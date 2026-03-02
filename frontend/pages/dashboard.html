@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard | Sistema RL v1.0</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+    --azul:       #0a2463;
+    --azul-med:   #1e3a8a;
+    --azul-claro: #3b82f6;
+    --azul-light: #eff6ff;
+    --rojo:       #dc2626;
+    --rojo-light: #fef2f2;
+    --blanco:     #ffffff;
+    --bg:         #f1f5f9;
+    --gris:       #94a3b8;
+    --gris-dark:  #475569;
+    --borde:      #e2e8f0;
+    --texto:      #0f172a;
+    --sidebar-w:  260px;
+}
+
+body {
+    font-family: 'Barlow', sans-serif;
+    background: var(--bg);
+    color: var(--texto);
+    min-height: 100vh;
+    display: flex;
+}
+
+/* ══════════════════════════════
+   SIDEBAR
+══════════════════════════════ */
+.sidebar {
+    width: var(--sidebar-w);
+    background: var(--azul);
+    min-height: 100vh;
+    position: fixed; left: 0; top: 0; bottom: 0;
+    display: flex; flex-direction: column;
+    z-index: 50;
+    box-shadow: 4px 0 20px rgba(10,36,99,0.3);
+    transition: transform 0.3s;
+}
+
+/* Barra roja lateral */
+.sidebar::after {
+    content: '';
+    position: absolute; top: 0; right: 0;
+    width: 3px; height: 100%;
+    background: linear-gradient(180deg, var(--rojo), transparent 60%);
+}
+
+.sidebar-logo {
+    padding: 24px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.logo-marca {
+    display: flex; align-items: center; gap: 12px;
+}
+.logo-icono {
+    width: 44px; height: 44px;
+    background: var(--rojo);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+.logo-texto { flex: 1; }
+.logo-nombre {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px; font-weight: 800;
+    color: white; text-transform: uppercase;
+    letter-spacing: 0.5px; line-height: 1.2;
+}
+.logo-version {
+    font-size: 10px; color: rgba(255,255,255,0.4);
+    letter-spacing: 1.5px;
+}
+
+/* Usuario activo */
+.sidebar-user {
+    padding: 16px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.user-chip {
+    display: flex; align-items: center; gap: 10px;
+}
+.user-avatar {
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,0.1);
+    border: 2px solid rgba(255,255,255,0.2);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; flex-shrink: 0;
+}
+.user-info { flex: 1; min-width: 0; }
+.user-nombre {
+    font-size: 13px; font-weight: 600;
+    color: white; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+.user-rol {
+    font-size: 10px; color: rgba(255,255,255,0.5);
+    text-transform: uppercase; letter-spacing: 1px;
+}
+
+/* Nav */
+.sidebar-nav { flex: 1; padding: 16px 0; overflow-y: auto; }
+.nav-seccion {
+    padding: 8px 20px 4px;
+    font-size: 10px; font-weight: 700;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase; letter-spacing: 2px;
+}
+.nav-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 20px;
+    color: rgba(255,255,255,0.65);
+    text-decoration: none;
+    font-size: 14px; font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    border-left: 3px solid transparent;
+}
+.nav-item:hover {
+    background: rgba(255,255,255,0.06);
+    color: white;
+}
+.nav-item.activo {
+    background: rgba(255,255,255,0.1);
+    color: white;
+    border-left-color: var(--rojo);
+}
+.nav-icono { font-size: 16px; width: 20px; text-align: center; }
+.nav-badge {
+    margin-left: auto;
+    background: var(--rojo);
+    color: white;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 10px;
+    min-width: 20px; text-align: center;
+}
+
+.sidebar-footer {
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+.btn-salir {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%; padding: 10px 14px;
+    background: rgba(220,38,38,0.15);
+    border: 1px solid rgba(220,38,38,0.3);
+    border-radius: 8px;
+    color: #fca5a5;
+    font-family: 'Barlow', sans-serif;
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+}
+.btn-salir:hover {
+    background: rgba(220,38,38,0.25);
+    color: white;
+}
+
+/* ══════════════════════════════
+   MAIN CONTENT
+══════════════════════════════ */
+.main {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    display: flex; flex-direction: column;
+    min-height: 100vh;
+}
+
+/* TOPBAR */
+.topbar {
+    background: white;
+    border-bottom: 1px solid var(--borde);
+    padding: 0 28px;
+    height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 40;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+.topbar-titulo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 22px; font-weight: 700;
+    color: var(--azul); text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.topbar-right {
+    display: flex; align-items: center; gap: 16px;
+}
+.fecha-chip {
+    padding: 6px 14px;
+    background: var(--azul-light);
+    border-radius: 6px;
+    font-size: 12px; font-weight: 600;
+    color: var(--azul);
+}
+.empresa-chip {
+    padding: 6px 14px;
+    background: var(--rojo-light);
+    border: 1px solid #fecaca;
+    border-radius: 6px;
+    font-size: 12px; font-weight: 700;
+    color: var(--rojo); letter-spacing: 1px;
+}
+.hamburger {
+    display: none; background: none; border: none;
+    font-size: 22px; cursor: pointer; color: var(--azul);
+}
+
+/* CONTENIDO */
+.contenido { padding: 28px; flex: 1; }
+
+/* BIENVENIDA */
+.bienvenida-bar {
+    background: linear-gradient(135deg, var(--azul) 0%, var(--azul-med) 100%);
+    border-radius: 12px;
+    padding: 22px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px;
+    position: relative; overflow: hidden;
+}
+.bienvenida-bar::before {
+    content: '';
+    position: absolute; right: -30px; top: -30px;
+    width: 160px; height: 160px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 50%;
+}
+.bienvenida-bar::after {
+    content: '';
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--rojo), transparent);
+}
+.bienvenida-txt h2 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 24px; font-weight: 800;
+    color: white; text-transform: uppercase; letter-spacing: 1px;
+}
+.bienvenida-txt p {
+    font-size: 13px; color: rgba(255,255,255,0.6);
+    margin-top: 2px;
+}
+.bienvenida-icono { font-size: 40px; opacity: 0.8; }
+
+/* ── TARJETAS DE ESTADÍSTICAS ── */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+.stat-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--borde);
+    display: flex; align-items: center; gap: 16px;
+    transition: all 0.2s;
+    position: relative; overflow: hidden;
+}
+.stat-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0;
+    width: 4px; height: 100%;
+    background: var(--azul);
+}
+.stat-card.rojo::before { background: var(--rojo); }
+.stat-card.verde::before { background: #16a34a; }
+.stat-card.naranja::before { background: #d97706; }
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(10,36,99,0.1);
+}
+.stat-icono {
+    width: 48px; height: 48px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+}
+.stat-icono.azul   { background: var(--azul-light); }
+.stat-icono.rojo   { background: var(--rojo-light); }
+.stat-icono.verde  { background: #f0fdf4; }
+.stat-icono.naranja{ background: #fffbeb; }
+.stat-info { flex: 1; }
+.stat-numero {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 32px; font-weight: 800;
+    color: var(--azul); line-height: 1;
+}
+.stat-numero.cargando {
+    background: #e2e8f0;
+    border-radius: 6px;
+    color: transparent;
+    animation: pulsar 1.2s ease-in-out infinite;
+    min-width: 60px;
+}
+@keyframes pulsar { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.stat-label {
+    font-size: 12px; font-weight: 600;
+    color: var(--gris);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin-top: 2px;
+}
+
+/* ── SECCIÓN DE GRÁFICOS ── */
+.graficos-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 24px;
+}
+.grafico-card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid var(--borde);
+    overflow: hidden;
+}
+.grafico-card.full { grid-column: 1 / -1; }
+.grafico-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--borde);
+    display: flex; align-items: center; justify-content: space-between;
+}
+.grafico-titulo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px; font-weight: 700;
+    color: var(--azul); text-transform: uppercase; letter-spacing: 1px;
+}
+.grafico-badge {
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px; font-weight: 700;
+    background: var(--azul-light);
+    color: var(--azul);
+    letter-spacing: 0.5px;
+}
+.grafico-body { padding: 20px; }
+.grafico-body canvas { max-height: 260px; }
+
+/* ── TABLA DOCUMENTOS FRECUENTES ── */
+.tabla-card {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid var(--borde);
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+.tabla-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--borde);
+    display: flex; align-items: center; justify-content: space-between;
+    background: #fafafa;
+}
+.tabla-titulo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px; font-weight: 700;
+    color: var(--azul); text-transform: uppercase; letter-spacing: 1px;
+}
+table { width: 100%; border-collapse: collapse; }
+th {
+    padding: 11px 16px;
+    text-align: left;
+    font-size: 11px; font-weight: 700;
+    color: var(--gris);
+    text-transform: uppercase; letter-spacing: 1px;
+    background: #fafafa;
+    border-bottom: 1px solid var(--borde);
+}
+td {
+    padding: 11px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid #f1f5f9;
+    color: var(--texto);
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: #fafafa; }
+.rang-bar {
+    height: 6px; border-radius: 3px;
+    background: var(--azul-light);
+    margin-top: 4px;
+}
+.rang-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, var(--azul), var(--azul-claro));
+    transition: width 0.8s ease;
+}
+
+/* SELECTOR AÑO */
+.filtro-bar {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 20px;
+}
+.filtro-label {
+    font-size: 13px; font-weight: 600; color: var(--gris-dark);
+}
+.filtro-select {
+    padding: 7px 12px;
+    border: 2px solid var(--borde);
+    border-radius: 8px;
+    font-family: 'Barlow', sans-serif;
+    font-size: 13px; font-weight: 600;
+    color: var(--azul);
+    background: white; cursor: pointer; outline: none;
+}
+.filtro-select:focus { border-color: var(--azul-claro); }
+
+/* SOLO ADMIN */
+.admin-seccion {
+    display: none;
+}
+.admin-seccion.visible { display: block; }
+
+/* SEPARADOR */
+.seccion-titulo {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px; font-weight: 700;
+    color: var(--azul); text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--borde);
+    display: flex; align-items: center; gap: 8px;
+}
+.seccion-titulo span {
+    background: var(--rojo);
+    color: white;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.open { transform: translateX(0); }
+    .main { margin-left: 0; }
+    .hamburger { display: block; }
+    .graficos-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+        <div class="logo-marca">
+            <div class="logo-icono">🏛️</div>
+            <div class="logo-texto">
+                <div class="logo-nombre">Sistema RL</div>
+                <div class="logo-version">v1.0 · 2026 · Joel Timoteo Gonza</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="sidebar-user">
+        <div class="user-chip">
+            <div class="user-avatar">👤</div>
+            <div class="user-info">
+                <div class="user-nombre" id="sideNombre">Cargando...</div>
+                <div class="user-rol"   id="sideRol">—</div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="sidebar-nav">
+        <div class="nav-seccion">Principal</div>
+        <a class="nav-item activo" href="dashboard.html">
+            <span class="nav-icono">📊</span> Dashboard
+        </a>
+
+        <div class="nav-seccion">Gestión</div>
+        <a class="nav-item" href="atenciones.html">
+            <span class="nav-icono">📋</span> Registrar Atención
+        </a>
+        <a class="nav-item" href="casos.html">
+            <span class="nav-icono">⚖️</span> Casos Disciplinarios
+        </a>
+        <a class="nav-item" href="visitas.html">
+            <span class="nav-icono">🌿</span> Visitas de Campo
+        </a>
+
+        <div class="nav-seccion">Consultas</div>
+        <a class="nav-item" href="historial.html">
+            <span class="nav-icono">🔍</span> Historial
+        </a>
+        <a class="nav-item" href="afp.html">
+            <span class="nav-icono">💼</span> Consulta AFP
+        </a>
+
+        <div class="nav-seccion">Reportes</div>
+        <a class="nav-item" href="correo.html">
+            <span class="nav-icono">📧</span> Enviar Reporte
+        </a>
+
+        <!-- Solo Admin -->
+        <div id="navAdmin" style="display:none">
+            <div class="nav-seccion">Administración</div>
+            <a class="nav-item" href="usuarios.html">
+                <span class="nav-icono">👥</span> Usuarios
+            </a>
+            <a class="nav-item" href="supervisores.html">
+                <span class="nav-icono">🎖️</span> Supervisores
+            </a>
+        </div>
+    </nav>
+
+    <div class="sidebar-footer">
+        <button class="btn-salir" onclick="cerrarSesion()">
+            🚪 Cerrar Sesión
+        </button>
+    </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+        <div style="display:flex;align-items:center;gap:12px">
+            <button class="hamburger" onclick="toggleSidebar()">☰</button>
+            <div class="topbar-titulo" id="topbarTitulo">Dashboard</div>
+        </div>
+        <div class="topbar-right">
+            <div class="fecha-chip" id="fechaChip">—</div>
+            <div class="empresa-chip" id="empresaChip">—</div>
+        </div>
+    </header>
+
+    <!-- CONTENIDO -->
+    <div class="contenido">
+
+        <!-- BIENVENIDA -->
+        <div class="bienvenida-bar">
+            <div class="bienvenida-txt">
+                <h2 id="bienNombre">Bienvenido</h2>
+                <p id="bienCargo">Cargando información...</p>
+            </div>
+            <div class="bienvenida-icono">🏛️</div>
+        </div>
+
+        <!-- FILTRO AÑO -->
+        <div class="filtro-bar">
+            <span class="filtro-label">Año:</span>
+            <select class="filtro-select" id="selectAnio" onchange="cargarEstadisticas()">
+                <option value="2025">2025</option>
+                <option value="2024">2024</option>
+                <option value="2023">2023</option>
+            </select>
+            <span class="filtro-label" id="filtroEmpresaLbl" style="margin-left:8px;display:none">Empresa:</span>
+            <select class="filtro-select" id="selectEmpresa" style="display:none" onchange="cargarEstadisticas()">
+                <option value="">Todas</option>
+                <option value="RAPEL">RAPEL</option>
+                <option value="VERFRUT">VERFRUT</option>
+            </select>
+        </div>
+
+        <!-- ── ESTADÍSTICAS RÁPIDAS ── -->
+        <div class="seccion-titulo">
+            📈 Mis Estadísticas <span id="labelEstadisticas">MI PANEL</span>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card">
+                <div class="stat-icono rojo">📅</div>
+                <div class="stat-info">
+                    <div class="stat-numero cargando" id="statHoy">—</div>
+                    <div class="stat-label">Atenciones Hoy</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icono azul">📆</div>
+                <div class="stat-info">
+                    <div class="stat-numero cargando" id="statSemana">—</div>
+                    <div class="stat-label">Esta Semana</div>
+                </div>
+            </div>
+            <div class="stat-card rojo">
+                <div class="stat-icono rojo">🗓️</div>
+                <div class="stat-info">
+                    <div class="stat-numero cargando" id="statMes">—</div>
+                    <div class="stat-label">Este Mes</div>
+                </div>
+            </div>
+            <div class="stat-card verde">
+                <div class="stat-icono verde">📊</div>
+                <div class="stat-info">
+                    <div class="stat-numero cargando" id="statAnio">—</div>
+                    <div class="stat-label">Total Año</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── GRÁFICOS ── -->
+        <div class="graficos-grid">
+            <div class="grafico-card">
+                <div class="grafico-header">
+                    <div class="grafico-titulo">Atenciones por Mes</div>
+                    <div class="grafico-badge" id="anioGrafico">2025</div>
+                </div>
+                <div class="grafico-body">
+                    <canvas id="chartMes"></canvas>
+                </div>
+            </div>
+            <div class="grafico-card">
+                <div class="grafico-header">
+                    <div class="grafico-titulo">Por Tipo de Documento</div>
+                    <div class="grafico-badge">TOP 8</div>
+                </div>
+                <div class="grafico-body">
+                    <canvas id="chartDocumento"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── DOCUMENTOS FRECUENTES ── -->
+        <div class="tabla-card">
+            <div class="tabla-header">
+                <div class="tabla-titulo">📄 Documentos Más Frecuentes</div>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Tipo de Documento</th>
+                        <th>Total</th>
+                        <th style="width:180px">Frecuencia</th>
+                    </tr>
+                </thead>
+                <tbody id="tablaDocumentos">
+                    <tr><td colspan="4" style="text-align:center;color:var(--gris);padding:24px">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- ══════════════════════════════
+             SECCIÓN SOLO ADMIN
+        ══════════════════════════════ -->
+        <div class="admin-seccion" id="adminSeccion">
+
+            <div class="seccion-titulo">
+                👑 Panel Administrador <span>RAPEL + VERFRUT</span>
+            </div>
+
+            <!-- Stats generales -->
+            <div class="stats-grid" style="margin-bottom:24px">
+                <div class="stat-card">
+                    <div class="stat-icono azul">🏢</div>
+                    <div class="stat-info">
+                        <div class="stat-numero cargando" id="adminRapel">—</div>
+                        <div class="stat-label">RAPEL — Año</div>
+                    </div>
+                </div>
+                <div class="stat-card rojo">
+                    <div class="stat-icono rojo">🏭</div>
+                    <div class="stat-info">
+                        <div class="stat-numero cargando" id="adminVerfrut">—</div>
+                        <div class="stat-label">VERFRUT — Año</div>
+                    </div>
+                </div>
+                <div class="stat-card verde">
+                    <div class="stat-icono verde">📋</div>
+                    <div class="stat-info">
+                        <div class="stat-numero cargando" id="adminTotal">—</div>
+                        <div class="stat-label">Total General</div>
+                    </div>
+                </div>
+                <div class="stat-card naranja">
+                    <div class="stat-icono naranja">👥</div>
+                    <div class="stat-info">
+                        <div class="stat-numero cargando" id="adminSupervisores">—</div>
+                        <div class="stat-label">Supervisores Activos</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gráfico por supervisor -->
+            <div class="grafico-card full" style="margin-bottom:24px">
+                <div class="grafico-header">
+                    <div class="grafico-titulo">📊 Atenciones por Supervisor</div>
+                    <div class="grafico-badge">RANKING</div>
+                </div>
+                <div class="grafico-body">
+                    <canvas id="chartSupervisor" style="max-height:300px"></canvas>
+                </div>
+            </div>
+
+            <!-- Tabla ranking supervisores -->
+            <div class="tabla-card">
+                <div class="tabla-header">
+                    <div class="tabla-titulo">🎖️ Ranking de Supervisores</div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Supervisor</th>
+                            <th>Sector</th>
+                            <th>Total Atenciones</th>
+                            <th style="width:180px">Participación</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tablaSupervisores">
+                        <tr><td colspan="5" style="text-align:center;color:var(--gris);padding:24px">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+        <!-- fin admin -->
+
+    </div>
+</main>
+
+<script>
+const API = '../../../api'; // ajustar según deploy
+let usuarioActual = null;
+let chartMes = null, chartDoc = null, chartSup = null;
+
+// ══════════════════════════
+// INICIALIZAR
+// ══════════════════════════
+window.addEventListener('load', async () => {
+    const token   = sessionStorage.getItem('token');
+    const usuData = sessionStorage.getItem('usuario');
+
+    if (!token) { window.location.href = '../index.html'; return; }
+
+    usuarioActual = JSON.parse(usuData);
+
+    // Llenar UI con datos del usuario
+    document.getElementById('sideNombre').textContent  = usuarioActual.nombre;
+    document.getElementById('sideRol').textContent     = usuarioActual.rol.replace('_',' ').toUpperCase();
+    document.getElementById('bienNombre').textContent  = `Bienvenido, ${usuarioActual.nombre.split(' ')[0]}`;
+    document.getElementById('bienCargo').textContent   = `${usuarioActual.cargo} · Sistema RL v1.0`;
+    document.getElementById('empresaChip').textContent = usuarioActual.empresa;
+
+    // Fecha
+    const hoy = new Date();
+    const dias = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+    document.getElementById('fechaChip').textContent =
+        `${dias[hoy.getDay()]} ${hoy.toLocaleDateString('es-PE',{day:'2-digit',month:'short',year:'numeric'})}`;
+
+    // Año actual seleccionado
+    document.getElementById('selectAnio').value = hoy.getFullYear();
+    document.getElementById('anioGrafico').textContent = hoy.getFullYear();
+
+    // Mostrar opciones de Admin
+    if (['administrador','jefa_rl','coordinador'].includes(usuarioActual.rol)) {
+        document.getElementById('navAdmin').style.display   = 'block';
+        document.getElementById('adminSeccion').classList.add('visible');
+        document.getElementById('labelEstadisticas').textContent = 'GENERAL';
+        document.getElementById('filtroEmpresaLbl').style.display = 'inline';
+        document.getElementById('selectEmpresa').style.display    = 'inline';
+        document.getElementById('topbarTitulo').textContent = 'Dashboard Administrador';
+    }
+
+    await cargarEstadisticas();
+});
+
+// ══════════════════════════
+// CARGAR ESTADÍSTICAS
+// ══════════════════════════
+async function cargarEstadisticas() {
+    const token   = sessionStorage.getItem('token');
+    const anio    = document.getElementById('selectAnio').value;
+    const empresa = document.getElementById('selectEmpresa').value || '';
+
+    document.getElementById('anioGrafico').textContent = anio;
+
+    // Mostrar loading
+    ['statHoy','statSemana','statMes','statAnio'].forEach(id => {
+        const el = document.getElementById(id);
+        el.textContent = '—';
+        el.classList.add('cargando');
+    });
+
+    try {
+        let url = `/api/atenciones/estadisticas?anio=${anio}`;
+        if (empresa) url += `&empresa=${empresa}`;
+
+        const r    = await fetch(url, { headers: { Authorization: `Bearer ${token}` }});
+        const data = await r.json();
+
+        if (!data.ok) throw new Error(data.mensaje);
+
+        const { totales, porMes, porDocumento, porSupervisor, porEmpresa } = data.data;
+
+        // ── TARJETAS ──
+        setStatCard('statHoy',    totales.total_hoy    || 0);
+        setStatCard('statSemana', totales.total_semana || 0);
+        setStatCard('statMes',    totales.total_mes    || 0);
+        setStatCard('statAnio',   totales.total_anio   || 0);
+
+        // ── GRÁFICO MENSUAL ──
+        renderChartMes(porMes);
+
+        // ── GRÁFICO DOCUMENTOS ──
+        renderChartDoc(porDocumento.slice(0,8));
+
+        // ── TABLA DOCUMENTOS ──
+        renderTablaDoc(porDocumento.slice(0,10));
+
+        // ── ADMIN: stats por empresa ──
+        if (['administrador','jefa_rl','coordinador'].includes(usuarioActual.rol)) {
+            const rapel   = porEmpresa.find(e => e.empresa === 'RAPEL');
+            const verfrut = porEmpresa.find(e => e.empresa === 'VERFRUT');
+            setStatCard('adminRapel',       rapel?.total   || 0);
+            setStatCard('adminVerfrut',     verfrut?.total || 0);
+            setStatCard('adminTotal',       totales.total_anio || 0);
+            setStatCard('adminSupervisores', porSupervisor.length);
+
+            // ── GRÁFICO SUPERVISORES ──
+            renderChartSup(porSupervisor.slice(0,12));
+
+            // ── TABLA SUPERVISORES ──
+            renderTablaSup(porSupervisor.slice(0,12));
+        }
+
+    } catch (err) {
+        console.error('Error estadísticas:', err);
+    }
+}
+
+function setStatCard(id, valor) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = valor.toLocaleString('es-PE');
+    el.classList.remove('cargando');
+}
+
+// ── GRÁFICO POR MES ──
+function renderChartMes(data) {
+    const mesesOrden = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const labels  = mesesOrden.map(m => m.substring(0,3));
+    const valores = mesesOrden.map(m => {
+        const fnd = data.find(d => d.mes === m);
+        return fnd ? fnd.total : 0;
+    });
+
+    if (chartMes) chartMes.destroy();
+    chartMes = new Chart(document.getElementById('chartMes'), {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Atenciones',
+                data: valores,
+                backgroundColor: valores.map((v,i) => i === new Date().getMonth() ? '#dc2626' : '#1e3a8a'),
+                borderRadius: 6,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f1f5f9' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+}
+
+// ── GRÁFICO DOCUMENTOS ──
+function renderChartDoc(data) {
+    if (chartDoc) chartDoc.destroy();
+    if (!data.length) return;
+    const colores = ['#0a2463','#1e3a8a','#3b82f6','#60a5fa','#dc2626','#ef4444','#f87171','#fca5a5'];
+    chartDoc = new Chart(document.getElementById('chartDocumento'), {
+        type: 'doughnut',
+        data: {
+            labels: data.map(d => d.tipo_documento.substring(0,30)),
+            datasets: [{
+                data: data.map(d => d.total),
+                backgroundColor: colores,
+                borderWidth: 2, borderColor: 'white'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } }
+            }
+        }
+    });
+}
+
+// ── GRÁFICO SUPERVISORES ──
+function renderChartSup(data) {
+    if (chartSup) chartSup.destroy();
+    if (!data.length) return;
+    chartSup = new Chart(document.getElementById('chartSupervisor'), {
+        type: 'bar',
+        data: {
+            labels: data.map(d => d.supervisor?.split(' ').slice(-2).join(' ') || '—'),
+            datasets: [{
+                label: 'Atenciones',
+                data: data.map(d => d.total),
+                backgroundColor: data.map((_, i) => i === 0 ? '#dc2626' : i === 1 ? '#1e3a8a' : '#3b82f6'),
+                borderRadius: 6, borderSkipped: false,
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f1f5f9' } },
+                y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+            }
+        }
+    });
+}
+
+// ── TABLA DOCUMENTOS ──
+function renderTablaDoc(data) {
+    const tbody = document.getElementById('tablaDocumentos');
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--gris);padding:24px">Sin datos</td></tr>'; return; }
+    const max = data[0].total;
+    tbody.innerHTML = data.map((d,i) => `
+        <tr>
+            <td><strong style="color:var(--azul)">${String(i+1).padStart(2,'0')}</strong></td>
+            <td style="max-width:300px">${d.tipo_documento}</td>
+            <td><strong style="color:var(--rojo)">${d.total}</strong></td>
+            <td>
+                <div class="rang-bar">
+                    <div class="rang-fill" style="width:${Math.round(d.total/max*100)}%"></div>
+                </div>
+            </td>
+        </tr>`).join('');
+}
+
+// ── TABLA SUPERVISORES ──
+function renderTablaSup(data) {
+    const tbody = document.getElementById('tablaSupervisores');
+    if (!data.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--gris);padding:24px">Sin datos</td></tr>'; return; }
+    const max = data[0].total;
+    tbody.innerHTML = data.map((d,i) => `
+        <tr>
+            <td>${i===0?'🥇':i===1?'🥈':i===2?'🥉':'<strong style="color:var(--gris)">'+String(i+1).padStart(2,'0')+'</strong>'}</td>
+            <td><strong>${d.supervisor || '—'}</strong></td>
+            <td><span style="font-size:12px;color:var(--gris)">${d.sector || '—'}</span></td>
+            <td><strong style="color:var(--azul);font-size:16px">${d.total}</strong></td>
+            <td>
+                <div class="rang-bar">
+                    <div class="rang-fill" style="width:${Math.round(d.total/max*100)}%;background:${i===0?'linear-gradient(90deg,var(--rojo),#f87171)':'linear-gradient(90deg,var(--azul),var(--azul-claro))'}"></div>
+                </div>
+            </td>
+        </tr>`).join('');
+}
+
+function cerrarSesion() {
+    sessionStorage.clear();
+    window.location.href = '../index.html';
+}
+
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+}
+</script>
+</body>
+</html>

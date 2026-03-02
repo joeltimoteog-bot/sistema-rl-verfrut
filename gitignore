@@ -1,0 +1,21 @@
+# Variables de entorno - NUNCA subir a GitHub
+.env
+.env.local
+.env.production
+
+# Node modules
+node_modules/
+
+# Uploads (fotos de visitas)
+backend/uploads/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/settings.json

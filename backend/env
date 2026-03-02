@@ -1,0 +1,26 @@
+# ============================================================
+# CONFIGURACIÓN - SISTEMA RL VERFRUT & RAPEL
+# ⚠️ NO subir este archivo a GitHub (.gitignore lo protege)
+# ============================================================
+
+PORT=3000
+NODE_ENV=development
+
+# Railway te da este valor automáticamente en producción
+# Para desarrollo local puedes dejarlo vacío por ahora
+DATABASE_URL=postgresql://usuario:password@host:5432/SistemaRL
+
+# JWT - cámbialo por algo único y largo
+JWT_SECRET=SistemaRL_Verfrut_Rapel_2025_TuClaveSecretaCambiarEsto
+JWT_EXPIRES_IN=8h
+
+# CORREO OUTLOOK
+MAIL_HOST=smtp.office365.com
+MAIL_PORT=587
+MAIL_USER=tucorreo@verfrut.com
+MAIL_PASS=tu_password_correo
+MAIL_FROM=Sistema RL <tucorreo@verfrut.com>
+
+# AFP NET
+AFP_URL=https://www.afpnet.com.pe/AFPnet/Afiliado/Datos
+AFP_TOKEN=CfDJ8FJUIQQAbhBGpDmg5dBoWpFlqEQfHx08RJ6jkHVEUvFGoUP9Hf7VZkvRH1cDGv-80hV9amSvqwxvgGXoH6-j37dKHtqOUdCeatJO1-64Q67sF17Zc17hDO17NedDjrQUJobhzQKTpcEHlwVfxlZzx6w
