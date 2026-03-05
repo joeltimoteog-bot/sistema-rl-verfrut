@@ -314,7 +314,10 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   <div class="fg">
     <div class="fc">
       <label>DNI *</label>
-      <input type="text" id="at_dni" placeholder="Ingresa DNI para buscar" oninput="buscarDni(this.value)">
+      <div style="display:flex;gap:6px">
+        <input type="text" id="at_dni" placeholder="Ingresa DNI..." oninput="buscarDni(this.value)" style="flex:1">
+        <button type="button" onclick="buscarDniBtn()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔍 Buscar</button>
+      </div>
       <div class="trab-res" id="trabRes"></div>
     </div>
     <div class="fc"><label>Nombre Completo *</label><input type="text" id="at_nom" placeholder="Nombre del trabajador"></div>
@@ -441,9 +444,47 @@ window.onload = async () => {
     document.getElementById('navAt').style.display='none';
     document.getElementById('btnNuevaAt').style.display='none';
   }
+  // Si supervisor necesita elegir fundo hoy
+  if (rol === 'supervisor' && USER.necesitaElegirFundo) {
+    mostrarModalFundo();
+  } else if (rol === 'supervisor' && USER.fundos && USER.fundos.length === 1) {
+    USER.fundoHoy = USER.fundos[0];
+    sessionStorage.setItem('user', JSON.stringify(USER));
+  }
+
   await cargarStats();
   await cargarAtenciones();
 };
+
+function mostrarModalFundo() {
+  const usuario = USER.usuario;
+  let opciones = [];
+  if (usuario === 'mmechato') {
+    opciones = ['El Papayo','Limones','Olivares Bajo','Los Olivares','Santa Rosa','Algarrobos','San Vicente','Punta Arenas','Aproa','Planta Rapel'];
+  } else if (usuario === 'ptamayo') {
+    opciones = ['El Papayo','Limones'];
+  } else {
+    opciones = ['El Papayo','Limones','Olivares Bajo','Los Olivares','Santa Rosa','Algarrobos','San Vicente','Punta Arenas','Aproa','Planta Rapel'];
+  }
+  const sel = document.getElementById('fundoSelect');
+  sel.innerHTML = opciones.map(f=>`<option value="${f}">${f}</option>`).join('');
+  const msg = document.getElementById('fundoMsg');
+  if (usuario === 'mmechato') {
+    msg.innerHTML = `<strong>${USER.nombre}</strong>, eres supervisora de reemplazo.<br>¿A qué fundo estás asignada hoy?`;
+  } else {
+    msg.innerHTML = `<strong>${USER.nombre}</strong>, tienes asignados varios fundos.<br>¿En qué fundo trabajas hoy?`;
+  }
+  abrir('mFundo');
+}
+
+function confirmarFundo() {
+  const fundo = v('fundoSelect');
+  if (!fundo) { alert('Selecciona un fundo'); return; }
+  USER.fundoHoy = fundo;
+  sessionStorage.setItem('user', JSON.stringify(USER));
+  cerrar('mFundo');
+  document.getElementById('tbE').textContent = USER.empresa + ' · ' + fundo;
+}
 
 // API
 async function apiGet(p) { const r=await fetch(API+'?'+new URLSearchParams(p)); return r.json(); }
@@ -521,6 +562,9 @@ function abrirAt() {
   ['at_dni','at_nom','at_fip','at_fundo','at_cargo','at_ruta','at_cod','at_fac','at_cel','at_fid','at_ftd','at_dias','at_resp','at_obs'].forEach(id=>sv(id,''));
   sv('at_sex',''); sv('at_emp','RAPEL'); sv('at_doc',''); sv('at_est','PENDIENTE');
   sv('at_fec',hoy()); sv('at_hi',new Date().toTimeString().substring(0,5)); sv('at_ht','');
+  // Auto-rellenar fundo actual del supervisor
+  if (USER.fundoHoy) sv('at_fac', USER.fundoHoy);
+  else if (USER.fundos && USER.fundos.length === 1) sv('at_fac', USER.fundos[0]);
   abrir('mAt');
 }
 
@@ -635,20 +679,33 @@ async function buscarDni(dni) {
   clearTimeout(dniTO);
   document.getElementById('trabRes').style.display='none';
   if(dni.length<7)return;
-  dniTO=setTimeout(async()=>{
-    try{
-      const d=await apiGet({action:'buscarTrabajador',q:dni,empresa:v('at_emp')||'AMBAS'});
-      if(d.success&&d.data.length){
-        const t=d.data[0];
-        sv('at_nom',t.nombre||''); sv('at_sex',t.sexo||'');
-        sv('at_emp',t.empresa||'RAPEL'); sv('at_fundo',t.fundo||'');
-        sv('at_cargo',t.cargo||''); sv('at_ruta',t.ruta||'');
-        sv('at_cod',t.codigo||''); sv('at_fac',t.fundo_actual||''); sv('at_cel',t.celular||'');
-        const r=document.getElementById('trabRes');
-        r.style.display='block';r.textContent='✅ '+t.nombre+' · '+t.empresa+' · '+(t.fundo||'');
-      }
-    }catch(e){}
-  },500);
+  dniTO=setTimeout(()=>buscarDniBtn(),500);
+}
+
+async function buscarDniBtn() {
+  const dni=v('at_dni').trim();
+  if(dni.length<2){alert('Ingresa el DNI del trabajador');return;}
+  const r=document.getElementById('trabRes');
+  r.style.display='block';r.textContent='🔍 Buscando...';
+  try{
+    const d=await apiGet({action:'buscarTrabajador',q:dni,empresa:'AMBAS'});
+    if(d.success&&d.data.length){
+      const t=d.data[0];
+      sv('at_nom',t.nombre||''); sv('at_sex',t.sexo||'');
+      sv('at_emp',t.empresa||'RAPEL'); sv('at_fundo',t.fundo||'');
+      sv('at_cargo',t.cargo||''); sv('at_ruta',t.ruta||'');
+      sv('at_cod',t.codigo||''); sv('at_cel',t.celular||'');
+      // Fundo actual = fundo del supervisor (no del trabajador)
+      if(USER.fundoHoy) sv('at_fac',USER.fundoHoy);
+      else if(USER.fundos&&USER.fundos.length===1) sv('at_fac',USER.fundos[0]);
+      else sv('at_fac',t.fundo_actual||'');
+      r.style.display='block';r.style.background='#f0fdf4';r.style.borderColor='#bbf7d0';
+      r.textContent='✅ '+t.nombre+' · '+t.empresa+' · '+(t.fundo||'');
+    }else{
+      r.style.background='#fef2f2';r.style.borderColor='#fecaca';
+      r.textContent='❌ No se encontró trabajador con DNI: '+dni;
+    }
+  }catch(e){r.textContent='❌ Error de conexión';}
 }
 
 function regAt(dni,nom,emp,fundo,cargo,sexo,ruta,cod,fac,cel){
@@ -870,5 +927,21 @@ function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[Stri
 function estC(e){const s=String(e||'').toUpperCase();return s==='PENDIENTE'?'bp':s==='EN PROCESO'?'bpr':'brs';}
 document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('on');}));
 </script>
+
+<!-- MODAL SELECCION FUNDO -->
+<div class="ov" id="mFundo">
+<div class="modal" style="max-width:420px">
+  <div class="modal-t">📍 Selecciona tu Fundo de Hoy</div>
+  <p id="fundoMsg" style="font-size:13px;color:#64748b;margin-bottom:18px;line-height:1.5"></p>
+  <div class="fc">
+    <label>Fundo asignado hoy</label>
+    <select id="fundoSelect" style="font-size:14px;padding:10px 12px"></select>
+  </div>
+  <div class="modal-ft" style="margin-top:20px">
+    <button class="btn-save" onclick="confirmarFundo()" style="width:100%;padding:12px;font-size:13px">✅ Confirmar</button>
+  </div>
+</div>
+</div>
+
 </body>
 </html>
