@@ -10,7 +10,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
 body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--tx)}
-.sb{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--azul);display:flex;flex-direction:column;z-index:100}
+.sb{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--azul);display:flex;flex-direction:column;z-index:100;transition:transform .3s ease}
 .sb-hdr{padding:20px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
 .sb-logo{display:flex;align-items:center;gap:10px}
 .sb-ic{width:36px;height:36px;background:var(--rojo);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px}
@@ -115,12 +115,24 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 .det-row{display:flex;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:12px}
 .det-l{width:170px;font-weight:600;color:var(--gr);flex-shrink:0}
 .det-v{color:var(--tx)}
-@media(max-width:768px){.sb{display:none}.main{margin-left:0}.sg{grid-template-columns:repeat(2,1fr)}.gg{grid-template-columns:1fr}}
+.hamburger{background:none;border:none;font-size:22px;cursor:pointer;color:var(--azul);padding:4px 8px;border-radius:6px;margin-right:8px}
+.overlay-sb{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
+@media(max-width:768px){
+  .sb{transform:translateX(-100%);transition:transform .3s ease}
+  .sb.open{transform:translateX(0)}
+  .main{margin-left:0}
+  .sg{grid-template-columns:repeat(2,1fr)}
+  .gg{grid-template-columns:1fr}
+  .hamburger{display:flex}
+  .overlay-sb{display:none}
+  .overlay-sb.on{display:block}
+}
+@media(min-width:769px){.hamburger{display:none}.overlay-sb{display:none!important}}
 </style>
 </head>
 <body>
 
-<nav class="sb">
+<nav class="sb" id="sb">
   <div class="sb-hdr">
     <div class="sb-logo">
       <div class="sb-ic">🏛️</div>
@@ -139,7 +151,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <button class="ni" onclick="ir('consulta',this)"><span class="ic">🔍</span>Consulta por DNI</button>
     <div class="ns" id="navAdmSec" style="display:none">Administración</div>
     <button class="ni" id="navRes" style="display:none" onclick="ir('resumen',this)"><span class="ic">📈</span>Resumen General</button>
-    <button class="ni" id="navCorreo" style="display:none" onclick="ir('correo',this)"><span class="ic">📧</span>Enviar Reporte</button>
+    <button class="ni" id="navCorreo" onclick="ir('correo',this)"><span class="ic">📧</span>Enviar Reporte</button>
     <button class="ni" id="navUsr" style="display:none" onclick="ir('usuarios',this)"><span class="ic">👥</span>Gestión Usuarios</button>
   </div>
   <div class="sb-ft">
@@ -149,12 +161,14 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 
 <div class="main">
   <div class="topbar">
+    <button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
     <div class="tb-t" id="tbT">MI DASHBOARD</div>
     <div class="tb-r">
       <span class="tb-f" id="tbF"></span>
       <span class="emp-b" id="tbE">--</span>
     </div>
   </div>
+  <div class="overlay-sb" id="overlaySb" onclick="cerrarSidebar()"></div>
   <div class="content">
 
     <!-- DASHBOARD -->
@@ -436,7 +450,6 @@ window.onload = async () => {
   if (esAdmin || esAdmin2) {
     document.getElementById('navAdmSec').style.display='';
     document.getElementById('navRes').style.display='';
-    document.getElementById('navCorreo').style.display='';
     if (esAdmin) document.getElementById('navUsr').style.display='';
   }
   // Admin01/02 no pueden registrar
@@ -903,7 +916,18 @@ async function toggleUs(usr,act){
 }
 
 // HELPERS
+function toggleSidebar(){
+  const sb=document.getElementById('sb');
+  const ov=document.getElementById('overlaySb');
+  sb.classList.toggle('open');
+  ov.classList.toggle('on');
+}
+function cerrarSidebar(){
+  document.getElementById('sb').classList.remove('open');
+  document.getElementById('overlaySb').classList.remove('on');
+}
 function ir(id,btn){
+  cerrarSidebar();
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   document.getElementById('sec-'+id)?.classList.add('on');
