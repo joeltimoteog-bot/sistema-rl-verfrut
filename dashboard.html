@@ -674,7 +674,7 @@ async function buscarTrab() {
   if(q.length<2){alert('Ingresa al menos 2 caracteres');return;}
   document.getElementById('tbTrab').innerHTML='<tr><td colspan="10" class="empty">🔍 Buscando...</td></tr>';
   try{
-    const d=await apiGet({action:'buscarTrabajador',q,empresa:emp});
+    const d=await apiGet({action:'buscarTrabajador',q:q.trim(),empresa:emp||'AMBAS'});
     if(!d.success||!d.data.length){document.getElementById('tbTrab').innerHTML='<tr><td colspan="10" class="empty">No se encontraron trabajadores</td></tr>';return;}
     document.getElementById('tbTrab').innerHTML=d.data.map(t=>`<tr>
       <td><strong>${t.dni||''}</strong></td><td>${t.nombre||''}</td><td>${t.sexo||''}</td>
@@ -701,7 +701,7 @@ async function buscarDniBtn() {
   const r=document.getElementById('trabRes');
   r.style.display='block';r.textContent='🔍 Buscando...';
   try{
-    const d=await apiGet({action:'buscarTrabajador',q:dni,empresa:'AMBAS'});
+    const d=await apiGet({action:'buscarTrabajador',q:String(dni).trim(),empresa:'AMBAS'});
     if(d.success&&d.data.length){
       const t=d.data[0];
       sv('at_nom',t.nombre||''); sv('at_sex',t.sexo||'');
