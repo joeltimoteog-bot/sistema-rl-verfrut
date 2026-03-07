@@ -1568,14 +1568,27 @@ async function generarInformeVisita() {
   cerrar('mVisita');
   abrir('mVerInforme');
 
-  // Guardar en Google Sheets
-  await guardarVisitaSheets({
-    empresa, sup, dni, correo, fundo, punto,
-    fi, ff, semana, fechaInf, paraNombre,
-    asunto, desarrollo, rutas, acciones,
-    compromisos, observaciones, motivo,
-    fotos: visitasFotos.length
-  });
+  // Guardar en Google Sheets PRIMERO
+  document.getElementById('informeVistaPrevia').innerHTML +=
+    '<div id="guardandoMsg" style="text-align:center;padding:10px;color:#0b1e45;font-weight:600">⏳ Guardando en el sistema...</div>';
+
+  let guardadoOK = false;
+  try {
+    const res = await guardarVisitaSheets({
+      empresa, sup, dni, correo, fundo, punto,
+      fi, ff, semana, fechaInf, paraNombre,
+      asunto, desarrollo, rutas, acciones,
+      compromisos, observaciones, motivo,
+      fotos: visitasFotos.length
+    });
+    guardadoOK = true;
+    const msg = document.getElementById('guardandoMsg');
+    if(msg) msg.innerHTML = '✅ <b>Guardado correctamente en Google Sheets</b>';
+  } catch(e) {
+    const msg = document.getElementById('guardandoMsg');
+    if(msg) msg.innerHTML = '⚠️ Error al guardar: ' + e.message + ' — Verifique que el Apps Script esté actualizado.';
+    console.error('Error guardando:', e);
+  }
 
   // Enviar correo con mailto
   const ccFundo  = CC_FUNDO[fundo] || '';
@@ -1659,9 +1672,8 @@ function imprimirInforme() {
 }
 
 async function guardarVisitaSheets(d) {
-  try {
-    const ffEl = document.getElementById('vFF');
-    await apiPost({
+  const ffEl = document.getElementById('vFF');
+  const res = await apiPost({
       action: 'saveVisita',
       empresa: d.empresa, supervisor: d.sup, dni: d.dni,
       correo: d.correo, fundo: d.fundo, punto: d.punto,
@@ -1681,7 +1693,7 @@ async function guardarVisitaSheets(d) {
       estado:             ffEl.dataset.estado     || 'EN PLAZO',
       temporada:          ffEl.dataset.temporada  || ''
     });
-  } catch(e) { console.error('Error guardando visita:', e); }
+  return res;
 }
 
 async function cargarVisitas() {
