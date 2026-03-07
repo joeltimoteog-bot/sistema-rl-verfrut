@@ -519,8 +519,9 @@ window.onload = async () => {
     sessionStorage.setItem('user', JSON.stringify(USER));
   }
 
-  await cargarStats();
-  await cargarAtenciones();
+  // Cargar stats primero (rapido), atenciones solo cuando se necesiten
+  cargarStats();
+  // Atenciones se cargan solo cuando el usuario va a esa seccion
 };
 
 function mostrarModalFundo() {
@@ -1146,6 +1147,7 @@ function ir(id,btn){
   document.getElementById('tbT').textContent=ts[id]||id.toUpperCase();
   if(id==='resumen')cargarResumen();
   if(id==='usuarios')cargarUs();
+  if(id==='atenciones' && atTodas.length===0) cargarAtenciones();
 }
 function abrir(id){document.getElementById(id).classList.add('on');}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
