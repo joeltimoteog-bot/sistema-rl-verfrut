@@ -292,8 +292,49 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <div class="fc"><label>Empresa</label>
             <select id="cEmp"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL</option><option value="VERFRUT">VERFRUT</option></select>
           </div>
-          <div class="fc"><label>Para (destinatarios)</label><input type="text" id="cPara" placeholder="correo1@verfrut.pe; correo2@..."></div>
-          <div class="fc"><label>CC (con copia)</label><input type="text" id="cCC" placeholder="Opcional"></div>
+          <div class="fc">
+            <label>Para (destinatarios) *</label>
+            <div id="paraList" style="display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;gap:5px">
+                <select id="cPara" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif">
+                  <option value="">-- Seleccionar destinatario --</option>
+                  <option>jchavez@verfrut.pe</option>
+                  <option>ovilela@verfrut.pe</option>
+                  <option>dreyna@verfrut.pe</option>
+                  <option>tvera@verfrut.pe</option>
+                  <option>lmorales@verfrut.pe</option>
+                  <option>mnavarro@verfrut.pe</option>
+                  <option>apacherre@verfrut.pe</option>
+                  <option>nestrada@verfrut.pe</option>
+                  <option>jtimoteo@verfrut.pe</option>
+                  <option>jfernandez@verfrut.pe</option>
+                </select>
+                <button type="button" onclick="agregarPara()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer">+ Agregar</button>
+              </div>
+              <div id="paraSeleccionados" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+              <input type="text" id="cParaNuevo" placeholder="O escribe un correo nuevo..." style="padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif">
+            </div>
+          </div>
+          <div class="fc">
+            <label>CC (con copia)</label>
+            <div style="display:flex;gap:5px">
+              <select id="cCC" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif">
+                <option value="">-- Seleccionar --</option>
+                <option>ovilela@verfrut.pe</option>
+                <option>jtimoteo@verfrut.pe</option>
+                <option>jchavez@verfrut.pe</option>
+                <option>lcovenas@verfrut.pe</option>
+                <option>mportocarrero@verfrut.pe</option>
+                <option>amarrufo@verfrut.pe</option>
+                <option>jmorales@verfrut.pe</option>
+                <option>smiranda@verfrut.pe</option>
+                <option>jsiancas@morales.pe</option>
+              </select>
+              <button type="button" onclick="agregarCC()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer">+ Agregar</button>
+            </div>
+            <div id="ccSeleccionados" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px"></div>
+            <input type="text" id="cCCNuevo" placeholder="O escribe un correo nuevo..." style="margin-top:5px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif">
+          </div>
         </div>
         <div style="margin-top:14px">
           <button class="btn-n" onclick="generarCorreo()" style="padding:10px 24px;font-size:12px">🔍 Generar Vista Previa</button>
@@ -358,10 +399,23 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <option>Vacaciones</option><option>Amonestación</option><option>Otro</option>
       </select>
     </div>
-    <div class="fc"><label>Fecha Inicio Doc.</label><input type="date" id="at_fid"></div>
-    <div class="fc"><label>Fecha Término Doc.</label><input type="date" id="at_ftd"></div>
+    <div class="fc"><label>Fecha Inicio Doc.</label><input type="date" id="at_fid" onchange="calcDias()"></div>
+    <div class="fc"><label>Fecha Término Doc.</label><input type="date" id="at_ftd" onchange="calcDias()"></div>
     <div class="fc"><label>Días Transcurridos</label><input type="number" id="at_dias" placeholder="0"></div>
-    <div class="fc"><label>Responsable Recepción</label><input type="text" id="at_resp" placeholder="Nombre responsable"></div>
+    <div class="fc">
+      <label>Responsable Recepción</label>
+      <select id="at_resp" style="padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif;color:var(--tx);background:#f8fafc">
+        <option value="">-- Seleccionar --</option>
+        <option>ALBERT PACHERRE</option>
+        <option>JAIME SIANCAS</option>
+        <option>JAIRO FERNANDEZ</option>
+        <option>DANIELA REYNA</option>
+        <option>ROSS MERY</option>
+        <option>ELIZBETH DIOSES</option>
+      </select>
+      <button type="button" onclick="agregarResp()" style="margin-top:5px;padding:5px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;cursor:pointer">+ Agregar responsable</button>
+      <div id="respExtra"></div>
+    </div>
     <div class="fc"><label>Estado</label><select id="at_est"><option value="PENDIENTE">PENDIENTE</option><option value="EN PROCESO">EN PROCESO</option><option value="RESUELTO">RESUELTO</option></select></div>
   </div>
   <div class="fg1" style="margin-top:12px">
@@ -575,6 +629,7 @@ function abrirAt() {
   ['at_dni','at_nom','at_fip','at_fundo','at_cargo','at_ruta','at_cod','at_fac','at_cel','at_fid','at_ftd','at_dias','at_resp','at_obs'].forEach(id=>sv(id,''));
   sv('at_sex',''); sv('at_emp','RAPEL'); sv('at_doc',''); sv('at_est','PENDIENTE');
   sv('at_fec',hoy()); sv('at_hi',new Date().toTimeString().substring(0,5)); sv('at_ht','');
+  iniciarReloj();
   // Auto-rellenar fundo actual del supervisor
   if (USER.fundoHoy) sv('at_fac', USER.fundoHoy);
   else if (USER.fundos && USER.fundos.length === 1) sv('at_fac', USER.fundos[0]);
@@ -821,6 +876,7 @@ async function generarCorreo() {
   const fi=v('cFI'), ff=v('cFF');
   if(!fi||!ff){alert('Selecciona el rango de fechas');return;}
   if(fi>ff){alert('La fecha inicio no puede ser mayor a la fecha fin');return;}
+  paraList=[]; ccList=[]; renderPara(); renderCC();
   document.getElementById('correoPreview').innerHTML='<div class="empty">⏳ Generando reporte...</div>';
   try{
     const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:v('cEmp'),rol:USER.rol,usuario:USER.usuario});
@@ -849,9 +905,11 @@ RESUMEN POR EMPRESA / TIPO DE DOCUMENTO / RESPONSABLE:`;
         </tbody></table>
       </div>`;
 
-    const para=v('cPara');
-    const cc=v('cCC');
-    const asunto=`Atenciones Registradas - ${fiF} al ${ffF}`;
+    const para = getParaFinal();
+    const cc   = getCCFinal();
+    const asunto = `Atenciones Registradas - ${fiF} al ${ffF}`;
+    // Guardar para confirmación
+    _correoData = { total: d.total, fi, ff, asunto, cuerpo };
 
     document.getElementById('correoPreview').innerHTML=`
       <div style="margin-top:20px">
@@ -863,7 +921,7 @@ RESUMEN POR EMPRESA / TIPO DE DOCUMENTO / RESPONSABLE:`;
           Deberás adjuntar manualmente el Excel exportado desde Google Sheets.
         </div>
         <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn-n" onclick="abrirOutlook('${esc(asunto)}','${esc(cuerpo)}','${esc(para)}','${esc(cc)}')" style="padding:10px 20px">
+          <button class="btn-n" onclick="enviarConConfirmacion()" style="padding:10px 20px">
             📧 Abrir en Outlook
           </button>
           <button class="btn-n" onclick="exportarExcel()" style="padding:10px 20px;background:var(--azul-med)">
@@ -874,6 +932,8 @@ RESUMEN POR EMPRESA / TIPO DE DOCUMENTO / RESPONSABLE:`;
   }catch(e){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ Error de conexión</div>';}
 }
 
+let _correoData = {};
+
 function abrirOutlook(asunto, cuerpo, para, cc) {
   const body = encodeURIComponent(cuerpo);
   const subj = encodeURIComponent(asunto);
@@ -882,6 +942,26 @@ function abrirOutlook(asunto, cuerpo, para, cc) {
   let mailto = `mailto:${to}?subject=${subj}&body=${body}`;
   if(c) mailto += `&cc=${c}`;
   window.location.href = mailto;
+}
+
+function enviarConConfirmacion() {
+  const para = getParaFinal();
+  const cc   = getCCFinal();
+  if (!para) { alert('Agrega al menos un destinatario'); return; }
+  const total = _correoData.total || 0;
+  const fi = fmtFLargo(_correoData.fi||'');
+  const ff = fmtFLargo(_correoData.ff||'');
+  const msg = `📋 CONFIRMACIÓN DE ENVÍO
+
+Rango: ${fi} al ${ff}
+Total de registros: ${total}
+Destinatarios: ${para}${cc?'
+CC: '+cc:''}
+
+¿Es correcto? Haz clic en OK para abrir Outlook.`;
+  if (confirm(msg)) {
+    abrirOutlook(_correoData.asunto||'', _correoData.cuerpo||'', para, cc);
+  }
 }
 
 function exportarExcel() {
@@ -926,6 +1006,137 @@ function cerrarSidebar(){
   document.getElementById('sb').classList.remove('open');
   document.getElementById('overlaySb').classList.remove('on');
 }
+// MAPA DOCUMENTO -> RESPONSABLE
+const DOC_RESP = {
+  '01 CITT - EMPRESA VERFRUT': 'ALBERT PACHERRE',
+  '02 CITT - EMPRESA RAPEL': 'ALBERT PACHERRE',
+  '03 REGULARIZAR CITT - GENERAR FORMULARIO': 'ALBERT PACHERRE',
+  '04 CMP - EMPRESA VERFRUT / RAPEL': 'ALBERT PACHERRE',
+  '05 REGULARIZAR CMP - GENERAR FORMULARIO': 'ALBERT PACHERRE',
+  '06 CERTIFICADO ODONTOLOGICO': 'ALBERT PACHERRE',
+  '07 REGULARIZAR CERTIFICADO ODONTOLOGICO - GENERAR FORMULARIO': 'ALBERT PACHERRE',
+  '08 INGRESO AL PROGRAMA DE GESTANTES VERFRUT / RAPEL': 'ALBERT PACHERRE',
+  '09 INGRESO A HORAS DE LACTANCIA VERFRUT / RAPEL': 'ALBERT PACHERRE',
+  '10 COPIAS PARA ASIGNACION FAMILIAR': 'JAIME SIANCAS',
+  '11 CONSTANCIA DE ESTUDIOS - JUSTIFICACION': 'ALBERT PACHERRE',
+  '12 CONTROL GESTANTE - JUSTIFICACION': 'ALBERT PACHERRE',
+  '13 DECLARACION SEGUROS DE VIDA LEY': 'JAIRO FERNANDEZ',
+  '14 FORMULARIO DE INTERCONSULTA': 'DANIELA REYNA',
+  '15 HORAS DE LACTANCIA VERFRUT / RAPEL': 'DANIELA REYNA',
+  '16 CONSTANCIA DE HOSPITALIZACION - GENERAR FORMULARIO / JUSTIFICAR': 'ALBERT PACHERRE',
+  '17 ESSALUD CITA (JUSTIFICACION)': 'ALBERT PACHERRE',
+  '18 COMPRA DE MEDICINA (JUSTIFICACION)': 'ALBERT PACHERRE',
+  '19 LICENCIA POR PATERNIDAD VERFRUT / RAPEL': 'DANIELA REYNA',
+  '20 LICENCIA POR FALLECIMIENTO VERFRUT / RAPEL': 'DANIELA REYNA',
+  '21 LICENCIA POR ENFERMEDAD GRAVE VERFRUT / RAPEL': 'DANIELA REYNA',
+  '22 RECETA MEDICA (JUSTIFICACION)': 'ALBERT PACHERRE',
+  '23 REGULARIZAR LICENCIA POR MATERNIDAD - GENERAR FORMULARIO': 'ALBERT PACHERRE',
+  '24 REGULARIZAR LICENCIA POR PATERNIDAD - GENERAR FORMULARIO': 'ALBERT PACHERRE',
+  '25 REGULARIZAR LICENCIA POR DEFUNCION - GENERAR FORMULARIO': 'ALBERT PACHERRE',
+  '26 REGULARIZAR LICENCIA POR ENFERMEDAD GRAVE - GENERAR FORMULARIO': 'ALBERT PACHERRE',
+  '27 JUSTIFICACION DEL JUEZ DE PAZ': 'ALBERT PACHERRE',
+  '28 OTROS TRAMITES': 'ALBERT PACHERRE',
+  '29 CMP - VALIDADO POR SIS': 'ALBERT PACHERRE',
+  '30 FORMULARIO INTERCONSULTA': 'ALBERT PACHERRE',
+  '31 FORMULARIO DE TRAMITE GESTANTE': 'ALBERT PACHERRE',
+  '32 NUMERO DE CUENTA': 'ROSS MERY',
+  '33 ELECCION DE SISTEMA PENSIONARIO': 'ELIZBETH DIOSES',
+  '34 LICENCIA POR MATERNIDAD': 'ALBERT PACHERRE'
+};
+
+function autoResponsable() {
+  const doc  = v('at_doc');
+  const resp = DOC_RESP[doc];
+  if (resp) sv('at_resp', resp);
+}
+
+function calcDias() {
+  const fi = v('at_fid'), ff = v('at_ftd');
+  if (fi && ff) {
+    const d = Math.round((new Date(ff) - new Date(fi)) / 86400000);
+    if (d >= 0) sv('at_dias', d);
+  }
+}
+
+let relojTO;
+function iniciarReloj() {
+  clearInterval(relojTO);
+  relojTO = setInterval(() => {
+    const el = document.getElementById('at_ht');
+    if (el && document.getElementById('mAt').classList.contains('on')) {
+      el.value = new Date().toTimeString().substring(0,5);
+    } else {
+      clearInterval(relojTO);
+    }
+  }, 30000); // actualiza cada 30 seg
+}
+
+function agregarDoc() {
+  const c = document.getElementById('docsExtra');
+  const d = document.createElement('input');
+  d.type='text'; d.placeholder='Nuevo documento...';
+  d.style.cssText='width:100%;margin-top:5px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif';
+  d.onchange = () => { if(d.value) sv('at_doc', d.value); };
+  c.appendChild(d); d.focus();
+}
+
+function agregarResp() {
+  const c = document.getElementById('respExtra');
+  const d = document.createElement('input');
+  d.type='text'; d.placeholder='Nuevo responsable...';
+  d.style.cssText='width:100%;margin-top:5px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif';
+  d.onchange = () => { if(d.value) sv('at_resp', d.value); };
+  c.appendChild(d); d.focus();
+}
+
+// Destinatarios seleccionados
+let paraList=[], ccList=[];
+
+function agregarPara() {
+  const sel = v('cPara');
+  if (sel && !paraList.includes(sel)) {
+    paraList.push(sel);
+    renderPara();
+  }
+}
+
+function agregarCC() {
+  const sel = v('cCC');
+  if (sel && !ccList.includes(sel)) {
+    ccList.push(sel);
+    renderCC();
+  }
+}
+
+function renderPara() {
+  document.getElementById('paraSeleccionados').innerHTML = paraList.map((e,i)=>
+    `<span style="background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer" onclick="quitarPara(${i})">📧 ${e} ✕</span>`
+  ).join('');
+}
+
+function renderCC() {
+  document.getElementById('ccSeleccionados').innerHTML = ccList.map((e,i)=>
+    `<span style="background:#f0fdf4;color:#166534;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer" onclick="quitarCC(${i})">📧 ${e} ✕</span>`
+  ).join('');
+}
+
+function quitarPara(i) { paraList.splice(i,1); renderPara(); }
+function quitarCC(i)   { ccList.splice(i,1);   renderCC(); }
+
+function getParaFinal() {
+  const extra = v('cParaNuevo').trim();
+  const todos = [...paraList];
+  if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim()) todos.push(e.trim()); });
+  return todos.join('; ');
+}
+
+function getCCFinal() {
+  const extra = v('cCCNuevo').trim();
+  const todos = [...ccList];
+  if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim()) todos.push(e.trim()); });
+  return todos.join('; ');
+}
+
 function ir(id,btn){
   cerrarSidebar();
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
