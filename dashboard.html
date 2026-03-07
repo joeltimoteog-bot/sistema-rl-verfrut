@@ -1716,8 +1716,9 @@ async function cargarVisitas() {
 function renderTablaVisitas(data) {
   const tb = document.getElementById('tbVisitas');
   if(!data.length) {
-    tb.innerHTML='<tr><td colspan="9" class="empty">No hay registros</td></tr>'; return;
+    tb.innerHTML='<tr><td colspan="8" class="empty">No hay registros</td></tr>'; return;
   }
+  const esAdmin = USER.rol === 'administrador';
   tb.innerHTML = data.map((v,i) => `
     <tr>
       <td>${i+1}</td>
@@ -1727,8 +1728,13 @@ function renderTablaVisitas(data) {
       <td>${v.fundo}</td>
       <td>Sem. ${v.semana}</td>
       <td><span class="tag ${v.estado==='EN PLAZO'?'tag-az':'tag-ro'}">${v.estado||'—'}</span></td>
-      <td><button class="btn-a" onclick="verInformeGuardado(${i})">📄 Ver</button></td>
-      <td><button class="btn-s" onclick="verInformeGuardado(${i})">👁️</button></td>
+      <td style="display:flex;gap:6px;align-items:center">
+        <button class="btn-a" onclick="verInformeGuardado(${i})">📄 Ver</button>
+        ${esAdmin
+          ? `<button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="habilitarEdicionVisita(${i})">✏️ Editar</button>`
+          : `<button class="btn-s" style="font-size:10px;padding:4px 8px" onclick="solicitarEdicion(${i})">🔒 Solicitar edición</button>`
+        }
+      </td>
     </tr>
   `).join('');
 }
