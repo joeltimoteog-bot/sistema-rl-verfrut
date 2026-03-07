@@ -152,6 +152,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <div class="ns" id="navAdmSec" style="display:none">Administración</div>
     <button class="ni" id="navRes" style="display:none" onclick="ir('resumen',this)"><span class="ic">📈</span>Resumen General</button>
     <button class="ni" id="navCorreo" onclick="ir('correo',this)"><span class="ic">📧</span>Enviar Reporte</button>
+    <button class="ni" id="navVisitas" onclick="ir('visitas',this)"><span class="ic">🏕️</span>Visitas de Campo</button>
     <button class="ni" id="navUsr" style="display:none" onclick="ir('usuarios',this)"><span class="ic">👥</span>Gestión Usuarios</button>
   </div>
   <div class="sb-ft">
@@ -340,6 +341,58 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <button class="btn-n" onclick="generarCorreo()" style="padding:10px 24px;font-size:12px">🔍 Generar Vista Previa</button>
         </div>
         <div id="correoPreview"></div>
+      </div>
+    </div>
+
+
+    <!-- VISITAS DE CAMPO -->
+    <div class="sec" id="sec-visitas">
+      <div class="sec-hd">
+        <h2>🏕️ Visitas de Campo</h2>
+        <button class="btn-n" onclick="abrirNuevaVisita()">+ Nueva Visita</button>
+      </div>
+
+      <!-- Filtros -->
+      <div class="filtros" style="margin-bottom:14px">
+        <select id="vFiltroEmp" onchange="cargarVisitas()">
+          <option value="">Todas las empresas</option>
+          <option>RAPEL</option><option>VERFRUT</option>
+        </select>
+        <select id="vFiltroMes" onchange="cargarVisitas()">
+          <option value="">Todos los meses</option>
+          <option value="1">Enero</option><option value="2">Febrero</option>
+          <option value="3">Marzo</option><option value="4">Abril</option>
+          <option value="5">Mayo</option><option value="6">Junio</option>
+          <option value="7">Julio</option><option value="8">Agosto</option>
+          <option value="9">Setiembre</option><option value="10">Octubre</option>
+          <option value="11">Noviembre</option><option value="12">Diciembre</option>
+        </select>
+        <input type="text" id="vFiltroSup" placeholder="Buscar supervisor..." oninput="cargarVisitas()" style="padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;width:180px">
+      </div>
+
+      <!-- Stats (solo admin) -->
+      <div id="statsVisitas" style="display:none;margin-bottom:16px">
+        <div class="cards" style="grid-template-columns:repeat(4,1fr)">
+          <div class="card"><div id="vTotalReg" style="font-size:26px;font-weight:800;color:var(--azul)">0</div><div>Total Registros</div></div>
+          <div class="card"><div id="vEnPlazo"  style="font-size:26px;font-weight:800;color:#16a34a">0</div><div>En Plazo</div></div>
+          <div class="card"><div id="vRetrasado" style="font-size:26px;font-weight:800;color:#dc2626">0</div><div>Retrasados</div></div>
+          <div class="card"><div id="vSemActual" style="font-size:26px;font-weight:800;color:var(--rojo)">0</div><div>Esta Semana</div></div>
+        </div>
+      </div>
+
+      <!-- Tabla registros -->
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>N°</th><th>Fecha</th><th>Empresa</th><th>Supervisor</th>
+              <th>Fundo</th><th>Semana</th><th>Estado</th><th>Informe</th>
+            </tr>
+          </thead>
+          <tbody id="tbVisitas">
+            <tr><td colspan="8" class="empty">Selecciona filtros o espera carga...</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -536,7 +589,8 @@ window.onload = async () => {
   const esSup    = ROLES_SUP.includes(rol);
   if (esAdmin || esAdmin2) {
     document.getElementById('navAdmSec').style.display='';
-    document.getElementById('navRes').style.display='';
+    document.getElementById('navVisitas').style.display='flex';
+  document.getElementById('navRes').style.display='';
     if (esAdmin) document.getElementById('navUsr').style.display='';
   }
   // Admin01/02 no pueden registrar
@@ -1176,11 +1230,12 @@ function ir(id,btn){
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   document.getElementById('sec-'+id)?.classList.add('on');
   if(btn)btn.classList.add('on');
-  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS'};
+  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS'};
   document.getElementById('tbT').textContent=ts[id]||id.toUpperCase();
   if(id==='resumen')cargarResumen();
   if(id==='usuarios')cargarUs();
   if(id==='atenciones' && atTodas.length===0) cargarAtenciones();
+  if(id==='visitas') cargarVisitas();
 }
 function abrir(id){document.getElementById(id).classList.add('on');}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
