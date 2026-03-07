@@ -1681,20 +1681,27 @@ function verInformeGuardado(idx) {
         <select id="vSup" onchange="autoFillVisita()">
           <option value="">-- Seleccionar --</option>
           <!-- Supervisores con sector fijo -->
-          <option data-dni="" data-correo="ptamayo@verfrut.pe" data-empresa="RAPEL" data-fundo="El Papayo" data-reemplazo="no">TAMAYO RODRIGUEZ POOL WILFREDO - El Papayo</option>
-          <option data-dni="" data-correo="ptamayo@verfrut.pe" data-empresa="RAPEL" data-fundo="Limones" data-reemplazo="no">TAMAYO RODRIGUEZ POOL WILFREDO - Limones</option>
-          <option data-dni="" data-correo="sviera@verfrut.pe" data-empresa="VERFRUT" data-fundo="Algarrobos" data-reemplazo="no">VIERA GIRON SERGIO - Algarrobos</option>
-          <option data-dni="" data-correo="yluzon@verfrut.pe" data-empresa="VERFRUT" data-fundo="Santa Rosa" data-reemplazo="no">LUZON VENEGAS YHANELLY GERALDINE - Santa Rosa</option>
-          <option data-dni="" data-correo="atineo@verfrut.pe" data-empresa="VERFRUT" data-fundo="Olivares Bajo" data-reemplazo="no">TINEO RAMOS ALEX - Olivares Bajo</option>
-          <option data-dni="" data-correo="fzapata@verfrut.pe" data-empresa="VERFRUT" data-fundo="Aproa" data-reemplazo="no">ZAPATA SUAREZ ALEX FABIAN - Aproa</option>
-          <option data-dni="" data-correo="almartinez@verfrut.pe" data-empresa="VERFRUT" data-fundo="Punta Arenas" data-reemplazo="no">MARTINEZ JUAREZ ALEXANDER - Punta Arenas</option>
-          <option data-dni="" data-correo="fpulache@verfrut.pe" data-empresa="VERFRUT" data-fundo="Los Olivares" data-reemplazo="no">PULACHE VIERA FLOR DE LOS MILAGROS - Los Olivares</option>
-          <option data-dni="" data-correo="ecastro@verfrut.pe" data-empresa="VERFRUT" data-fundo="San Vicente" data-reemplazo="no">CASTRO BAYONA ELBERTH JAN PIERRE - San Vicente</option>
-          <option data-dni="" data-correo="rmolero@verfrut.pe" data-empresa="RAPEL" data-fundo="Planta Rapel Packing" data-reemplazo="no">MOLERO ABAD ROBERTO CARLOS - Planta Rapel Packing</option>
-          <!-- Supervisores de reemplazo / fundos varios -->
-          <option data-dni="" data-correo="mmechato@verfrut.pe" data-empresa="" data-fundo="" data-reemplazo="si">MECHATO NAVARRO MURIEL DE LOS MILAGROS - Fundos Varios (Reemplazo)</option>
-          <option data-dni="" data-correo="javendano@verfrut.pe" data-empresa="" data-fundo="" data-reemplazo="si">AVENDAÑO GRANDA JHONNY DUBERLY - Fundos Varios (Reemplazo)</option>
-          <option data-dni="" data-correo="dquispe@verfrut.pe" data-empresa="" data-fundo="" data-reemplazo="si">QUISPE JUAREZ DEYSI MARISOL - Fundos Varios (Reemplazo)</option>
+          <option data-dni="73091524" data-correo="ecastro@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="San Vicente" data-reemplazo="no">CASTRO BAYONA ELBERTH JAN PIERRE</option>
+          <option data-dni="76329783" data-correo="yluzon@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="VERFRUT" data-fundo="Santa Rosa" data-reemplazo="no">LUZON VENEGAS YHANELLY GERALDENY</option>
+          <option data-dni="47262764" data-correo="smiranda@verfrut.pe" data-cargo="ASISTENTE DE RELACIONES LABORALES" data-empresa="RAPEL" data-fundo="Campo A" data-reemplazo="no">MIRANDA PASAPERA SOCORRO DEL PILAR</option>
+          <option data-dni="72954772" data-correo="ptamayo@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="Limones" data-reemplazo="no">TAMAYO RODRIGUEZ POOL WILFREDO</option>
+          <option data-dni="72954772" data-correo="ptamayo@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="El Papayo" data-reemplazo="no">TAMAYO RODRIGUEZ POOL WILFREDO</option>
+          <option data-dni="73332618" data-correo="atineo@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="VERFRUT" data-fundo="Olivares Bajo" data-reemplazo="no">TINEO RAMOS ALEXANDER</option>
+          <option data-dni="46066300" data-correo="sviera@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="Algarrobos" data-reemplazo="no">VIERA GIRON SERGIO</option>
+          <option data-dni="75656528" data-correo="fzapata@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="Aproa" data-reemplazo="no">ZAPATA SUAREZ ALEX FABIAN</option>
+          <option data-dni="72952975" data-correo="almartinez@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="VERFRUT" data-fundo="Punta Arenas" data-reemplazo="no">MARTINEZ JUAREZ ALEXANDER</option>
+          <option data-dni="46793507" data-correo="fpulache@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="Los Olivares" data-reemplazo="no">PULACHE VIERA FLOR DE LOS MILAGROS</option>
+          <option data-dni="74218729" data-correo="rmolero@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="Planta Packing - Rapel" data-reemplazo="no">MOLERO ABAD ROBERTO CARLOS</option>
+          <optgroup label="── Fundos Varios / Reemplazo ──">
+          <option data-dni="47524110" data-correo="jsiancas@verfrut.pe" data-cargo="ASISTENTE DE RELACIONES LABORALES" data-empresa="" data-fundo="" data-reemplazo="si">SIANCAS VIERA JAIME</option>
+          <option data-dni="46073509" data-correo="jtimoteo@verfrut.pe" data-cargo="COORDINADOR(A) DE RELACIONES LABORALES" data-empresa="" data-fundo="" data-reemplazo="si">TIMOTEO GONZA JOEL ANGEL</option>
+          <option data-dni="76342635" data-correo="javendano@verfrut.pe" data-cargo="DIGITADOR(A)" data-empresa="" data-fundo="" data-reemplazo="si">AVENDAÑO GRANDA JHONNY DUBERLY</option>
+          <option data-dni="47070759" data-correo="jchavez@verfrut.pe" data-cargo="COORDINADOR(A) DE RELACIONES LABORALES" data-empresa="" data-fundo="" data-reemplazo="si">CHAVEZ CORDOVA JORGE LUIS</option>
+          <option data-dni="43684214" data-correo="ovilela@verfrut.pe" data-cargo="JEFE(A) DE RELACIONES LABORALES" data-empresa="" data-fundo="" data-reemplazo="si">VILELA LUDEÑA OLGA STEFFANA</option>
+          <option data-dni="73046408" data-correo="mmechato@verfrut.pe" data-cargo="ASISTENTE DE RELACIONES LABORALES" data-empresa="" data-fundo="" data-reemplazo="si">MECHATO NAVARRO MURIEL DE LOS MILAGROS</option>
+          <option data-dni="74218729" data-correo="rmolero@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="" data-fundo="" data-reemplazo="si">MOLERO ABAD ROBERTO CARLOS</option>
+          <option data-dni="47227623" data-correo="dquispe@verfrut.pe" data-cargo="DIGITADOR(A)" data-empresa="" data-fundo="" data-reemplazo="si">QUISPE JUAREZ DEYSI MARISOL</option>
+          </optgroup>
         </select>
       </div>
 
