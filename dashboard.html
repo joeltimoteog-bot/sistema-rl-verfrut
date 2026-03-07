@@ -1701,7 +1701,7 @@ async function cargarVisitas() {
   const mes     = document.getElementById('vFiltroMes')?.value || '';
   const sup     = document.getElementById('vFiltroSup')?.value || '';
   try {
-    const d = await apiGet('getVisitas', {empresa, mes, supervisor: sup});
+    const d = await apiGet({action:'getVisitas', empresa, mes, supervisor: sup});
     visitasData = d.data || [];
     renderTablaVisitas(visitasData);
     if(USER.rol === 'administrador') {
@@ -1793,7 +1793,7 @@ let solicitudesData = [];
 
 async function cargarSolicitudes() {
   try {
-    const d = await apiGet('getSolicitudes', {});
+    const d = await apiGet({action:'getSolicitudes'});
     solicitudesData = d.data || [];
     renderSolicitudes(solicitudesData);
     actualizarBadge(solicitudesData.filter(s => s.estado === 'PENDIENTE').length);
@@ -1805,7 +1805,7 @@ async function cargarSolicitudes() {
 
 async function cargarBadgeSolicitudes() {
   try {
-    const d = await apiGet('getSolicitudes', { estado: 'PENDIENTE' });
+    const d = await apiGet({action:'getSolicitudes', estado:'PENDIENTE'});
     const n = (d.data || []).length;
     actualizarBadge(n);
   } catch(e) {}
