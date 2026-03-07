@@ -392,12 +392,45 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <div class="fc"><label>Hora Inicio</label><input type="time" id="at_hi"></div>
     <div class="fc"><label>Hora Término</label><input type="time" id="at_ht"></div>
     <div class="fc"><label>Detalle / Documento *</label>
-      <select id="at_doc">
+      <select id="at_doc" onchange="autoResponsable()">
         <option value="">-- Seleccionar --</option>
-        <option>Licencia Médica</option><option>Accidente Laboral</option><option>Finiquito</option>
-        <option>Reclamo</option><option>Consulta Laboral</option><option>Permiso</option>
-        <option>Vacaciones</option><option>Amonestación</option><option>Otro</option>
+        <option>01 CITT - EMPRESA VERFRUT</option>
+        <option>02 CITT - EMPRESA RAPEL</option>
+        <option>03 REGULARIZAR CITT - GENERAR FORMULARIO</option>
+        <option>04 CMP - EMPRESA VERFRUT / RAPEL</option>
+        <option>05 REGULARIZAR CMP - GENERAR FORMULARIO</option>
+        <option>06 CERTIFICADO ODONTOLOGICO</option>
+        <option>07 REGULARIZAR CERTIFICADO ODONTOLOGICO - GENERAR FORMULARIO</option>
+        <option>08 INGRESO AL PROGRAMA DE GESTANTES VERFRUT / RAPEL</option>
+        <option>09 INGRESO A HORAS DE LACTANCIA VERFRUT / RAPEL</option>
+        <option>10 COPIAS PARA ASIGNACION FAMILIAR</option>
+        <option>11 CONSTANCIA DE ESTUDIOS - JUSTIFICACION</option>
+        <option>12 CONTROL GESTANTE - JUSTIFICACION</option>
+        <option>13 DECLARACION SEGUROS DE VIDA LEY</option>
+        <option>14 FORMULARIO DE INTERCONSULTA</option>
+        <option>15 HORAS DE LACTANCIA VERFRUT / RAPEL</option>
+        <option>16 CONSTANCIA DE HOSPITALIZACION - GENERAR FORMULARIO / JUSTIFICAR</option>
+        <option>17 ESSALUD CITA (JUSTIFICACION)</option>
+        <option>18 COMPRA DE MEDICINA (JUSTIFICACION)</option>
+        <option>19 LICENCIA POR PATERNIDAD VERFRUT / RAPEL</option>
+        <option>20 LICENCIA POR FALLECIMIENTO VERFRUT / RAPEL</option>
+        <option>21 LICENCIA POR ENFERMEDAD GRAVE VERFRUT / RAPEL</option>
+        <option>22 RECETA MEDICA (JUSTIFICACION)</option>
+        <option>23 REGULARIZAR LICENCIA POR MATERNIDAD - GENERAR FORMULARIO</option>
+        <option>24 REGULARIZAR LICENCIA POR PATERNIDAD - GENERAR FORMULARIO</option>
+        <option>25 REGULARIZAR LICENCIA POR DEFUNCION - GENERAR FORMULARIO</option>
+        <option>26 REGULARIZAR LICENCIA POR ENFERMEDAD GRAVE - GENERAR FORMULARIO</option>
+        <option>27 JUSTIFICACION DEL JUEZ DE PAZ</option>
+        <option>28 OTROS TRAMITES</option>
+        <option>29 CMP - VALIDADO POR SIS</option>
+        <option>30 FORMULARIO INTERCONSULTA</option>
+        <option>31 FORMULARIO DE TRAMITE GESTANTE</option>
+        <option>32 NUMERO DE CUENTA</option>
+        <option>33 ELECCION DE SISTEMA PENSIONARIO</option>
+        <option>34 LICENCIA POR MATERNIDAD</option>
       </select>
+      <button type="button" onclick="agregarDoc()" style="margin-top:5px;padding:5px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;cursor:pointer">+ Agregar documento</button>
+      <div id="docsExtra"></div>
     </div>
     <div class="fc"><label>Fecha Inicio Doc.</label><input type="date" id="at_fid" onchange="calcDias()"></div>
     <div class="fc"><label>Fecha Término Doc.</label><input type="date" id="at_ftd" onchange="calcDias()"></div>
