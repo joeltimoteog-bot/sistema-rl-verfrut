@@ -1195,6 +1195,354 @@ function fmtFLargo(f){if(!f)return '';const [y,m,d]=f.split('-');const ms=['','e
 function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[String(e||'').toUpperCase()]||'bam';}
 function estC(e){const s=String(e||'').toUpperCase();return s==='PENDIENTE'?'bp':s==='EN PROCESO'?'bpr':'brs';}
 document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('on');}));
+
+// ============================================================
+// MÓDULO VISITAS DE CAMPO
+// ============================================================
+const LOGO_RAPEL   = "data:image/jpeg;base64,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";
+const LOGO_VERFRUT = "data:image/jpeg;base64,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";
+
+const CC_FUNDO = {
+  'Aproa':        'hcisneros@verfrut.pe',
+  'El Papayo':    'ygalindo@verfrut.pe',
+  'Limones':      'rperez@verfrut.pe',
+  'Olivares Bajo':'mtorres@verfrut.pe',
+  'Santa Rosa':   'galarcon@verfrut.pe',
+  'Punta Arenas': 'mcorrea@verfrut.pe',
+  'Algarrobos':   'wvillavicencio@verfrut.pe',
+  'San Vicente':  'cnavarro@verfrut.pe',
+  'Los Olivares': 'mtorres@verfrut.pe',
+  'Planta Rapel': 'rmolero@verfrut.pe'
+};
+
+let visitasFotos = [];
+let visitasData  = [];
+
+function abrirNuevaVisita() {
+  // Reset form
+  ['vSup','vDNI','vCorreo','vEmp','vFundo','vPunto','vFI','vFF',
+   'vSemana','vAsunto','vDesarrollo','vRutas','vAcciones',
+   'vCompromisos','vObservaciones','vMotivoRetraso','vPara'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.value='';
+  });
+  visitasFotos = [];
+  document.getElementById('vFotosPreview').innerHTML='';
+  document.getElementById('vFotosCount').textContent='0 imagen(es) seleccionada(s)';
+  document.getElementById('motivoRetrasoDiv').style.display='none';
+  // Fecha informe = hoy
+  document.getElementById('vFechaInforme').value = hoy();
+  abrir('mVisita');
+}
+
+function autoFillVisita() {
+  const sel = document.getElementById('vSup');
+  const opt = sel.options[sel.selectedIndex];
+  if(!opt.value) return;
+  document.getElementById('vDNI').value    = opt.dataset.dni    || '';
+  document.getElementById('vCorreo').value = opt.dataset.correo || '';
+  document.getElementById('vEmp').value    = opt.dataset.empresa|| '';
+  if(opt.dataset.fundo)  document.getElementById('vFundo').value = opt.dataset.fundo;
+  if(opt.dataset.punto)  document.getElementById('vPunto').value = opt.dataset.punto;
+}
+
+function calcSemanaVisita() {
+  const fi = document.getElementById('vFI').value;
+  const ff = document.getElementById('vFF').value;
+  if(!ff) return;
+  // Semana ISO del año
+  const d = new Date(ff);
+  const startOfYear = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
+  document.getElementById('vSemana').value = week;
+  // Calcular días hábiles transcurridos desde ff hasta hoy
+  const hoyD = new Date();
+  const ffD  = new Date(ff);
+  if(hoyD > ffD) {
+    let dias = 0, cur = new Date(ffD);
+    cur.setDate(cur.getDate()+1);
+    while(cur <= hoyD) {
+      const dow = cur.getDay();
+      if(dow !== 0) dias++; // lunes-sábado
+      cur.setDate(cur.getDate()+1);
+    }
+    if(dias > 7) {
+      document.getElementById('motivoRetrasoDiv').style.display='block';
+    } else {
+      document.getElementById('motivoRetrasoDiv').style.display='none';
+    }
+  }
+}
+
+function previewFotos(input) {
+  const files = Array.from(input.files);
+  if(files.length + visitasFotos.length > 6) {
+    alert('Máximo 6 imágenes permitidas.');
+    input.value='';
+    return;
+  }
+  const prev = document.getElementById('vFotosPreview');
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      visitasFotos.push({ name: file.name, data: e.target.result });
+      const img = document.createElement('div');
+      img.style.cssText='position:relative;display:inline-block';
+      img.innerHTML=`<img src="${e.target.result}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:2px solid #e2e8f0">
+        <button onclick="quitarFotoVisita(${visitasFotos.length-1},this.parentElement)" style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;padding:0">✕</button>`;
+      prev.appendChild(img);
+      document.getElementById('vFotosCount').textContent = visitasFotos.length + ' imagen(es) seleccionada(s)';
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function quitarFotoVisita(idx, el) {
+  visitasFotos.splice(idx,1);
+  el.remove();
+  document.getElementById('vFotosCount').textContent = visitasFotos.length + ' imagen(es) seleccionada(s)';
+}
+
+async function generarInformeVisita() {
+  // Validar campos obligatorios
+  const campos = [
+    ['vSup','Supervisor'],['vEmp','Empresa'],['vFundo','Fundo'],
+    ['vPunto','Punto/Zona'],['vFI','Fecha Inicio'],['vFF','Fecha Fin'],
+    ['vPara','Para (destinatario)'],['vAsunto','Asunto'],
+    ['vDesarrollo','Desarrollo'],['vRutas','Rutas/Áreas'],
+    ['vAcciones','Acciones'],['vObservaciones','Observaciones']
+  ];
+  for(const [id,nombre] of campos) {
+    if(!document.getElementById(id).value.trim()) {
+      alert('Complete el campo: ' + nombre);
+      document.getElementById(id).focus();
+      return;
+    }
+  }
+  if(visitasFotos.length === 0) {
+    alert('Debe agregar al menos una imagen de evidencia.');
+    return;
+  }
+  const motivoDiv = document.getElementById('motivoRetrasoDiv');
+  if(motivoDiv.style.display !== 'none') {
+    const motivo = document.getElementById('vMotivoRetraso').value.trim();
+    if(!motivo) {
+      alert('Debe ingresar el motivo del retraso.');
+      document.getElementById('vMotivoRetraso').focus();
+      return;
+    }
+  }
+
+  // Recopilar datos
+  const sup      = document.getElementById('vSup').options[document.getElementById('vSup').selectedIndex].text;
+  const dni      = document.getElementById('vDNI').value;
+  const correo   = document.getElementById('vCorreo').value;
+  const empresa  = document.getElementById('vEmp').value;
+  const fundo    = document.getElementById('vFundo').value;
+  const punto    = document.getElementById('vPunto').value;
+  const fi       = document.getElementById('vFI').value;
+  const ff       = document.getElementById('vFF').value;
+  const semana   = document.getElementById('vSemana').value;
+  const fechaInf = document.getElementById('vFechaInforme').value;
+  const paraVal  = document.getElementById('vPara').value;
+  const [paraNombre, paraCargo] = paraVal.split('|');
+  const asunto   = document.getElementById('vAsunto').value;
+  const desarrollo  = document.getElementById('vDesarrollo').value;
+  const rutas    = document.getElementById('vRutas').value;
+  const acciones = document.getElementById('vAcciones').value;
+  const compromisos = document.getElementById('vCompromisos').value;
+  const observaciones = document.getElementById('vObservaciones').value;
+  const motivo   = document.getElementById('vMotivoRetraso').value;
+  const logo     = empresa === 'RAPEL' ? LOGO_RAPEL : LOGO_VERFRUT;
+
+  // Generar HTML del informe
+  const informeHTML = generarHTMLInforme({
+    logo, empresa, sup, dni, correo, fundo, punto,
+    fi, ff, semana, fechaInf, paraNombre, paraCargo,
+    asunto, desarrollo, rutas, acciones, compromisos,
+    observaciones, motivo, fotos: visitasFotos
+  });
+
+  // Mostrar vista previa
+  document.getElementById('informeVistaPrevia').innerHTML = informeHTML;
+  cerrar('mVisita');
+  abrir('mVerInforme');
+
+  // Guardar en Google Sheets
+  await guardarVisitaSheets({
+    empresa, sup, dni, correo, fundo, punto,
+    fi, ff, semana, fechaInf, paraNombre,
+    asunto, desarrollo, rutas, acciones,
+    compromisos, observaciones, motivo,
+    fotos: visitasFotos.length
+  });
+
+  // Enviar correo con mailto
+  const ccFundo  = CC_FUNDO[fundo] || '';
+  const ccAdmin  = USER.usuario === 'jtimoteo' ? '' : 'jtimoteo@verfrut.pe';
+  const ccFinal  = [ccFundo, ccAdmin, 'jtimoteo@verfrut.pe'].filter(Boolean).join(';');
+  const cuerpoEmail = 'Estimados,' +
+    '\n\nAdjunto el informe de Visita de Campo - Semana ' + semana +
+    '\nEmpresa: ' + empresa +
+    '\nSupervisor: ' + sup +
+    '\nFundo: ' + fundo +
+    '\nPeriodo: ' + fmtF(fi) + ' al ' + fmtF(ff) +
+    '\n\nAtentamente,' +
+    '\n' + sup;
+  const subj = encodeURIComponent('Informe Visita Campo Semana ' + semana + ' - ' + empresa + ' - ' + fundo);
+  const para = encodeURIComponent('ovilela@verfrut.pe;jchavez@verfrut.pe;jtimoteo@verfrut.pe');
+  const cc   = encodeURIComponent(ccFinal);
+  const body = encodeURIComponent(cuerpoEmail);
+  setTimeout(() => {
+    if(confirm('✅ Informe generado y guardado.\n\n¿Desea abrirlo en Outlook para enviarlo?')) {
+      window.location.href = 'mailto:' + para + '?subject=' + subj + '&body=' + body + (cc ? '&cc=' + cc : '');
+    }
+  }, 500);
+}
+
+function generarHTMLInforme(d) {
+  const fotosHTML = d.fotos.map(f =>
+    `<img src="${f.data}" style="width:220px;height:160px;object-fit:cover;margin:4px;border:1px solid #ccc">`
+  ).join('');
+
+  return `
+    <div style="text-align:center;margin-bottom:10px">
+      <img src="${d.logo}" style="max-height:70px;max-width:200px">
+    </div>
+    <div style="text-align:center;font-weight:bold;font-size:11pt;margin-bottom:6px">
+      "Año del Fortalecimiento de la Soberanía Nacional"
+    </div>
+    <p style="margin:4px 0"><b>Informe Semana ${d.semana} – Empresa ${d.empresa}/DPTO. G.H./ Relaciones Laborales.</b></p>
+    <p style="margin:4px 0">De&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${d.sup}</p>
+    <p style="margin:4px 0">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Supervisor de Gestión Humana.</p>
+    <p style="margin:4px 0">Para&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${d.paraNombre}.</p>
+    <p style="margin:4px 0">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;${d.paraCargo}.</p>
+    <p style="margin:4px 0">Asunto&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: "${d.asunto}"</p>
+    <p style="margin:4px 0">Fecha&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${fmtF(d.fechaInf)}</p>
+    <br>
+    <p>Me es grato dirigirme a usted, para saludarle y a la vez informarle lo siguiente:</p>
+    <p><b>DESARROLLO:</b></p>
+    <p>Durante la semana ${d.semana}, que comprende del día del ${fmtF(d.fi)} al ${fmtF(d.ff)}, se realizaron constantes visitas a las diferentes labores programadas y a las distintas áreas de trabajo del Fundo ${d.fundo.toUpperCase()}.</p>
+    <p>${d.desarrollo}</p>
+    <p><b>RUTAS/AREAS VISITADAS:</b></p>
+    <p>${d.rutas}</p>
+    <p><b>ACCIONES:</b></p>
+    <p>${d.acciones}</p>
+    <p><b>COMPROMISO:</b></p>
+    <p>${d.compromisos || 'Sin compromisos registrados.'}</p>
+    <p><b>OBSERVACIONES:</b></p>
+    <p>${d.observaciones}</p>
+    ${d.motivo ? '<p><b>MOTIVO DE RETRASO:</b></p><p>' + d.motivo + '</p>' : ''}
+    <p><b>Anexos:</b></p>
+    <p><b>1.- Evidencia fotográfica:</b></p>
+    <div style="display:flex;flex-wrap:wrap;justify-content:center;margin:10px 0">
+      ${fotosHTML}
+    </div>
+    <br><br>
+    <p>Es todo lo que tengo que informar, para los fines que se crean convenientes.</p>
+    <br><br>
+    <p>____________________________________</p>
+    <p><b>${d.sup}</b></p>
+    <p>Supervisor de Gestión Humana.</p>
+  `;
+}
+
+function imprimirInforme() {
+  const contenido = document.getElementById('informeVistaPrevia').innerHTML;
+  const win = window.open('','_blank','width=900,height=700');
+  win.document.write('<html><head><title>Informe Visita Campo</title>');
+  win.document.write('<style>body{font-family:Times New Roman,serif;font-size:12pt;margin:40px;line-height:1.6} @media print{body{margin:20px}}</style>');
+  win.document.write('</head><body>' + contenido + '</body></html>');
+  win.document.close();
+  win.focus();
+  win.print();
+}
+
+async function guardarVisitaSheets(d) {
+  try {
+    await apiPost({
+      action: 'saveVisita',
+      empresa: d.empresa, supervisor: d.sup, dni: d.dni,
+      correo: d.correo, fundo: d.fundo, punto: d.punto,
+      fecha_inicio: d.fi, fecha_fin: d.ff,
+      semana: d.semana, fecha_informe: d.fechaInf,
+      para: d.paraNombre, asunto: d.asunto,
+      desarrollo: d.desarrollo, rutas: d.rutas,
+      acciones: d.acciones, compromisos: d.compromisos,
+      observaciones: d.observaciones, motivo: d.motivo,
+      fotos: d.fotos, registrado_por: USER.usuario
+    });
+  } catch(e) { console.error('Error guardando visita:', e); }
+}
+
+async function cargarVisitas() {
+  const empresa = document.getElementById('vFiltroEmp')?.value || '';
+  const mes     = document.getElementById('vFiltroMes')?.value || '';
+  const sup     = document.getElementById('vFiltroSup')?.value || '';
+  try {
+    const d = await apiGet('getVisitas', {empresa, mes, supervisor: sup});
+    visitasData = d.data || [];
+    renderTablaVisitas(visitasData);
+    if(USER.rol === 'administrador') {
+      document.getElementById('statsVisitas').style.display='block';
+      actualizarStatsVisitas(visitasData);
+    }
+  } catch(e) {
+    document.getElementById('tbVisitas').innerHTML = '<tr><td colspan="9" class="empty">Error cargando visitas</td></tr>';
+  }
+}
+
+function renderTablaVisitas(data) {
+  const tb = document.getElementById('tbVisitas');
+  if(!data.length) {
+    tb.innerHTML='<tr><td colspan="9" class="empty">No hay registros</td></tr>'; return;
+  }
+  tb.innerHTML = data.map((v,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td>${fmtF(v.fecha_informe)}</td>
+      <td><span class="tag tag-${v.empresa==='RAPEL'?'az':'ro'}">${v.empresa}</span></td>
+      <td>${v.supervisor}</td>
+      <td>${v.fundo}</td>
+      <td>Sem. ${v.semana}</td>
+      <td><span class="tag ${v.estado==='EN PLAZO'?'tag-az':'tag-ro'}">${v.estado||'—'}</span></td>
+      <td><button class="btn-a" onclick="verInformeGuardado(${i})">📄 Ver</button></td>
+      <td><button class="btn-s" onclick="verInformeGuardado(${i})">👁️</button></td>
+    </tr>
+  `).join('');
+}
+
+function actualizarStatsVisitas(data) {
+  document.getElementById('vTotalReg').textContent  = data.length;
+  document.getElementById('vEnPlazo').textContent   = data.filter(v=>v.estado==='EN PLAZO').length;
+  document.getElementById('vRetrasado').textContent = data.filter(v=>v.estado==='RETRASADO').length;
+  const sem = data.filter(v=>v.semana == document.getElementById('vSemana')?.value).length;
+  document.getElementById('vSemActual').textContent = sem;
+}
+
+function verInformeGuardado(idx) {
+  const v = visitasData[idx];
+  if(!v) return;
+  const logo = v.empresa === 'RAPEL' ? LOGO_RAPEL : LOGO_VERFRUT;
+  // Reconstruir fotos si existen
+  const fotosHTML = v.fotos_urls ? v.fotos_urls.map(u =>
+    `<img src="${u}" style="width:220px;height:160px;object-fit:cover;margin:4px;border:1px solid #ccc">`
+  ).join('') : '<p><i>Imágenes no disponibles en vista guardada</i></p>';
+
+  document.getElementById('informeVistaPrevia').innerHTML = generarHTMLInforme({
+    logo, empresa: v.empresa, sup: v.supervisor,
+    fundo: v.fundo, punto: v.punto,
+    fi: v.fecha_inicio, ff: v.fecha_fin,
+    semana: v.semana, fechaInf: v.fecha_informe,
+    paraNombre: v.para, paraCargo: 'Coordinador de Relaciones Laborales',
+    asunto: v.asunto, desarrollo: v.desarrollo,
+    rutas: v.rutas, acciones: v.acciones,
+    compromisos: v.compromisos, observaciones: v.observaciones,
+    motivo: v.motivo, fotos: []
+  }) + fotosHTML;
+  abrir('mVerInforme');
+}
+
 </script>
 
 <!-- MODAL SELECCION FUNDO -->
@@ -1210,6 +1558,170 @@ document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.
     <button class="btn-save" onclick="confirmarFundo()" style="width:100%;padding:12px;font-size:13px">✅ Confirmar</button>
   </div>
 </div>
+</div>
+
+
+<!-- MODAL NUEVA VISITA -->
+<div id="mVisita" class="modal">
+  <div class="modal-box" style="max-width:700px;max-height:90vh;overflow-y:auto">
+    <div class="modal-hd">
+      <h3 id="mVisitaTitulo">🏕️ Nueva Visita de Campo</h3>
+      <button onclick="cerrar('mVisita')" class="cls">✕</button>
+    </div>
+    <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px" id="formVisita">
+
+      <!-- Supervisor -->
+      <div class="fc" style="grid-column:1/-1">
+        <label>Supervisor *</label>
+        <select id="vSup" onchange="autoFillVisita()">
+          <option value="">-- Seleccionar --</option>
+          <option data-dni="12345678" data-correo="ecastro@verfrut.pe" data-empresa="VERFRUT" data-fundo="San Vicente" data-punto="Sector A">CASTRO BAYONA ELBERTH JAN PIERRE</option>
+          <option data-dni="23456789" data-correo="sviera@verfrut.pe" data-empresa="VERFRUT" data-fundo="Algarrobos" data-punto="Sector B">VIERA SEMINARIO SERGIO</option>
+          <option data-dni="34567890" data-correo="almartinez@verfrut.pe" data-empresa="VERFRUT" data-fundo="Punta Arenas" data-punto="Sector C">MARTINEZ CARRILLO ALEXANDER</option>
+          <option data-dni="45678901" data-correo="mmechato@verfrut.pe" data-empresa="VERFRUT" data-fundo="" data-punto="">MECHATO ZAPATA MURIEL</option>
+          <option data-dni="56789012" data-correo="rmolero@verfrut.pe" data-empresa="RAPEL" data-fundo="Planta Rapel" data-punto="Planta">MOLERO CRISANTO ROBERTO</option>
+          <option data-dni="67890123" data-correo="smiranda@verfrut.pe" data-empresa="RAPEL" data-fundo="" data-punto="">MIRANDA CASTILLO SOCORRO</option>
+          <option data-dni="78901234" data-correo="ptamayo@verfrut.pe" data-empresa="RAPEL" data-fundo="El Papayo" data-punto="Sector">TAMAYO RODRIGUEZ POOL WILFREDO</option>
+          <option data-dni="89012345" data-correo="atineo@verfrut.pe" data-empresa="VERFRUT" data-fundo="Olivares Bajo" data-punto="Sector">TINEO NOLE ALEX</option>
+          <option data-dni="90123456" data-correo="fpulache@verfrut.pe" data-empresa="VERFRUT" data-fundo="Los Olivares" data-punto="Sector">PULACHE ZAPATA FLOR</option>
+          <option data-dni="01234567" data-correo="fzapata@verfrut.pe" data-empresa="VERFRUT" data-fundo="Aproa" data-punto="Sector">ZAPATA NIZAMA ALEX</option>
+          <option data-dni="11223344" data-correo="yluzon@verfrut.pe" data-empresa="VERFRUT" data-fundo="Santa Rosa" data-punto="Sector">LUZON CHERO YHANELLY</option>
+        </select>
+      </div>
+
+      <!-- DNI y Correo (autorrelleno) -->
+      <div class="fc"><label>DNI</label><input type="text" id="vDNI" readonly style="background:#f1f5f9"></div>
+      <div class="fc"><label>Correo</label><input type="text" id="vCorreo" readonly style="background:#f1f5f9"></div>
+
+      <!-- Empresa y Fundo -->
+      <div class="fc">
+        <label>Empresa *</label>
+        <select id="vEmp" onchange="autoLogoPara()">
+          <option value="">-- Seleccionar --</option>
+          <option>RAPEL</option><option>VERFRUT</option>
+        </select>
+      </div>
+      <div class="fc">
+        <label>Fundo *</label>
+        <select id="vFundo">
+          <option value="">-- Seleccionar --</option>
+          <option>Aproa</option><option>El Papayo</option><option>Limones</option>
+          <option>Olivares Bajo</option><option>Santa Rosa</option><option>Punta Arenas</option>
+          <option>Algarrobos</option><option>San Vicente</option><option>Planta Rapel</option>
+          <option>Los Olivares</option>
+        </select>
+      </div>
+
+      <!-- Punto/Zona -->
+      <div class="fc" style="grid-column:1/-1">
+        <label>Punto / Zona visitada *</label>
+        <input type="text" id="vPunto" placeholder="Ej: Sector cosecha, Caseta Norte...">
+      </div>
+
+      <!-- Fechas -->
+      <div class="fc">
+        <label>Fecha Inicio Visita *</label>
+        <input type="date" id="vFI" onchange="calcSemanaVisita()">
+      </div>
+      <div class="fc">
+        <label>Fecha Fin Visita *</label>
+        <input type="date" id="vFF" onchange="calcSemanaVisita()">
+      </div>
+
+      <!-- Semana y Fecha informe -->
+      <div class="fc">
+        <label>Semana N°</label>
+        <input type="number" id="vSemana" readonly style="background:#f1f5f9">
+      </div>
+      <div class="fc">
+        <label>Fecha Informe</label>
+        <input type="date" id="vFechaInforme">
+      </div>
+
+      <!-- Para (destinatario del informe) -->
+      <div class="fc" style="grid-column:1/-1">
+        <label>Para (destinatario del informe) *</label>
+        <select id="vPara">
+          <option value="">-- Seleccionar --</option>
+          <option value="Olga Vilela Ludeña|Jefe de Relaciones Laborales">Olga Vilela Ludeña - Jefe de Relaciones Laborales</option>
+          <option value="Joel Ángel Timoteo Gonza|Coordinador de Relaciones Laborales">Joel Ángel Timoteo Gonza - Coordinador de Relaciones Laborales</option>
+          <option value="Jorge Chávez Córdova|Coordinador de Relaciones Laborales">Jorge Chávez Córdova - Coordinador de Relaciones Laborales</option>
+        </select>
+      </div>
+
+      <!-- Asunto -->
+      <div class="fc" style="grid-column:1/-1">
+        <label>Asunto *</label>
+        <input type="text" id="vAsunto" placeholder='Ej: "Visitas casetas - semana 9"'>
+      </div>
+
+      <!-- Desarrollo -->
+      <div class="fc" style="grid-column:1/-1">
+        <label>Desarrollo (descripción general de la semana) *</label>
+        <textarea id="vDesarrollo" rows="3" placeholder="Durante la semana X, se realizaron constantes visitas..."></textarea>
+      </div>
+
+      <!-- Rutas/Areas -->
+      <div class="fc" style="grid-column:1/-1">
+        <label>Rutas / Áreas Visitadas *</label>
+        <textarea id="vRutas" rows="2" placeholder="Describa las rutas y áreas recorridas..."></textarea>
+      </div>
+
+      <!-- Acciones -->
+      <div class="fc" style="grid-column:1/-1">
+        <label>Acciones *</label>
+        <textarea id="vAcciones" rows="3" placeholder="Acciones realizadas durante la visita..."></textarea>
+      </div>
+
+      <!-- Compromisos -->
+      <div class="fc" style="grid-column:1/-1">
+        <label>Compromisos</label>
+        <textarea id="vCompromisos" rows="2" placeholder="Compromisos establecidos..."></textarea>
+      </div>
+
+      <!-- Observaciones -->
+      <div class="fc" style="grid-column:1/-1">
+        <label>Observaciones *</label>
+        <textarea id="vObservaciones" rows="2" placeholder="Observaciones generales..."></textarea>
+      </div>
+
+      <!-- Fotos -->
+      <div class="fc" style="grid-column:1/-1">
+        <label>Evidencia Fotográfica (máx. 6 imágenes)</label>
+        <input type="file" id="vFotos" accept="image/*" multiple onchange="previewFotos(this)">
+        <div id="vFotosPreview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+        <div id="vFotosCount" style="font-size:11px;color:#64748b;margin-top:4px">0 imagen(es) seleccionada(s)</div>
+      </div>
+
+      <!-- Motivo retraso (condicional) -->
+      <div class="fc" style="grid-column:1/-1;display:none" id="motivoRetrasoDiv">
+        <label style="color:#dc2626">⚠️ Motivo de Retraso (obligatorio) *</label>
+        <textarea id="vMotivoRetraso" rows="2" placeholder="Ingrese el motivo del retraso..."></textarea>
+      </div>
+
+    </div>
+
+    <!-- Botones -->
+    <div style="padding:0 16px 16px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn-s" onclick="cerrar('mVisita')">Cancelar</button>
+      <button class="btn-n" onclick="generarInformeVisita()">📄 Generar Informe y Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL VER INFORME -->
+<div id="mVerInforme" class="modal">
+  <div class="modal-box" style="max-width:800px;max-height:90vh;overflow-y:auto">
+    <div class="modal-hd">
+      <h3>📄 Vista de Informe</h3>
+      <button onclick="cerrar('mVerInforme')" class="cls">✕</button>
+    </div>
+    <div id="informeVistaPrevia" style="padding:20px;font-family:Times New Roman,serif;font-size:12pt;line-height:1.6;background:#fff;border:1px solid #e2e8f0;margin:16px"></div>
+    <div style="padding:0 16px 16px;display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn-n" onclick="imprimirInforme()">🖨️ Imprimir / PDF</button>
+      <button class="btn-s" onclick="cerrar('mVerInforme')">Cerrar</button>
+    </div>
+  </div>
 </div>
 
 </body>
