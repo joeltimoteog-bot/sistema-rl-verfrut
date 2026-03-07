@@ -153,6 +153,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <button class="ni" id="navRes" style="display:none" onclick="ir('resumen',this)"><span class="ic">📈</span>Resumen General</button>
     <button class="ni" id="navCorreo" onclick="ir('correo',this)"><span class="ic">📧</span>Enviar Reporte</button>
     <button class="ni" id="navVisitas" onclick="ir('visitas',this)"><span class="ic">🏕️</span>Visitas de Campo</button>
+    <button class="ni" id="navSolicitudes" style="display:none" onclick="ir('solicitudes',this)"><span class="ic">🔔</span>Solicitudes <span id="badgeSol" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none">0</span></button>
     <button class="ni" id="navUsr" style="display:none" onclick="ir('usuarios',this)"><span class="ic">👥</span>Gestión Usuarios</button>
   </div>
   <div class="sb-ft">
@@ -396,6 +397,24 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       </div>
     </div>
 
+    <!-- SOLICITUDES DE EDICIÓN -->
+    <div class="sec" id="sec-solicitudes">
+      <div class="sec-hd"><h2>🔔 Solicitudes de Edición</h2></div>
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Fecha</th><th>Supervisor</th><th>Fundo</th><th>Semana</th>
+              <th>Motivo</th><th>Estado</th><th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tbSolicitudes">
+            <tr><td colspan="7" class="empty">Sin solicitudes pendientes</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- USUARIOS -->
     <div class="sec" id="sec-usuarios">
       <div class="card">
@@ -590,6 +609,10 @@ window.onload = async () => {
   if (esAdmin || esAdmin2) {
     document.getElementById('navAdmSec').style.display='';
     document.getElementById('navVisitas').style.display='flex';
+  if(USER.rol==='administrador') {
+    document.getElementById('navSolicitudes').style.display='flex';
+    cargarBadgeSolicitudes();
+  }
   document.getElementById('navRes').style.display='';
     if (esAdmin) document.getElementById('navUsr').style.display='';
   }
@@ -1230,12 +1253,13 @@ function ir(id,btn){
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   document.getElementById('sec-'+id)?.classList.add('on');
   if(btn)btn.classList.add('on');
-  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS'};
+  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS'};
   document.getElementById('tbT').textContent=ts[id]||id.toUpperCase();
   if(id==='resumen')cargarResumen();
   if(id==='usuarios')cargarUs();
   if(id==='atenciones' && atTodas.length===0) cargarAtenciones();
   if(id==='visitas') cargarVisitas();
+  if(id==='solicitudes') cargarSolicitudes();
 }
 function abrir(id){document.getElementById(id).classList.add('on');}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
@@ -1333,31 +1357,103 @@ function asignarFundoReemplazo() {
   };
 }
 
+// ── Temporada: baja = Lun-Vie | alta = Lun-Sab ──────────────────
+function esTemporadaAlta(fecha) {
+  const d   = new Date(fecha);
+  const mes = d.getMonth() + 1; // 1-12
+  const dia = d.getDate();
+  // Alta: 27 Jun → 31 Dic
+  if (mes > 6) return true;
+  if (mes === 6 && dia >= 27) return true;
+  // Baja: 5 Ene → 26 Jun
+  return false;
+}
+
+function esDiaHabil(fecha, alta) {
+  const dow = new Date(fecha).getDay(); // 0=Dom,6=Sab
+  if (dow === 0) return false;          // Domingo siempre libre
+  if (dow === 6 && !alta) return false; // Sábado libre en temporada baja
+  return true;
+}
+
+function diasHabilesEntre(desde, hasta, alta) {
+  let dias = 0;
+  let cur  = new Date(desde);
+  cur.setDate(cur.getDate() + 1); // desde el día siguiente
+  while (cur <= hasta) {
+    if (esDiaHabil(cur, alta)) dias++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dias;
+}
+
+function fechaLimiteInforme(fechaFin) {
+  // Plazo: 1 día hábil a partir del día siguiente a fechaFin
+  const alta = esTemporadaAlta(fechaFin);
+  let cur    = new Date(fechaFin);
+  let plazo  = 0;
+  while (plazo < 1) {
+    cur.setDate(cur.getDate() + 1);
+    if (esDiaHabil(cur, alta)) plazo++;
+  }
+  return cur;
+}
+
 function calcSemanaVisita() {
   const fi = document.getElementById('vFI').value;
   const ff = document.getElementById('vFF').value;
-  if(!ff) return;
-  // Semana ISO del año
-  const d = new Date(ff);
+  if (!ff) return;
+
+  // Semana del año
+  const d          = new Date(ff);
   const startOfYear = new Date(d.getFullYear(), 0, 1);
   const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
   document.getElementById('vSemana').value = week;
-  // Calcular días hábiles transcurridos desde ff hasta hoy
-  const hoyD = new Date();
-  const ffD  = new Date(ff);
-  if(hoyD > ffD) {
-    let dias = 0, cur = new Date(ffD);
-    cur.setDate(cur.getDate()+1);
-    while(cur <= hoyD) {
-      const dow = cur.getDay();
-      if(dow !== 0) dias++; // lunes-sábado
-      cur.setDate(cur.getDate()+1);
-    }
-    if(dias > 7) {
-      document.getElementById('motivoRetrasoDiv').style.display='block';
-    } else {
-      document.getElementById('motivoRetrasoDiv').style.display='none';
-    }
+
+  // Calcular plazo y estado
+  const hoy      = new Date(); hoy.setHours(0,0,0,0);
+  const ffD      = new Date(ff); ffD.setHours(0,0,0,0);
+  const alta     = esTemporadaAlta(ff);
+  const limite   = fechaLimiteInforme(ffD);
+  limite.setHours(0,0,0,0);
+
+  const diasTrans  = diasHabilesEntre(ffD, hoy, alta);
+  const diasPerm   = 1;
+  const diasRetr   = Math.max(0, diasTrans - diasPerm);
+  const pctAvance  = Math.min(1, diasTrans / diasPerm);
+  const pctRetraso = diasRetr / diasPerm;
+  const estado     = hoy > limite ? 'RETRASADO' : 'EN PLAZO';
+  const temporada  = alta ? 'ALTA (Lun-Sáb)' : 'BAJA (Lun-Vie)';
+
+  // Guardar en dataset para usarlos al guardar
+  document.getElementById('vFF').dataset.diasTrans  = diasTrans;
+  document.getElementById('vFF').dataset.diasPerm   = diasPerm;
+  document.getElementById('vFF').dataset.diasRetr   = diasRetr;
+  document.getElementById('vFF').dataset.pctAvance  = pctAvance.toFixed(2);
+  document.getElementById('vFF').dataset.pctRetraso = pctRetraso.toFixed(2);
+  document.getElementById('vFF').dataset.estado     = estado;
+  document.getElementById('vFF').dataset.temporada  = temporada;
+
+  // Mostrar indicador de plazo
+  const fmtLimite = limite.toLocaleDateString('es-PE', {weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  const indDiv = document.getElementById('plazoIndicadorDiv') || (() => {
+    const d = document.createElement('div');
+    d.id = 'plazoIndicadorDiv';
+    d.style.cssText = 'grid-column:1/-1;border-radius:8px;padding:10px 14px;font-size:12px;margin-top:4px';
+    document.getElementById('vFF').parentElement.after(d);
+    return d;
+  })();
+
+  if (estado === 'EN PLAZO') {
+    indDiv.style.background = '#f0fdf4';
+    indDiv.style.border = '1.5px solid #16a34a';
+    indDiv.innerHTML = `✅ <b>EN PLAZO</b> — Temporada ${temporada}. Plazo máximo: <b>${fmtLimite}</b>. Días hábiles transcurridos: ${diasTrans}/${diasPerm}.`;
+    document.getElementById('motivoRetrasoDiv').style.display = 'none';
+  } else {
+    indDiv.style.background = '#fef2f2';
+    indDiv.style.border = '1.5px solid #dc2626';
+    indDiv.innerHTML = `⚠️ <b>FUERA DE PLAZO</b> — Temporada ${temporada}. Plazo venció: <b>${fmtLimite}</b>. Días de retraso: <b>${diasRetr}</b>. Debes ingresar el motivo para continuar.`;
+    document.getElementById('motivoRetrasoDiv').style.display = 'block';
   }
 }
 
@@ -1564,6 +1660,7 @@ function imprimirInforme() {
 
 async function guardarVisitaSheets(d) {
   try {
+    const ffEl = document.getElementById('vFF');
     await apiPost({
       action: 'saveVisita',
       empresa: d.empresa, supervisor: d.sup, dni: d.dni,
@@ -1574,7 +1671,15 @@ async function guardarVisitaSheets(d) {
       desarrollo: d.desarrollo, rutas: d.rutas,
       acciones: d.acciones, compromisos: d.compromisos,
       observaciones: d.observaciones, motivo: d.motivo,
-      fotos: d.fotos, registrado_por: USER.usuario
+      fotos: d.fotos, registrado_por: USER.usuario,
+      // Datos de plazo
+      dias_transcurridos: ffEl.dataset.diasTrans  || 0,
+      dias_permitidos:    ffEl.dataset.diasPerm   || 1,
+      dias_retraso:       ffEl.dataset.diasRetr   || 0,
+      pct_avance:         ffEl.dataset.pctAvance  || '0.00',
+      pct_retraso:        ffEl.dataset.pctRetraso || '0.00',
+      estado:             ffEl.dataset.estado     || 'EN PLAZO',
+      temporada:          ffEl.dataset.temporada  || ''
     });
   } catch(e) { console.error('Error guardando visita:', e); }
 }
@@ -1622,6 +1727,162 @@ function actualizarStatsVisitas(data) {
   document.getElementById('vRetrasado').textContent = data.filter(v=>v.estado==='RETRASADO').length;
   const sem = data.filter(v=>v.semana == document.getElementById('vSemana')?.value).length;
   document.getElementById('vSemActual').textContent = sem;
+}
+
+function solicitarEdicion(idx) {
+  const v = visitasData[idx];
+  if (!v) return;
+  const motivo = prompt(
+    'Ingrese el motivo por el que necesita editar este informe:\n' +
+    '(Semana ' + v.semana + ' - ' + v.fundo + ')'
+  );
+  if (!motivo || !motivo.trim()) return;
+
+  // Guardar solicitud en Sheets
+  apiPost({
+    action: 'saveSolicitud',
+    nro_visita: v.nro,
+    supervisor: v.supervisor,
+    empresa: v.empresa,
+    fundo: v.fundo,
+    semana: v.semana,
+    fecha_informe: v.fecha_informe,
+    motivo: motivo.trim(),
+    solicitado_por: USER.usuario,
+    estado: 'PENDIENTE'
+  }).then(() => {
+    // Abrir WhatsApp con el mensaje
+    const nl = '%0A';
+    const msg = encodeURIComponent('SOLICITUD DE EDICION - SISTEMA RL') +
+      nl + nl +
+      encodeURIComponent('Estimado Joel, necesito su autorizacion para editar el siguiente informe:') +
+      nl + nl +
+      encodeURIComponent('Supervisor: ' + v.supervisor) + nl +
+      encodeURIComponent('Empresa: ' + v.empresa) + nl +
+      encodeURIComponent('Fundo: ' + v.fundo) + nl +
+      encodeURIComponent('Semana: ' + v.semana) + nl +
+      encodeURIComponent('Fecha: ' + fmtF(v.fecha_informe)) + nl + nl +
+      encodeURIComponent('Motivo: ' + motivo.trim()) + nl + nl +
+      encodeURIComponent('La solicitud fue registrada en el sistema. Quedo a la espera de su aprobacion.') + nl +
+      encodeURIComponent('Atentamente, ' + USER.nombre);
+    window.open('https://wa.me/51960853224?text=' + msg, '_blank');
+    alert('✅ Solicitud enviada. Joel revisará y aprobará desde el sistema.');
+  }).catch(() => {
+    alert('Error al registrar la solicitud. Intente nuevamente.');
+  });
+}
+
+function habilitarEdicionVisita(idx) {
+  alert('Función de edición disponible próximamente. Por ahora puede eliminar y re-registrar el informe.');
+}
+
+// ── SOLICITUDES DE EDICIÓN (ADMIN) ─────────────────────────
+let solicitudesData = [];
+
+async function cargarSolicitudes() {
+  try {
+    const d = await apiGet('getSolicitudes', {});
+    solicitudesData = d.data || [];
+    renderSolicitudes(solicitudesData);
+    actualizarBadge(solicitudesData.filter(s => s.estado === 'PENDIENTE').length);
+  } catch(e) {
+    document.getElementById('tbSolicitudes').innerHTML =
+      '<tr><td colspan="7" class="empty">Error cargando solicitudes</td></tr>';
+  }
+}
+
+async function cargarBadgeSolicitudes() {
+  try {
+    const d = await apiGet('getSolicitudes', { estado: 'PENDIENTE' });
+    const n = (d.data || []).length;
+    actualizarBadge(n);
+  } catch(e) {}
+}
+
+function actualizarBadge(n) {
+  const badge = document.getElementById('badgeSol');
+  if (n > 0) {
+    badge.textContent = n;
+    badge.style.display = 'inline';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderSolicitudes(data) {
+  const tb = document.getElementById('tbSolicitudes');
+  if (!data.length) {
+    tb.innerHTML = '<tr><td colspan="7" class="empty">Sin solicitudes</td></tr>';
+    return;
+  }
+  tb.innerHTML = data.map((s, i) => `
+    <tr style="${s.estado==='PENDIENTE'?'background:#fefce8':''}">
+      <td>${fmtF(s.fecha)}</td>
+      <td>${s.supervisor}</td>
+      <td>${s.fundo}</td>
+      <td>Sem. ${s.semana}</td>
+      <td style="max-width:200px;font-size:11px">${s.motivo}</td>
+      <td>
+        <span class="tag ${s.estado==='PENDIENTE'?'tag-ro':'tag-az'}">${s.estado}</span>
+      </td>
+      <td>
+        ${s.estado === 'PENDIENTE' ? `
+          <button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="aprobarSolicitud(${i})">✅ Aprobar</button>
+          <button class="btn-s" style="font-size:10px;padding:4px 8px;margin-left:4px" onclick="rechazarSolicitud(${i})">❌ Rechazar</button>
+        ` : `<span style="color:#64748b;font-size:11px">${s.resuelto_por||'—'}</span>`}
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function aprobarSolicitud(idx) {
+  const s = solicitudesData[idx];
+  if (!s) return;
+  if (!confirm('Aprobar solicitud de ' + s.supervisor + ' - Semana ' + s.semana + ' - ' + s.fundo + '?')) return;
+  try {
+    await apiPost({
+      action: 'resolverSolicitud',
+      fila: s.fila,
+      estado: 'APROBADA',
+      resuelto_por: USER.nombre
+    });
+    await cargarSolicitudes();
+    // Notificar por WhatsApp al supervisor
+    const nl2 = '%0A';
+    const msg = encodeURIComponent('SOLICITUD APROBADA - SISTEMA RL') +
+      nl2 + nl2 +
+      encodeURIComponent('Su solicitud de edicion fue APROBADA.') + nl2 + nl2 +
+      encodeURIComponent('Informe: Semana ' + s.semana + ' - ' + s.fundo) + nl2 +
+      encodeURIComponent('Aprobado por: ' + USER.nombre) + nl2 + nl2 +
+      encodeURIComponent('Ya puede editar su informe en el sistema.');
+    if (confirm('¿Notificar al supervisor por WhatsApp?')) {
+      window.open('https://wa.me/51960853224?text=' + msg, '_blank');
+    }
+    // Habilitar edición en tabla visitas
+    alert('✅ Solicitud aprobada. El supervisor ya puede editar su informe.');
+  } catch(e) {
+    alert('Error al aprobar. Intente nuevamente.');
+  }
+}
+
+async function rechazarSolicitud(idx) {
+  const s = solicitudesData[idx];
+  if (!s) return;
+  const motivo = prompt('Motivo del rechazo (se notificará al supervisor):');
+  if (!motivo) return;
+  try {
+    await apiPost({
+      action: 'resolverSolicitud',
+      fila: s.fila,
+      estado: 'RECHAZADA',
+      resuelto_por: USER.nombre,
+      motivo_rechazo: motivo
+    });
+    await cargarSolicitudes();
+    alert('Solicitud rechazada correctamente.');
+  } catch(e) {
+    alert('Error al rechazar.');
+  }
 }
 
 function verInformeGuardado(idx) {
