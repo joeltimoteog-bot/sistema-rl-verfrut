@@ -9,7 +9,7 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
-body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--tx)}
+body{font-family:Barlow,sans-serif;background:var(--bg);color:var(--tx)}
 .sb{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--azul);display:flex;flex-direction:column;z-index:100;transition:transform .3s ease}
 .sb-hdr{padding:20px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
 .sb-logo{display:flex;align-items:center;gap:10px}
@@ -51,7 +51,7 @@ body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--tx)}
 .btn-n{padding:7px 16px;background:var(--rojo);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
 .btn-n:hover{background:#b91c1c}
 .filtros{padding:11px 20px;border-bottom:1px solid var(--bd);display:flex;gap:9px;flex-wrap:wrap;align-items:center}
-.fi{padding:7px 12px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif;color:var(--tx);background:#f8fafc}
+.fi{padding:7px 12px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc}
 .fi:focus{outline:none;border-color:var(--azul-c);background:#fff}
 .btn-bus{padding:7px 16px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
 .tw{overflow-x:auto}
@@ -102,7 +102,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 .fg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
 .fc{display:flex;flex-direction:column;gap:5px}
 .fc label{font-size:9px;font-weight:700;color:var(--azul);letter-spacing:1px;text-transform:uppercase}
-.fc input,.fc select,.fc textarea{padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif;color:var(--tx);background:#f8fafc;transition:border-color .2s}
+.fc input,.fc select,.fc textarea{padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc;transition:border-color .2s}
 .fc input:focus,.fc select:focus,.fc textarea:focus{outline:none;border-color:var(--azul-c);background:#fff}
 .fc textarea{resize:vertical;min-height:65px}
 .trab-res{background:#f0f9ff;border:1px solid #bae6fd;border-radius:7px;padding:8px 12px;font-size:11px;color:#0369a1;margin-top:5px;display:none}
@@ -296,7 +296,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
             <label>Para (destinatarios) *</label>
             <div id="paraList" style="display:flex;flex-direction:column;gap:5px">
               <div style="display:flex;gap:5px">
-                <select id="cPara" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif">
+                <select id="cPara" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
                   <option value="">-- Seleccionar destinatario --</option>
                   <option>jchavez@verfrut.pe</option>
                   <option>ovilela@verfrut.pe</option>
@@ -312,13 +312,13 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
                 <button type="button" onclick="agregarPara()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer">+ Agregar</button>
               </div>
               <div id="paraSeleccionados" style="display:flex;flex-wrap:wrap;gap:5px"></div>
-              <input type="text" id="cParaNuevo" placeholder="O escribe un correo nuevo..." style="padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif">
+              <input type="text" id="cParaNuevo" placeholder="O escribe un correo nuevo..." style="padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
             </div>
           </div>
           <div class="fc">
             <label>CC (con copia)</label>
             <div style="display:flex;gap:5px">
-              <select id="cCC" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif">
+              <select id="cCC" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
                 <option value="">-- Seleccionar --</option>
                 <option>ovilela@verfrut.pe</option>
                 <option>jtimoteo@verfrut.pe</option>
@@ -333,7 +333,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
               <button type="button" onclick="agregarCC()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer">+ Agregar</button>
             </div>
             <div id="ccSeleccionados" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px"></div>
-            <input type="text" id="cCCNuevo" placeholder="O escribe un correo nuevo..." style="margin-top:5px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif">
+            <input type="text" id="cCCNuevo" placeholder="O escribe un correo nuevo..." style="margin-top:5px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
           </div>
         </div>
         <div style="margin-top:14px">
@@ -404,7 +404,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <div class="fc"><label>Días Transcurridos</label><input type="number" id="at_dias" placeholder="0"></div>
     <div class="fc">
       <label>Responsable Recepción</label>
-      <select id="at_resp" style="padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:'Barlow',sans-serif;color:var(--tx);background:#f8fafc">
+      <select id="at_resp" style="padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc">
         <option value="">-- Seleccionar --</option>
         <option>ALBERT PACHERRE</option>
         <option>JAIME SIANCAS</option>
