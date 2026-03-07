@@ -1728,11 +1728,13 @@ function renderTablaVisitas(data) {
       <td>${v.fundo}</td>
       <td>Sem. ${v.semana}</td>
       <td><span class="tag ${v.estado==='EN PLAZO'?'tag-az':'tag-ro'}">${v.estado||'—'}</span></td>
-      <td style="display:flex;gap:6px;align-items:center">
+      <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
         <button class="btn-a" onclick="verInformeGuardado(${i})">📄 Ver</button>
         ${esAdmin
           ? `<button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="habilitarEdicionVisita(${i})">✏️ Editar</button>`
-          : `<button class="btn-s" style="font-size:10px;padding:4px 8px" onclick="solicitarEdicion(${i})">🔒 Solicitar edición</button>`
+          : v.edicion_aprobada === 'EDICION_APROBADA'
+            ? `<button class="btn-n" style="font-size:10px;padding:4px 8px;background:#16a34a" onclick="editarVisitaAprobada(${i})">✏️ Editar</button>`
+            : `<button class="btn-s" style="font-size:10px;padding:4px 8px" onclick="solicitarEdicion(${i})">🔒 Solicitar edición</button>`
         }
       </td>
     </tr>
@@ -1791,7 +1793,51 @@ function solicitarEdicion(idx) {
 }
 
 function habilitarEdicionVisita(idx) {
-  alert('Función de edición disponible próximamente. Por ahora puede eliminar y re-registrar el informe.');
+  const v = visitasData[idx];
+  if (!v) return;
+  // Admin edita directamente abriendo el modal con datos precargados
+  editarVisitaConDatos(v, idx);
+}
+
+function editarVisitaAprobada(idx) {
+  const v = visitasData[idx];
+  if (!v) return;
+  if (!confirm('Tu solicitud fue aprobada. Ahora puedes editar este informe.\n¿Deseas continuar?')) return;
+  editarVisitaConDatos(v, idx);
+}
+
+function editarVisitaConDatos(v, idx) {
+  // Prellenar formulario con datos existentes
+  abrirNuevaVisita();
+  setTimeout(() => {
+    // Buscar supervisor en el select
+    const selSup = document.getElementById('vSup');
+    for(let i=0; i<selSup.options.length; i++) {
+      if(selSup.options[i].text.includes(v.supervisor.split(' ')[0])) {
+        selSup.selectedIndex = i;
+        break;
+      }
+    }
+    document.getElementById('vEmp').value          = v.empresa      || '';
+    document.getElementById('vFundo').value        = v.fundo        || '';
+    document.getElementById('vPunto').value        = v.punto        || '';
+    document.getElementById('vFI').value           = v.fecha_inicio || '';
+    document.getElementById('vFF').value           = v.fecha_fin    || '';
+    document.getElementById('vFechaInforme').value = v.fecha_informe|| '';
+    document.getElementById('vAsunto').value       = v.asunto       || '';
+    document.getElementById('vDesarrollo').value   = v.desarrollo   || '';
+    document.getElementById('vRutas').value        = v.rutas        || '';
+    document.getElementById('vAcciones').value     = v.acciones     || '';
+    document.getElementById('vCompromisos').value  = v.compromisos  || '';
+    document.getElementById('vObservaciones').value= v.observaciones|| '';
+    document.getElementById('vMotivoRetraso').value= v.motivo       || '';
+    // Recalcular semana y plazo
+    calcSemanaVisita();
+    // Marcar como edición
+    document.getElementById('mVisitaTitulo').textContent = '✏️ Editando Informe - Semana ' + v.semana;
+    // Guardar nro para actualizar en lugar de insertar
+    document.getElementById('vFF').dataset.editNro = v.nro;
+  }, 300);
 }
 
 // ── SOLICITUDES DE EDICIÓN (ADMIN) ─────────────────────────
