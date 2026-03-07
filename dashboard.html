@@ -153,6 +153,8 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <button class="ni" id="navRes" style="display:none" onclick="ir('resumen',this)"><span class="ic">📈</span>Resumen General</button>
     <button class="ni" id="navCorreo" onclick="ir('correo',this)"><span class="ic">📧</span>Enviar Reporte</button>
     <button class="ni" id="navVisitas" onclick="ir('visitas',this)"><span class="ic">🏕️</span>Visitas de Campo</button>
+    <button class="ni" id="navCasos" onclick="ir('casos',this)"><span class="ic">⚖️</span>Registro de Casos</button>
+    <button class="ni" id="navCasos" onclick="ir('casos',this)"><span class="ic">⚖️</span>Registro de Casos</button>
     <button class="ni" id="navSolicitudes" style="display:none" onclick="ir('solicitudes',this)"><span class="ic">🔔</span>Solicitudes <span id="badgeSol" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none">0</span></button>
     <button class="ni" id="navUsr" style="display:none" onclick="ir('usuarios',this)"><span class="ic">👥</span>Gestión Usuarios</button>
   </div>
@@ -398,6 +400,94 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     </div>
 
     <!-- SOLICITUDES DE EDICIÓN -->
+    <div class="sec" id="sec-casos">
+      <!-- ENCABEZADO -->
+      <div class="sec-hd">
+        <h2>⚖️ Registro de Casos</h2>
+        <button class="btn-n" onclick="abrirNuevoCaso()">+ Nuevo Caso</button>
+      </div>
+
+      <!-- FILTROS -->
+      <div class="filtros" style="margin-bottom:14px">
+        <select id="cFiltroEmp" onchange="cargarCasos()">
+          <option value="">Todas las empresas</option>
+          <option value="RAPEL">RAPEL</option>
+          <option value="VERFRUT">VERFRUT</option>
+        </select>
+        <select id="cFiltroMotivo" onchange="cargarCasos()">
+          <option value="">Todos los motivos</option>
+          <option>Beca del Foro</option>
+          <option>Contención</option>
+          <option>Enfermería</option>
+          <option>Transporte</option>
+          <option>Indisciplina</option>
+          <option>Incumplimiento RIT</option>
+          <option>Falta Grave</option>
+          <option>Observación Conductual</option>
+          <option>Otros</option>
+        </select>
+        <input type="text" id="cFiltroSup" placeholder="Buscar supervisor..." oninput="cargarCasos()">
+        <button class="btn-a" onclick="exportarCasosExcel()">📥 Exportar Excel</button>
+      </div>
+
+      <!-- STATS (solo admin) -->
+      <div id="statsCasos" style="display:none">
+        <div class="cards" style="margin-bottom:14px">
+          <div class="card"><div class="num" id="cTotalReg" style="color:#0b1e45">0</div>Total Casos</div>
+          <div class="card"><div class="num" id="cEnPlazo" style="color:#16a34a">0</div>En Plazo</div>
+          <div class="card"><div class="num" id="cRetrasado" style="color:#dc2626">0</div>Retrasados</div>
+          <div class="card"><div class="num" id="cEstaSemana" style="color:#d9292b">0</div>Esta Semana</div>
+        </div>
+      </div>
+
+      <!-- TABLA -->
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>N°</th><th>Fecha</th><th>Empresa</th><th>Trabajador</th>
+              <th>Motivo</th><th>Supervisor</th><th>Estado</th><th>% Avance</th><th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tbCasos">
+            <tr><td colspan="9" class="empty">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="sec" id="sec-casos">
+      <div class="sec-hd">
+        <h2>⚖️ Registro de Casos</h2>
+        <button class="btn-n" onclick="abrirNuevoCaso()">+ Nuevo Caso</button>
+      </div>
+      <div class="filtros" style="margin-bottom:14px">
+        <select id="cFiltroEmp" onchange="cargarCasos()"><option value="">Todas las empresas</option><option>RAPEL</option><option>VERFRUT</option></select>
+        <select id="cFiltroMotivo" onchange="cargarCasos()">
+          <option value="">Todos los motivos</option>
+          <option>Beca del Foro</option><option>Contención</option><option>Enfermería</option>
+          <option>Transporte</option><option>Indisciplina</option><option>Incumplimiento RIT</option>
+          <option>Falta Grave</option><option>Observación Conductual</option><option>Otros</option>
+        </select>
+        <input type="text" id="cFiltroSup" placeholder="Buscar supervisor..." oninput="cargarCasos()">
+        <button class="btn-a" onclick="exportarCasosExcel()">📥 Exportar Excel</button>
+      </div>
+      <div id="statsCasos" style="display:none">
+        <div class="cards" style="margin-bottom:14px">
+          <div class="card"><div class="num" id="cTotalReg" style="color:#0b1e45">0</div>Total Casos</div>
+          <div class="card"><div class="num" id="cEnPlazo" style="color:#16a34a">0</div>En Plazo</div>
+          <div class="card"><div class="num" id="cRetrasado" style="color:#dc2626">0</div>Retrasados</div>
+          <div class="card"><div class="num" id="cEstaSemana" style="color:#d9292b">0</div>Esta Semana</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="tbl">
+          <thead><tr><th>N°</th><th>Fecha</th><th>Empresa</th><th>Trabajador</th><th>Motivo</th><th>Supervisor</th><th>Estado</th><th>% Avance</th><th>Acción</th></tr></thead>
+          <tbody id="tbCasos"><tr><td colspan="9" class="empty">Cargando...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
     <div class="sec" id="sec-solicitudes">
       <div class="sec-hd"><h2>🔔 Solicitudes de Edición</h2></div>
       <div style="overflow-x:auto">
@@ -577,6 +667,126 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 </div>
 </div>
 
+<!-- MODAL NUEVO CASO -->
+<div class="ov" id="mCaso">
+<div class="modal" style="max-width:680px;width:96vw;max-height:92vh;overflow-y:auto;padding:0">
+  <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+    <span id="mCasoTitulo" style="font-weight:700;font-size:15px">⚖️ Nuevo Registro de Caso</span>
+    <span onclick="cerrarModal('mCaso')" style="cursor:pointer;font-size:20px;opacity:.8">✕</span>
+  </div>
+  <div style="padding:20px">
+    <div style="background:#f8fafc;border:2px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
+      <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px">🔍 Buscar Trabajador por DNI</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="cDNI" maxlength="8" placeholder="Ingrese DNI..."
+          style="flex:1;padding:8px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px"
+          oninput="if(this.value.length===8) buscarTrabajadorCaso()">
+        <button class="btn-n" onclick="buscarTrabajadorCaso()">Buscar</button>
+      </div>
+      <div id="cBuscarMsg" style="font-size:11px;margin-top:6px;color:#64748b"></div>
+    </div>
+    <div id="panelDatosCaso" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Nombre completo</label>
+          <input id="cNombre" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
+        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Empresa</label>
+          <input id="cEmpresa" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
+        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Cargo</label>
+          <input id="cCargo" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
+        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Sector / Zona</label>
+          <input id="cSector" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
+        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Fecha Ingreso</label>
+          <input id="cIngreso" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
+        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Fecha Término</label>
+          <input id="cTermino" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
+      </div>
+      <div style="border-top:2px solid #e2e8f0;padding-top:14px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:#0b1e45;margin-bottom:10px">📋 Datos del Caso</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Supervisor *</label>
+            <select id="cSupervisor" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
+              <option value="">-- Seleccionar --</option>
+              <option>CASTRO BAYONA ELBERTH JAN PIERRE</option>
+              <option>TAMAYO RODRIGUEZ POOL WILFREDO</option>
+              <option>VIERA GIRON SERGIO</option>
+              <option>TINEO RAMOS ALEXANDER</option>
+              <option>MARTINEZ JUAREZ ALEXANDER</option>
+              <option>ZAPATA SUAREZ ALEX FABIAN</option>
+              <option>LUZON VENEGAS YHANELLY GERALDENY</option>
+              <option>MIRANDA PASAPERA SOCORRO DEL PILAR</option>
+              <option>PULACHE VIERA FLOR DE LOS MILAGROS</option>
+              <option>MOLERO ABAD ROBERTO CARLOS</option>
+            </select></div>
+          <div><label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Motivo *</label>
+            <select id="cMotivo" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" onchange="mostrarMotivoExtraCaso()">
+              <option value="">-- Seleccionar --</option>
+              <option>Beca del Foro</option><option>Contención</option><option>Enfermería</option>
+              <option>Transporte</option><option>Indisciplina</option><option>Incumplimiento RIT</option>
+              <option>Falta Grave</option><option>Observación Conductual</option><option>Otros</option>
+            </select></div>
+          <div id="panelMotivoExtraCaso" style="display:none;grid-column:1/-1">
+            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Especificar motivo *</label>
+            <input id="cMotivoExtra" placeholder="Describa el motivo..." style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+
+          <div><label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Fecha Reporte *</label>
+            <input type="date" id="cFechaReporte" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" onchange="calcularFechaLimiteCaso()"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Temporada</label>
+          <input id="cTemporada" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
+        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Fecha Límite (auto)</label>
+          <input id="cFechaLimite" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
+        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Estado</label>
+          <input id="cEstadoCaso" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9;font-weight:700"></div>
+      </div>
+      <div id="panelAvanceCaso" style="display:none;margin-bottom:14px;padding:12px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span id="cEstadoLabel" style="font-size:12px;font-weight:700"></span>
+          <span id="cPorcentaje" style="font-size:14px;font-weight:800"></span>
+        </div>
+        <div style="background:#e2e8f0;border-radius:20px;height:8px">
+          <div id="cBarraAvance" style="height:8px;border-radius:20px;transition:width .4s"></div>
+        </div>
+        <div id="panelMotivoCaso" style="display:none;margin-top:10px">
+          <label style="font-size:11px;font-weight:600;color:#dc2626;display:block;margin-bottom:3px">⚠️ Motivo del retraso (obligatorio)</label>
+          <textarea id="cMotivoRetraso" rows="2" placeholder="Explique el motivo del retraso..." style="width:100%;padding:7px 10px;border:2px solid #dc2626;border-radius:6px;font-size:12px;resize:vertical"></textarea>
+        </div>
+      </div>
+      <!-- Adjuntos -->
+      <div style="border-top:2px solid #e2e8f0;padding-top:14px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:#0b1e45;margin-bottom:10px">📎 Documentos Adjuntos</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📄 Informe *</label>
+            <input type="file" id="cInforme" accept=".pdf,.doc,.docx" style="font-size:11px;width:100%">
+            <div id="cInformeMsg" style="font-size:10px;color:#64748b;margin-top:3px"></div>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📋 Reporte de Infracción *</label>
+            <input type="file" id="cReporte" accept=".pdf" style="font-size:11px;width:100%">
+            <div id="cReporteMsg" style="font-size:10px;color:#64748b;margin-top:3px"></div>
+          </div>
+        </div>
+        <div style="margin-top:8px;padding:8px 10px;background:#fffbeb;border-radius:6px;font-size:10px;color:#92400e">
+          ⚠️ Los archivos se subirán automáticamente a Google Drive al guardar el caso.
+        </div>
+      </div>
+
+    <div style="margin-bottom:16px">
+        <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Redacción / Descripción del caso *</label>
+        <textarea id="cRedaccion" rows="4" placeholder="Describa detalladamente el caso..." style="width:100%;padding:8px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px;resize:vertical"></textarea>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn-s" onclick="cerrarModal('mCaso')">Cancelar</button>
+        <button class="btn-n" onclick="guardarCaso()">💾 Guardar Caso</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+
 <script>
 let USER={}, API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec', atTodas=[], resData=[], detNro='', modoEdicion=false;
 let charts={};
@@ -667,6 +877,417 @@ function confirmarFundo() {
 // API
 async function apiGet(p) { const r=await fetch(API+'?'+new URLSearchParams(p)); return r.json(); }
 async function apiPost(b) { const r=await fetch(API,{method:'POST',body:JSON.stringify(b),headers:{'Content-Type':'text/plain'}}); return r.json(); }
+
+
+// ============================================================
+// MÓDULO CASOS
+// ============================================================
+const ARTICULOS_RAPEL = [
+  'Art. 24 a) - Abandono injustificado de trabajo',
+  'Art. 24 b) - Incumplimiento de obligaciones laborales',
+  'Art. 24 c) - Desobediencia a órdenes del empleador',
+  'Art. 24 d) - Falta de probidad o conducta inmoral',
+  'Art. 24 e) - Actos de violencia o intimidación',
+  'Art. 24 f) - Perjuicio material intencional',
+  'Art. 24 g) - Ausencias injustificadas',
+  'Art. 24 h) - Impuntualidad reiterada',
+  'Art. 24 i) - Incumplimiento del Reglamento Interno',
+  'Art. 25 - Falta grave',
+  'RIT - Infracción al Reglamento Interno de Trabajo',
+  'Otros'
+];
+
+const ARTICULOS_VERFRUT = [
+  'Art. 24 a) - Abandono injustificado de trabajo',
+  'Art. 24 b) - Incumplimiento de obligaciones laborales',
+  'Art. 24 c) - Desobediencia a órdenes del empleador',
+  'Art. 24 d) - Falta de probidad o conducta inmoral',
+  'Art. 24 e) - Actos de violencia o intimidación',
+  'Art. 24 f) - Perjuicio material intencional',
+  'Art. 24 g) - Ausencias injustificadas',
+  'Art. 24 h) - Impuntualidad reiterada',
+  'Art. 24 i) - Incumplimiento del Reglamento Interno',
+  'Art. 25 - Falta grave',
+  'RIT - Infracción al Reglamento Interno de Trabajo',
+  'Otros'
+];
+
+let casosData  = [];
+let casosFotos = [];
+
+function abrirNuevoCaso() {
+  document.getElementById('mCasoTitulo').textContent = '⚖️ Nuevo Registro de Caso';
+  limpiarFormCaso();
+  document.getElementById('mCaso').style.display='flex';
+}
+
+function limpiarFormCaso() {
+  ['cDNI','cNombre','cEmpresa','cCargo','cSector','cIngreso','cTermino',
+   'cFechaReporte','cFechaLimite','cTemporada','cEstadoCaso','cRedaccion',
+   'cMotivoExtra','cMotivoRetraso'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value='';
+  });
+  ['cSupervisor','cMotivo'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.selectedIndex=0;
+  });
+  document.getElementById('panelDatosCaso').style.display='none';
+  document.getElementById('panelAvanceCaso').style.display='none';
+  document.getElementById('panelMotivoExtraCaso').style.display='none';
+  document.getElementById('panelMotivoCaso').style.display='none';
+  document.getElementById('cBuscarMsg').textContent='';
+  document.getElementById('cInforme').value='';
+  document.getElementById('cReporte').value='';
+  document.getElementById('cInformeMsg').textContent='';
+  document.getElementById('cReporteMsg').textContent='';
+}
+
+async function buscarTrabajadorCaso() {
+  const dni = document.getElementById('cDNI').value.trim();
+  if(!dni || dni.length < 7) return;
+  document.getElementById('cBuscarMsg').textContent='⏳ Buscando...';
+  try {
+    const d = await apiGet({action:'buscarTrabajador', dni, usuario:USER.usuario, rol:USER.rol});
+    if(d.success && d.trabajador) {
+      const t = d.trabajador;
+      document.getElementById('cNombre').value  = t.nombre  || '';
+      document.getElementById('cEmpresa').value = t.empresa || '';
+      document.getElementById('cCargo').value   = t.oficio  || '';
+      document.getElementById('cSector').value  = t.zona    || '';
+      document.getElementById('cIngreso').value = t.fecha_inicio ? t.fecha_inicio.split('T')[0] : '';
+      document.getElementById('cTermino').value = t.fecha_termino ? t.fecha_termino.split('T')[0] : '';
+
+      document.getElementById('panelDatosCaso').style.display='block';
+      document.getElementById('cBuscarMsg').textContent='✅ Trabajador encontrado';
+    } else {
+      document.getElementById('cBuscarMsg').textContent='⚠️ DNI no encontrado en RAPEL ni VERFRUT';
+      document.getElementById('panelDatosCaso').style.display='none';
+    }
+  } catch(e) {
+    document.getElementById('cBuscarMsg').textContent='❌ Error al buscar: '+e.message;
+  }
+}
+
+function mostrarMotivoExtraCaso() {
+  const motivo = document.getElementById('cMotivo').value;
+  document.getElementById('panelMotivoExtraCaso').style.display =
+    motivo === 'Otros' ? 'block' : 'none';
+}
+
+function esDiaHabilCaso(fecha) {
+  const d = new Date(fecha);
+  const mes = d.getMonth()+1, dia = d.getDate(), year = d.getFullYear();
+  // Temporada baja: 5 Ene - 26 Jun → Lun-Vie
+  const esBaja = (new Date(fecha) <= new Date(year, 5, 26));
+  const dow = d.getDay(); // 0=Dom, 6=Sab
+  return esBaja ? (dow>=1 && dow<=5) : (dow>=1 && dow<=6);
+}
+
+function calcularFechaLimiteCaso() {
+  const fechaStr = document.getElementById('cFechaReporte').value;
+  if(!fechaStr) return;
+  const fechaRep = new Date(fechaStr + 'T00:00:00');
+  // Temporada
+  const esBaja = fechaRep <= new Date(fechaRep.getFullYear(), 5, 26);
+  document.getElementById('cTemporada').value = esBaja ? 'Temporada Baja' : 'Temporada Alta';
+  // Calcular fecha límite: 3 días hábiles
+  let contador = 0;
+  let fechaTemp = new Date(fechaRep);
+  fechaTemp.setDate(fechaTemp.getDate()+1);
+  while(contador < 3) {
+    if(esDiaHabilCaso(fechaTemp)) contador++;
+    if(contador < 3) fechaTemp.setDate(fechaTemp.getDate()+1);
+  }
+  // Asegurar que la fecha límite sea hábil
+  while(!esDiaHabilCaso(fechaTemp)) fechaTemp.setDate(fechaTemp.getDate()+1);
+  const fl = fechaTemp.toISOString().split('T')[0];
+  document.getElementById('cFechaLimite').value = fl;
+  // Calcular estado con la fecha de hoy
+  calcularEstadoCaso(fl);
+}
+
+function calcularEstadoCaso(fechaLimiteStr) {
+  if(!fechaLimiteStr) return;
+  const hoy    = new Date(); hoy.setHours(0,0,0,0);
+  const limite = new Date(fechaLimiteStr + 'T00:00:00');
+  const panel  = document.getElementById('panelAvanceCaso');
+  panel.style.display='block';
+  if(hoy <= limite) {
+    // En plazo
+    document.getElementById('cEstadoCaso').value = 'EN PLAZO';
+    document.getElementById('cEstadoCaso').style.color = '#16a34a';
+    document.getElementById('cEstadoLabel').textContent = '✅ EN PLAZO';
+    document.getElementById('cPorcentaje').textContent = '100%';
+    document.getElementById('cPorcentaje').style.color = '#16a34a';
+    document.getElementById('cBarraAvance').style.width='100%';
+    document.getElementById('cBarraAvance').style.background='#16a34a';
+    document.getElementById('panelMotivoCaso').style.display='none';
+    panel.style.background='#f0fdf4';
+    panel.style.borderColor='#bbf7d0';
+  } else {
+    // Retrasado
+    let diasRetraso=0, cur=new Date(limite); cur.setDate(cur.getDate()+1);
+    while(cur<=hoy){ if(esDiaHabilCaso(cur)) diasRetraso++; cur.setDate(cur.getDate()+1); }
+    let pct = Math.max(0, 100 - (diasRetraso*10));
+    document.getElementById('cEstadoCaso').value = 'RETRASADO';
+    document.getElementById('cEstadoCaso').style.color = '#dc2626';
+    document.getElementById('cEstadoLabel').textContent = '⚠️ RETRASADO — '+diasRetraso+' día(s) hábil(es)';
+    document.getElementById('cPorcentaje').textContent = pct+'%';
+    document.getElementById('cPorcentaje').style.color = '#dc2626';
+    document.getElementById('cBarraAvance').style.width=pct+'%';
+    document.getElementById('cBarraAvance').style.background='#dc2626';
+    document.getElementById('panelMotivoCaso').style.display='block';
+    panel.style.background='#fef2f2';
+    panel.style.borderColor='#fecaca';
+    // Guardar datos en dataset
+    document.getElementById('cFechaLimite').dataset.diasRetraso = diasRetraso;
+    document.getElementById('cFechaLimite').dataset.pct = pct;
+  }
+}
+
+async function subirArchivoDrive(fileInput, nombreCampo) {
+  const file = fileInput.files[0];
+  if(!file) return null;
+  const msgEl = document.getElementById(nombreCampo+'Msg');
+  if(msgEl) msgEl.textContent = '⏳ Subiendo '+file.name+'...';
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = async e => {
+      try {
+        const base64 = e.target.result.split(',')[1];
+        const res = await apiPost({
+          action: 'subirArchivo',
+          nombre: file.name,
+          tipo: file.type,
+          datos: base64
+        });
+        if(res.success) {
+          if(msgEl) msgEl.textContent = '✅ '+file.name;
+          if(msgEl) msgEl.style.color='#16a34a';
+          resolve({ nombre: file.name, enlace: res.enlace });
+        } else {
+          if(msgEl) msgEl.textContent = '❌ Error al subir';
+          if(msgEl) msgEl.style.color='#dc2626';
+          resolve(null);
+        }
+      } catch(err) {
+        if(msgEl) msgEl.textContent = '❌ '+err.message;
+        resolve(null);
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function guardarCaso() {
+  const dni       = document.getElementById('cDNI').value.trim();
+  const nombre    = document.getElementById('cNombre').value.trim();
+  const empresa   = document.getElementById('cEmpresa').value.trim();
+  const cargo     = document.getElementById('cCargo').value.trim();
+  const sector    = document.getElementById('cSector').value.trim();
+  const ingreso   = document.getElementById('cIngreso').value.trim();
+  const termino   = document.getElementById('cTermino').value.trim();
+  const supervisor= document.getElementById('cSupervisor').value;
+  const motivo    = document.getElementById('cMotivo').value;
+  const motivoExtra=document.getElementById('cMotivoExtra').value.trim();
+  const fechaRep  = document.getElementById('cFechaReporte').value;
+  const fechaLim  = document.getElementById('cFechaLimite').value;
+  const temporada = document.getElementById('cTemporada').value;
+  const estado    = document.getElementById('cEstadoCaso').value;
+  const redaccion = document.getElementById('cRedaccion').value.trim();
+  const motivoRet = document.getElementById('cMotivoRetraso').value.trim();
+  const diasRetr  = document.getElementById('cFechaLimite').dataset.diasRetraso || 0;
+  const pct       = document.getElementById('cFechaLimite').dataset.pct || 100;
+
+  if(!dni)        { alert('Busca un trabajador primero'); return; }
+  if(!supervisor) { alert('Selecciona un supervisor'); return; }
+  if(!motivo)     { alert('Selecciona el motivo'); return; }
+  if(motivo==='Otros' && !motivoExtra) { alert('Especifica el motivo'); return; }
+  if(!fechaRep)   { alert('Ingresa la fecha de reporte'); return; }
+  if(!redaccion)  { alert('Ingresa la redacción del caso'); return; }
+  if(estado==='RETRASADO' && !motivoRet) { alert('Debes ingresar el motivo del retraso'); return; }
+
+  const informeFile = document.getElementById('cInforme');
+  const reporteFile = document.getElementById('cReporte');
+  if(!informeFile.files[0])  { alert('Debes adjuntar el Informe'); return; }
+  if(!reporteFile.files[0])  { alert('Debes adjuntar el Reporte de Infracción'); return; }
+
+  const btn = document.querySelector('#mCaso .btn-n:last-child');
+  btn.textContent='⏳ Subiendo archivos...'; btn.disabled=true;
+
+  // Subir archivos a Drive
+  const [informe, reporte] = await Promise.all([
+    subirArchivoDrive(informeFile, 'cInforme'),
+    subirArchivoDrive(reporteFile, 'cReporte')
+  ]);
+
+  if(!informe || !reporte) {
+    alert('Error al subir uno o más archivos. Intenta nuevamente.');
+    btn.textContent='💾 Guardar Caso'; btn.disabled=false;
+    return;
+  }
+
+  btn.textContent='⏳ Guardando...';
+
+  try {
+    const res = await apiPost({
+      action:'saveCaso',
+      dni, nombre, empresa, cargo, sector, ingreso, termino,
+      supervisor, motivo, motivo_extra: motivoExtra,
+      fecha_reporte: fechaRep, fecha_limite: fechaLim,
+      temporada, estado, redaccion,
+      motivo_retraso: motivoRet,
+      dias_retraso: diasRetr,
+      porcentaje: estado==='EN PLAZO' ? 100 : pct,
+      registrado_por: USER.nombre,
+      nombre_informe:  informe.nombre,
+      enlace_informe:  informe.enlace,
+      nombre_reporte:  reporte.nombre,
+      enlace_reporte:  reporte.enlace
+    });
+    if(res.success) {
+      cerrarModal('mCaso');
+      await cargarCasos();
+      alert('✅ Caso registrado correctamente (N° '+res.nro+')');
+    } else {
+      alert('Error: '+res.error);
+    }
+  } catch(e) {
+    alert('Error al guardar: '+e.message);
+  } finally {
+    btn.textContent='💾 Guardar Caso'; btn.disabled=false;
+  }
+}
+
+async function cargarCasos() {
+  const empresa = document.getElementById('cFiltroEmp')?.value || '';
+  const motivo  = document.getElementById('cFiltroMotivo')?.value || '';
+  const sup     = document.getElementById('cFiltroSup')?.value || '';
+  try {
+    const d = await apiGet({action:'getCasos', empresa, motivo, supervisor:sup,
+                            usuario:USER.usuario, rol:USER.rol});
+    casosData = d.data || [];
+    renderTablaCasos(casosData);
+    if(USER.rol==='administrador') {
+      document.getElementById('statsCasos').style.display='block';
+      actualizarStatsCasos(casosData);
+    }
+  } catch(e) {
+    document.getElementById('tbCasos').innerHTML='<tr><td colspan="9" class="empty">Error cargando casos</td></tr>';
+  }
+}
+
+function renderTablaCasos(data) {
+  const tb = document.getElementById('tbCasos');
+  if(!data.length) { tb.innerHTML='<tr><td colspan="9" class="empty">No hay registros</td></tr>'; return; }
+  const esAdmin = USER.rol==='administrador';
+  tb.innerHTML = data.map((c,i) => `
+    <tr>
+      <td>${i+1}</td>
+      <td>${fmtF(c.fecha_reporte)}</td>
+      <td><span class="tag tag-${c.empresa==='RAPEL'?'az':'ro'}">${c.empresa}</span></td>
+      <td style="font-size:11px">${c.nombre}</td>
+      <td style="font-size:11px">${c.motivo}</td>
+      <td style="font-size:11px">${c.supervisor}</td>
+      <td><span class="tag ${c.estado==='EN PLAZO'?'tag-gr':'tag-ro'}">${c.estado||'—'}</span></td>
+      <td style="font-weight:700;color:${c.estado==='EN PLAZO'?'#16a34a':'#dc2626'}">${c.porcentaje}%</td>
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
+        <button class="btn-a" style="font-size:10px" onclick="verDetalleCaso(${i})">👁️ Ver</button>
+        ${c.enlace_informe ? `<a href="${c.enlace_informe}" target="_blank" class="btn-n" style="font-size:10px;padding:4px 8px;text-decoration:none">📄 Informe</a>` : ''}
+        ${c.enlace_reporte ? `<a href="${c.enlace_reporte}" target="_blank" class="btn-s" style="font-size:10px;padding:4px 8px;text-decoration:none">📋 Reporte</a>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function actualizarStatsCasos(data) {
+  document.getElementById('cTotalReg').textContent  = data.length;
+  document.getElementById('cEnPlazo').textContent   = data.filter(c=>c.estado==='EN PLAZO').length;
+  document.getElementById('cRetrasado').textContent = data.filter(c=>c.estado==='RETRASADO').length;
+  const hoy = new Date();
+  const inicio = new Date(hoy); inicio.setDate(hoy.getDate()-7);
+  document.getElementById('cEstaSemana').textContent = data.filter(c=>{
+    if(!c.fecha_reporte) return false;
+    const f=new Date(c.fecha_reporte); return f>=inicio && f<=hoy;
+  }).length;
+}
+
+function verDetalleCaso(idx) {
+  const c = casosData[idx];
+  if(!c) return;
+  alert(
+    'CASO N° ' + (idx+1) + '\n' +
+    '━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+    'DNI: ' + c.dni + '\n' +
+    'Trabajador: ' + c.nombre + '\n' +
+    'Empresa: ' + c.empresa + '\n' +
+    'Cargo: ' + c.cargo + '\n' +
+    'Sector: ' + c.sector + '\n' +
+    '━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+    'Motivo: ' + c.motivo + (c.motivo_extra?' - '+c.motivo_extra:'') + '\n' +
+    'Artículo: ' + c.articulo + '\n' +
+    'Supervisor: ' + c.supervisor + '\n' +
+    'Fecha reporte: ' + c.fecha_reporte + '\n' +
+    'Fecha límite: ' + c.fecha_limite + '\n' +
+    'Temporada: ' + c.temporada + '\n' +
+    'Estado: ' + c.estado + ' (' + c.porcentaje + '%)\n' +
+    (c.motivo_retraso ? 'Motivo retraso: ' + c.motivo_retraso + '\n' : '') +
+    '━━━━━━━━━━━━━━━━━━━━━━━━\n' +
+    'Redacción: ' + c.redaccion
+  );
+}
+
+function exportarCasosExcel() {
+  if(!casosData.length) { alert('No hay datos para exportar'); return; }
+  const headers = ['N°','Fecha Reporte','Empresa','DNI','Trabajador','Cargo','Sector',
+                   'Supervisor','Motivo','Artículo','Fecha Límite','Temporada',
+                   'Estado','% Avance','Redacción','Registrado Por'];
+  const rows = casosData.map((c,i) => [
+    i+1, c.fecha_reporte, c.empresa, c.dni, c.nombre, c.cargo, c.sector,
+    c.supervisor, c.motivo+(c.motivo_extra?' - '+c.motivo_extra:''),
+    c.articulo, c.fecha_limite, c.temporada,
+    c.estado, c.porcentaje+'%', c.redaccion, c.registrado_por
+  ]);
+  let csv = [headers, ...rows].map(r => r.map(v => '"'+(v||'').toString().replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='Casos_RL_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click();
+}
+
+function previewFotosCaso(input) {
+  const files = Array.from(input.files);
+  if(files.length + casosFotos.length > 6) {
+    alert('Máximo 6 imágenes permitidas.');
+    input.value='';
+    return;
+  }
+  const prev = document.getElementById('cFotosPreview');
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      casosFotos.push({ name: file.name, data: e.target.result });
+      const div = document.createElement('div');
+      div.style.cssText='position:relative;display:inline-block';
+      div.innerHTML = `
+        <img src="${e.target.result}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:2px solid #e2e8f0">
+        <button onclick="quitarFotoCaso(${casosFotos.length-1},this.parentNode)"
+          style="position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border:none;
+                 border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px">✕</button>`;
+      prev.appendChild(div);
+      document.getElementById('cFotosCount').textContent = casosFotos.length + ' imagen(es) seleccionada(s)';
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function quitarFotoCaso(idx, div) {
+  casosFotos.splice(idx,1);
+  div.remove();
+  document.getElementById('cFotosCount').textContent = casosFotos.length + ' imagen(es) seleccionada(s)';
+}
 
 // STATS
 async function cargarStats() {
