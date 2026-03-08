@@ -664,41 +664,59 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 
 <!-- MODAL NUEVO CASO -->
 <div class="ov" id="mCaso">
-<div class="modal" style="max-width:680px;width:96vw;max-height:92vh;overflow-y:auto;padding:0">
+<div class="modal" style="max-width:640px;width:96vw;max-height:92vh;overflow-y:auto;padding:0">
   <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
-    <span id="mCasoTitulo" style="font-weight:700;font-size:15px">⚖️ Nuevo Registro de Caso</span>
-    <span onclick="cerrarModal('mCaso')" style="cursor:pointer;font-size:20px;opacity:.8">✕</span>
+    <span style="font-weight:700;font-size:15px">⚖️ Registro de Caso</span>
+    <span onclick="cerrar('mCaso')" style="cursor:pointer;font-size:22px;line-height:1">✕</span>
   </div>
   <div style="padding:20px">
+
+    <!-- BUSCAR DNI -->
     <div style="background:#f8fafc;border:2px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
       <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px">🔍 Buscar Trabajador por DNI</label>
       <div style="display:flex;gap:8px">
         <input type="text" id="cDNI" maxlength="8" placeholder="Ingrese DNI..."
-          style="flex:1;padding:8px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px"
-          oninput="if(this.value.length===8) buscarTrabajadorCaso()">
+          style="flex:1;padding:8px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
         <button class="btn-n" onclick="buscarTrabajadorCaso()">Buscar</button>
       </div>
-      <div id="cBuscarMsg" style="font-size:11px;margin-top:6px;color:#64748b"></div>
+      <div id="cBuscarMsg" style="font-size:11px;margin-top:6px"></div>
     </div>
-    <div id="panelDatosCaso" style="display:none">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
-        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Nombre completo</label>
-          <input id="cNombre" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
-        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Empresa</label>
-          <input id="cEmpresa" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
-        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Cargo</label>
-          <input id="cCargo" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
-        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Sector / Zona</label>
-          <input id="cSector" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
-        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Fecha Ingreso</label>
-          <input id="cIngreso" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
-        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Fecha Término</label>
-          <input id="cTermino" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
+
+    <!-- DATOS TRABAJADOR readonly -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div>
+        <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Nombre completo</label>
+        <input id="cNombre" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9">
       </div>
-      <div style="border-top:2px solid #e2e8f0;padding-top:14px;margin-bottom:14px">
+      <div>
+        <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Empresa</label>
+        <input id="cEmpresa" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Cargo</label>
+        <input id="cCargo" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Sector / Zona</label>
+        <input id="cSector" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Fecha Ingreso</label>
+        <input id="cIngreso" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9">
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Fecha Término</label>
+        <input id="cTermino" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9">
+      </div>
+    </div>
+
+    <!-- DATOS DEL CASO -->
+    <div id="panelDatosCaso" style="display:none">
+      <div style="border-top:2px solid #e2e8f0;padding-top:14px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:700;color:#0b1e45;margin-bottom:10px">📋 Datos del Caso</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div><label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Supervisor *</label>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Supervisor *</label>
             <select id="cSupervisor" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
               <option value="">-- Seleccionar --</option>
               <option>CASTRO BAYONA ELBERTH JAN PIERRE</option>
@@ -711,43 +729,65 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
               <option>MIRANDA PASAPERA SOCORRO DEL PILAR</option>
               <option>PULACHE VIERA FLOR DE LOS MILAGROS</option>
               <option>MOLERO ABAD ROBERTO CARLOS</option>
-            </select></div>
-          <div><label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Motivo *</label>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Motivo *</label>
             <select id="cMotivo" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" onchange="mostrarMotivoExtraCaso()">
               <option value="">-- Seleccionar --</option>
               <option>Beca del Foro</option><option>Contención</option><option>Enfermería</option>
               <option>Transporte</option><option>Indisciplina</option><option>Incumplimiento RIT</option>
               <option>Falta Grave</option><option>Observación Conductual</option><option>Otros</option>
-            </select></div>
+            </select>
+          </div>
           <div id="panelMotivoExtraCaso" style="display:none;grid-column:1/-1">
             <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Especificar motivo *</label>
-            <input id="cMotivoExtra" placeholder="Describa el motivo..." style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+            <input id="cMotivoExtra" placeholder="Describa el motivo..." style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Fecha Reporte *</label>
+            <input type="date" id="cFechaReporte" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" onchange="calcularFechaLimiteCaso()">
+          </div>
+        </div>
+      </div>
 
-          <div><label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Fecha Reporte *</label>
-            <input type="date" id="cFechaReporte" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" onchange="calcularFechaLimiteCaso()"></div>
+      <!-- Plazos automáticos -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Temporada</label>
+          <input id="cTemporada" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;background:#f1f5f9">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Fecha Límite (auto)</label>
+          <input id="cFechaLimite" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;background:#f1f5f9">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Estado</label>
+          <input id="cEstadoCaso" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;background:#f1f5f9;font-weight:700">
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
-        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Temporada</label>
-          <input id="cTemporada" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
-        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Fecha Límite (auto)</label>
-          <input id="cFechaLimite" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9"></div>
-        <div><label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Estado</label>
-          <input id="cEstadoCaso" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9;font-weight:700"></div>
-      </div>
-      <div id="panelAvanceCaso" style="display:none;margin-bottom:14px;padding:12px;border-radius:8px;background:#f8fafc;border:1px solid #e2e8f0">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+
+      <!-- Panel avance/retraso -->
+      <div id="panelAvanceCaso" style="display:none;margin-bottom:12px;padding:10px 12px;border-radius:8px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:5px">
           <span id="cEstadoLabel" style="font-size:12px;font-weight:700"></span>
-          <span id="cPorcentaje" style="font-size:14px;font-weight:800"></span>
+          <span id="cPorcentaje" style="font-size:13px;font-weight:800"></span>
         </div>
-        <div style="background:#e2e8f0;border-radius:20px;height:8px">
-          <div id="cBarraAvance" style="height:8px;border-radius:20px;transition:width .4s"></div>
+        <div style="background:#e2e8f0;border-radius:20px;height:7px">
+          <div id="cBarraAvance" style="height:7px;border-radius:20px;transition:width .4s"></div>
         </div>
         <div id="panelMotivoCaso" style="display:none;margin-top:10px">
           <label style="font-size:11px;font-weight:600;color:#dc2626;display:block;margin-bottom:3px">⚠️ Motivo del retraso (obligatorio)</label>
-          <textarea id="cMotivoRetraso" rows="2" placeholder="Explique el motivo del retraso..." style="width:100%;padding:7px 10px;border:2px solid #dc2626;border-radius:6px;font-size:12px;resize:vertical"></textarea>
+          <textarea id="cMotivoRetraso" rows="2" style="width:100%;padding:7px 10px;border:2px solid #dc2626;border-radius:6px;font-size:12px;resize:vertical" placeholder="Explique el motivo..."></textarea>
         </div>
       </div>
+
+      <!-- Redacción -->
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Descripción del caso *</label>
+        <textarea id="cRedaccion" rows="3" style="width:100%;padding:8px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px;resize:vertical" placeholder="Describa el caso detalladamente..."></textarea>
+      </div>
+
       <!-- Adjuntos -->
       <div style="border-top:2px solid #e2e8f0;padding-top:14px;margin-bottom:14px">
         <div style="font-size:12px;font-weight:700;color:#0b1e45;margin-bottom:10px">📎 Documentos Adjuntos</div>
@@ -755,28 +795,26 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <div>
             <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📄 Informe *</label>
             <input type="file" id="cInforme" accept=".pdf,.doc,.docx" style="font-size:11px;width:100%">
-            <div id="cInformeMsg" style="font-size:10px;color:#64748b;margin-top:3px"></div>
+            <div id="cInformeMsg" style="font-size:10px;margin-top:3px"></div>
           </div>
           <div>
-            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📋 Reporte de Infracción *</label>
+            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📋 Reporte Infracción *</label>
             <input type="file" id="cReporte" accept=".pdf" style="font-size:11px;width:100%">
-            <div id="cReporteMsg" style="font-size:10px;color:#64748b;margin-top:3px"></div>
+            <div id="cReporteMsg" style="font-size:10px;margin-top:3px"></div>
           </div>
         </div>
-        <div style="margin-top:8px;padding:8px 10px;background:#fffbeb;border-radius:6px;font-size:10px;color:#92400e">
-          ⚠️ Los archivos se subirán automáticamente a Google Drive al guardar el caso.
+        <div style="margin-top:8px;padding:7px 10px;background:#fffbeb;border-radius:6px;font-size:10px;color:#92400e">
+          ⚠️ Los archivos se suben automáticamente a Google Drive al guardar.
         </div>
       </div>
 
-    <div style="margin-bottom:16px">
-        <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Redacción / Descripción del caso *</label>
-        <textarea id="cRedaccion" rows="4" placeholder="Describa detalladamente el caso..." style="width:100%;padding:8px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px;resize:vertical"></textarea>
-      </div>
+      <!-- Botones -->
       <div style="display:flex;justify-content:flex-end;gap:8px">
-        <button class="btn-s" onclick="cerrarModal('mCaso')">Cancelar</button>
+        <button class="btn-s" onclick="cerrar('mCaso')">Cancelar</button>
         <button class="btn-n" onclick="guardarCaso()">💾 Guardar Caso</button>
       </div>
     </div>
+
   </div>
 </div>
 </div>
@@ -913,29 +951,38 @@ let casosFotos = [];
 function abrirNuevoCaso() {
   document.getElementById('mCasoTitulo').textContent = '⚖️ Nuevo Registro de Caso';
   limpiarFormCaso();
-  document.getElementById('mCaso').style.display='flex';
+  abrir('mCaso');
 }
 
 function limpiarFormCaso() {
   ['cDNI','cNombre','cEmpresa','cCargo','cSector','cIngreso','cTermino',
    'cFechaReporte','cFechaLimite','cTemporada','cEstadoCaso','cRedaccion',
-   'cMotivoExtra','cMotivoRetraso'].forEach(id => {
+   'cMotivoExtra','cMotivoRetraso','cBuscarMsg'].forEach(id => {
     const el = document.getElementById(id);
-    if(el) el.value='';
+    if(el) el.value !== undefined ? el.value='' : null;
+    if(el && el.tagName==='DIV') el.textContent='';
   });
   ['cSupervisor','cMotivo'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.selectedIndex=0;
   });
-  document.getElementById('panelDatosCaso').style.display='none';
-  document.getElementById('panelAvanceCaso').style.display='none';
-  document.getElementById('panelMotivoExtraCaso').style.display='none';
-  document.getElementById('panelMotivoCaso').style.display='none';
-  document.getElementById('cBuscarMsg').textContent='';
-  document.getElementById('cInforme').value='';
-  document.getElementById('cReporte').value='';
-  document.getElementById('cInformeMsg').textContent='';
-  document.getElementById('cReporteMsg').textContent='';
+  const pd = document.getElementById('panelDatosCaso');
+  if(pd) pd.style.display='none';
+  const pa = document.getElementById('panelAvanceCaso');
+  if(pa) pa.style.display='none';
+  const pm = document.getElementById('panelMotivoExtraCaso');
+  if(pm) pm.style.display='none';
+  const pmc = document.getElementById('panelMotivoCaso');
+  if(pmc) pmc.style.display='none';
+  const ci = document.getElementById('cInforme');
+  if(ci) ci.value='';
+  const cr = document.getElementById('cReporte');
+  if(cr) cr.value='';
+  const cim = document.getElementById('cInformeMsg');
+  if(cim) cim.textContent='';
+  const crm = document.getElementById('cReporteMsg');
+  if(crm) crm.textContent='';
+  window._casoTrabajador = null;
 }
 
 async function buscarTrabajadorCaso() {
@@ -959,6 +1006,8 @@ async function buscarTrabajadorCaso() {
         ? String(t.fecha_termino).split('T')[0] : '';
       document.getElementById('panelDatosCaso').style.display='block';
       msg.textContent='✅ Trabajador encontrado — '+t.empresa;
+      // Guardar para payload
+      window._casoTrabajador = t;
       msg.style.color='#16a34a';
     } else {
       msg.textContent='⚠️ DNI no encontrado en RAPEL ni VERFRUT';
@@ -1084,12 +1133,13 @@ async function subirArchivoDrive(fileInput, nombreCampo) {
 
 async function guardarCaso() {
   const dni       = document.getElementById('cDNI').value.trim();
-  const nombre    = document.getElementById('cNombre').value.trim();
-  const empresa   = document.getElementById('cEmpresa').value.trim();
-  const cargo     = document.getElementById('cCargo').value.trim();
-  const sector    = document.getElementById('cSector').value.trim();
-  const ingreso   = document.getElementById('cIngreso').value.trim();
-  const termino   = document.getElementById('cTermino').value.trim();
+  const t         = window._casoTrabajador || {};
+  const nombre    = t.nombre    || '';
+  const empresa   = t.empresa   || '';
+  const cargo     = t.cargo     || t.oficio || '';
+  const sector    = t.fundo_actual || t.fundo || t.zona || '';
+  const ingreso   = t.fecha_inicio_periodo ? String(t.fecha_inicio_periodo).split('T')[0] : '';
+  const termino   = t.fecha_termino ? String(t.fecha_termino).split('T')[0] : '';
   const supervisor= document.getElementById('cSupervisor').value;
   const motivo    = document.getElementById('cMotivo').value;
   const motivoExtra=document.getElementById('cMotivoExtra').value.trim();
@@ -1149,7 +1199,7 @@ async function guardarCaso() {
       enlace_reporte:  reporte.enlace
     });
     if(res.success) {
-      cerrarModal('mCaso');
+      cerrar('mCaso');
       await cargarCasos();
       alert('✅ Caso registrado correctamente (N° '+res.nro+')');
     } else {
