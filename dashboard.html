@@ -154,7 +154,6 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <button class="ni" id="navCorreo" onclick="ir('correo',this)"><span class="ic">📧</span>Enviar Reporte</button>
     <button class="ni" id="navVisitas" onclick="ir('visitas',this)"><span class="ic">🏕️</span>Visitas de Campo</button>
     <button class="ni" id="navCasos" onclick="ir('casos',this)"><span class="ic">⚖️</span>Registro de Casos</button>
-    <button class="ni" id="navCasos" onclick="ir('casos',this)"><span class="ic">⚖️</span>Registro de Casos</button>
     <button class="ni" id="navSolicitudes" style="display:none" onclick="ir('solicitudes',this)"><span class="ic">🔔</span>Solicitudes <span id="badgeSol" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none">0</span></button>
     <button class="ni" id="navUsr" style="display:none" onclick="ir('usuarios',this)"><span class="ic">👥</span>Gestión Usuarios</button>
   </div>
@@ -399,7 +398,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       </div>
     </div>
 
-    <!-- SOLICITUDES DE EDICIÓN -->
+    <!-- REGISTRO DE CASOS -->
     <div class="sec" id="sec-casos">
       <!-- ENCABEZADO -->
       <div class="sec-hd">
@@ -452,38 +451,6 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <tbody id="tbCasos">
             <tr><td colspan="9" class="empty">Cargando...</td></tr>
           </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div class="sec" id="sec-casos">
-      <div class="sec-hd">
-        <h2>⚖️ Registro de Casos</h2>
-        <button class="btn-n" onclick="abrirNuevoCaso()">+ Nuevo Caso</button>
-      </div>
-      <div class="filtros" style="margin-bottom:14px">
-        <select id="cFiltroEmp" onchange="cargarCasos()"><option value="">Todas las empresas</option><option>RAPEL</option><option>VERFRUT</option></select>
-        <select id="cFiltroMotivo" onchange="cargarCasos()">
-          <option value="">Todos los motivos</option>
-          <option>Beca del Foro</option><option>Contención</option><option>Enfermería</option>
-          <option>Transporte</option><option>Indisciplina</option><option>Incumplimiento RIT</option>
-          <option>Falta Grave</option><option>Observación Conductual</option><option>Otros</option>
-        </select>
-        <input type="text" id="cFiltroSup" placeholder="Buscar supervisor..." oninput="cargarCasos()">
-        <button class="btn-a" onclick="exportarCasosExcel()">📥 Exportar Excel</button>
-      </div>
-      <div id="statsCasos" style="display:none">
-        <div class="cards" style="margin-bottom:14px">
-          <div class="card"><div class="num" id="cTotalReg" style="color:#0b1e45">0</div>Total Casos</div>
-          <div class="card"><div class="num" id="cEnPlazo" style="color:#16a34a">0</div>En Plazo</div>
-          <div class="card"><div class="num" id="cRetrasado" style="color:#dc2626">0</div>Retrasados</div>
-          <div class="card"><div class="num" id="cEstaSemana" style="color:#d9292b">0</div>Esta Semana</div>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <table class="tbl">
-          <thead><tr><th>N°</th><th>Fecha</th><th>Empresa</th><th>Trabajador</th><th>Motivo</th><th>Supervisor</th><th>Estado</th><th>% Avance</th><th>Acción</th></tr></thead>
-          <tbody id="tbCasos"><tr><td colspan="9" class="empty">Cargando...</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -666,6 +633,34 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   </div>
 </div>
 </div>
+
+<!-- MODAL SOLICITAR EDICIÓN VISITA -->
+<div class="ov" id="mSolicitud">
+<div class="modal" style="max-width:460px;width:96vw;padding:0">
+  <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-weight:700;font-size:15px">🔒 Solicitar Edición de Informe</span>
+    <span onclick="cerrarModal('mSolicitud')" style="cursor:pointer;font-size:20px;opacity:.8">✕</span>
+  </div>
+  <div style="padding:20px">
+    <div style="font-size:11px;color:#64748b;margin-bottom:12px">Tu solicitud será enviada a Joel Timoteo para su aprobación vía WhatsApp.</div>
+    <div id="mSolInfo" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:#475569"></div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">Motivo de la solicitud *</label>
+      <textarea id="mSolMotivo" rows="4" placeholder="Describe por qué necesitas editar este informe..." style="width:100%;padding:8px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px;resize:vertical"></textarea>
+    </div>
+    <div style="padding:8px 12px;background:#f0fdf4;border-radius:7px;font-size:11px;color:#166534;margin-bottom:14px">
+      📱 Al confirmar se abrirá <b>WhatsApp</b> con el mensaje listo para Joel (960 853 224).
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px">
+      <button class="btn-s" onclick="cerrarModal('mSolicitud')">Cancelar</button>
+      <button class="btn-n" style="background:#25d366" onclick="confirmarSolicitudEdicion()">
+        📱 Enviar por WhatsApp
+      </button>
+    </div>
+  </div>
+</div>
+</div>
+
 
 <!-- MODAL NUEVO CASO -->
 <div class="ov" id="mCaso">
@@ -2370,47 +2365,57 @@ function actualizarStatsVisitas(data) {
   document.getElementById('vSemActual').textContent = sem;
 }
 
+let _solicitudIdx = null;
+
 function solicitarEdicion(idx) {
   const v = visitasData[idx];
   if (!v) return;
-  const motivo = prompt(
-    'Ingrese el motivo por el que necesita editar este informe:\n' +
-    '(Semana ' + v.semana + ' - ' + v.fundo + ')'
-  );
-  if (!motivo || !motivo.trim()) return;
+  _solicitudIdx = idx;
+  document.getElementById('mSolInfo').innerHTML =
+    '<b>Informe:</b> Semana ' + v.semana + ' — ' + v.fundo + ' — ' + v.empresa + '<br>' +
+    '<b>Supervisor:</b> ' + v.supervisor + '<br>' +
+    '<b>Fecha:</b> ' + fmtF(v.fecha_informe);
+  document.getElementById('mSolMotivo').value = '';
+  document.getElementById('mSolicitud').style.display = 'flex';
+}
 
-  // Guardar solicitud en Sheets
-  apiPost({
-    action: 'saveSolicitud',
-    nro_visita: v.nro,
-    supervisor: v.supervisor,
-    empresa: v.empresa,
-    fundo: v.fundo,
-    semana: v.semana,
-    fecha_informe: v.fecha_informe,
-    motivo: motivo.trim(),
-    solicitado_por: USER.usuario,
-    estado: 'PENDIENTE'
-  }).then(() => {
-    // Abrir WhatsApp con el mensaje
+async function confirmarSolicitudEdicion() {
+  const motivo = document.getElementById('mSolMotivo').value.trim();
+  if (!motivo) { alert('Ingresa el motivo de la solicitud'); return; }
+  const v = visitasData[_solicitudIdx];
+  if (!v) return;
+  try {
+    await apiPost({
+      action: 'saveSolicitud',
+      nro_visita: v.nro,
+      supervisor: v.supervisor,
+      empresa: v.empresa,
+      fundo: v.fundo,
+      semana: v.semana,
+      fecha_informe: v.fecha_informe,
+      motivo: motivo,
+      solicitado_por: USER.usuario,
+      estado: 'PENDIENTE'
+    });
+    cerrarModal('mSolicitud');
     const nl = '%0A';
     const msg = encodeURIComponent('SOLICITUD DE EDICION - SISTEMA RL') +
       nl + nl +
-      encodeURIComponent('Estimado Joel, necesito su autorizacion para editar el siguiente informe:') +
+      encodeURIComponent('Estimado Joel, necesito autorización para editar el siguiente informe:') +
       nl + nl +
       encodeURIComponent('Supervisor: ' + v.supervisor) + nl +
       encodeURIComponent('Empresa: ' + v.empresa) + nl +
       encodeURIComponent('Fundo: ' + v.fundo) + nl +
       encodeURIComponent('Semana: ' + v.semana) + nl +
       encodeURIComponent('Fecha: ' + fmtF(v.fecha_informe)) + nl + nl +
-      encodeURIComponent('Motivo: ' + motivo.trim()) + nl + nl +
-      encodeURIComponent('La solicitud fue registrada en el sistema. Quedo a la espera de su aprobacion.') + nl +
+      encodeURIComponent('Motivo: ' + motivo) + nl + nl +
+      encodeURIComponent('Solicitud registrada en el sistema. Quedo a la espera de su aprobación.') + nl +
       encodeURIComponent('Atentamente, ' + USER.nombre);
     window.open('https://wa.me/51960853224?text=' + msg, '_blank');
     alert('✅ Solicitud enviada. Joel revisará y aprobará desde el sistema.');
-  }).catch(() => {
+  } catch(e) {
     alert('Error al registrar la solicitud. Intente nuevamente.');
-  });
+  }
 }
 
 function habilitarEdicionVisita(idx) {
