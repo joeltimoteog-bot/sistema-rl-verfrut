@@ -948,12 +948,15 @@ async function buscarTrabajadorCaso() {
     const d = await apiGet({action:'buscarTrabajador', q:String(dni), empresa:'AMBAS'});
     if(d.success && d.data && d.data.length) {
       const t = d.data[0];
-      document.getElementById('cNombre').value  = t.nombre  || t.nombr || '';
-      document.getElementById('cEmpresa').value = t.empresa || '';
-      document.getElementById('cCargo').value   = t.oficio  || t.cargo || '';
-      document.getElementById('cSector').value  = t.zona    || t.sector || '';
-      document.getElementById('cIngreso').value = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '';
-      document.getElementById('cTermino').value = t.fecha_termino ? String(t.fecha_termino).split('T')[0] : '';
+      document.getElementById('cNombre').value  = t.nombre        || '';
+      document.getElementById('cEmpresa').value = t.empresa       || '';
+      document.getElementById('cCargo').value   = t.cargo         || t.oficio || '';
+      document.getElementById('cSector').value  = t.fundo_actual  || t.fundo  || t.zona || '';
+      document.getElementById('cIngreso').value = t.fecha_inicio_periodo
+        ? String(t.fecha_inicio_periodo).split('T')[0]
+        : (t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '');
+      document.getElementById('cTermino').value = t.fecha_termino
+        ? String(t.fecha_termino).split('T')[0] : '';
       document.getElementById('panelDatosCaso').style.display='block';
       msg.textContent='✅ Trabajador encontrado — '+t.empresa;
       msg.style.color='#16a34a';
