@@ -941,26 +941,30 @@ function limpiarFormCaso() {
 async function buscarTrabajadorCaso() {
   const dni = document.getElementById('cDNI').value.trim();
   if(!dni || dni.length < 7) return;
-  document.getElementById('cBuscarMsg').textContent='⏳ Buscando...';
+  const msg = document.getElementById('cBuscarMsg');
+  msg.textContent='⏳ Buscando...';
+  msg.style.color='#64748b';
   try {
-    const d = await apiGet({action:'buscarTrabajador', dni, usuario:USER.usuario, rol:USER.rol});
-    if(d.success && d.trabajador) {
-      const t = d.trabajador;
-      document.getElementById('cNombre').value  = t.nombre  || '';
+    const d = await apiGet({action:'buscarTrabajador', q:String(dni), empresa:'AMBAS'});
+    if(d.success && d.data && d.data.length) {
+      const t = d.data[0];
+      document.getElementById('cNombre').value  = t.nombre  || t.nombr || '';
       document.getElementById('cEmpresa').value = t.empresa || '';
-      document.getElementById('cCargo').value   = t.oficio  || '';
-      document.getElementById('cSector').value  = t.zona    || '';
-      document.getElementById('cIngreso').value = t.fecha_inicio ? t.fecha_inicio.split('T')[0] : '';
-      document.getElementById('cTermino').value = t.fecha_termino ? t.fecha_termino.split('T')[0] : '';
-
+      document.getElementById('cCargo').value   = t.oficio  || t.cargo || '';
+      document.getElementById('cSector').value  = t.zona    || t.sector || '';
+      document.getElementById('cIngreso').value = t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '';
+      document.getElementById('cTermino').value = t.fecha_termino ? String(t.fecha_termino).split('T')[0] : '';
       document.getElementById('panelDatosCaso').style.display='block';
-      document.getElementById('cBuscarMsg').textContent='✅ Trabajador encontrado';
+      msg.textContent='✅ Trabajador encontrado — '+t.empresa;
+      msg.style.color='#16a34a';
     } else {
-      document.getElementById('cBuscarMsg').textContent='⚠️ DNI no encontrado en RAPEL ni VERFRUT';
+      msg.textContent='⚠️ DNI no encontrado en RAPEL ni VERFRUT';
+      msg.style.color='#dc2626';
       document.getElementById('panelDatosCaso').style.display='none';
     }
   } catch(e) {
-    document.getElementById('cBuscarMsg').textContent='❌ Error al buscar: '+e.message;
+    msg.textContent='❌ Error: '+e.message;
+    msg.style.color='#dc2626';
   }
 }
 
