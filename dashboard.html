@@ -443,7 +443,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 .det-l{width:170px;font-weight:600;color:var(--gr);flex-shrink:0}
 .det-v{color:var(--tx)}
 .hamburger{background:none;border:none;font-size:22px;cursor:pointer;color:var(--azul);padding:4px 8px;border-radius:6px;margin-right:8px}
-.overlay-sb{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
+.overlay-sb{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:none;pointer-events:none}
 @media(max-width:768px){
   .sb{transform:translateX(-100%);transition:transform .3s ease}
   .sb.open{transform:translateX(0)}
@@ -452,7 +452,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   .gg{grid-template-columns:1fr}
   .hamburger{display:flex}
   .overlay-sb{display:none}
-  .overlay-sb.on{display:block}
+  .overlay-sb.on{display:block;pointer-events:auto}
 }
 @media(min-width:769px){.hamburger{display:none}.overlay-sb{display:none!important}}
 </style>
@@ -2438,18 +2438,27 @@ function getCCFinal() {
 }
 
 function ir(id,btn){
-  cerrarSidebar();
+  // Cerrar sidebar en móvil
+  const sb=document.getElementById('sb');
+  const ov=document.getElementById('overlaySb');
+  if(sb) sb.classList.remove('open');
+  if(ov) ov.classList.remove('on');
+  // Cambiar sección
   document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
-  document.getElementById('sec-'+id)?.classList.add('on');
-  if(btn)btn.classList.add('on');
-  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS',fusiones:'FUSIONES DE BUSES'};
-  document.getElementById('tbT').textContent=ts[id]||id.toUpperCase();
-  if(id==='resumen')cargarResumen();
-  if(id==='usuarios')cargarUs();
+  const sec=document.getElementById('sec-'+id);
+  if(sec) sec.classList.add('on');
+  if(btn) btn.classList.add('on');
+  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS',fusiones:'FUSIONES DE BUSES',casos:'REGISTRO DE CASOS'};
+  const tbT=document.getElementById('tbT');
+  if(tbT) tbT.textContent=ts[id]||id.toUpperCase();
+  if(id==='resumen')   cargarResumen();
+  if(id==='usuarios')  cargarUs();
   if(id==='atenciones' && atTodas.length===0) cargarAtenciones();
-  if(id==='visitas') cargarVisitas();
+  if(id==='visitas')   cargarVisitas();
   if(id==='solicitudes') cargarSolicitudes();
+  if(id==='fusiones')  cargarFusiones();
+  if(id==='casos')     cargarCasos();
 }
 function abrir(id){document.getElementById(id).classList.add('on');}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
