@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard | Sistema RL v3.0</title>
-<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&amp;family=Barlow+Condensed:wght@700;800;900&amp;display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js">
 // ══════════════════ MÓDULO FUSIONES DE BUSES ══════════════════
 
@@ -330,13 +330,6 @@ function verFotosFusion(idx) {
   fotos.forEach((url,i) => window.open(url,'_blank'));
 }
 
-// Cargar al entrar a la sección
-const _irOrig = ir;
-function ir(id, btn) {
-  _irOrig(id, btn);
-  if(id==='fusiones') cargarFusiones();
-  if(id==='casos') cargarCasos();
-}
 // ══════════════════ FIN FUSIONES ══════════════════
 
 </script>
