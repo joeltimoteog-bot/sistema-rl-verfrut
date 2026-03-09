@@ -675,7 +675,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <div style="background:#f8fafc;border:2px solid #e2e8f0;border-radius:10px;padding:14px;margin-bottom:16px">
       <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px">🔍 Buscar Trabajador por DNI</label>
       <div style="display:flex;gap:8px">
-        <input type="text" id="cDNI" maxlength="8" placeholder="Ingrese DNI..."
+        <input type="text" id="mCasoDNI" maxlength="8" placeholder="Ingrese DNI (8 dígitos)..."
           style="flex:1;padding:8px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
         <button class="btn-n" onclick="buscarTrabajadorCaso()">Buscar</button>
       </div>
@@ -954,7 +954,7 @@ function abrirNuevoCaso() {
 }
 
 function limpiarFormCaso() {
-  ['cDNI','cNombre','cEmpresa','cCargo','cSector','cIngreso','cTermino',
+  ['mCasoDNI','cNombre','cEmpresa','cCargo','cSector','cIngreso','cTermino',
    'cFechaReporte','cFechaLimite','cTemporada','cEstadoCaso','cRedaccion',
    'cMotivoExtra','cMotivoRetraso','cBuscarMsg'].forEach(id => {
     const el = document.getElementById(id);
@@ -987,7 +987,7 @@ function limpiarFormCaso() {
 }
 
 async function buscarTrabajadorCaso() {
-  const dni = document.getElementById('cDNI').value.trim();
+  const dni = document.getElementById('mCasoDNI').value.trim();
   const msg = document.getElementById('cBuscarMsg');
   if(!dni || dni.length < 2) { msg.textContent='⚠️ Ingresa el DNI'; msg.style.color='#dc2626'; return; }
   msg.textContent='🔍 Buscando en RAPEL y VERFRUT...';
@@ -1132,7 +1132,7 @@ async function subirArchivoDrive(fileInput, nombreCampo) {
 }
 
 async function guardarCaso() {
-  const dni       = document.getElementById('cDNI').value.trim();
+  const dni       = document.getElementById('mCasoDNI').value.trim();
   const t         = window._casoTrabajador || {};
   const nombre    = t.nombre    || '';
   const empresa   = t.empresa   || '';
