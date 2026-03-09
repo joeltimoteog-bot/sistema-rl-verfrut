@@ -5,7 +5,341 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard | Sistema RL v3.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js">
+// ══════════════════ MÓDULO FUSIONES DE BUSES ══════════════════
+
+const SUPERVISORES_SECTOR = {
+  'El Papayo':         'Paul Tamayo Rodríguez',
+  'Limones':           'Paul Tamayo Rodríguez',
+  'Olivares Bajo':     'Alex Tineo Ramos',
+  'Olivares':          'Flor Pulache Viera',
+  'Santa Rosa':        'Yhanelly Luzón Venegas',
+  'Aproa':             'Alex Zapata Suárez',
+  'Punta Arenas':      'Alexander Martínez Juárez',
+  'Algarrobos':        'Sergio Viera Girón',
+  'San Vicente':       'Elberth Castro Bayona',
+  'Planta Rapel Packing': 'Roberto Molero Abad'
+};
+
+function autoSupervisor() {
+  const sector = document.getElementById('fSector').value;
+  document.getElementById('fSupervisorAuto').value = SUPERVISORES_SECTOR[sector] || '';
+}
+
+function toggleReemplazo() {
+  const val = document.querySelector('input[name="fReemplazo"]:checked')?.value;
+  document.getElementById('panelReemplazo').style.display = val === 'Sí' ? 'block' : 'none';
+}
+
+function toggleMotivoOtro() {
+  const val = document.getElementById('fMotivo').value;
+  document.getElementById('panelMotivoOtro').style.display = val === 'Otro' ? 'block' : 'none';
+}
+
+function agregarRuta() {
+  const cont = document.getElementById('contenedorRutas');
+  const filas = cont.querySelectorAll('.fila-ruta');
+  if(filas.length >= 3) { alert('Máximo 3 rutas destino'); return; }
+  const div = document.createElement('div');
+  div.className = 'fila-ruta';
+  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end';
+  div.innerHTML = `
+    <div><input class="rNombre" placeholder="Nombre ruta" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+    <div><input class="rCodigo" placeholder="Código" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+    <div><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+    <div><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>`;
+  cont.appendChild(div);
+}
+
+function quitarRuta(btn) {
+  const filas = document.querySelectorAll('#contenedorRutas .fila-ruta');
+  if(filas.length <= 1) { alert('Debe haber al menos 1 ruta destino'); return; }
+  btn.closest('.fila-ruta').remove();
+  validarDistribucion();
+}
+
+function validarDistribucion() {
+  const total = parseInt(document.getElementById('fTotalTrab').value) || 0;
+  const personales = document.querySelectorAll('#contenedorRutas .rPersonal');
+  let suma = 0;
+  personales.forEach(p => suma += parseInt(p.value) || 0);
+  const div = document.getElementById('fValidacionRutas');
+  if(total === 0 || suma === 0) { div.textContent = ''; return; }
+  if(suma === total) {
+    div.textContent = '✅ Distribución correcta: ' + suma + ' / ' + total + ' trabajadores';
+    div.style.color = '#16a34a';
+  } else {
+    div.textContent = '⚠️ La distribución del personal no coincide: ' + suma + ' / ' + total;
+    div.style.color = '#dc2626';
+  }
+}
+
+function previsualizarFoto(input, prevId) {
+  const file = input.files[0];
+  const prev = document.getElementById(prevId);
+  if(file) {
+    const url = URL.createObjectURL(file);
+    prev.src = url;
+    prev.style.display = 'block';
+  } else {
+    prev.style.display = 'none';
+  }
+}
+
+function abrirNuevaFusion() {
+  limpiarFormFusion();
+  abrir('mFusion');
+}
+
+function limpiarFormFusion() {
+  ['fSector','fCantBuses','fMotivo','fReemplazante','fReemplazado'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.selectedIndex = 0;
+  });
+  ['fSupervisorAuto','fRutaOrigen','fCodigoOrigen','fMotivoOtro','fObservaciones'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  const tt = document.getElementById('fTotalTrab');
+  if(tt) tt.value = '';
+  document.getElementById('panelReemplazo').style.display = 'none';
+  document.getElementById('panelMotivoOtro').style.display = 'none';
+  document.getElementById('fValidacionRutas').textContent = '';
+  ['fFoto1','fFoto2','fFoto3'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  ['prev1','prev2','prev3'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
+  ['fFoto1Msg','fFoto2Msg','fFoto3Msg'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = '';
+  });
+  // Restablecer radio a "No"
+  const radioNo = document.querySelector('input[name="fReemplazo"][value="No"]');
+  if(radioNo) radioNo.checked = true;
+  // Restablecer rutas destino a 2
+  const cont = document.getElementById('contenedorRutas');
+  if(cont) {
+    cont.innerHTML = `
+      <div class="fila-ruta" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+        <div><label class="lbl" style="font-size:10px">Nombre ruta</label><input class="rNombre" placeholder="Ej: Ruta Rita" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+        <div><label class="lbl" style="font-size:10px">Código</label><input class="rCodigo" placeholder="20" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+        <div><label class="lbl" style="font-size:10px">Trabajadores</label><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+        <div style="padding-bottom:2px"><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>
+      </div>
+      <div class="fila-ruta" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+        <div><input class="rNombre" placeholder="Ej: Ruta Santa Ana" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+        <div><input class="rCodigo" placeholder="10" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+        <div><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+        <div><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>
+      </div>`;
+  }
+}
+
+// Subir foto a Drive via Apps Script
+async function subirFotoFusion(file, sector, ruta, idx) {
+  return new Promise((resolve) => {
+    if(!file) { resolve(''); return; }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target.result.split(',')[1];
+      const ext = file.name.split('.').pop();
+      const fecha = new Date();
+      const ts = fecha.getFullYear().toString() +
+        String(fecha.getMonth()+1).padStart(2,'0') +
+        String(fecha.getDate()).padStart(2,'0') + '_' +
+        String(fecha.getHours()).padStart(2,'0') +
+        String(fecha.getMinutes()).padStart(2,'0');
+      const nombre = ('FUSION_' + sector + '_' + ruta + '_' + ts + '_' + idx + '.' + ext)
+        .replace(/[^a-zA-Z0-9_.-]/g,'_').toUpperCase();
+      try {
+        const d = await apiPost({
+          action:'subirArchivo', base64, nombre,
+          mimeType: file.type || 'image/jpeg',
+          carpeta:'Evidencias_Fusiones_Buses'
+        });
+        resolve(d.enlace || d.url || d.link || '');
+      } catch(e) { resolve(''); }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function guardarFusion() {
+  const sector    = document.getElementById('fSector').value;
+  const supervisor= document.getElementById('fSupervisorAuto').value;
+  const cantBuses = document.getElementById('fCantBuses').value;
+  const rutaOrigen= document.getElementById('fRutaOrigen').value.trim();
+  const codOrigen = document.getElementById('fCodigoOrigen').value.trim();
+  const totalTrab = document.getElementById('fTotalTrab').value;
+  const motivo    = document.getElementById('fMotivo').value;
+  const motiOtro  = document.getElementById('fMotivoOtro').value.trim();
+  const obs       = document.getElementById('fObservaciones').value.trim();
+  const reemplazo = document.querySelector('input[name="fReemplazo"]:checked')?.value || 'No';
+  const reemplazante = document.getElementById('fReemplazante').value;
+  const reemplazado  = document.getElementById('fReemplazado').value;
+
+  // Validaciones
+  if(!sector)      { alert('Selecciona el sector'); return; }
+  if(!cantBuses)   { alert('Selecciona cantidad de buses fusionados'); return; }
+  if(!rutaOrigen)  { alert('Ingresa la ruta original'); return; }
+  if(!totalTrab)   { alert('Ingresa el total de trabajadores afectados'); return; }
+  if(!motivo)      { alert('Selecciona el motivo de la fusión'); return; }
+  if(motivo==='Otro' && !motiOtro) { alert('Especifica el motivo'); return; }
+
+  // Validar distribución
+  const total = parseInt(totalTrab);
+  const personales = document.querySelectorAll('#contenedorRutas .rPersonal');
+  let suma = 0;
+  personales.forEach(p => suma += parseInt(p.value)||0);
+  if(suma !== total) {
+    alert('Distribución incorrecta: ' + suma + ' vs ' + total + ' trabajadores');
+    return;
+  }
+
+  // Recoger rutas destino
+  const filas = document.querySelectorAll('#contenedorRutas .fila-ruta');
+  const rutas = [];
+  filas.forEach(f => {
+    rutas.push({
+      nombre:   f.querySelector('.rNombre')?.value.trim() || '',
+      codigo:   f.querySelector('.rCodigo')?.value.trim() || '',
+      personal: f.querySelector('.rPersonal')?.value || '0'
+    });
+  });
+
+  const btn = document.getElementById('btnGuardarFusion');
+  btn.disabled = true;
+  btn.textContent = '⏳ Guardando...';
+
+  // Subir fotos
+  const sectorLimpio = sector.replace(/\s/g,'');
+  const rutaLimpia   = rutaOrigen.replace(/\s/g,'');
+  const foto1file = document.getElementById('fFoto1').files[0];
+  const foto2file = document.getElementById('fFoto2').files[0];
+  const foto3file = document.getElementById('fFoto3').files[0];
+  if(foto1file) { document.getElementById('fFoto1Msg').textContent='⏳ Subiendo foto 1...'; }
+  if(foto2file) { document.getElementById('fFoto2Msg').textContent='⏳ Subiendo foto 2...'; }
+  if(foto3file) { document.getElementById('fFoto3Msg').textContent='⏳ Subiendo foto 3...'; }
+
+  const [link1, link2, link3] = await Promise.all([
+    subirFotoFusion(foto1file, sectorLimpio, rutaLimpia, 1),
+    subirFotoFusion(foto2file, sectorLimpio, rutaLimpia, 2),
+    subirFotoFusion(foto3file, sectorLimpio, rutaLimpia, 3)
+  ]);
+  if(foto1file) document.getElementById('fFoto1Msg').textContent = link1 ? '✅ Subida' : '⚠️ No subida';
+  if(foto2file) document.getElementById('fFoto2Msg').textContent = link2 ? '✅ Subida' : '⚠️ No subida';
+  if(foto3file) document.getElementById('fFoto3Msg').textContent = link3 ? '✅ Subida' : '⚠️ No subida';
+
+  const ahora = new Date();
+  const payload = {
+    action: 'saveFusion',
+    fecha:  ahora.toLocaleDateString('es-PE'),
+    hora:   ahora.toLocaleTimeString('es-PE', {hour:'2-digit',minute:'2-digit'}),
+    usuario: USER.nombre || USER.email || '',
+    sector, supervisor, reemplazo, reemplazante, reemplazado,
+    cantBuses, rutaOrigen, codOrigen, totalTrab,
+    ruta1:     rutas[0]?.nombre||'', codigo1: rutas[0]?.codigo||'', personal1: rutas[0]?.personal||'',
+    ruta2:     rutas[1]?.nombre||'', codigo2: rutas[1]?.codigo||'', personal2: rutas[1]?.personal||'',
+    ruta3:     rutas[2]?.nombre||'', codigo3: rutas[2]?.codigo||'', personal3: rutas[2]?.personal||'',
+    motivo: motivo==='Otro' ? motiOtro : motivo,
+    observaciones: obs,
+    foto1: link1, foto2: link2, foto3: link3,
+    estado: 'Pendiente'
+  };
+
+  try {
+    const d = await apiPost(payload);
+    if(d.success) {
+      cerrar('mFusion');
+      cargarFusiones();
+      alert('✅ Registro guardado. Fusión de ruta ' + rutaOrigen + ' (código ' + codOrigen + ') registrada. El administrador validará este registro.');
+    } else {
+      alert('❌ Error al guardar: ' + (d.error || d.message || 'Error desconocido'));
+    }
+  } catch(e) {
+    alert('❌ Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar Registro';
+  }
+}
+
+// Cargar tabla de fusiones
+let _fusionesData = [];
+async function cargarFusiones() {
+  document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
+  try {
+    const d = await apiGet({action:'getFusiones', usuario: USER.rol==='admin'?'TODOS':USER.nombre||USER.email});
+    if(d.success && d.data) {
+      _fusionesData = d.data;
+      renderFusiones(_fusionesData);
+      actualizarStatsFusiones(_fusionesData);
+    }
+  } catch(e) {
+    document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">❌ Error al cargar</td></tr>';
+  }
+}
+
+function renderFusiones(data) {
+  const tb = document.getElementById('tbFusiones');
+  if(!data.length){ tb.innerHTML='<tr><td colspan="9" class="empty">Sin registros</td></tr>'; return; }
+  tb.innerHTML = data.map((r,i) => {
+    const estColor = r.estado==='Validado'?'#16a34a':r.estado==='Observado'?'#dc2626':'#f59e0b';
+    const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${r.fecha||''}</td>
+      <td>${r.sector||''}</td>
+      <td style="font-size:11px">${r.supervisor||''}</td>
+      <td>${r.ruta_origen||''} <span style="font-size:10px;color:#94a3b8">cod.${r.codigo_origen||''}</span></td>
+      <td style="text-align:center;font-weight:700">${r.total_trab||''}</td>
+      <td style="font-size:11px">${r.motivo||''}</td>
+      <td><span style="background:${estColor}20;color:${estColor};padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700">${r.estado||'Pendiente'}</span></td>
+      <td>
+        ${fotos.length ? '<button onclick="verFotosFusion('+i+')" style="background:#e0e7ff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px">📷 '+fotos.length+'</button>' : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function actualizarStatsFusiones(data) {
+  document.getElementById('sfTotal').textContent       = data.length;
+  document.getElementById('sfPendientes').textContent  = data.filter(r=>r.estado==='Pendiente').length;
+  document.getElementById('sfTrabajadores').textContent= data.reduce((a,r)=>a+(parseInt(r.total_trab)||0),0);
+  const sectores = new Set(data.map(r=>r.sector).filter(Boolean));
+  document.getElementById('sfSectores').textContent    = sectores.size;
+}
+
+function filtrarFusiones() {
+  const q = document.getElementById('fFusionBuscar').value.toLowerCase();
+  const est = document.getElementById('fFusionEstado').value;
+  const fil = _fusionesData.filter(r =>
+    (!q || JSON.stringify(r).toLowerCase().includes(q)) &&
+    (!est || r.estado === est)
+  );
+  renderFusiones(fil);
+}
+
+function verFotosFusion(idx) {
+  const r = _fusionesData[idx];
+  const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
+  fotos.forEach((url,i) => window.open(url,'_blank'));
+}
+
+// Cargar al entrar a la sección
+const _irOrig = ir;
+function ir(id, btn) {
+  _irOrig(id, btn);
+  if(id==='fusiones') cargarFusiones();
+  if(id==='casos') cargarCasos();
+}
+// ══════════════════ FIN FUSIONES ══════════════════
+
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
@@ -154,6 +488,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <button class="ni" id="navCorreo" onclick="ir('correo',this)"><span class="ic">📧</span>Enviar Reporte</button>
     <button class="ni" id="navVisitas" onclick="ir('visitas',this)"><span class="ic">🏕️</span>Visitas de Campo</button>
     <button class="ni" id="navCasos" onclick="ir('casos',this)"><span class="ic">⚖️</span>Registro de Casos</button>
+    <button class="ni" id="navFusiones" onclick="ir('fusiones',this)"><span class="ic">🚌</span>Fusiones de Buses</button>
     <button class="ni" id="navSolicitudes" style="display:none" onclick="ir('solicitudes',this)"><span class="ic">🔔</span>Solicitudes <span id="badgeSol" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none">0</span></button>
     <button class="ni" id="navUsr" style="display:none" onclick="ir('usuarios',this)"><span class="ic">👥</span>Gestión Usuarios</button>
   </div>
@@ -489,6 +824,55 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   </div>
 </div>
 
+
+<!-- ══════════════════════ SECCIÓN FUSIONES DE BUSES ══════════════════════ -->
+<div class="sec" id="sec-fusiones">
+  <div class="sec-hd">
+    <h2>🚌 Fusiones de Buses</h2>
+    <button class="btn-n" onclick="abrirNuevaFusion()">+ Nueva Fusión</button>
+  </div>
+
+  <!-- STATS PANEL -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:18px" id="statsFusiones">
+    <div style="background:#fff;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center">
+      <div style="font-size:22px;font-weight:800;color:var(--azul)" id="sfTotal">—</div>
+      <div style="font-size:11px;color:#64748b;margin-top:2px">Total Fusiones</div>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center">
+      <div style="font-size:22px;font-weight:800;color:#f59e0b" id="sfPendientes">—</div>
+      <div style="font-size:11px;color:#64748b;margin-top:2px">Pendientes</div>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center">
+      <div style="font-size:22px;font-weight:800;color:#16a34a" id="sfTrabajadores">—</div>
+      <div style="font-size:11px;color:#64748b;margin-top:2px">Trabajadores redistribuidos</div>
+    </div>
+    <div style="background:#fff;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center">
+      <div style="font-size:22px;font-weight:800;color:var(--rojo)" id="sfSectores">—</div>
+      <div style="font-size:11px;color:#64748b;margin-top:2px">Sectores afectados</div>
+    </div>
+  </div>
+
+  <!-- TABLA -->
+  <div class="card" style="padding:0;overflow:hidden">
+    <div style="padding:14px 16px;border-bottom:1px solid #f1f5f9;display:flex;gap:8px;flex-wrap:wrap">
+      <input class="fi" id="fFusionBuscar" placeholder="🔍 Buscar por sector, ruta..." style="flex:2;min-width:160px" oninput="filtrarFusiones()">
+      <select class="fi" id="fFusionEstado" style="flex:1;min-width:120px" onchange="filtrarFusiones()">
+        <option value="">Todos los estados</option>
+        <option>Pendiente</option><option>Validado</option><option>Observado</option>
+      </select>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tbl">
+        <thead><tr>
+          <th>N°</th><th>Fecha</th><th>Sector</th><th>Supervisor</th>
+          <th>Ruta Original</th><th>Trabajadores</th><th>Motivo</th><th>Estado</th><th>Acciones</th>
+        </tr></thead>
+        <tbody id="tbFusiones"><tr><td colspan="9" class="empty">⏳ Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL NUEVA/EDITAR ATENCIÓN -->
 <div class="ov" id="mAt">
 <div class="modal">
@@ -819,6 +1203,146 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 </div>
 </div>
 
+
+<!-- MODAL FUSIÓN DE BUSES -->
+<div class="ov" id="mFusion">
+<div class="modal" style="max-width:660px;width:96vw;max-height:93vh;overflow-y:auto;padding:0">
+  <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-weight:700;font-size:15px">🚌 Registro de Fusión de Buses</span>
+    <span onclick="cerrar('mFusion')" style="cursor:pointer;font-size:22px;line-height:1">✕</span>
+  </div>
+  <div style="padding:20px;display:flex;flex-direction:column;gap:14px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <div>
+        <label class="lbl">Sector *</label>
+        <select id="fSector" style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px" onchange="autoSupervisor()">
+          <option value="">-- Seleccionar --</option>
+          <option>El Papayo</option><option>Limones</option><option>Olivares Bajo</option>
+          <option>Olivares</option><option>Santa Rosa</option><option>Aproa</option>
+          <option>Punta Arenas</option><option>Algarrobos</option><option>San Vicente</option>
+          <option>Planta Rapel Packing</option>
+        </select>
+      </div>
+      <div>
+        <label class="lbl">Supervisor responsable</label>
+        <input id="fSupervisorAuto" readonly style="width:100%;padding:8px 10px;border:1px solid #e2e8f0;border-radius:7px;font-size:12px;background:#f1f5f9">
+      </div>
+    </div>
+    <div>
+      <label class="lbl">¿Estás reemplazando a un supervisor?</label>
+      <div style="display:flex;gap:12px;margin-top:5px">
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="radio" name="fReemplazo" value="No" checked onchange="toggleReemplazo()"> No</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="radio" name="fReemplazo" value="Sí" onchange="toggleReemplazo()"> Sí</label>
+      </div>
+    </div>
+    <div id="panelReemplazo" style="display:none;background:#f8fafc;border-radius:8px;padding:12px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label class="lbl">Supervisor reemplazante</label>
+          <select id="fReemplazante" style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
+            <option value="">-- Seleccionar --</option>
+            <option>Muriel Mechato</option><option>Jhonny Avendaño</option><option>Deisy Quispe</option>
+          </select>
+        </div>
+        <div>
+          <label class="lbl">Supervisor reemplazado</label>
+          <select id="fReemplazado" style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
+            <option value="">-- Seleccionar --</option>
+            <option>Elberth Castro Bayona</option><option>Pool Tamayo Rodríguez</option>
+            <option>Sergio Viera Girón</option><option>Alex Tineo Ramos</option>
+            <option>Alexander Martínez Juárez</option><option>Alex Zapata Suárez</option>
+            <option>Yhanelly Luzón Venegas</option><option>Socorro Miranda Pasapera</option>
+            <option>Flor Pulache Viera</option><option>Roberto Molero Abad</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div>
+        <label class="lbl">Buses fusionados *</label>
+        <select id="fCantBuses" style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
+          <option value="">-- Seleccionar --</option>
+          <option>1 a 5</option><option>5 a 10</option><option>Más de 10</option>
+        </select>
+      </div>
+      <div>
+        <label class="lbl">Ruta original *</label>
+        <input id="fRutaOrigen" placeholder="Ej: Ruta Angostura" style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
+      </div>
+      <div>
+        <label class="lbl">Código ruta *</label>
+        <input id="fCodigoOrigen" placeholder="Ej: 70" style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
+      </div>
+    </div>
+    <div>
+      <label class="lbl">Total trabajadores afectados *</label>
+      <input type="number" id="fTotalTrab" min="1" placeholder="Ej: 29" style="width:160px;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px" oninput="validarDistribucion()">
+    </div>
+    <div style="background:#f8fafc;border-radius:10px;padding:14px">
+      <div style="font-size:12px;font-weight:700;color:#0b1e45;margin-bottom:10px">🔀 Rutas Destino</div>
+      <div id="contenedorRutas">
+        <div class="fila-ruta" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+          <div><label class="lbl" style="font-size:10px">Nombre ruta</label><input class="rNombre" placeholder="Ej: Ruta Rita" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+          <div><label class="lbl" style="font-size:10px">Código</label><input class="rCodigo" placeholder="20" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+          <div><label class="lbl" style="font-size:10px">Trabajadores</label><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+          <div style="padding-bottom:2px"><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>
+        </div>
+        <div class="fila-ruta" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+          <div><input class="rNombre" placeholder="Ej: Ruta Santa Ana" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+          <div><input class="rCodigo" placeholder="10" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+          <div><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+          <div><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>
+        </div>
+      </div>
+      <button onclick="agregarRuta()" style="background:#e0e7ff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-size:12px;color:#3730a3;font-weight:600">+ Agregar ruta destino</button>
+      <div id="fValidacionRutas" style="margin-top:8px;font-size:12px;font-weight:600"></div>
+    </div>
+    <div>
+      <label class="lbl">Motivo de la fusión *</label>
+      <select id="fMotivo" style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px" onchange="toggleMotivoOtro()">
+        <option value="">-- Seleccionar --</option>
+        <option>Baja cantidad de personal</option><option>Reorganización de transporte</option>
+        <option>Falla mecánica</option><option>Contingencia operativa</option><option>Otro</option>
+      </select>
+    </div>
+    <div id="panelMotivoOtro" style="display:none">
+      <label class="lbl">Especificar motivo *</label>
+      <input id="fMotivoOtro" placeholder="Describa el motivo..." style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
+    </div>
+    <div>
+      <label class="lbl">Observaciones</label>
+      <textarea id="fObservaciones" rows="2" placeholder="Observaciones adicionales..." style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px;resize:vertical"></textarea>
+    </div>
+    <div style="background:#f0fdf4;border:2px dashed #86efac;border-radius:10px;padding:14px">
+      <div style="font-size:12px;font-weight:700;color:#166534;margin-bottom:10px">📷 Evidencia Fotográfica (máx. 3 fotos)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div>
+          <label class="lbl" style="font-size:10px">Foto 1</label>
+          <input type="file" id="fFoto1" accept="image/*" capture="environment" style="font-size:11px;width:100%" onchange="previsualizarFoto(this,'prev1')">
+          <img id="prev1" style="display:none;width:100%;height:70px;object-fit:cover;border-radius:6px;margin-top:4px">
+          <div id="fFoto1Msg" style="font-size:10px;margin-top:2px"></div>
+        </div>
+        <div>
+          <label class="lbl" style="font-size:10px">Foto 2</label>
+          <input type="file" id="fFoto2" accept="image/*" capture="environment" style="font-size:11px;width:100%" onchange="previsualizarFoto(this,'prev2')">
+          <img id="prev2" style="display:none;width:100%;height:70px;object-fit:cover;border-radius:6px;margin-top:4px">
+          <div id="fFoto2Msg" style="font-size:10px;margin-top:2px"></div>
+        </div>
+        <div>
+          <label class="lbl" style="font-size:10px">Foto 3</label>
+          <input type="file" id="fFoto3" accept="image/*" capture="environment" style="font-size:11px;width:100%" onchange="previsualizarFoto(this,'prev3')">
+          <img id="prev3" style="display:none;width:100%;height:70px;object-fit:cover;border-radius:6px;margin-top:4px">
+          <div id="fFoto3Msg" style="font-size:10px;margin-top:2px"></div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding-top:4px">
+      <button class="btn-s" onclick="cerrar('mFusion')">Cancelar</button>
+      <button class="btn-n" id="btnGuardarFusion" onclick="guardarFusion()">💾 Guardar Registro</button>
+    </div>
+  </div>
+</div>
+</div>
 
 <script>
 let USER={}, API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec', atTodas=[], resData=[], detNro='', modoEdicion=false;
@@ -1926,7 +2450,7 @@ function ir(id,btn){
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   document.getElementById('sec-'+id)?.classList.add('on');
   if(btn)btn.classList.add('on');
-  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS'};
+  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS',fusiones:'FUSIONES DE BUSES'};
   document.getElementById('tbT').textContent=ts[id]||id.toUpperCase();
   if(id==='resumen')cargarResumen();
   if(id==='usuarios')cargarUs();
@@ -2339,543 +2863,3 @@ function imprimirInforme() {
   win.document.write('<html><head><title>Informe Visita Campo</title>');
   win.document.write('<style>body{font-family:Times New Roman,serif;font-size:12pt;margin:40px;line-height:1.6} @media print{body{margin:20px}}</style>');
   win.document.write('</head><body>' + contenido + '</body></html>');
-  win.document.close();
-  win.focus();
-  win.print();
-}
-
-async function guardarVisitaSheets(d) {
-  const ffEl = document.getElementById('vFF');
-  const res = await apiPost({
-      action: 'saveVisita',
-      empresa: d.empresa, supervisor: d.sup, dni: d.dni,
-      correo: d.correo, fundo: d.fundo, punto: d.punto,
-      fecha_inicio: d.fi, fecha_fin: d.ff,
-      semana: d.semana, fecha_informe: d.fechaInf,
-      para: d.paraNombre, asunto: d.asunto,
-      desarrollo: d.desarrollo, rutas: d.rutas,
-      acciones: d.acciones, compromisos: d.compromisos,
-      observaciones: d.observaciones, motivo: d.motivo,
-      fotos: d.fotos, registrado_por: USER.usuario,
-      // Datos de plazo
-      dias_transcurridos: ffEl.dataset.diasTrans  || 0,
-      dias_permitidos:    ffEl.dataset.diasPerm   || 1,
-      dias_retraso:       ffEl.dataset.diasRetr   || 0,
-      pct_avance:         ffEl.dataset.pctAvance  || '0.00',
-      pct_retraso:        ffEl.dataset.pctRetraso || '0.00',
-      estado:             ffEl.dataset.estado     || 'EN PLAZO',
-      temporada:          ffEl.dataset.temporada  || ''
-    });
-  return res;
-}
-
-async function cargarVisitas() {
-  const empresa = document.getElementById('vFiltroEmp')?.value || '';
-  const mes     = document.getElementById('vFiltroMes')?.value || '';
-  const sup     = document.getElementById('vFiltroSup')?.value || '';
-  try {
-    const d = await apiGet({action:'getVisitas', empresa, mes, supervisor: sup});
-    visitasData = d.data || [];
-    renderTablaVisitas(visitasData);
-    if(USER.rol === 'administrador') {
-      document.getElementById('statsVisitas').style.display='block';
-      actualizarStatsVisitas(visitasData);
-    }
-  } catch(e) {
-    document.getElementById('tbVisitas').innerHTML = '<tr><td colspan="9" class="empty">Error cargando visitas</td></tr>';
-  }
-}
-
-function renderTablaVisitas(data) {
-  const tb = document.getElementById('tbVisitas');
-  if(!data.length) {
-    tb.innerHTML='<tr><td colspan="8" class="empty">No hay registros</td></tr>'; return;
-  }
-  const esAdmin = USER.rol === 'administrador';
-  tb.innerHTML = data.map((v,i) => `
-    <tr>
-      <td>${i+1}</td>
-      <td>${fmtF(v.fecha_informe)}</td>
-      <td><span class="tag tag-${v.empresa==='RAPEL'?'az':'ro'}">${v.empresa}</span></td>
-      <td>${v.supervisor}</td>
-      <td>${v.fundo}</td>
-      <td>Sem. ${v.semana}</td>
-      <td><span class="tag ${v.estado==='EN PLAZO'?'tag-az':'tag-ro'}">${v.estado||'—'}</span></td>
-      <td style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <button class="btn-a" onclick="verInformeGuardado(${i})">📄 Ver</button>
-        ${esAdmin
-          ? `<button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="habilitarEdicionVisita(${i})">✏️ Editar</button>`
-          : v.edicion_aprobada === 'EDICION_APROBADA'
-            ? `<button class="btn-n" style="font-size:10px;padding:4px 8px;background:#16a34a" onclick="editarVisitaAprobada(${i})">✏️ Editar</button>`
-            : `<button class="btn-s" style="font-size:10px;padding:4px 8px" onclick="solicitarEdicion(${i})">🔒 Solicitar edición</button>`
-        }
-      </td>
-    </tr>
-  `).join('');
-}
-
-function actualizarStatsVisitas(data) {
-  document.getElementById('vTotalReg').textContent  = data.length;
-  document.getElementById('vEnPlazo').textContent   = data.filter(v=>v.estado==='EN PLAZO').length;
-  document.getElementById('vRetrasado').textContent = data.filter(v=>v.estado==='RETRASADO').length;
-  const sem = data.filter(v=>v.semana == document.getElementById('vSemana')?.value).length;
-  document.getElementById('vSemActual').textContent = sem;
-}
-
-let _solicitudIdx = null;
-
-function solicitarEdicion(idx) {
-  const v = visitasData[idx];
-  if (!v) return;
-  _solicitudIdx = idx;
-  document.getElementById('mSolInfo').innerHTML =
-    '<b>Informe:</b> Semana ' + v.semana + ' — ' + v.fundo + ' — ' + v.empresa + '<br>' +
-    '<b>Supervisor:</b> ' + v.supervisor + '<br>' +
-    '<b>Fecha:</b> ' + fmtF(v.fecha_informe);
-  document.getElementById('mSolMotivo').value = '';
-  document.getElementById('mSolicitud').style.display = 'flex';
-}
-
-async function confirmarSolicitudEdicion() {
-  const motivo = document.getElementById('mSolMotivo').value.trim();
-  if (!motivo) { alert('Ingresa el motivo de la solicitud'); return; }
-  const v = visitasData[_solicitudIdx];
-  if (!v) return;
-  try {
-    await apiPost({
-      action: 'saveSolicitud',
-      nro_visita: v.nro,
-      supervisor: v.supervisor,
-      empresa: v.empresa,
-      fundo: v.fundo,
-      semana: v.semana,
-      fecha_informe: v.fecha_informe,
-      motivo: motivo,
-      solicitado_por: USER.usuario,
-      estado: 'PENDIENTE'
-    });
-    cerrarModal('mSolicitud');
-    const nl = '%0A';
-    const msg = encodeURIComponent('SOLICITUD DE EDICION - SISTEMA RL') +
-      nl + nl +
-      encodeURIComponent('Estimado Joel, necesito autorización para editar el siguiente informe:') +
-      nl + nl +
-      encodeURIComponent('Supervisor: ' + v.supervisor) + nl +
-      encodeURIComponent('Empresa: ' + v.empresa) + nl +
-      encodeURIComponent('Fundo: ' + v.fundo) + nl +
-      encodeURIComponent('Semana: ' + v.semana) + nl +
-      encodeURIComponent('Fecha: ' + fmtF(v.fecha_informe)) + nl + nl +
-      encodeURIComponent('Motivo: ' + motivo) + nl + nl +
-      encodeURIComponent('Solicitud registrada en el sistema. Quedo a la espera de su aprobación.') + nl +
-      encodeURIComponent('Atentamente, ' + USER.nombre);
-    window.open('https://wa.me/51960853224?text=' + msg, '_blank');
-    alert('✅ Solicitud enviada. Joel revisará y aprobará desde el sistema.');
-  } catch(e) {
-    alert('Error al registrar la solicitud. Intente nuevamente.');
-  }
-}
-
-function habilitarEdicionVisita(idx) {
-  const v = visitasData[idx];
-  if (!v) return;
-  // Admin edita directamente abriendo el modal con datos precargados
-  editarVisitaConDatos(v, idx);
-}
-
-function editarVisitaAprobada(idx) {
-  const v = visitasData[idx];
-  if (!v) return;
-  if (!confirm('Tu solicitud fue aprobada. Ahora puedes editar este informe.\n¿Deseas continuar?')) return;
-  editarVisitaConDatos(v, idx);
-}
-
-function editarVisitaConDatos(v, idx) {
-  // Prellenar formulario con datos existentes
-  abrirNuevaVisita();
-  setTimeout(() => {
-    // Buscar supervisor en el select
-    const selSup = document.getElementById('vSup');
-    for(let i=0; i<selSup.options.length; i++) {
-      if(selSup.options[i].text.includes(v.supervisor.split(' ')[0])) {
-        selSup.selectedIndex = i;
-        break;
-      }
-    }
-    document.getElementById('vEmp').value          = v.empresa      || '';
-    document.getElementById('vFundo').value        = v.fundo        || '';
-    document.getElementById('vPunto').value        = v.punto        || '';
-    document.getElementById('vFI').value           = v.fecha_inicio || '';
-    document.getElementById('vFF').value           = v.fecha_fin    || '';
-    document.getElementById('vFechaInforme').value = v.fecha_informe|| '';
-    document.getElementById('vAsunto').value       = v.asunto       || '';
-    document.getElementById('vDesarrollo').value   = v.desarrollo   || '';
-    document.getElementById('vRutas').value        = v.rutas        || '';
-    document.getElementById('vAcciones').value     = v.acciones     || '';
-    document.getElementById('vCompromisos').value  = v.compromisos  || '';
-    document.getElementById('vObservaciones').value= v.observaciones|| '';
-    document.getElementById('vMotivoRetraso').value= v.motivo       || '';
-    // Recalcular semana y plazo
-    calcSemanaVisita();
-    // Marcar como edición
-    document.getElementById('mVisitaTitulo').textContent = '✏️ Editando Informe - Semana ' + v.semana;
-    // Guardar nro para actualizar en lugar de insertar
-    document.getElementById('vFF').dataset.editNro = v.nro;
-  }, 300);
-}
-
-// ── SOLICITUDES DE EDICIÓN (ADMIN) ─────────────────────────
-let solicitudesData = [];
-
-async function cargarSolicitudes() {
-  try {
-    const d = await apiGet({action:'getSolicitudes'});
-    solicitudesData = d.data || [];
-    renderSolicitudes(solicitudesData);
-    actualizarBadge(solicitudesData.filter(s => s.estado === 'PENDIENTE').length);
-  } catch(e) {
-    document.getElementById('tbSolicitudes').innerHTML =
-      '<tr><td colspan="7" class="empty">Error cargando solicitudes</td></tr>';
-  }
-}
-
-async function cargarBadgeSolicitudes() {
-  try {
-    const d = await apiGet({action:'getSolicitudes', estado:'PENDIENTE'});
-    const n = (d.data || []).length;
-    actualizarBadge(n);
-  } catch(e) {}
-}
-
-function actualizarBadge(n) {
-  const badge = document.getElementById('badgeSol');
-  if (n > 0) {
-    badge.textContent = n;
-    badge.style.display = 'inline';
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-function renderSolicitudes(data) {
-  const tb = document.getElementById('tbSolicitudes');
-  if (!data.length) {
-    tb.innerHTML = '<tr><td colspan="7" class="empty">Sin solicitudes</td></tr>';
-    return;
-  }
-  tb.innerHTML = data.map((s, i) => `
-    <tr style="${s.estado==='PENDIENTE'?'background:#fefce8':''}">
-      <td>${fmtF(s.fecha)}</td>
-      <td>${s.supervisor}</td>
-      <td>${s.fundo}</td>
-      <td>Sem. ${s.semana}</td>
-      <td style="max-width:200px;font-size:11px">${s.motivo}</td>
-      <td>
-        <span class="tag ${s.estado==='PENDIENTE'?'tag-ro':'tag-az'}">${s.estado}</span>
-      </td>
-      <td>
-        ${s.estado === 'PENDIENTE' ? `
-          <button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="aprobarSolicitud(${i})">✅ Aprobar</button>
-          <button class="btn-s" style="font-size:10px;padding:4px 8px;margin-left:4px" onclick="rechazarSolicitud(${i})">❌ Rechazar</button>
-        ` : `<span style="color:#64748b;font-size:11px">${s.resuelto_por||'—'}</span>`}
-      </td>
-    </tr>
-  `).join('');
-}
-
-async function aprobarSolicitud(idx) {
-  const s = solicitudesData[idx];
-  if (!s) return;
-  if (!confirm('Aprobar solicitud de ' + s.supervisor + ' - Semana ' + s.semana + ' - ' + s.fundo + '?')) return;
-  try {
-    await apiPost({
-      action: 'resolverSolicitud',
-      fila: s.fila,
-      estado: 'APROBADA',
-      resuelto_por: USER.nombre
-    });
-    await cargarSolicitudes();
-    // Notificar por WhatsApp al supervisor
-    const nl2 = '%0A';
-    const msg = encodeURIComponent('SOLICITUD APROBADA - SISTEMA RL') +
-      nl2 + nl2 +
-      encodeURIComponent('Su solicitud de edicion fue APROBADA.') + nl2 + nl2 +
-      encodeURIComponent('Informe: Semana ' + s.semana + ' - ' + s.fundo) + nl2 +
-      encodeURIComponent('Aprobado por: ' + USER.nombre) + nl2 + nl2 +
-      encodeURIComponent('Ya puede editar su informe en el sistema.');
-    if (confirm('¿Notificar al supervisor por WhatsApp?')) {
-      window.open('https://wa.me/51960853224?text=' + msg, '_blank');
-    }
-    // Habilitar edición en tabla visitas
-    alert('✅ Solicitud aprobada. El supervisor ya puede editar su informe.');
-  } catch(e) {
-    alert('Error al aprobar. Intente nuevamente.');
-  }
-}
-
-async function rechazarSolicitud(idx) {
-  const s = solicitudesData[idx];
-  if (!s) return;
-  const motivo = prompt('Motivo del rechazo (se notificará al supervisor):');
-  if (!motivo) return;
-  try {
-    await apiPost({
-      action: 'resolverSolicitud',
-      fila: s.fila,
-      estado: 'RECHAZADA',
-      resuelto_por: USER.nombre,
-      motivo_rechazo: motivo
-    });
-    await cargarSolicitudes();
-    alert('Solicitud rechazada correctamente.');
-  } catch(e) {
-    alert('Error al rechazar.');
-  }
-}
-
-function verInformeGuardado(idx) {
-  const v = visitasData[idx];
-  if(!v) return;
-  const logo = v.empresa === 'RAPEL' ? LOGO_RAPEL : LOGO_VERFRUT;
-  // Reconstruir fotos si existen
-  const fotosHTML = v.fotos_urls ? v.fotos_urls.map(u =>
-    `<img src="${u}" style="width:220px;height:160px;object-fit:cover;margin:4px;border:1px solid #ccc">`
-  ).join('') : '<p><i>Imágenes no disponibles en vista guardada</i></p>';
-
-  document.getElementById('informeVistaPrevia').innerHTML = generarHTMLInforme({
-    logo, empresa: v.empresa, sup: v.supervisor,
-    fundo: v.fundo, punto: v.punto,
-    fi: v.fecha_inicio, ff: v.fecha_fin,
-    semana: v.semana, fechaInf: v.fecha_informe,
-    paraNombre: v.para, paraCargo: 'Coordinador de Relaciones Laborales',
-    asunto: v.asunto, desarrollo: v.desarrollo,
-    rutas: v.rutas, acciones: v.acciones,
-    compromisos: v.compromisos, observaciones: v.observaciones,
-    motivo: v.motivo, fotos: []
-  }) + fotosHTML;
-  abrir('mVerInforme');
-}
-
-</script>
-
-<!-- MODAL SELECCION FUNDO -->
-<div class="ov" id="mFundo">
-<div class="modal" style="max-width:420px">
-  <div class="modal-t">📍 Selecciona tu Fundo de Hoy</div>
-  <p id="fundoMsg" style="font-size:13px;color:#64748b;margin-bottom:18px;line-height:1.5"></p>
-  <div class="fc">
-    <label>Fundo asignado hoy</label>
-    <select id="fundoSelect" style="font-size:14px;padding:10px 12px"></select>
-  </div>
-  <div class="modal-ft" style="margin-top:20px">
-    <button class="btn-save" onclick="confirmarFundo()" style="width:100%;padding:12px;font-size:13px">✅ Confirmar</button>
-  </div>
-</div>
-</div>
-
-
-<!-- MODAL NUEVA VISITA -->
-<div class="ov" id="mVisita">
-<div class="modal" style="max-width:700px;width:96vw;max-height:92vh;overflow-y:auto;padding:0">
-  <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:16px;font-weight:700">🏕️ Nueva Visita de Campo</span>
-    <button onclick="cerrar('mVisita')" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;line-height:28px;padding:0">✕</button>
-  </div>
-  <div style="padding:16px">
-    <div style="padding:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px" id="formVisita">
-
-      <!-- Supervisor -->
-      <div class="fc" style="grid-column:1/-1">
-        <label>Supervisor *</label>
-        <select id="vSup" onchange="autoFillVisita()">
-          <option value="">-- Seleccionar --</option>
-          <!-- Supervisores con sector fijo -->
-          <option data-dni="73091524" data-correo="ecastro@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="San Vicente" data-reemplazo="no">CASTRO BAYONA ELBERTH JAN PIERRE</option>
-          <option data-dni="76329783" data-correo="yluzon@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="VERFRUT" data-fundo="Santa Rosa" data-reemplazo="no">LUZON VENEGAS YHANELLY GERALDENY</option>
-          <option data-dni="47262764" data-correo="smiranda@verfrut.pe" data-cargo="ASISTENTE DE RELACIONES LABORALES" data-empresa="RAPEL" data-fundo="Campo A" data-reemplazo="no">MIRANDA PASAPERA SOCORRO DEL PILAR</option>
-          <option data-dni="72954772" data-correo="ptamayo@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="Limones" data-reemplazo="no">TAMAYO RODRIGUEZ POOL WILFREDO</option>
-          <option data-dni="72954772" data-correo="ptamayo@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="El Papayo" data-reemplazo="no">TAMAYO RODRIGUEZ POOL WILFREDO</option>
-          <option data-dni="73332618" data-correo="atineo@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="VERFRUT" data-fundo="Olivares Bajo" data-reemplazo="no">TINEO RAMOS ALEXANDER</option>
-          <option data-dni="46066300" data-correo="sviera@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="Algarrobos" data-reemplazo="no">VIERA GIRON SERGIO</option>
-          <option data-dni="75656528" data-correo="fzapata@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="Aproa" data-reemplazo="no">ZAPATA SUAREZ ALEX FABIAN</option>
-          <option data-dni="72952975" data-correo="almartinez@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="VERFRUT" data-fundo="Punta Arenas" data-reemplazo="no">MARTINEZ JUAREZ ALEXANDER</option>
-          <option data-dni="46793507" data-correo="fpulache@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="Los Olivares" data-reemplazo="no">PULACHE VIERA FLOR DE LOS MILAGROS</option>
-          <option data-dni="74218729" data-correo="rmolero@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="RAPEL" data-fundo="Planta Packing - Rapel" data-reemplazo="no">MOLERO ABAD ROBERTO CARLOS</option>
-          <optgroup label="── Fundos Varios / Reemplazo ──">
-          <option data-dni="47524110" data-correo="jsiancas@verfrut.pe" data-cargo="ASISTENTE DE RELACIONES LABORALES" data-empresa="" data-fundo="" data-reemplazo="si">SIANCAS VIERA JAIME</option>
-          <option data-dni="46073509" data-correo="jtimoteo@verfrut.pe" data-cargo="COORDINADOR(A) DE RELACIONES LABORALES" data-empresa="" data-fundo="" data-reemplazo="si">TIMOTEO GONZA JOEL ANGEL</option>
-          <option data-dni="76342635" data-correo="javendano@verfrut.pe" data-cargo="DIGITADOR(A)" data-empresa="" data-fundo="" data-reemplazo="si">AVENDAÑO GRANDA JHONNY DUBERLY</option>
-          <option data-dni="47070759" data-correo="jchavez@verfrut.pe" data-cargo="COORDINADOR(A) DE RELACIONES LABORALES" data-empresa="" data-fundo="" data-reemplazo="si">CHAVEZ CORDOVA JORGE LUIS</option>
-          <option data-dni="43684214" data-correo="ovilela@verfrut.pe" data-cargo="JEFE(A) DE RELACIONES LABORALES" data-empresa="" data-fundo="" data-reemplazo="si">VILELA LUDEÑA OLGA STEFFANA</option>
-          <option data-dni="73046408" data-correo="mmechato@verfrut.pe" data-cargo="ASISTENTE DE RELACIONES LABORALES" data-empresa="" data-fundo="" data-reemplazo="si">MECHATO NAVARRO MURIEL DE LOS MILAGROS</option>
-          <option data-dni="74218729" data-correo="rmolero@verfrut.pe" data-cargo="SUPERVISOR(A) DE GESTION HUMANA" data-empresa="" data-fundo="" data-reemplazo="si">MOLERO ABAD ROBERTO CARLOS</option>
-          <option data-dni="47227623" data-correo="dquispe@verfrut.pe" data-cargo="DIGITADOR(A)" data-empresa="" data-fundo="" data-reemplazo="si">QUISPE JUAREZ DEYSI MARISOL</option>
-          </optgroup>
-        </select>
-      </div>
-
-      <!-- DNI y Correo (autorrelleno) -->
-      <div class="fc"><label>DNI</label><input type="text" id="vDNI" readonly style="background:#f1f5f9"></div>
-      <div class="fc"><label>Correo</label><input type="text" id="vCorreo" readonly style="background:#f1f5f9"></div>
-
-      <!-- Empresa y Fundo -->
-      <div class="fc">
-        <label>Empresa *</label>
-        <select id="vEmp" onchange="autoLogoPara()">
-          <option value="">-- Seleccionar --</option>
-          <option>RAPEL</option><option>VERFRUT</option>
-        </select>
-      </div>
-      <div class="fc">
-        <label>Fundo *</label>
-        <select id="vFundo">
-          <option value="">-- Seleccionar --</option>
-          <option>Aproa</option>
-          <option>El Papayo</option>
-          <option>Limones</option>
-          <option>Olivares Bajo</option>
-          <option>Santa Rosa</option>
-          <option>Punta Arenas</option>
-          <option>Algarrobos</option>
-          <option>San Vicente</option>
-          <option>Los Olivares</option>
-          <option>Planta Rapel Packing</option>
-        </select>
-      </div>
-
-      <!-- Reasignación (solo para fundos varios) -->
-      <div class="fc" style="grid-column:1/-1;display:none;background:#fef3c7;border:1.5px solid #f59e0b;border-radius:8px;padding:12px" id="reemplazoDivVisita">
-        <label style="color:#92400e;font-weight:700">⚠️ Supervisor de Reemplazo — Selecciona el sector asignado</label>
-        <select id="vFundoReemplazo" onchange="asignarFundoReemplazo()" style="margin-top:6px;padding:8px 12px;border:2px solid #f59e0b;border-radius:7px;font-size:12px;width:100%">
-          <option value="">-- ¿A qué sector fue reasignado? --</option>
-          <option>Aproa</option>
-          <option>El Papayo</option>
-          <option>Limones</option>
-          <option>Olivares Bajo</option>
-          <option>Santa Rosa</option>
-          <option>Punta Arenas</option>
-          <option>Algarrobos</option>
-          <option>San Vicente</option>
-          <option>Los Olivares</option>
-          <option>Planta Rapel Packing</option>
-        </select>
-        <div style="margin-top:8px">
-          <label style="color:#92400e;font-size:11px">Supervisor titular del sector (en vacaciones/permiso)</label>
-          <input type="text" id="vSupTitular" placeholder="Nombre del supervisor que reemplaza..." style="padding:7px 12px;border:1.5px solid #f59e0b;border-radius:7px;font-size:12px;width:100%;margin-top:4px">
-        </div>
-      </div>
-
-      <!-- Punto/Zona -->
-      <div class="fc" style="grid-column:1/-1">
-        <label>Punto / Zona visitada *</label>
-        <input type="text" id="vPunto" placeholder="Ej: Sector cosecha, Caseta Norte...">
-      </div>
-
-      <!-- Fechas -->
-      <div class="fc">
-        <label>Fecha Inicio Visita *</label>
-        <input type="date" id="vFI" onchange="calcSemanaVisita()">
-      </div>
-      <div class="fc">
-        <label>Fecha Fin Visita *</label>
-        <input type="date" id="vFF" onchange="calcSemanaVisita()">
-      </div>
-
-      <!-- Semana y Fecha informe -->
-      <div class="fc">
-        <label>Semana N°</label>
-        <input type="number" id="vSemana" readonly style="background:#f1f5f9">
-      </div>
-      <div class="fc">
-        <label>Fecha Informe</label>
-        <input type="date" id="vFechaInforme">
-      </div>
-
-      <!-- Para (destinatario del informe) -->
-      <div class="fc" style="grid-column:1/-1">
-        <label>Para (destinatario del informe) *</label>
-        <select id="vPara">
-          <option value="">-- Seleccionar --</option>
-          <option value="Olga Vilela Ludeña|Jefe de Relaciones Laborales">Olga Vilela Ludeña - Jefe de Relaciones Laborales</option>
-          <option value="Joel Ángel Timoteo Gonza|Coordinador de Relaciones Laborales">Joel Ángel Timoteo Gonza - Coordinador de Relaciones Laborales</option>
-          <option value="Jorge Chávez Córdova|Coordinador de Relaciones Laborales">Jorge Chávez Córdova - Coordinador de Relaciones Laborales</option>
-        </select>
-      </div>
-
-      <!-- Asunto -->
-      <div class="fc" style="grid-column:1/-1">
-        <label>Asunto *</label>
-        <input type="text" id="vAsunto" placeholder='Ej: "Visitas casetas - semana 9"'>
-      </div>
-
-      <!-- Desarrollo -->
-      <div class="fc" style="grid-column:1/-1">
-        <label>Desarrollo (descripción general de la semana) *</label>
-        <textarea id="vDesarrollo" rows="3" placeholder="Durante la semana X, se realizaron constantes visitas..."></textarea>
-      </div>
-
-      <!-- Rutas/Areas -->
-      <div class="fc" style="grid-column:1/-1">
-        <label>Rutas / Áreas Visitadas *</label>
-        <textarea id="vRutas" rows="2" placeholder="Describa las rutas y áreas recorridas..."></textarea>
-      </div>
-
-      <!-- Acciones -->
-      <div class="fc" style="grid-column:1/-1">
-        <label>Acciones *</label>
-        <textarea id="vAcciones" rows="3" placeholder="Acciones realizadas durante la visita..."></textarea>
-      </div>
-
-      <!-- Compromisos -->
-      <div class="fc" style="grid-column:1/-1">
-        <label>Compromisos</label>
-        <textarea id="vCompromisos" rows="2" placeholder="Compromisos establecidos..."></textarea>
-      </div>
-
-      <!-- Observaciones -->
-      <div class="fc" style="grid-column:1/-1">
-        <label>Observaciones *</label>
-        <textarea id="vObservaciones" rows="2" placeholder="Observaciones generales..."></textarea>
-      </div>
-
-      <!-- Fotos -->
-      <div class="fc" style="grid-column:1/-1">
-        <label>Evidencia Fotográfica (máx. 6 imágenes)</label>
-        <input type="file" id="vFotos" accept="image/*" multiple onchange="previewFotos(this)">
-        <div id="vFotosPreview" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
-        <div id="vFotosCount" style="font-size:11px;color:#64748b;margin-top:4px">0 imagen(es) seleccionada(s)</div>
-      </div>
-
-      <!-- Motivo retraso (condicional) -->
-      <div class="fc" style="grid-column:1/-1;display:none" id="motivoRetrasoDiv">
-        <label style="color:#dc2626">⚠️ Motivo de Retraso (obligatorio) *</label>
-        <textarea id="vMotivoRetraso" rows="2" placeholder="Ingrese el motivo del retraso..."></textarea>
-      </div>
-
-    </div>
-
-    <!-- Botones -->
-    <div style="padding:12px 0 4px;display:flex;gap:10px;justify-content:flex-end">
-      <button class="btn-s" onclick="cerrar('mVisita')">Cancelar</button>
-      <button class="btn-n" onclick="generarInformeVisita()">📄 Generar Informe y Enviar</button>
-    </div>
-  </div>
-</div>
-</div>
-
-<!-- MODAL VER INFORME -->
-<div class="ov" id="mVerInforme">
-<div class="modal" style="max-width:820px;width:96vw;max-height:92vh;overflow-y:auto;padding:0">
-  <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-size:16px;font-weight:700">📄 Vista Previa del Informe</span>
-    <button onclick="cerrar('mVerInforme')" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer;line-height:28px;padding:0">✕</button>
-  </div>
-  <div id="informeVistaPrevia" style="padding:30px;font-family:Times New Roman,serif;font-size:12pt;line-height:1.8;background:#fff"></div>
-  <div style="padding:12px 20px 16px;display:flex;gap:10px;justify-content:flex-end;border-top:1px solid #e2e8f0">
-    <button class="btn-n" onclick="imprimirInforme()">🖨️ Imprimir / PDF</button>
-    <button class="btn-s" onclick="cerrar('mVerInforme')">Cerrar</button>
-  </div>
-</div>
-</div>
-
-</body>
-</html>
