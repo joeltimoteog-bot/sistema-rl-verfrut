@@ -5,334 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard | Sistema RL v3.0</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&amp;family=Barlow+Condensed:wght@700;800;900&amp;display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js">
-// ══════════════════ MÓDULO FUSIONES DE BUSES ══════════════════
-
-const SUPERVISORES_SECTOR = {
-  'El Papayo':         'Paul Tamayo Rodríguez',
-  'Limones':           'Paul Tamayo Rodríguez',
-  'Olivares Bajo':     'Alex Tineo Ramos',
-  'Olivares':          'Flor Pulache Viera',
-  'Santa Rosa':        'Yhanelly Luzón Venegas',
-  'Aproa':             'Alex Zapata Suárez',
-  'Punta Arenas':      'Alexander Martínez Juárez',
-  'Algarrobos':        'Sergio Viera Girón',
-  'San Vicente':       'Elberth Castro Bayona',
-  'Planta Rapel Packing': 'Roberto Molero Abad'
-};
-
-function autoSupervisor() {
-  const sector = document.getElementById('fSector').value;
-  document.getElementById('fSupervisorAuto').value = SUPERVISORES_SECTOR[sector] || '';
-}
-
-function toggleReemplazo() {
-  const val = document.querySelector('input[name="fReemplazo"]:checked')?.value;
-  document.getElementById('panelReemplazo').style.display = val === 'Sí' ? 'block' : 'none';
-}
-
-function toggleMotivoOtro() {
-  const val = document.getElementById('fMotivo').value;
-  document.getElementById('panelMotivoOtro').style.display = val === 'Otro' ? 'block' : 'none';
-}
-
-function agregarRuta() {
-  const cont = document.getElementById('contenedorRutas');
-  const filas = cont.querySelectorAll('.fila-ruta');
-  if(filas.length >= 3) { alert('Máximo 3 rutas destino'); return; }
-  const div = document.createElement('div');
-  div.className = 'fila-ruta';
-  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end';
-  div.innerHTML = `
-    <div><input class="rNombre" placeholder="Nombre ruta" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
-    <div><input class="rCodigo" placeholder="Código" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
-    <div><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
-    <div><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>`;
-  cont.appendChild(div);
-}
-
-function quitarRuta(btn) {
-  const filas = document.querySelectorAll('#contenedorRutas .fila-ruta');
-  if(filas.length <= 1) { alert('Debe haber al menos 1 ruta destino'); return; }
-  btn.closest('.fila-ruta').remove();
-  validarDistribucion();
-}
-
-function validarDistribucion() {
-  const total = parseInt(document.getElementById('fTotalTrab').value) || 0;
-  const personales = document.querySelectorAll('#contenedorRutas .rPersonal');
-  let suma = 0;
-  personales.forEach(p => suma += parseInt(p.value) || 0);
-  const div = document.getElementById('fValidacionRutas');
-  if(total === 0 || suma === 0) { div.textContent = ''; return; }
-  if(suma === total) {
-    div.textContent = '✅ Distribución correcta: ' + suma + ' / ' + total + ' trabajadores';
-    div.style.color = '#16a34a';
-  } else {
-    div.textContent = '⚠️ La distribución del personal no coincide: ' + suma + ' / ' + total;
-    div.style.color = '#dc2626';
-  }
-}
-
-function previsualizarFoto(input, prevId) {
-  const file = input.files[0];
-  const prev = document.getElementById(prevId);
-  if(file) {
-    const url = URL.createObjectURL(file);
-    prev.src = url;
-    prev.style.display = 'block';
-  } else {
-    prev.style.display = 'none';
-  }
-}
-
-function abrirNuevaFusion() {
-  limpiarFormFusion();
-  abrir('mFusion');
-}
-
-function limpiarFormFusion() {
-  ['fSector','fCantBuses','fMotivo','fReemplazante','fReemplazado'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.selectedIndex = 0;
-  });
-  ['fSupervisorAuto','fRutaOrigen','fCodigoOrigen','fMotivoOtro','fObservaciones'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.value = '';
-  });
-  const tt = document.getElementById('fTotalTrab');
-  if(tt) tt.value = '';
-  document.getElementById('panelReemplazo').style.display = 'none';
-  document.getElementById('panelMotivoOtro').style.display = 'none';
-  document.getElementById('fValidacionRutas').textContent = '';
-  ['fFoto1','fFoto2','fFoto3'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.value = '';
-  });
-  ['prev1','prev2','prev3'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.style.display = 'none';
-  });
-  ['fFoto1Msg','fFoto2Msg','fFoto3Msg'].forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.textContent = '';
-  });
-  // Restablecer radio a "No"
-  const radioNo = document.querySelector('input[name="fReemplazo"][value="No"]');
-  if(radioNo) radioNo.checked = true;
-  // Restablecer rutas destino a 2
-  const cont = document.getElementById('contenedorRutas');
-  if(cont) {
-    cont.innerHTML = `
-      <div class="fila-ruta" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
-        <div><label class="lbl" style="font-size:10px">Nombre ruta</label><input class="rNombre" placeholder="Ej: Ruta Rita" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
-        <div><label class="lbl" style="font-size:10px">Código</label><input class="rCodigo" placeholder="20" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
-        <div><label class="lbl" style="font-size:10px">Trabajadores</label><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
-        <div style="padding-bottom:2px"><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>
-      </div>
-      <div class="fila-ruta" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
-        <div><input class="rNombre" placeholder="Ej: Ruta Santa Ana" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
-        <div><input class="rCodigo" placeholder="10" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
-        <div><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
-        <div><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>
-      </div>`;
-  }
-}
-
-// Subir foto a Drive via Apps Script
-async function subirFotoFusion(file, sector, ruta, idx) {
-  return new Promise((resolve) => {
-    if(!file) { resolve(''); return; }
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const base64 = e.target.result.split(',')[1];
-      const ext = file.name.split('.').pop();
-      const fecha = new Date();
-      const ts = fecha.getFullYear().toString() +
-        String(fecha.getMonth()+1).padStart(2,'0') +
-        String(fecha.getDate()).padStart(2,'0') + '_' +
-        String(fecha.getHours()).padStart(2,'0') +
-        String(fecha.getMinutes()).padStart(2,'0');
-      const nombre = ('FUSION_' + sector + '_' + ruta + '_' + ts + '_' + idx + '.' + ext)
-        .replace(/[^a-zA-Z0-9_.-]/g,'_').toUpperCase();
-      try {
-        const d = await apiPost({
-          action:'subirArchivo', base64, nombre,
-          mimeType: file.type || 'image/jpeg',
-          carpeta:'Evidencias_Fusiones_Buses'
-        });
-        resolve(d.enlace || d.url || d.link || '');
-      } catch(e) { resolve(''); }
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-async function guardarFusion() {
-  const sector    = document.getElementById('fSector').value;
-  const supervisor= document.getElementById('fSupervisorAuto').value;
-  const cantBuses = document.getElementById('fCantBuses').value;
-  const rutaOrigen= document.getElementById('fRutaOrigen').value.trim();
-  const codOrigen = document.getElementById('fCodigoOrigen').value.trim();
-  const totalTrab = document.getElementById('fTotalTrab').value;
-  const motivo    = document.getElementById('fMotivo').value;
-  const motiOtro  = document.getElementById('fMotivoOtro').value.trim();
-  const obs       = document.getElementById('fObservaciones').value.trim();
-  const reemplazo = document.querySelector('input[name="fReemplazo"]:checked')?.value || 'No';
-  const reemplazante = document.getElementById('fReemplazante').value;
-  const reemplazado  = document.getElementById('fReemplazado').value;
-
-  // Validaciones
-  if(!sector)      { alert('Selecciona el sector'); return; }
-  if(!cantBuses)   { alert('Selecciona cantidad de buses fusionados'); return; }
-  if(!rutaOrigen)  { alert('Ingresa la ruta original'); return; }
-  if(!totalTrab)   { alert('Ingresa el total de trabajadores afectados'); return; }
-  if(!motivo)      { alert('Selecciona el motivo de la fusión'); return; }
-  if(motivo==='Otro' && !motiOtro) { alert('Especifica el motivo'); return; }
-
-  // Validar distribución
-  const total = parseInt(totalTrab);
-  const personales = document.querySelectorAll('#contenedorRutas .rPersonal');
-  let suma = 0;
-  personales.forEach(p => suma += parseInt(p.value)||0);
-  if(suma !== total) {
-    alert('Distribución incorrecta: ' + suma + ' vs ' + total + ' trabajadores');
-    return;
-  }
-
-  // Recoger rutas destino
-  const filas = document.querySelectorAll('#contenedorRutas .fila-ruta');
-  const rutas = [];
-  filas.forEach(f => {
-    rutas.push({
-      nombre:   f.querySelector('.rNombre')?.value.trim() || '',
-      codigo:   f.querySelector('.rCodigo')?.value.trim() || '',
-      personal: f.querySelector('.rPersonal')?.value || '0'
-    });
-  });
-
-  const btn = document.getElementById('btnGuardarFusion');
-  btn.disabled = true;
-  btn.textContent = '⏳ Guardando...';
-
-  // Subir fotos
-  const sectorLimpio = sector.replace(/\s/g,'');
-  const rutaLimpia   = rutaOrigen.replace(/\s/g,'');
-  const foto1file = document.getElementById('fFoto1').files[0];
-  const foto2file = document.getElementById('fFoto2').files[0];
-  const foto3file = document.getElementById('fFoto3').files[0];
-  if(foto1file) { document.getElementById('fFoto1Msg').textContent='⏳ Subiendo foto 1...'; }
-  if(foto2file) { document.getElementById('fFoto2Msg').textContent='⏳ Subiendo foto 2...'; }
-  if(foto3file) { document.getElementById('fFoto3Msg').textContent='⏳ Subiendo foto 3...'; }
-
-  const [link1, link2, link3] = await Promise.all([
-    subirFotoFusion(foto1file, sectorLimpio, rutaLimpia, 1),
-    subirFotoFusion(foto2file, sectorLimpio, rutaLimpia, 2),
-    subirFotoFusion(foto3file, sectorLimpio, rutaLimpia, 3)
-  ]);
-  if(foto1file) document.getElementById('fFoto1Msg').textContent = link1 ? '✅ Subida' : '⚠️ No subida';
-  if(foto2file) document.getElementById('fFoto2Msg').textContent = link2 ? '✅ Subida' : '⚠️ No subida';
-  if(foto3file) document.getElementById('fFoto3Msg').textContent = link3 ? '✅ Subida' : '⚠️ No subida';
-
-  const ahora = new Date();
-  const payload = {
-    action: 'saveFusion',
-    fecha:  ahora.toLocaleDateString('es-PE'),
-    hora:   ahora.toLocaleTimeString('es-PE', {hour:'2-digit',minute:'2-digit'}),
-    usuario: USER.nombre || USER.email || '',
-    sector, supervisor, reemplazo, reemplazante, reemplazado,
-    cantBuses, rutaOrigen, codOrigen, totalTrab,
-    ruta1:     rutas[0]?.nombre||'', codigo1: rutas[0]?.codigo||'', personal1: rutas[0]?.personal||'',
-    ruta2:     rutas[1]?.nombre||'', codigo2: rutas[1]?.codigo||'', personal2: rutas[1]?.personal||'',
-    ruta3:     rutas[2]?.nombre||'', codigo3: rutas[2]?.codigo||'', personal3: rutas[2]?.personal||'',
-    motivo: motivo==='Otro' ? motiOtro : motivo,
-    observaciones: obs,
-    foto1: link1, foto2: link2, foto3: link3,
-    estado: 'Pendiente'
-  };
-
-  try {
-    const d = await apiPost(payload);
-    if(d.success) {
-      cerrar('mFusion');
-      cargarFusiones();
-      alert('✅ Registro guardado. Fusión de ruta ' + rutaOrigen + ' (código ' + codOrigen + ') registrada. El administrador validará este registro.');
-    } else {
-      alert('❌ Error al guardar: ' + (d.error || d.message || 'Error desconocido'));
-    }
-  } catch(e) {
-    alert('❌ Error: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = '💾 Guardar Registro';
-  }
-}
-
-// Cargar tabla de fusiones
-let _fusionesData = [];
-async function cargarFusiones() {
-  document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
-  try {
-    const d = await apiGet({action:'getFusiones', usuario: USER.rol==='admin'?'TODOS':USER.nombre||USER.email});
-    if(d.success && d.data) {
-      _fusionesData = d.data;
-      renderFusiones(_fusionesData);
-      actualizarStatsFusiones(_fusionesData);
-    }
-  } catch(e) {
-    document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">❌ Error al cargar</td></tr>';
-  }
-}
-
-function renderFusiones(data) {
-  const tb = document.getElementById('tbFusiones');
-  if(!data.length){ tb.innerHTML='<tr><td colspan="9" class="empty">Sin registros</td></tr>'; return; }
-  tb.innerHTML = data.map((r,i) => {
-    const estColor = r.estado==='Validado'?'#16a34a':r.estado==='Observado'?'#dc2626':'#f59e0b';
-    const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
-    return `<tr>
-      <td>${i+1}</td>
-      <td>${r.fecha||''}</td>
-      <td>${r.sector||''}</td>
-      <td style="font-size:11px">${r.supervisor||''}</td>
-      <td>${r.ruta_origen||''} <span style="font-size:10px;color:#94a3b8">cod.${r.codigo_origen||''}</span></td>
-      <td style="text-align:center;font-weight:700">${r.total_trab||''}</td>
-      <td style="font-size:11px">${r.motivo||''}</td>
-      <td><span style="background:${estColor}20;color:${estColor};padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700">${r.estado||'Pendiente'}</span></td>
-      <td>
-        ${fotos.length ? '<button onclick="verFotosFusion('+i+')" style="background:#e0e7ff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px">📷 '+fotos.length+'</button>' : ''}
-      </td>
-    </tr>`;
-  }).join('');
-}
-
-function actualizarStatsFusiones(data) {
-  document.getElementById('sfTotal').textContent       = data.length;
-  document.getElementById('sfPendientes').textContent  = data.filter(r=>r.estado==='Pendiente').length;
-  document.getElementById('sfTrabajadores').textContent= data.reduce((a,r)=>a+(parseInt(r.total_trab)||0),0);
-  const sectores = new Set(data.map(r=>r.sector).filter(Boolean));
-  document.getElementById('sfSectores').textContent    = sectores.size;
-}
-
-function filtrarFusiones() {
-  const q = document.getElementById('fFusionBuscar').value.toLowerCase();
-  const est = document.getElementById('fFusionEstado').value;
-  const fil = _fusionesData.filter(r =>
-    (!q || JSON.stringify(r).toLowerCase().includes(q)) &&
-    (!est || r.estado === est)
-  );
-  renderFusiones(fil);
-}
-
-function verFotosFusion(idx) {
-  const r = _fusionesData[idx];
-  const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
-  fotos.forEach((url,i) => window.open(url,'_blank'));
-}
-
-// ══════════════════ FIN FUSIONES ══════════════════
-
-</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
@@ -1340,6 +1013,332 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 <script>
 let USER={}, API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec', atTodas=[], resData=[], detNro='', modoEdicion=false;
 let charts={};
+
+// ══════════════════ MÓDULO FUSIONES DE BUSES ══════════════════
+
+const SUPERVISORES_SECTOR = {
+  'El Papayo':         'Paul Tamayo Rodríguez',
+  'Limones':           'Paul Tamayo Rodríguez',
+  'Olivares Bajo':     'Alex Tineo Ramos',
+  'Olivares':          'Flor Pulache Viera',
+  'Santa Rosa':        'Yhanelly Luzón Venegas',
+  'Aproa':             'Alex Zapata Suárez',
+  'Punta Arenas':      'Alexander Martínez Juárez',
+  'Algarrobos':        'Sergio Viera Girón',
+  'San Vicente':       'Elberth Castro Bayona',
+  'Planta Rapel Packing': 'Roberto Molero Abad'
+};
+
+function autoSupervisor() {
+  const sector = document.getElementById('fSector').value;
+  document.getElementById('fSupervisorAuto').value = SUPERVISORES_SECTOR[sector] || '';
+}
+
+function toggleReemplazo() {
+  const val = document.querySelector('input[name="fReemplazo"]:checked')?.value;
+  document.getElementById('panelReemplazo').style.display = val === 'Sí' ? 'block' : 'none';
+}
+
+function toggleMotivoOtro() {
+  const val = document.getElementById('fMotivo').value;
+  document.getElementById('panelMotivoOtro').style.display = val === 'Otro' ? 'block' : 'none';
+}
+
+function agregarRuta() {
+  const cont = document.getElementById('contenedorRutas');
+  const filas = cont.querySelectorAll('.fila-ruta');
+  if(filas.length >= 3) { alert('Máximo 3 rutas destino'); return; }
+  const div = document.createElement('div');
+  div.className = 'fila-ruta';
+  div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end';
+  div.innerHTML = `
+    <div><input class="rNombre" placeholder="Nombre ruta" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+    <div><input class="rCodigo" placeholder="Código" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+    <div><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+    <div><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>`;
+  cont.appendChild(div);
+}
+
+function quitarRuta(btn) {
+  const filas = document.querySelectorAll('#contenedorRutas .fila-ruta');
+  if(filas.length <= 1) { alert('Debe haber al menos 1 ruta destino'); return; }
+  btn.closest('.fila-ruta').remove();
+  validarDistribucion();
+}
+
+function validarDistribucion() {
+  const total = parseInt(document.getElementById('fTotalTrab').value) || 0;
+  const personales = document.querySelectorAll('#contenedorRutas .rPersonal');
+  let suma = 0;
+  personales.forEach(p => suma += parseInt(p.value) || 0);
+  const div = document.getElementById('fValidacionRutas');
+  if(total === 0 || suma === 0) { div.textContent = ''; return; }
+  if(suma === total) {
+    div.textContent = '✅ Distribución correcta: ' + suma + ' / ' + total + ' trabajadores';
+    div.style.color = '#16a34a';
+  } else {
+    div.textContent = '⚠️ La distribución del personal no coincide: ' + suma + ' / ' + total;
+    div.style.color = '#dc2626';
+  }
+}
+
+function previsualizarFoto(input, prevId) {
+  const file = input.files[0];
+  const prev = document.getElementById(prevId);
+  if(file) {
+    const url = URL.createObjectURL(file);
+    prev.src = url;
+    prev.style.display = 'block';
+  } else {
+    prev.style.display = 'none';
+  }
+}
+
+function abrirNuevaFusion() {
+  limpiarFormFusion();
+  abrir('mFusion');
+}
+
+function limpiarFormFusion() {
+  ['fSector','fCantBuses','fMotivo','fReemplazante','fReemplazado'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.selectedIndex = 0;
+  });
+  ['fSupervisorAuto','fRutaOrigen','fCodigoOrigen','fMotivoOtro','fObservaciones'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  const tt = document.getElementById('fTotalTrab');
+  if(tt) tt.value = '';
+  document.getElementById('panelReemplazo').style.display = 'none';
+  document.getElementById('panelMotivoOtro').style.display = 'none';
+  document.getElementById('fValidacionRutas').textContent = '';
+  ['fFoto1','fFoto2','fFoto3'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  ['prev1','prev2','prev3'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.display = 'none';
+  });
+  ['fFoto1Msg','fFoto2Msg','fFoto3Msg'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.textContent = '';
+  });
+  // Restablecer radio a "No"
+  const radioNo = document.querySelector('input[name="fReemplazo"][value="No"]');
+  if(radioNo) radioNo.checked = true;
+  // Restablecer rutas destino a 2
+  const cont = document.getElementById('contenedorRutas');
+  if(cont) {
+    cont.innerHTML = `
+      <div class="fila-ruta" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+        <div><label class="lbl" style="font-size:10px">Nombre ruta</label><input class="rNombre" placeholder="Ej: Ruta Rita" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+        <div><label class="lbl" style="font-size:10px">Código</label><input class="rCodigo" placeholder="20" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+        <div><label class="lbl" style="font-size:10px">Trabajadores</label><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+        <div style="padding-bottom:2px"><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>
+      </div>
+      <div class="fila-ruta" style="display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end">
+        <div><input class="rNombre" placeholder="Ej: Ruta Santa Ana" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+        <div><input class="rCodigo" placeholder="10" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+        <div><input class="rPersonal" type="number" min="0" placeholder="0" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" oninput="validarDistribucion()"></div>
+        <div><button onclick="quitarRuta(this)" style="background:#fee2e2;border:none;border-radius:6px;padding:7px 10px;cursor:pointer;font-size:13px">✕</button></div>
+      </div>`;
+  }
+}
+
+// Subir foto a Drive via Apps Script
+async function subirFotoFusion(file, sector, ruta, idx) {
+  return new Promise((resolve) => {
+    if(!file) { resolve(''); return; }
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64 = e.target.result.split(',')[1];
+      const ext = file.name.split('.').pop();
+      const fecha = new Date();
+      const ts = fecha.getFullYear().toString() +
+        String(fecha.getMonth()+1).padStart(2,'0') +
+        String(fecha.getDate()).padStart(2,'0') + '_' +
+        String(fecha.getHours()).padStart(2,'0') +
+        String(fecha.getMinutes()).padStart(2,'0');
+      const nombre = ('FUSION_' + sector + '_' + ruta + '_' + ts + '_' + idx + '.' + ext)
+        .replace(/[^a-zA-Z0-9_.-]/g,'_').toUpperCase();
+      try {
+        const d = await apiPost({
+          action:'subirArchivo', base64, nombre,
+          mimeType: file.type || 'image/jpeg',
+          carpeta:'Evidencias_Fusiones_Buses'
+        });
+        resolve(d.enlace || d.url || d.link || '');
+      } catch(e) { resolve(''); }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function guardarFusion() {
+  const sector    = document.getElementById('fSector').value;
+  const supervisor= document.getElementById('fSupervisorAuto').value;
+  const cantBuses = document.getElementById('fCantBuses').value;
+  const rutaOrigen= document.getElementById('fRutaOrigen').value.trim();
+  const codOrigen = document.getElementById('fCodigoOrigen').value.trim();
+  const totalTrab = document.getElementById('fTotalTrab').value;
+  const motivo    = document.getElementById('fMotivo').value;
+  const motiOtro  = document.getElementById('fMotivoOtro').value.trim();
+  const obs       = document.getElementById('fObservaciones').value.trim();
+  const reemplazo = document.querySelector('input[name="fReemplazo"]:checked')?.value || 'No';
+  const reemplazante = document.getElementById('fReemplazante').value;
+  const reemplazado  = document.getElementById('fReemplazado').value;
+
+  // Validaciones
+  if(!sector)      { alert('Selecciona el sector'); return; }
+  if(!cantBuses)   { alert('Selecciona cantidad de buses fusionados'); return; }
+  if(!rutaOrigen)  { alert('Ingresa la ruta original'); return; }
+  if(!totalTrab)   { alert('Ingresa el total de trabajadores afectados'); return; }
+  if(!motivo)      { alert('Selecciona el motivo de la fusión'); return; }
+  if(motivo==='Otro' && !motiOtro) { alert('Especifica el motivo'); return; }
+
+  // Validar distribución
+  const total = parseInt(totalTrab);
+  const personales = document.querySelectorAll('#contenedorRutas .rPersonal');
+  let suma = 0;
+  personales.forEach(p => suma += parseInt(p.value)||0);
+  if(suma !== total) {
+    alert('Distribución incorrecta: ' + suma + ' vs ' + total + ' trabajadores');
+    return;
+  }
+
+  // Recoger rutas destino
+  const filas = document.querySelectorAll('#contenedorRutas .fila-ruta');
+  const rutas = [];
+  filas.forEach(f => {
+    rutas.push({
+      nombre:   f.querySelector('.rNombre')?.value.trim() || '',
+      codigo:   f.querySelector('.rCodigo')?.value.trim() || '',
+      personal: f.querySelector('.rPersonal')?.value || '0'
+    });
+  });
+
+  const btn = document.getElementById('btnGuardarFusion');
+  btn.disabled = true;
+  btn.textContent = '⏳ Guardando...';
+
+  // Subir fotos
+  const sectorLimpio = sector.replace(/\s/g,'');
+  const rutaLimpia   = rutaOrigen.replace(/\s/g,'');
+  const foto1file = document.getElementById('fFoto1').files[0];
+  const foto2file = document.getElementById('fFoto2').files[0];
+  const foto3file = document.getElementById('fFoto3').files[0];
+  if(foto1file) { document.getElementById('fFoto1Msg').textContent='⏳ Subiendo foto 1...'; }
+  if(foto2file) { document.getElementById('fFoto2Msg').textContent='⏳ Subiendo foto 2...'; }
+  if(foto3file) { document.getElementById('fFoto3Msg').textContent='⏳ Subiendo foto 3...'; }
+
+  const [link1, link2, link3] = await Promise.all([
+    subirFotoFusion(foto1file, sectorLimpio, rutaLimpia, 1),
+    subirFotoFusion(foto2file, sectorLimpio, rutaLimpia, 2),
+    subirFotoFusion(foto3file, sectorLimpio, rutaLimpia, 3)
+  ]);
+  if(foto1file) document.getElementById('fFoto1Msg').textContent = link1 ? '✅ Subida' : '⚠️ No subida';
+  if(foto2file) document.getElementById('fFoto2Msg').textContent = link2 ? '✅ Subida' : '⚠️ No subida';
+  if(foto3file) document.getElementById('fFoto3Msg').textContent = link3 ? '✅ Subida' : '⚠️ No subida';
+
+  const ahora = new Date();
+  const payload = {
+    action: 'saveFusion',
+    fecha:  ahora.toLocaleDateString('es-PE'),
+    hora:   ahora.toLocaleTimeString('es-PE', {hour:'2-digit',minute:'2-digit'}),
+    usuario: USER.nombre || USER.email || '',
+    sector, supervisor, reemplazo, reemplazante, reemplazado,
+    cantBuses, rutaOrigen, codOrigen, totalTrab,
+    ruta1:     rutas[0]?.nombre||'', codigo1: rutas[0]?.codigo||'', personal1: rutas[0]?.personal||'',
+    ruta2:     rutas[1]?.nombre||'', codigo2: rutas[1]?.codigo||'', personal2: rutas[1]?.personal||'',
+    ruta3:     rutas[2]?.nombre||'', codigo3: rutas[2]?.codigo||'', personal3: rutas[2]?.personal||'',
+    motivo: motivo==='Otro' ? motiOtro : motivo,
+    observaciones: obs,
+    foto1: link1, foto2: link2, foto3: link3,
+    estado: 'Pendiente'
+  };
+
+  try {
+    const d = await apiPost(payload);
+    if(d.success) {
+      cerrar('mFusion');
+      cargarFusiones();
+      alert('✅ Registro guardado. Fusión de ruta ' + rutaOrigen + ' (código ' + codOrigen + ') registrada. El administrador validará este registro.');
+    } else {
+      alert('❌ Error al guardar: ' + (d.error || d.message || 'Error desconocido'));
+    }
+  } catch(e) {
+    alert('❌ Error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '💾 Guardar Registro';
+  }
+}
+
+// Cargar tabla de fusiones
+let _fusionesData = [];
+async function cargarFusiones() {
+  document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
+  try {
+    const d = await apiGet({action:'getFusiones', usuario: USER.rol==='admin'?'TODOS':USER.nombre||USER.email});
+    if(d.success && d.data) {
+      _fusionesData = d.data;
+      renderFusiones(_fusionesData);
+      actualizarStatsFusiones(_fusionesData);
+    }
+  } catch(e) {
+    document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">❌ Error al cargar</td></tr>';
+  }
+}
+
+function renderFusiones(data) {
+  const tb = document.getElementById('tbFusiones');
+  if(!data.length){ tb.innerHTML='<tr><td colspan="9" class="empty">Sin registros</td></tr>'; return; }
+  tb.innerHTML = data.map((r,i) => {
+    const estColor = r.estado==='Validado'?'#16a34a':r.estado==='Observado'?'#dc2626':'#f59e0b';
+    const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${r.fecha||''}</td>
+      <td>${r.sector||''}</td>
+      <td style="font-size:11px">${r.supervisor||''}</td>
+      <td>${r.ruta_origen||''} <span style="font-size:10px;color:#94a3b8">cod.${r.codigo_origen||''}</span></td>
+      <td style="text-align:center;font-weight:700">${r.total_trab||''}</td>
+      <td style="font-size:11px">${r.motivo||''}</td>
+      <td><span style="background:${estColor}20;color:${estColor};padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700">${r.estado||'Pendiente'}</span></td>
+      <td>
+        ${fotos.length ? '<button onclick="verFotosFusion('+i+')" style="background:#e0e7ff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px">📷 '+fotos.length+'</button>' : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function actualizarStatsFusiones(data) {
+  document.getElementById('sfTotal').textContent       = data.length;
+  document.getElementById('sfPendientes').textContent  = data.filter(r=>r.estado==='Pendiente').length;
+  document.getElementById('sfTrabajadores').textContent= data.reduce((a,r)=>a+(parseInt(r.total_trab)||0),0);
+  const sectores = new Set(data.map(r=>r.sector).filter(Boolean));
+  document.getElementById('sfSectores').textContent    = sectores.size;
+}
+
+function filtrarFusiones() {
+  const q = document.getElementById('fFusionBuscar').value.toLowerCase();
+  const est = document.getElementById('fFusionEstado').value;
+  const fil = _fusionesData.filter(r =>
+    (!q || JSON.stringify(r).toLowerCase().includes(q)) &&
+    (!est || r.estado === est)
+  );
+  renderFusiones(fil);
+}
+
+function verFotosFusion(idx) {
+  const r = _fusionesData[idx];
+  const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
+  fotos.forEach((url,i) => window.open(url,'_blank'));
+}
+
+// ══════════════════ FIN FUSIONES ══════════════════
 
 const ROLES_ADMIN   = ['administrador'];
 const ROLES_ADMIN2  = ['administrador 01','administrador 02'];
@@ -2865,3 +2864,10 @@ function imprimirInforme() {
   win.document.write('<html><head><title>Informe Visita Campo</title>');
   win.document.write('<style>body{font-family:Times New Roman,serif;font-size:12pt;margin:40px;line-height:1.6} @media print{body{margin:20px}}</style>');
   win.document.write('</head><body>' + contenido + '</body></html>');
+  win.document.close();
+  win.print();
+}
+
+</script>
+</body>
+</html>
