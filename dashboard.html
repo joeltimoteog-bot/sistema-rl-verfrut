@@ -988,27 +988,25 @@ function limpiarFormCaso() {
 
 async function buscarTrabajadorCaso() {
   const dni = document.getElementById('cDNI').value.trim();
-  if(!dni || dni.length < 7) return;
   const msg = document.getElementById('cBuscarMsg');
-  msg.textContent='⏳ Buscando...';
+  if(!dni || dni.length < 2) { msg.textContent='⚠️ Ingresa el DNI'; msg.style.color='#dc2626'; return; }
+  msg.textContent='🔍 Buscando en RAPEL y VERFRUT...';
   msg.style.color='#64748b';
   try {
-    const d = await apiGet({action:'buscarTrabajador', q:String(dni), empresa:'AMBAS'});
+    const d = await apiGet({action:'buscarTrabajador', q:String(dni).trim(), empresa:'AMBAS'});
     if(d.success && d.data && d.data.length) {
       const t = d.data[0];
-      // Llenar campos readonly
-      document.getElementById('cNombre').value  = t.nombre || '';
+      document.getElementById('cNombre').value  = t.nombre  || '';
       document.getElementById('cEmpresa').value = t.empresa || '';
-      document.getElementById('cCargo').value   = t.cargo || t.oficio || '';
+      document.getElementById('cCargo').value   = t.cargo   || t.oficio || '';
       document.getElementById('cSector').value  = t.fundo_actual || t.fundo || t.zona || '';
       document.getElementById('cIngreso').value = t.fecha_inicio_periodo
         ? String(t.fecha_inicio_periodo).split('T')[0]
         : (t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '');
       document.getElementById('cTermino').value = t.fecha_termino
         ? String(t.fecha_termino).split('T')[0] : '';
-      // Mostrar panel datos caso
       document.getElementById('panelDatosCaso').style.display = 'block';
-      msg.textContent = '✅ Trabajador encontrado — ' + t.empresa;
+      msg.textContent = '✅ Encontrado: ' + t.nombre + ' — ' + t.empresa;
       msg.style.color = '#16a34a';
       window._casoTrabajador = t;
     } else {
