@@ -959,12 +959,14 @@ function limpiarFormCaso() {
    'cMotivoExtra','cMotivoRetraso','cBuscarMsg'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value !== undefined ? el.value='' : null;
-    if(el && el.tagName==='DIV') el.textContent='';
+    if(el && (el.tagName==='DIV'||el.tagName==='SPAN')) el.textContent='';
   });
   ['cSupervisor','cMotivo'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.selectedIndex=0;
   });
+  const bmsg = document.getElementById('cBuscarMsg');
+  if(bmsg) bmsg.textContent='';
   const pd = document.getElementById('panelDatosCaso');
   if(pd) pd.style.display='none';
   const pa = document.getElementById('panelAvanceCaso');
@@ -994,28 +996,29 @@ async function buscarTrabajadorCaso() {
     const d = await apiGet({action:'buscarTrabajador', q:String(dni), empresa:'AMBAS'});
     if(d.success && d.data && d.data.length) {
       const t = d.data[0];
-      document.getElementById('cNombre').value  = t.nombre        || '';
-      document.getElementById('cEmpresa').value = t.empresa       || '';
-      document.getElementById('cCargo').value   = t.cargo         || t.oficio || '';
-      document.getElementById('cSector').value  = t.fundo_actual  || t.fundo  || t.zona || '';
+      // Llenar campos readonly
+      document.getElementById('cNombre').value  = t.nombre || '';
+      document.getElementById('cEmpresa').value = t.empresa || '';
+      document.getElementById('cCargo').value   = t.cargo || t.oficio || '';
+      document.getElementById('cSector').value  = t.fundo_actual || t.fundo || t.zona || '';
       document.getElementById('cIngreso').value = t.fecha_inicio_periodo
         ? String(t.fecha_inicio_periodo).split('T')[0]
         : (t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '');
       document.getElementById('cTermino').value = t.fecha_termino
         ? String(t.fecha_termino).split('T')[0] : '';
-      document.getElementById('panelDatosCaso').style.display='block';
-      msg.textContent='✅ Trabajador encontrado — '+t.empresa;
-      // Guardar para payload
+      // Mostrar panel datos caso
+      document.getElementById('panelDatosCaso').style.display = 'block';
+      msg.textContent = '✅ Trabajador encontrado — ' + t.empresa;
+      msg.style.color = '#16a34a';
       window._casoTrabajador = t;
-      msg.style.color='#16a34a';
     } else {
-      msg.textContent='⚠️ DNI no encontrado en RAPEL ni VERFRUT';
-      msg.style.color='#dc2626';
-      document.getElementById('panelDatosCaso').style.display='none';
+      msg.textContent = '⚠️ DNI no encontrado en RAPEL ni VERFRUT';
+      msg.style.color = '#dc2626';
+      document.getElementById('panelDatosCaso').style.display = 'none';
     }
   } catch(e) {
-    msg.textContent='❌ Error: '+e.message;
-    msg.style.color='#dc2626';
+    msg.textContent = '❌ Error: ' + e.message;
+    msg.style.color = '#dc2626';
   }
 }
 
