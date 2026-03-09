@@ -1013,6 +1013,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 <script>
 let USER={}, API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec', atTodas=[], resData=[], detNro='', modoEdicion=false;
 let charts={};
+let _fusionesData=[], solicitudesData=[];
 
 // ══════════════════ MÓDULO FUSIONES DE BUSES ══════════════════
 
@@ -1277,11 +1278,10 @@ async function guardarFusion() {
 }
 
 // Cargar tabla de fusiones
-let _fusionesData = [];
 async function cargarFusiones() {
   document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
   try {
-    const d = await apiGet({action:'getFusiones', usuario: USER.rol==='admin'?'TODOS':USER.nombre||USER.email});
+    const d = await apiGet({action:'getFusiones', usuario: ROLES_ADMIN.includes(USER.rol)||ROLES_ADMIN2.includes(USER.rol)?'TODOS':USER.nombre||USER.email});
     if(d.success && d.data) {
       _fusionesData = d.data;
       renderFusiones(_fusionesData);
