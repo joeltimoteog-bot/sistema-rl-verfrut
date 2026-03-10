@@ -1458,28 +1458,37 @@ async function cargarEstadisticasAdmin() {
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   if (!esAdmin) return;
 
-  // Usar cache si está disponible y tiene datos
+  const empresa = (document.getElementById('estFiltroEmp')?.value || '').toUpperCase();
+  const mes     = parseInt(document.getElementById('estFiltroMes')?.value || '0');
+  const sup     = (document.getElementById('estFiltroSup')?.value || '').toLowerCase().trim();
+
+  // Si hay cache, filtrar directo en frontend sin llamar al backend
   if (CACHE.estadisticasAdmin && typeof CACHE.estadisticasAdmin === 'object') {
-    renderEstadisticasAdmin(CACHE.estadisticasAdmin);
+    const data = CACHE.estadisticasAdmin;
+    // Aplicar filtros al porSupervisor del cache
+    let porSupFiltrado = Object.assign({}, data.porSupervisor);
+    if (sup) {
+      porSupFiltrado = Object.fromEntries(
+        Object.entries(porSupFiltrado).filter(([k]) => k.toLowerCase().includes(sup))
+      );
+    }
+    renderEstadisticasAdmin({ stats: data.stats, porSupervisor: porSupFiltrado, tendencia: data.tendencia });
     return;
   }
 
   const tb = document.getElementById('tbEstSupervisores');
   if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">⏳ Cargando datos...</td></tr>';
 
-  const empresa = document.getElementById('estFiltroEmp')?.value || '';
-  const mes     = document.getElementById('estFiltroMes')?.value || '';
-  const sup     = document.getElementById('estFiltroSup')?.value || '';
-
   try {
-    const d = await apiGet({ action:'getEstadisticasAdmin', empresa, mes, supervisor:sup });
+    const d = await apiGet({ action:'getEstadisticasAdmin', empresa, mes: mes||'', supervisor: sup });
     if (!d.success) {
-      if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error al cargar</td></tr>';
+      if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ ' + (d.error||'Error al cargar') + '</td></tr>';
       return;
     }
+    CACHE.estadisticasAdmin = d.data;
     renderEstadisticasAdmin(d.data);
   } catch(e) {
-    if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error de conexión</td></tr>';
+    if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error de conexión: ' + e.message + '</td></tr>';
   }
 }
 
