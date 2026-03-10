@@ -155,6 +155,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <button class="ni" id="navVisitas" onclick="ir('visitas',this)"><span class="ic">🏕️</span>Visitas de Campo</button>
     <button class="ni" id="navCasos" onclick="ir('casos',this)"><span class="ic">⚖️</span>Registro de Casos</button>
     <button class="ni" id="navFusiones" onclick="ir('fusiones',this)"><span class="ic">🚌</span>Fusiones de Buses</button>
+    <button class="ni" id="navEstadisticas" style="display:none" onclick="ir('estadisticas',this)"><span class="ic">📊</span>Estadísticas Admin</button>
     <button class="ni" id="navSolicitudes" style="display:none" onclick="ir('solicitudes',this)"><span class="ic">🔔</span>Solicitudes <span id="badgeSol" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none">0</span></button>
     <button class="ni" id="navUsr" style="display:none" onclick="ir('usuarios',this)"><span class="ic">👥</span>Gestión Usuarios</button>
   </div>
@@ -535,6 +536,161 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     </div>
   </div>
 </div>
+
+    <!-- ESTADÍSTICAS ADMIN -->
+    <div class="sec" id="sec-estadisticas">
+      <!-- HEADER -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
+        <h2 style="margin:0;font-size:18px;color:#0b1e45">📊 Estadísticas Generales</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <select id="estFiltroEmp" onchange="cargarEstadisticasAdmin()" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px">
+            <option value="">Todas las empresas</option>
+            <option value="RAPEL">RAPEL</option>
+            <option value="VERFRUT">VERFRUT</option>
+          </select>
+          <select id="estFiltroMes" onchange="cargarEstadisticasAdmin()" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px">
+            <option value="">Todos los meses</option>
+            <option value="1">Enero</option><option value="2">Febrero</option>
+            <option value="3">Marzo</option><option value="4">Abril</option>
+            <option value="5">Mayo</option><option value="6">Junio</option>
+            <option value="7">Julio</option><option value="8">Agosto</option>
+            <option value="9">Setiembre</option><option value="10">Octubre</option>
+            <option value="11">Noviembre</option><option value="12">Diciembre</option>
+          </select>
+          <input id="estFiltroSup" placeholder="🔍 Buscar supervisor..." oninput="cargarEstadisticasAdmin()"
+            style="padding:7px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px;width:180px">
+        </div>
+      </div>
+
+      <!-- RESUMEN GLOBAL: 4 módulos -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:22px" id="estCardsGlobales">
+        <!-- Atenciones -->
+        <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-left:5px solid #0b1e45">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span style="font-size:13px;font-weight:700;color:#0b1e45">🩺 Atenciones</span>
+            <span style="font-size:28px;font-weight:900;color:#0b1e45" id="eAtTotal">—</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center">
+            <div style="background:#fff7ed;border-radius:8px;padding:6px">
+              <div style="font-size:18px;font-weight:800;color:#f97316" id="eAtPend">—</div>
+              <div style="font-size:10px;color:#64748b">Pendientes</div>
+            </div>
+            <div style="background:#eff6ff;border-radius:8px;padding:6px">
+              <div style="font-size:18px;font-weight:800;color:#3b82f6" id="eAtProc">—</div>
+              <div style="font-size:10px;color:#64748b">En proceso</div>
+            </div>
+            <div style="background:#f0fdf4;border-radius:8px;padding:6px">
+              <div style="font-size:18px;font-weight:800;color:#16a34a" id="eAtRes">—</div>
+              <div style="font-size:10px;color:#64748b">Resueltos</div>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:#64748b">
+            Este mes: <strong id="eAtMes">—</strong>
+          </div>
+        </div>
+        <!-- Visitas -->
+        <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-left:5px solid #7c3aed">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span style="font-size:13px;font-weight:700;color:#7c3aed">🏕️ Visitas de Campo</span>
+            <span style="font-size:28px;font-weight:900;color:#7c3aed" id="eVisTotal">—</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center">
+            <div style="background:#f0fdf4;border-radius:8px;padding:6px">
+              <div style="font-size:18px;font-weight:800;color:#16a34a" id="eVisPlazo">—</div>
+              <div style="font-size:10px;color:#64748b">En plazo</div>
+            </div>
+            <div style="background:#fef2f2;border-radius:8px;padding:6px">
+              <div style="font-size:18px;font-weight:800;color:#dc2626" id="eVisRetras">—</div>
+              <div style="font-size:10px;color:#64748b">Retrasadas</div>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:#64748b">
+            Este mes: <strong id="eVisMes">—</strong>
+          </div>
+        </div>
+        <!-- Casos -->
+        <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-left:5px solid #d9292b">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span style="font-size:13px;font-weight:700;color:#d9292b">⚖️ Casos RL</span>
+            <span style="font-size:28px;font-weight:900;color:#d9292b" id="eCasTotal">—</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center">
+            <div style="background:#f0fdf4;border-radius:8px;padding:6px">
+              <div style="font-size:18px;font-weight:800;color:#16a34a" id="eCasPlazo">—</div>
+              <div style="font-size:10px;color:#64748b">En plazo</div>
+            </div>
+            <div style="background:#fef2f2;border-radius:8px;padding:6px">
+              <div style="font-size:18px;font-weight:800;color:#dc2626" id="eCasRetras">—</div>
+              <div style="font-size:10px;color:#64748b">Retrasados</div>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:#64748b">
+            Este mes: <strong id="eCasMes">—</strong>
+          </div>
+        </div>
+        <!-- Fusiones -->
+        <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-left:5px solid #f59e0b">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+            <span style="font-size:13px;font-weight:700;color:#f59e0b">🚌 Fusiones de Buses</span>
+            <span style="font-size:28px;font-weight:900;color:#f59e0b" id="eFusTotal">—</span>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center">
+            <div style="background:#fff7ed;border-radius:8px;padding:6px">
+              <div style="font-size:18px;font-weight:800;color:#f59e0b" id="eFusPend">—</div>
+              <div style="font-size:10px;color:#64748b">Pendientes</div>
+            </div>
+            <div style="background:#f0fdf4;border-radius:8px;padding:6px">
+              <div style="font-size:18px;font-weight:800;color:#16a34a" id="eFusValid">—</div>
+              <div style="font-size:10px;color:#64748b">Validados</div>
+            </div>
+          </div>
+          <div style="margin-top:10px;font-size:11px;color:#64748b">
+            Este mes: <strong id="eFusMes">—</strong> · Trab: <strong id="eFusTrab">—</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRÁFICO TENDENCIA + TABLA POR SUPERVISOR -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px">
+        <!-- Gráfico tendencia mensual -->
+        <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+          <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">📈 Tendencia últimos 6 meses</div>
+          <canvas id="chartTendencia" style="max-height:220px"></canvas>
+        </div>
+        <!-- Distribución por empresa -->
+        <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+          <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">🏢 Total general por módulo</div>
+          <canvas id="chartModulos" style="max-height:220px"></canvas>
+        </div>
+      </div>
+
+      <!-- TABLA POR SUPERVISOR -->
+      <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+        <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">👥 Detalle por Supervisor</div>
+        <div style="overflow-x:auto">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Supervisor</th>
+                <th style="background:#e0e7ff;color:#3730a3">Atenciones</th>
+                <th style="color:#f97316">Pend.</th>
+                <th style="color:#16a34a">Resueltos</th>
+                <th style="background:#ede9fe;color:#7c3aed">Visitas</th>
+                <th style="color:#dc2626">V.Retras.</th>
+                <th style="background:#fce7f3;color:#d9292b">Casos</th>
+                <th style="color:#dc2626">C.Retras.</th>
+                <th style="background:#fef9c3;color:#f59e0b">Fusiones</th>
+                <th style="background:#f0fdf4;color:#16a34a;font-weight:800">TOTAL</th>
+              </tr>
+            </thead>
+            <tbody id="tbEstSupervisores">
+              <tr><td colspan="10" class="empty">⏳ Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
 
 <!-- MODAL NUEVA/EDITAR ATENCIÓN -->
 <div class="ov" id="mAt">
@@ -1010,6 +1166,23 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 <script>
 let USER={}, API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec', atTodas=[], resData=[], detNro='', modoEdicion=false;
 let charts={};
+
+function mostrarToast(msg, tipo='ok') {
+  let t = document.getElementById('_toast');
+  if(!t) {
+    t = document.createElement('div');
+    t.id = '_toast';
+    t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;transition:opacity .4s;box-shadow:0 4px 16px rgba(0,0,0,.15)';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = tipo === 'error' ? '#fee2e2' : '#dcfce7';
+  t.style.color = tipo === 'error' ? '#991b1b' : '#166534';
+  t.style.opacity = '1';
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.style.opacity = '0', 3000);
+}
+
 let _fusionesData=[], solicitudesData=[];
 
 // ══════════════════ MÓDULO FUSIONES DE BUSES ══════════════════
@@ -1275,6 +1448,304 @@ async function guardarFusion() {
 }
 
 // Cargar tabla de fusiones
+
+// ══════════════════ ESTADÍSTICAS ADMIN ══════════════════
+
+async function cargarEstadisticasAdmin() {
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  if (!esAdmin) return;
+
+  const tb = document.getElementById('tbEstSupervisores');
+  if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">⏳ Cargando datos...</td></tr>';
+
+  const empresa = document.getElementById('estFiltroEmp')?.value || '';
+  const mes     = document.getElementById('estFiltroMes')?.value || '';
+  const sup     = document.getElementById('estFiltroSup')?.value || '';
+
+  try {
+    const d = await apiGet({ action:'getEstadisticasAdmin', empresa, mes, supervisor:sup });
+    if (!d.success) {
+      if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error al cargar</td></tr>';
+      return;
+    }
+
+    const { stats, porSupervisor, tendencia } = d.data;
+
+    // ── Cards globales ──
+    const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+    set('eAtTotal', stats.atenciones.total);
+    set('eAtPend',  stats.atenciones.pendientes);
+    set('eAtProc',  stats.atenciones.enProceso);
+    set('eAtRes',   stats.atenciones.resueltos);
+    set('eAtMes',   stats.atenciones.esteMes);
+
+    set('eVisTotal',  stats.visitas.total);
+    set('eVisPlazo',  stats.visitas.enPlazo);
+    set('eVisRetras', stats.visitas.retrasadas);
+    set('eVisMes',    stats.visitas.esteMes);
+
+    set('eCasTotal',  stats.casos.total);
+    set('eCasPlazo',  stats.casos.enPlazo);
+    set('eCasRetras', stats.casos.retrasados);
+    set('eCasMes',    stats.casos.esteMes);
+
+    set('eFusTotal', stats.fusiones.total);
+    set('eFusPend',  stats.fusiones.pendientes);
+    set('eFusValid', stats.fusiones.validados);
+    set('eFusMes',   stats.fusiones.esteMes);
+    set('eFusTrab',  stats.fusiones.trabajadores);
+
+    // ── Gráfico tendencia ──
+    const ctxT = document.getElementById('chartTendencia');
+    if(ctxT) {
+      if(charts['tendencia']) charts['tendencia'].destroy();
+      charts['tendencia'] = new Chart(ctxT, {
+        type: 'line',
+        data: {
+          labels: tendencia.map(t => t.label),
+          datasets: [
+            { label:'Atenciones', data: tendencia.map(t=>t.atenciones), borderColor:'#0b1e45', backgroundColor:'rgba(11,30,69,.08)', tension:.4, fill:true },
+            { label:'Visitas',    data: tendencia.map(t=>t.visitas),    borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,.08)', tension:.4, fill:true },
+            { label:'Casos',      data: tendencia.map(t=>t.casos),      borderColor:'#d9292b', backgroundColor:'rgba(217,41,43,.08)', tension:.4, fill:true },
+            { label:'Fusiones',   data: tendencia.map(t=>t.fusiones),   borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.08)', tension:.4, fill:true }
+          ]
+        },
+        options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:10} } } }, scales:{ y:{ beginAtZero:true } } }
+      });
+    }
+
+    // ── Gráfico módulos (barras) ──
+    const ctxM = document.getElementById('chartModulos');
+    if(ctxM) {
+      if(charts['modulos']) charts['modulos'].destroy();
+      charts['modulos'] = new Chart(ctxM, {
+        type: 'bar',
+        data: {
+          labels: ['Atenciones','Visitas','Casos','Fusiones'],
+          datasets: [{
+            label: 'Total registros',
+            data: [stats.atenciones.total, stats.visitas.total, stats.casos.total, stats.fusiones.total],
+            backgroundColor: ['#0b1e45','#7c3aed','#d9292b','#f59e0b'],
+            borderRadius: 8
+          }]
+        },
+        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
+      });
+    }
+
+    // ── Tabla por supervisor ──
+    if(!tb) return;
+    const filas = Object.values(porSupervisor)
+      .sort((a,b) => (b.atenciones+b.visitas+b.casos+b.fusiones) - (a.atenciones+a.visitas+a.casos+a.fusiones));
+
+    if(filas.length === 0) {
+      tb.innerHTML = '<tr><td colspan="10" class="empty">Sin datos para mostrar</td></tr>';
+      return;
+    }
+
+    tb.innerHTML = filas.map((s,i) => {
+      const total = s.atenciones + s.visitas + s.casos + s.fusiones;
+      const bg = i % 2 === 0 ? '' : 'background:#f8fafc';
+      return `<tr style="${bg}">
+        <td style="font-weight:700;color:#0b1e45">${s.nombre}</td>
+        <td style="text-align:center;font-weight:700;color:#3730a3">${s.atenciones}</td>
+        <td style="text-align:center;color:#f97316">${s.atPendientes}</td>
+        <td style="text-align:center;color:#16a34a">${s.atResueltos}</td>
+        <td style="text-align:center;font-weight:700;color:#7c3aed">${s.visitas}</td>
+        <td style="text-align:center;color:#dc2626">${s.viRetrasadas}</td>
+        <td style="text-align:center;font-weight:700;color:#d9292b">${s.casos}</td>
+        <td style="text-align:center;color:#dc2626">${s.caRetrasados}</td>
+        <td style="text-align:center;font-weight:700;color:#f59e0b">${s.fusiones}</td>
+        <td style="text-align:center;font-weight:900;color:#16a34a;font-size:15px">${total}</td>
+      </tr>`;
+    }).join('');
+
+  } catch(e) {
+    if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error de conexión</td></tr>';
+  }
+}
+
+// ══════════════════ MÓDULO VISITAS DE CAMPO ══════════════════
+
+async function cargarVisitas() {
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  const tb = document.getElementById('tbVisitas');
+  if(tb) tb.innerHTML = '<tr><td colspan="8" class="empty">⏳ Cargando...</td></tr>';
+
+  const empresa  = document.getElementById('vFiltroEmp')?.value  || '';
+  const mes      = document.getElementById('vFiltroMes')?.value  || '';
+  const supFiltro= document.getElementById('vFiltroSup')?.value  || '';
+
+  try {
+    const params = { action:'getVisitas', empresa, mes };
+    if (!esAdmin) params.supervisor = USER.nombre || USER.usuario;
+    if (supFiltro) params.supervisor = supFiltro;
+
+    const d = await apiGet(params);
+    if (d.success && d.data) {
+      visitasData = d.data;
+      renderVisitas(visitasData);
+      // Stats solo admin
+      const statsEl = document.getElementById('statsVisitas');
+      if (esAdmin && statsEl) {
+        statsEl.style.display = 'block';
+        actualizarStatsVisitas(visitasData);
+      }
+    } else {
+      if(tb) tb.innerHTML = '<tr><td colspan="8" class="empty">❌ Error al cargar</td></tr>';
+    }
+  } catch(e) {
+    if(tb) tb.innerHTML = '<tr><td colspan="8" class="empty">❌ Error de conexión</td></tr>';
+  }
+}
+
+function renderVisitas(data) {
+  const tb = document.getElementById('tbVisitas');
+  if(!tb) return;
+  if(!data || data.length === 0) {
+    tb.innerHTML = '<tr><td colspan="8" class="empty">Sin registros de visitas</td></tr>';
+    return;
+  }
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  tb.innerHTML = data.map((v, i) => {
+    const estado = (v.estado || 'EN PLAZO').toUpperCase();
+    const colorEstado = estado.includes('RETRAS') ? '#dc2626' : estado.includes('PLAZO') ? '#16a34a' : '#64748b';
+    const enlace = v.enlace_informe
+      ? `<a href="${v.enlace_informe}" target="_blank" style="color:#0b1e45;font-weight:700;text-decoration:none">📄 Ver</a>`
+      : '<span style="color:#94a3b8;font-size:10px">Sin informe</span>';
+    const supCol = esAdmin ? `<td>${v.supervisor||'—'}</td>` : '';
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${v.fecha_reg||'—'}</td>
+      <td><span style="font-size:10px;background:${v.empresa==='RAPEL'?'#dbeafe':'#fce7f3'};padding:2px 7px;border-radius:10px">${v.empresa||'—'}</span></td>
+      ${supCol}
+      <td>${v.sector||v.fundo||'—'}</td>
+      <td>${v.semana||'—'}</td>
+      <td><span style="font-size:10px;font-weight:700;color:${colorEstado}">${estado}</span></td>
+      <td>${enlace}</td>
+    </tr>`;
+  }).join('');
+
+  // Ajustar columnas según rol
+  const thead = document.querySelector('#sec-visitas .tbl thead tr');
+  if(thead) {
+    if(esAdmin && thead.children.length === 7) {
+      const th = document.createElement('th');
+      th.textContent = 'Supervisor';
+      thead.insertBefore(th, thead.children[3]);
+    } else if(!esAdmin && thead.children.length === 8) {
+      thead.children[3].remove();
+    }
+  }
+}
+
+function actualizarStatsVisitas(data) {
+  const hoy = new Date();
+  const inicioSemana = new Date(hoy);
+  inicioSemana.setDate(hoy.getDate() - hoy.getDay());
+
+  const total     = data.length;
+  const enPlazo   = data.filter(v => !(v.estado||'').toUpperCase().includes('RETRAS')).length;
+  const retrasado = data.filter(v => (v.estado||'').toUpperCase().includes('RETRAS')).length;
+  const estaSemana= data.filter(v => {
+    const f = new Date(v.fecha_reg);
+    return f >= inicioSemana && f <= hoy;
+  }).length;
+
+  const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val; };
+  set('vTotalReg',  total);
+  set('vEnPlazo',   enPlazo);
+  set('vRetrasado', retrasado);
+  set('vSemActual', estaSemana);
+}
+
+// ══════════════════ MÓDULO SOLICITUDES DE EDICIÓN ══════════════════
+
+async function cargarSolicitudes() {
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  const tb = document.getElementById('tbSolicitudes');
+  if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">⏳ Cargando...</td></tr>';
+
+  try {
+    const params = { action:'getSolicitudes' };
+    // Admin ve todas; supervisor solo las suyas
+    if (!esAdmin) params.supervisor = USER.nombre || USER.usuario;
+
+    const d = await apiGet(params);
+    if (d.success && d.data) {
+      let lista = d.data;
+      if (!esAdmin) {
+        lista = lista.filter(s =>
+          (s.supervisor||'').toLowerCase().includes((USER.nombre||USER.usuario||'').toLowerCase())
+        );
+      }
+      renderSolicitudes(lista);
+    } else {
+      if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error al cargar</td></tr>';
+    }
+  } catch(e) {
+    if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error de conexión</td></tr>';
+  }
+}
+
+function renderSolicitudes(data) {
+  const tb = document.getElementById('tbSolicitudes');
+  if(!tb) return;
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+
+  if(!data || data.length === 0) {
+    tb.innerHTML = '<tr><td colspan="7" class="empty">Sin solicitudes pendientes</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = data.map(s => {
+    const estado = s.estado || 'PENDIENTE';
+    const colorEst = estado === 'APROBADA' ? '#16a34a' : estado === 'RECHAZADA' ? '#dc2626' : '#f59e0b';
+    const accion = esAdmin
+      ? `<div style="display:flex;gap:5px">
+           <button onclick="resolverSolicitud(${s.fila},'APROBADA')"
+             style="padding:4px 10px;background:#dcfce7;border:none;border-radius:5px;font-size:11px;cursor:pointer;font-weight:700;color:#166534">✅ Aprobar</button>
+           <button onclick="resolverSolicitud(${s.fila},'RECHAZADA')"
+             style="padding:4px 10px;background:#fee2e2;border:none;border-radius:5px;font-size:11px;cursor:pointer;font-weight:700;color:#991b1b">❌ Rechazar</button>
+         </div>`
+      : `<span style="font-size:10px;color:#64748b">—</span>`;
+
+    return `<tr>
+      <td>${s.fecha||'—'}</td>
+      <td>${s.supervisor||'—'}</td>
+      <td>${s.fundo||'—'}</td>
+      <td>${s.semana||'—'}</td>
+      <td style="max-width:180px;font-size:11px">${s.motivo||'—'}</td>
+      <td><span style="font-size:10px;font-weight:700;color:${colorEst}">${estado}</span></td>
+      <td>${accion}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function resolverSolicitud(fila, decision) {
+  const motivo = decision === 'RECHAZADA'
+    ? prompt('Motivo del rechazo:')
+    : '';
+  if (decision === 'RECHAZADA' && !motivo) return;
+
+  try {
+    const d = await apiPost({
+      action: 'resolverSolicitud',
+      fila, decision,
+      motivo_rechazo: motivo || '',
+      resuelto_por: USER.nombre || USER.usuario
+    });
+    if (d.success) {
+      mostrarToast(decision === 'APROBADA' ? '✅ Solicitud aprobada' : '❌ Solicitud rechazada');
+      cargarSolicitudes();
+    } else {
+      mostrarToast('❌ Error: ' + (d.error||''), 'error');
+    }
+  } catch(e) {
+    mostrarToast('❌ Error de conexión', 'error');
+  }
+}
+
 async function cargarFusiones() {
   document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
   try {
@@ -1364,6 +1835,7 @@ window.onload = async () => {
   const esSup    = ROLES_SUP.includes(rol);
   if (esAdmin || esAdmin2) {
     document.getElementById('navAdmSec').style.display='';
+    document.getElementById('navEstadisticas').style.display='';
     document.getElementById('navVisitas').style.display='flex';
   if(USER.rol==='administrador') {
     document.getElementById('navSolicitudes').style.display='flex';
@@ -2445,7 +2917,7 @@ function ir(id,btn){
   const sec=document.getElementById('sec-'+id);
   if(sec) sec.classList.add('on');
   if(btn) btn.classList.add('on');
-  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS',fusiones:'FUSIONES DE BUSES',casos:'REGISTRO DE CASOS'};
+  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS',fusiones:'FUSIONES DE BUSES',estadisticas:'ESTADÍSTICAS ADMIN',casos:'REGISTRO DE CASOS'};
   const tbT=document.getElementById('tbT');
   if(tbT) tbT.textContent=ts[id]||id.toUpperCase();
   if(id==='resumen')   cargarResumen();
@@ -2454,6 +2926,7 @@ function ir(id,btn){
   if(id==='visitas')   cargarVisitas();
   if(id==='solicitudes') cargarSolicitudes();
   if(id==='fusiones')  cargarFusiones();
+  if(id==='estadisticas') cargarEstadisticasAdmin();
   if(id==='casos')     cargarCasos();
 }
 function abrir(id){document.getElementById(id).classList.add('on');}
