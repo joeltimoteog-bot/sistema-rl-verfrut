@@ -692,6 +692,112 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     </div>
 
 
+<!-- MODAL NUEVA VISITA DE CAMPO -->
+<div class="ov" id="mVisita">
+<div class="modal" style="max-width:700px;width:97vw;padding:0;max-height:92vh;overflow-y:auto">
+  <div style="background:var(--azul);color:#fff;padding:14px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10">
+    <span style="font-weight:700;font-size:15px">🏕️ Nueva Visita de Campo</span>
+    <span onclick="cerrar('mVisita')" style="cursor:pointer;font-size:20px;opacity:.8">✕</span>
+  </div>
+  <div style="padding:20px">
+
+    <!-- Supervisor -->
+    <div class="sep">Datos del Supervisor</div>
+    <div class="fg">
+      <div class="fc" style="grid-column:1/-1">
+        <label>Supervisor *</label>
+        <select id="vSup" onchange="autoFillVisita()" style="width:100%">
+          <option value="">— Seleccione supervisor —</option>
+        </select>
+      </div>
+      <div class="fc"><label>DNI</label><input type="text" id="vDNI" readonly style="background:#f8fafc"></div>
+      <div class="fc"><label>Correo</label><input type="text" id="vCorreo" readonly style="background:#f8fafc"></div>
+    </div>
+
+    <!-- Panel reemplazo (oculto por defecto) -->
+    <div id="reemplazoDivVisita" style="display:none;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#c2410c;margin-bottom:8px">⚠️ Supervisor en reemplazo — indique el sector asignado</div>
+      <div class="fg">
+        <div class="fc">
+          <label>Fundo/Sector reasignado *</label>
+          <select id="vFundoReemplazo" onchange="autoFillFundoReemplazo()">
+            <option value="">— Seleccione fundo —</option>
+            <option>El Papayo</option><option>Limones</option><option>Olivares Bajo</option>
+            <option>Olivares</option><option>Santa Rosa</option><option>Aproa</option>
+            <option>Punta Arenas</option><option>Algarrobos</option><option>San Vicente</option>
+            <option>Planta Rapel Packing</option>
+          </select>
+        </div>
+        <div class="fc"><label>Supervisor titular del sector *</label><input type="text" id="vSupTitular" placeholder="Nombre del sup. titular"></div>
+      </div>
+    </div>
+
+    <!-- Datos de visita -->
+    <div class="sep">Datos de la Visita</div>
+    <div class="fg">
+      <div class="fc">
+        <label>Empresa *</label>
+        <select id="vEmp">
+          <option value="">— Empresa —</option>
+          <option>RAPEL</option><option>VERFRUT</option>
+        </select>
+      </div>
+      <div class="fc"><label>Fundo/Sector *</label><input type="text" id="vFundo" placeholder="Ej: El Papayo"></div>
+      <div class="fc"><label>Punto / Zona *</label><input type="text" id="vPunto" placeholder="Ej: Cosecha Bloque 3"></div>
+    </div>
+    <div class="fg">
+      <div class="fc"><label>Fecha Inicio *</label><input type="date" id="vFI" onchange="calcularSemanaVisita()"></div>
+      <div class="fc"><label>Fecha Fin *</label><input type="date" id="vFF" onchange="calcularSemanaVisita()"></div>
+      <div class="fc"><label>Semana</label><input type="text" id="vSemana" readonly style="background:#f8fafc" placeholder="Auto"></div>
+    </div>
+    <div class="fg">
+      <div class="fc"><label>Fecha Informe *</label><input type="date" id="vFechaInforme"></div>
+      <div class="fc" style="grid-column:span 2">
+        <label>Para (destinatario) *</label>
+        <select id="vPara">
+          <option value="">— Seleccione destinatario —</option>
+          <option value="Joel Timoteo|Coordinador de Relaciones Laborales">Joel Timoteo — Coord. RRHH</option>
+          <option value="Gerente de Operaciones|Gerente de Operaciones">Gerente de Operaciones</option>
+          <option value="Jefe de Recursos Humanos|Jefe de Recursos Humanos">Jefe de Recursos Humanos</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Contenido del informe -->
+    <div class="sep">Contenido del Informe</div>
+    <div class="fg">
+      <div class="fc" style="grid-column:1/-1"><label>Asunto *</label><input type="text" id="vAsunto" placeholder="Ej: Visita de supervisión a cosecha"></div>
+      <div class="fc" style="grid-column:1/-1"><label>Desarrollo de actividades *</label><textarea id="vDesarrollo" rows="3" placeholder="Describe las actividades observadas durante la visita..."></textarea></div>
+      <div class="fc" style="grid-column:1/-1"><label>Rutas / Áreas visitadas *</label><textarea id="vRutas" rows="2" placeholder="Ej: Bloque A, B — Sector Cosecha Norte"></textarea></div>
+      <div class="fc" style="grid-column:1/-1"><label>Acciones correctivas *</label><textarea id="vAcciones" rows="2" placeholder="Ej: Se instruye uso de EPP, se corrige postura..."></textarea></div>
+      <div class="fc" style="grid-column:1/-1"><label>Compromisos / Acuerdos</label><textarea id="vCompromisos" rows="2" placeholder="Compromisos asumidos por el supervisor y/o trabajadores..."></textarea></div>
+      <div class="fc" style="grid-column:1/-1"><label>Observaciones *</label><textarea id="vObservaciones" rows="2" placeholder="Observaciones generales de la visita..."></textarea></div>
+    </div>
+
+    <!-- Motivo retraso (oculto por defecto) -->
+    <div id="motivoRetrasoDiv" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:12px;margin-bottom:12px">
+      <label style="color:#dc2626;font-weight:700">Motivo del retraso en el informe *</label>
+      <textarea id="vMotivoRetraso" rows="2" placeholder="Explique el motivo por el que el informe se elabora fuera del plazo..."></textarea>
+    </div>
+
+    <!-- Evidencias fotográficas -->
+    <div class="sep">Evidencias Fotográficas</div>
+    <div style="margin-bottom:12px">
+      <label style="display:block;margin-bottom:6px;font-size:12px;font-weight:600;color:#374151">Imágenes de evidencia *</label>
+      <input type="file" id="vFotos" accept="image/*" multiple onchange="previewFotos(this)" style="font-size:12px">
+      <div id="vFotosCount" style="font-size:11px;color:#64748b;margin-top:4px">0 imagen(es) seleccionada(s)</div>
+      <div id="vFotosPreview" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+    </div>
+
+    <!-- Botones -->
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0">
+      <button type="button" onclick="cerrar('mVisita')" style="padding:9px 20px;background:#f1f5f9;border:none;border-radius:8px;font-size:13px;cursor:pointer">Cancelar</button>
+      <button type="button" onclick="generarInformeVisita()" style="padding:9px 22px;background:var(--azul);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">📄 Generar Informe</button>
+    </div>
+  </div>
+</div>
+</div>
+
 <!-- MODAL NUEVA/EDITAR ATENCIÓN -->
 <div class="ov" id="mAt">
 <div class="modal">
@@ -3153,6 +3259,37 @@ const CC_FUNDO = {
 let visitasFotos = [];
 let visitasData  = [];
 
+function calcularSemanaVisita() {
+  const fi = document.getElementById('vFI').value;
+  if (!fi) return;
+  const d = new Date(fi + 'T00:00:00');
+  // Semana del año
+  const start = new Date(d.getFullYear(), 0, 1);
+  const diff = d - start + ((start.getDay() + 6) % 7) * 86400000;
+  const sem = Math.ceil(diff / (7 * 86400000));
+  document.getElementById('vSemana').value = sem;
+}
+
+function autoFillFundoReemplazo() {
+  const fundo = document.getElementById('vFundoReemplazo').value;
+  const emp = document.getElementById('vEmp');
+  if (fundo) {
+    const esRapel = ['El Papayo','Limones','Olivares Bajo','Olivares','Santa Rosa',
+                     'Aproa','Punta Arenas','Algarrobos','San Vicente','Planta Rapel Packing'].includes(fundo);
+    emp.value = esRapel ? 'RAPEL' : 'VERFRUT';
+    document.getElementById('vFundo').value = fundo;
+    // Sugerir supervisor titular
+    const titulares = {
+      'El Papayo': 'Paul Tamayo Rodríguez', 'Limones': 'Paul Tamayo Rodríguez',
+      'Olivares Bajo': 'Alex Tineo Ramos', 'Olivares': 'Flor Pulache Viera',
+      'Santa Rosa': 'Yhanelly Luzón Venegas', 'Aproa': 'Alex Zapata Suárez',
+      'Punta Arenas': 'Alexander Martínez Juárez', 'Algarrobos': 'Sergio Viera Girón',
+      'San Vicente': 'Elberth Castro Bayona', 'Planta Rapel Packing': 'Roberto Molero Abad'
+    };
+    document.getElementById('vSupTitular').value = titulares[fundo] || '';
+  }
+}
+
 function abrirNuevaVisita() {
   // Reset form
   ['vSup','vDNI','vCorreo','vEmp','vFundo','vPunto','vFI','vFF',
@@ -3161,6 +3298,20 @@ function abrirNuevaVisita() {
     const el = document.getElementById(id);
     if(el) el.value='';
   });
+  // Llenar select de supervisores desde preload
+  const selSup = document.getElementById('vSup');
+  if (selSup && selSup.options.length <= 1) {
+    const sups = CACHE.supervisores || [];
+    sups.forEach(s => {
+      const opt = new Option(s.nombre + (s.fundo ? ' - ' + s.fundo : ''), s.usuario || s.nombre);
+      opt.dataset.dni     = s.dni     || '';
+      opt.dataset.correo  = s.correo  || '';
+      opt.dataset.empresa = s.empresa || '';
+      opt.dataset.fundo   = s.fundo   || '';
+      opt.dataset.reemplazo = s.reemplazo || 'no';
+      selSup.appendChild(opt);
+    });
+  }
   visitasFotos = [];
   document.getElementById('vFotosPreview').innerHTML='';
   document.getElementById('vFotosCount').textContent='0 imagen(es) seleccionada(s)';
