@@ -2329,14 +2329,21 @@ function quitarFotoCaso(idx, div) {
 // STATS
 async function cargarStats() {
   try {
-    const d = await apiGet({action:'getEstadisticas', usuario:USER.usuario, rol:USER.rol, empresa:USER.empresa});
-    if (!d.success) return;
-    document.getElementById('sH').textContent = d.data.hoy;
-    document.getElementById('sM').textContent = d.data.mes;
-    document.getElementById('sA').textContent = d.data.anio;
-    document.getElementById('sP').textContent = d.data.pendientes;
+    const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+    // Admin ve TODAS las empresas, supervisor solo la suya
+    const empresa = esAdmin ? '' : (USER.empresa || '');
+    const d = await apiGet({action:'getEstadisticas', usuario:USER.usuario, rol:USER.rol, empresa});
+    if (!d.success) {
+      console.error('getEstadisticas error:', d.error);
+      return;
+    }
+    const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
+    set('sH', d.data.hoy);
+    set('sM', d.data.mes);
+    set('sA', d.data.anio);
+    set('sP', d.data.pendientes);
     dibujar(d.data);
-  } catch(e){}
+  } catch(e){ console.error('cargarStats excepción:', e); }
 }
 function dibujar(s) {
   if(charts.m)charts.m.destroy(); if(charts.e)charts.e.destroy();
