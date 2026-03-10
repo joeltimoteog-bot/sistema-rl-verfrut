@@ -189,8 +189,8 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="sc"><div class="sc-ic in">⏳</div><div><div class="sc-n" id="sP">0</div><div class="sc-l">PENDIENTES</div></div></div>
       </div>
       <div class="gg">
-        <div class="gc"><div class="gc-t">Atenciones últimos 6 meses</div><canvas id="cM"></canvas></div>
-        <div class="gc"><div class="gc-t">Por Estado</div><canvas id="cE"></canvas></div>
+        <div class="gc"><div class="gc-t">Atenciones últimos 6 meses</div><canvas id="cM" style="height:200px;max-height:200px"></canvas></div>
+        <div class="gc"><div class="gc-t">Por Estado</div><canvas id="cE" style="height:200px;max-height:200px"></canvas></div>
       </div>
     </div>
 
@@ -655,12 +655,12 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <!-- Gráfico tendencia mensual -->
         <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
           <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">📈 Tendencia últimos 6 meses</div>
-          <canvas id="chartTendencia" style="max-height:220px"></canvas>
+          <canvas id="chartTendencia" style="height:220px;max-height:220px"></canvas>
         </div>
         <!-- Distribución por empresa -->
         <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
           <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">🏢 Total general por módulo</div>
-          <canvas id="chartModulos" style="max-height:220px"></canvas>
+          <canvas id="chartModulos" style="height:220px;max-height:220px"></canvas>
         </div>
       </div>
 
@@ -1510,7 +1510,8 @@ async function cargarEstadisticasAdmin() {
             { label:'Fusiones',   data: tendencia.map(t=>t.fusiones),   borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.08)', tension:.4, fill:true }
           ]
         },
-        options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:10} } } }, scales:{ y:{ beginAtZero:true } } }
+        options: {
+          maintainAspectRatio: false, responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:10} } } }, scales:{ y:{ beginAtZero:true } } }
       });
     }
 
@@ -1529,7 +1530,8 @@ async function cargarEstadisticasAdmin() {
             borderRadius: 8
           }]
         },
-        options: { responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
+        options: {
+          maintainAspectRatio: false, responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
       });
     }
 
@@ -2348,11 +2350,46 @@ async function cargarStats() {
   } catch(e){ console.error('cargarStats excepción:', e); }
 }
 function dibujar(s) {
-  if(charts.m)charts.m.destroy(); if(charts.e)charts.e.destroy();
-  const mks=Object.keys(s.porMes);
-  const lm=mks.map(k=>['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(k.split('-')[1])]);
-  charts.m=new Chart(document.getElementById('cM'),{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(s.porMes),backgroundColor:'#3b82f6',borderRadius:5}]},options:{responsive:true,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
-  charts.e=new Chart(document.getElementById('cE'),{type:'doughnut',data:{labels:['Pendiente','En Proceso','Resuelto'],datasets:[{data:[s.porEstado.PENDIENTE||0,s.porEstado['EN PROCESO']||0,s.porEstado.RESUELTO||0],backgroundColor:['#f97316','#3b82f6','#22c55e']}]},options:{responsive:true,plugins:{legend:{position:'bottom'}}}});
+  // Destruir instancias previas
+  ['m','e'].forEach(k => { if(charts[k]) { charts[k].destroy(); charts[k]=null; } });
+
+  const elM = document.getElementById('cM');
+  const elE = document.getElementById('cE');
+  if (!elM || !elE) return;
+
+  const mks = Object.keys(s.porMes||{});
+  const lm  = mks.map(k => ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(k.split('-')[1])]);
+
+  charts.m = new Chart(elM, {
+    type: 'bar',
+    data: {
+      labels: lm,
+      datasets: [{ label:'Atenciones', data: Object.values(s.porMes||{}), backgroundColor:'#3b82f6', borderRadius:5 }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales:  { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
+  });
+
+  charts.e = new Chart(elE, {
+    type: 'doughnut',
+    data: {
+      labels: ['Pendiente','En Proceso','Resuelto'],
+      datasets: [{ data: [
+        s.porEstado?.PENDIENTE||0,
+        s.porEstado?.['EN PROCESO']||0,
+        s.porEstado?.RESUELTO||0
+      ], backgroundColor: ['#f97316','#3b82f6','#22c55e'] }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom' } }
+    }
+  });
 }
 
 // ATENCIONES
@@ -2937,6 +2974,14 @@ function ir(id,btn){
   if(id==='fusiones')  cargarFusiones();
   if(id==='estadisticas') cargarEstadisticasAdmin();
   if(id==='casos')     cargarCasos();
+  // Redibujar gráficos al volver al dashboard (por si el canvas tenía size 0)
+  if(id==='dashboard') {
+    setTimeout(() => {
+      if(charts.m) { charts.m.resize(); }
+      if(charts.e) { charts.e.resize(); }
+      if(!charts.m && typeof cargarStats === 'function') cargarStats();
+    }, 50);
+  }
 }
 function abrir(id){document.getElementById(id).classList.add('on');}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
