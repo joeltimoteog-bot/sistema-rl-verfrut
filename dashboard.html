@@ -1329,6 +1329,23 @@ const SUPERVISORES_SECTOR = {
   'Planta Rapel Packing': 'Roberto Molero Abad'
 };
 
+const SUPERVISORES_LISTA = [
+  { dni:'73091524', nombre:'Elberth Castro Bayona',          cargo:'Supervisor de Gestión Humana',        sector:'San Vicente',         empresa:'RAPEL',   correo:'ecastro@rapel.pe',    reemplazo: false },
+  { dni:'76329783', nombre:'Yhanelly Luzón Venegas',         cargo:'Supervisor de Gestión Humana',        sector:'Santa Rosa',          empresa:'VERFRUT', correo:'yluzon@verfrut.pe',   reemplazo: false },
+  { dni:'47262764', nombre:'Socorro Miranda Pasapera',       cargo:'Asistente de Relaciones Laborales',   sector:'Campo A',             empresa:'RAPEL',   correo:'smiranda@rapel.pe',   reemplazo: true  },
+  { dni:'47524110', nombre:'Jaime Siancas Viera',            cargo:'Asistente de Relaciones Laborales',   sector:'Fundos Varios',       empresa:'',        correo:'jsiancas@rapel.pe',   reemplazo: true  },
+  { dni:'72954772', nombre:'Pool Tamayo Rodríguez',          cargo:'Supervisor de Gestión Humana',        sector:'Limones / El Papayo', empresa:'RAPEL',   correo:'ptamayo@rapel.pe',    reemplazo: false },
+  { dni:'73332618', nombre:'Alexander Tineo Ramos',          cargo:'Supervisor de Gestión Humana',        sector:'Olivares Bajo',       empresa:'VERFRUT', correo:'atineo@verfrut.pe',   reemplazo: false },
+  { dni:'46066300', nombre:'Sergio Viera Girón',             cargo:'Supervisor de Gestión Humana',        sector:'Algarrobos',          empresa:'RAPEL',   correo:'sviera@rapel.pe',     reemplazo: false },
+  { dni:'75656528', nombre:'Alex Zapata Suárez',             cargo:'Supervisor de Gestión Humana',        sector:'Aproa',               empresa:'RAPEL',   correo:'azapata@rapel.pe',    reemplazo: false },
+  { dni:'76342635', nombre:'Jhonny Avendaño Granda',         cargo:'Digitador',                           sector:'Fundos Varios',       empresa:'',        correo:'javendano@rapel.pe',  reemplazo: true  },
+  { dni:'72952975', nombre:'Alexander Martínez Juárez',      cargo:'Supervisor de Gestión Humana',        sector:'Punta Arenas',        empresa:'VERFRUT', correo:'amartinez@verfrut.pe',reemplazo: false },
+  { dni:'46793507', nombre:'Flor Pulache Viera',             cargo:'Supervisor de Gestión Humana',        sector:'Los Olivares',        empresa:'RAPEL',   correo:'fpulache@rapel.pe',   reemplazo: false },
+  { dni:'73046408', nombre:'Muriel Mechato Navarro',         cargo:'Asistente de Relaciones Laborales',   sector:'Fundos Varios',       empresa:'',        correo:'mmechato@rapel.pe',   reemplazo: true  },
+  { dni:'74218729', nombre:'Roberto Molero Abad',            cargo:'Supervisor de Gestión Humana',        sector:'Planta Packing Rapel',empresa:'RAPEL',   correo:'rmolero@rapel.pe',    reemplazo: false },
+  { dni:'47227623', nombre:'Deysi Quispe Juárez',            cargo:'Digitadora',                          sector:'Fundos Varios',       empresa:'',        correo:'dquispe@rapel.pe',    reemplazo: true  },
+];
+
 function autoSupervisor() {
   const sector = document.getElementById('fSector').value;
   document.getElementById('fSupervisorAuto').value = SUPERVISORES_SECTOR[sector] || '';
@@ -3319,42 +3336,25 @@ function abrirNuevaVisita() {
     if(el) el.value='';
   });
 
-  // Llenar select de supervisores — siempre limpiar y rellenar
+  // Llenar select de supervisores desde lista hardcodeada
   const selSup = document.getElementById('vSup');
   if (selSup) {
-    // Limpiar opciones anteriores excepto la primera (placeholder)
     while (selSup.options.length > 1) selSup.remove(1);
-
-    const sups = CACHE.supervisores || [];
-    if (sups.length === 0) {
-      // Si no hay en cache, cargar directamente
-      apiGet({ action: 'getSupervisores' }).then(d => {
-        if (d.success && d.data) {
-          CACHE.supervisores = d.data;
-          d.data.forEach(s => {
-            const fundo = s.sector || s.fundo || '';
-            const opt = new Option(s.nombre + (fundo ? ' - ' + fundo : ''), s.nombre);
-            opt.dataset.dni      = s.dni      || '';
-            opt.dataset.correo   = s.correo   || '';
-            opt.dataset.empresa  = s.empresa  || '';
-            opt.dataset.fundo    = fundo;
-            opt.dataset.reemplazo = s.reemplazo ? 'si' : 'no';
-            selSup.appendChild(opt);
-          });
-        }
-      }).catch(()=>{});
-    } else {
-      sups.forEach(s => {
-        const fundo = s.sector || s.fundo || '';
-        const opt = new Option(s.nombre + (fundo ? ' - ' + fundo : ''), s.nombre);
-        opt.dataset.dni      = s.dni      || '';
-        opt.dataset.correo   = s.correo   || '';
-        opt.dataset.empresa  = s.empresa  || '';
-        opt.dataset.fundo    = fundo;
-        opt.dataset.reemplazo = s.reemplazo ? 'si' : 'no';
-        selSup.appendChild(opt);
-      });
-    }
+    // Primero supervisores con sector fijo, luego reemplazantes
+    const fijos      = SUPERVISORES_LISTA.filter(s => !s.reemplazo);
+    const reemplazos = SUPERVISORES_LISTA.filter(s =>  s.reemplazo);
+    [...fijos, ...reemplazos].forEach(s => {
+      const label = s.reemplazo
+        ? s.nombre + ' ⚠️ (Reemplazante)'
+        : s.nombre + ' — ' + s.sector;
+      const opt = new Option(label, s.nombre);
+      opt.dataset.dni       = s.dni;
+      opt.dataset.correo    = s.correo;
+      opt.dataset.empresa   = s.empresa;
+      opt.dataset.fundo     = s.sector;
+      opt.dataset.reemplazo = s.reemplazo ? 'si' : 'no';
+      selSup.appendChild(opt);
+    });
   }
 
   visitasFotos = [];
@@ -3362,7 +3362,6 @@ function abrirNuevaVisita() {
   document.getElementById('vFotosCount').textContent='0 imagen(es) seleccionada(s)';
   document.getElementById('motivoRetrasoDiv').style.display='none';
   document.getElementById('reemplazoDivVisita').style.display='none';
-  // Fecha informe = hoy
   document.getElementById('vFechaInforme').value = hoy();
   abrir('mVisita');
 }
