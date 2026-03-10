@@ -1455,12 +1455,14 @@ async function guardarFusion() {
 // ══════════════════ ESTADÍSTICAS ADMIN ══════════════════
 
 async function cargarEstadisticasAdmin() {
-  if (CACHE.estadisticasAdmin) {
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  if (!esAdmin) return;
+
+  // Usar cache si está disponible y tiene datos
+  if (CACHE.estadisticasAdmin && typeof CACHE.estadisticasAdmin === 'object') {
     renderEstadisticasAdmin(CACHE.estadisticasAdmin);
     return;
   }
-  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-  if (!esAdmin) return;
 
   const tb = document.getElementById('tbEstSupervisores');
   if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">⏳ Cargando datos...</td></tr>';
@@ -1475,105 +1477,109 @@ async function cargarEstadisticasAdmin() {
       if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error al cargar</td></tr>';
       return;
     }
-
-    const { stats, porSupervisor, tendencia } = d.data;
-
-    // ── Cards globales ──
-    const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
-    set('eAtTotal', stats.atenciones.total);
-    set('eAtPend',  stats.atenciones.pendientes);
-    set('eAtProc',  stats.atenciones.enProceso);
-    set('eAtRes',   stats.atenciones.resueltos);
-    set('eAtMes',   stats.atenciones.esteMes);
-
-    set('eVisTotal',  stats.visitas.total);
-    set('eVisPlazo',  stats.visitas.enPlazo);
-    set('eVisRetras', stats.visitas.retrasadas);
-    set('eVisMes',    stats.visitas.esteMes);
-
-    set('eCasTotal',  stats.casos.total);
-    set('eCasPlazo',  stats.casos.enPlazo);
-    set('eCasRetras', stats.casos.retrasados);
-    set('eCasMes',    stats.casos.esteMes);
-
-    set('eFusTotal', stats.fusiones.total);
-    set('eFusPend',  stats.fusiones.pendientes);
-    set('eFusValid', stats.fusiones.validados);
-    set('eFusMes',   stats.fusiones.esteMes);
-    set('eFusTrab',  stats.fusiones.trabajadores);
-
-    // ── Gráfico tendencia ──
-    const ctxT = document.getElementById('chartTendencia');
-    if(ctxT) {
-      if(charts['tendencia']) charts['tendencia'].destroy();
-      charts['tendencia'] = new Chart(ctxT, {
-        type: 'line',
-        data: {
-          labels: tendencia.map(t => t.label),
-          datasets: [
-            { label:'Atenciones', data: tendencia.map(t=>t.atenciones), borderColor:'#0b1e45', backgroundColor:'rgba(11,30,69,.08)', tension:.4, fill:true },
-            { label:'Visitas',    data: tendencia.map(t=>t.visitas),    borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,.08)', tension:.4, fill:true },
-            { label:'Casos',      data: tendencia.map(t=>t.casos),      borderColor:'#d9292b', backgroundColor:'rgba(217,41,43,.08)', tension:.4, fill:true },
-            { label:'Fusiones',   data: tendencia.map(t=>t.fusiones),   borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.08)', tension:.4, fill:true }
-          ]
-        },
-        options: {
-          maintainAspectRatio: false, responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:10} } } }, scales:{ y:{ beginAtZero:true } } }
-      });
-    }
-
-    // ── Gráfico módulos (barras) ──
-    const ctxM = document.getElementById('chartModulos');
-    if(ctxM) {
-      if(charts['modulos']) charts['modulos'].destroy();
-      charts['modulos'] = new Chart(ctxM, {
-        type: 'bar',
-        data: {
-          labels: ['Atenciones','Visitas','Casos','Fusiones'],
-          datasets: [{
-            label: 'Total registros',
-            data: [stats.atenciones.total, stats.visitas.total, stats.casos.total, stats.fusiones.total],
-            backgroundColor: ['#0b1e45','#7c3aed','#d9292b','#f59e0b'],
-            borderRadius: 8
-          }]
-        },
-        options: {
-          maintainAspectRatio: false, responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
-      });
-    }
-
-    // ── Tabla por supervisor ──
-    if(!tb) return;
-    const filas = Object.values(porSupervisor)
-      .sort((a,b) => (b.atenciones+b.visitas+b.casos+b.fusiones) - (a.atenciones+a.visitas+a.casos+a.fusiones));
-
-    if(filas.length === 0) {
-      tb.innerHTML = '<tr><td colspan="10" class="empty">Sin datos para mostrar</td></tr>';
-      return;
-    }
-
-    tb.innerHTML = filas.map((s,i) => {
-      const total = s.atenciones + s.visitas + s.casos + s.fusiones;
-      // Evitar mostrar fechas como nombre de supervisor
-      const nombreSup = (s.nombre && !s.nombre.includes('GMT') && !s.nombre.match(/^\d{4}-/)) ? s.nombre : '— sin nombre —';
-      const bg = i % 2 === 0 ? '' : 'background:#f8fafc';
-      return `<tr style="${bg}">
-        <td style="font-weight:700;color:#0b1e45">${nombreSup}</td>
-        <td style="text-align:center;font-weight:700;color:#3730a3">${s.atenciones}</td>
-        <td style="text-align:center;color:#f97316">${s.atPendientes}</td>
-        <td style="text-align:center;color:#16a34a">${s.atResueltos}</td>
-        <td style="text-align:center;font-weight:700;color:#7c3aed">${s.visitas}</td>
-        <td style="text-align:center;color:#dc2626">${s.viRetrasadas}</td>
-        <td style="text-align:center;font-weight:700;color:#d9292b">${s.casos}</td>
-        <td style="text-align:center;color:#dc2626">${s.caRetrasados}</td>
-        <td style="text-align:center;font-weight:700;color:#f59e0b">${s.fusiones}</td>
-        <td style="text-align:center;font-weight:900;color:#16a34a;font-size:15px">${total}</td>
-      </tr>`;
-    }).join('');
-
+    renderEstadisticasAdmin(d.data);
   } catch(e) {
     if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error de conexión</td></tr>';
   }
+}
+
+function renderEstadisticasAdmin(data) {
+  if (!data) return;
+  const { stats, porSupervisor, tendencia } = data;
+
+  // ── Cards globales ──
+  const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+  set('eAtTotal', stats.atenciones.total);
+  set('eAtPend',  stats.atenciones.pendientes);
+  set('eAtProc',  stats.atenciones.enProceso);
+  set('eAtRes',   stats.atenciones.resueltos);
+  set('eAtMes',   stats.atenciones.esteMes);
+
+  set('eVisTotal',  stats.visitas.total);
+  set('eVisPlazo',  stats.visitas.enPlazo);
+  set('eVisRetras', stats.visitas.retrasadas);
+  set('eVisMes',    stats.visitas.esteMes);
+
+  set('eCasTotal',  stats.casos.total);
+  set('eCasPlazo',  stats.casos.enPlazo);
+  set('eCasRetras', stats.casos.retrasados);
+  set('eCasMes',    stats.casos.esteMes);
+
+  set('eFusTotal', stats.fusiones.total);
+  set('eFusPend',  stats.fusiones.pendientes);
+  set('eFusValid', stats.fusiones.validados);
+  set('eFusMes',   stats.fusiones.esteMes);
+  set('eFusTrab',  stats.fusiones.trabajadores);
+
+  // ── Gráfico tendencia ──
+  const ctxT = document.getElementById('chartTendencia');
+  if(ctxT) {
+    if(charts['tendencia']) charts['tendencia'].destroy();
+    charts['tendencia'] = new Chart(ctxT, {
+      type: 'line',
+      data: {
+        labels: tendencia.map(t => t.label),
+        datasets: [
+          { label:'Atenciones', data: tendencia.map(t=>t.atenciones), borderColor:'#0b1e45', backgroundColor:'rgba(11,30,69,.08)', tension:.4, fill:true },
+          { label:'Visitas',    data: tendencia.map(t=>t.visitas),    borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,.08)', tension:.4, fill:true },
+          { label:'Casos',      data: tendencia.map(t=>t.casos),      borderColor:'#d9292b', backgroundColor:'rgba(217,41,43,.08)', tension:.4, fill:true },
+          { label:'Fusiones',   data: tendencia.map(t=>t.fusiones),   borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.08)', tension:.4, fill:true }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false, responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:10} } } }, scales:{ y:{ beginAtZero:true } } }
+    });
+  }
+
+  // ── Gráfico módulos (barras) ──
+  const ctxM = document.getElementById('chartModulos');
+  if(ctxM) {
+    if(charts['modulos']) charts['modulos'].destroy();
+    charts['modulos'] = new Chart(ctxM, {
+      type: 'bar',
+      data: {
+        labels: ['Atenciones','Visitas','Casos','Fusiones'],
+        datasets: [{
+          label: 'Total registros',
+          data: [stats.atenciones.total, stats.visitas.total, stats.casos.total, stats.fusiones.total],
+          backgroundColor: ['#0b1e45','#7c3aed','#d9292b','#f59e0b'],
+          borderRadius: 8
+        }]
+      },
+      options: {
+        maintainAspectRatio: false, responsive:true, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } }
+    });
+  }
+
+  // ── Tabla por supervisor ──
+  if(!tb) return;
+  const filas = Object.values(porSupervisor)
+    .sort((a,b) => (b.atenciones+b.visitas+b.casos+b.fusiones) - (a.atenciones+a.visitas+a.casos+a.fusiones));
+
+  if(filas.length === 0) {
+    tb.innerHTML = '<tr><td colspan="10" class="empty">Sin datos para mostrar</td></tr>';
+    return;
+  }
+
+  tb.innerHTML = filas.map((s,i) => {
+    const total = s.atenciones + s.visitas + s.casos + s.fusiones;
+    // Evitar mostrar fechas como nombre de supervisor
+    const nombreSup = (s.nombre && !s.nombre.includes('GMT') && !s.nombre.match(/^\d{4}-/)) ? s.nombre : '— sin nombre —';
+    const bg = i % 2 === 0 ? '' : 'background:#f8fafc';
+    return `<tr style="${bg}">
+      <td style="font-weight:700;color:#0b1e45">${nombreSup}</td>
+      <td style="text-align:center;font-weight:700;color:#3730a3">${s.atenciones}</td>
+      <td style="text-align:center;color:#f97316">${s.atPendientes}</td>
+      <td style="text-align:center;color:#16a34a">${s.atResueltos}</td>
+      <td style="text-align:center;font-weight:700;color:#7c3aed">${s.visitas}</td>
+      <td style="text-align:center;color:#dc2626">${s.viRetrasadas}</td>
+      <td style="text-align:center;font-weight:700;color:#d9292b">${s.casos}</td>
+      <td style="text-align:center;color:#dc2626">${s.caRetrasados}</td>
+      <td style="text-align:center;font-weight:700;color:#f59e0b">${s.fusiones}</td>
+      <td style="text-align:center;font-weight:900;color:#16a34a;font-size:15px">${total}</td>
+    </tr>`;
+  }).join('');
+
 }
 
 // ══════════════════ MÓDULO VISITAS DE CAMPO ══════════════════
@@ -2221,7 +2227,13 @@ async function guardarCaso() {
 
 async function cargarCasos() {
   if (CACHE.casos) {
-    renderCasos(CACHE.casos);
+    casosData = CACHE.casos;
+    renderTablaCasos(casosData);
+    if(USER.rol==='administrador') {
+      const sc = document.getElementById('statsCasos');
+      if(sc) sc.style.display='block';
+      actualizarStatsCasos(casosData);
+    }
     return;
   }
   const empresa = document.getElementById('cFiltroEmp')?.value || '';
@@ -2360,7 +2372,7 @@ async function preloadData() {
   try {
     const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
     const empresa = esAdmin ? '' : (USER.empresa || '');
-    
+
     const d = await apiGet({
       action:  'getPreload',
       usuario: USER.usuario,
@@ -2370,14 +2382,16 @@ async function preloadData() {
 
     if (!d.success) {
       if(ind) ind.style.display='none';
-      console.warn('Preload falló, cargando stats individuales...');
+      console.warn('Preload falló:', d.error);
       cargarStats();
       return;
     }
 
     // Guardar todo en CACHE
-    CACHE = d.data;
+    CACHE    = d.data;
     CACHE_TS = Date.now();
+    // Usar _LOADED para distinguir "no cargado" de "cargado y vacío"
+    CACHE._loaded = true;
 
     // Aplicar stats al dashboard inmediatamente
     cargarStats();
@@ -2387,12 +2401,19 @@ async function preloadData() {
       atenciones: (CACHE.atenciones||[]).length,
       visitas:    (CACHE.visitas||[]).length,
       casos:      (CACHE.casos||[]).length,
-      fusiones:   (CACHE.fusiones||[]).length
+      fusiones:   (CACHE.fusiones||[]).length,
+      estadisticasAdmin: CACHE.estadisticasAdmin ? '✅' : '❌ null'
     });
+
+    // Si estadísticas admin no vinieron en el preload → cargarlas por separado
+    if (esAdmin && !CACHE.estadisticasAdmin) {
+      setTimeout(() => cargarEstadisticasAdmin(), 500);
+    }
+
   } catch(e) {
     if(ind) ind.style.display='none';
     console.error('preloadData error:', e);
-    cargarStats(); // fallback
+    cargarStats();
   }
 }
 
@@ -2490,7 +2511,7 @@ async function cargarAtenciones(historial=false) {
   // Usar cache si está disponible (solo para carga normal, no historial)
   if (!historial && CACHE.atenciones) {
     atTodas = CACHE.atenciones;
-    renderAtenciones(atTodas);
+    renderAt(atTodas);
     return;
   }
   try {
