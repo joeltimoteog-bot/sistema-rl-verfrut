@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema RL | Relaciones Laborales</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--rojo-d:#991b1b}
+html,body{height:100%}
+body{font-family:'Barlow',sans-serif;background:linear-gradient(140deg,var(--azul) 0%,#1e3a8a 60%,#0f172a 100%);display:flex;align-items:center;justify-content:center;min-height:100vh;overflow:hidden}
+body::before{content:'';position:fixed;top:-300px;right:-200px;width:700px;height:700px;background:radial-gradient(circle,rgba(220,38,38,.12) 0%,transparent 70%);border-radius:50%;animation:fl 18s ease-in-out infinite}
+body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;height:600px;background:radial-gradient(circle,rgba(59,130,246,.12) 0%,transparent 70%);border-radius:50%;animation:fl 22s ease-in-out infinite reverse}
+@keyframes fl{0%,100%{transform:translateY(0)}50%{transform:translateY(-30px)}}
+.card{display:flex;width:880px;max-width:96vw;min-height:510px;border-radius:22px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.5);position:relative;z-index:1;animation:up .6s ease}
+@keyframes up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+.izq{flex:0 0 40%;background:linear-gradient(155deg,var(--rojo) 0%,var(--rojo-d) 100%);padding:48px 38px;display:flex;flex-direction:column;justify-content:center;position:relative;overflow:hidden}
+.izq::before{content:'';position:absolute;top:-80px;right:-80px;width:240px;height:240px;background:rgba(255,255,255,.07);border-radius:50%}
+.izq::after{content:'';position:absolute;bottom:-60px;left:-60px;width:200px;height:200px;background:rgba(0,0,0,.1);border-radius:50%}
+.logo{width:68px;height:68px;background:rgba(255,255,255,.15);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:30px;margin-bottom:28px;border:1px solid rgba(255,255,255,.2)}
+.ttl{font-family:'Barlow Condensed',sans-serif;font-size:44px;font-weight:900;color:#fff;line-height:1;letter-spacing:-1px;margin-bottom:8px}
+.sub{font-size:11px;font-weight:700;color:rgba(255,255,255,.6);letter-spacing:3px;text-transform:uppercase;margin-bottom:28px}
+.badges{display:flex;gap:8px}
+.badge{padding:5px 14px;border:1.5px solid rgba(255,255,255,.35);border-radius:20px;color:#fff;font-size:11px;font-weight:700;letter-spacing:1px}
+.ver{position:absolute;bottom:20px;left:38px;font-size:11px;color:rgba(255,255,255,.35)}
+.der{flex:1;background:#fff;padding:48px 44px;display:flex;flex-direction:column;justify-content:center}
+.fh{font-family:'Barlow Condensed',sans-serif;font-size:30px;font-weight:900;color:var(--azul);letter-spacing:1px;margin-bottom:4px}
+.fs{font-size:13px;color:#94a3b8;margin-bottom:32px}
+.fs span{color:var(--rojo);font-weight:600}
+.alerta{background:#fef2f2;border-left:4px solid var(--rojo);padding:11px 15px;border-radius:8px;color:#991b1b;font-size:13px;margin-bottom:18px;display:none}
+.alerta.on{display:block}
+.campo{margin-bottom:18px}
+.campo label{display:block;font-size:10px;font-weight:700;letter-spacing:1.5px;color:var(--azul);text-transform:uppercase;margin-bottom:7px}
+.wrap{position:relative}
+.wrap svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:#94a3b8;width:17px;height:17px}
+.campo input{width:100%;padding:12px 13px 12px 42px;border:2px solid #e2e8f0;border-radius:10px;font-size:14px;font-family:'Barlow',sans-serif;color:var(--azul);background:#f8fafc;transition:border-color .2s}
+.campo input:focus{outline:none;border-color:var(--azul-c);background:#fff}
+.eye{position:absolute;right:13px;top:50%;transform:translateY(-50%);cursor:pointer;background:none;border:none;font-size:17px;color:#94a3b8}
+.dots{display:flex;gap:5px;margin-top:7px;align-items:center}
+.dot{width:7px;height:7px;border-radius:50%;background:#e2e8f0;transition:background .3s}
+.dot.used{background:var(--rojo)}
+.dot-t{font-size:11px;color:#94a3b8;margin-left:4px}
+.btn{width:100%;padding:14px;background:linear-gradient(135deg,var(--azul),var(--azul-med));color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all .3s;display:flex;align-items:center;justify-content:center;gap:9px;margin-top:8px}
+.btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 24px rgba(10,36,99,.35)}
+.btn:disabled{opacity:.6;cursor:not-allowed}
+.spin{width:17px;height:17px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite;display:none}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ft{text-align:center;font-size:11px;color:#cbd5e1;margin-top:28px}
+@media(max-width:600px){.izq{display:none}.der{padding:36px 26px}.card{border-radius:16px}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="izq">
+    <div class="logo">🏛️</div>
+    <div class="ttl">RELACIONES<br>LABORALES</div>
+    <div class="sub">Sistema de Gestión</div>
+    <div class="badges"><span class="badge">RAPEL</span><span class="badge">VERFRUT</span></div>
+    <div class="ver">© 2026 · Joel Timoteo Gonza · v3.0</div>
+  </div>
+  <div class="der">
+    <div class="fh">INICIAR SESIÓN</div>
+    <div class="fs">Ingresa con tus credenciales del <span>Sistema RL</span></div>
+    <div class="alerta" id="alerta"></div>
+    <div class="campo">
+      <label>Usuario</label>
+      <div class="wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <input type="text" id="usuario" placeholder="Tu usuario" autocomplete="username">
+      </div>
+    </div>
+    <div class="campo">
+      <label>Contraseña</label>
+      <div class="wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <input type="password" id="password" placeholder="Tu contraseña" autocomplete="current-password">
+        <button class="eye" id="eyeBtn" onclick="togglePass()" type="button">👁️</button>
+      </div>
+      <div class="dots" id="dots"></div>
+    </div>
+    <button class="btn" id="btnLogin" onclick="doLogin()">
+      <div class="spin" id="spin"></div>
+      <span id="btnTxt">INGRESAR</span>
+    </button>
+    <div class="ft">Sistema protegido · Solo personal autorizado</div>
+  </div>
+</div>
+<script>
+const API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+let intentos=0,MAX=3;
+function togglePass(){const p=document.getElementById('password');p.type=p.type==='password'?'text':'password';document.getElementById('eyeBtn').textContent=p.type==='password'?'👁️':'🙈';}
+function setAlert(m){const a=document.getElementById('alerta');a.textContent=m;a.classList.add('on');}
+function clearAlert(){document.getElementById('alerta').classList.remove('on');}
+function updateDots(){
+  const c=document.getElementById('dots');c.innerHTML='';
+  for(let i=0;i<MAX;i++){const d=document.createElement('div');d.className='dot'+(i<intentos?' used':'');c.appendChild(d);}
+  if(intentos>0){const t=document.createElement('span');t.className='dot-t';t.textContent=(MAX-intentos)+' intento(s) restante(s)';c.appendChild(t);}
+}
+async function doLogin(){
+  if(intentos>=MAX){setAlert('Cuenta bloqueada. Contacta al administrador.');return;}
+  const u=document.getElementById('usuario').value.trim();
+  const p=document.getElementById('password').value;
+  if(!u||!p){setAlert('Ingresa tu usuario y contraseña.');return;}
+  clearAlert();setLoading(true);
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'login',usuario:u,password:p}),headers:{'Content-Type':'text/plain'}});
+    const d=await r.json();
+    if(d.success){
+      sessionStorage.setItem('user',JSON.stringify(d.user));
+      sessionStorage.setItem('api',API);
+      window.location.href='dashboard.html';
+    }else{
+      intentos++;updateDots();
+      setAlert(d.error||'Datos incorrectos. Te quedan '+(MAX-intentos)+' intento(s).');
+      if(intentos>=MAX)document.getElementById('btnLogin').disabled=true;
+    }
+  }catch(e){setAlert('Error de conexión. Verifica tu internet.');}
+  setLoading(false);
+}
+function setLoading(v){
+  document.getElementById('spin').style.display=v?'block':'none';
+  document.getElementById('btnTxt').textContent=v?'Verificando...':'INGRESAR';
+  document.getElementById('btnLogin').disabled=v;
+}
+document.addEventListener('keypress',e=>{if(e.key==='Enter')doLogin();});
+</script>
+</body>
+</html>
