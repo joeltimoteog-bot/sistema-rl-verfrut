@@ -1165,6 +1165,9 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 
 <script>
 let USER={}, API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec', atTodas=[], resData=[], detNro='', modoEdicion=false;
+let CACHE = {};            // Cache global - datos precargados al login
+let CACHE_TS = 0;          // Timestamp del último preload
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos antes de considerar stale
 let charts={};
 
 function mostrarToast(msg, tipo='ok') {
@@ -1452,6 +1455,10 @@ async function guardarFusion() {
 // ══════════════════ ESTADÍSTICAS ADMIN ══════════════════
 
 async function cargarEstadisticasAdmin() {
+  if (CACHE.estadisticasAdmin) {
+    renderEstadisticasAdmin(CACHE.estadisticasAdmin);
+    return;
+  }
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   if (!esAdmin) return;
 
@@ -1572,6 +1579,10 @@ async function cargarEstadisticasAdmin() {
 // ══════════════════ MÓDULO VISITAS DE CAMPO ══════════════════
 
 async function cargarVisitas() {
+  if (CACHE.visitas) {
+    renderVisitas(CACHE.visitas);
+    return;
+  }
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   const tb = document.getElementById('tbVisitas');
   if(tb) tb.innerHTML = '<tr><td colspan="8" class="empty">⏳ Cargando...</td></tr>';
@@ -1666,6 +1677,10 @@ function actualizarStatsVisitas(data) {
 // ══════════════════ MÓDULO SOLICITUDES DE EDICIÓN ══════════════════
 
 async function cargarSolicitudes() {
+  if (CACHE.solicitudes) {
+    renderSolicitudes(CACHE.solicitudes);
+    return;
+  }
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   const tb = document.getElementById('tbSolicitudes');
   if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">⏳ Cargando...</td></tr>';
@@ -1751,6 +1766,10 @@ async function resolverSolicitud(fila, decision) {
 }
 
 async function cargarFusiones() {
+  if (CACHE.fusiones) {
+    renderFusiones(CACHE.fusiones);
+    return;
+  }
   document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
   try {
     const d = await apiGet({action:'getFusiones', usuario: ROLES_ADMIN.includes(USER.rol)||ROLES_ADMIN2.includes(USER.rol)?'TODOS':USER.nombre||USER.email});
@@ -1861,9 +1880,8 @@ window.onload = async () => {
     sessionStorage.setItem('user', JSON.stringify(USER));
   }
 
-  // Cargar stats primero (rapido), atenciones solo cuando se necesiten
-  cargarStats();
-  // Atenciones se cargan solo cuando el usuario va a esa seccion
+  // Preload: cargar TODOS los datos en una sola llamada al login
+  preloadData();
 };
 
 function mostrarModalFundo() {
@@ -2202,6 +2220,10 @@ async function guardarCaso() {
 }
 
 async function cargarCasos() {
+  if (CACHE.casos) {
+    renderCasos(CACHE.casos);
+    return;
+  }
   const empresa = document.getElementById('cFiltroEmp')?.value || '';
   const motivo  = document.getElementById('cFiltroMotivo')?.value || '';
   const sup     = document.getElementById('cFiltroSup')?.value || '';
@@ -2331,21 +2353,90 @@ function quitarFotoCaso(idx, div) {
 }
 
 // STATS
-async function cargarStats() {
+// ══════════════════ PRELOAD - CARGA INICIAL ══════════════════
+async function preloadData() {
+  const ind = document.getElementById('preloadIndicator');
+  if(ind) ind.style.display='block';
   try {
     const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-    // Admin ve TODAS las empresas, supervisor solo la suya
     const empresa = esAdmin ? '' : (USER.empresa || '');
-    const d = await apiGet({action:'getEstadisticas', usuario:USER.usuario, rol:USER.rol, empresa});
+    
+    const d = await apiGet({
+      action:  'getPreload',
+      usuario: USER.usuario,
+      rol:     USER.rol,
+      empresa: empresa
+    });
+
     if (!d.success) {
-      console.error('getEstadisticas error:', d.error);
+      if(ind) ind.style.display='none';
+      console.warn('Preload falló, cargando stats individuales...');
+      cargarStats();
       return;
     }
+
+    // Guardar todo en CACHE
+    CACHE = d.data;
+    CACHE_TS = Date.now();
+
+    // Aplicar stats al dashboard inmediatamente
+    cargarStats();
+
+    if(ind) ind.style.display='none';
+    console.log('✅ Preload completo:', {
+      atenciones: (CACHE.atenciones||[]).length,
+      visitas:    (CACHE.visitas||[]).length,
+      casos:      (CACHE.casos||[]).length,
+      fusiones:   (CACHE.fusiones||[]).length
+    });
+  } catch(e) {
+    if(ind) ind.style.display='none';
+    console.error('preloadData error:', e);
+    cargarStats(); // fallback
+  }
+}
+
+// Invalida el cache de un módulo (llamar después de guardar/editar)
+function invalidarCache(modulo) {
+  if (modulo === 'atenciones') { delete CACHE.atenciones; delete CACHE.stats; }
+  if (modulo === 'visitas')    { delete CACHE.visitas; }
+  if (modulo === 'casos')      { delete CACHE.casos; }
+  if (modulo === 'fusiones')   { delete CACHE.fusiones; }
+  if (modulo === 'solicitudes'){ delete CACHE.solicitudes; }
+  if (modulo === 'todos')      { CACHE = {}; }
+  delete CACHE.estadisticasAdmin; // siempre refrescar stats admin
+}
+
+// Recarga completa en segundo plano (sin bloquear UI)
+async function refrescarEnBackground() {
+  const rol     = USER.rol;
+  const empresa = (ROLES_ADMIN.includes(rol) || ROLES_ADMIN2.includes(rol)) ? '' : (USER.empresa || '');
+  try {
+    const d = await apiGet({ action:'getPreload', usuario:USER.usuario, rol, empresa });
+    if (d.success) {
+      CACHE = d.data;
+      CACHE_TS = Date.now();
+    }
+  } catch(e){}
+}
+
+async function cargarStats() {
+  try {
+    // Usar cache si está disponible
+    const s = CACHE.stats;
+    if (s) {
+      const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
+      set('sH', s.hoy); set('sM', s.mes); set('sA', s.anio); set('sP', s.pendientes);
+      dibujar(s);
+      return;
+    }
+    // Fallback: llamada directa
+    const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+    const empresa = esAdmin ? '' : (USER.empresa || '');
+    const d = await apiGet({action:'getEstadisticas', usuario:USER.usuario, rol:USER.rol, empresa});
+    if (!d.success) { console.error('getEstadisticas error:', d.error); return; }
     const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
-    set('sH', d.data.hoy);
-    set('sM', d.data.mes);
-    set('sA', d.data.anio);
-    set('sP', d.data.pendientes);
+    set('sH', d.data.hoy); set('sM', d.data.mes); set('sA', d.data.anio); set('sP', d.data.pendientes);
     dibujar(d.data);
   } catch(e){ console.error('cargarStats excepción:', e); }
 }
@@ -2394,6 +2485,12 @@ function dibujar(s) {
 
 // ATENCIONES
 async function cargarAtenciones() {
+  // Usar cache si está disponible
+  if (CACHE.atenciones) {
+    atTodas = CACHE.atenciones;
+    renderAtenciones(atTodas);
+    return;
+  }
   try {
     const d=await apiGet({action:'getAtenciones',usuario:USER.usuario,rol:USER.rol,empresa:USER.empresa});
     if(d.success){atTodas=d.data;renderAt(atTodas);}
@@ -2502,7 +2599,7 @@ async function eliminarAt(nro) {
   if(!confirm('¿Eliminar la atención N° '+nro+'? Esta acción no se puede deshacer.'))return;
   try{
     const r=await apiPost({action:'deleteAtencion',nro,rol:USER.rol,usuario:USER.usuario});
-    if(r.success){await cargarAtenciones();await cargarStats();alert('✅ Atención eliminada');}
+    if(r.success){invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();alert('✅ Atención eliminada');}
     else alert('Error: '+(r.error||'No tienes permiso'));
   }catch(e){alert('Error de conexión');}
 }
@@ -2534,7 +2631,7 @@ function verDet(nro, fuente) {
 
 async function updateAt() {
   const r=await apiPost({action:'updateAtencion',nro:detNro,estado:v('dEst'),hora_termino:v('dHT'),observaciones:v('dObs'),rol:USER.rol,usuario:USER.usuario});
-  if(r.success){cerrar('mDet');await cargarAtenciones();await cargarStats();alert('✅ Actualizado');}
+  if(r.success){cerrar('mDet');invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();alert('✅ Actualizado');}
   else alert('Error: '+(r.error||'No tienes permiso'));
 }
 
@@ -2974,13 +3071,17 @@ function ir(id,btn){
   if(id==='fusiones')  cargarFusiones();
   if(id==='estadisticas') cargarEstadisticasAdmin();
   if(id==='casos')     cargarCasos();
-  // Redibujar gráficos al volver al dashboard (por si el canvas tenía size 0)
+  // Redibujar gráficos al volver al dashboard
   if(id==='dashboard') {
     setTimeout(() => {
       if(charts.m) { charts.m.resize(); }
       if(charts.e) { charts.e.resize(); }
       if(!charts.m && typeof cargarStats === 'function') cargarStats();
     }, 50);
+    // Si el cache es viejo (>5 min), refrescar en background silenciosamente
+    if (Date.now() - CACHE_TS > CACHE_TTL) {
+      refrescarEnBackground().then(() => { cargarStats(); });
+    }
   }
 }
 function abrir(id){document.getElementById(id).classList.add('on');}
