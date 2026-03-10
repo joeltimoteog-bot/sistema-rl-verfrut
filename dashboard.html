@@ -1486,6 +1486,7 @@ async function cargarEstadisticasAdmin() {
 function renderEstadisticasAdmin(data) {
   if (!data) return;
   const { stats, porSupervisor, tendencia } = data;
+  const tb = document.getElementById('tbEstSupervisores');
 
   // ── Cards globales ──
   const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
