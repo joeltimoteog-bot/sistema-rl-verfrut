@@ -2404,7 +2404,9 @@ function invalidarCache(modulo) {
   if (modulo === 'fusiones')   { delete CACHE.fusiones; }
   if (modulo === 'solicitudes'){ delete CACHE.solicitudes; }
   if (modulo === 'todos')      { CACHE = {}; }
-  delete CACHE.estadisticasAdmin; // siempre refrescar stats admin
+  delete CACHE.estadisticasAdmin;
+  // También limpiar CacheService del servidor silenciosamente
+  apiPost({action:'limpiarCache', usuario:USER.usuario, rol:USER.rol}).catch(()=>{});
 }
 
 // Recarga completa en segundo plano (sin bloquear UI)
@@ -2484,9 +2486,9 @@ function dibujar(s) {
 }
 
 // ATENCIONES
-async function cargarAtenciones() {
-  // Usar cache si está disponible
-  if (CACHE.atenciones) {
+async function cargarAtenciones(historial=false) {
+  // Usar cache si está disponible (solo para carga normal, no historial)
+  if (!historial && CACHE.atenciones) {
     atTodas = CACHE.atenciones;
     renderAtenciones(atTodas);
     return;
