@@ -1484,7 +1484,7 @@ async function subirFotoFusion(file, sector, ruta, idx) {
       try {
         const d = await apiPost({
           action:'subirArchivo', base64, nombre,
-          mimeType: file.type || 'image/jpeg',
+          mimeType: (file.type && file.type !== '') ? file.type : 'image/jpeg',
           carpeta:'Evidencias_Fusiones_Buses'
         });
         resolve(d.enlace || d.url || d.link || '');
