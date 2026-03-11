@@ -490,7 +490,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 
 
     <!-- ══════════════════════ SECCIÓN FUSIONES DE BUSES ══════════════════════ -->
-<div class="sec" id="sec-fusiones">
+    <div class="sec" id="sec-fusiones">
   <div class="sec-hd">
     <h2>🚌 Fusiones de Buses</h2>
     <button class="btn-n" onclick="abrirNuevaFusion()">+ Nueva Fusión</button>
@@ -535,7 +535,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       </table>
     </div>
   </div>
-</div>
+    </div>
 
     <!-- ESTADÍSTICAS ADMIN -->
     <div class="sec" id="sec-estadisticas">
@@ -1290,105 +1290,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 </div>
 
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
-function verInformeGuardado(idx) {
-  const v = (window._visitasData || [])[idx];
-  if(!v) { alert('No se encontraron datos del informe.'); return; }
-
-  // Reconstruir HTML del informe desde los datos guardados en Sheets
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;padding:20px">
-      <div style="text-align:center;margin-bottom:20px">
-        <div style="font-size:20px;font-weight:900;color:#0a2463">INFORME DE VISITA DE CAMPO</div>
-        <div style="font-size:12px;color:#64748b">${v.empresa||''} · Semana ${v.semana||''} · ${v.fecha_reg||v.fecha||''}</div>
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
-        <tr style="background:#0a2463;color:#fff">
-          <th colspan="4" style="padding:8px;text-align:left">DATOS GENERALES</th>
-        </tr>
-        <tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;width:25%">Empresa</td><td style="padding:6px;border:1px solid #e2e8f0">${v.empresa||'—'}</td>
-            <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;width:25%">Supervisor</td><td style="padding:6px;border:1px solid #e2e8f0">${v.supervisor||'—'}</td></tr>
-        <tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Sector/Fundo</td><td style="padding:6px;border:1px solid #e2e8f0">${v.sector||v.fundo||'—'}</td>
-            <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Semana</td><td style="padding:6px;border:1px solid #e2e8f0">${v.semana||'—'}</td></tr>
-        <tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Fecha Visita</td><td style="padding:6px;border:1px solid #e2e8f0">${v.fecha_inicio||v.fecha||'—'}</td>
-            <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Estado</td><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;color:${(v.estado||'').includes('RETRAS')?'#dc2626':'#16a34a'}">${v.estado||'—'}</td></tr>
-        <tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Asunto</td><td colspan="3" style="padding:6px;border:1px solid #e2e8f0">${v.asunto||'—'}</td></tr>
-      </table>
-      ${v.desarrollo ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
-        <tr style="background:#1e3a8a;color:#fff"><th style="padding:8px;text-align:left">DESARROLLO DE LA VISITA</th></tr>
-        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.desarrollo}</td></tr>
-      </table>` : ''}
-      ${v.acciones ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
-        <tr style="background:#166534;color:#fff"><th style="padding:8px;text-align:left">ACCIONES CORRECTIVAS</th></tr>
-        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.acciones}</td></tr>
-      </table>` : ''}
-      ${v.compromisos ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
-        <tr style="background:#92400e;color:#fff"><th style="padding:8px;text-align:left">COMPROMISOS</th></tr>
-        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.compromisos}</td></tr>
-      </table>` : ''}
-      ${v.observaciones ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
-        <tr style="background:#374151;color:#fff"><th style="padding:8px;text-align:left">OBSERVACIONES</th></tr>
-        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.observaciones}</td></tr>
-      </table>` : ''}
-      ${v.motivo_retraso ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
-        <tr style="background:#dc2626;color:#fff"><th style="padding:8px;text-align:left">MOTIVO DE RETRASO</th></tr>
-        <tr><td style="padding:10px;border:1px solid #e2e8f0">${v.motivo_retraso}</td></tr>
-      </table>` : ''}
-      <div style="margin-top:30px;text-align:center;font-size:11px;color:#94a3b8">
-        Generado por Sistema RL · ${new Date().toLocaleDateString('es-PE')}
-      </div>
-    </div>`;
-
-  document.getElementById('informeVistaPrevia').innerHTML = html;
-  abrir('mVerInforme');
-}
-
-
-function verInformeGuardado(idx) {
-  const v = (window._visitasData || [])[idx];
-  if(!v) { alert('No se encontraron datos del informe.'); return; }
-  const html = `
-    <div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;padding:20px">
-      <div style="text-align:center;margin-bottom:20px">
-        <div style="font-size:20px;font-weight:900;color:#0a2463">INFORME DE VISITA DE CAMPO</div>
-        <div style="font-size:12px;color:#64748b">${v.empresa||''} · Semana ${v.semana||''} · ${v.fecha_reg||v.fecha||''}</div>
-      </div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
-        <tr style="background:#0a2463;color:#fff"><th colspan="4" style="padding:8px;text-align:left">DATOS GENERALES</th></tr>
-        <tr>
-          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;width:25%">Empresa</td>
-          <td style="padding:6px;border:1px solid #e2e8f0">${v.empresa||'—'}</td>
-          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;width:25%">Supervisor</td>
-          <td style="padding:6px;border:1px solid #e2e8f0">${v.supervisor||'—'}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Sector/Fundo</td>
-          <td style="padding:6px;border:1px solid #e2e8f0">${v.sector||v.fundo||'—'}</td>
-          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Semana</td>
-          <td style="padding:6px;border:1px solid #e2e8f0">${v.semana||'—'}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Fecha Visita</td>
-          <td style="padding:6px;border:1px solid #e2e8f0">${v.fecha_inicio||v.fecha||'—'}</td>
-          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Estado</td>
-          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;color:${(v.estado||'').includes('RETRAS')?'#dc2626':'#16a34a'}">${v.estado||'—'}</td>
-        </tr>
-        <tr>
-          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Asunto</td>
-          <td colspan="3" style="padding:6px;border:1px solid #e2e8f0">${v.asunto||'—'}</td>
-        </tr>
-      </table>
-      ${v.desarrollo?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><tr style="background:#1e3a8a;color:#fff"><th style="padding:8px;text-align:left">DESARROLLO DE LA VISITA</th></tr><tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.desarrollo}</td></tr></table>`:''}
-      ${v.acciones?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><tr style="background:#166534;color:#fff"><th style="padding:8px;text-align:left">ACCIONES CORRECTIVAS</th></tr><tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.acciones}</td></tr></table>`:''}
-      ${v.compromisos?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><tr style="background:#92400e;color:#fff"><th style="padding:8px;text-align:left">COMPROMISOS</th></tr><tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.compromisos}</td></tr></table>`:''}
-      ${v.observaciones?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><tr style="background:#374151;color:#fff"><th style="padding:8px;text-align:left">OBSERVACIONES</th></tr><tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.observaciones}</td></tr></table>`:''}
-      ${v.motivo_retraso?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><tr style="background:#dc2626;color:#fff"><th style="padding:8px;text-align:left">MOTIVO DE RETRASO</th></tr><tr><td style="padding:10px;border:1px solid #e2e8f0">${v.motivo_retraso}</td></tr></table>`:''}
-      <div style="margin-top:30px;text-align:center;font-size:11px;color:#94a3b8">Generado por Sistema RL · ${new Date().toLocaleDateString('es-PE')}</div>
-    </div>`;
-  document.getElementById('informeVistaPrevia').innerHTML = html;
-  abrir('mVerInforme');
-}
-
-</script><script>
+<script>
 let USER={}, API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec', atTodas=[], resData=[], detNro='', modoEdicion=false;
 let CACHE = {};            // Cache global - datos precargados al login
 let CACHE_TS = 0;          // Timestamp del último preload
@@ -2097,9 +1999,113 @@ const ROLES_ADMIN2  = ['administrador 01','administrador 02'];
 const ROLES_SUP     = ['supervisor'];
 const ROLES_VER_TODO = ['administrador','administrador 01','administrador 02'];
 
+
+// verInformeGuardado (movido del fragmento suelto)
+function verInformeGuardado(idx) {
+  const v = (window._visitasData || [])[idx];
+  if(!v) { alert('No se encontraron datos del informe.'); return; }
+
+  // Reconstruir HTML del informe desde los datos guardados en Sheets
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;padding:20px">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:20px;font-weight:900;color:#0a2463">INFORME DE VISITA DE CAMPO</div>
+        <div style="font-size:12px;color:#64748b">${v.empresa||''} · Semana ${v.semana||''} · ${v.fecha_reg||v.fecha||''}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <tr style="background:#0a2463;color:#fff">
+          <th colspan="4" style="padding:8px;text-align:left">DATOS GENERALES</th>
+        </tr>
+        <tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;width:25%">Empresa</td><td style="padding:6px;border:1px solid #e2e8f0">${v.empresa||'—'}</td>
+            <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;width:25%">Supervisor</td><td style="padding:6px;border:1px solid #e2e8f0">${v.supervisor||'—'}</td></tr>
+        <tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Sector/Fundo</td><td style="padding:6px;border:1px solid #e2e8f0">${v.sector||v.fundo||'—'}</td>
+            <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Semana</td><td style="padding:6px;border:1px solid #e2e8f0">${v.semana||'—'}</td></tr>
+        <tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Fecha Visita</td><td style="padding:6px;border:1px solid #e2e8f0">${v.fecha_inicio||v.fecha||'—'}</td>
+            <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Estado</td><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;color:${(v.estado||'').includes('RETRAS')?'#dc2626':'#16a34a'}">${v.estado||'—'}</td></tr>
+        <tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Asunto</td><td colspan="3" style="padding:6px;border:1px solid #e2e8f0">${v.asunto||'—'}</td></tr>
+      </table>
+      ${v.desarrollo ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <tr style="background:#1e3a8a;color:#fff"><th style="padding:8px;text-align:left">DESARROLLO DE LA VISITA</th></tr>
+        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.desarrollo}</td></tr>
+      </table>` : ''}
+      ${v.acciones ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <tr style="background:#166534;color:#fff"><th style="padding:8px;text-align:left">ACCIONES CORRECTIVAS</th></tr>
+        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.acciones}</td></tr>
+      </table>` : ''}
+      ${v.compromisos ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <tr style="background:#92400e;color:#fff"><th style="padding:8px;text-align:left">COMPROMISOS</th></tr>
+        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.compromisos}</td></tr>
+      </table>` : ''}
+      ${v.observaciones ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <tr style="background:#374151;color:#fff"><th style="padding:8px;text-align:left">OBSERVACIONES</th></tr>
+        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.observaciones}</td></tr>
+      </table>` : ''}
+      ${v.motivo_retraso ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <tr style="background:#dc2626;color:#fff"><th style="padding:8px;text-align:left">MOTIVO DE RETRASO</th></tr>
+        <tr><td style="padding:10px;border:1px solid #e2e8f0">${v.motivo_retraso}</td></tr>
+      </table>` : ''}
+      <div style="margin-top:30px;text-align:center;font-size:11px;color:#94a3b8">
+        Generado por Sistema RL · ${new Date().toLocaleDateString('es-PE')}
+      </div>
+    </div>`;
+
+  document.getElementById('informeVistaPrevia').innerHTML = html;
+  abrir('mVerInforme');
+}
+
+
+function verInformeGuardado(idx) {
+  const v = (window._visitasData || [])[idx];
+  if(!v) { alert('No se encontraron datos del informe.'); return; }
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:780px;margin:0 auto;padding:20px">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:20px;font-weight:900;color:#0a2463">INFORME DE VISITA DE CAMPO</div>
+        <div style="font-size:12px;color:#64748b">${v.empresa||''} · Semana ${v.semana||''} · ${v.fecha_reg||v.fecha||''}</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <tr style="background:#0a2463;color:#fff"><th colspan="4" style="padding:8px;text-align:left">DATOS GENERALES</th></tr>
+        <tr>
+          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;width:25%">Empresa</td>
+          <td style="padding:6px;border:1px solid #e2e8f0">${v.empresa||'—'}</td>
+          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;width:25%">Supervisor</td>
+          <td style="padding:6px;border:1px solid #e2e8f0">${v.supervisor||'—'}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Sector/Fundo</td>
+          <td style="padding:6px;border:1px solid #e2e8f0">${v.sector||v.fundo||'—'}</td>
+          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Semana</td>
+          <td style="padding:6px;border:1px solid #e2e8f0">${v.semana||'—'}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Fecha Visita</td>
+          <td style="padding:6px;border:1px solid #e2e8f0">${v.fecha_inicio||v.fecha||'—'}</td>
+          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Estado</td>
+          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;color:${(v.estado||'').includes('RETRAS')?'#dc2626':'#16a34a'}">${v.estado||'—'}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Asunto</td>
+          <td colspan="3" style="padding:6px;border:1px solid #e2e8f0">${v.asunto||'—'}</td>
+        </tr>
+      </table>
+      ${v.desarrollo?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><tr style="background:#1e3a8a;color:#fff"><th style="padding:8px;text-align:left">DESARROLLO DE LA VISITA</th></tr><tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.desarrollo}</td></tr></table>`:''}
+      ${v.acciones?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><tr style="background:#166534;color:#fff"><th style="padding:8px;text-align:left">ACCIONES CORRECTIVAS</th></tr><tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.acciones}</td></tr></table>`:''}
+      ${v.compromisos?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><tr style="background:#92400e;color:#fff"><th style="padding:8px;text-align:left">COMPROMISOS</th></tr><tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.compromisos}</td></tr></table>`:''}
+      ${v.observaciones?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><tr style="background:#374151;color:#fff"><th style="padding:8px;text-align:left">OBSERVACIONES</th></tr><tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.observaciones}</td></tr></table>`:''}
+      ${v.motivo_retraso?`<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px"><tr style="background:#dc2626;color:#fff"><th style="padding:8px;text-align:left">MOTIVO DE RETRASO</th></tr><tr><td style="padding:10px;border:1px solid #e2e8f0">${v.motivo_retraso}</td></tr></table>`:''}
+      <div style="margin-top:30px;text-align:center;font-size:11px;color:#94a3b8">Generado por Sistema RL · ${new Date().toLocaleDateString('es-PE')}</div>
+    </div>`;
+  document.getElementById('informeVistaPrevia').innerHTML = html;
+  abrir('mVerInforme');
+}
+
+const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+
 window.onload = async () => {
   const ud = sessionStorage.getItem('user');
-  API = sessionStorage.getItem('api') || '';
+  // Siempre usar la URL del Apps Script — si sessionStorage está vacío, usar la URL hardcodeada
+  API = sessionStorage.getItem('api') || API_URL_DEFAULT;
+  if (!API || API.trim() === '') API = API_URL_DEFAULT;
   if (!ud) { location.href='index.html'; return; }
   USER = JSON.parse(ud);
   const rol = USER.rol || '';
@@ -2176,8 +2182,16 @@ function confirmarFundo() {
 }
 
 // API
-async function apiGet(p) { const r=await fetch(API+'?'+new URLSearchParams(p)); return r.json(); }
-async function apiPost(b) { const r=await fetch(API,{method:'POST',body:JSON.stringify(b),headers:{'Content-Type':'text/plain'}}); return r.json(); }
+async function apiGet(p) {
+  if (!API || API.trim() === '') API = API_URL_DEFAULT;
+  const r = await fetch(API+'?'+new URLSearchParams(p));
+  return r.json();
+}
+async function apiPost(b) {
+  if (!API || API.trim() === '') API = API_URL_DEFAULT;
+  const r = await fetch(API,{method:'POST',body:JSON.stringify(b),headers:{'Content-Type':'text/plain'}});
+  return r.json();
+}
 
 
 // ============================================================
@@ -2668,6 +2682,9 @@ async function preloadData() {
   } catch(e) {
     if(ind) ind.style.display='none';
     console.error('preloadData error:', e);
+    // Mostrar aviso visible en el dashboard en vez de quedarse silencioso
+    const welcome = document.querySelector('#sec-dashboard .welcome p');
+    if(welcome) welcome.innerHTML = '⚠️ Error al conectar con el servidor. <a href="#" onclick="preloadData();return false;" style="color:#fbbf24;text-decoration:underline">Reintentar</a>';
     cargarStats();
   }
 }
@@ -3832,4 +3849,35 @@ function generarHTMLInforme(d) {
     <p style="margin:4px 0">De&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${d.sup}</p>
     <p style="margin:4px 0">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Supervisor de Gestión Humana.</p>
     <p style="margin:4px 0">Para&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${d.paraNombre}.</p>
-    <p style="margin:4px 0">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbs
+    <p style="margin:4px 0">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Jefe Recursos Humanos ${d.empresa}.</p>
+    <br>
+    <p style="margin:4px 0"><b>ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${d.asunto}</b></p>
+    <p style="margin:4px 0"><b>FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${d.fechaInf}</b></p>
+    <hr style="margin:10px 0">
+    <p style="margin:6px 0"><b>I. DESARROLLO DE ACTIVIDADES:</b></p>
+    <p style="margin:4px 0;white-space:pre-wrap">${d.desarrollo}</p>
+    <br>
+    <p style="margin:6px 0"><b>II. RUTAS RECORRIDAS:</b></p>
+    <p style="margin:4px 0;white-space:pre-wrap">${d.rutas}</p>
+    <br>
+    <p style="margin:6px 0"><b>III. ACCIONES TOMADAS:</b></p>
+    <p style="margin:4px 0;white-space:pre-wrap">${d.acciones}</p>
+    <br>
+    <p style="margin:6px 0"><b>IV. COMPROMISOS:</b></p>
+    <p style="margin:4px 0;white-space:pre-wrap">${d.compromisos}</p>
+    <br>
+    ${d.observaciones ? `<p style="margin:6px 0"><b>V. OBSERVACIONES:</b></p><p style="margin:4px 0;white-space:pre-wrap">${d.observaciones}</p><br>` : ''}
+    ${d.motivo ? `<p style="margin:6px 0"><b>MOTIVO DE RETRASO:</b></p><p style="margin:4px 0">${d.motivo}</p><br>` : ''}
+    ${fotosHTML ? `<p style="margin:6px 0"><b>EVIDENCIAS FOTOGRÁFICAS:</b></p><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">${fotosHTML}</div>` : ''}
+    <br>
+    <p style="margin:4px 0">Atentamente,</p>
+    <br><br>
+    <p style="margin:4px 0">_________________________________</p>
+    <p style="margin:4px 0"><b>${d.sup}</b></p>
+    <p style="margin:4px 0">Supervisor de Gestión Humana</p>
+    <p style="margin:4px 0">${d.empresa}</p>
+  `;
+}
+</script>
+</body>
+</html>
