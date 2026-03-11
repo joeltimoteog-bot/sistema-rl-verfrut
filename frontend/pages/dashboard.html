@@ -2127,9 +2127,9 @@ window.onload = async () => {
     document.getElementById('navAdmSec').style.display='';
     document.getElementById('navEstadisticas').style.display='';
     document.getElementById('navVisitas').style.display='flex';
-  if(USER.rol==='administrador') {
+  if(USER.rol=== 'administrador'|| USER.rol==='Administrador') {
     document.getElementById('navSolicitudes').style.display='flex';
-    cargarBadgeSolicitudes();
+    if(typeof cargarBadgeSolicitudes === 'function') cargarBadgeSolicitudes();
   }
   document.getElementById('navRes').style.display='';
     if (esAdmin) document.getElementById('navUsr').style.display='';
