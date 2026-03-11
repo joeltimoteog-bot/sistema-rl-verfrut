@@ -109,7 +109,7 @@ async function doLogin(){
     if(d.success){
       sessionStorage.setItem('user',JSON.stringify(d.user));
       sessionStorage.setItem('api',API);
-      window.location.href='dashboard.html';
+      window.location.href='frontend/pages/dashboard.html';
     }else{
       intentos++;updateDots();
       setAlert(d.error||'Datos incorrectos. Te quedan '+(MAX-intentos)+' intento(s).');
