@@ -6,6 +6,7 @@
 <title>Dashboard | Sistema RL v3.1</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&amp;family=Barlow+Condensed:wght@700;800;900&amp;display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
@@ -200,6 +201,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="card-h">
           <span class="card-t">Mis Atenciones</span>
           <button class="btn-n" id="btnNuevaAt" onclick="abrirAt()">+ Nueva Atención</button>
+          <button class="btn-n" onclick="exportarAtenciones()" style="background:#1a7f4b">📥 Excel</button>
         </div>
         <div class="filtros">
           <input class="fi" id="fAQ" placeholder="🔍 DNI o nombre..." oninput="filtrarAt()" style="flex:1.5">
@@ -245,6 +247,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="filtros">
           <input class="fi" id="cDNI" placeholder="🔍 Ingresa DNI del trabajador..." style="flex:2" maxlength="8">
           <button class="btn-bus" onclick="consultarDNI()">🔍 Consultar</button>
+          <button class="btn-n" onclick="exportarConsultaDNI()" style="background:#1a7f4b">📥 Excel</button>
         </div>
       </div>
       <div id="consultaResult"></div>
@@ -260,6 +263,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
         </select>
         <select class="fi" id="rAnio" onchange="cargarResumen()"><option value="">Todos los años</option><option value="2025">2025</option><option value="2026">2026</option></select>
+        <button class="btn-n" onclick="exportarResumen()" style="background:#1a7f4b">📥 Excel</button>
       </div>
       <div class="sg" style="grid-template-columns:repeat(3,1fr)">
         <div class="sc"><div class="sc-ic ia">📊</div><div><div class="sc-n" id="rT">0</div><div class="sc-l">TOTAL</div></div></div>
@@ -354,6 +358,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       <div class="sec-hd">
         <h2>🏕️ Visitas de Campo</h2>
         <button class="btn-n" onclick="abrirNuevaVisita()">+ Nueva Visita</button>
+        <button class="btn-n" onclick="exportarVisitas()" style="background:#1a7f4b">📥 Excel</button>
       </div>
 
       <!-- Filtros -->
@@ -524,6 +529,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <option value="">Todos los estados</option>
         <option>Pendiente</option><option>Validado</option><option>Observado</option>
       </select>
+      <button class="btn-n" onclick="exportarFusiones()" style="background:#1a7f4b">📥 Excel</button>
     </div>
     <div style="overflow-x:auto">
       <table class="tbl">
@@ -559,6 +565,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           </select>
           <input id="estFiltroSup" placeholder="🔍 Buscar supervisor..." oninput="cargarEstadisticasAdmin()"
             style="padding:7px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px;width:180px">
+          <button class="btn-n" onclick="exportarEstadisticasAdmin()" style="background:#1a7f4b">📥 Excel</button>
         </div>
       </div>
 
@@ -1785,6 +1792,7 @@ async function cargarVisitas() {
 }
 
 function renderVisitas(data) {
+  window._visFiltradas = data;
   const tb = document.getElementById('tbVisitas');
   if(!tb) return;
   if(!data || data.length === 0) {
@@ -1993,6 +2001,7 @@ function filtrarFusiones() {
     (!q || JSON.stringify(r).toLowerCase().includes(q)) &&
     (!est || r.estado === est)
   );
+  window._fusFiltradas = fil;
   renderFusiones(fil);
 }
 
@@ -2831,10 +2840,12 @@ function renderAt(lista) {
 
 function filtrarAt() {
   const q=v('fAQ').toLowerCase(), e=v('fAE'), emp=v('fAEmp'), m=v('fAM');
-  renderAt(atTodas.filter(a=>
+  const filtradas = atTodas.filter(a=>
     (!q||String(a.dni).includes(q)||String(a.nombre).toLowerCase().includes(q))&&
     (!e||String(a.estado).toUpperCase()===e)&&(!emp||a.empresa===emp)&&(!m||String(a.mes)===m)
-  ));
+  );
+  window._atFiltradas = filtradas;
+  renderAt(filtradas);
 }
 
 function abrirAt() {
@@ -3012,6 +3023,7 @@ async function consultarDNI() {
     const d=await apiGet({action:'consultaDNI',dni});
     if(!d.success){document.getElementById('consultaResult').innerHTML='<div class="empty">❌ '+d.error+'</div>';return;}
     if(!d.data.length){document.getElementById('consultaResult').innerHTML='<div class="empty">No se encontraron atenciones para este DNI</div>';return;}
+    window._consultaDNIResultados = d.data;
     const t=d.trabajador||{};
     document.getElementById('consultaResult').innerHTML=`
       <div class="dni-result">
@@ -3076,6 +3088,7 @@ async function cargarResumen() {
 function filtrarRes() {
   const emp=v('rFE'), est=v('rFEst');
   const lista=resData.filter(a=>(!emp||a.empresa===emp)&&(!est||String(a.estado).toUpperCase()===est));
+  window._resFiltradas = lista;
   document.getElementById('tbRes').innerHTML=lista.length?
     lista.map(a=>`<tr>
       <td>${a.nro||''}</td><td>${fmtF(a.fecha_atencion)}</td>
@@ -3887,6 +3900,88 @@ function generarHTMLInforme(d) {
     <p style="margin:4px 0">Supervisor de Gestión Humana</p>
     <p style="margin:4px 0">${d.empresa}</p>
   `;
+}
+
+// ============================================================
+// EXPORTAR A EXCEL
+// ============================================================
+function exportarExcelGen(datos, columnas, nombreArchivo) {
+  if(!datos || !datos.length) { alert('No hay datos para exportar.'); return; }
+  const filas = datos.map(row => {
+    const obj = {};
+    columnas.forEach(col => { obj[col.label] = row[col.key] !== undefined ? row[col.key] : ''; });
+    return obj;
+  });
+  const ws = XLSX.utils.json_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Datos');
+  XLSX.writeFile(wb, nombreArchivo + '_' + new Date().toLocaleDateString('es-PE').replace(/\//g,'-') + '.xlsx');
+}
+
+function exportarAtenciones() {
+  const datos = window._atFiltradas || CACHE.atenciones || [];
+  exportarExcelGen(datos, [
+    {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha'},
+    {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},
+    {key:'empresa',label:'Empresa'},{key:'fundo',label:'Fundo'},
+    {key:'cargo',label:'Cargo'},{key:'supervisor',label:'Supervisor'},
+    {key:'detalle_documento',label:'Documento'},{key:'estado',label:'Estado'},
+    {key:'observaciones',label:'Observaciones'}
+  ], 'Atenciones');
+}
+
+function exportarResumen() {
+  const datos = window._resFiltradas || CACHE.resumen?.lista || [];
+  exportarExcelGen(datos, [
+    {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha'},
+    {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},
+    {key:'empresa',label:'Empresa'},{key:'supervisor',label:'Supervisor'},
+    {key:'detalle_documento',label:'Documento'},{key:'estado',label:'Estado'},
+    {key:'observaciones',label:'Observaciones'}
+  ], 'ResumenGeneral');
+}
+
+function exportarVisitas() {
+  const datos = window._visFiltradas || CACHE.visitas || [];
+  exportarExcelGen(datos, [
+    {key:'nro',label:'N°'},{key:'fecha_reg',label:'Fecha'},
+    {key:'empresa',label:'Empresa'},{key:'supervisor',label:'Supervisor'},
+    {key:'fundo',label:'Fundo'},{key:'semana',label:'Semana'},
+    {key:'fecha_informe',label:'Fecha Informe'},{key:'estado',label:'Estado'}
+  ], 'Visitas');
+}
+
+function exportarConsultaDNI() {
+  const datos = window._consultaDNIResultados || [];
+  exportarExcelGen(datos, [
+    {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha'},
+    {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},
+    {key:'empresa',label:'Empresa'},{key:'detalle_documento',label:'Documento'},
+    {key:'estado',label:'Estado'},{key:'observaciones',label:'Observaciones'}
+  ], 'ConsultaDNI');
+}
+
+function exportarFusiones() {
+  const datos = window._fusFiltradas || CACHE.fusiones || [];
+  exportarExcelGen(datos, [
+    {key:'id',label:'ID'},{key:'fecha',label:'Fecha'},{key:'hora',label:'Hora'},
+    {key:'sector',label:'Sector'},{key:'supervisor',label:'Supervisor'},
+    {key:'cantBuses',label:'Buses'},{key:'ruta_origen',label:'Ruta Origen'},
+    {key:'total_trab',label:'Total Trab.'},{key:'motivo',label:'Motivo'},
+    {key:'estado',label:'Estado'}
+  ], 'Fusiones');
+}
+
+function exportarEstadisticasAdmin() {
+  const ps = CACHE.estadisticasAdmin?.porSupervisor || {};
+  const datos = Object.values(ps);
+  exportarExcelGen(datos, [
+    {key:'nombre',label:'Supervisor'},
+    {key:'atenciones',label:'Atenciones'},{key:'atPendientes',label:'Pendientes'},
+    {key:'atResueltos',label:'Resueltos'},{key:'visitas',label:'Visitas'},
+    {key:'viRetrasadas',label:'Visitas Retrasadas'},{key:'casos',label:'Casos'},
+    {key:'fusiones',label:'Fusiones'}
+  ], 'EstadisticasAdmin');
 }
 </script>
 </body>
