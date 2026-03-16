@@ -189,7 +189,6 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="sc"><div class="sc-ic iv">📊</div><div><div class="sc-n" id="sA">0</div><div class="sc-l">TOTAL AÑO</div></div></div>
         <div class="sc"><div class="sc-ic in">⏳</div><div><div class="sc-n" id="sP">0</div><div class="sc-l">PENDIENTES</div></div></div>
       </div>
-      <!-- Filtros estadísticas supervisor -->
       <div style="background:#fff;border-radius:11px;border:1px solid var(--bd);padding:10px 16px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <span style="font-size:12px;font-weight:700;color:#0b1e45">📊 Filtrar:</span>
         <select id="dFiltroAnio" onchange="filtrarEstadisticasDash()" style="padding:6px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
@@ -209,10 +208,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="gc"><div class="gc-t">Por Estado</div><canvas id="cE" style="height:200px;max-height:200px"></canvas></div>
       </div>
       <div class="gg" style="margin-top:14px">
-        <div class="gc">
-          <div class="gc-t">📈 Tendencia anual</div>
-          <canvas id="cTendAnual" style="height:200px;max-height:200px"></canvas>
-        </div>
+        <div class="gc"><div class="gc-t">📈 Tendencia anual</div><canvas id="cTendAnual" style="height:200px;max-height:200px"></canvas></div>
         <div class="gc">
           <div class="gc-t">📋 Resumen por año</div>
           <div style="overflow-x:auto">
@@ -298,14 +294,14 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
           <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
         </select>
-        <select class="fi" id="rAnio" onchange="cargarResumen()"><option value="">Todos los años</option><option value="2025">2025</option><option value="2026">2026</option></select>
-        <select class="fi" id="rFiltroEst" onchange="cargarResumen()" style="min-width:130px">
+        <select class="fi" id="rAnio" onchange="filtrarResumen()"><option value="">Todos los años</option><option value="2025">2025</option><option value="2026">2026</option></select>
+        <select class="fi" id="rFiltroEst" onchange="filtrarResumen()" style="min-width:130px">
           <option value="">Todos los estados</option>
           <option value="PENDIENTE">Pendiente</option>
           <option value="EN PROCESO">En Proceso</option>
           <option value="RESUELTO">Resuelto</option>
         </select>
-        <select class="fi" id="rFiltroSup" onchange="cargarResumen()" style="min-width:160px">
+        <select class="fi" id="rFiltroSup" onchange="filtrarResumen()" style="min-width:160px">
           <option value="">Todos los supervisores</option>
         </select>
         <button class="btn-n" onclick="exportarResumen()" style="background:#1a7f4b">📥 Excel</button>
@@ -2828,7 +2824,7 @@ async function cargarStats() {
   } catch(e){ console.error('cargarStats excepción:', e); }
 }
 function dibujar(s) {
-  if (CACHE.atenciones) setTimeout(()=>dibujarEstadisticasDash(CACHE.atenciones),100);
+  if (CACHE.atenciones) setTimeout(()=>dibujarEstadisticasDash(CACHE.atenciones),200);
   // Destruir instancias previas
   ['m','e'].forEach(k => { if(charts[k]) { charts[k].destroy(); charts[k]=null; } });
 
@@ -3139,6 +3135,9 @@ async function cargarResumen() {
     const d=await apiGet({action:'getResumenGeneral',empresa:emp,mes,anio});
     if(!d.success)return;
     resData=d.data.lista||[];
+    // Poblar select supervisores
+    const supSel=document.getElementById('rFiltroSup');
+    if(supSel){ const sups=[...new Set(resData.map(a=>a.supervisor).filter(Boolean))].sort(); while(supSel.options.length>1) supSel.remove(1); sups.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;supSel.appendChild(o);}); }
     document.getElementById('rT').textContent=resData.length;
     document.getElementById('rP').textContent=resData.filter(a=>String(a.estado).toUpperCase()==='PENDIENTE').length;
     document.getElementById('rR').textContent=resData.filter(a=>String(a.estado).toUpperCase()==='RESUELTO').length;
@@ -3161,7 +3160,16 @@ async function cargarResumen() {
 
 function filtrarRes() {
   const emp=v('rFE'), est=v('rFEst');
-  const lista=resData.filter(a=>(!emp||a.empresa===emp)&&(!est||String(a.estado).toUpperCase()===est));
+  const filtEst = v('rFiltroEst') || '';
+  const filtSup = v('rFiltroSup') || '';
+  const filtAnio = v('rAnio') || '';
+  const lista=resData.filter(a=>
+    (!emp  || a.empresa===emp) &&
+    (!est  || String(a.estado||'').toUpperCase()===est) &&
+    (!filtEst || String(a.estado||'').toUpperCase()===filtEst) &&
+    (!filtSup || String(a.supervisor||'').toLowerCase().includes(filtSup.toLowerCase())) &&
+    (!filtAnio|| String(a.anio||a.fecha_atencion||'').substring(0,4)===filtAnio)
+  );
   window._resFiltradas = lista;
   setTimeout(()=>dibujarGraficosResumen(lista),100);
   document.getElementById('tbRes').innerHTML=lista.length?
@@ -3988,49 +3996,39 @@ function filtrarEstadisticasDash() {
   if (est)  datos = datos.filter(a => String(a.estado||'').toUpperCase() === est);
   dibujarEstadisticasDash(datos);
 }
-
 function dibujarEstadisticasDash(datos) {
-  const labels = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  // Barras por mes (últimos 6)
-  const porMes = {};
-  for (let i=5;i>=0;i--) { const d=new Date(); d.setMonth(d.getMonth()-i); porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0; }
-  datos.forEach(a => { const f=String(a.fecha_atencion||'').substring(0,7); if(porMes.hasOwnProperty(f)) porMes[f]++; });
-  const lm = Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]);
+  const labels=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const porMes={};
+  for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
+  datos.forEach(a=>{const f=String(a.fecha_atencion||'').substring(0,7);if(porMes.hasOwnProperty(f)) porMes[f]++;});
+  const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]);
   if(charts.m){charts.m.destroy();charts.m=null;}
   const elM=document.getElementById('cM');
   if(elM) charts.m=new Chart(elM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#3b82f6',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
-  // Dona por estado
   const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
   const proc=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
   const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
   if(charts.e){charts.e.destroy();charts.e=null;}
   const elE=document.getElementById('cE');
   if(elE) charts.e=new Chart(elE,{type:'doughnut',data:{labels:['Pendiente','En Proceso','Resuelto'],datasets:[{data:[pend,proc,res],backgroundColor:['#f97316','#3b82f6','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
-  // Línea tendencia anual
   const porAnio={};
-  datos.forEach(a=>{ const y=String(a.anio||a.fecha_atencion||'').substring(0,4); if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1; });
+  datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
   if(charts.tendAnual){charts.tendAnual.destroy();charts.tendAnual=null;}
   const elT=document.getElementById('cTendAnual');
-  if(elT){ const anios=Object.keys(porAnio).sort(); charts.tendAnual=new Chart(elT,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#0b1e45',backgroundColor:'rgba(11,30,69,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}}); }
-  // Tabla resumen por año
+  if(elT){const anios=Object.keys(porAnio).sort();charts.tendAnual=new Chart(elT,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#0b1e45',backgroundColor:'rgba(11,30,69,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
   const tbody=document.getElementById('tbResAnualBody');
   if(tbody){
     const resAnio={};
-    datos.forEach(a=>{ const y=String(a.anio||a.fecha_atencion||'').substring(0,4); if(!y||y.length!==4) return; if(!resAnio[y]) resAnio[y]={total:0,pend:0,proc:0,res:0}; resAnio[y].total++; const e=String(a.estado||'').toUpperCase(); if(e==='PENDIENTE') resAnio[y].pend++; else if(e==='EN PROCESO') resAnio[y].proc++; else if(e==='RESUELTO') resAnio[y].res++; });
+    datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(!y||y.length!==4) return;if(!resAnio[y]) resAnio[y]={total:0,pend:0,proc:0,res:0};resAnio[y].total++;const e=String(a.estado||'').toUpperCase();if(e==='PENDIENTE') resAnio[y].pend++;else if(e==='EN PROCESO') resAnio[y].proc++;else if(e==='RESUELTO') resAnio[y].res++;});
     const aniosOrden=Object.keys(resAnio).sort().reverse();
     tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total}</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].pend}</td><td style="padding:7px 10px;text-align:center;color:#3b82f6">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
   }
 }
-
 // ============================================================
 // ESTADÍSTICAS POR AÑO - RESUMEN GENERAL (ADMIN)
 // ============================================================
 function dibujarGraficosResumen(datos) {
-  // Poblar select supervisores
-  const supSelect=document.getElementById('rFiltroSup');
-  if(supSelect && supSelect.options.length<=1){ const sups=[...new Set(datos.map(a=>a.supervisor).filter(Boolean))].sort(); sups.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;supSelect.appendChild(o);}); }
   const labels=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  // Barras por mes
   const porMes={};
   for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
   datos.forEach(a=>{const f=String(a.fecha_atencion||'').substring(0,7);if(porMes.hasOwnProperty(f)) porMes[f]++;});
@@ -4038,20 +4036,17 @@ function dibujarGraficosResumen(datos) {
   if(charts.rMes){charts.rMes.destroy();charts.rMes=null;}
   const elRM=document.getElementById('rChartMes');
   if(elRM) charts.rMes=new Chart(elRM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#0b1e45',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
-  // Dona por estado
   const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
   const proc=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
   const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
   if(charts.rEst){charts.rEst.destroy();charts.rEst=null;}
   const elRE=document.getElementById('rChartEst');
   if(elRE) charts.rEst=new Chart(elRE,{type:'doughnut',data:{labels:['Pendiente','En Proceso','Resuelto'],datasets:[{data:[pend,proc,res],backgroundColor:['#f97316','#3b82f6','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
-  // Línea tendencia anual
   const porAnio={};
   datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
   if(charts.rAnual){charts.rAnual.destroy();charts.rAnual=null;}
   const elRA=document.getElementById('rChartAnual');
   if(elRA){const anios=Object.keys(porAnio).sort();charts.rAnual=new Chart(elRA,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#d9292b',backgroundColor:'rgba(217,41,43,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
-  // Tabla resumen por año
   const tbody=document.getElementById('tbResAnualBodyAdmin');
   if(tbody){
     const resAnio={};
@@ -4060,7 +4055,6 @@ function dibujarGraficosResumen(datos) {
     tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total}</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].pend}</td><td style="padding:7px 10px;text-align:center;color:#3b82f6">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
   }
 }
-
 // ============================================================
 // EXPORTAR A EXCEL
 // ============================================================
