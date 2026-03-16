@@ -119,66 +119,14 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 .hamburger{background:none;border:none;font-size:22px;cursor:pointer;color:var(--azul);padding:4px 8px;border-radius:6px;margin-right:8px}
 .overlay-sb{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99;display:none;pointer-events:none}
 @media(max-width:768px){
-  /* SIDEBAR */
   .sb{transform:translateX(-100%);transition:transform .3s ease}
   .sb.open{transform:translateX(0)}
-  .main{margin-left:0;padding:10px}
+  .main{margin-left:0}
+  .sg{grid-template-columns:repeat(2,1fr)}
+  .gg{grid-template-columns:1fr}
   .hamburger{display:flex}
   .overlay-sb{display:none}
   .overlay-sb.on{display:block;pointer-events:auto}
-  /* TOPBAR */
-  .topbar{padding:0 12px;height:52px}
-  .topbar h1{font-size:14px}
-  /* GRIDS */
-  .sg{grid-template-columns:repeat(2,1fr);gap:8px}
-  .gg{grid-template-columns:1fr}
-  /* STATS CARDS */
-  .sc{padding:12px;gap:8px}
-  .sc-ic{width:36px;height:36px;font-size:16px}
-  .sc-n{font-size:22px}
-  /* CARDS */
-  .card{margin-top:10px;border-radius:9px}
-  .card-h{padding:10px 14px;flex-wrap:wrap;gap:6px}
-  .card-t{font-size:12px}
-  /* BOTONES */
-  .btn-n{padding:6px 12px;font-size:11px}
-  .btn-bus{padding:8px 14px;font-size:12px}
-  /* FILTROS */
-  .filtros{padding:10px 12px;gap:7px;flex-direction:column;align-items:stretch}
-  .fi{width:100%!important;flex:none!important;font-size:13px;padding:9px 12px}
-  /* TABLAS */
-  .tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .tbl{min-width:500px;font-size:11px}
-  .tbl th,.tbl td{padding:7px 8px;white-space:nowrap}
-  table{min-width:480px;font-size:11px}
-  table th,table td{padding:7px 8px;white-space:nowrap}
-  /* SECCIÓN HEADER */
-  .sec-hd{flex-wrap:wrap;gap:8px;padding-bottom:10px}
-  .sec-hd h2{font-size:15px}
-  .sec{padding:0}
-  /* MODALES */
-  .modal-box{width:96vw!important;max-width:96vw!important;margin:10px auto;max-height:90vh;overflow-y:auto;border-radius:12px}
-  .modal-hd{padding:14px 16px}
-  .modal-hd h3{font-size:14px}
-  .modal-body{padding:14px 16px}
-  /* FORMULARIOS */
-  .form-grid,.fg{grid-template-columns:1fr!important;gap:10px}
-  .form-group,.fgi{grid-column:1!important}
-  label{font-size:12px}
-  input,select,textarea{font-size:13px!important;padding:9px 12px!important}
-  /* WELCOME */
-  .welcome{padding:18px 16px}
-  .welcome h2{font-size:20px}
-  /* SUPERVISOR CARDS */
-  .sup-card{padding:12px}
-  .sup-t{font-size:13px}
-  /* WHATSAPP */
-  a[href*="wa.me"]{bottom:16px!important;right:16px!important;width:50px!important;height:50px!important}
-}
-@media(max-width:400px){
-  .sg{grid-template-columns:1fr}
-  .sc-n{font-size:20px}
-  .topbar h1{font-size:12px}
 }
 @media(min-width:769px){.hamburger{display:none}.overlay-sb{display:none!important}}
 </style>
@@ -241,9 +189,45 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="sc"><div class="sc-ic iv">📊</div><div><div class="sc-n" id="sA">0</div><div class="sc-l">TOTAL AÑO</div></div></div>
         <div class="sc"><div class="sc-ic in">⏳</div><div><div class="sc-n" id="sP">0</div><div class="sc-l">PENDIENTES</div></div></div>
       </div>
+      <!-- Filtros estadísticas supervisor -->
+      <div style="background:#fff;border-radius:11px;border:1px solid var(--bd);padding:10px 16px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:12px;font-weight:700;color:#0b1e45">📊 Filtrar:</span>
+        <select id="dFiltroAnio" onchange="filtrarEstadisticasDash()" style="padding:6px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+          <option value="">Todos los años</option>
+          <option value="2025">2025</option>
+          <option value="2026">2026</option>
+        </select>
+        <select id="dFiltroEst" onchange="filtrarEstadisticasDash()" style="padding:6px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+          <option value="">Todos los estados</option>
+          <option value="PENDIENTE">Pendiente</option>
+          <option value="EN PROCESO">En Proceso</option>
+          <option value="RESUELTO">Resuelto</option>
+        </select>
+      </div>
       <div class="gg">
         <div class="gc"><div class="gc-t">Atenciones últimos 6 meses</div><canvas id="cM" style="height:200px;max-height:200px"></canvas></div>
         <div class="gc"><div class="gc-t">Por Estado</div><canvas id="cE" style="height:200px;max-height:200px"></canvas></div>
+      </div>
+      <div class="gg" style="margin-top:14px">
+        <div class="gc">
+          <div class="gc-t">📈 Tendencia anual</div>
+          <canvas id="cTendAnual" style="height:200px;max-height:200px"></canvas>
+        </div>
+        <div class="gc">
+          <div class="gc-t">📋 Resumen por año</div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead><tr style="background:#0b1e45;color:#fff">
+                <th style="padding:7px 10px;text-align:left">Año</th>
+                <th style="padding:7px 10px;text-align:center">Total</th>
+                <th style="padding:7px 10px;text-align:center">Pendientes</th>
+                <th style="padding:7px 10px;text-align:center">En Proceso</th>
+                <th style="padding:7px 10px;text-align:center">Resueltos</th>
+              </tr></thead>
+              <tbody id="tbResAnualBody"><tr><td colspan="5" style="text-align:center;padding:10px;color:#64748b">⏳ Cargando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -315,6 +299,15 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
         </select>
         <select class="fi" id="rAnio" onchange="cargarResumen()"><option value="">Todos los años</option><option value="2025">2025</option><option value="2026">2026</option></select>
+        <select class="fi" id="rFiltroEst" onchange="cargarResumen()" style="min-width:130px">
+          <option value="">Todos los estados</option>
+          <option value="PENDIENTE">Pendiente</option>
+          <option value="EN PROCESO">En Proceso</option>
+          <option value="RESUELTO">Resuelto</option>
+        </select>
+        <select class="fi" id="rFiltroSup" onchange="cargarResumen()" style="min-width:160px">
+          <option value="">Todos los supervisores</option>
+        </select>
         <button class="btn-n" onclick="exportarResumen()" style="background:#1a7f4b">📥 Excel</button>
       </div>
       <div class="sg" style="grid-template-columns:repeat(3,1fr)">
@@ -325,6 +318,28 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       <div class="sup-card">
         <div class="sup-t">📋 Resumen por Supervisor</div>
         <div id="supR"><div class="empty">⏳ Cargando...</div></div>
+      </div>
+      <div class="gg" style="margin-top:14px">
+        <div class="gc"><div class="gc-t">📊 Atenciones por mes</div><canvas id="rChartMes" style="height:200px;max-height:200px"></canvas></div>
+        <div class="gc"><div class="gc-t">🍩 Por Estado</div><canvas id="rChartEst" style="height:200px;max-height:200px"></canvas></div>
+      </div>
+      <div class="gg" style="margin-top:14px">
+        <div class="gc"><div class="gc-t">📈 Tendencia anual</div><canvas id="rChartAnual" style="height:200px;max-height:200px"></canvas></div>
+        <div class="gc">
+          <div class="gc-t">📋 Resumen por año</div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead><tr style="background:#0b1e45;color:#fff">
+                <th style="padding:7px 10px;text-align:left">Año</th>
+                <th style="padding:7px 10px;text-align:center">Total</th>
+                <th style="padding:7px 10px;text-align:center">Pendientes</th>
+                <th style="padding:7px 10px;text-align:center">En Proceso</th>
+                <th style="padding:7px 10px;text-align:center">Resueltos</th>
+              </tr></thead>
+              <tbody id="tbResAnualBodyAdmin"><tr><td colspan="5" style="text-align:center;padding:10px;color:#64748b">⏳ Cargando...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
       </div>
       <div class="card">
         <div class="card-h">
@@ -617,6 +632,11 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           </select>
           <input id="estFiltroSup" placeholder="🔍 Buscar supervisor..." oninput="cargarEstadisticasAdmin()"
             style="padding:7px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px;width:180px">
+          <select id="estFiltroAnio" onchange="cargarEstadisticasAdmin()" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px">
+            <option value="">Todos los años</option>
+            <option value="2025">2025</option>
+            <option value="2026">2026</option>
+          </select>
           <button class="btn-n" onclick="exportarEstadisticasAdmin()" style="background:#1a7f4b">📥 Excel</button>
         </div>
       </div>
@@ -1392,7 +1412,7 @@ const SUPERVISORES_SECTOR = {
 const SUPERVISORES_LISTA = [
   { dni:'73091524', nombre:'Elberth Castro Bayona',          cargo:'Supervisor de Gestión Humana',        sector:'San Vicente',         empresa:'RAPEL',   correo:'ecastro@rapel.pe',    reemplazo: false },
   { dni:'76329783', nombre:'Yhanelly Luzón Venegas',         cargo:'Supervisor de Gestión Humana',        sector:'Santa Rosa',          empresa:'VERFRUT', correo:'yluzon@verfrut.pe',   reemplazo: false },
-  { dni:'47262764', nombre:'Socorro Miranda Pasapera',       cargo:'Asistente de Relaciones Laborales',   sector:'Campo A',             empresa:'RAPEL',   correo:'smiranda@rapel.pe',   reemplazo: true  },
+  { dni:'47262764', nombre:'Socorro Miranda Pasapera',       cargo:'Asistente de Relaciones Laborales',   sector:'Campo A',             empresa:'RAPEL',   correo:'smiranda@rapel.pe',   reemplazo: false  },
   { dni:'47524110', nombre:'Jaime Siancas Viera',            cargo:'Asistente de Relaciones Laborales',   sector:'Fundos Varios',       empresa:'',        correo:'jsiancas@rapel.pe',   reemplazo: true  },
   { dni:'72954772', nombre:'Pool Tamayo Rodríguez',          cargo:'Supervisor de Gestión Humana',        sector:'Limones / El Papayo', empresa:'RAPEL',   correo:'ptamayo@rapel.pe',    reemplazo: false },
   { dni:'73332618', nombre:'Alexander Tineo Ramos',          cargo:'Supervisor de Gestión Humana',        sector:'Olivares Bajo',       empresa:'VERFRUT', correo:'atineo@verfrut.pe',   reemplazo: false },
@@ -1674,6 +1694,7 @@ async function cargarEstadisticasAdmin() {
   const empresa = (document.getElementById('estFiltroEmp')?.value || '').toUpperCase();
   const mes     = parseInt(document.getElementById('estFiltroMes')?.value || '0');
   const sup     = (document.getElementById('estFiltroSup')?.value || '').toLowerCase().trim();
+  const anio    = document.getElementById('estFiltroAnio')?.value || '';
 
   // Si hay cache, filtrar directo en frontend sin llamar al backend
   if (CACHE.estadisticasAdmin && typeof CACHE.estadisticasAdmin === 'object') {
@@ -2807,6 +2828,7 @@ async function cargarStats() {
   } catch(e){ console.error('cargarStats excepción:', e); }
 }
 function dibujar(s) {
+  if (CACHE.atenciones) setTimeout(()=>dibujarEstadisticasDash(CACHE.atenciones),100);
   // Destruir instancias previas
   ['m','e'].forEach(k => { if(charts[k]) { charts[k].destroy(); charts[k]=null; } });
 
@@ -3141,6 +3163,7 @@ function filtrarRes() {
   const emp=v('rFE'), est=v('rFEst');
   const lista=resData.filter(a=>(!emp||a.empresa===emp)&&(!est||String(a.estado).toUpperCase()===est));
   window._resFiltradas = lista;
+  setTimeout(()=>dibujarGraficosResumen(lista),100);
   document.getElementById('tbRes').innerHTML=lista.length?
     lista.map(a=>`<tr>
       <td>${a.nro||''}</td><td>${fmtF(a.fecha_atencion)}</td>
@@ -3952,6 +3975,90 @@ function generarHTMLInforme(d) {
     <p style="margin:4px 0">Supervisor de Gestión Humana</p>
     <p style="margin:4px 0">${d.empresa}</p>
   `;
+}
+
+// ============================================================
+// ESTADÍSTICAS POR AÑO - MI DASHBOARD (SUPERVISOR)
+// ============================================================
+function filtrarEstadisticasDash() {
+  const anio = document.getElementById('dFiltroAnio')?.value || '';
+  const est  = document.getElementById('dFiltroEst')?.value || '';
+  let datos = CACHE.atenciones || [];
+  if (anio) datos = datos.filter(a => String(a.anio||a.fecha_atencion||'').substring(0,4) === anio);
+  if (est)  datos = datos.filter(a => String(a.estado||'').toUpperCase() === est);
+  dibujarEstadisticasDash(datos);
+}
+
+function dibujarEstadisticasDash(datos) {
+  const labels = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  // Barras por mes (últimos 6)
+  const porMes = {};
+  for (let i=5;i>=0;i--) { const d=new Date(); d.setMonth(d.getMonth()-i); porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0; }
+  datos.forEach(a => { const f=String(a.fecha_atencion||'').substring(0,7); if(porMes.hasOwnProperty(f)) porMes[f]++; });
+  const lm = Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]);
+  if(charts.m){charts.m.destroy();charts.m=null;}
+  const elM=document.getElementById('cM');
+  if(elM) charts.m=new Chart(elM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#3b82f6',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+  // Dona por estado
+  const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
+  const proc=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
+  const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
+  if(charts.e){charts.e.destroy();charts.e=null;}
+  const elE=document.getElementById('cE');
+  if(elE) charts.e=new Chart(elE,{type:'doughnut',data:{labels:['Pendiente','En Proceso','Resuelto'],datasets:[{data:[pend,proc,res],backgroundColor:['#f97316','#3b82f6','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+  // Línea tendencia anual
+  const porAnio={};
+  datos.forEach(a=>{ const y=String(a.anio||a.fecha_atencion||'').substring(0,4); if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1; });
+  if(charts.tendAnual){charts.tendAnual.destroy();charts.tendAnual=null;}
+  const elT=document.getElementById('cTendAnual');
+  if(elT){ const anios=Object.keys(porAnio).sort(); charts.tendAnual=new Chart(elT,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#0b1e45',backgroundColor:'rgba(11,30,69,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}}); }
+  // Tabla resumen por año
+  const tbody=document.getElementById('tbResAnualBody');
+  if(tbody){
+    const resAnio={};
+    datos.forEach(a=>{ const y=String(a.anio||a.fecha_atencion||'').substring(0,4); if(!y||y.length!==4) return; if(!resAnio[y]) resAnio[y]={total:0,pend:0,proc:0,res:0}; resAnio[y].total++; const e=String(a.estado||'').toUpperCase(); if(e==='PENDIENTE') resAnio[y].pend++; else if(e==='EN PROCESO') resAnio[y].proc++; else if(e==='RESUELTO') resAnio[y].res++; });
+    const aniosOrden=Object.keys(resAnio).sort().reverse();
+    tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total}</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].pend}</td><td style="padding:7px 10px;text-align:center;color:#3b82f6">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
+  }
+}
+
+// ============================================================
+// ESTADÍSTICAS POR AÑO - RESUMEN GENERAL (ADMIN)
+// ============================================================
+function dibujarGraficosResumen(datos) {
+  // Poblar select supervisores
+  const supSelect=document.getElementById('rFiltroSup');
+  if(supSelect && supSelect.options.length<=1){ const sups=[...new Set(datos.map(a=>a.supervisor).filter(Boolean))].sort(); sups.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;supSelect.appendChild(o);}); }
+  const labels=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  // Barras por mes
+  const porMes={};
+  for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
+  datos.forEach(a=>{const f=String(a.fecha_atencion||'').substring(0,7);if(porMes.hasOwnProperty(f)) porMes[f]++;});
+  const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]);
+  if(charts.rMes){charts.rMes.destroy();charts.rMes=null;}
+  const elRM=document.getElementById('rChartMes');
+  if(elRM) charts.rMes=new Chart(elRM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#0b1e45',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  // Dona por estado
+  const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
+  const proc=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
+  const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
+  if(charts.rEst){charts.rEst.destroy();charts.rEst=null;}
+  const elRE=document.getElementById('rChartEst');
+  if(elRE) charts.rEst=new Chart(elRE,{type:'doughnut',data:{labels:['Pendiente','En Proceso','Resuelto'],datasets:[{data:[pend,proc,res],backgroundColor:['#f97316','#3b82f6','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+  // Línea tendencia anual
+  const porAnio={};
+  datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
+  if(charts.rAnual){charts.rAnual.destroy();charts.rAnual=null;}
+  const elRA=document.getElementById('rChartAnual');
+  if(elRA){const anios=Object.keys(porAnio).sort();charts.rAnual=new Chart(elRA,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#d9292b',backgroundColor:'rgba(217,41,43,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
+  // Tabla resumen por año
+  const tbody=document.getElementById('tbResAnualBodyAdmin');
+  if(tbody){
+    const resAnio={};
+    datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(!y||y.length!==4) return;if(!resAnio[y]) resAnio[y]={total:0,pend:0,proc:0,res:0};resAnio[y].total++;const e=String(a.estado||'').toUpperCase();if(e==='PENDIENTE') resAnio[y].pend++;else if(e==='EN PROCESO') resAnio[y].proc++;else if(e==='RESUELTO') resAnio[y].res++;});
+    const aniosOrden=Object.keys(resAnio).sort().reverse();
+    tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total}</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].pend}</td><td style="padding:7px 10px;text-align:center;color:#3b82f6">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
+  }
 }
 
 // ============================================================
