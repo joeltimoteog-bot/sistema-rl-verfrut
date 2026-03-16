@@ -2767,6 +2767,9 @@ async function preloadData() {
       setTimeout(() => cargarEstadisticasAdmin(), 500);
     }
 
+    // Cargar historial completo para estadísticas por año (en segundo plano)
+    setTimeout(() => cargarHistorialCompleto(), 1000);
+
   } catch(e) {
     if(ind) ind.style.display='none';
     console.error('preloadData error:', e);
@@ -2824,7 +2827,8 @@ async function cargarStats() {
   } catch(e){ console.error('cargarStats excepción:', e); }
 }
 function dibujar(s) {
-  if (CACHE.atenciones) setTimeout(()=>dibujarEstadisticasDash(CACHE.atenciones),200);
+  const datosParaGraficar = CACHE.historialAtenciones || CACHE.atenciones || [];
+  if (datosParaGraficar.length) setTimeout(()=>dibujarEstadisticasDash(datosParaGraficar),200);
   // Destruir instancias previas
   ['m','e'].forEach(k => { if(charts[k]) { charts[k].destroy(); charts[k]=null; } });
 
@@ -4001,13 +4005,22 @@ function filtrarEstadisticasDash() {
 }
 
 async function cargarHistorialDash() {
+  await cargarHistorialCompleto();
+  filtrarEstadisticasDash();
+}
+
+async function cargarHistorialCompleto() {
+  if (CACHE.historialAtenciones) return; // ya cargado
   try {
-    const d = await apiGet({action:'getAtenciones', usuario:USER.usuario, rol:USER.rol, empresa:USER.empresa, historial:true});
+    const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+    const empresa = esAdmin ? '' : (USER.empresa || '');
+    const d = await apiGet({action:'getAtenciones', usuario:USER.usuario, rol:USER.rol, empresa, historial:true});
     if(d.success) {
       CACHE.historialAtenciones = d.data;
-      filtrarEstadisticasDash();
+      // Redibujar gráficos del dashboard con historial completo
+      dibujarEstadisticasDash(d.data);
     }
-  } catch(e) {}
+  } catch(e) { console.warn('historial error:', e); }
 }
 function dibujarEstadisticasDash(datos) {
   const labels=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
