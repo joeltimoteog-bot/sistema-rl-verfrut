@@ -191,7 +191,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       </div>
       <div style="background:#fff;border-radius:11px;border:1px solid var(--bd);padding:10px 16px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <span style="font-size:12px;font-weight:700;color:#0b1e45">📊 Filtrar:</span>
-        <select id="dFiltroAnio" onchange="filtrarEstadisticasDash()" style="padding:6px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+        <select id="dFiltroAnio" onchange="this.value && !CACHE.historialAtenciones ? cargarHistorialDash() : filtrarEstadisticasDash()" style="padding:6px 10px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
           <option value="">Todos los años</option>
           <option value="2025">2025</option>
           <option value="2026">2026</option>
@@ -3131,8 +3131,10 @@ async function consultarDNI() {
 // RESUMEN GENERAL
 async function cargarResumen() {
   const emp=v('rEmp'), mes=v('rMes'), anio=v('rAnio');
+  // Si hay año, enviar también al backend para filtrar
+  const params = {action:'getResumenGeneral', empresa:emp, mes, anio};
   try{
-    const d=await apiGet({action:'getResumenGeneral',empresa:emp,mes,anio});
+    const d=await apiGet(params);
     if(!d.success)return;
     resData=d.data.lista||[];
     // Poblar select supervisores
@@ -3991,15 +3993,33 @@ function generarHTMLInforme(d) {
 function filtrarEstadisticasDash() {
   const anio = document.getElementById('dFiltroAnio')?.value || '';
   const est  = document.getElementById('dFiltroEst')?.value || '';
-  let datos = CACHE.atenciones || [];
+  // Si hay año seleccionado y hay historial cargado, usarlo
+  let datos = CACHE.historialAtenciones || CACHE.atenciones || [];
   if (anio) datos = datos.filter(a => String(a.anio||a.fecha_atencion||'').substring(0,4) === anio);
   if (est)  datos = datos.filter(a => String(a.estado||'').toUpperCase() === est);
   dibujarEstadisticasDash(datos);
 }
+
+async function cargarHistorialDash() {
+  try {
+    const d = await apiGet({action:'getAtenciones', usuario:USER.usuario, rol:USER.rol, empresa:USER.empresa, historial:true});
+    if(d.success) {
+      CACHE.historialAtenciones = d.data;
+      filtrarEstadisticasDash();
+    }
+  } catch(e) {}
+}
 function dibujarEstadisticasDash(datos) {
   const labels=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const anioSel = document.getElementById('dFiltroAnio')?.value || '';
   const porMes={};
-  for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
+  if(anioSel) {
+    // Si hay año seleccionado, mostrar los 12 meses de ese año
+    for(let i=1;i<=12;i++) porMes[anioSel+'-'+String(i).padStart(2,'0')]=0;
+  } else {
+    // Si no hay año, mostrar últimos 6 meses
+    for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
+  }
   datos.forEach(a=>{const f=String(a.fecha_atencion||'').substring(0,7);if(porMes.hasOwnProperty(f)) porMes[f]++;});
   const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]);
   if(charts.m){charts.m.destroy();charts.m=null;}
@@ -4029,8 +4049,13 @@ function dibujarEstadisticasDash(datos) {
 // ============================================================
 function dibujarGraficosResumen(datos) {
   const labels=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const anioSel = v('rAnio') || '';
   const porMes={};
-  for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
+  if(anioSel) {
+    for(let i=1;i<=12;i++) porMes[anioSel+'-'+String(i).padStart(2,'0')]=0;
+  } else {
+    for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
+  }
   datos.forEach(a=>{const f=String(a.fecha_atencion||'').substring(0,7);if(porMes.hasOwnProperty(f)) porMes[f]++;});
   const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]);
   if(charts.rMes){charts.rMes.destroy();charts.rMes=null;}
