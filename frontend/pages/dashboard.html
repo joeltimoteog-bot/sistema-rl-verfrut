@@ -4182,7 +4182,12 @@ function exportarConsultaDNI() {
   exportarExcelGen(datos, [
     {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha'},
     {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},
-    {key:'empresa',label:'Empresa'},{key:'detalle_documento',label:'Documento'},
+    {key:'empresa',label:'Empresa'},{key:'fundo',label:'Fundo/Sector'},
+    {key:'detalle_documento',label:'Documento'},
+    {key:'fecha_inicio_doc',label:'F. Inicio Doc.'},
+    {key:'fecha_termino_doc',label:'F. Fin Doc.'},
+    {key:'dias_transcurridos',label:'Días'},
+    {key:'supervisor',label:'Supervisor'},
     {key:'estado',label:'Estado'},{key:'observaciones',label:'Observaciones'}
   ], 'ConsultaDNI');
 }
