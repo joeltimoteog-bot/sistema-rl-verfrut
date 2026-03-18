@@ -586,12 +586,16 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 
   <!-- TABLA -->
   <div class="card" style="padding:0;overflow:hidden">
-    <div style="padding:14px 16px;border-bottom:1px solid #f1f5f9;display:flex;gap:8px;flex-wrap:wrap">
-      <input class="fi" id="fFusionBuscar" placeholder="🔍 Buscar por sector, ruta..." style="flex:2;min-width:160px" oninput="filtrarFusiones()">
+    <div style="padding:14px 16px;border-bottom:1px solid #f1f5f9;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <select class="fi" id="fFusionSup" style="flex:1;min-width:160px" onchange="filtrarFusiones()">
+        <option value="">Todos los supervisores</option>
+      </select>
       <select class="fi" id="fFusionEstado" style="flex:1;min-width:120px" onchange="filtrarFusiones()">
         <option value="">Todos los estados</option>
         <option>Pendiente</option><option>Validado</option><option>Observado</option>
       </select>
+      <input class="fi" type="date" id="fFusionFechaDesde" onchange="filtrarFusiones()" style="flex:1;min-width:130px" title="Desde">
+      <input class="fi" type="date" id="fFusionFechaHasta" onchange="filtrarFusiones()" style="flex:1;min-width:130px" title="Hasta">
       <button class="btn-n" onclick="exportarFusiones()" style="background:#1a7f4b">📥 Excel</button>
     </div>
     <div style="overflow-x:auto">
@@ -1666,7 +1670,10 @@ async function guardarFusion() {
     const d = await apiPost(payload);
     if(d.success) {
       cerrar('mFusion');
-      cargarFusiones();
+      invalidarCache('fusiones');
+      delete CACHE.estadisticasAdmin;
+      await cargarFusiones(true);
+      cargarStats();
       alert('✅ Registro guardado. Fusión de ruta ' + rutaOrigen + ' (código ' + codOrigen + ') registrada. El administrador validará este registro.');
     } else {
       alert('❌ Error al guardar: ' + (d.error || d.message || 'Error desconocido'));
@@ -2015,9 +2022,12 @@ async function resolverSolicitud(fila, decision) {
   }
 }
 
-async function cargarFusiones() {
-  if (CACHE.fusiones) {
-    renderFusiones(CACHE.fusiones);
+async function cargarFusiones(forzar=false) {
+  if (!forzar && CACHE.fusiones) {
+    _fusionesData = CACHE.fusiones;
+    poblarSupFusiones(_fusionesData);
+    renderFusiones(_fusionesData);
+    actualizarStatsFusiones(_fusionesData);
     return;
   }
   document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
@@ -2025,12 +2035,22 @@ async function cargarFusiones() {
     const d = await apiGet({action:'getFusiones', usuario: ROLES_ADMIN.includes(USER.rol)||ROLES_ADMIN2.includes(USER.rol)?'TODOS':USER.nombre||USER.email});
     if(d.success && d.data) {
       _fusionesData = d.data;
+      CACHE.fusiones = d.data;
+      poblarSupFusiones(_fusionesData);
       renderFusiones(_fusionesData);
       actualizarStatsFusiones(_fusionesData);
     }
   } catch(e) {
     document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">❌ Error al cargar</td></tr>';
   }
+}
+
+function poblarSupFusiones(data) {
+  const sel = document.getElementById('fFusionSup');
+  if(!sel) return;
+  const sups = [...new Set(data.map(r=>r.supervisor).filter(Boolean))].sort();
+  while(sel.options.length > 1) sel.remove(1);
+  sups.forEach(s => { const o=document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o); });
 }
 
 function renderFusiones(data) {
@@ -2064,13 +2084,28 @@ function actualizarStatsFusiones(data) {
 }
 
 function filtrarFusiones() {
-  const q = document.getElementById('fFusionBuscar').value.toLowerCase();
-  const est = document.getElementById('fFusionEstado').value;
-  const fil = _fusionesData.filter(r =>
-    (!q || JSON.stringify(r).toLowerCase().includes(q)) &&
-    (!est || r.estado === est)
-  );
+  const sup      = document.getElementById('fFusionSup')?.value || '';
+  const est      = document.getElementById('fFusionEstado')?.value || '';
+  const desde    = document.getElementById('fFusionFechaDesde')?.value || '';
+  const hasta    = document.getElementById('fFusionFechaHasta')?.value || '';
+  const fil = _fusionesData.filter(r => {
+    if(sup  && String(r.supervisor||'') !== sup) return false;
+    if(est  && r.estado !== est) return false;
+    if(desde || hasta) {
+      // Normalizar fecha del registro (puede venir como Date o string)
+      let fStr = '';
+      if(r.fecha instanceof Date) {
+        fStr = r.fecha.toISOString().substring(0,10);
+      } else {
+        fStr = String(r.fecha||'').substring(0,10);
+      }
+      if(desde && fStr < desde) return false;
+      if(hasta && fStr > hasta) return false;
+    }
+    return true;
+  });
   window._fusFiltradas = fil;
+  actualizarStatsFusiones(fil);
   renderFusiones(fil);
 }
 
