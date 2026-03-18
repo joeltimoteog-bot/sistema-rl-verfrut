@@ -366,22 +366,15 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           </div>
           <div class="fc">
             <label>Para (destinatarios) *</label>
-            <div id="paraList" style="display:flex;flex-direction:column;gap:5px">
-              <div style="display:flex;gap:5px">
-                <select id="cPara" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
-                  <option value="">-- Seleccionar destinatario --</option>
-                  <option value="dreyna@verfrut.pe">dreyna@verfrut.pe</option>
-                  <option value="apacherre@verfrut.pe">apacherre@verfrut.pe</option>
-                  <option value="tvera@verfrut.pe">tvera@verfrut.pe</option>
-                  <option value="smiranda@verfrut.pe">smiranda@verfrut.pe</option>
-                  <option value="amarrufo@verfrut.pe">amarrufo@verfrut.pe</option>
-                  <option value="jmorales@verfrut.pe">jmorales@verfrut.pe</option>
-                </select>
-                <button type="button" onclick="agregarPara()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer">+ Agregar</button>
-              </div>
-              <div id="paraSeleccionados" style="display:flex;flex-wrap:wrap;gap:5px"></div>
-              <input type="text" id="cParaNuevo" placeholder="O escribe un correo nuevo..." style="padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+            <div style="background:#f8fafc;border:1.5px solid var(--bd);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px">
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="dreyna@verfrut.pe" class="chkPara"> dreyna@verfrut.pe</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="apacherre@verfrut.pe" class="chkPara"> apacherre@verfrut.pe</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="tvera@verfrut.pe" class="chkPara"> tvera@verfrut.pe</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="smiranda@verfrut.pe" class="chkPara"> smiranda@verfrut.pe</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="amarrufo@verfrut.pe" class="chkPara"> amarrufo@verfrut.pe</label>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="jmorales@verfrut.pe" class="chkPara"> jmorales@verfrut.pe</label>
             </div>
+            <input type="text" id="cParaNuevo" placeholder="O escribe un correo adicional..." style="margin-top:6px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;width:100%">
           </div>
           <div class="fc">
             <label>CC (con copia) — Se copiarán automáticamente a los coordinadores</label>
@@ -403,7 +396,6 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
             <div id="ccSeleccionados" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px"></div>
             <input type="text" id="cCCNuevo" placeholder="O escribe un correo adicional..." style="margin-top:5px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
           </div>
-        </div>
         <div style="margin-top:14px">
           <button class="btn-n" onclick="generarCorreo()" style="padding:10px 24px;font-size:12px">🔍 Generar Vista Previa</button>
         </div>
@@ -3234,7 +3226,7 @@ async function generarCorreo() {
   paraList=[]; ccList=[]; renderPara(); renderCC();
   document.getElementById('correoPreview').innerHTML='<div class="empty">⏳ Generando reporte...</div>';
   try{
-    const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:v('cEmp'),rol:USER.rol,usuario:USER.usuario});
+    const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:v('cEmp'),rol:USER.rol,usuario:USER.nombre||USER.usuario});
     if(!d.success){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ '+d.error+'</div>';return;}
     const hora=new Date().getHours();
     const saludo=hora<12?'Buenos días':hora<19?'Buenas tardes':'Buenas noches';
@@ -3479,14 +3471,15 @@ function quitarCC(i)   { ccList.splice(i,1);   renderCC(); }
 
 function getParaFinal() {
   const extra = v('cParaNuevo').trim();
-  const todos = [...paraList];
-  if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim()) todos.push(e.trim()); });
+  // Leer checkboxes marcados
+  const checks = Array.from(document.querySelectorAll('.chkPara:checked')).map(c=>c.value);
+  const todos = [...checks, ...paraList];
+  if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim() && !todos.includes(e.trim())) todos.push(e.trim()); });
   return todos.join('; ');
 }
 
 function getCCFinal() {
   const extra = v('cCCNuevo').trim();
-  // CC fijos siempre incluidos
   const CC_FIJOS = ['jtimoteo@verfrut.pe','jchavez@verfrut.pe','ovilela@verfrut.pe'];
   const todos = [...CC_FIJOS, ...ccList];
   if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim() && !todos.includes(e.trim())) todos.push(e.trim()); });
