@@ -3149,14 +3149,19 @@ async function consultarDNI() {
         </div>
         <div class="tw">
           <table><thead><tr>
-            <th>N°</th><th>Fecha</th><th>Empresa</th><th>Documento</th>
-            <th>Supervisor</th><th>Estado</th><th>Observaciones</th>
+            <th>N°</th><th>Fecha</th><th>Empresa</th><th>Fundo/Sector</th>
+            <th>Documento</th><th>F. Inicio Doc.</th><th>F. Fin Doc.</th>
+            <th>Días</th><th>Supervisor</th><th>Estado</th><th>Observaciones</th>
           </tr></thead>
           <tbody>${d.data.map(a=>`<tr>
             <td>${a.nro||''}</td>
             <td>${fmtF(a.fecha_atencion)}</td>
             <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
+            <td>${a.fundo||''}</td>
             <td>${a.detalle_documento||''}</td>
+            <td>${a.fecha_inicio_doc||''}</td>
+            <td>${a.fecha_termino_doc||''}</td>
+            <td style="text-align:center;font-weight:700">${a.dias_transcurridos||''}</td>
             <td>${a.supervisor||''}</td>
             <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
             <td>${a.observaciones||''}</td>
