@@ -366,34 +366,53 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           </div>
           <div class="fc">
             <label>Para (destinatarios) *</label>
-            <div id="paraCheckboxes" style="background:#f8fafc;border:1.5px solid var(--bd);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px"></div>
-            <input type="text" id="cParaNuevo" placeholder="O escribe un correo adicional..." style="margin-top:6px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;width:100%">
+            <div id="paraList" style="display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;gap:5px">
+                <select id="cPara" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+                  <option value="">-- Seleccionar destinatario --</option>
+                  <option><template class="__cf_email__" data-cfemail="244e474c4552415e64524156425651500a5441">[email&#160;protected]</template></option>
+                  <option><template class="__cf_email__" data-cfemail="0e617867626b626f4e786b7c687c7b7a207e6b">[email&#160;protected]</template></option>
+                  <option><template class="__cf_email__" data-cfemail="40243225392e2100362532263235346e3025">[email&#160;protected]</template></option>
+                  <option><template class="__cf_email__" data-cfemail="b1c5c7d4c3d0f1c7d4c3d7c3c4c59fc1d4">[email&#160;protected]</template></option>
+                  <option><template class="__cf_email__" data-cfemail="87ebeae8f5e6ebe2f4c7f1e2f5e1f5f2f3a9f7e2">[email&#160;protected]</template></option>
+                  <option><template class="__cf_email__" data-cfemail="cfa2a1aeb9aebdbda08fb9aabda9bdbabbe1bfaa">[email&#160;protected]</template></option>
+                  <option><template class="__cf_email__" data-cfemail="c9a8b9a8aaa1acbbbbac89bfacbbafbbbcbde7b9ac">[email&#160;protected]</template></option>
+                  <option><template class="__cf_email__" data-cfemail="4a242f393e382b2e2b0a3c2f382c383f3e643a2f">[email&#160;protected]</template></option>
+                  <option><template class="__cf_email__" data-cfemail="cda7b9a4a0a2b9a8a28dbba8bfabbfb8b9e3bda8">[email&#160;protected]</template></option>
+                  <option><template class="__cf_email__" data-cfemail="107a7675627e717e74756a50667562766265643e6075">[email&#160;protected]</template></option>
+                </select>
+                <button type="button" onclick="agregarPara()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer">+ Agregar</button>
+              </div>
+              <div id="paraSeleccionados" style="display:flex;flex-wrap:wrap;gap:5px"></div>
+              <input type="text" id="cParaNuevo" placeholder="O escribe un correo nuevo..." style="padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+            </div>
           </div>
           <div class="fc">
-            <label>CC (con copia) — Se copiarán automáticamente a los coordinadores</label>
-            <div style="background:#eff6ff;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e40af;margin-bottom:8px">
-              ✅ <strong>CC fijo:</strong> jtimoteo&#64;verfrut.pe · jchavez&#64;verfrut.pe · ovilela&#64;verfrut.pe</div>
+            <label>CC (con copia)</label>
             <div style="display:flex;gap:5px">
               <select id="cCC" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
-                <option value="">-- Agregar copia adicional --</option>
-                <option value="dreyna@verfrut.pe"><template class="__cf_email__" data-cfemail="8febfdeaf6e1eecff9eafde9fdfafba1ffea">[email&#160;protected]</template></option>
-                <option value="apacherre@verfrut.pe"><template class="__cf_email__" data-cfemail="65041504060d0017170025130017031710114b1500">[email&#160;protected]</template></option>
-                <option value="tvera@verfrut.pe"><template class="__cf_email__" data-cfemail="c6b2b0a3b4a786b0a3b4a0b4b3b2e8b6a3">[email&#160;protected]</template></option>
-                <option value="smiranda@verfrut.pe"><template class="__cf_email__" data-cfemail="a6d5cbcfd4c7c8c2c7e6d0c3d4c0d4d3d288d6c3">[email&#160;protected]</template></option>
-                <option value="amarrufo@verfrut.pe"><template class="__cf_email__" data-cfemail="0d6c606c7f7f786b624d7b687f6b7f7879237d68">[email&#160;protected]</template></option>
-                <option value="jmorales@verfrut.pe"><template class="__cf_email__" data-cfemail="2f4542405d4e434a5c6f594a5d495d5a5b015f4a">[email&#160;protected]</template></option>
+                <option value="">-- Seleccionar --</option>
+                <option><template class="__cf_email__" data-cfemail="5738213e3b323b361721322531252223792732">[email&#160;protected]</template></option>
+                <option><template class="__cf_email__" data-cfemail="e48e908d898b90818ba492819682969190ca9481">[email&#160;protected]</template></option>
+                <option><template class="__cf_email__" data-cfemail="274d444f4651425d6751425541555253095742">[email&#160;protected]</template></option>
+                <option><template class="__cf_email__" data-cfemail="81ede2eef7e4efe0f2c1f7e4f3e7f3f4f5aff1e4">[email&#160;protected]</template></option>
+                <option><template class="__cf_email__" data-cfemail="365b4659444259555744445344597640534450444342184653">[email&#160;protected]</template></option>
+                <option><template class="__cf_email__" data-cfemail="2c4d414d5e5e594a436c5a495e4a5e5958025c49">[email&#160;protected]</template></option>
+                <option><template class="__cf_email__" data-cfemail="305a5d5f42515c554370465542564245441e4055">[email&#160;protected]</template></option>
+                <option><template class="__cf_email__" data-cfemail="5b283632293a353f3a1b2d3e293d292e2f752b3e">[email&#160;protected]</template></option>
+                <option><template class="__cf_email__" data-cfemail="abc1d8c2cac5c8cad8ebc6c4d9cac7ced885dbce">[email&#160;protected]</template></option>
               </select>
               <button type="button" onclick="agregarCC()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer">+ Agregar</button>
             </div>
             <div id="ccSeleccionados" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px"></div>
-            <input type="text" id="cCCNuevo" placeholder="O escribe un correo adicional..." style="margin-top:5px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+            <input type="text" id="cCCNuevo" placeholder="O escribe un correo nuevo..." style="margin-top:5px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
           </div>
+        </div>
         <div style="margin-top:14px">
           <button class="btn-n" onclick="generarCorreo()" style="padding:10px 24px;font-size:12px">🔍 Generar Vista Previa</button>
         </div>
         <div id="correoPreview"></div>
       </div>
-    </div>
     </div>
 
 
@@ -855,6 +874,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       <button type="button" onclick="generarInformeVisita()" style="padding:9px 22px;background:var(--azul);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">📄 Generar Informe</button>
     </div>
   </div>
+</div>
 </div>
 
 <!-- MODAL VER INFORME VISITA -->
@@ -1348,7 +1368,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 </div>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
 <script>
 let USER={}, API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec', atTodas=[], resData=[], detNro='', modoEdicion=false;
 let CACHE = {};            // Cache global - datos precargados al login
@@ -2205,24 +2225,6 @@ function verInformeGuardado(idx) {
 const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 
 window.onload = async () => {
-  // Inicializar checkboxes de correo (evitar ofuscación de Cloudflare)
-  const paraDiv = document.getElementById('paraCheckboxes');
-  if(paraDiv) {
-    const correos = [
-      'dreyna' + '@' + 'verfrut.pe',
-      'apacherre' + '@' + 'verfrut.pe',
-      'tvera' + '@' + 'verfrut.pe',
-      'smiranda' + '@' + 'verfrut.pe',
-      'amarrufo' + '@' + 'verfrut.pe',
-      'jmorales' + '@' + 'verfrut.pe'
-    ];
-    correos.forEach(c => {
-      const lbl = document.createElement('label');
-      lbl.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer';
-      lbl.innerHTML = '<input type="checkbox" value="'+c+'" class="chkPara"> '+c;
-      paraDiv.appendChild(lbl);
-    });
-  }
   const ud = sessionStorage.getItem('user');
   // Siempre usar la URL del Apps Script — si sessionStorage está vacío, usar la URL hardcodeada
   API = sessionStorage.getItem('api') || API_URL_DEFAULT;
@@ -3147,19 +3149,14 @@ async function consultarDNI() {
         </div>
         <div class="tw">
           <table><thead><tr>
-            <th>N°</th><th>Fecha</th><th>Empresa</th><th>Fundo/Sector</th>
-            <th>Documento</th><th>F. Inicio Doc.</th><th>F. Fin Doc.</th>
-            <th>Días</th><th>Supervisor</th><th>Estado</th><th>Observaciones</th>
+            <th>N°</th><th>Fecha</th><th>Empresa</th><th>Documento</th>
+            <th>Supervisor</th><th>Estado</th><th>Observaciones</th>
           </tr></thead>
           <tbody>${d.data.map(a=>`<tr>
             <td>${a.nro||''}</td>
             <td>${fmtF(a.fecha_atencion)}</td>
             <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
-            <td>${a.fundo||''}</td>
             <td>${a.detalle_documento||''}</td>
-            <td>${a.fecha_inicio_doc||''}</td>
-            <td>${a.fecha_termino_doc||''}</td>
-            <td style="text-align:center;font-weight:700">${a.dias_transcurridos||''}</td>
             <td>${a.supervisor||''}</td>
             <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
             <td>${a.observaciones||''}</td>
@@ -3236,7 +3233,7 @@ async function generarCorreo() {
   paraList=[]; ccList=[]; renderPara(); renderCC();
   document.getElementById('correoPreview').innerHTML='<div class="empty">⏳ Generando reporte...</div>';
   try{
-    const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:v('cEmp'),rol:USER.rol,usuario:USER.nombre||USER.usuario});
+    const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:v('cEmp'),rol:USER.rol,usuario:USER.usuario});
     if(!d.success){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ '+d.error+'</div>';return;}
     const hora=new Date().getHours();
     const saludo=hora<12?'Buenos días':hora<19?'Buenas tardes':'Buenas noches';
@@ -3481,18 +3478,15 @@ function quitarCC(i)   { ccList.splice(i,1);   renderCC(); }
 
 function getParaFinal() {
   const extra = v('cParaNuevo').trim();
-  // Leer checkboxes marcados
-  const checks = Array.from(document.querySelectorAll('.chkPara:checked')).map(c=>c.value);
-  const todos = [...checks, ...paraList];
-  if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim() && !todos.includes(e.trim())) todos.push(e.trim()); });
+  const todos = [...paraList];
+  if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim()) todos.push(e.trim()); });
   return todos.join('; ');
 }
 
 function getCCFinal() {
   const extra = v('cCCNuevo').trim();
-  const CC_FIJOS = ['jtimoteo@verfrut.pe','jchavez@verfrut.pe','ovilela@verfrut.pe'];
-  const todos = [...CC_FIJOS, ...ccList];
-  if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim() && !todos.includes(e.trim())) todos.push(e.trim()); });
+  const todos = [...ccList];
+  if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim()) todos.push(e.trim()); });
   return todos.join('; ');
 }
 
@@ -3600,7 +3594,6 @@ function autoFillFundoReemplazo() {
 }
 
 function abrirNuevaVisita() {
-  try {
   // Reset form
   ['vDNI','vCorreo','vEmp','vFundo','vPunto','vFI','vFF',
    'vSemana','vAsunto','vDesarrollo','vRutas','vAcciones',
@@ -3637,7 +3630,6 @@ function abrirNuevaVisita() {
   document.getElementById('reemplazoDivVisita').style.display='none';
   document.getElementById('vFechaInforme').value = hoy();
   abrir('mVisita');
-  } catch(e) { console.error('abrirNuevaVisita:', e); abrir('mVisita'); }
 }
 
 function autoFillVisita() {
@@ -4190,12 +4182,7 @@ function exportarConsultaDNI() {
   exportarExcelGen(datos, [
     {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha'},
     {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},
-    {key:'empresa',label:'Empresa'},{key:'fundo',label:'Fundo/Sector'},
-    {key:'detalle_documento',label:'Documento'},
-    {key:'fecha_inicio_doc',label:'F. Inicio Doc.'},
-    {key:'fecha_termino_doc',label:'F. Fin Doc.'},
-    {key:'dias_transcurridos',label:'Días'},
-    {key:'supervisor',label:'Supervisor'},
+    {key:'empresa',label:'Empresa'},{key:'detalle_documento',label:'Documento'},
     {key:'estado',label:'Estado'},{key:'observaciones',label:'Observaciones'}
   ], 'ConsultaDNI');
 }
@@ -4223,5 +4210,16 @@ function exportarEstadisticasAdmin() {
   ], 'EstadisticasAdmin');
 }
 </script>
+<!-- BOTÓN FLOTANTE WHATSAPP -->
+<a href="https://wa.me/51994190769?text=Hola%20Joel%2C%20tengo%20una%20consulta%20sobre%20el%20Sistema%20RL%20v3.0" 
+   target="_blank" 
+   title="Consultas al Administrador"
+   style="position:fixed;bottom:24px;right:24px;z-index:9999;background:#25D366;color:#fff;border-radius:50%;width:56px;height:56px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(37,211,102,0.5);text-decoration:none;font-size:28px;transition:transform .2s"
+   onmouseover="this.style.transform='scale(1.15)'" 
+   onmouseout="this.style.transform='scale(1)'">
+  <svg viewBox="0 0 32 32" width="30" height="30" fill="#fff" xmlns="http://www.w3.org/2000/svg">
+    <path d="M16 2C8.28 2 2 8.28 2 16c0 2.46.67 4.88 1.93 6.98L2 30l7.24-1.9A13.93 13.93 0 0 0 16 30c7.72 0 14-6.28 14-14S23.72 2 16 2zm0 25.5a11.44 11.44 0 0 1-5.84-1.6l-.42-.25-4.3 1.13 1.15-4.18-.27-.43A11.5 11.5 0 1 1 16 27.5zm6.29-8.61c-.34-.17-2.02-1-2.34-1.11-.32-.11-.55-.17-.78.17-.23.34-.89 1.11-1.09 1.34-.2.23-.4.26-.74.09-.34-.17-1.44-.53-2.74-1.69-1.01-.9-1.69-2.01-1.89-2.35-.2-.34-.02-.52.15-.69.15-.15.34-.4.51-.6.17-.2.23-.34.34-.57.11-.23.06-.43-.03-.6-.09-.17-.78-1.88-1.07-2.57-.28-.67-.57-.58-.78-.59h-.66c-.23 0-.6.09-.91.43-.31.34-1.19 1.16-1.19 2.83s1.22 3.28 1.39 3.51c.17.23 2.4 3.67 5.82 5.14.81.35 1.44.56 1.93.72.81.26 1.55.22 2.13.13.65-.1 2.02-.83 2.3-1.62.29-.8.29-1.48.2-1.62-.08-.14-.31-.23-.65-.4z"/>
+  </svg>
+</a>
 </body>
 </html>
