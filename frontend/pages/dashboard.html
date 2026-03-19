@@ -366,21 +366,13 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           </div>
           <div class="fc">
             <label>Para (destinatarios) *</label>
-            <div style="background:#f8fafc;border:1.5px solid var(--bd);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px">
-              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="dreyna@verfrut.pe" class="chkPara"> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="c8acbaadb1a6a988beadbaaebabdbce6b8ad">[email&#160;protected]</a></label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="apacherre@verfrut.pe" class="chkPara"> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="16776677757e736464735660736470646362386673">[email&#160;protected]</a></label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="tvera@verfrut.pe" class="chkPara"> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="0b7f7d6e796a4b7d6e796d797e7f257b6e">[email&#160;protected]</a></label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="smiranda@verfrut.pe" class="chkPara"> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="6417090d16050a000524120116021611104a1401">[email&#160;protected]</a></label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="amarrufo@verfrut.pe" class="chkPara"> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="91f0fcf0e3e3e4f7fed1e7f4e3f7e3e4e5bfe1f4">[email&#160;protected]</a></label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer"><input type="checkbox" value="jmorales@verfrut.pe" class="chkPara"> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="781215170a19141d0b380e1d0a1e0a0d0c56081d">[email&#160;protected]</a></label>
-            </div>
+            <div id="paraCheckboxes" style="background:#f8fafc;border:1.5px solid var(--bd);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px"></div>
             <input type="text" id="cParaNuevo" placeholder="O escribe un correo adicional..." style="margin-top:6px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;width:100%">
           </div>
           <div class="fc">
             <label>CC (con copia) — Se copiarán automáticamente a los coordinadores</label>
             <div style="background:#eff6ff;border-radius:8px;padding:10px 12px;font-size:12px;color:#1e40af;margin-bottom:8px">
-              ✅ <strong>CC fijo:</strong> <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="c0aab4a9adafb4a5af80b6a5b2a6b2b5b4eeb0a5">[email&#160;protected]</a> · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="3258515a5344574872445740544047461c4257">[email&#160;protected]</a> · <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e18e97888d848d80a197849387939495cf9184">[email&#160;protected]</a>
-            </div>
+              ✅ <strong>CC fijo:</strong> jtimoteo&#64;verfrut.pe · jchavez&#64;verfrut.pe · ovilela&#64;verfrut.pe</div>
             <div style="display:flex;gap:5px">
               <select id="cCC" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
                 <option value="">-- Agregar copia adicional --</option>
@@ -2213,6 +2205,24 @@ function verInformeGuardado(idx) {
 const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 
 window.onload = async () => {
+  // Inicializar checkboxes de correo (evitar ofuscación de Cloudflare)
+  const paraDiv = document.getElementById('paraCheckboxes');
+  if(paraDiv) {
+    const correos = [
+      'dreyna' + '@' + 'verfrut.pe',
+      'apacherre' + '@' + 'verfrut.pe',
+      'tvera' + '@' + 'verfrut.pe',
+      'smiranda' + '@' + 'verfrut.pe',
+      'amarrufo' + '@' + 'verfrut.pe',
+      'jmorales' + '@' + 'verfrut.pe'
+    ];
+    correos.forEach(c => {
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer';
+      lbl.innerHTML = '<input type="checkbox" value="'+c+'" class="chkPara"> '+c;
+      paraDiv.appendChild(lbl);
+    });
+  }
   const ud = sessionStorage.getItem('user');
   // Siempre usar la URL del Apps Script — si sessionStorage está vacío, usar la URL hardcodeada
   API = sessionStorage.getItem('api') || API_URL_DEFAULT;
@@ -3590,6 +3600,7 @@ function autoFillFundoReemplazo() {
 }
 
 function abrirNuevaVisita() {
+  try {
   // Reset form
   ['vDNI','vCorreo','vEmp','vFundo','vPunto','vFI','vFF',
    'vSemana','vAsunto','vDesarrollo','vRutas','vAcciones',
@@ -3626,6 +3637,7 @@ function abrirNuevaVisita() {
   document.getElementById('reemplazoDivVisita').style.display='none';
   document.getElementById('vFechaInforme').value = hoy();
   abrir('mVisita');
+  } catch(e) { console.error('abrirNuevaVisita:', e); abrir('mVisita'); }
 }
 
 function autoFillVisita() {
