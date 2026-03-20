@@ -2631,7 +2631,7 @@ function renderAt(lista) {
   if(!lista.length){tb.innerHTML='<tr><td colspan="11" class="empty">No hay atenciones registradas</td></tr>';return;}
   const esSup = ROLES_SUP.includes(USER.rol);
   tb.innerHTML=lista.map(a=>{
-    const esDueno = a.supervisor===USER.usuario;
+    const esDueno = a.supervisor===(USER.nombre||USER.usuario) || a.supervisor===USER.usuario;
     const puedeMod = !esSup || esDueno;
     return `<tr>
       <td>${a.nro||''}</td>
@@ -2709,7 +2709,7 @@ async function guardarAt() {
     detalle_documento:v('at_doc'), fecha_inicio_doc:v('at_fid'),
     fecha_termino_doc:v('at_ftd'), dias_transcurridos:v('at_dias'),
     responsable_recepcion:v('at_resp'), observaciones:v('at_obs'),
-    estado:v('at_est'), supervisor:USER.usuario, usuario_sistema:USER.usuario
+    estado:v('at_est'), supervisor:USER.nombre||USER.usuario, usuario_sistema:USER.usuario
   };
   if(!d.dni||!d.nombre){alert('DNI y Nombre son obligatorios.');return;}
   try{
