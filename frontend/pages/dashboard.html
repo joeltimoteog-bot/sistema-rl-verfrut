@@ -1487,7 +1487,7 @@ function previsualizarFoto(input, prevId) {
 }
 
 function abrirNuevaFusion() {
-  try { limpiarFormFusion(); } catch(e) { console.error('limpiarFormFusion:', e); }
+  limpiarFormFusion();
   abrir('mFusion');
 }
 
@@ -2349,7 +2349,7 @@ let casosData  = [];
 let casosFotos = [];
 
 function abrirNuevoCaso() {
-  try { limpiarFormCaso(); } catch(e) { console.error('limpiarFormCaso:', e); }
+  limpiarFormCaso();
   abrir('mCaso');
 }
 
@@ -2903,8 +2903,8 @@ function dibujar(s) {
 
 // ATENCIONES
 async function cargarAtenciones(historial=false) {
-  // Usar cache si está disponible y tiene datos
-  if (!historial && CACHE.atenciones && CACHE.atenciones.length > 0) {
+  // Usar cache si está disponible (solo para carga normal, no historial)
+  if (!historial && CACHE.atenciones) {
     atTodas = CACHE.atenciones;
     renderAt(atTodas);
     return;
@@ -4145,7 +4145,7 @@ function dibujarEstadisticasDash(datos) {
   const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]);
   if(charts.m){charts.m.destroy();charts.m=null;}
   const elM=document.getElementById('cM');
-  if(elM) charts.m=new Chart(elM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#3b82f6',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}}});
+  if(elM) charts.m=new Chart(elM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#3b82f6',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{maxTicksLimit:8}}}}});
   const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
   const proc=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
   const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
