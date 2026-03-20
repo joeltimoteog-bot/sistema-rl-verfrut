@@ -2627,7 +2627,7 @@ async function cargarCasos() {
   const motivo  = document.getElementById('cFiltroMotivo')?.value || '';
   const sup     = document.getElementById('cFiltroSup')?.value || '';
   try {
-    const d = await apiGet({action:'getCasos', empresa, motivo, supervisor:sup,
+    const d = await apiGet({action:'getCasos', empresa, motivo, supervisor:sup, nombre:USER.nombre||USER.usuario,
                             usuario:USER.usuario, rol:USER.rol});
     casosData = d.data || [];
     renderTablaCasos(casosData);
@@ -2828,7 +2828,7 @@ async function refrescarEnBackground() {
   const rol     = USER.rol;
   const empresa = (ROLES_ADMIN.includes(rol) || ROLES_ADMIN2.includes(rol)) ? '' : (USER.empresa || '');
   try {
-    const d = await apiGet({ action:'getPreload', usuario:USER.usuario, rol, empresa });
+    const d = await apiGet({ action:'getPreload', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol, empresa });
     if (d.success) {
       CACHE = d.data;
       CACHE_TS = Date.now();
@@ -2849,7 +2849,7 @@ async function cargarStats() {
     // Fallback: llamada directa
     const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
     const empresa = esAdmin ? '' : (USER.empresa || '');
-    const d = await apiGet({action:'getEstadisticas', usuario:USER.usuario, rol:USER.rol, empresa});
+    const d = await apiGet({action:'getEstadisticas', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
     if (!d.success) { console.error('getEstadisticas error:', d.error); return; }
     const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
     set('sH', d.data.hoy); set('sM', d.data.mes); set('sA', d.data.anio); set('sP', d.data.pendientes);
@@ -2910,7 +2910,7 @@ async function cargarAtenciones(historial=false) {
     return;
   }
   try {
-    const d=await apiGet({action:'getAtenciones',usuario:USER.usuario,rol:USER.rol,empresa:USER.empresa});
+    const d=await apiGet({action:'getAtenciones',usuario:USER.usuario,nombre:USER.nombre||USER.usuario,rol:USER.rol,empresa:USER.empresa});
     if(d.success){atTodas=d.data;renderAt(atTodas);}
   } catch(e){document.getElementById('tbAt').innerHTML='<tr><td colspan="11" class="empty">❌ Error al cargar</td></tr>';}
 }
@@ -3234,7 +3234,7 @@ async function generarCorreo() {
   if(!para){alert('Agrega al menos un destinatario en Para');return;}
   document.getElementById('correoPreview').innerHTML='<div class="empty">⏳ Generando reporte...</div>';
   try{
-    const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:v('cEmp'),rol:USER.rol,usuario:USER.nombre||USER.usuario});
+    const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:v('cEmp'),rol:USER.rol,usuario:USER.nombre||USER.usuario,nombre:USER.nombre||USER.usuario});
     if(!d.success){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ '+d.error+'</div>';return;}
     if(!d.data||!d.data.length){
       document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
@@ -4122,7 +4122,7 @@ async function cargarHistorialCompleto() {
   try {
     const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
     const empresa = esAdmin ? '' : (USER.empresa || '');
-    const d = await apiGet({action:'getAtenciones', usuario:USER.usuario, rol:USER.rol, empresa, historial:true});
+    const d = await apiGet({action:'getAtenciones', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa, historial:true});
     if(d.success) {
       CACHE.historialAtenciones = d.data;
       // Redibujar gráficos del dashboard con historial completo
