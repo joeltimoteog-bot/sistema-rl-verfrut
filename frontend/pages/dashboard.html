@@ -1487,7 +1487,7 @@ function previsualizarFoto(input, prevId) {
 }
 
 function abrirNuevaFusion() {
-  limpiarFormFusion();
+  try { limpiarFormFusion(); } catch(e) { console.warn('limpiarFormFusion:', e); }
   abrir('mFusion');
 }
 
@@ -2349,7 +2349,7 @@ let casosData  = [];
 let casosFotos = [];
 
 function abrirNuevoCaso() {
-  limpiarFormCaso();
+  try { limpiarFormCaso(); } catch(e) { console.warn('limpiarFormCaso:', e); }
   abrir('mCaso');
 }
 
@@ -2903,8 +2903,9 @@ function dibujar(s) {
 
 // ATENCIONES
 async function cargarAtenciones(historial=false) {
-  // Usar cache si está disponible (solo para carga normal, no historial)
-  if (!historial && CACHE.atenciones) {
+  // Usar cache solo para admins (supervisores siempre van a la API para filtrar por nombre)
+  const esSup = ROLES_SUP.includes(USER.rol);
+  if (!historial && !esSup && CACHE.atenciones && CACHE.atenciones.length > 0) {
     atTodas = CACHE.atenciones;
     renderAt(atTodas);
     return;
