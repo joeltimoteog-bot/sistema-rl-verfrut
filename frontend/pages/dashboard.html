@@ -1928,6 +1928,11 @@ function verInformeGuardado(idx) {
 const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 
 window.onload = async () => {
+  // Mover modales al body para evitar problemas con position:fixed en contenedores con transform
+  ['mCaso','mFusion','mVisita'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el && el.parentElement !== document.body) document.body.appendChild(el);
+  });
   const ud = sessionStorage.getItem('user');
   // Siempre usar la URL del Apps Script — si sessionStorage está vacío, usar la URL hardcodeada
   API = sessionStorage.getItem('api') || API_URL_DEFAULT;
@@ -2611,8 +2616,9 @@ function dibujar(s) {
 
 // ATENCIONES
 async function cargarAtenciones(historial=false) {
-  // Usar cache si está disponible (solo para carga normal, no historial)
-  if (!historial && CACHE.atenciones) {
+  // Supervisores siempre van a la API; admins pueden usar cache
+  const esSup = ROLES_SUP.includes(USER.rol);
+  if (!historial && !esSup && CACHE.atenciones && CACHE.atenciones.length > 0) {
     atTodas = CACHE.atenciones;
     renderAt(atTodas);
     return;
