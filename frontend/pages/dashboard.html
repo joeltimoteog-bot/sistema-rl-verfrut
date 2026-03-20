@@ -2720,7 +2720,10 @@ async function guardarAt() {
       r=await apiPost({action:'saveAtencion',...d});
     }
     if(r.success){
-      cerrar('mAt');await cargarAtenciones();await cargarStats();
+      cerrar('mAt');
+      invalidarCache('atenciones');
+      await cargarAtenciones();
+      await cargarStats();
       alert(modoEdicion?'✅ Atención actualizada':'✅ Atención registrada N°: '+r.nro);
     }else alert('Error: '+(r.error||'Desconocido'));
   }catch(e){alert('Error de conexión');}
