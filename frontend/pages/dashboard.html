@@ -1063,10 +1063,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     </div>
   </div>
 </div>
-
-
-
-
+</div>
 
 <!-- MODAL FUSIÓN DE BUSES -->
 
@@ -2616,8 +2613,9 @@ function dibujar(s) {
 
 // ATENCIONES
 async function cargarAtenciones(historial=false) {
-  // Usar cache si está disponible (solo para carga normal, no historial)
-  if (!historial && CACHE.atenciones) {
+  // Supervisores siempre a la API; admins pueden usar cache
+  const esSup = ROLES_SUP.includes(USER.rol);
+  if (!historial && !esSup && CACHE.atenciones && CACHE.atenciones.length > 0) {
     atTodas = CACHE.atenciones;
     renderAt(atTodas);
     return;
