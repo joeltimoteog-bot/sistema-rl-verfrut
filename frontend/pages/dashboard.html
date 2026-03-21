@@ -2952,6 +2952,10 @@ async function generarCorreo() {
               <th style="padding:6px 8px">Nombre</th>
               <th style="padding:6px 8px">Empresa</th>
               <th style="padding:6px 8px">Documento</th>
+              <th style="padding:6px 8px">F. Inicio Doc.</th>
+              <th style="padding:6px 8px">F. Fin Doc.</th>
+              <th style="padding:6px 8px">Días</th>
+              <th style="padding:6px 8px">Observaciones</th>
               <th style="padding:6px 8px">Supervisor</th>
               <th style="padding:6px 8px">Estado</th>
             </tr></thead><tbody>
@@ -2962,6 +2966,10 @@ async function generarCorreo() {
               <td style="padding:5px 8px">${a.nombre||''}</td>
               <td style="padding:5px 8px">${a.empresa||''}</td>
               <td style="padding:5px 8px">${a.detalle_documento||''}</td>
+              <td style="padding:5px 8px">${fmtF(a.fecha_inicio_doc)||''}</td>
+              <td style="padding:5px 8px">${fmtF(a.fecha_termino_doc)||''}</td>
+              <td style="padding:5px 8px;text-align:center">${a.dias_transcurridos||''}</td>
+              <td style="padding:5px 8px">${a.observaciones||''}</td>
               <td style="padding:5px 8px">${a.supervisor||''}</td>
               <td style="padding:5px 8px"><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
             </tr>`).join('')}
