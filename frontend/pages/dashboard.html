@@ -2181,20 +2181,22 @@ async function subirArchivoDrive(fileInput, nombreCampo) {
         const res = await apiPost({
           action: 'subirArchivo',
           nombre: file.name,
-          tipo: file.type,
-          datos: base64
+          mimeType: file.type,
+          base64
         });
         if(res.success) {
           if(msgEl) msgEl.textContent = '✅ '+file.name;
           if(msgEl) msgEl.style.color='#16a34a';
           resolve({ nombre: file.name, enlace: res.enlace });
         } else {
-          if(msgEl) msgEl.textContent = '❌ Error al subir';
+          if(msgEl) msgEl.textContent = '❌ '+(res.error||'Error al subir');
           if(msgEl) msgEl.style.color='#dc2626';
+          console.error('[subirArchivoDrive] fallo servidor:', res);
           resolve(null);
         }
       } catch(err) {
         if(msgEl) msgEl.textContent = '❌ '+err.message;
+        console.error('[subirArchivoDrive] excepción:', err);
         resolve(null);
       }
     };
