@@ -1390,7 +1390,11 @@ async function guardarFusion() {
 
 // ══════════════════ ESTADÍSTICAS ADMIN ══════════════════
 
+let _estTimer = null;
 async function cargarEstadisticasAdmin() {
+  // Debounce: evita múltiples renders al cambiar filtros rápido
+  clearTimeout(_estTimer);
+  await new Promise(r => { _estTimer = setTimeout(r, 200); });
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   if (!esAdmin) return;
 
@@ -1577,29 +1581,8 @@ function renderVisitas(data) {
     return;
   }
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-  tb.innerHTML = data.map((v, i) => {
-    const estado = (v.estado || 'EN PLAZO').toUpperCase();
-    const colorEstado = estado.includes('RETRAS') ? '#dc2626' : estado.includes('PLAZO') ? '#16a34a' : '#64748b';
-    // Botón Ver siempre disponible si hay datos suficientes
-    const btnVer = `<button onclick="verInformeGuardado(${i})"
-      style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">📄 Ver</button>`;
-    const supCol = esAdmin ? `<td>${v.supervisor||'—'}</td>` : '';
-    return `<tr>
-      <td>${i+1}</td>
-      <td>${v.fecha_reg||v.fecha||'—'}</td>
-      <td><span style="font-size:10px;background:${v.empresa==='RAPEL'?'#dbeafe':'#fce7f3'};padding:2px 7px;border-radius:10px">${v.empresa||'—'}</span></td>
-      ${supCol}
-      <td>${v.sector||v.fundo||'—'}</td>
-      <td>${v.semana||'—'}</td>
-      <td><span style="font-size:10px;font-weight:700;color:${colorEstado}">${estado}</span></td>
-      <td>${btnVer}</td>
-    </tr>`;
-  }).join('');
-
-  // Guardar data para verInformeGuardado
+  // Efectos secundarios inmediatos (no dependen del render del tbody)
   window._visitasData = data;
-
-  // Ajustar columnas según rol
   const thead = document.querySelector('#sec-visitas .tbl thead tr');
   if(thead) {
     if(esAdmin && thead.children.length === 7) {
@@ -1610,6 +1593,26 @@ function renderVisitas(data) {
       thead.children[3].remove();
     }
   }
+  tb.innerHTML = '<tr><td colspan="8" class="empty">⏳ Cargando tabla...</td></tr>';
+  setTimeout(() => {
+    tb.innerHTML = data.map((v, i) => {
+      const estado = (v.estado || 'EN PLAZO').toUpperCase();
+      const colorEstado = estado.includes('RETRAS') ? '#dc2626' : estado.includes('PLAZO') ? '#16a34a' : '#64748b';
+      const btnVer = `<button onclick="verInformeGuardado(${i})"
+        style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">📄 Ver</button>`;
+      const supCol = esAdmin ? `<td>${v.supervisor||'—'}</td>` : '';
+      return `<tr>
+        <td>${i+1}</td>
+        <td>${v.fecha_reg||v.fecha||'—'}</td>
+        <td><span style="font-size:10px;background:${v.empresa==='RAPEL'?'#dbeafe':'#fce7f3'};padding:2px 7px;border-radius:10px">${v.empresa||'—'}</span></td>
+        ${supCol}
+        <td>${v.sector||v.fundo||'—'}</td>
+        <td>${v.semana||'—'}</td>
+        <td><span style="font-size:10px;font-weight:700;color:${colorEstado}">${estado}</span></td>
+        <td>${btnVer}</td>
+      </tr>`;
+    }).join('');
+  }, 0);
 }
 
 function actualizarStatsVisitas(data) {
@@ -1758,7 +1761,8 @@ function poblarSupFusiones(data) {
 function renderFusiones(data) {
   const tb = document.getElementById('tbFusiones');
   if(!data.length){ tb.innerHTML='<tr><td colspan="9" class="empty">Sin registros</td></tr>'; return; }
-  tb.innerHTML = data.map((r,i) => {
+  tb.innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando tabla...</td></tr>';
+  setTimeout(() => { tb.innerHTML = data.map((r,i) => {
     const estColor = r.estado==='Validado'?'#16a34a':r.estado==='Observado'?'#dc2626':'#f59e0b';
     const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
     return `<tr>
@@ -1774,7 +1778,7 @@ function renderFusiones(data) {
         ${fotos.length ? '<button onclick="verFotosFusion('+i+')" style="background:#e0e7ff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px">📷 '+fotos.length+'</button>' : ''}
       </td>
     </tr>`;
-  }).join('');
+  }).join(''); }, 0);
 }
 
 function actualizarStatsFusiones(data) {
@@ -2312,23 +2316,26 @@ function renderTablaCasos(data) {
   const tb = document.getElementById('tbCasos');
   if(!data.length) { tb.innerHTML='<tr><td colspan="9" class="empty">No hay registros</td></tr>'; return; }
   const esAdmin = USER.rol==='administrador';
-  tb.innerHTML = data.map((c,i) => `
-    <tr>
-      <td>${i+1}</td>
-      <td>${fmtF(c.fecha_reporte)}</td>
-      <td><span class="tag tag-${c.empresa==='RAPEL'?'az':'ro'}">${c.empresa}</span></td>
-      <td style="font-size:11px">${c.nombre}</td>
-      <td style="font-size:11px">${c.motivo}</td>
-      <td style="font-size:11px">${c.supervisor}</td>
-      <td><span class="tag ${c.estado==='EN PLAZO'?'tag-gr':'tag-ro'}">${c.estado||'—'}</span></td>
-      <td style="font-weight:700;color:${c.estado==='EN PLAZO'?'#16a34a':'#dc2626'}">${c.porcentaje}%</td>
-      <td style="display:flex;gap:4px;flex-wrap:wrap">
-        <button class="btn-a" style="font-size:10px" onclick="verDetalleCaso(${i})">👁️ Ver</button>
-        ${c.enlace_informe ? `<a href="${c.enlace_informe}" target="_blank" class="btn-n" style="font-size:10px;padding:4px 8px;text-decoration:none">📄 Informe</a>` : ''}
-        ${c.enlace_reporte ? `<a href="${c.enlace_reporte}" target="_blank" class="btn-s" style="font-size:10px;padding:4px 8px;text-decoration:none">📋 Reporte</a>` : ''}
-      </td>
-    </tr>
-  `).join('');
+  tb.innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando tabla...</td></tr>';
+  setTimeout(() => {
+    tb.innerHTML = data.map((c,i) => `
+      <tr>
+        <td>${i+1}</td>
+        <td>${fmtF(c.fecha_reporte)}</td>
+        <td><span class="tag tag-${c.empresa==='RAPEL'?'az':'ro'}">${c.empresa}</span></td>
+        <td style="font-size:11px">${c.nombre}</td>
+        <td style="font-size:11px">${c.motivo}</td>
+        <td style="font-size:11px">${c.supervisor}</td>
+        <td><span class="tag ${c.estado==='EN PLAZO'?'tag-gr':'tag-ro'}">${c.estado||'—'}</span></td>
+        <td style="font-weight:700;color:${c.estado==='EN PLAZO'?'#16a34a':'#dc2626'}">${c.porcentaje}%</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="btn-a" style="font-size:10px" onclick="verDetalleCaso(${i})">👁️ Ver</button>
+          ${c.enlace_informe ? `<a href="${c.enlace_informe}" target="_blank" class="btn-n" style="font-size:10px;padding:4px 8px;text-decoration:none">📄 Informe</a>` : ''}
+          ${c.enlace_reporte ? `<a href="${c.enlace_reporte}" target="_blank" class="btn-s" style="font-size:10px;padding:4px 8px;text-decoration:none">📋 Reporte</a>` : ''}
+        </td>
+      </tr>
+    `).join('');
+  }, 0);
 }
 
 function actualizarStatsCasos(data) {
@@ -2465,9 +2472,6 @@ async function preloadData() {
       setTimeout(() => cargarEstadisticasAdmin(), 500);
     }
 
-    // Cargar historial completo para estadísticas por año (en segundo plano)
-    setTimeout(() => cargarHistorialCompleto(), 1000);
-
   } catch(e) {
     if(ind) ind.style.display='none';
     console.error('preloadData error:', e);
@@ -2526,8 +2530,12 @@ async function cargarStats() {
 }
 function dibujar(s) {
   const datosParaGraficar = CACHE.historialAtenciones || CACHE.atenciones || [];
-  if (datosParaGraficar.length) setTimeout(()=>dibujarEstadisticasDash(datosParaGraficar),200);
-  // Destruir instancias previas
+  if (datosParaGraficar.length) {
+    // Diferir para no bloquear; dibujarEstadisticasDash recrea charts.m y charts.e
+    setTimeout(() => dibujarEstadisticasDash(datosParaGraficar), 0);
+    return; // evita crear los charts dos veces
+  }
+  // Fallback: sin datos en cache, usar estadísticas básicas del preload
   ['m','e'].forEach(k => { if(charts[k]) { charts[k].destroy(); charts[k]=null; } });
 
   const elM = document.getElementById('cM');
@@ -2587,27 +2595,30 @@ function renderAt(lista) {
   const tb=document.getElementById('tbAt');
   if(!lista.length){tb.innerHTML='<tr><td colspan="11" class="empty">No hay atenciones registradas</td></tr>';return;}
   const esSup = ROLES_SUP.includes(USER.rol);
-  tb.innerHTML=lista.map(a=>{
-    const esDueno = a.supervisor===(USER.nombre||USER.usuario) || a.supervisor===USER.usuario;
-    const puedeMod = !esSup || esDueno;
-    return `<tr>
-      <td>${a.nro||''}</td>
-      <td>${fmtF(a.fecha_atencion)}</td>
-      <td>${a.hora_inicio||''}</td>
-      <td>${a.hora_termino||''}</td>
-      <td><strong>${a.dni||''}</strong></td>
-      <td>${a.nombre||''}</td>
-      <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
-      <td>${a.fundo||''}</td>
-      <td>${a.detalle_documento||''}</td>
-      <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
-      <td>
-        <button class="btn-a bv" onclick="verDet('${a.nro}','at')">Ver</button>
-        ${puedeMod?`<button class="btn-a be" onclick="editarAt('${a.nro}')">✏️</button>`:''}
-        ${puedeMod?`<button class="btn-a bd" onclick="eliminarAt('${a.nro}')">🗑️</button>`:''}
-      </td>
-    </tr>`;
-  }).join('');
+  tb.innerHTML = '<tr><td colspan="11" class="empty">⏳ Cargando tabla...</td></tr>';
+  setTimeout(() => {
+    tb.innerHTML=lista.map(a=>{
+      const esDueno = a.supervisor===(USER.nombre||USER.usuario) || a.supervisor===USER.usuario;
+      const puedeMod = !esSup || esDueno;
+      return `<tr>
+        <td>${a.nro||''}</td>
+        <td>${fmtF(a.fecha_atencion)}</td>
+        <td>${a.hora_inicio||''}</td>
+        <td>${a.hora_termino||''}</td>
+        <td><strong>${a.dni||''}</strong></td>
+        <td>${a.nombre||''}</td>
+        <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
+        <td>${a.fundo||''}</td>
+        <td>${a.detalle_documento||''}</td>
+        <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
+        <td>
+          <button class="btn-a bv" onclick="verDet('${a.nro}','at')">Ver</button>
+          ${puedeMod?`<button class="btn-a be" onclick="editarAt('${a.nro}')">✏️</button>`:''}
+          ${puedeMod?`<button class="btn-a bd" onclick="eliminarAt('${a.nro}')">🗑️</button>`:''}
+        </td>
+      </tr>`;
+    }).join('');
+  }, 0);
 }
 
 function filtrarAt() {
@@ -3258,20 +3269,25 @@ function ir(id,btn){
   const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS',fusiones:'FUSIONES DE BUSES',estadisticas:'ESTADÍSTICAS ADMIN',casos:'REGISTRO DE CASOS'};
   const tbT=document.getElementById('tbT');
   if(tbT) tbT.textContent=ts[id]||id.toUpperCase();
-  if(id==='resumen'      && !resData.length)           cargarResumen();
-  if(id==='usuarios')                                   cargarUs();
-  if(id==='atenciones'   && atTodas.length===0)         cargarAtenciones();
-  if(id==='visitas'      && !visitasData.length)        cargarVisitas();
-  if(id==='solicitudes'  && !CACHE.solicitudes)         cargarSolicitudes();
-  if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
-  if(id==='estadisticas' && !CACHE.estadisticasAdmin)   cargarEstadisticasAdmin();
-  if(id==='casos'        && !casosData.length)          cargarCasos();
+  // Diferir carga al siguiente tick para que el navegador pinte la sección antes de bloquear
+  setTimeout(() => {
+    if(id==='resumen'      && !resData.length)           cargarResumen();
+    if(id==='usuarios')                                   cargarUs();
+    if(id==='atenciones'   && atTodas.length===0)         cargarAtenciones();
+    if(id==='visitas'      && !visitasData.length)        cargarVisitas();
+    if(id==='solicitudes'  && !CACHE.solicitudes)         cargarSolicitudes();
+    if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
+    if(id==='estadisticas' && !CACHE.estadisticasAdmin)   cargarEstadisticasAdmin();
+    if(id==='casos'        && !casosData.length)          cargarCasos();
+  }, 0);
   // Redibujar gráficos al volver al dashboard
   if(id==='dashboard') {
     setTimeout(() => {
       if(charts.m) { charts.m.resize(); }
       if(charts.e) { charts.e.resize(); }
       if(!charts.m && typeof cargarStats === 'function') cargarStats();
+      // Cargar historial completo de forma diferida (solo si aún no está en cache)
+      if(!CACHE.historialAtenciones) cargarHistorialCompleto();
     }, 50);
     // Si el cache es viejo (>5 min), refrescar en background silenciosamente
     if (Date.now() - CACHE_TS > CACHE_TTL) {
