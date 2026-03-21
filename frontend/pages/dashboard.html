@@ -1552,6 +1552,7 @@ async function cargarVisitas() {
     const d = await apiGet(params);
     if (d.success && d.data) {
       visitasData = d.data;
+      CACHE.visitas = d.data;
       renderVisitas(visitasData);
       // Stats solo admin
       const statsEl = document.getElementById('statsVisitas');
@@ -1655,6 +1656,7 @@ async function cargarSolicitudes() {
           (s.supervisor||'').toLowerCase().includes((USER.nombre||USER.usuario||'').toLowerCase())
         );
       }
+      CACHE.solicitudes = lista;
       renderSolicitudes(lista);
     } else {
       if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error al cargar</td></tr>';
@@ -2295,6 +2297,7 @@ async function cargarCasos() {
     const d = await apiGet({action:'getCasos', empresa, motivo, supervisor:sup, nombre:USER.nombre||USER.usuario,
                             usuario:USER.usuario, rol:USER.rol});
     casosData = d.data || [];
+    CACHE.casos = casosData;
     renderTablaCasos(casosData);
     if(USER.rol==='administrador') {
       document.getElementById('statsCasos').style.display='block';
@@ -2568,9 +2571,8 @@ function dibujar(s) {
 
 // ATENCIONES
 async function cargarAtenciones(historial=false) {
-  // Supervisores siempre a la API; admins pueden usar cache
   const esSup = ROLES_SUP.includes(USER.rol);
-  if (!historial && !esSup && CACHE.atenciones && CACHE.atenciones.length > 0) {
+  if (!historial && CACHE.atenciones && CACHE.atenciones.length > 0) {
     atTodas = CACHE.atenciones;
     renderAt(atTodas);
     return;
@@ -2844,6 +2846,7 @@ async function cargarResumen() {
   try{
     const d=await apiGet(params);
     if(!d.success)return;
+    CACHE.resumen=d.data;
     resData=d.data.lista||[];
     // Poblar select supervisores
     const supSel=document.getElementById('rFiltroSup');
@@ -3247,14 +3250,14 @@ function ir(id,btn){
   const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS',fusiones:'FUSIONES DE BUSES',estadisticas:'ESTADÍSTICAS ADMIN',casos:'REGISTRO DE CASOS'};
   const tbT=document.getElementById('tbT');
   if(tbT) tbT.textContent=ts[id]||id.toUpperCase();
-  if(id==='resumen')   cargarResumen();
-  if(id==='usuarios')  cargarUs();
-  if(id==='atenciones' && atTodas.length===0) cargarAtenciones();
-  if(id==='visitas')   cargarVisitas();
-  if(id==='solicitudes') cargarSolicitudes();
-  if(id==='fusiones')  cargarFusiones();
-  if(id==='estadisticas') cargarEstadisticasAdmin();
-  if(id==='casos')     cargarCasos();
+  if(id==='resumen'      && !resData.length)           cargarResumen();
+  if(id==='usuarios')                                   cargarUs();
+  if(id==='atenciones'   && atTodas.length===0)         cargarAtenciones();
+  if(id==='visitas'      && !visitasData.length)        cargarVisitas();
+  if(id==='solicitudes'  && !CACHE.solicitudes)         cargarSolicitudes();
+  if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
+  if(id==='estadisticas' && !CACHE.estadisticasAdmin)   cargarEstadisticasAdmin();
+  if(id==='casos'        && !casosData.length)          cargarCasos();
   // Redibujar gráficos al volver al dashboard
   if(id==='dashboard') {
     setTimeout(() => {
