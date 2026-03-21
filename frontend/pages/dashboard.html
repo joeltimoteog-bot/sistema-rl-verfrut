@@ -1951,12 +1951,14 @@ function mostrarModalFundo() {
     opciones = ['El Papayo','Limones','Olivares Bajo','Los Olivares','Santa Rosa','Algarrobos','San Vicente','Punta Arenas','Aproa','Planta Rapel'];
   }
   const sel = document.getElementById('fundoSelect');
-  sel.innerHTML = opciones.map(f=>`<option value="${f}">${f}</option>`).join('');
+  if(sel) sel.innerHTML = opciones.map(f=>`<option value="${f}">${f}</option>`).join('');
   const msg = document.getElementById('fundoMsg');
-  if (usuario === 'mmechato') {
-    msg.innerHTML = `<strong>${USER.nombre}</strong>, eres supervisora de reemplazo.<br>¿A qué fundo estás asignada hoy?`;
-  } else {
-    msg.innerHTML = `<strong>${USER.nombre}</strong>, tienes asignados varios fundos.<br>¿En qué fundo trabajas hoy?`;
+  if(msg) {
+    if (usuario === 'mmechato') {
+      msg.innerHTML = `<strong>${USER.nombre}</strong>, eres supervisora de reemplazo.<br>¿A qué fundo estás asignada hoy?`;
+    } else {
+      msg.innerHTML = `<strong>${USER.nombre}</strong>, tienes asignados varios fundos.<br>¿En qué fundo trabajas hoy?`;
+    }
   }
   abrir('mFundo');
 }
