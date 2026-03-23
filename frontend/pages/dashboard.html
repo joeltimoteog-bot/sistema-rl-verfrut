@@ -1730,9 +1730,11 @@ async function resolverSolicitud(fila, decision) {
 async function cargarFusiones(forzar=false) {
   if (!forzar && CACHE.fusiones) {
     _fusionesData = CACHE.fusiones;
-    poblarSupFusiones(_fusionesData);
     renderFusiones(_fusionesData);
-    actualizarStatsFusiones(_fusionesData);
+    setTimeout(() => {
+      poblarSupFusiones(_fusionesData);
+      actualizarStatsFusiones(_fusionesData);
+    }, 0);
     return;
   }
   document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
@@ -1741,9 +1743,11 @@ async function cargarFusiones(forzar=false) {
     if(d.success && d.data) {
       _fusionesData = d.data;
       CACHE.fusiones = d.data;
-      poblarSupFusiones(_fusionesData);
       renderFusiones(_fusionesData);
-      actualizarStatsFusiones(_fusionesData);
+      setTimeout(() => {
+        poblarSupFusiones(_fusionesData);
+        actualizarStatsFusiones(_fusionesData);
+      }, 0);
     }
   } catch(e) {
     document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">❌ Error al cargar</td></tr>';
@@ -2303,7 +2307,7 @@ async function cargarCasos() {
     if(USER.rol==='administrador') {
       const sc = document.getElementById('statsCasos');
       if(sc) sc.style.display='block';
-      actualizarStatsCasos(casosData);
+      setTimeout(() => actualizarStatsCasos(casosData), 0);
     }
     return;
   }
@@ -2318,7 +2322,7 @@ async function cargarCasos() {
     renderTablaCasos(casosData);
     if(USER.rol==='administrador') {
       document.getElementById('statsCasos').style.display='block';
-      actualizarStatsCasos(casosData);
+      setTimeout(() => actualizarStatsCasos(casosData), 0);
     }
   } catch(e) {
     document.getElementById('tbCasos').innerHTML='<tr><td colspan="9" class="empty">Error cargando casos</td></tr>';
@@ -2592,7 +2596,6 @@ function dibujar(s) {
 
 // ATENCIONES
 async function cargarAtenciones(historial=false) {
-  const esSup = ROLES_SUP.includes(USER.rol);
   if (!historial && CACHE.atenciones && CACHE.atenciones.length > 0) {
     atTodas = CACHE.atenciones;
     renderAt(atTodas);
@@ -3273,40 +3276,41 @@ function ir(id,btn){
   const ov=document.getElementById('overlaySb');
   if(sb) sb.classList.remove('open');
   if(ov) ov.classList.remove('on');
-  // Cambiar sección
-  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
-  document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
-  const sec=document.getElementById('sec-'+id);
-  if(sec) sec.classList.add('on');
-  if(btn) btn.classList.add('on');
-  const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS',fusiones:'FUSIONES DE BUSES',estadisticas:'ESTADÍSTICAS ADMIN',casos:'REGISTRO DE CASOS'};
-  const tbT=document.getElementById('tbT');
-  if(tbT) tbT.textContent=ts[id]||id.toUpperCase();
-  // Diferir carga al siguiente tick para que el navegador pinte la sección antes de bloquear
-  setTimeout(() => {
-    if(id==='resumen'      && !resData.length)           cargarResumen();
-    if(id==='usuarios')                                   cargarUs();
-    if(id==='atenciones'   && atTodas.length===0)         cargarAtenciones();
-    if(id==='visitas'      && !visitasData.length)        cargarVisitas();
-    if(id==='solicitudes'  && !CACHE.solicitudes)         cargarSolicitudes();
-    if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
-    if(id==='estadisticas' && !CACHE.estadisticasAdmin)   cargarEstadisticasAdmin();
-    if(id==='casos'        && !casosData.length)          cargarCasos();
-  }, 0);
-  // Redibujar gráficos al volver al dashboard
-  if(id==='dashboard') {
+  // Cambiar sección en el siguiente frame — el navegador pinta el clic antes de procesar
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
+    document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
+    const sec=document.getElementById('sec-'+id);
+    if(sec) sec.classList.add('on');
+    if(btn) btn.classList.add('on');
+    const ts={dashboard:'MI DASHBOARD',atenciones:'MIS ATENCIONES',trabajadores:'BUSCAR TRABAJADOR',visitas:'VISITAS DE CAMPO',solicitudes:'SOLICITUDES DE EDICIÓN',consulta:'CONSULTA POR DNI',resumen:'RESUMEN GENERAL',correo:'ENVIAR REPORTE',usuarios:'GESTIÓN USUARIOS',fusiones:'FUSIONES DE BUSES',estadisticas:'ESTADÍSTICAS ADMIN',casos:'REGISTRO DE CASOS'};
+    const tbT=document.getElementById('tbT');
+    if(tbT) tbT.textContent=ts[id]||id.toUpperCase();
+    // Diferir carga al tick siguiente para que el navegador pinte la sección primero
     setTimeout(() => {
-      if(charts.m) { charts.m.resize(); }
-      if(charts.e) { charts.e.resize(); }
-      if(!charts.m && typeof cargarStats === 'function') cargarStats();
-      // Cargar historial completo de forma diferida (solo si aún no está en cache)
-      if(!CACHE.historialAtenciones) cargarHistorialCompleto();
-    }, 50);
-    // Si el cache es viejo (>5 min), refrescar en background silenciosamente
-    if (Date.now() - CACHE_TS > CACHE_TTL) {
-      refrescarEnBackground().then(() => { cargarStats(); });
+      if(id==='resumen'      && !resData.length)           cargarResumen();
+      if(id==='usuarios')                                   cargarUs();
+      if(id==='atenciones'   && atTodas.length===0)         cargarAtenciones();
+      if(id==='visitas'      && !visitasData.length)        cargarVisitas();
+      if(id==='solicitudes'  && !CACHE.solicitudes)         cargarSolicitudes();
+      if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
+      if(id==='estadisticas' && !CACHE.estadisticasAdmin)   cargarEstadisticasAdmin();
+      if(id==='casos'        && !casosData.length)          cargarCasos();
+    }, 0);
+    // Redibujar gráficos al volver al dashboard
+    if(id==='dashboard') {
+      setTimeout(() => {
+        if(charts.m) { charts.m.resize(); }
+        if(charts.e) { charts.e.resize(); }
+        if(!charts.m && typeof cargarStats === 'function') cargarStats();
+        if(!CACHE.historialAtenciones) cargarHistorialCompleto();
+      }, 50);
+      // Si el cache es viejo (>10 min), refrescar en background silenciosamente
+      if (Date.now() - CACHE_TS > CACHE_TTL) {
+        refrescarEnBackground().then(() => { cargarStats(); });
+      }
     }
-  }
+  });
 }
 function abrir(id){document.getElementById(id).classList.add('on');}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
