@@ -1073,7 +1073,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 let USER={}, API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec', atTodas=[], resData=[], detNro='', modoEdicion=false;
 let CACHE = {};            // Cache global - datos precargados al login
 let CACHE_TS = 0;          // Timestamp del último preload
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutos antes de considerar stale
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutos antes de considerar stale
 let charts={};
 
 function mostrarToast(msg, tipo='ok') {
@@ -1939,6 +1939,15 @@ window.onload = async () => {
   // Preload: cargar TODOS los datos en una sola llamada al login
   preloadData();
 };
+
+// Al volver a la pestaña: refrescar solo si han pasado más de 10 minutos
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (!CACHE._loaded) return; // sin sesión activa o preload no completado
+  if (Date.now() - CACHE_TS > CACHE_TTL) {
+    refrescarEnBackground().then(() => cargarStats());
+  }
+});
 
 function mostrarModalFundo() {
   const usuario = USER.usuario;
