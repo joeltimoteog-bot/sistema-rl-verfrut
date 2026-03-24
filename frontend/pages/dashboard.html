@@ -1144,7 +1144,7 @@ function toggleMotivoOtro() {
 function agregarRuta() {
   const cont = document.getElementById('contenedorRutas');
   const filas = cont.querySelectorAll('.fila-ruta');
-  if(filas.length >= 3) { alert('Máximo 3 rutas destino'); return; }
+  if(filas.length >= 3) { mostrarToast('❌ Máximo 3 rutas destino', 'error'); return; }
   const div = document.createElement('div');
   div.className = 'fila-ruta';
   div.style.cssText = 'display:grid;grid-template-columns:2fr 1fr 1fr auto;gap:8px;margin-bottom:8px;align-items:end';
@@ -1158,7 +1158,7 @@ function agregarRuta() {
 
 function quitarRuta(btn) {
   const filas = document.querySelectorAll('#contenedorRutas .fila-ruta');
-  if(filas.length <= 1) { alert('Debe haber al menos 1 ruta destino'); return; }
+  if(filas.length <= 1) { mostrarToast('❌ Debe haber al menos 1 ruta destino', 'error'); return; }
   btn.closest('.fila-ruta').remove();
   validarDistribucion();
 }
@@ -1298,12 +1298,12 @@ async function guardarFusion() {
   const reemplazado  = document.getElementById('fReemplazado').value;
 
   // Validaciones
-  if(!sector)      { alert('Selecciona el sector'); return; }
-  if(!cantBuses)   { alert('Selecciona cantidad de buses fusionados'); return; }
-  if(!rutaOrigen)  { alert('Ingresa la ruta original'); return; }
-  if(!totalTrab)   { alert('Ingresa el total de trabajadores afectados'); return; }
-  if(!motivo)      { alert('Selecciona el motivo de la fusión'); return; }
-  if(motivo==='Otro' && !motiOtro) { alert('Especifica el motivo'); return; }
+  if(!sector)      { mostrarToast('❌ Selecciona el sector', 'error'); return; }
+  if(!cantBuses)   { mostrarToast('❌ Selecciona cantidad de buses fusionados', 'error'); return; }
+  if(!rutaOrigen)  { mostrarToast('❌ Ingresa la ruta original', 'error'); return; }
+  if(!totalTrab)   { mostrarToast('❌ Ingresa el total de trabajadores afectados', 'error'); return; }
+  if(!motivo)      { mostrarToast('❌ Selecciona el motivo de la fusión', 'error'); return; }
+  if(motivo==='Otro' && !motiOtro) { mostrarToast('❌ Especifica el motivo', 'error'); return; }
 
   // Validar distribución
   const total = parseInt(totalTrab);
@@ -1311,7 +1311,7 @@ async function guardarFusion() {
   let suma = 0;
   personales.forEach(p => suma += parseInt(p.value)||0);
   if(suma !== total) {
-    alert('Distribución incorrecta: ' + suma + ' vs ' + total + ' trabajadores');
+    mostrarToast('❌ Distribución incorrecta: ' + suma + ' vs ' + total + ' trabajadores', 'error');
     return;
   }
 
@@ -1374,12 +1374,12 @@ async function guardarFusion() {
       delete CACHE.estadisticasAdmin;
       await cargarFusiones(true);
       cargarStats();
-      alert('✅ Registro guardado. Fusión de ruta ' + rutaOrigen + ' (código ' + codOrigen + ') registrada. El administrador validará este registro.');
+      mostrarToast('✅ Fusión de ruta ' + rutaOrigen + ' registrada. El administrador validará este registro.');
     } else {
-      alert('❌ Error al guardar: ' + (d.error || d.message || 'Error desconocido'));
+      mostrarToast('❌ Error al guardar: ' + (d.error || d.message || 'Error desconocido'), 'error');
     }
   } catch(e) {
-    alert('❌ Error: ' + e.message);
+    mostrarToast('❌ Error: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
     btn.textContent = '💾 Guardar Registro';
@@ -1439,6 +1439,7 @@ async function cargarEstadisticasAdmin() {
 function renderEstadisticasAdmin(data) {
   if (!data) return;
   const { stats, porSupervisor, tendencia } = data;
+  if (!stats || !porSupervisor || !tendencia) { console.error('renderEstadisticasAdmin: datos incompletos', data); return; }
   const tb = document.getElementById('tbEstSupervisores');
 
   // ── Cards globales ──
@@ -1766,8 +1767,9 @@ function poblarSupFusiones(data) {
 }
 
 function renderFusiones(data) {
+  window._fusFiltradas = data;
   const tb = document.getElementById('tbFusiones');
-  if(!data.length){ tb.innerHTML='<tr><td colspan="9" class="empty">Sin registros</td></tr>'; return; }
+  if(!data || !data.length){ tb.innerHTML='<tr><td colspan="9" class="empty">Sin registros</td></tr>'; return; }
   tb.innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando tabla...</td></tr>';
   setTimeout(() => { tb.innerHTML = data.map((r,i) => {
     const estColor = r.estado==='Validado'?'#16a34a':r.estado==='Observado'?'#dc2626':'#f59e0b';
@@ -1823,7 +1825,7 @@ function filtrarFusiones() {
 }
 
 function verFotosFusion(idx) {
-  const r = _fusionesData[idx];
+  const r = (window._fusFiltradas || _fusionesData)[idx];
   const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
   fotos.forEach((url,i) => window.open(url,'_blank'));
 }
@@ -1839,7 +1841,7 @@ const ROLES_VER_TODO = ['administrador','administrador 01','administrador 02','A
 // verInformeGuardado (movido del fragmento suelto)
 function verInformeGuardado(idx) {
   const v = (window._visitasData || [])[idx];
-  if(!v) { alert('No se encontraron datos del informe.'); return; }
+  if(!v) { mostrarToast('❌ No se encontraron datos del informe.', 'error'); return; }
 
   // Reconstruir HTML del informe desde los datos guardados en Sheets
   const html = `
@@ -1923,7 +1925,7 @@ window.onload = async () => {
     document.getElementById('navAdmSec').style.display='';
     document.getElementById('navEstadisticas').style.display='';
     document.getElementById('navVisitas').style.display='flex';
-  if(USER.rol=== 'administrador'|| USER.rol==='Administrador') {
+  if(ROLES_ADMIN.includes(USER.rol)) {
     document.getElementById('navSolicitudes').style.display='flex';
     if(typeof cargarBadgeSolicitudes === 'function') cargarBadgeSolicitudes();
   }
@@ -1981,7 +1983,7 @@ function mostrarModalFundo() {
 
 function confirmarFundo() {
   const fundo = v('fundoSelect');
-  if (!fundo) { alert('Selecciona un fundo'); return; }
+  if (!fundo) { mostrarToast('❌ Selecciona un fundo', 'error'); return; }
   USER.fundoHoy = fundo;
   sessionStorage.setItem('user', JSON.stringify(USER));
   cerrar('mFundo');
@@ -2243,18 +2245,18 @@ async function guardarCaso() {
   const diasRetr  = document.getElementById('cFechaLimite').dataset.diasRetraso || 0;
   const pct       = document.getElementById('cFechaLimite').dataset.pct || 100;
 
-  if(!dni)        { alert('Busca un trabajador primero'); return; }
-  if(!supervisor) { alert('Selecciona un supervisor'); return; }
-  if(!motivo)     { alert('Selecciona el motivo'); return; }
-  if(motivo==='Otros' && !motivoExtra) { alert('Especifica el motivo'); return; }
-  if(!fechaRep)   { alert('Ingresa la fecha de reporte'); return; }
-  if(!redaccion)  { alert('Ingresa la redacción del caso'); return; }
-  if(estado==='RETRASADO' && !motivoRet) { alert('Debes ingresar el motivo del retraso'); return; }
+  if(!dni)        { mostrarToast('❌ Busca un trabajador primero','error'); return; }
+  if(!supervisor) { mostrarToast('❌ Selecciona un supervisor','error'); return; }
+  if(!motivo)     { mostrarToast('❌ Selecciona el motivo','error'); return; }
+  if(motivo==='Otros' && !motivoExtra) { mostrarToast('❌ Especifica el motivo','error'); return; }
+  if(!fechaRep)   { mostrarToast('❌ Ingresa la fecha de reporte','error'); return; }
+  if(!redaccion)  { mostrarToast('❌ Ingresa la redacción del caso','error'); return; }
+  if(estado==='RETRASADO' && !motivoRet) { mostrarToast('❌ Debes ingresar el motivo del retraso','error'); return; }
 
   const informeFile = document.getElementById('cInforme');
   const reporteFile = document.getElementById('cReporte');
-  if(!informeFile.files[0])  { alert('Debes adjuntar el Informe'); return; }
-  if(!reporteFile.files[0])  { alert('Debes adjuntar el Reporte de Infracción'); return; }
+  if(!informeFile.files[0])  { mostrarToast('❌ Debes adjuntar el Informe','error'); return; }
+  if(!reporteFile.files[0])  { mostrarToast('❌ Debes adjuntar el Reporte de Infracción','error'); return; }
 
   const btn = document.querySelector('#mCaso .btn-n:last-child');
   btn.textContent='⏳ Subiendo archivos...'; btn.disabled=true;
@@ -2266,7 +2268,7 @@ async function guardarCaso() {
   ]);
 
   if(!informe || !reporte) {
-    alert('Error al subir uno o más archivos. Intenta nuevamente.');
+    mostrarToast('❌ Error al subir uno o más archivos. Intenta nuevamente.','error');
     btn.textContent='💾 Guardar Caso'; btn.disabled=false;
     return;
   }
@@ -2292,12 +2294,12 @@ async function guardarCaso() {
     if(res.success) {
       cerrar('mCaso');
       await cargarCasos();
-      alert('✅ Caso registrado correctamente (N° '+res.nro+')');
+      mostrarToast('✅ Caso registrado correctamente (N° '+res.nro+')');
     } else {
-      alert('Error: '+res.error);
+      mostrarToast('❌ Error: '+res.error,'error');
     }
   } catch(e) {
-    alert('Error al guardar: '+e.message);
+    mostrarToast('❌ Error al guardar: '+e.message,'error');
   } finally {
     btn.textContent='💾 Guardar Caso'; btn.disabled=false;
   }
@@ -2314,7 +2316,7 @@ async function cargarCasos() {
       (!sup     || String(c.supervisor||'').toLowerCase().includes(sup))
     );
     renderTablaCasos(casosData);
-    if(USER.rol==='administrador') {
+    if(ROLES_ADMIN.includes(USER.rol)) {
       const sc = document.getElementById('statsCasos');
       if(sc) sc.style.display='block';
       setTimeout(() => actualizarStatsCasos(casosData), 0);
@@ -2327,7 +2329,7 @@ async function cargarCasos() {
     casosData = d.data || [];
     CACHE.casos = casosData;
     renderTablaCasos(casosData);
-    if(USER.rol==='administrador') {
+    if(ROLES_ADMIN.includes(USER.rol)) {
       document.getElementById('statsCasos').style.display='block';
       setTimeout(() => actualizarStatsCasos(casosData), 0);
     }
@@ -2338,8 +2340,8 @@ async function cargarCasos() {
 
 function renderTablaCasos(data) {
   const tb = document.getElementById('tbCasos');
-  if(!data.length) { tb.innerHTML='<tr><td colspan="9" class="empty">No hay registros</td></tr>'; return; }
-  const esAdmin = USER.rol==='administrador';
+  if(!data || !data.length) { tb.innerHTML='<tr><td colspan="9" class="empty">No hay registros</td></tr>'; return; }
+  const esAdmin = ROLES_ADMIN.includes(USER.rol);
   tb.innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando tabla...</td></tr>';
   setTimeout(() => {
     tb.innerHTML = data.map((c,i) => `
@@ -2400,7 +2402,7 @@ function verDetalleCaso(idx) {
 }
 
 function exportarCasosExcel() {
-  if(!casosData.length) { alert('No hay datos para exportar'); return; }
+  if(!casosData.length) { mostrarToast('❌ No hay datos para exportar', 'error'); return; }
   const headers = ['N°','Fecha Reporte','Empresa','DNI','Trabajador','Cargo','Sector',
                    'Supervisor','Motivo','Artículo','Fecha Límite','Temporada',
                    'Estado','% Avance','Redacción','Registrado Por'];
@@ -2421,7 +2423,7 @@ function exportarCasosExcel() {
 function previewFotosCaso(input) {
   const files = Array.from(input.files);
   if(files.length + casosFotos.length > 6) {
-    alert('Máximo 6 imágenes permitidas.');
+    mostrarToast('❌ Máximo 6 imágenes permitidas.', 'error');
     input.value='';
     return;
   }
@@ -2515,7 +2517,7 @@ function invalidarCache(modulo) {
   if (modulo === 'solicitudes'){ delete CACHE.solicitudes; }
   if (modulo === 'todos')      { CACHE = {}; }
   // También limpiar CacheService del servidor silenciosamente
-  apiPost({action:'limpiarCache', usuario:USER.usuario, rol:USER.rol}).catch(()=>{});
+  apiPost({action:'limpiarCache', usuario:USER.usuario, rol:USER.rol}).catch(e => console.warn('limpiarCache server:', e));
 }
 
 // Recarga completa en segundo plano (sin bloquear UI)
@@ -2528,7 +2530,7 @@ async function refrescarEnBackground() {
       CACHE = d.data;
       CACHE_TS = Date.now();
     }
-  } catch(e){}
+  } catch(e){ console.error('refrescarEnBackground:', e); }
 }
 
 async function cargarStats() {
@@ -2609,7 +2611,7 @@ async function cargarAtenciones(historial=false) {
   }
   try {
     const d=await apiGet({action:'getAtenciones',usuario:USER.usuario,nombre:USER.nombre||USER.usuario,rol:USER.rol,empresa:USER.empresa});
-    if(d.success){atTodas=d.data;renderAt(atTodas);}
+    if(d.success){atTodas=d.data;CACHE.atenciones=d.data;renderAt(atTodas);}
   } catch(e){document.getElementById('tbAt').innerHTML='<tr><td colspan="11" class="empty">❌ Error al cargar</td></tr>';}
 }
 
@@ -2701,7 +2703,9 @@ async function guardarAt() {
     responsable_recepcion:v('at_resp'), observaciones:v('at_obs'),
     estado:v('at_est'), supervisor:USER.nombre||USER.usuario, usuario_sistema:USER.usuario
   };
-  if(!d.dni||!d.nombre){alert('DNI y Nombre son obligatorios.');return;}
+  if(!d.dni||!d.nombre){mostrarToast('❌ DNI y Nombre son obligatorios.','error');return;}
+  const btnAt = document.getElementById('btnGuardarAt');
+  if(btnAt){btnAt.disabled=true; btnAt.textContent='⏳ Guardando...';}
   try{
     let r;
     if(modoEdicion&&nroEdit){
@@ -2714,18 +2718,20 @@ async function guardarAt() {
       invalidarCache('atenciones');
       await cargarAtenciones();
       await cargarStats();
-      alert(modoEdicion?'✅ Atención actualizada':'✅ Atención registrada N°: '+r.nro);
-    }else alert('Error: '+(r.error||'Desconocido'));
-  }catch(e){alert('Error de conexión');}
+      filtrarAt();
+      mostrarToast(modoEdicion?'✅ Atención actualizada':'✅ Atención registrada N°: '+r.nro);
+    }else mostrarToast('❌ Error: '+(r.error||'Desconocido'),'error');
+  }catch(e){mostrarToast('❌ Error de conexión','error');}
+  finally{if(btnAt){btnAt.disabled=false; btnAt.textContent='💾 Guardar';}}
 }
 
 async function eliminarAt(nro) {
   if(!confirm('¿Eliminar la atención N° '+nro+'? Esta acción no se puede deshacer.'))return;
   try{
     const r=await apiPost({action:'deleteAtencion',nro,rol:USER.rol,usuario:USER.usuario});
-    if(r.success){invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();alert('✅ Atención eliminada');}
-    else alert('Error: '+(r.error||'No tienes permiso'));
-  }catch(e){alert('Error de conexión');}
+    if(r.success){invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();mostrarToast('✅ Atención eliminada');}
+    else mostrarToast('❌ Error: '+(r.error||'No tienes permiso'),'error');
+  }catch(e){mostrarToast('❌ Error de conexión','error');}
 }
 
 function verDet(nro, fuente) {
@@ -2755,14 +2761,14 @@ function verDet(nro, fuente) {
 
 async function updateAt() {
   const r=await apiPost({action:'updateAtencion',nro:detNro,estado:v('dEst'),hora_termino:v('dHT'),observaciones:v('dObs'),rol:USER.rol,usuario:USER.usuario});
-  if(r.success){cerrar('mDet');invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();alert('✅ Actualizado');}
-  else alert('Error: '+(r.error||'No tienes permiso'));
+  if(r.success){cerrar('mDet');invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();mostrarToast('✅ Actualizado');}
+  else mostrarToast('❌ Error: '+(r.error||'No tienes permiso'),'error');
 }
 
 // BUSCAR TRABAJADOR
 async function buscarTrab() {
   const q=v('fTQ').trim(), emp=v('fTE');
-  if(q.length<2){alert('Ingresa al menos 2 caracteres');return;}
+  if(q.length<2){mostrarToast('❌ Ingresa al menos 2 caracteres','error');return;}
   document.getElementById('tbTrab').innerHTML='<tr><td colspan="10" class="empty">🔍 Buscando...</td></tr>';
   try{
     const d=await apiGet({action:'buscarTrabajador',q:q.trim(),empresa:emp||'AMBAS'});
@@ -2775,7 +2781,7 @@ async function buscarTrab() {
       <td>${t.supervisor||''}</td><td>${t.celular||''}</td>
       <td><button class="btn-a bv" onclick="regAt('${t.dni}','${esc(t.nombre||'')}','${t.empresa||''}','${esc(t.fundo||'')}','${esc(t.cargo||'')}','${t.sexo||''}','${esc(t.ruta||'')}','${esc(t.codigo||'')}','${esc(t.fundo_actual||'')}','${t.celular||''}')">+ Atención</button></td>
     </tr>`).join('');
-  }catch(e){}
+  }catch(e){ console.error('buscarTrab:', e); }
 }
 
 let dniTO;
@@ -2788,7 +2794,7 @@ async function buscarDni(dni) {
 
 async function buscarDniBtn() {
   const dni=v('at_dni').trim();
-  if(dni.length<2){alert('Ingresa el DNI del trabajador');return;}
+  if(dni.length<2){mostrarToast('❌ Ingresa el DNI del trabajador','error');return;}
   const r=document.getElementById('trabRes');
   r.style.display='block';r.textContent='🔍 Buscando...';
   try{
@@ -2825,7 +2831,7 @@ function regAt(dni,nom,emp,fundo,cargo,sexo,ruta,cod,fac,cel){
 // CONSULTA POR DNI
 async function consultarDNI() {
   const dni=v('cDNI').trim();
-  if(dni.length<7){alert('Ingresa un DNI válido (8 dígitos)');return;}
+  if(dni.length<7){mostrarToast('❌ Ingresa un DNI válido (8 dígitos)','error');return;}
   document.getElementById('consultaResult').innerHTML='<div class="empty">🔍 Consultando...</div>';
   try{
     const d=await apiGet({action:'consultaDNI',dni});
@@ -2901,7 +2907,7 @@ async function cargarResumen() {
         </div>`).join('') :
       '<div class="empty">No hay datos</div>';
     filtrarRes();
-  }catch(e){}
+  }catch(e){ console.error('cargarResumen:', e); }
 }
 
 function filtrarRes() {
@@ -2933,10 +2939,10 @@ function filtrarRes() {
 // REPORTE CORREO
 async function generarCorreo() {
   const fi=v('cFI'), ff=v('cFF');
-  if(!fi||!ff){alert('Selecciona el rango de fechas');return;}
-  if(fi>ff){alert('La fecha inicio no puede ser mayor a la fecha fin');return;}
+  if(!fi||!ff){mostrarToast('❌ Selecciona el rango de fechas','error');return;}
+  if(fi>ff){mostrarToast('❌ La fecha inicio no puede ser mayor a la fecha fin','error');return;}
   const para = getParaFinal();
-  if(!para){alert('Agrega al menos un destinatario en Para');return;}
+  if(!para){mostrarToast('❌ Agrega al menos un destinatario en Para','error');return;}
   document.getElementById('correoPreview').innerHTML='<div class="empty">⏳ Generando reporte...</div>';
   try{
     const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:v('cEmp'),rol:USER.rol,usuario:USER.nombre||USER.usuario,nombre:USER.nombre||USER.usuario});
@@ -3069,8 +3075,8 @@ function abrirOutlook(asunto, cuerpo, para, cc) {
 function enviarConConfirmacion() {
   const para = getParaFinal();
   const cc   = getCCFinal();
-  if (!para) { alert('Agrega al menos un destinatario'); return; }
-  if (!_correoData.fi) { alert('Primero genera la vista previa'); return; }
+  if (!para) { mostrarToast('❌ Agrega al menos un destinatario', 'error'); return; }
+  if (!_correoData.fi) { mostrarToast('❌ Primero genera la vista previa', 'error'); return; }
   const total = _correoData.total || 0;
   const fi = fmtFLargo(_correoData.fi||'');
   const ff = fmtFLargo(_correoData.ff||'');
@@ -3084,7 +3090,7 @@ function enviarConConfirmacion() {
 
 function exportarCorreoExcel() {
   const datos = _correoData.data || [];
-  if(!datos.length){ alert('No hay datos para exportar. Genera primero la vista previa.'); return; }
+  if(!datos.length){ mostrarToast('❌ No hay datos para exportar. Genera primero la vista previa.', 'error'); return; }
   exportarExcelGen(datos, [
     {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha'},
     {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},
@@ -3119,13 +3125,21 @@ async function cargarUs() {
     if(!d.success)return;
     CACHE.usuarios = d.data;
     _renderUs(d.data);
-  }catch(e){}
+  }catch(e){ console.error('cargarUs:', e); }
 }
-function abrirUs(){abrir('mUs');}
+function abrirUs(){
+  ['us_u','us_p','us_n','us_c'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  abrir('mUs');
+}
 async function guardarUs() {
   const d={action:'saveUsuario',usuario:v('us_u'),password:v('us_p'),nombre:v('us_n'),rol:v('us_r'),empresa:v('us_e'),correo:v('us_c')};
-  if(!d.usuario||!d.password||!d.nombre){alert('Completa todos los campos');return;}
-  try{const r=await apiPost(d);if(r.success){cerrar('mUs');delete CACHE.usuarios;await cargarUs();alert('✅ Usuario: '+d.usuario+' / Pass: '+d.password);}}catch(e){alert('Error');}
+  if(!d.usuario||!d.password||!d.nombre){mostrarToast('❌ Completa todos los campos','error');return;}
+  if(d.correo && !d.correo.includes('@')){mostrarToast('❌ Correo inválido','error');return;}
+  try{
+    const r=await apiPost(d);
+    if(r.success){cerrar('mUs');delete CACHE.usuarios;await cargarUs();mostrarToast('✅ Usuario creado: '+d.usuario);}
+    else mostrarToast('❌ Error al crear usuario','error');
+  }catch(e){mostrarToast('❌ Error de conexión','error');}
 }
 async function toggleUs(usr,act){
   if(!confirm((act?'Activar':'Desactivar')+' a '+usr+'?'))return;
@@ -3575,7 +3589,7 @@ function calcSemanaVisita() {
 function previewFotos(input) {
   const files = Array.from(input.files);
   if(files.length + visitasFotos.length > 6) {
-    alert('Máximo 6 imágenes permitidas.');
+    mostrarToast('❌ Máximo 6 imágenes permitidas.', 'error');
     input.value='';
     return;
   }
@@ -3638,12 +3652,12 @@ async function generarInformeVisita() {
   const supOptV = document.getElementById('vSup').options[document.getElementById('vSup').selectedIndex];
   if (supOptV.dataset.reemplazo === 'si') {
     if (!document.getElementById('vFundoReemplazo').value) {
-      alert('Debe seleccionar el sector al que fue reasignado.');
+      mostrarToast('❌ Debe seleccionar el sector al que fue reasignado.', 'error');
       document.getElementById('vFundoReemplazo').focus();
       return;
     }
     if (!document.getElementById('vSupTitular').value.trim()) {
-      alert('Debe indicar el supervisor titular del sector.');
+      mostrarToast('❌ Debe indicar el supervisor titular del sector.', 'error');
       document.getElementById('vSupTitular').focus();
       return;
     }
@@ -3657,20 +3671,20 @@ async function generarInformeVisita() {
   ];
   for(const [id,nombre] of campos) {
     if(!document.getElementById(id).value.trim()) {
-      alert('Complete el campo: ' + nombre);
+      mostrarToast('❌ Complete el campo: ' + nombre, 'error');
       document.getElementById(id).focus();
       return;
     }
   }
   if(visitasFotos.length === 0) {
-    alert('Debe agregar al menos una imagen de evidencia.');
+    mostrarToast('❌ Debe agregar al menos una imagen de evidencia.', 'error');
     return;
   }
   const motivoDiv = document.getElementById('motivoRetrasoDiv');
   if(motivoDiv.style.display !== 'none') {
     const motivo = document.getElementById('vMotivoRetraso').value.trim();
     if(!motivo) {
-      alert('Debe ingresar el motivo del retraso.');
+      mostrarToast('❌ Debe ingresar el motivo del retraso.', 'error');
       document.getElementById('vMotivoRetraso').focus();
       return;
     }
@@ -3929,7 +3943,7 @@ function dibujarGraficosResumen(datos) {
 // EXPORTAR A EXCEL
 // ============================================================
 function exportarExcelGen(datos, columnas, nombreArchivo) {
-  if(!datos || !datos.length) { alert('No hay datos para exportar.'); return; }
+  if(!datos || !datos.length) { mostrarToast('❌ No hay datos para exportar.', 'error'); return; }
   const filas = datos.map(row => {
     const obj = {};
     columnas.forEach(col => { obj[col.label] = row[col.key] !== undefined ? row[col.key] : ''; });
