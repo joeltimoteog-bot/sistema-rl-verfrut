@@ -235,6 +235,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <button class="btn-n" id="btnNuevaAt" onclick="abrirAt()">+ Nueva Atención</button>
           <button class="btn-n" onclick="exportarAtenciones()" style="background:#1a7f4b">📥 Excel</button>
         </div>
+        <div style="font-size:13px;color:#1e3a8a;background:#eff6ff;border-radius:8px;padding:8px 14px;margin:0 0 8px 0">ℹ️ Solo se muestran las atenciones del día de hoy. Para ver el historial completo, usa <b>Consulta por DNI</b>.</div>
         <div class="filtros">
           <input class="fi" id="fAQ" placeholder="🔍 DNI o nombre..." oninput="filtrarAt()" style="flex:1.5">
           <select class="fi" id="fAE" onchange="filtrarAt()"><option value="">Todos los estados</option><option>PENDIENTE</option><option>EN PROCESO</option><option>RESUELTO</option></select>
@@ -278,6 +279,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="card-h"><span class="card-t">Consulta de Atenciones por DNI</span></div>
         <div class="filtros">
           <input class="fi" id="cDNI" placeholder="🔍 Ingresa DNI del trabajador..." style="flex:2" maxlength="8">
+          <div id="cAnioWrap" style="display:none"><select class="fi" id="cAnio"><option value="">Todos los años</option><option value="2023">2023</option><option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option></select></div>
           <button class="btn-bus" onclick="consultarDNI()">🔍 Consultar</button>
           <button class="btn-n" onclick="exportarConsultaDNI()" style="background:#1a7f4b">📥 Excel</button>
         </div>
@@ -1932,6 +1934,8 @@ window.onload = async () => {
   }
   document.getElementById('navRes').style.display='';
     if (esAdmin) document.getElementById('navUsr').style.display='';
+    const cAnioWrap = document.getElementById('cAnioWrap');
+    if (cAnioWrap) { cAnioWrap.style.display=''; const cAnio=document.getElementById('cAnio'); if(cAnio) cAnio.value=new Date().getFullYear().toString(); }
   }
   // Admin01/02 no pueden registrar
   if (esAdmin2) {
@@ -2639,13 +2643,13 @@ function dibujar(s) {
 // ATENCIONES
 async function cargarAtenciones(historial=false) {
   if (!historial && CACHE.atenciones && CACHE.atenciones.length > 0) {
-    atTodas = CACHE.atenciones;
+    atTodas = CACHE.atenciones.filter(a => a.fecha_atencion === hoy());
     renderAt(atTodas);
     return;
   }
   try {
     const d=await apiGet({action:'getAtenciones',usuario:USER.usuario,nombre:USER.nombre||USER.usuario,rol:USER.rol,empresa:USER.empresa});
-    if(d.success){atTodas=d.data;CACHE.atenciones=d.data;renderAt(atTodas);}
+    if(d.success){CACHE.atenciones=d.data;atTodas=d.data.filter(a=>a.fecha_atencion===hoy());renderAt(atTodas);}
   } catch(e){document.getElementById('tbAt').innerHTML='<tr><td colspan="11" class="empty">❌ Error al cargar</td></tr>';}
 }
 
@@ -2867,9 +2871,11 @@ function regAt(dni,nom,emp,fundo,cargo,sexo,ruta,cod,fac,cel){
 async function consultarDNI() {
   const dni=v('cDNI').trim();
   if(dni.length<7){mostrarToast('❌ Ingresa un DNI válido (8 dígitos)','error');return;}
+  const esAdminUser = ROLES_ADMIN.includes(USER.rol)||ROLES_ADMIN2.includes(USER.rol);
+  const anio = esAdminUser ? (v('cAnio')||new Date().getFullYear().toString()) : new Date().getFullYear().toString();
   document.getElementById('consultaResult').innerHTML='<div class="empty">🔍 Consultando...</div>';
   try{
-    const d=await apiGet({action:'consultaDNI',dni});
+    const d=await apiGet({action:'consultaDNI',dni,anio,rol:USER.rol});
     if(!d.success){document.getElementById('consultaResult').innerHTML='<div class="empty">❌ '+d.error+'</div>';return;}
     if(!d.data.length){document.getElementById('consultaResult').innerHTML='<div class="empty">No se encontraron atenciones para este DNI</div>';return;}
     window._consultaDNIResultados = d.data;
