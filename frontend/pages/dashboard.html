@@ -2205,6 +2205,15 @@ async function subirArchivoDrive(fileInput, nombreCampo) {
   const file = fileInput.files[0];
   if(!file) return null;
   const msgEl = document.getElementById(nombreCampo+'Msg');
+  const MAX_MB = 10;
+  if(file.size > MAX_MB * 1024 * 1024) {
+    if(msgEl){ msgEl.textContent='❌ Archivo demasiado grande (máx '+MAX_MB+'MB)'; msgEl.style.color='#dc2626'; }
+    mostrarToast('❌ '+file.name+' supera los '+MAX_MB+'MB permitidos','error');
+    return null;
+  }
+  const _ext = file.name.split('.').pop().toLowerCase();
+  const _mimeMap = { pdf:'application/pdf', doc:'application/msword', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document', jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', gif:'image/gif', webp:'image/webp' };
+  const mimeType = file.type || _mimeMap[_ext] || 'application/octet-stream';
   if(msgEl) msgEl.textContent = '⏳ Subiendo '+file.name+'...';
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -2214,7 +2223,7 @@ async function subirArchivoDrive(fileInput, nombreCampo) {
         const res = await apiPost({
           action: 'subirArchivo',
           nombre: file.name,
-          mimeType: file.type,
+          mimeType,
           base64
         });
         if(res.success) {
@@ -2320,14 +2329,17 @@ async function guardarCaso() {
 }
 
 async function cargarCasos() {
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   const empresa = document.getElementById('cFiltroEmp')?.value || '';
   const motivo  = document.getElementById('cFiltroMotivo')?.value || '';
   const sup     = (document.getElementById('cFiltroSup')?.value || '').toLowerCase().trim();
   if (CACHE.casos) {
+    const miNombre = (USER.nombre || USER.usuario).toLowerCase();
     casosData = CACHE.casos.filter(c =>
       (!empresa || c.empresa === empresa) &&
       (!motivo  || c.motivo === motivo) &&
-      (!sup     || String(c.supervisor||'').toLowerCase().includes(sup))
+      (!sup     || String(c.supervisor||'').toLowerCase().includes(sup)) &&
+      (esAdmin  || String(c.supervisor||'').toLowerCase() === miNombre)
     );
     renderTablaCasos(casosData);
     if(ROLES_ADMIN.includes(USER.rol)) {
@@ -2370,8 +2382,8 @@ function renderTablaCasos(data) {
         <td style="font-weight:700;color:${c.estado==='EN PLAZO'?'#16a34a':'#dc2626'}">${c.porcentaje}%</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn-a" style="font-size:10px" onclick="verDetalleCaso(${i})">👁️ Ver</button>
-          ${c.enlace_informe ? `<a href="${c.enlace_informe}" target="_blank" class="btn-n" style="font-size:10px;padding:4px 8px;text-decoration:none">📄 Informe</a>` : ''}
-          ${c.enlace_reporte ? `<a href="${c.enlace_reporte}" target="_blank" class="btn-s" style="font-size:10px;padding:4px 8px;text-decoration:none">📋 Reporte</a>` : ''}
+          ${c.enlace_informe ? `<a href="${c.enlace_informe}" target="_blank" class="btn-n" style="font-size:10px;padding:4px 8px;text-decoration:none">📄 Informe</a>` : `<button class="btn-n" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin informe adjunto">📄 Informe</button>`}
+          ${c.enlace_reporte ? `<a href="${c.enlace_reporte}" target="_blank" class="btn-s" style="font-size:10px;padding:4px 8px;text-decoration:none">📋 Reporte</a>` : `<button class="btn-s" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin reporte adjunto">📋 Reporte</button>`}
         </td>
       </tr>
     `).join('');
@@ -4225,12 +4237,12 @@ function exportarEstadisticasAdmin() {
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div>
             <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📄 Informe *</label>
-            <input type="file" id="cInforme" accept=".pdf,.doc,.docx" style="font-size:11px;width:100%">
+            <input type="file" id="cInforme" accept="application/pdf,.pdf,.doc,.docx,image/*" style="font-size:11px;width:100%">
             <div id="cInformeMsg" style="font-size:10px;margin-top:3px"></div>
           </div>
           <div>
             <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📋 Reporte Infracción *</label>
-            <input type="file" id="cReporte" accept=".pdf" style="font-size:11px;width:100%">
+            <input type="file" id="cReporte" accept="application/pdf,.pdf,image/*" style="font-size:11px;width:100%">
             <div id="cReporteMsg" style="font-size:10px;margin-top:3px"></div>
           </div>
         </div>
