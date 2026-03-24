@@ -294,14 +294,14 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
           <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
         </select>
-        <select class="fi" id="rAnio" onchange="filtrarResumen()"><option value="">Todos los años</option><option value="2025">2025</option><option value="2026">2026</option></select>
-        <select class="fi" id="rFiltroEst" onchange="filtrarResumen()" style="min-width:130px">
+        <select class="fi" id="rAnio" onchange="filtrarRes()"><option value="">Todos los años</option><option value="2025">2025</option><option value="2026">2026</option></select>
+        <select class="fi" id="rFiltroEst" onchange="filtrarRes()" style="min-width:130px">
           <option value="">Todos los estados</option>
           <option value="PENDIENTE">Pendiente</option>
           <option value="EN PROCESO">En Proceso</option>
           <option value="RESUELTO">Resuelto</option>
         </select>
-        <select class="fi" id="rFiltroSup" onchange="filtrarResumen()" style="min-width:160px">
+        <select class="fi" id="rFiltroSup" onchange="filtrarRes()" style="min-width:160px">
           <option value="">Todos los supervisores</option>
         </select>
         <button class="btn-n" onclick="exportarResumen()" style="background:#1a7f4b">📥 Excel</button>
@@ -1403,6 +1403,9 @@ async function cargarEstadisticasAdmin() {
   const sup     = (document.getElementById('estFiltroSup')?.value || '').toLowerCase().trim();
   const anio    = document.getElementById('estFiltroAnio')?.value || '';
 
+  // Empresa/mes/año requieren datos agregados desde el backend — forzar API si están activos
+  if (empresa || mes || anio) delete CACHE.estadisticasAdmin;
+
   // Si hay cache, filtrar directo en frontend sin llamar al backend
   if (CACHE.estadisticasAdmin && typeof CACHE.estadisticasAdmin === 'object') {
     const data = CACHE.estadisticasAdmin;
@@ -2301,8 +2304,15 @@ async function guardarCaso() {
 }
 
 async function cargarCasos() {
+  const empresa = document.getElementById('cFiltroEmp')?.value || '';
+  const motivo  = document.getElementById('cFiltroMotivo')?.value || '';
+  const sup     = (document.getElementById('cFiltroSup')?.value || '').toLowerCase().trim();
   if (CACHE.casos) {
-    casosData = CACHE.casos;
+    casosData = CACHE.casos.filter(c =>
+      (!empresa || c.empresa === empresa) &&
+      (!motivo  || c.motivo === motivo) &&
+      (!sup     || String(c.supervisor||'').toLowerCase().includes(sup))
+    );
     renderTablaCasos(casosData);
     if(USER.rol==='administrador') {
       const sc = document.getElementById('statsCasos');
@@ -2311,9 +2321,6 @@ async function cargarCasos() {
     }
     return;
   }
-  const empresa = document.getElementById('cFiltroEmp')?.value || '';
-  const motivo  = document.getElementById('cFiltroMotivo')?.value || '';
-  const sup     = document.getElementById('cFiltroSup')?.value || '';
   try {
     const d = await apiGet({action:'getCasos', empresa, motivo, supervisor:sup, nombre:USER.nombre||USER.usuario,
                             usuario:USER.usuario, rol:USER.rol});
@@ -2501,13 +2508,12 @@ async function preloadData() {
 
 // Invalida el cache de un módulo (llamar después de guardar/editar)
 function invalidarCache(modulo) {
-  if (modulo === 'atenciones') { delete CACHE.atenciones; delete CACHE.stats; }
-  if (modulo === 'visitas')    { delete CACHE.visitas; }
-  if (modulo === 'casos')      { delete CACHE.casos; }
-  if (modulo === 'fusiones')   { delete CACHE.fusiones; }
+  if (modulo === 'atenciones') { delete CACHE.atenciones; delete CACHE.stats; delete CACHE.estadisticasAdmin; }
+  if (modulo === 'visitas')    { delete CACHE.visitas;    delete CACHE.estadisticasAdmin; }
+  if (modulo === 'casos')      { delete CACHE.casos;      delete CACHE.estadisticasAdmin; }
+  if (modulo === 'fusiones')   { delete CACHE.fusiones;   delete CACHE.estadisticasAdmin; }
   if (modulo === 'solicitudes'){ delete CACHE.solicitudes; }
   if (modulo === 'todos')      { CACHE = {}; }
-  delete CACHE.estadisticasAdmin;
   // También limpiar CacheService del servidor silenciosamente
   apiPost({action:'limpiarCache', usuario:USER.usuario, rol:USER.rol}).catch(()=>{});
 }
@@ -3096,29 +3102,34 @@ function exportarCorreoExcel() {
 function exportarExcel() { exportarCorreoExcel(); }
 
 // USUARIOS
+function _renderUs(data) {
+  document.getElementById('tbUs').innerHTML = data.map(u=>`<tr>
+    <td><strong>${u.usuario||''}</strong></td><td>${u.nombre||''}</td>
+    <td>${cap(u.rol||'')}</td>
+    <td><span class="bg ${empC(u.empresa)}">${u.empresa||''}</span></td>
+    <td>${u.correo||''}</td>
+    <td><span class="bg ${u.activo?'bact':'binac'}">${u.activo?'Activo':'Inactivo'}</span></td>
+    <td><button class="btn-a be" onclick="toggleUs('${u.usuario}',${!u.activo})">${u.activo?'Desactivar':'Activar'}</button></td>
+  </tr>`).join('');
+}
 async function cargarUs() {
+  if (CACHE.usuarios) { _renderUs(CACHE.usuarios); return; }
   try{
     const d=await apiGet({action:'getUsuarios'});
     if(!d.success)return;
-    document.getElementById('tbUs').innerHTML=d.data.map(u=>`<tr>
-      <td><strong>${u.usuario||''}</strong></td><td>${u.nombre||''}</td>
-      <td>${cap(u.rol||'')}</td>
-      <td><span class="bg ${empC(u.empresa)}">${u.empresa||''}</span></td>
-      <td>${u.correo||''}</td>
-      <td><span class="bg ${u.activo?'bact':'binac'}">${u.activo?'Activo':'Inactivo'}</span></td>
-      <td><button class="btn-a be" onclick="toggleUs('${u.usuario}',${!u.activo})">${u.activo?'Desactivar':'Activar'}</button></td>
-    </tr>`).join('');
+    CACHE.usuarios = d.data;
+    _renderUs(d.data);
   }catch(e){}
 }
 function abrirUs(){abrir('mUs');}
 async function guardarUs() {
   const d={action:'saveUsuario',usuario:v('us_u'),password:v('us_p'),nombre:v('us_n'),rol:v('us_r'),empresa:v('us_e'),correo:v('us_c')};
   if(!d.usuario||!d.password||!d.nombre){alert('Completa todos los campos');return;}
-  try{const r=await apiPost(d);if(r.success){cerrar('mUs');await cargarUs();alert('✅ Usuario: '+d.usuario+' / Pass: '+d.password);}}catch(e){alert('Error');}
+  try{const r=await apiPost(d);if(r.success){cerrar('mUs');delete CACHE.usuarios;await cargarUs();alert('✅ Usuario: '+d.usuario+' / Pass: '+d.password);}}catch(e){alert('Error');}
 }
 async function toggleUs(usr,act){
   if(!confirm((act?'Activar':'Desactivar')+' a '+usr+'?'))return;
-  await apiPost({action:'updateUsuario',usuario:usr,activo:act});await cargarUs();
+  await apiPost({action:'updateUsuario',usuario:usr,activo:act});delete CACHE.usuarios;await cargarUs();
 }
 
 // HELPERS
@@ -3289,7 +3300,7 @@ function ir(id,btn){
     // Diferir carga al tick siguiente para que el navegador pinte la sección primero
     setTimeout(() => {
       if(id==='resumen'      && !resData.length)           cargarResumen();
-      if(id==='usuarios')                                   cargarUs();
+      if(id==='usuarios'     && !CACHE.usuarios)            cargarUs();
       if(id==='atenciones'   && atTodas.length===0)         cargarAtenciones();
       if(id==='visitas'      && !visitasData.length)        cargarVisitas();
       if(id==='solicitudes'  && !CACHE.solicitudes)         cargarSolicitudes();
