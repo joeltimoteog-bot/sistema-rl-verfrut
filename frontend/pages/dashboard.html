@@ -1543,7 +1543,7 @@ function renderEstadisticasAdmin(data) {
 // ══════════════════ MÓDULO VISITAS DE CAMPO ══════════════════
 
 async function cargarVisitas() {
-  if (CACHE.visitas) {
+  if (CACHE.visitas && CACHE.visitas.length > 0) {
     renderVisitas(CACHE.visitas);
     return;
   }
@@ -1934,9 +1934,10 @@ window.onload = async () => {
   }
   document.getElementById('navRes').style.display='';
     if (esAdmin) document.getElementById('navUsr').style.display='';
-    const cAnioWrap = document.getElementById('cAnioWrap');
-    if (cAnioWrap) { cAnioWrap.style.display=''; const cAnio=document.getElementById('cAnio'); if(cAnio) cAnio.value=new Date().getFullYear().toString(); }
   }
+  // Filtro año en Consulta por DNI: visible para todos los roles
+  const cAnioWrap = document.getElementById('cAnioWrap');
+  if (cAnioWrap) { cAnioWrap.style.display=''; const cAnio=document.getElementById('cAnio'); if(cAnio) cAnio.value=new Date().getFullYear().toString(); }
   // Admin01/02 no pueden registrar
   if (esAdmin2) {
     document.getElementById('navAt').style.display='none';
@@ -2497,6 +2498,7 @@ async function preloadData() {
     const d = await apiGet({
       action:  'getPreload',
       usuario: USER.usuario,
+      nombre:  USER.nombre || USER.usuario,
       rol:     USER.rol,
       empresa: empresa
     });
