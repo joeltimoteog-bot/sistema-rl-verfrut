@@ -1863,22 +1863,22 @@ function verInformeGuardado(idx) {
             <td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Estado</td><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700;color:${(v.estado||'').includes('RETRAS')?'#dc2626':'#16a34a'}">${v.estado||'—'}</td></tr>
         <tr><td style="padding:6px;border:1px solid #e2e8f0;font-weight:700">Asunto</td><td colspan="3" style="padding:6px;border:1px solid #e2e8f0">${v.asunto||'—'}</td></tr>
       </table>
-      ${v.desarrollo ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
         <tr style="background:#1e3a8a;color:#fff"><th style="padding:8px;text-align:left">DESARROLLO DE LA VISITA</th></tr>
-        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.desarrollo}</td></tr>
-      </table>` : ''}
-      ${v.acciones ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.desarrollo||'—'}</td></tr>
+      </table>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
         <tr style="background:#166534;color:#fff"><th style="padding:8px;text-align:left">ACCIONES CORRECTIVAS</th></tr>
-        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.acciones}</td></tr>
-      </table>` : ''}
-      ${v.compromisos ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.acciones||'—'}</td></tr>
+      </table>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
         <tr style="background:#92400e;color:#fff"><th style="padding:8px;text-align:left">COMPROMISOS</th></tr>
-        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.compromisos}</td></tr>
-      </table>` : ''}
-      ${v.observaciones ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
+        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.compromisos||'—'}</td></tr>
+      </table>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
         <tr style="background:#374151;color:#fff"><th style="padding:8px;text-align:left">OBSERVACIONES</th></tr>
-        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.observaciones}</td></tr>
-      </table>` : ''}
+        <tr><td style="padding:10px;border:1px solid #e2e8f0;white-space:pre-wrap">${v.observaciones||'—'}</td></tr>
+      </table>
       ${v.motivo_retraso ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px">
         <tr style="background:#dc2626;color:#fff"><th style="padding:8px;text-align:left">MOTIVO DE RETRASO</th></tr>
         <tr><td style="padding:10px;border:1px solid #e2e8f0">${v.motivo_retraso}</td></tr>
@@ -3144,7 +3144,10 @@ function exportarExcel() { exportarCorreoExcel(); }
 
 // USUARIOS
 function _renderUs(data) {
-  document.getElementById('tbUs').innerHTML = data.map(u=>`<tr>
+  const tb = document.getElementById('tbUs');
+  if(!tb) return;
+  if(!data || !data.length){ tb.innerHTML='<tr><td colspan="7" class="empty">No hay usuarios registrados</td></tr>'; return; }
+  tb.innerHTML = data.map(u=>`<tr>
     <td><strong>${u.usuario||''}</strong></td><td>${u.nombre||''}</td>
     <td>${cap(u.rol||'')}</td>
     <td><span class="bg ${empC(u.empresa)}">${u.empresa||''}</span></td>
@@ -3155,12 +3158,20 @@ function _renderUs(data) {
 }
 async function cargarUs() {
   if (CACHE.usuarios) { _renderUs(CACHE.usuarios); return; }
+  const tb = document.getElementById('tbUs');
+  if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">⏳ Cargando...</td></tr>';
   try{
-    const d=await apiGet({action:'getUsuarios'});
-    if(!d.success)return;
-    CACHE.usuarios = d.data;
-    _renderUs(d.data);
-  }catch(e){ console.error('cargarUs:', e); }
+    const d=await apiGet({action:'getUsuarios', usuario:USER.usuario, rol:USER.rol});
+    if(!d.success){
+      if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error: '+(d.error||'No autorizado')+'</td></tr>';
+      return;
+    }
+    CACHE.usuarios = d.data || [];
+    _renderUs(CACHE.usuarios);
+  }catch(e){
+    console.error('cargarUs:', e);
+    if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error de conexión</td></tr>';
+  }
 }
 function abrirUs(){
   ['us_u','us_p','us_n','us_c'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
@@ -3349,10 +3360,10 @@ function ir(id,btn){
     // Diferir carga al tick siguiente para que el navegador pinte la sección primero
     setTimeout(() => {
       if(id==='resumen'      && !resData.length)           cargarResumen();
-      if(id==='usuarios'     && !CACHE.usuarios)            cargarUs();
+      if(id==='usuarios')                                    cargarUs();
       if(id==='atenciones'   && atTodas.length===0)         cargarAtenciones();
       if(id==='visitas'      && !visitasData.length)        cargarVisitas();
-      if(id==='solicitudes'  && !CACHE.solicitudes)         cargarSolicitudes();
+      if(id==='solicitudes')                                cargarSolicitudes();
       if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
       if(id==='estadisticas' && !CACHE.estadisticasAdmin)   cargarEstadisticasAdmin();
       if(id==='casos'        && !casosData.length)          cargarCasos();
