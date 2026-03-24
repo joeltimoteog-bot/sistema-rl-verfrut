@@ -1374,6 +1374,7 @@ async function guardarFusion() {
       delete CACHE.estadisticasAdmin;
       await cargarFusiones(true);
       cargarStats();
+      guardarCacheLS();
       mostrarToast('✅ Fusión de ruta ' + rutaOrigen + ' registrada. El administrador validará este registro.');
     } else {
       mostrarToast('❌ Error al guardar: ' + (d.error || d.message || 'Error desconocido'), 'error');
@@ -1945,8 +1946,15 @@ window.onload = async () => {
     sessionStorage.setItem('user', JSON.stringify(USER));
   }
 
-  // Preload: cargar TODOS los datos en una sola llamada al login
-  preloadData();
+  // Carga instantánea: usar localStorage si hay datos frescos (< 10 min)
+  if (cargarCacheLS()) {
+    CACHE._loaded = true;
+    cargarStats();
+    // Actualizar silenciosamente en background
+    refrescarEnBackground().then(() => cargarStats());
+  } else {
+    preloadData();
+  }
 };
 
 // Al volver a la pestaña: refrescar solo si han pasado más de 10 minutos
@@ -2294,6 +2302,7 @@ async function guardarCaso() {
     if(res.success) {
       cerrar('mCaso');
       await cargarCasos();
+      guardarCacheLS();
       mostrarToast('✅ Caso registrado correctamente (N° '+res.nro+')');
     } else {
       mostrarToast('❌ Error: '+res.error,'error');
@@ -2453,6 +2462,26 @@ function quitarFotoCaso(idx, div) {
 }
 
 // STATS
+// ══════════════════ CACHE PERSISTENTE (localStorage) ══════════════════
+function _lsCacheKey() { return 'rl_cache_' + USER.usuario; }
+
+function guardarCacheLS() {
+  try {
+    localStorage.setItem(_lsCacheKey(), JSON.stringify({data: CACHE, ts: CACHE_TS}));
+  } catch(e) { console.warn('localStorage save:', e); }
+}
+
+function cargarCacheLS() {
+  try {
+    const raw = localStorage.getItem(_lsCacheKey());
+    if(!raw) return false;
+    const stored = JSON.parse(raw);
+    if(!stored || !stored.data || (Date.now() - stored.ts) > CACHE_TTL) return false;
+    CACHE    = stored.data;
+    CACHE_TS = stored.ts;
+    return true;
+  } catch(e) { return false; }
+}
 // ══════════════════ PRELOAD - CARGA INICIAL ══════════════════
 async function preloadData() {
   const ind = document.getElementById('preloadIndicator');
@@ -2480,6 +2509,9 @@ async function preloadData() {
     CACHE_TS = Date.now();
     // Usar _LOADED para distinguir "no cargado" de "cargado y vacío"
     CACHE._loaded = true;
+
+    // Persistir en localStorage para carga instantánea en próxima sesión
+    guardarCacheLS();
 
     // Aplicar stats al dashboard inmediatamente
     cargarStats();
@@ -2529,6 +2561,8 @@ async function refrescarEnBackground() {
     if (d.success) {
       CACHE = d.data;
       CACHE_TS = Date.now();
+      CACHE._loaded = true;
+      guardarCacheLS();
     }
   } catch(e){ console.error('refrescarEnBackground:', e); }
 }
@@ -2719,6 +2753,7 @@ async function guardarAt() {
       await cargarAtenciones();
       await cargarStats();
       filtrarAt();
+      guardarCacheLS();
       mostrarToast(modoEdicion?'✅ Atención actualizada':'✅ Atención registrada N°: '+r.nro);
     }else mostrarToast('❌ Error: '+(r.error||'Desconocido'),'error');
   }catch(e){mostrarToast('❌ Error de conexión','error');}
@@ -3742,6 +3777,7 @@ async function generarInformeVisita() {
       fotos: visitasFotos.length
     });
     guardadoOK = true;
+    guardarCacheLS();
     const msg = document.getElementById('guardandoMsg');
     if(msg) msg.innerHTML = '✅ <b>Guardado correctamente en Google Sheets</b>';
   } catch(e) {
