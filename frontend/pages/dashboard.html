@@ -1543,11 +1543,14 @@ function renderEstadisticasAdmin(data) {
 // ══════════════════ MÓDULO VISITAS DE CAMPO ══════════════════
 
 async function cargarVisitas() {
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   if (CACHE.visitas && CACHE.visitas.length > 0) {
-    renderVisitas(CACHE.visitas);
+    const lista = esAdmin ? CACHE.visitas : CACHE.visitas.filter(v =>
+      String(v.supervisor||'').toLowerCase().trim() === (USER.nombre||USER.usuario).toLowerCase().trim()
+    );
+    renderVisitas(lista);
     return;
   }
-  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   const tb = document.getElementById('tbVisitas');
   if(tb) tb.innerHTML = '<tr><td colspan="8" class="empty">⏳ Cargando...</td></tr>';
 
@@ -2333,13 +2336,13 @@ async function cargarCasos() {
   const empresa = document.getElementById('cFiltroEmp')?.value || '';
   const motivo  = document.getElementById('cFiltroMotivo')?.value || '';
   const sup     = (document.getElementById('cFiltroSup')?.value || '').toLowerCase().trim();
-  if (CACHE.casos) {
-    const miNombre = (USER.nombre || USER.usuario).toLowerCase();
+  if (CACHE.casos && CACHE.casos.length > 0) {
+    const miNombre = (USER.nombre || USER.usuario).toLowerCase().trim();
     casosData = CACHE.casos.filter(c =>
       (!empresa || c.empresa === empresa) &&
       (!motivo  || c.motivo === motivo) &&
       (!sup     || String(c.supervisor||'').toLowerCase().includes(sup)) &&
-      (esAdmin  || String(c.supervisor||'').toLowerCase() === miNombre)
+      (esAdmin  || String(c.supervisor||'').toLowerCase().trim() === miNombre)
     );
     renderTablaCasos(casosData);
     if(ROLES_ADMIN.includes(USER.rol)) {
@@ -2405,26 +2408,41 @@ function actualizarStatsCasos(data) {
 function verDetalleCaso(idx) {
   const c = casosData[idx];
   if(!c) return;
-  alert(
-    'CASO N° ' + (idx+1) + '\n' +
-    '━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-    'DNI: ' + c.dni + '\n' +
-    'Trabajador: ' + c.nombre + '\n' +
-    'Empresa: ' + c.empresa + '\n' +
-    'Cargo: ' + c.cargo + '\n' +
-    'Sector: ' + c.sector + '\n' +
-    '━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-    'Motivo: ' + c.motivo + (c.motivo_extra?' - '+c.motivo_extra:'') + '\n' +
-    'Artículo: ' + c.articulo + '\n' +
-    'Supervisor: ' + c.supervisor + '\n' +
-    'Fecha reporte: ' + c.fecha_reporte + '\n' +
-    'Fecha límite: ' + c.fecha_limite + '\n' +
-    'Temporada: ' + c.temporada + '\n' +
-    'Estado: ' + c.estado + ' (' + c.porcentaje + '%)\n' +
-    (c.motivo_retraso ? 'Motivo retraso: ' + c.motivo_retraso + '\n' : '') +
-    '━━━━━━━━━━━━━━━━━━━━━━━━\n' +
-    'Redacción: ' + c.redaccion
-  );
+  const estColor = c.estado==='EN PLAZO' ? '#16a34a' : '#dc2626';
+  document.getElementById('mDetalleCasoBody').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      <div><span style="font-size:10px;color:#64748b;display:block">DNI</span><b>${c.dni||'—'}</b></div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Empresa</span><b>${c.empresa||'—'}</b></div>
+      <div style="grid-column:1/-1"><span style="font-size:10px;color:#64748b;display:block">Trabajador</span><b>${c.nombre||'—'}</b></div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Cargo</span>${c.cargo||'—'}</div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Sector</span>${c.sector||'—'}</div>
+    </div>
+    <div style="border-top:1px solid #e2e8f0;padding-top:12px;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="grid-column:1/-1"><span style="font-size:10px;color:#64748b;display:block">Motivo</span><b>${c.motivo||'—'}${c.motivo_extra?' — '+c.motivo_extra:''}</b></div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Supervisor</span>${c.supervisor||'—'}</div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Temporada</span>${c.temporada||'—'}</div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Fecha Reporte</span>${fmtF(c.fecha_reporte)}</div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Fecha Límite</span>${fmtF(c.fecha_limite)}</div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Estado</span><b style="color:${estColor}">${c.estado||'—'}</b></div>
+      <div><span style="font-size:10px;color:#64748b;display:block">% Avance</span><b style="color:${estColor}">${c.porcentaje||0}%</b></div>
+      ${c.motivo_retraso?`<div style="grid-column:1/-1"><span style="font-size:10px;color:#dc2626;display:block">Motivo Retraso</span>${c.motivo_retraso}</div>`:''}
+    </div>
+    <div style="border-top:1px solid #e2e8f0;padding-top:12px;margin-bottom:14px">
+      <span style="font-size:10px;color:#64748b;display:block;margin-bottom:4px">Descripción del caso</span>
+      <div style="background:#f8fafc;border-radius:7px;padding:10px;font-size:12px;line-height:1.6">${c.redaccion||'—'}</div>
+    </div>
+    <div style="border-top:1px solid #e2e8f0;padding-top:12px">
+      <div style="font-size:11px;font-weight:700;color:#0b1e45;margin-bottom:8px">📎 Documentos Adjuntos</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${c.enlace_informe
+          ? `<a href="${c.enlace_informe}" target="_blank" class="btn-n" style="text-decoration:none;font-size:12px">📄 Ver Informe</a>`
+          : `<span style="font-size:12px;color:#94a3b8;padding:6px 10px;border:1px dashed #cbd5e1;border-radius:6px">📄 Sin informe adjunto</span>`}
+        ${c.enlace_reporte
+          ? `<a href="${c.enlace_reporte}" target="_blank" class="btn-s" style="text-decoration:none;font-size:12px">📋 Ver Reporte</a>`
+          : `<span style="font-size:12px;color:#94a3b8;padding:6px 10px;border:1px dashed #cbd5e1;border-radius:6px">📋 Sin reporte adjunto</span>`}
+      </div>
+    </div>`;
+  abrir('mDetalleCaso');
 }
 
 function exportarCasosExcel() {
@@ -4399,5 +4417,20 @@ function exportarEstadisticasAdmin() {
   </div>
 </div>
 </div>
+
+<!-- MODAL DETALLE CASO -->
+<div class="ov" id="mDetalleCaso">
+  <div class="modal" style="max-width:580px;width:96vw;max-height:90vh;overflow-y:auto;padding:0">
+    <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:1">
+      <span style="font-weight:700;font-size:15px">⚖️ Detalle del Caso</span>
+      <span onclick="cerrar('mDetalleCaso')" style="cursor:pointer;font-size:22px;line-height:1">✕</span>
+    </div>
+    <div style="padding:20px" id="mDetalleCasoBody"></div>
+    <div style="padding:0 20px 20px;display:flex;justify-content:flex-end">
+      <button class="btn-s" onclick="cerrar('mDetalleCaso')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
