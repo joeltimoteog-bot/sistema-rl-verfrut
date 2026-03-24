@@ -3839,28 +3839,54 @@ async function generarInformeVisita() {
   cerrar('mVisita');
   abrir('mVerInforme');
 
-  // Guardar en Google Sheets PRIMERO
+  // Guardar / actualizar en Google Sheets
   document.getElementById('informeVistaPrevia').innerHTML +=
     '<div id="guardandoMsg" style="text-align:center;padding:10px;color:#0b1e45;font-weight:600">⏳ Guardando en el sistema...</div>';
 
+  const modoEdicion = window._editandoVisitaIdx !== undefined && window._editandoVisitaIdx !== null;
+
   let guardadoOK = false;
   try {
-    const res = await guardarVisitaSheets({
-      empresa, sup, dni, correo, fundo, punto,
-      fi, ff, semana, fechaInf, paraNombre,
-      asunto, desarrollo, rutas, acciones,
-      compromisos, observaciones, motivo,
-      fotos: visitasFotos.length
-    });
-    guardadoOK = true;
-    guardarCacheLS();
-    const msg = document.getElementById('guardandoMsg');
-    if(msg) msg.innerHTML = '✅ <b>Guardado correctamente en Google Sheets</b>';
+    if (modoEdicion) {
+      const vOriginal = (window._visitasData||[])[window._editandoVisitaIdx];
+      const nro = vOriginal ? vOriginal.nro : null;
+      const res = await apiPost({
+        action:'updateVisita', nro,
+        empresa, supervisor:sup, dni, correo, fundo, punto,
+        fecha_inicio:fi, fecha_fin:ff, semana, fecha_informe:fechaInf,
+        para:paraNombre, asunto, desarrollo, rutas, acciones,
+        compromisos, observaciones, motivo
+      });
+      if(!res.success) throw new Error(res.error || 'Error al actualizar');
+      window._editandoVisitaIdx = null;
+      invalidarCache('visitas');
+      guardarCacheLS();
+      cargarVisitas();
+      const msg = document.getElementById('guardandoMsg');
+      if(msg) msg.innerHTML = '✅ <b>Visita actualizada correctamente</b>';
+      mostrarToast('✅ Visita actualizada correctamente');
+      guardadoOK = true;
+    } else {
+      const res = await guardarVisitaSheets({
+        empresa, sup, dni, correo, fundo, punto,
+        fi, ff, semana, fechaInf, paraNombre,
+        asunto, desarrollo, rutas, acciones,
+        compromisos, observaciones, motivo,
+        fotos: visitasFotos.length
+      });
+      guardadoOK = true;
+      guardarCacheLS();
+      const msg = document.getElementById('guardandoMsg');
+      if(msg) msg.innerHTML = '✅ <b>Guardado correctamente en Google Sheets</b>';
+    }
   } catch(e) {
     const msg = document.getElementById('guardandoMsg');
-    if(msg) msg.innerHTML = '⚠️ Error al guardar: ' + e.message + ' — Verifique que el Apps Script esté actualizado.';
-    console.error('Error guardando:', e);
+    if(msg) msg.innerHTML = '⚠️ Error al guardar: ' + e.message;
+    mostrarToast('❌ Error: ' + e.message, 'error');
+    console.error('Error guardando visita:', e);
   }
+
+  if(modoEdicion) return; // en edición no abrir Outlook
 
   // Enviar correo con mailto
   const ccFundo  = CC_FUNDO[fundo] || '';
