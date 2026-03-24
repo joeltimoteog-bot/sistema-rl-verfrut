@@ -456,7 +456,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <thead>
             <tr>
               <th>N°</th><th>Fecha</th><th>Empresa</th><th>Supervisor</th>
-              <th>Fundo</th><th>Semana</th><th>Estado</th><th>Informe</th>
+              <th>Fundo</th><th>Semana</th><th>Estado</th><th>Acciones</th>
             </tr>
           </thead>
           <tbody id="tbVisitas">
@@ -885,7 +885,9 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   <div style="padding:20px">
     <!-- Botones acción -->
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
-      <button type="button" onclick="imprimirInforme()" style="padding:9px 18px;background:#0b1e45;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimir / Guardar PDF</button>
+      <button type="button" onclick="imprimirInforme()" style="padding:9px 18px;background:#0b1e45;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>
+      <button type="button" onclick="enviarInformeVisita(window._verInformeIdx)" style="padding:9px 18px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">📧 Enviar por Correo</button>
+      <button type="button" onclick="cerrar('mVerInforme');editarVisita(window._verInformeIdx)" style="padding:9px 18px;background:#d97706;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✏️ Editar</button>
       <button type="button" onclick="cerrar('mVerInforme')" style="padding:9px 16px;background:#f1f5f9;border:none;border-radius:8px;font-size:13px;cursor:pointer">✕ Cerrar</button>
     </div>
     <!-- Vista previa del informe -->
@@ -1545,9 +1547,13 @@ function renderEstadisticasAdmin(data) {
 async function cargarVisitas() {
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   if (CACHE.visitas && CACHE.visitas.length > 0) {
-    const lista = esAdmin ? CACHE.visitas : CACHE.visitas.filter(v =>
-      String(v.supervisor||'').toLowerCase().trim() === (USER.nombre||USER.usuario).toLowerCase().trim()
-    );
+    const miNombre = (USER.nombre||USER.usuario).toLowerCase().trim();
+    const lista = esAdmin ? CACHE.visitas : CACHE.visitas.filter(v => {
+      const sup = String(v.supervisor||'').toLowerCase().trim();
+      const reg = String(v.registrado_por||'').toLowerCase().trim();
+      return sup.includes(miNombre) || miNombre.includes(sup) ||
+             reg.includes(miNombre) || miNombre.includes(reg);
+    });
     renderVisitas(lista);
     return;
   }
@@ -1559,7 +1565,7 @@ async function cargarVisitas() {
   const supFiltro= document.getElementById('vFiltroSup')?.value  || '';
 
   try {
-    const params = { action:'getVisitas', empresa, mes };
+    const params = { action:'getVisitas', empresa, mes, usuario:USER.usuario, nombre:USER.nombre||USER.usuario };
     if (!esAdmin) params.supervisor = USER.nombre || USER.usuario;
     if (supFiltro) params.supervisor = supFiltro;
 
@@ -1605,11 +1611,16 @@ function renderVisitas(data) {
   }
   tb.innerHTML = '<tr><td colspan="8" class="empty">⏳ Cargando tabla...</td></tr>';
   setTimeout(() => {
+    const miNombreR = (USER.nombre||USER.usuario).toLowerCase();
     tb.innerHTML = data.map((v, i) => {
       const estado = (v.estado || 'EN PLAZO').toUpperCase();
       const colorEstado = estado.includes('RETRAS') ? '#dc2626' : estado.includes('PLAZO') ? '#16a34a' : '#64748b';
-      const btnVer = `<button onclick="verInformeGuardado(${i})"
-        style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">📄 Ver</button>`;
+      const puedeEditar = esAdmin ||
+        String(v.supervisor||'').toLowerCase().includes(miNombreR.split(' ')[0]) ||
+        String(v.registrado_por||'').toLowerCase().includes(miNombreR.split(' ')[0]);
+      const btnVer    = `<button onclick="verInformeGuardado(${i})" style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📄 Ver</button>`;
+      const btnEnviar = `<button onclick="enviarInformeVisita(${i})" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📧 Enviar</button>`;
+      const btnEditar = puedeEditar ? `<button onclick="editarVisita(${i})" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button>` : '';
       const supCol = esAdmin ? `<td>${v.supervisor||'—'}</td>` : '';
       return `<tr>
         <td>${i+1}</td>
@@ -1619,7 +1630,7 @@ function renderVisitas(data) {
         <td>${v.sector||v.fundo||'—'}</td>
         <td>${v.semana||'—'}</td>
         <td><span style="font-size:10px;font-weight:700;color:${colorEstado}">${estado}</span></td>
-        <td>${btnVer}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">${btnVer}${btnEnviar}${btnEditar}</td>
       </tr>`;
     }).join('');
   }, 0);
@@ -1846,6 +1857,7 @@ const ROLES_VER_TODO = ['administrador','administrador 01','administrador 02','A
 
 // verInformeGuardado (movido del fragmento suelto)
 function verInformeGuardado(idx) {
+  window._verInformeIdx = idx;
   const v = (window._visitasData || [])[idx];
   if(!v) { mostrarToast('❌ No se encontraron datos del informe.', 'error'); return; }
 
@@ -3871,6 +3883,71 @@ async function generarInformeVisita() {
       window.location.href = 'mailto:' + para + '?subject=' + subj + '&body=' + body + (cc ? '&cc=' + cc : '');
     }
   }, 500);
+}
+
+function enviarInformeVisita(idx) {
+  const v = (window._visitasData||[])[idx];
+  if(!v) { mostrarToast('❌ No hay datos de visita','error'); return; }
+  const ccFundo = CC_FUNDO[v.fundo||v.sector] || '';
+  const ccAdmin = USER.usuario === 'jtimoteo' ? '' : 'jtimoteo@verfrut.pe';
+  const ccFinal = [ccFundo, ccAdmin].filter(Boolean).join(';');
+  const cuerpo =
+    'Estimados,\n\n' +
+    'Adjunto el Informe de Visita de Campo - Semana ' + (v.semana||'') + '\n' +
+    'Empresa: '       + (v.empresa||'') + '\n' +
+    'Supervisor: '    + (v.supervisor||'') + '\n' +
+    'Fundo/Sector: '  + (v.fundo||v.sector||'') + '\n' +
+    'Período: '       + (v.fecha_inicio||v.fi||'') + ' al ' + (v.fecha_fin||v.ff||'') + '\n\n' +
+    'DESARROLLO DE LA VISITA:\n' + (v.desarrollo||'—') + '\n\n' +
+    'ACCIONES CORRECTIVAS:\n'    + (v.acciones||'—')   + '\n\n' +
+    'COMPROMISOS:\n'              + (v.compromisos||'—') + '\n\n' +
+    'OBSERVACIONES:\n'            + (v.observaciones||'—') + '\n\n' +
+    'Atentamente,\n' + (v.supervisor||USER.nombre);
+  const subj = encodeURIComponent('Informe Visita Campo Semana ' + (v.semana||'') + ' - ' + (v.empresa||'') + ' - ' + (v.fundo||v.sector||''));
+  const para = encodeURIComponent('ovilela@verfrut.pe;jchavez@verfrut.pe;jtimoteo@verfrut.pe');
+  const cc   = encodeURIComponent(ccFinal);
+  const body = encodeURIComponent(cuerpo);
+  window.location.href = 'mailto:' + para + '?subject=' + subj + '&body=' + body + (ccFinal ? '&cc=' + cc : '');
+}
+
+function editarVisita(idx) {
+  if(idx === undefined || idx === null) return;
+  const v = (window._visitasData||[])[idx];
+  if(!v) { mostrarToast('❌ No hay datos de visita','error'); return; }
+  const esAdmin = ROLES_ADMIN.includes(USER.rol)||ROLES_ADMIN2.includes(USER.rol);
+  const miNombre = (USER.nombre||USER.usuario).toLowerCase();
+  const puedeEditar = esAdmin ||
+    String(v.supervisor||'').toLowerCase().includes(miNombre.split(' ')[0]) ||
+    String(v.registrado_por||'').toLowerCase().includes(miNombre.split(' ')[0]);
+  if(!puedeEditar){ mostrarToast('❌ No tienes permiso para editar esta visita','error'); return; }
+  window._editandoVisitaIdx = idx;
+  abrirNuevaVisita();
+  setTimeout(() => {
+    const sv = id => document.getElementById(id);
+    if(sv('vEmp'))           sv('vEmp').value          = v.empresa||'';
+    if(sv('vFundo'))         sv('vFundo').value         = v.fundo||v.sector||'';
+    if(sv('vPunto'))         sv('vPunto').value         = v.punto||'';
+    if(sv('vFI'))            sv('vFI').value            = v.fecha_inicio||v.fi||'';
+    if(sv('vFF'))            sv('vFF').value            = v.fecha_fin||v.ff||'';
+    if(sv('vSemana'))        sv('vSemana').value        = v.semana||'';
+    if(sv('vAsunto'))        sv('vAsunto').value        = v.asunto||'';
+    if(sv('vDesarrollo'))    sv('vDesarrollo').value    = v.desarrollo||'';
+    if(sv('vRutas'))         sv('vRutas').value         = v.rutas||'';
+    if(sv('vAcciones'))      sv('vAcciones').value      = v.acciones||'';
+    if(sv('vCompromisos'))   sv('vCompromisos').value   = v.compromisos||'';
+    if(sv('vObservaciones')) sv('vObservaciones').value = v.observaciones||'';
+    if(sv('vMotivoRetraso')) sv('vMotivoRetraso').value = v.motivo_retraso||'';
+    if(sv('vDNI'))           sv('vDNI').value           = v.dni||'';
+    if(sv('vCorreo'))        sv('vCorreo').value        = v.correo||'';
+    const selSup = document.getElementById('vSup');
+    if(selSup && v.supervisor) {
+      for(let o=0; o<selSup.options.length; o++) {
+        if(selSup.options[o].value===v.supervisor || selSup.options[o].text.includes(v.supervisor.split(' ')[0])) {
+          selSup.selectedIndex = o; break;
+        }
+      }
+    }
+  }, 150);
 }
 
 function imprimirInforme() {
