@@ -513,11 +513,11 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <thead>
             <tr>
               <th>N°</th><th>Fecha</th><th>Empresa</th><th>Trabajador</th>
-              <th>Motivo</th><th>Supervisor</th><th>Estado</th><th>% Avance</th><th>Acción</th>
+              <th>Motivo</th><th>Supervisor</th><th>Estado</th><th>% Avance</th><th>Gestión</th><th>Gravedad</th><th>Acción</th>
             </tr>
           </thead>
           <tbody id="tbCasos">
-            <tr><td colspan="9" class="empty">Cargando...</td></tr>
+            <tr><td colspan="11" class="empty">Cargando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -2264,7 +2264,9 @@ async function guardarCaso() {
   const fechaRep  = document.getElementById('cFechaReporte').value;
   const fechaLim  = document.getElementById('cFechaLimite').value;
   const temporada = document.getElementById('cTemporada').value;
-  const estado    = document.getElementById('cEstadoCaso').value;
+  const estado         = document.getElementById('cEstadoCaso').value;
+  const estadoGestion  = document.getElementById('cEstadoGestion').value;
+  const gravedad       = document.getElementById('cGravedad').value;
   const redaccion = document.getElementById('cRedaccion').value.trim();
   const motivoRet = document.getElementById('cMotivoRetraso').value.trim();
   const diasRetr  = document.getElementById('cFechaLimite').dataset.diasRetraso || 0;
@@ -2307,6 +2309,8 @@ async function guardarCaso() {
       supervisor, motivo, motivo_extra: motivoExtra,
       fecha_reporte: fechaRep, fecha_limite: fechaLim,
       temporada, estado, redaccion,
+      estado_gestion: estadoGestion,
+      gravedad,
       motivo_retraso: motivoRet,
       dias_retraso: diasRetr,
       porcentaje: estado==='EN PLAZO' ? 100 : pct,
@@ -2366,15 +2370,19 @@ async function cargarCasos() {
       setTimeout(() => actualizarStatsCasos(casosData), 0);
     }
   } catch(e) {
-    document.getElementById('tbCasos').innerHTML='<tr><td colspan="9" class="empty">Error cargando casos</td></tr>';
+    document.getElementById('tbCasos').innerHTML='<tr><td colspan="11" class="empty">Error cargando casos</td></tr>';
   }
 }
 
+function _gravColor(g) {
+  const m = {BAJO:'#16a34a',MEDIO:'#d97706',ALTO:'#ea580c',CRÍTICO:'#dc2626'};
+  return m[(g||'').toUpperCase()] || '#64748b';
+}
 function renderTablaCasos(data) {
   const tb = document.getElementById('tbCasos');
-  if(!data || !data.length) { tb.innerHTML='<tr><td colspan="9" class="empty">No hay registros</td></tr>'; return; }
+  if(!data || !data.length) { tb.innerHTML='<tr><td colspan="11" class="empty">No hay registros</td></tr>'; return; }
   const esAdmin = ROLES_ADMIN.includes(USER.rol);
-  tb.innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando tabla...</td></tr>';
+  tb.innerHTML = '<tr><td colspan="11" class="empty">⏳ Cargando tabla...</td></tr>';
   setTimeout(() => {
     tb.innerHTML = data.map((c,i) => `
       <tr>
@@ -2386,6 +2394,8 @@ function renderTablaCasos(data) {
         <td style="font-size:11px">${c.supervisor}</td>
         <td><span class="tag ${c.estado==='EN PLAZO'?'tag-gr':'tag-ro'}">${c.estado||'—'}</span></td>
         <td style="font-weight:700;color:${c.estado==='EN PLAZO'?'#16a34a':'#dc2626'}">${c.porcentaje}%</td>
+        <td style="font-size:11px;font-weight:600">${c.estado_gestion||'—'}</td>
+        <td><span style="font-size:10px;font-weight:700;color:#fff;background:${_gravColor(c.gravedad)};padding:2px 7px;border-radius:10px">${c.gravedad||'—'}</span></td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn-a" style="font-size:10px" onclick="verDetalleCaso(${i})">👁️ Ver</button>
           ${c.enlace_informe ? `<button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="window.open('${c.enlace_informe}','_blank')">📄 Informe</button>` : `<button class="btn-n" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin informe adjunto">📄 Informe</button>`}
@@ -2426,8 +2436,10 @@ function verDetalleCaso(idx) {
       <div><span style="font-size:10px;color:#64748b;display:block">Temporada</span>${c.temporada||'—'}</div>
       <div><span style="font-size:10px;color:#64748b;display:block">Fecha Reporte</span>${fmtF(c.fecha_reporte)}</div>
       <div><span style="font-size:10px;color:#64748b;display:block">Fecha Límite</span>${fmtF(c.fecha_limite)}</div>
-      <div><span style="font-size:10px;color:#64748b;display:block">Estado</span><b style="color:${estColor}">${c.estado||'—'}</b></div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Estado Plazo</span><b style="color:${estColor}">${c.estado||'—'}</b></div>
       <div><span style="font-size:10px;color:#64748b;display:block">% Avance</span><b style="color:${estColor}">${c.porcentaje||0}%</b></div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Estado Gestión</span><b>${c.estado_gestion||'—'}</b></div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Gravedad</span><span style="font-size:11px;font-weight:700;color:#fff;background:${_gravColor(c.gravedad)};padding:2px 8px;border-radius:10px">${c.gravedad||'—'}</span></div>
       ${c.motivo_retraso?`<div style="grid-column:1/-1"><span style="font-size:10px;color:#dc2626;display:block">Motivo Retraso</span>${c.motivo_retraso}</div>`:''}
     </div>
     <div style="border-top:1px solid #e2e8f0;padding-top:12px;margin-bottom:14px">
@@ -4250,6 +4262,27 @@ function exportarEstadisticasAdmin() {
       <div style="margin-bottom:14px">
         <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Descripción del caso *</label>
         <textarea id="cRedaccion" rows="3" style="width:100%;padding:8px 12px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px;resize:vertical" placeholder="Describa el caso detalladamente..."></textarea>
+      </div>
+
+      <!-- Estado gestión + Gravedad -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">📋 Estado del Caso *</label>
+          <select id="cEstadoGestion" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
+            <option value="PENDIENTE" selected>Pendiente</option>
+            <option value="EN PROCESO">En Proceso</option>
+            <option value="CERRADO">Cerrado</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">⚠️ Nivel de Gravedad *</label>
+          <select id="cGravedad" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
+            <option value="BAJO">Bajo</option>
+            <option value="MEDIO" selected>Medio</option>
+            <option value="ALTO">Alto</option>
+            <option value="CRÍTICO">Crítico</option>
+          </select>
+        </div>
       </div>
 
       <!-- Adjuntos -->
