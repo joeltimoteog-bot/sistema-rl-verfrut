@@ -3366,6 +3366,17 @@ function filtrarRes() {
 }
 
 // REPORTE CORREO
+// Calcula el resumen agrupado localmente (empresa / tipo doc / responsable)
+function _calcularResumenCorreo(data) {
+  const mapa = {};
+  data.forEach(a => {
+    const key = (a.empresa||'—')+'||'+(a.detalle_documento||'—')+'||'+(a.responsable_recepcion||'—');
+    if (!mapa[key]) mapa[key] = { empresa:a.empresa||'—', tipo:a.detalle_documento||'—', responsable:a.responsable_recepcion||'—', cantidad:0 };
+    mapa[key].cantidad++;
+  });
+  return Object.values(mapa).sort((a,b) => a.empresa.localeCompare(b.empresa));
+}
+
 async function generarCorreo() {
   const fi=v('cFI'), ff=v('cFF');
   if(!fi||!ff){mostrarToast('❌ Selecciona el rango de fechas','error');return;}
@@ -3374,12 +3385,35 @@ async function generarCorreo() {
   if(!para){mostrarToast('❌ Agrega al menos un destinatario en Para','error');return;}
   document.getElementById('correoPreview').innerHTML='<div class="empty">⏳ Generando reporte...</div>';
   try{
-    const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:v('cEmp'),rol:USER.rol,usuario:USER.nombre||USER.usuario,nombre:USER.nombre||USER.usuario});
-    if(!d.success){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ '+d.error+'</div>';return;}
-    if(!d.data||!d.data.length){
-      document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
-      return;
+    let datos, resumen, total;
+    const empFiltro = v('cEmp');
+
+    // ── Usar caché si está disponible (evita llamada a la API) ──
+    const historial = CACHE.historialAtenciones || CACHE.atenciones || [];
+    if (historial.length > 0) {
+      datos = historial.filter(a => {
+        const f = a.fecha_atencion || '';
+        return f >= fi && f <= ff && (!empFiltro || a.empresa === empFiltro);
+      });
+      if (!datos.length) {
+        document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
+        return;
+      }
+      resumen = _calcularResumenCorreo(datos);
+      total   = datos.length;
+    } else {
+      // Sin caché: llamar a la API
+      const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:empFiltro,rol:USER.rol,usuario:USER.nombre||USER.usuario,nombre:USER.nombre||USER.usuario});
+      if(!d.success){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ '+d.error+'</div>';return;}
+      if(!d.data||!d.data.length){
+        document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
+        return;
+      }
+      datos   = d.data;
+      resumen = d.resumen;
+      total   = d.total;
     }
+
     const hora=new Date().getHours();
     const saludo=hora<12?'Buenos días':hora<19?'Buenas tardes':'Buenas noches';
     const fiF=fmtFLargo(fi), ffF=fmtFLargo(ff);
@@ -3397,7 +3431,7 @@ async function generarCorreo() {
             <th style="padding:7px 10px;text-align:left">Responsable Recepción</th>
             <th style="padding:7px 10px;text-align:center">Cantidad</th>
           </tr></thead><tbody>
-          ${d.resumen.map((r,i)=>`<tr style="background:${i%2===0?'#f8fafc':'#fff'}">
+          ${resumen.map((r,i)=>`<tr style="background:${i%2===0?'#f8fafc':'#fff'}">
             <td style="padding:6px 10px"><span class="bg ${empC(r.empresa)}">${r.empresa}</span></td>
             <td style="padding:6px 10px">${r.tipo}</td>
             <td style="padding:6px 10px">${r.responsable}</td>
@@ -3410,7 +3444,7 @@ async function generarCorreo() {
     // Tabla detalle de atenciones
     const tablaDetalle=`
       <div style="margin-top:16px">
-        <p style="font-weight:700;margin-bottom:6px">DETALLE DE ATENCIONES (${d.total} registros):</p>
+        <p style="font-weight:700;margin-bottom:6px">DETALLE DE ATENCIONES (${total} registros):</p>
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:11px">
             <thead><tr style="background:#0b1e45;color:#fff">
@@ -3427,7 +3461,7 @@ async function generarCorreo() {
               <th style="padding:6px 8px">Supervisor</th>
               <th style="padding:6px 8px">Estado</th>
             </tr></thead><tbody>
-            ${d.data.map((a,i)=>`<tr style="background:${i%2===0?'#f8fafc':'#fff'}">
+            ${datos.map((a,i)=>`<tr style="background:${i%2===0?'#f8fafc':'#fff'}">
               <td style="padding:5px 8px">${a.nro||''}</td>
               <td style="padding:5px 8px">${fmtF(a.fecha_atencion)}</td>
               <td style="padding:5px 8px">${a.dni||''}</td>
@@ -3456,7 +3490,7 @@ async function generarCorreo() {
       </div>`;
 
     // Guardar datos para exportar Excel
-    _correoData = { total: d.total, fi, ff, asunto, data: d.data, resumen: d.resumen };
+    _correoData = { total, fi, ff, asunto, data: datos, resumen };
 
     document.getElementById('correoPreview').innerHTML=`
       <div style="margin-top:20px;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:20px">
@@ -3469,17 +3503,17 @@ async function generarCorreo() {
         <div style="font-size:12px;line-height:1.8">
           <p>Estimados, ${saludo}.</p>
           <p>Se adjunta el archivo Excel con el registro de atenciones registradas entre el <strong>${fiF}</strong> y el <strong>${ffF}</strong>.</p>
-          <p>Total de atenciones: <strong>${d.total}</strong></p>
+          <p>Total de atenciones: <strong>${total}</strong></p>
         </div>
         ${tablaResumen}
         ${tablaDetalle}
         ${firma}
         <div style="margin-top:16px;padding:12px;background:#fef9c3;border-radius:8px;font-size:11px;color:#854d0e">
-          <strong>⚠️ Nota:</strong> Haz clic en "Abrir en Outlook" para abrir el correo. Deberás adjuntar manualmente el Excel generado.
+          <strong>⚠️ Outlook clásico:</strong> Al hacer clic en "Enviar por Outlook", el Excel se descargará automáticamente. Adjúntalo manualmente al correo.
         </div>
         <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn-n" onclick="enviarConConfirmacion()" style="padding:10px 20px">
-            📧 Abrir en Outlook
+            📧 Enviar por Outlook
           </button>
           <button class="btn-n" onclick="exportarCorreoExcel()" style="padding:10px 20px;background:#1a7f4b">
             📥 Exportar Excel
@@ -3492,13 +3526,20 @@ async function generarCorreo() {
 let _correoData = {};
 
 function abrirOutlook(asunto, cuerpo, para, cc) {
-  const body = encodeURIComponent(cuerpo);
+  // Normalizar saltos de línea a CRLF para compatibilidad con Outlook clásico
+  const cuerpoNorm = cuerpo.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
+  const body = encodeURIComponent(cuerpoNorm);
   const subj = encodeURIComponent(asunto);
   const to   = encodeURIComponent(para);
   const c    = cc ? encodeURIComponent(cc) : '';
   let mailto = `mailto:${to}?subject=${subj}&body=${body}`;
   if(c) mailto += `&cc=${c}`;
-  window.location.href = mailto;
+  // Usar enlace temporal para no navegar fuera de la página
+  const a = document.createElement('a');
+  a.href = mailto;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function enviarConConfirmacion() {
@@ -3509,11 +3550,13 @@ function enviarConConfirmacion() {
   const total = _correoData.total || 0;
   const fi = fmtFLargo(_correoData.fi||'');
   const ff = fmtFLargo(_correoData.ff||'');
-  const msg = `📋 CONFIRMACIÓN DE ENVÍO\n\nRango: ${fi} al ${ff}\nTotal de registros: ${total}\nDestinatarios: ${para}\n\n¿Abrir Outlook con el correo listo?`;
+  const msg = `📋 CONFIRMACIÓN DE ENVÍO\n\nRango: ${fi} al ${ff}\nTotal de registros: ${total}\nDestinatarios: ${para}\n\n✅ El Excel se descargará automáticamente.\n⚠️ Adjúntalo manualmente al correo en Outlook.\n\n¿Continuar?`;
   if (confirm(msg)) {
-    // Construir cuerpo del correo
-    const cuerpo = `Estimados,\n\nSe adjunta el archivo Excel con el registro de atenciones registradas entre el ${fi} y el ${ff}.\n\nTotal de atenciones: ${total}\n\nAtentamente,\n${USER.nombre||'Joel Timoteo'}\nCoordinador de Relaciones Laborales\nVerfrut / Rapel`;
-    abrirOutlook(_correoData.asunto||'', cuerpo, para, cc);
+    // 1. Descargar Excel automáticamente
+    exportarCorreoExcel();
+    // 2. Abrir Outlook con cuerpo simplificado (respetar límite ~2000 chars del mailto)
+    const cuerpo = `Estimados,\n\nSe adjunta el reporte de atenciones del ${fi} al ${ff}.\nTotal: ${total} registros. (Ver archivo Excel adjunto)\n\nAtentamente,\n${USER.nombre||'Joel Timoteo'}\nCoordinador de Relaciones Laborales\nVerfrut / Rapel`;
+    setTimeout(() => abrirOutlook(_correoData.asunto||'', cuerpo, para, cc), 600);
   }
 }
 
