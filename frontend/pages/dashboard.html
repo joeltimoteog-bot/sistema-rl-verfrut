@@ -992,8 +992,9 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   <div class="fg1" style="margin-top:12px">
     <div class="fc"><label>Observaciones</label><textarea id="at_obs" placeholder="Observaciones del caso..."></textarea></div>
   </div>
+  <div id="atSuccessMsg" style="display:none;margin:0 0 12px;padding:10px 14px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;color:#15803d;font-weight:600;font-size:13px;text-align:center"></div>
   <div class="modal-ft">
-    <button class="btn-cancel" onclick="cerrar('mAt')">Cancelar</button>
+    <button class="btn-cancel" onclick="cerrar('mAt')">Cerrar</button>
     <button class="btn-save" id="btnGuardarAt" onclick="guardarAt()">💾 Guardar</button>
   </div>
 </div>
@@ -2782,6 +2783,7 @@ function abrirAt() {
   modoEdicion=false;
   document.getElementById('mAtTitulo').textContent='Nueva Atención';
   document.getElementById('at_nro_edit').value='';
+  const msg=document.getElementById('atSuccessMsg'); if(msg) msg.style.display='none';
   document.getElementById('trabRes').style.display='none';
   // Reset campos
   ['at_dni','at_nom','at_fip','at_ftp','at_fundo','at_cargo','at_ruta','at_cod','at_fac','at_cel','at_fid','at_ftd','at_dias','at_resp','at_obs'].forEach(id=>sv(id,''));
@@ -2837,13 +2839,20 @@ async function guardarAt() {
       r=await apiPost({action:'saveAtencion',...d});
     }
     if(r.success){
-      cerrar('mAt');
       invalidarCache('atenciones');
-      await cargarAtenciones();
-      await cargarStats();
+      cargarAtenciones();
+      cargarStats();
       filtrarAt();
       guardarCacheLS();
-      mostrarToast(modoEdicion?'✅ Atención actualizada':'✅ Atención registrada N°: '+r.nro);
+      if(modoEdicion){
+        cerrar('mAt');
+        mostrarToast('✅ Atención actualizada');
+      } else {
+        // Mostrar éxito dentro del modal y limpiar para seguir registrando
+        const msg = document.getElementById('atSuccessMsg');
+        if(msg){ msg.textContent='✅ Atención registrada correctamente (N° '+r.nro+')'; msg.style.display='block'; setTimeout(()=>{ msg.style.display='none'; }, 5000); }
+        abrirAt();
+      }
     }else mostrarToast('❌ Error: '+(r.error||'Desconocido'),'error');
   }catch(e){mostrarToast('❌ Error de conexión','error');}
   finally{if(btnAt){btnAt.disabled=false; btnAt.textContent='💾 Guardar';}}
