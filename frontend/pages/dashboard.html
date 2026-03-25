@@ -1565,7 +1565,7 @@ async function cargarVisitas() {
   const supFiltro= document.getElementById('vFiltroSup')?.value  || '';
 
   try {
-    const params = { action:'getVisitas', empresa, mes, usuario:USER.usuario, nombre:USER.nombre||USER.usuario };
+    const params = { action:'getVisitas', empresa, mes };
     if (!esAdmin) params.supervisor = USER.nombre || USER.usuario;
     if (supFiltro) params.supervisor = supFiltro;
 
@@ -2640,7 +2640,22 @@ async function cargarStats() {
       dibujar(s);
       return;
     }
-    // Fallback: llamada directa
+    // Fallback local: calcular desde CACHE.atenciones sin llamar a la API
+    const ats = CACHE.atenciones || [];
+    if (ats.length > 0) {
+      const h = hoy();
+      const stats = {
+        hoy:        ats.filter(a => a.fecha_atencion === h).length,
+        mes:        ats.filter(a => (a.fecha_atencion||'').startsWith(h.slice(0,7))).length,
+        anio:       ats.filter(a => (a.fecha_atencion||'').startsWith(h.slice(0,4))).length,
+        pendientes: ats.filter(a => (a.estado||'').toUpperCase() === 'PENDIENTE').length
+      };
+      const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
+      set('sH', stats.hoy); set('sM', stats.mes); set('sA', stats.anio); set('sP', stats.pendientes);
+      dibujar(stats);
+      return;
+    }
+    // Último fallback: llamada directa a la API
     const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
     const empresa = esAdmin ? '' : (USER.empresa || '');
     const d = await apiGet({action:'getEstadisticas', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
