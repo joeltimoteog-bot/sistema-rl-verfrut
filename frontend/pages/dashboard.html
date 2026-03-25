@@ -2068,9 +2068,72 @@ const ARTICULOS_VERFRUT = [
 
 let casosData  = [];
 let casosFotos = [];
+let _modoCaso  = 'concluido'; // 'investigacion' | 'concluido'
+let _editandoCasoNro = null;  // nro del caso en edición, null si es nuevo
 
 function abrirNuevoCaso() {
+  abrir('mTipoCaso');
+}
+
+function abrirCasoInvestigacion() {
+  cerrar('mTipoCaso');
+  _modoCaso = 'investigacion';
+  _editandoCasoNro = null;
   limpiarFormCaso();
+  document.getElementById('mCasoTitulo').textContent = '🔍 Caso en Investigación';
+  document.getElementById('panelAdjuntosCaso').style.display = 'none';
+  document.getElementById('cEstadoGestion').value = 'EN PROCESO';
+  abrir('mCaso');
+}
+
+function abrirCasoConcluido() {
+  cerrar('mTipoCaso');
+  _modoCaso = 'concluido';
+  _editandoCasoNro = null;
+  limpiarFormCaso();
+  document.getElementById('mCasoTitulo').textContent = '✅ Caso Concluido';
+  document.getElementById('panelAdjuntosCaso').style.display = 'block';
+  document.getElementById('cEstadoGestion').value = 'CERRADO';
+  abrir('mCaso');
+}
+
+function editarCaso(idx) {
+  const c = casosData[idx];
+  if(!c) return;
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  const miNombre = (USER.nombre || USER.usuario).toLowerCase();
+  const esDueño  = String(c.supervisor||'').toLowerCase().includes(miNombre.split(' ')[0]) ||
+                   String(c.registrado_por||'').toLowerCase().includes(miNombre.split(' ')[0]);
+  if(!esAdmin && !esDueño) { mostrarToast('❌ Sin permiso para editar este caso','error'); return; }
+
+  _editandoCasoNro = c.nro;
+  _modoCaso = 'concluido';
+  limpiarFormCaso();
+  document.getElementById('mCasoTitulo').textContent = '✏️ Editar Caso N° ' + c.nro;
+  document.getElementById('panelAdjuntosCaso').style.display = 'block';
+
+  // Prefill trabajador
+  document.getElementById('mCasoDNI').value  = c.dni     || '';
+  document.getElementById('cNombre').value   = c.nombre  || '';
+  document.getElementById('cEmpresa').value  = c.empresa || '';
+  document.getElementById('cCargo').value    = c.cargo   || '';
+  document.getElementById('cSector').value   = c.sector  || '';
+  document.getElementById('cIngreso').value  = c.ingreso || '';
+  document.getElementById('cTermino').value  = c.termino || '';
+  document.getElementById('panelDatosCaso').style.display = 'block';
+  window._casoTrabajador = { nombre:c.nombre, empresa:c.empresa, cargo:c.cargo };
+
+  // Prefill caso
+  document.getElementById('cSupervisor').value     = c.supervisor     || '';
+  document.getElementById('cMotivo').value          = c.motivo         || '';
+  mostrarMotivoExtraCaso();
+  document.getElementById('cMotivoExtra').value     = c.motivo_extra   || '';
+  document.getElementById('cFechaReporte').value    = c.fecha_reporte  || '';
+  if(c.fecha_reporte) calcularFechaLimiteCaso();
+  document.getElementById('cRedaccion').value       = c.redaccion      || '';
+  document.getElementById('cEstadoGestion').value   = c.estado_gestion || 'EN PROCESO';
+  document.getElementById('cGravedad').value        = c.gravedad       || 'MEDIO';
+  document.getElementById('cMotivoRetraso').value   = c.motivo_retraso || '';
   abrir('mCaso');
 }
 
@@ -2105,6 +2168,11 @@ function limpiarFormCaso() {
   const crm = document.getElementById('cReporteMsg');
   if(crm) crm.textContent='';
   window._casoTrabajador = null;
+  _editandoCasoNro = null;
+  const titulo = document.getElementById('mCasoTitulo');
+  if(titulo) titulo.textContent = '⚖️ Registro de Caso';
+  const padj = document.getElementById('panelAdjuntosCaso');
+  if(padj) padj.style.display = 'block';
 }
 
 async function buscarTrabajadorCaso() {
@@ -2294,31 +2362,38 @@ async function guardarCaso() {
   if(!redaccion)  { mostrarToast('❌ Ingresa la redacción del caso','error'); return; }
   if(estado==='RETRASADO' && !motivoRet) { mostrarToast('❌ Debes ingresar el motivo del retraso','error'); return; }
 
+  const esConcluido = _modoCaso === 'concluido';
   const informeFile = document.getElementById('cInforme');
   const reporteFile = document.getElementById('cReporte');
-  if(!informeFile.files[0])  { mostrarToast('❌ Debes adjuntar el Informe','error'); return; }
-  if(!reporteFile.files[0])  { mostrarToast('❌ Debes adjuntar el Reporte de Infracción','error'); return; }
 
-  const btn = document.querySelector('#mCaso .btn-n:last-child');
-  btn.textContent='⏳ Subiendo archivos...'; btn.disabled=true;
-
-  // Subir archivos a Drive
-  const [informe, reporte] = await Promise.all([
-    subirArchivoDrive(informeFile, 'cInforme'),
-    subirArchivoDrive(reporteFile, 'cReporte')
-  ]);
-
-  if(!informe || !reporte) {
-    mostrarToast('❌ Error al subir uno o más archivos. Intenta nuevamente.','error');
-    btn.textContent='💾 Guardar Caso'; btn.disabled=false;
-    return;
+  // Adjuntos obligatorios solo en modo concluido y sin nro existente
+  if(esConcluido && !_editandoCasoNro) {
+    if(!informeFile.files[0])  { mostrarToast('❌ Debes adjuntar el Informe','error'); return; }
+    if(!reporteFile.files[0])  { mostrarToast('❌ Debes adjuntar el Reporte de Infracción','error'); return; }
   }
 
-  btn.textContent='⏳ Guardando...';
+  const btn = document.querySelector('#mCaso .btn-n:last-child');
+  btn.textContent='⏳ Guardando...'; btn.disabled=true;
+
+  let informe = null, reporte = null;
+
+  if(esConcluido && (informeFile.files[0] || reporteFile.files[0])) {
+    btn.textContent='⏳ Subiendo archivos...';
+    const uploads = await Promise.all([
+      informeFile.files[0] ? subirArchivoDrive(informeFile, 'cInforme') : Promise.resolve(null),
+      reporteFile.files[0] ? subirArchivoDrive(reporteFile, 'cReporte') : Promise.resolve(null)
+    ]);
+    informe = uploads[0]; reporte = uploads[1];
+    if((informeFile.files[0] && !informe) || (reporteFile.files[0] && !reporte)) {
+      mostrarToast('❌ Error al subir uno o más archivos. Intenta nuevamente.','error');
+      btn.textContent='💾 Guardar Caso'; btn.disabled=false;
+      return;
+    }
+    btn.textContent='⏳ Guardando...';
+  }
 
   try {
-    const res = await apiPost({
-      action:'saveCaso',
+    const payload = {
       dni, nombre, empresa, cargo, sector, ingreso, termino,
       supervisor, motivo, motivo_extra: motivoExtra,
       fecha_reporte: fechaRep, fecha_limite: fechaLim,
@@ -2328,18 +2403,24 @@ async function guardarCaso() {
       motivo_retraso: motivoRet,
       dias_retraso: diasRetr,
       porcentaje: estado==='EN PLAZO' ? 100 : pct,
-      registrado_por: USER.nombre,
-      nombre_informe:  informe.nombre,
-      enlace_informe:  informe.enlace,
-      nombre_reporte:  reporte.nombre,
-      enlace_reporte:  reporte.enlace
-    });
+      registrado_por: USER.nombre
+    };
+    if(informe) { payload.nombre_informe = informe.nombre; payload.enlace_informe = informe.enlace; }
+    if(reporte) { payload.nombre_reporte = reporte.nombre; payload.enlace_reporte = reporte.enlace; }
+
+    const action = _editandoCasoNro ? 'updateCaso' : 'saveCaso';
+    if(_editandoCasoNro) payload.nro = _editandoCasoNro;
+
+    const res = await apiPost({ action, ...payload });
     if(res.success) {
       cerrar('mCaso');
       invalidarCache('casos');
       await cargarCasos();
       guardarCacheLS();
-      mostrarToast('✅ Caso registrado correctamente (N° '+res.nro+')');
+      mostrarToast(_editandoCasoNro
+        ? '✅ Caso actualizado correctamente'
+        : '✅ Caso registrado correctamente (N° '+res.nro+')');
+      _editandoCasoNro = null;
     } else {
       mostrarToast('❌ Error: '+res.error,'error');
     }
@@ -2405,10 +2486,15 @@ function _gravColor(g) {
 function renderTablaCasos(data) {
   const tb = document.getElementById('tbCasos');
   if(!data || !data.length) { tb.innerHTML='<tr><td colspan="11" class="empty">No hay registros</td></tr>'; return; }
-  const esAdmin = ROLES_ADMIN.includes(USER.rol);
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  const miNombreC = (USER.nombre || USER.usuario).toLowerCase();
   tb.innerHTML = '<tr><td colspan="11" class="empty">⏳ Cargando tabla...</td></tr>';
   setTimeout(() => {
-    tb.innerHTML = data.map((c,i) => `
+    tb.innerHTML = data.map((c,i) => {
+      const puedeEditar = esAdmin ||
+        String(c.supervisor||'').toLowerCase().includes(miNombreC.split(' ')[0]) ||
+        String(c.registrado_por||'').toLowerCase().includes(miNombreC.split(' ')[0]);
+      return `
       <tr>
         <td>${i+1}</td>
         <td>${fmtF(c.fecha_reporte)}</td>
@@ -2422,11 +2508,12 @@ function renderTablaCasos(data) {
         <td><span style="font-size:10px;font-weight:700;color:#fff;background:${_gravColor(c.gravedad)};padding:2px 7px;border-radius:10px">${c.gravedad||'—'}</span></td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn-a" style="font-size:10px" onclick="verDetalleCaso(${i})">👁️ Ver</button>
+          ${puedeEditar ? `<button style="font-size:10px;padding:4px 8px;background:#d97706;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="editarCaso(${i})">✏️ Editar</button>` : ''}
           ${c.enlace_informe ? `<button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="window.open('${c.enlace_informe}','_blank')">📄 Informe</button>` : `<button class="btn-n" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin informe adjunto">📄 Informe</button>`}
           ${c.enlace_reporte ? `<button class="btn-s" style="font-size:10px;padding:4px 8px" onclick="window.open('${c.enlace_reporte}','_blank')">📋 Reporte</button>` : `<button class="btn-s" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin reporte adjunto">📋 Reporte</button>`}
         </td>
       </tr>
-    `).join('');
+    `; }).join('');
   }, 0);
 }
 
@@ -4279,11 +4366,28 @@ function exportarEstadisticasAdmin() {
   </svg>
 </a>
 
+<!-- MODAL SELECCIÓN TIPO CASO -->
+<div class="ov" id="mTipoCaso">
+<div class="modal" style="max-width:380px;width:94vw;padding:28px 24px;text-align:center">
+  <div style="font-size:16px;font-weight:700;color:#0b1e45;margin-bottom:6px">⚖️ ¿Qué tipo de caso es?</div>
+  <div style="font-size:12px;color:#64748b;margin-bottom:22px">Selecciona el estado actual del caso</div>
+  <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px">
+    <button onclick="abrirCasoInvestigacion()" style="padding:16px 20px;background:#3b82f6;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;text-align:left;line-height:1.4">
+      🔍 En Investigación<br><span style="font-size:11px;font-weight:400;opacity:.88">Caso abierto — sin documentos adjuntos</span>
+    </button>
+    <button onclick="abrirCasoConcluido()" style="padding:16px 20px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;text-align:left;line-height:1.4">
+      ✅ Caso Concluido<br><span style="font-size:11px;font-weight:400;opacity:.88">Caso cerrado — adjunta informe y reporte</span>
+    </button>
+  </div>
+  <button onclick="cerrar('mTipoCaso')" style="padding:7px 22px;background:#e2e8f0;border:none;border-radius:8px;cursor:pointer;font-size:13px;color:#475569;font-weight:600">Cancelar</button>
+</div>
+</div>
+
 <!-- MODAL NUEVO CASO -->
 <div class="ov" id="mCaso">
 <div class="modal" style="max-width:640px;width:96vw;max-height:92vh;overflow-y:auto;padding:0">
   <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-weight:700;font-size:15px">⚖️ Registro de Caso</span>
+    <span id="mCasoTitulo" style="font-weight:700;font-size:15px">⚖️ Registro de Caso</span>
     <span onclick="cerrar('mCaso')" style="cursor:pointer;font-size:22px;line-height:1">✕</span>
   </div>
   <div style="padding:20px">
@@ -4427,7 +4531,7 @@ function exportarEstadisticasAdmin() {
       </div>
 
       <!-- Adjuntos -->
-      <div style="border-top:2px solid #e2e8f0;padding-top:14px;margin-bottom:14px">
+      <div id="panelAdjuntosCaso" style="border-top:2px solid #e2e8f0;padding-top:14px;margin-bottom:14px">
         <div style="font-size:12px;font-weight:700;color:#0b1e45;margin-bottom:10px">📎 Documentos Adjuntos</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div>
