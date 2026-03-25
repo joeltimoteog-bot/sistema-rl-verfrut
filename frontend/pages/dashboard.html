@@ -915,6 +915,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <div class="fc"><label>Nombre Completo *</label><input type="text" id="at_nom" placeholder="Nombre del trabajador"></div>
     <div class="fc"><label>Sexo</label><select id="at_sex"><option value="">--</option><option>M</option><option>F</option></select></div>
     <div class="fc"><label>Fecha Inicio Periodo</label><input type="date" id="at_fip"></div>
+    <div class="fc"><label>Fecha Término Periodo</label><input type="date" id="at_ftp"></div>
     <div class="fc"><label>Empresa *</label><select id="at_emp"><option>RAPEL</option><option>VERFRUT</option></select></div>
     <div class="fc"><label>Fundo</label><input type="text" id="at_fundo" placeholder="Fundo de origen"></div>
     <div class="fc"><label>Cargo</label><input type="text" id="at_cargo" placeholder="Cargo"></div>
@@ -2783,7 +2784,7 @@ function abrirAt() {
   document.getElementById('at_nro_edit').value='';
   document.getElementById('trabRes').style.display='none';
   // Reset campos
-  ['at_dni','at_nom','at_fip','at_fundo','at_cargo','at_ruta','at_cod','at_fac','at_cel','at_fid','at_ftd','at_dias','at_resp','at_obs'].forEach(id=>sv(id,''));
+  ['at_dni','at_nom','at_fip','at_ftp','at_fundo','at_cargo','at_ruta','at_cod','at_fac','at_cel','at_fid','at_ftd','at_dias','at_resp','at_obs'].forEach(id=>sv(id,''));
   sv('at_sex',''); sv('at_emp','RAPEL'); sv('at_doc',''); sv('at_est','PENDIENTE');
   sv('at_fec',hoy()); sv('at_hi',new Date().toTimeString().substring(0,5)); sv('at_ht','');
   iniciarReloj();
@@ -2800,7 +2801,7 @@ function editarAt(nro) {
   document.getElementById('mAtTitulo').textContent='Editar Atención N° '+nro;
   sv('at_nro_edit',nro);
   sv('at_dni',a.dni||''); sv('at_nom',a.nombre||''); sv('at_sex',a.sexo||'');
-  sv('at_fip',a.fecha_inicio_periodo||''); sv('at_emp',a.empresa||'RAPEL');
+  sv('at_fip',a.fecha_inicio_periodo||''); sv('at_ftp',a.fecha_termino_periodo||''); sv('at_emp',a.empresa||'RAPEL');
   sv('at_fundo',a.fundo||''); sv('at_cargo',a.cargo||''); sv('at_ruta',a.ruta||'');
   sv('at_cod',a.codigo||''); sv('at_fac',a.fundo_actual||''); sv('at_cel',a.celular||'');
   sv('at_fec',a.fecha_atencion||''); sv('at_hi',a.hora_inicio||''); sv('at_ht',a.hora_termino||'');
@@ -2816,7 +2817,7 @@ async function guardarAt() {
   const nroEdit=v('at_nro_edit');
   const d={
     dni:v('at_dni'), nombre:v('at_nom'), sexo:v('at_sex'),
-    fecha_inicio_periodo:v('at_fip'), empresa:v('at_emp'),
+    fecha_inicio_periodo:v('at_fip'), fecha_termino_periodo:v('at_ftp'), empresa:v('at_emp'),
     fundo:v('at_fundo'), cargo:v('at_cargo'), ruta:v('at_ruta'),
     codigo:v('at_cod'), fundo_actual:v('at_fac'), celular:v('at_cel'),
     fecha_atencion:v('at_fec'), hora_inicio:v('at_hi'), hora_termino:v('at_ht'),
@@ -2867,7 +2868,7 @@ function verDet(nro, fuente) {
     ['Hora Inicio',a.hora_inicio],['Hora Término',a.hora_termino],
     ['N° Semana',a.nro_semana],['Mes/Año',a.mes+'/'+a.anio],
     ['DNI',a.dni],['Nombre',a.nombre],['Sexo',a.sexo],
-    ['F. Inicio Periodo',fmtF(a.fecha_inicio_periodo)],
+    ['F. Inicio Periodo',fmtF(a.fecha_inicio_periodo)],['F. Término Periodo',fmtF(a.fecha_termino_periodo)],
     ['Empresa',a.empresa],['Fundo',a.fundo],['Cargo',a.cargo],
     ['Ruta',a.ruta],['Código',a.codigo],['Fundo Actual',a.fundo_actual],
     ['Celular',a.celular],['Supervisor',a.supervisor],
@@ -2902,7 +2903,7 @@ async function buscarTrab() {
       <td>${t.cargo||''}</td><td>${t.fundo||''}</td>
       <td>${t.fundo_actual||t['fundo_actual']||''}</td>
       <td>${t.supervisor||''}</td><td>${t.celular||''}</td>
-      <td><button class="btn-a bv" onclick="regAt('${t.dni}','${esc(t.nombre||'')}','${t.empresa||''}','${esc(t.fundo||'')}','${esc(t.cargo||'')}','${t.sexo||''}','${esc(t.ruta||'')}','${esc(t.codigo||'')}','${esc(t.fundo_actual||'')}','${t.celular||''}')">+ Atención</button></td>
+      <td><button class="btn-a bv" onclick="regAt('${t.dni}','${esc(t.nombre||'')}','${t.empresa||''}','${esc(t.fundo||'')}','${esc(t.cargo||'')}','${t.sexo||''}','${esc(t.ruta||'')}','${esc(t.codigo||'')}','${esc(t.fundo_actual||'')}','${t.celular||''}','${t.fecha_inicio_periodo?String(t.fecha_inicio_periodo).split('T')[0]:''}','${t.fecha_termino_periodo?String(t.fecha_termino_periodo).split('T')[0]:''}')">+ Atención</button></td>
     </tr>`).join('');
   }catch(e){ console.error('buscarTrab:', e); }
 }
@@ -2928,6 +2929,8 @@ async function buscarDniBtn() {
       sv('at_emp',t.empresa||'RAPEL'); sv('at_fundo',t.fundo||'');
       sv('at_cargo',t.cargo||''); sv('at_ruta',t.ruta||'');
       sv('at_cod',t.codigo||''); sv('at_cel',t.celular||'');
+      sv('at_fip', t.fecha_inicio_periodo ? String(t.fecha_inicio_periodo).split('T')[0] : '');
+      sv('at_ftp', t.fecha_termino_periodo ? String(t.fecha_termino_periodo).split('T')[0] : '');
       // Fundo actual = fundo del supervisor (no del trabajador)
       if(USER.fundoHoy) sv('at_fac',USER.fundoHoy);
       else if(USER.fundos&&USER.fundos.length===1) sv('at_fac',USER.fundos[0]);
@@ -2941,11 +2944,12 @@ async function buscarDniBtn() {
   }catch(e){r.textContent='❌ Error de conexión';}
 }
 
-function regAt(dni,nom,emp,fundo,cargo,sexo,ruta,cod,fac,cel){
+function regAt(dni,nom,emp,fundo,cargo,sexo,ruta,cod,fac,cel,fip,ftp){
   abrirAt();
   setTimeout(()=>{
     sv('at_dni',dni);sv('at_nom',nom);sv('at_emp',emp);sv('at_fundo',fundo);
     sv('at_cargo',cargo);sv('at_sex',sexo);sv('at_ruta',ruta);sv('at_cod',cod);sv('at_fac',fac);sv('at_cel',cel);
+    sv('at_fip',fip||'');sv('at_ftp',ftp||'');
     const r=document.getElementById('trabRes');r.style.display='block';r.textContent='✅ '+nom+' · '+emp;
   },100);
   ir('atenciones',null);
