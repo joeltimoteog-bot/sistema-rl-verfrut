@@ -2359,8 +2359,8 @@ async function cargarCasos() {
       (!motivo  || c.motivo === motivo) &&
       (!sup     || String(c.supervisor||'').toLowerCase().includes(sup)) &&
       (esAdmin  ||
-        String(c.supervisor||'').toLowerCase().trim() === miNombre ||
-        String(c.registrado_por||'').toLowerCase().trim() === miNombre)
+        String(c.supervisor||'').toLowerCase().trim().includes(miNombre.split(' ')[0]) ||
+        String(c.registrado_por||'').toLowerCase().trim().includes(miNombre.split(' ')[0]))
     );
     renderTablaCasos(casosData);
     if(ROLES_ADMIN.includes(USER.rol)) {
@@ -2370,10 +2370,13 @@ async function cargarCasos() {
     }
     return;
   }
+  const tb = document.getElementById('tbCasos');
+  if(tb) tb.innerHTML = '<tr><td colspan="11" class="empty">⏳ Cargando...</td></tr>';
   try {
-    const d = await apiGet({action:'getCasos', empresa, motivo, supervisor:sup, nombre:USER.nombre||USER.usuario,
-                            usuario:USER.usuario, rol:USER.rol});
-    if(d.data && d.data.length > 0) console.log('[getCasos] campos del primer registro:', Object.keys(d.data[0]), d.data[0]);
+    const params = {action:'getCasos', empresa, motivo, nombre:USER.nombre||USER.usuario, usuario:USER.usuario, rol:USER.rol};
+    if(sup) params.supervisor = sup;
+    const d = await apiGet(params);
+    if(d.data && d.data.length > 0) console.log('[getCasos] campos:', Object.keys(d.data[0]));
     casosData = d.data || [];
     CACHE.casos = casosData;
     renderTablaCasos(casosData);
