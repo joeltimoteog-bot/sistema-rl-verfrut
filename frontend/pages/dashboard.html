@@ -2334,6 +2334,7 @@ async function guardarCaso() {
     });
     if(res.success) {
       cerrar('mCaso');
+      invalidarCache('casos');
       await cargarCasos();
       guardarCacheLS();
       mostrarToast('✅ Caso registrado correctamente (N° '+res.nro+')');
@@ -2376,6 +2377,10 @@ async function cargarCasos() {
     const params = {action:'getCasos', empresa, motivo, nombre:USER.nombre||USER.usuario, usuario:USER.usuario, rol:USER.rol};
     if(sup) params.supervisor = sup;
     const d = await apiGet(params);
+    if (!d.success) {
+      if(tb) tb.innerHTML = '<tr><td colspan="11" class="empty">❌ '+( d.error||'Error al cargar casos')+'</td></tr>';
+      return;
+    }
     if(d.data && d.data.length > 0) console.log('[getCasos] campos:', Object.keys(d.data[0]));
     casosData = d.data || [];
     CACHE.casos = casosData;
@@ -2385,7 +2390,9 @@ async function cargarCasos() {
       setTimeout(() => actualizarStatsCasos(casosData), 0);
     }
   } catch(e) {
-    document.getElementById('tbCasos').innerHTML='<tr><td colspan="11" class="empty">Error cargando casos</td></tr>';
+    const tb2 = document.getElementById('tbCasos');
+    if(tb2) tb2.innerHTML='<tr><td colspan="11" class="empty">❌ Error de conexión</td></tr>';
+    console.error('cargarCasos error:', e);
   }
 }
 
