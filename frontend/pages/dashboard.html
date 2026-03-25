@@ -2071,6 +2071,102 @@ let casosFotos = [];
 let _modoCaso  = 'concluido'; // 'investigacion' | 'concluido'
 let _editandoCasoNro = null;  // nro del caso en edición, null si es nuevo
 
+// ── Mapeo usuario → nombre de carpeta en Drive ────────────────
+const CASOS_USER_MAP = {
+  ptamayo:   'PTAMAYO',   atineo:    'ATINEO',     fpulache:  'FPULACHE',
+  yluzon:    'YLUZON',    sviera:    'SVIERA',      ecastro:   'ECASTRO',
+  almartinez:'ALMARTINEZ',fzapata:   'FZAPATA',    rmolero:   'RMOLERO',
+  ovilela:   'OVILELA',   jchavez:   'JCHAVEZ',    jtimoteo:  'JTIMOTEO',
+  mmechato:  'MURIEL MECHATO',       javendano: 'JAVENDANI',
+  jsiancas:  'JSIANCAS',  smiranda:  'SMIRANDA'
+};
+const CASOS_MAX_MB = 10; // tamaño máximo de archivos (configurable)
+
+/** Devuelve el nombre de carpeta Drive del usuario actual */
+function getCarpetaUsuarioCaso() {
+  const u = (USER.usuario || '').toLowerCase().trim();
+  return CASOS_USER_MAP[u] || u.toUpperCase();
+}
+
+// ── Lógica de temporadas y días hábiles ──────────────────────
+
+/**
+ * Detecta la temporada de una fecha
+ * Baja: 01 Ene – 26 Jun  (Lun-Vie)
+ * Alta: 27 Jun – 31 Dic  (Lun-Sáb)
+ */
+function detectarTemporada(fecha) {
+  const d = (fecha instanceof Date) ? fecha : new Date(fecha + 'T00:00:00');
+  const mes = d.getMonth() + 1;
+  const dia = d.getDate();
+  if (mes < 6 || (mes === 6 && dia <= 26)) return 'baja';
+  return 'alta';
+}
+
+/**
+ * Determina si una fecha es día hábil según su temporada
+ * Baja: Lun(1)–Vie(5) | Alta: Lun(1)–Sáb(6)  — Domingo nunca hábil
+ */
+function esDiaHabilCaso(fecha) {
+  const d = (fecha instanceof Date) ? fecha : new Date(fecha + 'T00:00:00');
+  const dow = d.getDay();
+  if (dow === 0) return false;
+  return detectarTemporada(d) === 'baja' ? dow <= 5 : true;
+}
+
+/**
+ * Suma N días hábiles a una fecha (la fecha de inicio no se cuenta)
+ */
+function sumarDiasHabiles(fechaInicio, cantidad) {
+  const d = new Date(fechaInicio); d.setHours(0, 0, 0, 0);
+  let contados = 0;
+  while (contados < cantidad) {
+    d.setDate(d.getDate() + 1);
+    if (esDiaHabilCaso(d)) contados++;
+  }
+  return d;
+}
+
+/**
+ * Cuenta días hábiles entre dos fechas (inicio no incluido, fin incluido)
+ */
+function calcularDiasHabilesTranscurridos(fechaInicio, fechaFin) {
+  const ini = new Date(fechaInicio); ini.setHours(0, 0, 0, 0);
+  const fin = new Date(fechaFin);   fin.setHours(0, 0, 0, 0);
+  if (fin <= ini) return 0;
+  const cur = new Date(ini); cur.setDate(cur.getDate() + 1);
+  let count = 0;
+  while (cur <= fin) { if (esDiaHabilCaso(cur)) count++; cur.setDate(cur.getDate() + 1); }
+  return count;
+}
+
+/**
+ * Calcula días hábiles de retraso respecto a fecha límite (0 si no hay retraso)
+ */
+function calcularRetraso(fechaLimite, fechaActual) {
+  const limite = new Date(fechaLimite + 'T00:00:00');
+  const hoy = new Date(fechaActual); hoy.setHours(0, 0, 0, 0);
+  if (hoy <= limite) return 0;
+  return calcularDiasHabilesTranscurridos(limite, hoy);
+}
+
+/**
+ * Porcentaje de avance: 100% en plazo, decrece 10% por cada día hábil de retraso
+ */
+function calcularAvance(diasRetraso) {
+  return Math.max(0, 100 - (diasRetraso * 10));
+}
+
+/** Color semáforo según estado y días restantes */
+function _estadoPlazoColor(estadoCaso, diasRestantes) {
+  if (!estadoCaso) return '#64748b';
+  if (estadoCaso.includes('VENCIDO') || estadoCaso.includes('CON_RETRASO')) return '#dc2626';
+  if (diasRestantes <= 1) return '#d97706';
+  return '#16a34a';
+}
+
+// ── Apertura de modales ───────────────────────────────────────
+
 function abrirNuevoCaso() {
   abrir('mTipoCaso');
 }
@@ -2099,18 +2195,20 @@ function abrirCasoConcluido() {
 
 function editarCaso(idx) {
   const c = casosData[idx];
-  if(!c) return;
+  if (!c) return;
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   const miNombre = (USER.nombre || USER.usuario).toLowerCase();
   const esDueño  = String(c.supervisor||'').toLowerCase().includes(miNombre.split(' ')[0]) ||
                    String(c.registrado_por||'').toLowerCase().includes(miNombre.split(' ')[0]);
-  if(!esAdmin && !esDueño) { mostrarToast('❌ Sin permiso para editar este caso','error'); return; }
+  if (!esAdmin && !esDueño) { mostrarToast('❌ Sin permiso para editar este caso','error'); return; }
 
   _editandoCasoNro = c.nro;
-  _modoCaso = 'concluido';
+  // Detectar modo por estado guardado (compatible con registros antiguos)
+  const estadoGuardado = c.estado_caso || c.estado || '';
+  _modoCaso = estadoGuardado.startsWith('CONCLUIDO') ? 'concluido' : 'investigacion';
   limpiarFormCaso();
   document.getElementById('mCasoTitulo').textContent = '✏️ Editar Caso N° ' + c.nro;
-  document.getElementById('panelAdjuntosCaso').style.display = 'block';
+  document.getElementById('panelAdjuntosCaso').style.display = _modoCaso === 'concluido' ? 'block' : 'none';
 
   // Prefill trabajador
   document.getElementById('mCasoDNI').value  = c.dni     || '';
@@ -2124,16 +2222,16 @@ function editarCaso(idx) {
   window._casoTrabajador = { nombre:c.nombre, empresa:c.empresa, cargo:c.cargo };
 
   // Prefill caso
-  document.getElementById('cSupervisor').value     = c.supervisor     || '';
-  document.getElementById('cMotivo').value          = c.motivo         || '';
+  document.getElementById('cSupervisor').value   = c.supervisor     || '';
+  document.getElementById('cMotivo').value        = c.motivo         || '';
   mostrarMotivoExtraCaso();
-  document.getElementById('cMotivoExtra').value     = c.motivo_extra   || '';
-  document.getElementById('cFechaReporte').value    = c.fecha_reporte  || '';
-  if(c.fecha_reporte) calcularFechaLimiteCaso();
-  document.getElementById('cRedaccion').value       = c.redaccion      || '';
-  document.getElementById('cEstadoGestion').value   = c.estado_gestion || 'EN PROCESO';
-  document.getElementById('cGravedad').value        = c.gravedad       || 'MEDIO';
-  document.getElementById('cMotivoRetraso').value   = c.motivo_retraso || '';
+  document.getElementById('cMotivoExtra').value   = c.motivo_extra   || '';
+  document.getElementById('cFechaReporte').value  = c.fecha_reporte  || '';
+  if (c.fecha_reporte) calcularFechaLimiteCaso();
+  document.getElementById('cRedaccion').value     = c.redaccion      || '';
+  document.getElementById('cEstadoGestion').value = c.estado_gestion || 'EN PROCESO';
+  document.getElementById('cGravedad').value      = c.gravedad       || 'MEDIO';
+  document.getElementById('cMotivoRetraso').value = c.motivo_retraso || '';
   abrir('mCaso');
 }
 
@@ -2215,115 +2313,144 @@ function mostrarMotivoExtraCaso() {
     motivo === 'Otros' ? 'block' : 'none';
 }
 
-function esDiaHabilCaso(fecha) {
-  const d = new Date(fecha);
-  const mes = d.getMonth()+1, dia = d.getDate(), year = d.getFullYear();
-  // Temporada baja: 5 Ene - 26 Jun → Lun-Vie
-  const esBaja = (new Date(fecha) <= new Date(year, 5, 26));
-  const dow = d.getDay(); // 0=Dom, 6=Sab
-  return esBaja ? (dow>=1 && dow<=5) : (dow>=1 && dow<=6);
-}
+// ── Cálculo de plazos ─────────────────────────────────────────
 
+/** Actualiza los campos automáticos al seleccionar fecha de reporte */
 function calcularFechaLimiteCaso() {
   const fechaStr = document.getElementById('cFechaReporte').value;
-  if(!fechaStr) return;
+  if (!fechaStr) return;
   const fechaRep = new Date(fechaStr + 'T00:00:00');
-  // Temporada
-  const esBaja = fechaRep <= new Date(fechaRep.getFullYear(), 5, 26);
-  document.getElementById('cTemporada').value = esBaja ? 'Temporada Baja' : 'Temporada Alta';
-  // Calcular fecha límite: 3 días hábiles
-  let contador = 0;
-  let fechaTemp = new Date(fechaRep);
-  fechaTemp.setDate(fechaTemp.getDate()+1);
-  while(contador < 3) {
-    if(esDiaHabilCaso(fechaTemp)) contador++;
-    if(contador < 3) fechaTemp.setDate(fechaTemp.getDate()+1);
-  }
-  // Asegurar que la fecha límite sea hábil
-  while(!esDiaHabilCaso(fechaTemp)) fechaTemp.setDate(fechaTemp.getDate()+1);
-  const fl = fechaTemp.toISOString().split('T')[0];
+  const temporada = detectarTemporada(fechaRep);
+  document.getElementById('cTemporada').value = temporada === 'baja' ? 'Temporada Baja' : 'Temporada Alta';
+  // Plazo: 4 días hábiles desde el día siguiente al reporte
+  const fechaLimite = sumarDiasHabiles(fechaRep, 4);
+  const fl = fechaLimite.toISOString().split('T')[0];
   document.getElementById('cFechaLimite').value = fl;
-  // Calcular estado con la fecha de hoy
   calcularEstadoCaso(fl);
 }
 
+/**
+ * Calcula y muestra el estado automático del caso
+ * Estados: EN_PROCESO_DENTRO_PLAZO | EN_PROCESO_VENCIDO |
+ *          CONCLUIDO_DENTRO_PLAZO  | CONCLUIDO_CON_RETRASO
+ */
 function calcularEstadoCaso(fechaLimiteStr) {
-  if(!fechaLimiteStr) return;
-  const hoy    = new Date(); hoy.setHours(0,0,0,0);
+  if (!fechaLimiteStr) return;
+  const hoy    = new Date(); hoy.setHours(0, 0, 0, 0);
   const limite = new Date(fechaLimiteStr + 'T00:00:00');
   const panel  = document.getElementById('panelAvanceCaso');
-  panel.style.display='block';
-  if(hoy <= limite) {
-    // En plazo
-    document.getElementById('cEstadoCaso').value = 'EN PLAZO';
-    document.getElementById('cEstadoCaso').style.color = '#16a34a';
-    document.getElementById('cEstadoLabel').textContent = '✅ EN PLAZO';
-    document.getElementById('cPorcentaje').textContent = '100%';
-    document.getElementById('cPorcentaje').style.color = '#16a34a';
-    document.getElementById('cBarraAvance').style.width='100%';
-    document.getElementById('cBarraAvance').style.background='#16a34a';
-    document.getElementById('panelMotivoCaso').style.display='none';
-    panel.style.background='#f0fdf4';
-    panel.style.borderColor='#bbf7d0';
+  const esConcluido = _modoCaso === 'concluido';
+  const diasRetraso = calcularRetraso(fechaLimiteStr, hoy);
+  const pct         = calcularAvance(diasRetraso);
+  panel.style.display = 'block';
+
+  let estadoPlazo, etiqueta, color, bg, border;
+
+  if (diasRetraso === 0) {
+    const diasRestantes = calcularDiasHabilesTranscurridos(hoy, limite);
+    estadoPlazo = esConcluido ? 'CONCLUIDO_DENTRO_PLAZO' : 'EN_PROCESO_DENTRO_PLAZO';
+    if (!esConcluido && diasRestantes <= 1) {
+      // Amarillo: por vencer
+      color = '#d97706'; bg = '#fffbeb'; border = '#fde68a';
+      etiqueta = '⚠️ EN PROCESO — vence hoy o mañana (' + diasRestantes + ' día(s) restante(s))';
+    } else {
+      color = '#16a34a'; bg = '#f0fdf4'; border = '#bbf7d0';
+      etiqueta = esConcluido ? '✅ CONCLUIDO DENTRO DEL PLAZO' : '✅ EN PROCESO — DENTRO DEL PLAZO';
+    }
   } else {
-    // Retrasado
-    let diasRetraso=0, cur=new Date(limite); cur.setDate(cur.getDate()+1);
-    while(cur<=hoy){ if(esDiaHabilCaso(cur)) diasRetraso++; cur.setDate(cur.getDate()+1); }
-    let pct = Math.max(0, 100 - (diasRetraso*10));
-    document.getElementById('cEstadoCaso').value = 'RETRASADO';
-    document.getElementById('cEstadoCaso').style.color = '#dc2626';
-    document.getElementById('cEstadoLabel').textContent = '⚠️ RETRASADO — '+diasRetraso+' día(s) hábil(es)';
-    document.getElementById('cPorcentaje').textContent = pct+'%';
-    document.getElementById('cPorcentaje').style.color = '#dc2626';
-    document.getElementById('cBarraAvance').style.width=pct+'%';
-    document.getElementById('cBarraAvance').style.background='#dc2626';
-    document.getElementById('panelMotivoCaso').style.display='block';
-    panel.style.background='#fef2f2';
-    panel.style.borderColor='#fecaca';
-    // Guardar datos en dataset
-    document.getElementById('cFechaLimite').dataset.diasRetraso = diasRetraso;
-    document.getElementById('cFechaLimite').dataset.pct = pct;
+    // Rojo: vencido
+    estadoPlazo = esConcluido ? 'CONCLUIDO_CON_RETRASO' : 'EN_PROCESO_VENCIDO';
+    color = '#dc2626'; bg = '#fef2f2'; border = '#fecaca';
+    etiqueta = (esConcluido ? '🔴 CONCLUIDO CON RETRASO' : '🔴 EN PROCESO — VENCIDO') +
+               ' — ' + diasRetraso + ' día(s) hábil(es) de retraso';
   }
+
+  // Actualizar UI
+  document.getElementById('cEstadoCaso').value       = estadoPlazo;
+  document.getElementById('cEstadoCaso').style.color = color;
+  document.getElementById('cEstadoLabel').textContent = etiqueta;
+  document.getElementById('cPorcentaje').textContent  = pct + '%';
+  document.getElementById('cPorcentaje').style.color  = color;
+  document.getElementById('cBarraAvance').style.width      = pct + '%';
+  document.getElementById('cBarraAvance').style.background = color;
+  panel.style.background  = bg;
+  panel.style.borderColor = border;
+  document.getElementById('panelMotivoCaso').style.display = diasRetraso > 0 ? 'block' : 'none';
+
+  // Guardar datos para guardarCaso()
+  const flEl = document.getElementById('cFechaLimite');
+  flEl.dataset.diasRetraso = diasRetraso;
+  flEl.dataset.pct         = pct;
+  flEl.dataset.estadoPlazo = estadoPlazo;
 }
 
-async function subirArchivoDrive(fileInput, nombreCampo) {
+// ── Subida de archivos a Drive ────────────────────────────────
+
+/** Genera nombre normalizado del archivo: {dni}_{tipo}_{yyyymmdd}.pdf */
+function nombreArchivoCaso(dni, tipo, fechaReporte) {
+  const yyyymmdd = (fechaReporte || '').replace(/-/g, '') ||
+                   new Date().toISOString().split('T')[0].replace(/-/g, '');
+  return `${dni}_${tipo}_${yyyymmdd}.pdf`;
+}
+
+/**
+ * Sube un archivo PDF a Drive en /rl/año/usuario
+ * @param {HTMLInputElement} fileInput
+ * @param {string} nombreCampo - 'cInforme' | 'cReporte'
+ * @param {string} tipo        - 'informe'  | 'descargo'
+ * @param {string} dni
+ * @param {string} fechaReporte - YYYY-MM-DD
+ */
+async function subirArchivoDrive(fileInput, nombreCampo, tipo, dni, fechaReporte) {
   const file = fileInput.files[0];
-  if(!file) return null;
-  const msgEl = document.getElementById(nombreCampo+'Msg');
-  const MAX_MB = 10;
-  if(file.size > MAX_MB * 1024 * 1024) {
-    if(msgEl){ msgEl.textContent='❌ Archivo demasiado grande (máx '+MAX_MB+'MB)'; msgEl.style.color='#dc2626'; }
-    mostrarToast('❌ '+file.name+' supera los '+MAX_MB+'MB permitidos','error');
+  if (!file) return null;
+  const msgEl = document.getElementById(nombreCampo + 'Msg');
+
+  // Solo PDF
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (ext !== 'pdf' && file.type !== 'application/pdf') {
+    if (msgEl) { msgEl.textContent = '❌ Solo se aceptan archivos PDF'; msgEl.style.color = '#dc2626'; }
+    mostrarToast('❌ Solo se permiten archivos PDF', 'error');
     return null;
   }
-  const _ext = file.name.split('.').pop().toLowerCase();
-  const _mimeMap = { pdf:'application/pdf', doc:'application/msword', docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document', jpg:'image/jpeg', jpeg:'image/jpeg', png:'image/png', gif:'image/gif', webp:'image/webp' };
-  const mimeType = file.type || _mimeMap[_ext] || 'application/octet-stream';
-  if(msgEl) msgEl.textContent = '⏳ Subiendo '+file.name+'...';
-  return new Promise((resolve) => {
+
+  // Tamaño máximo
+  if (file.size > CASOS_MAX_MB * 1024 * 1024) {
+    if (msgEl) { msgEl.textContent = '❌ Máx ' + CASOS_MAX_MB + 'MB'; msgEl.style.color = '#dc2626'; }
+    mostrarToast('❌ Archivo supera los ' + CASOS_MAX_MB + 'MB permitidos', 'error');
+    return null;
+  }
+
+  const nombreFinal = nombreArchivoCaso(dni, tipo, fechaReporte);
+  const carpeta     = getCarpetaUsuarioCaso();
+  const año         = String(new Date().getFullYear());
+
+  if (msgEl) { msgEl.textContent = '⏳ Subiendo ' + nombreFinal + '...'; msgEl.style.color = '#64748b'; }
+
+  return new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = async e => {
       try {
         const base64 = e.target.result.split(',')[1];
         const res = await apiPost({
           action: 'subirArchivo',
-          nombre: file.name,
-          mimeType,
-          base64
+          nombre: nombreFinal,
+          mimeType: 'application/pdf',
+          base64,
+          carpeta,
+          año
         });
-        if(res.success) {
-          if(msgEl) msgEl.textContent = '✅ '+file.name;
-          if(msgEl) msgEl.style.color='#16a34a';
-          resolve({ nombre: file.name, enlace: res.enlace });
+        if (res.success) {
+          if (msgEl) { msgEl.textContent = '✅ ' + nombreFinal; msgEl.style.color = '#16a34a'; }
+          resolve({ nombre: nombreFinal, enlace: res.enlace, carpeta: res.carpeta || '' });
         } else {
-          if(msgEl) msgEl.textContent = '❌ '+(res.error||'Error al subir');
-          if(msgEl) msgEl.style.color='#dc2626';
-          console.error('[subirArchivoDrive] fallo servidor:', res);
+          if (msgEl) { msgEl.textContent = '❌ ' + (res.error || 'Error al subir'); msgEl.style.color = '#dc2626'; }
+          console.error('[subirArchivoDrive]', res);
           resolve(null);
         }
       } catch(err) {
-        if(msgEl) msgEl.textContent = '❌ '+err.message;
-        console.error('[subirArchivoDrive] excepción:', err);
+        if (msgEl) { msgEl.textContent = '❌ ' + err.message; msgEl.style.color = '#dc2626'; }
+        console.error('[subirArchivoDrive]', err);
         resolve(null);
       }
     };
@@ -2332,102 +2459,135 @@ async function subirArchivoDrive(fileInput, nombreCampo) {
 }
 
 async function guardarCaso() {
-  const dni       = document.getElementById('mCasoDNI').value.trim();
-  const t         = window._casoTrabajador || {};
-  const nombre    = t.nombre    || '';
-  const empresa   = t.empresa   || '';
-  const cargo     = t.cargo     || t.oficio || '';
-  const sector    = t.fundo_actual || t.fundo || t.zona || '';
-  const ingreso   = t.fecha_inicio_periodo ? String(t.fecha_inicio_periodo).split('T')[0] : '';
-  const termino   = t.fecha_termino ? String(t.fecha_termino).split('T')[0] : '';
-  const supervisor= document.getElementById('cSupervisor').value;
-  const motivo    = document.getElementById('cMotivo').value;
-  const motivoExtra=document.getElementById('cMotivoExtra').value.trim();
-  const fechaRep  = document.getElementById('cFechaReporte').value;
-  const fechaLim  = document.getElementById('cFechaLimite').value;
-  const temporada = document.getElementById('cTemporada').value;
-  const estado         = document.getElementById('cEstadoCaso').value;
-  const estadoGestion  = document.getElementById('cEstadoGestion').value;
-  const gravedad       = document.getElementById('cGravedad').value;
-  const redaccion = document.getElementById('cRedaccion').value.trim();
-  const motivoRet = document.getElementById('cMotivoRetraso').value.trim();
-  const diasRetr  = document.getElementById('cFechaLimite').dataset.diasRetraso || 0;
-  const pct       = document.getElementById('cFechaLimite').dataset.pct || 100;
+  const dni         = document.getElementById('mCasoDNI').value.trim();
+  const t           = window._casoTrabajador || {};
+  const nombre      = t.nombre || '';
+  const empresa     = t.empresa || '';
+  const cargo       = t.cargo || t.oficio || '';
+  const sector      = t.fundo_actual || t.fundo || t.zona || '';
+  const ingreso     = t.fecha_inicio_periodo ? String(t.fecha_inicio_periodo).split('T')[0] : '';
+  const termino     = t.fecha_termino ? String(t.fecha_termino).split('T')[0] : '';
+  const supervisor  = document.getElementById('cSupervisor').value;
+  const motivo      = document.getElementById('cMotivo').value;
+  const motivoExtra = document.getElementById('cMotivoExtra').value.trim();
+  const fechaRep    = document.getElementById('cFechaReporte').value;
+  const fechaLim    = document.getElementById('cFechaLimite').value;
+  const temporada   = document.getElementById('cTemporada').value;
+  const estadoGestion = document.getElementById('cEstadoGestion').value;
+  const gravedad    = document.getElementById('cGravedad').value;
+  const redaccion   = document.getElementById('cRedaccion').value.trim();
+  const motivoRet   = document.getElementById('cMotivoRetraso').value.trim();
+  const flEl        = document.getElementById('cFechaLimite');
+  const diasRetraso = Number(flEl.dataset.diasRetraso || 0);
+  const pct         = Number(flEl.dataset.pct || 100);
+  const estadoPlazo = flEl.dataset.estadoPlazo || '';
 
-  if(!dni)        { mostrarToast('❌ Busca un trabajador primero','error'); return; }
-  if(!supervisor) { mostrarToast('❌ Selecciona un supervisor','error'); return; }
-  if(!motivo)     { mostrarToast('❌ Selecciona el motivo','error'); return; }
-  if(motivo==='Otros' && !motivoExtra) { mostrarToast('❌ Especifica el motivo','error'); return; }
-  if(!fechaRep)   { mostrarToast('❌ Ingresa la fecha de reporte','error'); return; }
-  if(!redaccion)  { mostrarToast('❌ Ingresa la redacción del caso','error'); return; }
-  if(estado==='RETRASADO' && !motivoRet) { mostrarToast('❌ Debes ingresar el motivo del retraso','error'); return; }
+  // ── Validaciones ─────────────────────────────────────────────
+  if (!dni)        { mostrarToast('❌ Busca un trabajador primero','error'); return; }
+  if (!supervisor) { mostrarToast('❌ Selecciona un supervisor','error'); return; }
+  if (!motivo)     { mostrarToast('❌ Selecciona el motivo','error'); return; }
+  if (motivo === 'Otros' && !motivoExtra) { mostrarToast('❌ Especifica el motivo','error'); return; }
+  if (!fechaRep)   { mostrarToast('❌ Ingresa la fecha de reporte','error'); return; }
+  if (!redaccion)  { mostrarToast('❌ Ingresa la redacción del caso','error'); return; }
+
+  // Motivo de retraso obligatorio cuando el caso está vencido
+  const estaVencido = estadoPlazo === 'EN_PROCESO_VENCIDO' || estadoPlazo === 'CONCLUIDO_CON_RETRASO';
+  if (estaVencido && !motivoRet) {
+    mostrarToast('❌ El caso está vencido: debes ingresar el motivo del retraso','error');
+    document.getElementById('panelMotivoCaso').style.display = 'block';
+    document.getElementById('cMotivoRetraso').focus();
+    return;
+  }
 
   const esConcluido = _modoCaso === 'concluido';
   const informeFile = document.getElementById('cInforme');
   const reporteFile = document.getElementById('cReporte');
 
-  // Adjuntos obligatorios solo en modo concluido y sin nro existente
-  if(esConcluido && !_editandoCasoNro) {
-    if(!informeFile.files[0])  { mostrarToast('❌ Debes adjuntar el Informe','error'); return; }
-    if(!reporteFile.files[0])  { mostrarToast('❌ Debes adjuntar el Reporte de Infracción','error'); return; }
+  // Adjuntos obligatorios solo en modo concluido y registro nuevo
+  if (esConcluido && !_editandoCasoNro) {
+    if (!informeFile.files[0]) { mostrarToast('❌ Adjunta el Informe (PDF)','error'); return; }
+    if (!reporteFile.files[0]) { mostrarToast('❌ Adjunta el Reporte de Infracción (PDF)','error'); return; }
   }
 
   const btn = document.querySelector('#mCaso .btn-n:last-child');
-  btn.textContent='⏳ Guardando...'; btn.disabled=true;
+  btn.textContent = '⏳ Guardando...'; btn.disabled = true;
 
-  let informe = null, reporte = null;
+  let informe = null, reporte = null, carpetaDrive = '';
 
-  if(esConcluido && (informeFile.files[0] || reporteFile.files[0])) {
-    btn.textContent='⏳ Subiendo archivos...';
+  if (esConcluido && (informeFile.files[0] || reporteFile.files[0])) {
+    btn.textContent = '⏳ Subiendo archivos...';
     const uploads = await Promise.all([
-      informeFile.files[0] ? subirArchivoDrive(informeFile, 'cInforme') : Promise.resolve(null),
-      reporteFile.files[0] ? subirArchivoDrive(reporteFile, 'cReporte') : Promise.resolve(null)
+      informeFile.files[0] ? subirArchivoDrive(informeFile, 'cInforme', 'informe',  dni, fechaRep) : Promise.resolve(null),
+      reporteFile.files[0] ? subirArchivoDrive(reporteFile, 'cReporte', 'descargo', dni, fechaRep) : Promise.resolve(null)
     ]);
     informe = uploads[0]; reporte = uploads[1];
-    if((informeFile.files[0] && !informe) || (reporteFile.files[0] && !reporte)) {
-      mostrarToast('❌ Error al subir uno o más archivos. Intenta nuevamente.','error');
-      btn.textContent='💾 Guardar Caso'; btn.disabled=false;
+    if ((informeFile.files[0] && !informe) || (reporteFile.files[0] && !reporte)) {
+      mostrarToast('❌ Error al subir archivos. Intenta nuevamente.','error');
+      btn.textContent = '💾 Guardar Caso'; btn.disabled = false;
       return;
     }
-    btn.textContent='⏳ Guardando...';
+    carpetaDrive = (informe || reporte)?.carpeta || '';
+    btn.textContent = '⏳ Guardando...';
   }
+
+  // Calcular días restantes al momento de guardar
+  const hoy    = new Date(); hoy.setHours(0, 0, 0, 0);
+  const limite = fechaLim ? new Date(fechaLim + 'T00:00:00') : hoy;
+  const diasRestantes = hoy <= limite ? calcularDiasHabilesTranscurridos(hoy, limite) : 0;
 
   try {
     const payload = {
       dni, nombre, empresa, cargo, sector, ingreso, termino,
       supervisor, motivo, motivo_extra: motivoExtra,
-      fecha_reporte: fechaRep, fecha_limite: fechaLim,
-      temporada, estado, redaccion,
-      estado_gestion: estadoGestion,
+      fecha_reporte:              fechaRep,
+      fecha_inicio_plazo:         fechaRep,
+      fecha_limite:               fechaLim,
+      temporada,
+      estado_plazo:               estadoPlazo,
+      estado_caso:                estadoPlazo,
+      estado_gestion:             estadoGestion,
       gravedad,
-      motivo_retraso: motivoRet,
-      dias_retraso: diasRetr,
-      porcentaje: estado==='EN PLAZO' ? 100 : pct,
-      registrado_por: USER.nombre
+      redaccion,
+      motivo_retraso:             motivoRet,
+      dias_habiles_transcurridos: diasRetraso,
+      dias_restantes:             diasRestantes,
+      porcentaje_avance:          pct,
+      fecha_conclusion:           esConcluido ? new Date().toISOString().split('T')[0] : '',
+      carpeta_drive:              carpetaDrive,
+      usuario_registro:           USER.usuario || '',
+      registrado_por:             USER.nombre  || USER.usuario || ''
     };
-    if(informe) { payload.nombre_informe = informe.nombre; payload.enlace_informe = informe.enlace; }
-    if(reporte) { payload.nombre_reporte = reporte.nombre; payload.enlace_reporte = reporte.enlace; }
+    if (informe) {
+      payload.nombre_informe      = informe.nombre;
+      payload.archivo_informe_url = informe.enlace;
+      payload.enlace_informe      = informe.enlace;
+    }
+    if (reporte) {
+      payload.nombre_reporte       = reporte.nombre;
+      payload.archivo_descargo_url = reporte.enlace;
+      payload.enlace_reporte       = reporte.enlace;
+    }
 
     const action = _editandoCasoNro ? 'updateCaso' : 'saveCaso';
-    if(_editandoCasoNro) payload.nro = _editandoCasoNro;
+    if (_editandoCasoNro) payload.nro = _editandoCasoNro;
 
     const res = await apiPost({ action, ...payload });
-    if(res.success) {
+    if (res.success) {
       cerrar('mCaso');
       invalidarCache('casos');
       await cargarCasos();
       guardarCacheLS();
       mostrarToast(_editandoCasoNro
         ? '✅ Caso actualizado correctamente'
-        : '✅ Caso registrado correctamente (N° '+res.nro+')');
+        : '✅ Caso registrado correctamente (N° ' + res.nro + ')');
       _editandoCasoNro = null;
     } else {
-      mostrarToast('❌ Error: '+res.error,'error');
+      mostrarToast('❌ Error: ' + res.error, 'error');
     }
   } catch(e) {
-    mostrarToast('❌ Error al guardar: '+e.message,'error');
+    mostrarToast('❌ Error al guardar: ' + e.message, 'error');
   } finally {
-    btn.textContent='💾 Guardar Caso'; btn.disabled=false;
+    btn.textContent = '💾 Guardar Caso'; btn.disabled = false;
   }
 }
 
@@ -2483,17 +2643,35 @@ function _gravColor(g) {
   const m = {BAJO:'#16a34a',MEDIO:'#d97706',ALTO:'#ea580c',CRÍTICO:'#dc2626'};
   return m[(g||'').toUpperCase()] || '#64748b';
 }
+
 function renderTablaCasos(data) {
   const tb = document.getElementById('tbCasos');
-  if(!data || !data.length) { tb.innerHTML='<tr><td colspan="11" class="empty">No hay registros</td></tr>'; return; }
+  if (!data || !data.length) { tb.innerHTML='<tr><td colspan="11" class="empty">No hay registros</td></tr>'; return; }
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   const miNombreC = (USER.nombre || USER.usuario).toLowerCase();
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   tb.innerHTML = '<tr><td colspan="11" class="empty">⏳ Cargando tabla...</td></tr>';
   setTimeout(() => {
     tb.innerHTML = data.map((c,i) => {
       const puedeEditar = esAdmin ||
         String(c.supervisor||'').toLowerCase().includes(miNombreC.split(' ')[0]) ||
         String(c.registrado_por||'').toLowerCase().includes(miNombreC.split(' ')[0]);
+      // Estado: compatible con registros nuevos (estado_caso) y antiguos (estado)
+      const estadoCaso = c.estado_caso || c.estado || '';
+      const diasRestantes = c.fecha_limite
+        ? (new Date(c.fecha_limite+'T00:00:00') >= hoy
+           ? calcularDiasHabilesTranscurridos(hoy, new Date(c.fecha_limite+'T00:00:00'))
+           : 0)
+        : 0;
+      // Semáforo: verde / amarillo / rojo
+      const vencido = estadoCaso.includes('VENCIDO') || estadoCaso.includes('CON_RETRASO');
+      const porVencer = !vencido && !estadoCaso.startsWith('CONCLUIDO') && diasRestantes <= 1;
+      const estColor = vencido ? '#dc2626' : (porVencer ? '#d97706' : '#16a34a');
+      const estBg    = vencido ? '#fee2e2' : (porVencer ? '#fef3c7' : '#dcfce7');
+      const porcentaje = c.porcentaje_avance !== undefined ? c.porcentaje_avance : (c.porcentaje || '—');
+      const estadoLabel = estadoCaso.replace(/_/g,' ') || '—';
+      const urlInforme  = c.archivo_informe_url  || c.enlace_informe  || '';
+      const urlDescargo = c.archivo_descargo_url || c.enlace_reporte  || '';
       return `
       <tr>
         <td>${i+1}</td>
@@ -2502,37 +2680,53 @@ function renderTablaCasos(data) {
         <td style="font-size:11px">${c.nombre}</td>
         <td style="font-size:11px">${c.motivo}</td>
         <td style="font-size:11px">${c.supervisor}</td>
-        <td><span class="tag ${c.estado==='EN PLAZO'?'tag-gr':'tag-ro'}">${c.estado||'—'}</span></td>
-        <td style="font-weight:700;color:${c.estado==='EN PLAZO'?'#16a34a':'#dc2626'}">${c.porcentaje}%</td>
+        <td><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:${estBg};color:${estColor};white-space:nowrap">${estadoLabel}</span></td>
+        <td style="font-weight:700;color:${estColor}">${porcentaje}%</td>
         <td style="font-size:11px;font-weight:600">${c.estado_gestion||'—'}</td>
         <td><span style="font-size:10px;font-weight:700;color:#fff;background:${_gravColor(c.gravedad)};padding:2px 7px;border-radius:10px">${c.gravedad||'—'}</span></td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn-a" style="font-size:10px" onclick="verDetalleCaso(${i})">👁️ Ver</button>
           ${puedeEditar ? `<button style="font-size:10px;padding:4px 8px;background:#d97706;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="editarCaso(${i})">✏️ Editar</button>` : ''}
-          ${c.enlace_informe ? `<button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="window.open('${c.enlace_informe}','_blank')">📄 Informe</button>` : `<button class="btn-n" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin informe adjunto">📄 Informe</button>`}
-          ${c.enlace_reporte ? `<button class="btn-s" style="font-size:10px;padding:4px 8px" onclick="window.open('${c.enlace_reporte}','_blank')">📋 Reporte</button>` : `<button class="btn-s" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin reporte adjunto">📋 Reporte</button>`}
+          ${urlInforme  ? `<button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="window.open('${urlInforme}','_blank')">📄 Informe</button>`  : `<button class="btn-n" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin informe">📄 Informe</button>`}
+          ${urlDescargo ? `<button class="btn-s" style="font-size:10px;padding:4px 8px" onclick="window.open('${urlDescargo}','_blank')">📋 Descargo</button>` : `<button class="btn-s" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin descargo">📋 Descargo</button>`}
         </td>
       </tr>
-    `; }).join('');
+    `;}).join('');
   }, 0);
 }
 
 function actualizarStatsCasos(data) {
   document.getElementById('cTotalReg').textContent  = data.length;
-  document.getElementById('cEnPlazo').textContent   = data.filter(c=>c.estado==='EN PLAZO').length;
-  document.getElementById('cRetrasado').textContent = data.filter(c=>c.estado==='RETRASADO').length;
+  document.getElementById('cEnPlazo').textContent   = data.filter(c => {
+    const e = c.estado_caso || c.estado || '';
+    return e.includes('DENTRO_PLAZO') || e === 'EN PLAZO';
+  }).length;
+  document.getElementById('cRetrasado').textContent = data.filter(c => {
+    const e = c.estado_caso || c.estado || '';
+    return e.includes('VENCIDO') || e.includes('CON_RETRASO') || e === 'RETRASADO';
+  }).length;
   const hoy = new Date();
-  const inicio = new Date(hoy); inicio.setDate(hoy.getDate()-7);
-  document.getElementById('cEstaSemana').textContent = data.filter(c=>{
-    if(!c.fecha_reporte) return false;
-    const f=new Date(c.fecha_reporte); return f>=inicio && f<=hoy;
+  const inicio = new Date(hoy); inicio.setDate(hoy.getDate() - 7);
+  document.getElementById('cEstaSemana').textContent = data.filter(c => {
+    if (!c.fecha_reporte) return false;
+    const f = new Date(c.fecha_reporte); return f >= inicio && f <= hoy;
   }).length;
 }
 
 function verDetalleCaso(idx) {
   const c = casosData[idx];
-  if(!c) return;
-  const estColor = c.estado==='EN PLAZO' ? '#16a34a' : '#dc2626';
+  if (!c) return;
+  const estadoCaso = c.estado_caso || c.estado || '';
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const diasRestantes = c.fecha_limite
+    ? (new Date(c.fecha_limite+'T00:00:00') >= hoy
+       ? calcularDiasHabilesTranscurridos(hoy, new Date(c.fecha_limite+'T00:00:00'))
+       : 0)
+    : 0;
+  const estColor   = _estadoPlazoColor(estadoCaso, diasRestantes);
+  const porcentaje = c.porcentaje_avance !== undefined ? c.porcentaje_avance : (c.porcentaje || 0);
+  const urlInforme  = c.archivo_informe_url  || c.enlace_informe  || '';
+  const urlDescargo = c.archivo_descargo_url || c.enlace_reporte  || '';
   document.getElementById('mDetalleCasoBody').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
       <div><span style="font-size:10px;color:#64748b;display:block">DNI</span><b>${c.dni||'—'}</b></div>
@@ -2547,10 +2741,13 @@ function verDetalleCaso(idx) {
       <div><span style="font-size:10px;color:#64748b;display:block">Temporada</span>${c.temporada||'—'}</div>
       <div><span style="font-size:10px;color:#64748b;display:block">Fecha Reporte</span>${fmtF(c.fecha_reporte)}</div>
       <div><span style="font-size:10px;color:#64748b;display:block">Fecha Límite</span>${fmtF(c.fecha_limite)}</div>
-      <div><span style="font-size:10px;color:#64748b;display:block">Estado Plazo</span><b style="color:${estColor}">${c.estado||'—'}</b></div>
-      <div><span style="font-size:10px;color:#64748b;display:block">% Avance</span><b style="color:${estColor}">${c.porcentaje||0}%</b></div>
+      <div><span style="font-size:10px;color:#64748b;display:block">Estado</span><b style="color:${estColor}">${estadoCaso.replace(/_/g,' ')||'—'}</b></div>
+      <div><span style="font-size:10px;color:#64748b;display:block">% Avance</span><b style="color:${estColor}">${porcentaje}%</b></div>
       <div><span style="font-size:10px;color:#64748b;display:block">Estado Gestión</span><b>${c.estado_gestion||'—'}</b></div>
       <div><span style="font-size:10px;color:#64748b;display:block">Gravedad</span><span style="font-size:11px;font-weight:700;color:#fff;background:${_gravColor(c.gravedad)};padding:2px 8px;border-radius:10px">${c.gravedad||'—'}</span></div>
+      ${c.dias_restantes!==undefined&&c.dias_restantes!==''?`<div><span style="font-size:10px;color:#64748b;display:block">Días restantes</span><b>${c.dias_restantes}</b></div>`:''}
+      ${c.dias_habiles_transcurridos?`<div><span style="font-size:10px;color:#dc2626;display:block">Días retraso</span><b style="color:#dc2626">${c.dias_habiles_transcurridos}</b></div>`:''}
+      ${c.carpeta_drive?`<div style="grid-column:1/-1"><span style="font-size:10px;color:#64748b;display:block">Carpeta Drive</span><code style="font-size:10px">${c.carpeta_drive}</code></div>`:''}
       ${c.motivo_retraso?`<div style="grid-column:1/-1"><span style="font-size:10px;color:#dc2626;display:block">Motivo Retraso</span>${c.motivo_retraso}</div>`:''}
     </div>
     <div style="border-top:1px solid #e2e8f0;padding-top:12px;margin-bottom:14px">
@@ -2560,33 +2757,40 @@ function verDetalleCaso(idx) {
     <div style="border-top:1px solid #e2e8f0;padding-top:12px">
       <div style="font-size:11px;font-weight:700;color:#0b1e45;margin-bottom:8px">📎 Documentos Adjuntos</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        ${c.enlace_informe
-          ? `<button class="btn-n" style="font-size:12px" onclick="window.open('${c.enlace_informe}','_blank')">📄 Ver Informe</button>`
-          : `<span style="font-size:12px;color:#94a3b8;padding:6px 10px;border:1px dashed #cbd5e1;border-radius:6px">📄 Sin informe adjunto</span>`}
-        ${c.enlace_reporte
-          ? `<button class="btn-s" style="font-size:12px" onclick="window.open('${c.enlace_reporte}','_blank')">📋 Ver Reporte</button>`
-          : `<span style="font-size:12px;color:#94a3b8;padding:6px 10px;border:1px dashed #cbd5e1;border-radius:6px">📋 Sin reporte adjunto</span>`}
+        ${urlInforme
+          ? `<button class="btn-n" style="font-size:12px" onclick="window.open('${urlInforme}','_blank')">📄 Ver Informe</button>`
+          : `<span style="font-size:12px;color:#94a3b8;padding:6px 10px;border:1px dashed #cbd5e1;border-radius:6px">📄 Sin informe</span>`}
+        ${urlDescargo
+          ? `<button class="btn-s" style="font-size:12px" onclick="window.open('${urlDescargo}','_blank')">📋 Ver Descargo</button>`
+          : `<span style="font-size:12px;color:#94a3b8;padding:6px 10px;border:1px dashed #cbd5e1;border-radius:6px">📋 Sin descargo</span>`}
       </div>
     </div>`;
   abrir('mDetalleCaso');
 }
 
 function exportarCasosExcel() {
-  if(!casosData.length) { mostrarToast('❌ No hay datos para exportar', 'error'); return; }
+  if (!casosData.length) { mostrarToast('❌ No hay datos para exportar', 'error'); return; }
   const headers = ['N°','Fecha Reporte','Empresa','DNI','Trabajador','Cargo','Sector',
-                   'Supervisor','Motivo','Artículo','Fecha Límite','Temporada',
-                   'Estado','% Avance','Redacción','Registrado Por'];
+                   'Supervisor','Motivo','Fecha Límite','Temporada',
+                   'Estado Caso','% Avance','Estado Gestión','Gravedad',
+                   'Días Retraso','Días Restantes','Motivo Retraso',
+                   'Fecha Conclusión','Carpeta Drive','Registrado Por'];
   const rows = casosData.map((c,i) => [
     i+1, c.fecha_reporte, c.empresa, c.dni, c.nombre, c.cargo, c.sector,
-    c.supervisor, c.motivo+(c.motivo_extra?' - '+c.motivo_extra:''),
-    c.articulo, c.fecha_limite, c.temporada,
-    c.estado, c.porcentaje+'%', c.redaccion, c.registrado_por
+    c.supervisor, c.motivo + (c.motivo_extra ? ' - '+c.motivo_extra : ''),
+    c.fecha_limite, c.temporada,
+    (c.estado_caso||c.estado||'').replace(/_/g,' '),
+    (c.porcentaje_avance||c.porcentaje||'')+'%',
+    c.estado_gestion, c.gravedad,
+    c.dias_habiles_transcurridos||0, c.dias_restantes||0,
+    c.motivo_retraso||'', c.fecha_conclusion||'',
+    c.carpeta_drive||'', c.registrado_por||''
   ]);
   let csv = [headers, ...rows].map(r => r.map(v => '"'+(v||'').toString().replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
   const a = document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='Casos_RL_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.href = URL.createObjectURL(blob);
+  a.download = 'Casos_RL_' + new Date().toISOString().split('T')[0] + '.csv';
   a.click();
 }
 
@@ -4535,13 +4739,13 @@ function exportarEstadisticasAdmin() {
         <div style="font-size:12px;font-weight:700;color:#0b1e45;margin-bottom:10px">📎 Documentos Adjuntos</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div>
-            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📄 Informe *</label>
-            <input type="file" id="cInforme" accept="application/pdf,.pdf,.doc,.docx,image/*" style="font-size:11px;width:100%">
+            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📄 Informe * <span style="font-weight:400;color:#94a3b8">(solo PDF)</span></label>
+            <input type="file" id="cInforme" accept="application/pdf,.pdf" style="font-size:11px;width:100%">
             <div id="cInformeMsg" style="font-size:10px;margin-top:3px"></div>
           </div>
           <div>
-            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📋 Reporte Infracción *</label>
-            <input type="file" id="cReporte" accept="application/pdf,.pdf,image/*" style="font-size:11px;width:100%">
+            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px">📋 Reporte Infracción * <span style="font-weight:400;color:#94a3b8">(solo PDF)</span></label>
+            <input type="file" id="cReporte" accept="application/pdf,.pdf" style="font-size:11px;width:100%">
             <div id="cReporteMsg" style="font-size:10px;margin-top:3px"></div>
           </div>
         </div>
