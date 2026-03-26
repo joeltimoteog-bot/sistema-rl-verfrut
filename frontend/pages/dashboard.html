@@ -2283,7 +2283,7 @@ async function buscarTrabajadorCaso() {
   msg.textContent='🔍 Buscando en RAPEL y VERFRUT...';
   msg.style.color='#64748b';
   try {
-    const d = await apiGet({action:'buscarTrabajador', q:String(dni).trim(), empresa:'AMBAS'});
+    const d = await apiGet({action:'buscarTrabajador', q:String(dni).trim().toUpperCase(), empresa:'AMBAS'});
     if(d.success && d.data && d.data.length) {
       const t = d.data[0];
       document.getElementById('cNombre').value  = t.nombre  || '';
@@ -3246,6 +3246,7 @@ async function buscarDni(dni) {
 }
 
 async function buscarDniBtn() {
+  clearTimeout(dniTO);
   const dni=v('at_dni').trim();
   if(dni.length<2){mostrarToast('❌ Ingresa el DNI del trabajador','error');return;}
   const r=document.getElementById('trabRes');
@@ -3554,6 +3555,59 @@ async function generarCorreo() {
 
 let _correoData = {};
 
+function _construirCuerpoTextoPlano(datos, resumen, fi, ff, total) {
+  const col  = (s, n)  => String(s||'').substring(0, n).padEnd(n);
+  const colR = (s, n)  => String(s||'').substring(0, n).padStart(n);
+  const sep  = (widths) => widths.map(w => '-'.repeat(w)).join('-+-') + '\n';
+
+  // ── Encabezado ──────────────────────────────────────────
+  let c = 'Estimados,\n\n';
+  c += 'Se adjunta el archivo Excel con el registro de atenciones\n';
+  c += 'entre el ' + fi + ' y el ' + ff + '.\n';
+  c += 'Total de atenciones: ' + total + '\n\n';
+
+  // ── Resumen por empresa / tipo / responsable ─────────────
+  c += '='.repeat(72) + '\n';
+  c += 'RESUMEN POR EMPRESA / TIPO DE DOCUMENTO / RESPONSABLE\n';
+  c += '='.repeat(72) + '\n';
+  c += col('EMPRESA',10) + ' | ' + col('TIPO DOCUMENTO',28) + ' | ' + col('RESPONSABLE',24) + ' | CANT\n';
+  c += sep([10, 28, 24, 4]);
+  resumen.forEach(r => {
+    c += col(r.empresa,10) + ' | ' + col(r.tipo,28) + ' | ' + col(r.responsable,24) + ' | ' + colR(r.cantidad,4) + '\n';
+  });
+
+  // ── Detalle de atenciones ────────────────────────────────
+  c += '\n' + '='.repeat(72) + '\n';
+  c += 'DETALLE DE ATENCIONES (' + total + ' registros)\n';
+  c += '='.repeat(72) + '\n';
+  c += col('N°',4)   + ' | ' + col('FECHA',10)  + ' | ' + col('DNI',9)
+     + ' | ' + col('NOMBRE',22)        + ' | ' + col('EMP',7)
+     + ' | ' + col('DOCUMENTO',22)     + ' | ' + col('F.INI DOC',10)
+     + ' | ' + col('F.FIN DOC',10)     + ' | ' + colR('DIAS',4)
+     + ' | ' + col('SUPERVISOR',18)    + ' | ESTADO\n';
+  c += sep([4, 10, 9, 22, 7, 22, 10, 10, 4, 18, 12]);
+  datos.forEach((a, idx) => {
+    c += col(idx+1,4)                          + ' | '
+       + col(fmtF(a.fecha_atencion),10)        + ' | '
+       + col(a.dni,9)                          + ' | '
+       + col(a.nombre,22)                      + ' | '
+       + col(a.empresa,7)                      + ' | '
+       + col(a.detalle_documento,22)           + ' | '
+       + col(fmtF(a.fecha_inicio_doc),10)      + ' | '
+       + col(fmtF(a.fecha_termino_doc),10)     + ' | '
+       + colR(a.dias_transcurridos||'',4)      + ' | '
+       + col(a.supervisor,18)                  + ' | '
+       + (a.estado||'') + '\n';
+  });
+
+  c += '\n' + '='.repeat(72) + '\n\n';
+  c += 'Atentamente,\n';
+  c += (USER.nombre||'Joel Timoteo') + '\n';
+  c += 'Coordinador de Relaciones Laborales\n';
+  c += 'Verfrut / Rapel — Sistema RL';
+  return c;
+}
+
 function abrirOutlook(asunto, cuerpo, para, cc) {
   // Normalizar saltos de línea a CRLF para compatibilidad con Outlook clásico
   const cuerpoNorm = cuerpo.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
@@ -3583,8 +3637,8 @@ function enviarConConfirmacion() {
   if (confirm(msg)) {
     // 1. Descargar Excel automáticamente
     exportarCorreoExcel();
-    // 2. Abrir Outlook con cuerpo simplificado (respetar límite ~2000 chars del mailto)
-    const cuerpo = `Estimados,\n\nSe adjunta el reporte de atenciones del ${fi} al ${ff}.\nTotal: ${total} registros. (Ver archivo Excel adjunto)\n\nAtentamente,\n${USER.nombre||'Joel Timoteo'}\nCoordinador de Relaciones Laborales\nVerfrut / Rapel`;
+    // 2. Abrir Outlook con cuerpo en texto plano estructurado (compatible Outlook clásico)
+    const cuerpo = _construirCuerpoTextoPlano(_correoData.data||[], _correoData.resumen||[], fi, ff, total);
     setTimeout(() => abrirOutlook(_correoData.asunto||'', cuerpo, para, cc), 600);
   }
 }
@@ -3852,6 +3906,7 @@ function ir(id,btn){
 function abrir(id){document.getElementById(id).classList.add('on');}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
+window.addEventListener('beforeunload', () => { clearTimeout(dniTO); clearTimeout(_estTimer); });
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
 function v(id){const el=document.getElementById(id);return el?el.value:'';}
 function sv(id,val){const el=document.getElementById(id);if(el)el.value=val;}
@@ -4046,8 +4101,8 @@ function calcSemanaVisita() {
   const ff = document.getElementById('vFF').value;
   if (!ff) return;
 
-  // Semana del año
-  const d          = new Date(ff);
+  // Semana del año — parsear como hora local para evitar desfase UTC en Peru (UTC-5)
+  const d           = new Date(ff + 'T00:00:00');
   const startOfYear = new Date(d.getFullYear(), 0, 1);
   const week = Math.ceil(((d - startOfYear) / 86400000 + startOfYear.getDay() + 1) / 7);
   document.getElementById('vSemana').value = week;
