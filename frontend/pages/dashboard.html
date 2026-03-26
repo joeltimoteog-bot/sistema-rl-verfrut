@@ -1081,6 +1081,7 @@ let CACHE = {};            // Cache global - datos precargados al login
 let CACHE_TS = 0;          // Timestamp del último preload
 const CACHE_TTL = 10 * 60 * 1000; // 10 minutos antes de considerar stale
 let charts={};
+function _destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
 
 function mostrarToast(msg, tipo='ok') {
   let t = document.getElementById('_toast');
@@ -1402,6 +1403,7 @@ async function cargarEstadisticasAdmin() {
   // Debounce: evita múltiples renders al cambiar filtros rápido
   clearTimeout(_estTimer);
   await new Promise(r => { _estTimer = setTimeout(r, 200); });
+  if (!document.getElementById('sec-estadisticas')?.classList.contains('on')) return;
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   if (!esAdmin) return;
 
@@ -1476,7 +1478,7 @@ function renderEstadisticasAdmin(data) {
   // ── Gráfico tendencia ──
   const ctxT = document.getElementById('chartTendencia');
   if(ctxT) {
-    if(charts['tendencia']) charts['tendencia'].destroy();
+    _destroyChart('tendencia');
     charts['tendencia'] = new Chart(ctxT, {
       type: 'line',
       data: {
@@ -1496,7 +1498,7 @@ function renderEstadisticasAdmin(data) {
   // ── Gráfico módulos (barras) ──
   const ctxM = document.getElementById('chartModulos');
   if(ctxM) {
-    if(charts['modulos']) charts['modulos'].destroy();
+    _destroyChart('modulos');
     charts['modulos'] = new Chart(ctxM, {
       type: 'bar',
       data: {
@@ -1599,8 +1601,6 @@ function renderVisitas(data) {
     return;
   }
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-  // Efectos secundarios inmediatos (no dependen del render del tbody)
-  window._visitasData = data;
   const thead = document.querySelector('#sec-visitas .tbl thead tr');
   if(thead) {
     if(esAdmin && thead.children.length === 7) {
@@ -1613,6 +1613,7 @@ function renderVisitas(data) {
   }
   tb.innerHTML = '<tr><td colspan="8" class="empty">⏳ Cargando tabla...</td></tr>';
   setTimeout(() => {
+    window._visitasData = data;
     const miNombreR = (USER.nombre||USER.usuario).toLowerCase();
     tb.innerHTML = data.map((v, i) => {
       const estado = (v.estado || 'EN PLAZO').toUpperCase();
@@ -1771,9 +1772,12 @@ async function cargarFusiones(forzar=false) {
         poblarSupFusiones(_fusionesData);
         actualizarStatsFusiones(_fusionesData);
       }, 0);
+    } else {
+      document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">❌ ' + (d.error || 'Error al cargar fusiones') + '</td></tr>';
     }
   } catch(e) {
-    document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">❌ Error al cargar</td></tr>';
+    document.getElementById('tbFusiones').innerHTML = '<tr><td colspan="9" class="empty">❌ Error de conexión</td></tr>';
+    console.error('cargarFusiones:', e);
   }
 }
 
@@ -1789,8 +1793,7 @@ function renderFusiones(data) {
   window._fusFiltradas = data;
   const tb = document.getElementById('tbFusiones');
   if(!data || !data.length){ tb.innerHTML='<tr><td colspan="9" class="empty">Sin registros</td></tr>'; return; }
-  tb.innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando tabla...</td></tr>';
-  setTimeout(() => { tb.innerHTML = data.map((r,i) => {
+  tb.innerHTML = data.map((r,i) => {
     const estColor = r.estado==='Validado'?'#16a34a':r.estado==='Observado'?'#dc2626':'#f59e0b';
     const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
     return `<tr>
@@ -1806,7 +1809,7 @@ function renderFusiones(data) {
         ${fotos.length ? '<button onclick="verFotosFusion('+i+')" style="background:#e0e7ff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px">📷 '+fotos.length+'</button>' : ''}
       </td>
     </tr>`;
-  }).join(''); }, 0);
+  }).join('');
 }
 
 function actualizarStatsFusiones(data) {
@@ -2641,7 +2644,7 @@ async function cargarCasos() {
 
 function _gravColor(g) {
   const m = {BAJO:'#16a34a',MEDIO:'#d97706',ALTO:'#ea580c',CRÍTICO:'#dc2626'};
-  return m[(g||'').toUpperCase()] || '#64748b';
+  return m[String(g||'').toUpperCase()] || '#64748b';
 }
 
 function renderTablaCasos(data) {
@@ -2650,9 +2653,7 @@ function renderTablaCasos(data) {
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   const miNombreC = (USER.nombre || USER.usuario).toLowerCase();
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-  tb.innerHTML = '<tr><td colspan="11" class="empty">⏳ Cargando tabla...</td></tr>';
-  setTimeout(() => {
-    tb.innerHTML = data.map((c,i) => {
+  tb.innerHTML = data.map((c,i) => {
       const puedeEditar = esAdmin ||
         String(c.supervisor||'').toLowerCase().includes(miNombreC.split(' ')[0]) ||
         String(c.registrado_por||'').toLowerCase().includes(miNombreC.split(' ')[0]);
@@ -2668,7 +2669,7 @@ function renderTablaCasos(data) {
       const porVencer = !vencido && !estadoCaso.startsWith('CONCLUIDO') && diasRestantes <= 1;
       const estColor = vencido ? '#dc2626' : (porVencer ? '#d97706' : '#16a34a');
       const estBg    = vencido ? '#fee2e2' : (porVencer ? '#fef3c7' : '#dcfce7');
-      const porcentaje = c.porcentaje_avance !== undefined ? c.porcentaje_avance : (c.porcentaje || '—');
+      const porcentaje = Math.min(100, Math.max(0, Number(c.porcentaje_avance ?? c.porcentaje) || 0));
       const estadoLabel = estadoCaso.replace(/_/g,' ') || '—';
       const urlInforme  = c.archivo_informe_url  || c.enlace_informe  || '';
       const urlDescargo = c.archivo_descargo_url || c.enlace_reporte  || '';
@@ -2687,12 +2688,20 @@ function renderTablaCasos(data) {
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn-a" style="font-size:10px" onclick="verDetalleCaso(${i})">👁️ Ver</button>
           ${puedeEditar ? `<button style="font-size:10px;padding:4px 8px;background:#d97706;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="editarCaso(${i})">✏️ Editar</button>` : ''}
-          ${urlInforme  ? `<button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="window.open('${urlInforme}','_blank')">📄 Informe</button>`  : `<button class="btn-n" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin informe">📄 Informe</button>`}
-          ${urlDescargo ? `<button class="btn-s" style="font-size:10px;padding:4px 8px" onclick="window.open('${urlDescargo}','_blank')">📋 Descargo</button>` : `<button class="btn-s" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin descargo">📋 Descargo</button>`}
+          ${urlInforme  ? `<button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="abrirUrlCaso(${i},'informe')">📄 Informe</button>`  : `<button class="btn-n" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin informe">📄 Informe</button>`}
+          ${urlDescargo ? `<button class="btn-s" style="font-size:10px;padding:4px 8px" onclick="abrirUrlCaso(${i},'descargo')">📋 Descargo</button>` : `<button class="btn-s" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin descargo">📋 Descargo</button>`}
         </td>
       </tr>
     `;}).join('');
-  }, 0);
+}
+
+function abrirUrlCaso(idx, tipo) {
+  const c = casosData[idx];
+  if (!c) return;
+  const url = tipo === 'informe'
+    ? (c.archivo_informe_url || c.enlace_informe  || '')
+    : (c.archivo_descargo_url || c.enlace_reporte || '');
+  if (url) window.open(url, '_blank');
 }
 
 function actualizarStatsCasos(data) {
@@ -2758,10 +2767,10 @@ function verDetalleCaso(idx) {
       <div style="font-size:11px;font-weight:700;color:#0b1e45;margin-bottom:8px">📎 Documentos Adjuntos</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${urlInforme
-          ? `<button class="btn-n" style="font-size:12px" onclick="window.open('${urlInforme}','_blank')">📄 Ver Informe</button>`
+          ? `<button class="btn-n" style="font-size:12px" onclick="abrirUrlCaso(${idx},'informe')">📄 Ver Informe</button>`
           : `<span style="font-size:12px;color:#94a3b8;padding:6px 10px;border:1px dashed #cbd5e1;border-radius:6px">📄 Sin informe</span>`}
         ${urlDescargo
-          ? `<button class="btn-s" style="font-size:12px" onclick="window.open('${urlDescargo}','_blank')">📋 Ver Descargo</button>`
+          ? `<button class="btn-s" style="font-size:12px" onclick="abrirUrlCaso(${idx},'descargo')">📋 Ver Descargo</button>`
           : `<span style="font-size:12px;color:#94a3b8;padding:6px 10px;border:1px dashed #cbd5e1;border-radius:6px">📋 Sin descargo</span>`}
       </div>
     </div>`;
@@ -2810,7 +2819,7 @@ function previewFotosCaso(input) {
       div.style.cssText='position:relative;display:inline-block';
       div.innerHTML = `
         <img src="${e.target.result}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:2px solid #e2e8f0">
-        <button onclick="quitarFotoCaso(${casosFotos.length-1},this.parentNode)"
+        <button onclick="quitarFotoCaso(this.parentNode)"
           style="position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border:none;
                  border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px">✕</button>`;
       prev.appendChild(div);
@@ -2820,8 +2829,11 @@ function previewFotosCaso(input) {
   });
 }
 
-function quitarFotoCaso(idx, div) {
-  casosFotos.splice(idx,1);
+function quitarFotoCaso(div) {
+  const prev = document.getElementById('cFotosPreview');
+  const idx = Array.from(prev.children).indexOf(div);
+  if (idx === -1) return;
+  casosFotos.splice(idx, 1);
   div.remove();
   document.getElementById('cFotosCount').textContent = casosFotos.length + ' imagen(es) seleccionada(s)';
 }
@@ -2833,7 +2845,16 @@ function _lsCacheKey() { return 'rl_cache_' + USER.usuario; }
 function guardarCacheLS() {
   try {
     localStorage.setItem(_lsCacheKey(), JSON.stringify({data: CACHE, ts: CACHE_TS}));
-  } catch(e) { console.warn('localStorage save:', e); }
+  } catch(e) {
+    // Cuota excedida: liberar la clave propia y reintentar
+    try {
+      localStorage.removeItem(_lsCacheKey());
+      localStorage.setItem(_lsCacheKey(), JSON.stringify({data: CACHE, ts: CACHE_TS}));
+    } catch(e2) {
+      mostrarToast('⚠️ Almacenamiento local lleno. Los datos no se guardarán localmente hasta reiniciar sesión.', 'error');
+      console.warn('localStorage lleno:', e2);
+    }
+  }
 }
 
 function cargarCacheLS() {
@@ -2914,8 +2935,6 @@ function invalidarCache(modulo) {
   if (modulo === 'fusiones')   { delete CACHE.fusiones;   delete CACHE.estadisticasAdmin; }
   if (modulo === 'solicitudes'){ delete CACHE.solicitudes; }
   if (modulo === 'todos')      { CACHE = {}; }
-  // También limpiar CacheService del servidor silenciosamente
-  apiPost({action:'limpiarCache', usuario:USER.usuario, rol:USER.rol}).catch(e => console.warn('limpiarCache server:', e));
 }
 
 // Recarga completa en segundo plano (sin bloquear UI)
@@ -2976,14 +2995,14 @@ function dibujar(s) {
     return; // evita crear los charts dos veces
   }
   // Fallback: sin datos en cache, usar estadísticas básicas del preload
-  ['m','e'].forEach(k => { if(charts[k]) { charts[k].destroy(); charts[k]=null; } });
+  ['m','e'].forEach(k => _destroyChart(k));
 
   const elM = document.getElementById('cM');
   const elE = document.getElementById('cE');
   if (!elM || !elE) return;
 
   const mks = Object.keys(s.porMes||{});
-  const lm  = mks.map(k => ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(k.split('-')[1])]);
+  const lm  = mks.map(k => ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(k.split('-')[1])] || k);
 
   charts.m = new Chart(elM, {
     type: 'bar',
@@ -3027,7 +3046,11 @@ async function cargarAtenciones(historial=false) {
   try {
     const d=await apiGet({action:'getAtenciones',usuario:USER.usuario,nombre:USER.nombre||USER.usuario,rol:USER.rol,empresa:USER.empresa});
     if(d.success){CACHE.atenciones=d.data;atTodas=d.data.filter(a=>a.fecha_atencion===hoy());renderAt(atTodas);}
-  } catch(e){document.getElementById('tbAt').innerHTML='<tr><td colspan="11" class="empty">❌ Error al cargar</td></tr>';}
+    else { document.getElementById('tbAt').innerHTML='<tr><td colspan="11" class="empty">❌ '+(d.error||'Error al cargar atenciones')+'</td></tr>'; }
+  } catch(e){
+    document.getElementById('tbAt').innerHTML='<tr><td colspan="11" class="empty">❌ Error de conexión</td></tr>';
+    console.error('cargarAtenciones:', e);
+  }
 }
 
 function renderAt(lista) {
@@ -3131,8 +3154,8 @@ async function guardarAt() {
     }
     if(r.success){
       invalidarCache('atenciones');
-      cargarAtenciones();
-      cargarStats();
+      await cargarAtenciones();
+      await cargarStats();
       filtrarAt();
       guardarCacheLS();
       if(modoEdicion){
@@ -3184,9 +3207,15 @@ function verDet(nro, fuente) {
 }
 
 async function updateAt() {
-  const r=await apiPost({action:'updateAtencion',nro:detNro,estado:v('dEst'),hora_termino:v('dHT'),observaciones:v('dObs'),rol:USER.rol,usuario:USER.usuario});
-  if(r.success){cerrar('mDet');invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();mostrarToast('✅ Actualizado');}
-  else mostrarToast('❌ Error: '+(r.error||'No tienes permiso'),'error');
+  const btn = document.querySelector('#mDet .btn-save');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Actualizando...'; }
+  try {
+    const r=await apiPost({action:'updateAtencion',nro:detNro,estado:v('dEst'),hora_termino:v('dHT'),observaciones:v('dObs'),rol:USER.rol,usuario:USER.usuario});
+    if(r.success){cerrar('mDet');invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();mostrarToast('✅ Actualizado');}
+    else mostrarToast('❌ Error: '+(r.error||'No tienes permiso'),'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Actualizar'; }
+  }
 }
 
 // BUSCAR TRABAJADOR
@@ -3203,7 +3232,7 @@ async function buscarTrab() {
       <td>${t.cargo||''}</td><td>${t.fundo||''}</td>
       <td>${t.fundo_actual||t['fundo_actual']||''}</td>
       <td>${t.supervisor||''}</td><td>${t.celular||''}</td>
-      <td><button class="btn-a bv" onclick="regAt('${t.dni}','${esc(t.nombre||'')}','${t.empresa||''}','${esc(t.fundo||'')}','${esc(t.cargo||'')}','${t.sexo||''}','${esc(t.ruta||'')}','${esc(t.codigo||'')}','${esc(t.fundo_actual||'')}','${t.celular||''}','${t.fecha_inicio_periodo?String(t.fecha_inicio_periodo).split('T')[0]:''}','${t.fecha_termino_periodo?String(t.fecha_termino_periodo).split('T')[0]:''}')">+ Atención</button></td>
+      <td><button class="btn-a bv" onclick="regAt('${esc(t.dni||'')}','${esc(t.nombre||'')}','${esc(t.empresa||'')}','${esc(t.fundo||'')}','${esc(t.cargo||'')}','${esc(t.sexo||'')}','${esc(t.ruta||'')}','${esc(t.codigo||'')}','${esc(t.fundo_actual||'')}','${esc(t.celular||'')}','${esc(t.fecha_inicio_periodo?String(t.fecha_inicio_periodo).split('T')[0]:'')}','${esc(t.fecha_termino_periodo?String(t.fecha_termino_periodo).split('T')[0]:'')}')">+ Atención</button></td>
     </tr>`).join('');
   }catch(e){ console.error('buscarTrab:', e); }
 }
@@ -3832,7 +3861,7 @@ function fmtF(f){if(!f)return '';return String(f).split('T')[0];}
 function fmtFLargo(f){if(!f)return '';const [y,m,d]=f.split('-');const ms=['','enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];return `${parseInt(d)} de ${ms[parseInt(m)]} de ${y}`;}
 function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[String(e||'').toUpperCase()]||'bam';}
 function estC(e){const s=String(e||'').toUpperCase();return s==='PENDIENTE'?'bp':s==='EN PROCESO'?'bpr':'brs';}
-document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('on');}));
+document.addEventListener('click', e=>{ if(e.target.classList.contains('ov')) e.target.classList.remove('on'); });
 
 // ============================================================
 // MÓDULO VISITAS DE CAMPO
@@ -3888,6 +3917,7 @@ function autoFillFundoReemplazo() {
 }
 
 function abrirNuevaVisita() {
+  window._editandoVisitaIdx = null;
   // Reset form
   ['vDNI','vCorreo','vEmp','vFundo','vPunto','vFI','vFF',
    'vSemana','vAsunto','vDesarrollo','vRutas','vAcciones',
@@ -3971,7 +4001,7 @@ function asignarFundoReemplazo() {
 
 // ── Temporada: baja = Lun-Vie | alta = Lun-Sab ──────────────────
 function esTemporadaAlta(fecha) {
-  const d   = new Date(fecha);
+  const d   = (fecha instanceof Date) ? fecha : new Date(fecha + 'T00:00:00');
   const mes = d.getMonth() + 1; // 1-12
   const dia = d.getDate();
   // Alta: 27 Jun → 31 Dic
@@ -3981,19 +4011,20 @@ function esTemporadaAlta(fecha) {
   return false;
 }
 
-function esDiaHabil(fecha, alta) {
-  const dow = new Date(fecha).getDay(); // 0=Dom,6=Sab
-  if (dow === 0) return false;          // Domingo siempre libre
-  if (dow === 6 && !alta) return false; // Sábado libre en temporada baja
+function esDiaHabil(fecha) {
+  const d   = (fecha instanceof Date) ? fecha : new Date(fecha + 'T00:00:00');
+  const dow = d.getDay(); // 0=Dom,6=Sab
+  if (dow === 0) return false;                        // Domingo siempre libre
+  if (dow === 6 && !esTemporadaAlta(d)) return false; // Sábado libre en temporada baja
   return true;
 }
 
-function diasHabilesEntre(desde, hasta, alta) {
+function diasHabilesEntre(desde, hasta) {
   let dias = 0;
   let cur  = new Date(desde);
   cur.setDate(cur.getDate() + 1); // desde el día siguiente
   while (cur <= hasta) {
-    if (esDiaHabil(cur, alta)) dias++;
+    if (esDiaHabil(cur)) dias++;
     cur.setDate(cur.getDate() + 1);
   }
   return dias;
@@ -4001,12 +4032,11 @@ function diasHabilesEntre(desde, hasta, alta) {
 
 function fechaLimiteInforme(fechaFin) {
   // Plazo: 1 día hábil a partir del día siguiente a fechaFin
-  const alta = esTemporadaAlta(fechaFin);
-  let cur    = new Date(fechaFin);
-  let plazo  = 0;
+  let cur   = new Date(fechaFin);
+  let plazo = 0;
   while (plazo < 1) {
     cur.setDate(cur.getDate() + 1);
-    if (esDiaHabil(cur, alta)) plazo++;
+    if (esDiaHabil(cur)) plazo++;
   }
   return cur;
 }
@@ -4025,17 +4055,16 @@ function calcSemanaVisita() {
   // Calcular plazo y estado
   const hoy      = new Date(); hoy.setHours(0,0,0,0);
   const ffD      = new Date(ff); ffD.setHours(0,0,0,0);
-  const alta     = esTemporadaAlta(ff);
   const limite   = fechaLimiteInforme(ffD);
   limite.setHours(0,0,0,0);
 
-  const diasTrans  = diasHabilesEntre(ffD, hoy, alta);
+  const diasTrans  = diasHabilesEntre(ffD, hoy);
   const diasPerm   = 1;
   const diasRetr   = Math.max(0, diasTrans - diasPerm);
   const pctAvance  = Math.min(1, diasTrans / diasPerm);
   const pctRetraso = diasRetr / diasPerm;
   const estado     = hoy > limite ? 'RETRASADO' : 'EN PLAZO';
-  const temporada  = alta ? 'ALTA (Lun-Sáb)' : 'BAJA (Lun-Vie)';
+  const temporada  = esTemporadaAlta(ffD) ? 'ALTA (Lun-Sáb)' : 'BAJA (Lun-Vie)';
 
   // Guardar en dataset para usarlos al guardar
   document.getElementById('vFF').dataset.diasTrans  = diasTrans;
@@ -4084,7 +4113,7 @@ function previewFotos(input) {
       const img = document.createElement('div');
       img.style.cssText='position:relative;display:inline-block';
       img.innerHTML=`<img src="${e.target.result}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:2px solid #e2e8f0">
-        <button onclick="quitarFotoVisita(${visitasFotos.length-1},this.parentElement)" style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;padding:0">✕</button>`;
+        <button onclick="quitarFotoVisita(this.parentElement)" style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;padding:0">✕</button>`;
       prev.appendChild(img);
       document.getElementById('vFotosCount').textContent = visitasFotos.length + ' imagen(es) seleccionada(s)';
     };
@@ -4092,8 +4121,11 @@ function previewFotos(input) {
   });
 }
 
-function quitarFotoVisita(idx, el) {
-  visitasFotos.splice(idx,1);
+function quitarFotoVisita(el) {
+  const prev = document.getElementById('vFotosPreview');
+  const idx = Array.from(prev.children).indexOf(el);
+  if (idx === -1) return;
+  visitasFotos.splice(idx, 1);
   el.remove();
   document.getElementById('vFotosCount').textContent = visitasFotos.length + ' imagen(es) seleccionada(s)';
 }
@@ -4130,6 +4162,9 @@ async function guardarVisitaSheets(datos) {
 }
 
 async function generarInformeVisita() {
+  const btn = document.querySelector('[onclick="generarInformeVisita()"]');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Generando...'; }
+  try {
   // Validar campos obligatorios
   // Validar reasignación si es reemplazo
   const supOptV = document.getElementById('vSup').options[document.getElementById('vSup').selectedIndex];
@@ -4281,6 +4316,9 @@ async function generarInformeVisita() {
       window.location.href = 'mailto:' + para + '?subject=' + subj + '&body=' + body + (cc ? '&cc=' + cc : '');
     }
   }, 500);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📄 Generar Informe'; }
+  }
 }
 
 function enviarInformeVisita(idx) {
@@ -4318,8 +4356,8 @@ function editarVisita(idx) {
     String(v.supervisor||'').toLowerCase().includes(miNombre.split(' ')[0]) ||
     String(v.registrado_por||'').toLowerCase().includes(miNombre.split(' ')[0]);
   if(!puedeEditar){ mostrarToast('❌ No tienes permiso para editar esta visita','error'); return; }
-  window._editandoVisitaIdx = idx;
   abrirNuevaVisita();
+  window._editandoVisitaIdx = idx;
   setTimeout(() => {
     const sv = id => document.getElementById(id);
     if(sv('vEmp'))           sv('vEmp').value          = v.empresa||'';
@@ -4455,19 +4493,19 @@ function dibujarEstadisticasDash(datos) {
     for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
   }
   datos.forEach(a=>{const f=String(a.fecha_atencion||'').substring(0,7);if(porMes.hasOwnProperty(f)) porMes[f]++;});
-  const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]);
-  if(charts.m){charts.m.destroy();charts.m=null;}
+  const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]||k);
+  _destroyChart('m');
   const elM=document.getElementById('cM');
   if(elM) charts.m=new Chart(elM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#3b82f6',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{maxTicksLimit:8}}}}});
   const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
   const proc=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
   const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
-  if(charts.e){charts.e.destroy();charts.e=null;}
+  _destroyChart('e');
   const elE=document.getElementById('cE');
   if(elE) charts.e=new Chart(elE,{type:'doughnut',data:{labels:['Pendiente','En Proceso','Resuelto'],datasets:[{data:[pend,proc,res],backgroundColor:['#f97316','#3b82f6','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
   const porAnio={};
   datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
-  if(charts.tendAnual){charts.tendAnual.destroy();charts.tendAnual=null;}
+  _destroyChart('tendAnual');
   const elT=document.getElementById('cTendAnual');
   if(elT){const anios=Object.keys(porAnio).sort();charts.tendAnual=new Chart(elT,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#0b1e45',backgroundColor:'rgba(11,30,69,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
   const tbody=document.getElementById('tbResAnualBody');
@@ -4491,19 +4529,19 @@ function dibujarGraficosResumen(datos) {
     for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
   }
   datos.forEach(a=>{const f=String(a.fecha_atencion||'').substring(0,7);if(porMes.hasOwnProperty(f)) porMes[f]++;});
-  const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]);
-  if(charts.rMes){charts.rMes.destroy();charts.rMes=null;}
+  const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]||k);
+  _destroyChart('rMes');
   const elRM=document.getElementById('rChartMes');
   if(elRM) charts.rMes=new Chart(elRM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#0b1e45',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
   const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
   const proc=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
   const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
-  if(charts.rEst){charts.rEst.destroy();charts.rEst=null;}
+  _destroyChart('rEst');
   const elRE=document.getElementById('rChartEst');
   if(elRE) charts.rEst=new Chart(elRE,{type:'doughnut',data:{labels:['Pendiente','En Proceso','Resuelto'],datasets:[{data:[pend,proc,res],backgroundColor:['#f97316','#3b82f6','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
   const porAnio={};
   datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
-  if(charts.rAnual){charts.rAnual.destroy();charts.rAnual=null;}
+  _destroyChart('rAnual');
   const elRA=document.getElementById('rChartAnual');
   if(elRA){const anios=Object.keys(porAnio).sort();charts.rAnual=new Chart(elRA,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#d9292b',backgroundColor:'rgba(217,41,43,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
   const tbody=document.getElementById('tbResAnualBodyAdmin');
