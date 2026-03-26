@@ -1551,12 +1551,14 @@ function renderEstadisticasAdmin(data) {
 async function cargarVisitas() {
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   if (CACHE.visitas && CACHE.visitas.length > 0) {
-    const miNombre = (USER.nombre||USER.usuario).toLowerCase().trim();
+    const miLogin  = (USER.usuario||'').toLowerCase().trim();
+    const miPrimer = (USER.nombre||USER.usuario).toLowerCase().trim().split(' ')[0];
     const lista = esAdmin ? CACHE.visitas : CACHE.visitas.filter(v => {
       const sup = String(v.supervisor||'').toLowerCase().trim();
       const reg = String(v.registrado_por||'').toLowerCase().trim();
-      return sup.includes(miNombre) || miNombre.includes(sup) ||
-             reg.includes(miNombre) || miNombre.includes(reg);
+      // sup puede ser login ("jtimoteo") o nombre; reg puede ser login o nombre completo
+      return sup === miLogin || sup.includes(miPrimer) ||
+             reg === miLogin || reg.includes(miPrimer);
     });
     renderVisitas(lista);
     return;
@@ -1624,14 +1626,15 @@ function renderVisitas(data) {
       const btnVer    = `<button onclick="verInformeGuardado(${i})" style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📄 Ver</button>`;
       const btnEnviar = `<button onclick="enviarInformeVisita(${i})" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📧 Enviar</button>`;
       const btnEditar = puedeEditar ? `<button onclick="editarVisita(${i})" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button>` : '';
-      const supCol = esAdmin ? `<td>${v.supervisor||'—'}</td>` : '';
+      const escT = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const supCol = esAdmin ? `<td>${escT(v.supervisor||'—')}</td>` : '';
       return `<tr>
         <td>${i+1}</td>
         <td>${v.fecha_reg||v.fecha||'—'}</td>
-        <td><span style="font-size:10px;background:${v.empresa==='RAPEL'?'#dbeafe':'#fce7f3'};padding:2px 7px;border-radius:10px">${v.empresa||'—'}</span></td>
+        <td><span style="font-size:10px;background:${v.empresa==='RAPEL'?'#dbeafe':'#fce7f3'};padding:2px 7px;border-radius:10px">${escT(v.empresa||'—')}</span></td>
         ${supCol}
-        <td>${v.sector||v.fundo||'—'}</td>
-        <td>${v.semana||'—'}</td>
+        <td>${escT(v.sector||v.fundo||'—')}</td>
+        <td>${escT(v.semana||'—')}</td>
         <td><span style="font-size:10px;font-weight:700;color:${colorEstado}">${estado}</span></td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">${btnVer}${btnEnviar}${btnEditar}</td>
       </tr>`;
