@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Evaluación 360° | Sistema RL v3.1</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
+body{font-family:Barlow,sans-serif;background:var(--bg);color:var(--tx)}
+.sb{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--azul);display:flex;flex-direction:column;z-index:100;transition:transform .3s ease}
+.sb-hdr{padding:20px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sb-logo{display:flex;align-items:center;gap:10px}
+.sb-ic{width:36px;height:36px;background:var(--rojo);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px}
+.sb-t{font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:800;color:#fff;letter-spacing:1px}
+.sb-s{font-size:10px;color:rgba(255,255,255,.4)}
+.sb-usr{padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:9px}
+.av{width:32px;height:32px;border-radius:50%;background:var(--rojo);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;flex-shrink:0}
+.av-n{font-size:12px;font-weight:600;color:#fff} .av-r{font-size:10px;color:rgba(255,255,255,.4)}
+.nav{flex:1;padding:12px 8px;overflow-y:auto}
+.ns{font-size:9px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.3);text-transform:uppercase;padding:0 8px;margin:12px 0 5px}
+.ni{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;color:rgba(255,255,255,.6);cursor:pointer;transition:all .2s;font-size:12px;font-weight:500;margin-bottom:1px;border:none;background:none;width:100%;text-align:left;text-decoration:none}
+.ni:hover{background:rgba(255,255,255,.1);color:#fff} .ni.on{background:var(--rojo);color:#fff}
+.ni .ic{font-size:14px;width:18px;text-align:center}
+.sb-ft{padding:12px 8px;border-top:1px solid rgba(255,255,255,.1)}
+.logout{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;color:rgba(255,255,255,.45);cursor:pointer;font-size:12px;font-weight:500;border:none;background:none;width:100%;transition:all .2s}
+.logout:hover{color:#fff;background:rgba(220,38,38,.3)}
+.main{margin-left:var(--sw);min-height:100vh;display:flex;flex-direction:column}
+.topbar{background:#fff;border-bottom:1px solid var(--bd);padding:13px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.tb-t{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:800;color:var(--azul);letter-spacing:1px}
+.tb-r{display:flex;align-items:center;gap:9px}
+.tb-f{font-size:11px;color:var(--gr)}
+.emp-b{padding:4px 12px;border-radius:20px;background:var(--rojo);color:#fff;font-size:10px;font-weight:700;letter-spacing:1px}
+.content{padding:22px;flex:1}
+.card{background:#fff;border-radius:11px;border:1px solid var(--bd);overflow:hidden;margin-bottom:16px}
+.card-h{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bd);flex-wrap:wrap;gap:8px}
+.card-t{font-size:13px;font-weight:700;color:var(--azul)}
+.btn-n{padding:7px 16px;background:var(--rojo);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-n:hover{background:#b91c1c}
+.btn-blue{padding:7px 16px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-blue:hover{background:var(--azul-med)}
+.btn-green{padding:7px 16px;background:#16a34a;color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-green:hover{background:#15803d}
+.fi{padding:7px 12px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc}
+.fi:focus{outline:none;border-color:var(--azul-c);background:#fff}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:500px}
+th{padding:9px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--gr);text-transform:uppercase;background:#f8fafc;border-bottom:1px solid var(--bd);white-space:nowrap}
+td{padding:10px 12px;font-size:11px;border-bottom:1px solid #f1f5f9;white-space:nowrap}
+tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
+.empty{text-align:center;padding:32px;color:var(--gr);font-size:12px}
+.bg{padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.brap{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.bver{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+.bam{background:#f5f3ff;color:#5b21b6;border:1px solid #ddd6fe}
+.btn-a{padding:4px 9px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;border:none;transition:all .2s;margin-right:2px}
+.bv{background:#dbeafe;color:#1e40af} .bv:hover{background:#bfdbfe}
+.bd{background:#fee2e2;color:#991b1b} .bd:hover{background:#fecaca}
+/* FORM EVAL */
+.form-panel{background:#fff;border-radius:11px;border:1px solid var(--bd);padding:24px;margin-bottom:16px}
+.form-titulo{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:var(--azul);margin-bottom:20px}
+.form-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px}
+.fc{display:flex;flex-direction:column;gap:5px}
+.fc label{font-size:9px;font-weight:700;color:var(--azul);letter-spacing:1px;text-transform:uppercase}
+.fc input,.fc select,.fc textarea{padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc;transition:border-color .2s}
+.fc input:focus,.fc select:focus,.fc textarea:focus{outline:none;border-color:var(--azul-c);background:#fff}
+.competencia-bloque{background:#f8fafc;border-radius:10px;border:1px solid var(--bd);padding:16px;margin-bottom:12px}
+.comp-titulo{font-size:12px;font-weight:700;color:var(--azul);margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
+.comp-prom{font-size:11px;font-weight:800;color:var(--azul-c);background:#dbeafe;padding:3px 10px;border-radius:20px}
+.pregunta-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bd);gap:12px}
+.pregunta-row:last-child{border-bottom:none}
+.pregunta-txt{font-size:12px;color:var(--tx);flex:1}
+.escala-radios{display:flex;gap:6px}
+.escala-radios label{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;font-size:9px;font-weight:700;color:var(--gr)}
+.escala-radios input[type=radio]{width:16px;height:16px;cursor:pointer;accent-color:var(--azul)}
+.escala-radios label:nth-child(1){color:#dc2626}
+.escala-radios label:nth-child(2){color:#f97316}
+.escala-radios label:nth-child(3){color:#f59e0b}
+.escala-radios label:nth-child(4){color:#3b82f6}
+.escala-radios label:nth-child(5){color:#16a34a}
+/* PANEL RESULTADO */
+.resultado-panel{background:#fff;border-radius:11px;border:2px solid var(--bd);padding:20px;margin-bottom:16px;transition:border-color .3s}
+.resultado-panel.excelente{border-color:#16a34a;background:#f0fdf4}
+.resultado-panel.bueno{border-color:#3b82f6;background:#eff6ff}
+.resultado-panel.regular{border-color:#f97316;background:#fff7ed}
+.resultado-panel.critico{border-color:#dc2626;background:#fef2f2}
+.resultado-titulo{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:var(--azul);margin-bottom:14px}
+.resultado-pct{font-family:'Barlow Condensed',sans-serif;font-size:52px;font-weight:900;line-height:1}
+.resultado-nivel{font-size:14px;font-weight:700;margin-top:6px}
+.resultado-bars{margin-top:16px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:11px}
+.bar-label{width:130px;font-weight:600;color:var(--tx);flex-shrink:0}
+.bar-bg{flex:1;background:#e2e8f0;border-radius:20px;height:10px;overflow:hidden}
+.bar-fill{height:100%;border-radius:20px;transition:width .4s ease}
+.bar-val{width:40px;text-align:right;font-weight:700;font-size:12px}
+/* RANKING */
+.rank-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.rank-ex{background:#d1fae5;color:#065f46}
+.rank-bu{background:#dbeafe;color:#1e40af}
+.rank-re{background:#ffedd5;color:#c2410c}
+.rank-cr{background:#fee2e2;color:#991b1b}
+/* MODAL */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:center;justify-content:center}
+.ov.on{display:flex}
+.modal{background:#fff;border-radius:14px;padding:28px;width:500px;max-width:96vw;max-height:92vh;overflow-y:auto;animation:pop .3s ease}
+@keyframes pop{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.modal-t{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:var(--azul);margin-bottom:20px}
+.modal-ft{display:flex;gap:9px;justify-content:flex-end;margin-top:20px}
+.btn-cancel{padding:8px 20px;border:2px solid var(--bd);background:#fff;color:var(--gr);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-save{padding:8px 20px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer}
+.btn-save:hover{background:var(--azul-med)}
+.hamburger{background:none;border:none;font-size:22px;cursor:pointer;color:var(--azul);padding:4px 8px;border-radius:6px;margin-right:8px}
+@media(max-width:900px){.form-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:768px){
+  .sb{transform:translateX(-100%);transition:transform .3s ease}
+  .sb.open{transform:translateX(0)}
+  .main{margin-left:0}
+  .form-grid{grid-template-columns:1fr}
+  .pregunta-row{flex-direction:column;align-items:flex-start}
+  .hamburger{display:flex}
+}
+@media(min-width:769px){.hamburger{display:none}}
+@media print{
+  .sb,.topbar,.no-print{display:none!important}
+  .main{margin-left:0}
+  .reporte-imprimible{display:block!important}
+}
+.reporte-imprimible{display:none}
+</style>
+</head>
+<body>
+
+<!-- MODAL AGREGAR SUPERVISOR -->
+<div class="ov" id="mSupCustom">
+<div class="modal">
+  <div class="modal-t">Agregar Supervisor</div>
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div class="fc"><label>Nombre Completo</label><input type="text" id="cust_nombre" placeholder="Ej: Juan Pérez González"></div>
+    <div class="fc"><label>Empresa</label>
+      <select id="cust_empresa">
+        <option value="RAPEL">RAPEL</option>
+        <option value="VERFRUT">VERFRUT</option>
+        <option value="AMBAS">AMBAS</option>
+      </select>
+    </div>
+    <div class="fc"><label>Sector / Fundo</label><input type="text" id="cust_sector" placeholder="Ej: Fundos Varios"></div>
+  </div>
+  <div class="modal-ft">
+    <button class="btn-cancel" onclick="cerrar('mSupCustom')">Cancelar</button>
+    <button class="btn-save" onclick="guardarSupCustom()">✅ Agregar</button>
+  </div>
+</div>
+</div>
+
+<nav class="sb" id="sb">
+  <div class="sb-hdr">
+    <div class="sb-logo">
+      <div class="sb-ic">🏛️</div>
+      <div><div class="sb-t">SISTEMA RL</div><div class="sb-s">Relaciones Laborales v3.0</div></div>
+    </div>
+  </div>
+  <div class="sb-usr">
+    <div class="av" id="av">J</div>
+    <div><div class="av-n" id="avN">...</div><div class="av-r" id="avR">...</div></div>
+  </div>
+  <div class="nav">
+    <div class="ns">Principal</div>
+    <a class="ni" href="dashboard.html"><span class="ic">📊</span>Mi Dashboard</a>
+    <div class="ns">Administración</div>
+    <a class="ni" href="resumen.html"><span class="ic">📈</span>Resumen General</a>
+    <a class="ni" href="estadisticas.html"><span class="ic">📊</span>Estadísticas Admin</a>
+    <a class="ni" id="navUsr" style="display:none" href="usuarios.html"><span class="ic">👥</span>Gestión Usuarios</a>
+    <a class="ni on" href="evaluacion360.html"><span class="ic">⭐</span>Evaluación 360°</a>
+  </div>
+  <div class="sb-ft">
+    <button class="logout" onclick="logout()"><span>🚪</span>Cerrar Sesión</button>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:center">
+      <button class="hamburger" onclick="document.getElementById('sb').classList.toggle('open')">☰</button>
+      <span class="tb-t">EVALUACIÓN 360°</span>
+    </div>
+    <div class="tb-r">
+      <span class="tb-f" id="tbF"></span>
+      <span class="emp-b" id="tbE"></span>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- PANEL PRINCIPAL: ranking + botones -->
+    <div id="panelDashboard">
+      <div class="card">
+        <div class="card-h">
+          <span class="card-t">⭐ Ranking de Supervisores Evaluados</span>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select class="fi" id="filtEmpRank" onchange="renderRanking()" style="width:130px">
+              <option value="">Todas las empresas</option>
+              <option value="RAPEL">RAPEL</option>
+              <option value="VERFRUT">VERFRUT</option>
+            </select>
+            <select class="fi" id="filtSupRank" onchange="renderRanking()" style="min-width:160px">
+              <option value="">Todos los supervisores</option>
+            </select>
+            <button class="btn-n" onclick="mostrarFormulario()">+ Nueva Evaluación</button>
+            <button class="btn-blue" onclick="abrir('mSupCustom')">+ Agregar Supervisor</button>
+          </div>
+        </div>
+        <div class="tw">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Supervisor</th><th>Empresa</th>
+                <th>Promedio</th><th>Clasificación</th><th>Fecha</th><th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbRanking">
+              <tr><td colspan="7" class="empty">No hay evaluaciones registradas. Haga clic en "Nueva Evaluación" para comenzar.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- FORMULARIO DE EVALUACIÓN -->
+    <div id="panelFormulario" style="display:none">
+      <div class="form-panel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+          <div class="form-titulo">📋 Nueva Evaluación 360°</div>
+          <button class="btn-cancel" onclick="mostrarDashboard()" style="font-size:12px">← Volver al Ranking</button>
+        </div>
+        <div class="form-grid">
+          <div class="fc">
+            <label>Supervisor Evaluado</label>
+            <select id="eval_supervisor" onchange="actualizarEmpresaSup()">
+              <option value="">-- Seleccionar supervisor --</option>
+            </select>
+          </div>
+          <div class="fc">
+            <label>Empresa</label>
+            <select id="eval_empresa">
+              <option value="RAPEL">RAPEL</option>
+              <option value="VERFRUT">VERFRUT</option>
+              <option value="AMBAS">AMBAS</option>
+            </select>
+          </div>
+          <div class="fc">
+            <label>Fecha de Evaluación</label>
+            <input type="date" id="eval_fecha">
+          </div>
+          <div class="fc">
+            <label>Evaluador</label>
+            <input type="text" id="eval_evaluador" placeholder="Nombre del evaluador">
+          </div>
+          <div class="fc" style="grid-column:1/-1">
+            <label>Observaciones Generales</label>
+            <textarea id="eval_obs" rows="2" placeholder="Comentarios generales sobre la evaluación..."></textarea>
+          </div>
+        </div>
+
+        <!-- Competencias -->
+        <div id="competeciasContainer"></div>
+
+        <!-- Panel resultado en tiempo real -->
+        <div class="resultado-panel" id="panelResultado">
+          <div class="resultado-titulo">📊 Resultado en Tiempo Real</div>
+          <div style="display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap">
+            <div>
+              <div class="resultado-pct" id="resPct" style="color:#94a3b8">—%</div>
+              <div class="resultado-nivel" id="resNivel" style="color:#94a3b8">Sin calificar</div>
+            </div>
+            <div class="resultado-bars" style="flex:1;min-width:200px" id="resBars"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+          <button class="btn-cancel" onclick="limpiarFormulario()">🗑️ Limpiar</button>
+          <button class="btn-green" onclick="guardarEvaluacion()">💾 Guardar Evaluación</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- REPORTE IMPRIMIBLE (oculto hasta emitir) -->
+    <div id="panelReporte" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px" class="no-print">
+        <h3 style="color:var(--azul);font-size:16px">📄 Reporte de Evaluación</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn-cancel" onclick="mostrarDashboard()">← Volver</button>
+          <button class="btn-blue" onclick="window.print()">🖨️ Imprimir / PDF</button>
+        </div>
+      </div>
+      <div id="reporteContenido" class="reporte-imprimible" style="display:block;background:#fff;padding:32px;border-radius:11px;border:1px solid var(--bd)">
+        <!-- Generado dinámicamente -->
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+let API = sessionStorage.getItem('api') || API_URL_DEFAULT;
+const ud = sessionStorage.getItem('user');
+if (!ud) { location.href = '../../index.html'; throw 'no session'; }
+const USER = JSON.parse(ud);
+const ROLES_ADMIN  = ['administrador','Administrador'];
+const ROLES_ADMIN2 = ['administrador 01','administrador 02','Administrador 01','Administrador 02'];
+const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+if (!esAdmin) { location.href = 'dashboard.html'; throw 'no access'; }
+
+const HISTORIAL_KEY = 'eval360_historial';
+const CUSTOM_SUPS_KEY = 'eval360_supervisores_custom';
+
+// ── Lista base de supervisores ──
+const SUPERVISORES_BASE = [
+  { nombre:'Elberth Castro Bayona',     empresa:'RAPEL',   sector:'San Vicente' },
+  { nombre:'Yhanelly Luzón Venegas',    empresa:'VERFRUT', sector:'Santa Rosa' },
+  { nombre:'Socorro Miranda Pasapera',  empresa:'RAPEL',   sector:'Campo A' },
+  { nombre:'Pool Tamayo Rodríguez',     empresa:'RAPEL',   sector:'Limones / El Papayo' },
+  { nombre:'Alexander Tineo Ramos',     empresa:'VERFRUT', sector:'Olivares Bajo' },
+  { nombre:'Sergio Viera Girón',        empresa:'RAPEL',   sector:'Algarrobos' },
+  { nombre:'Alex Zapata Suárez',        empresa:'RAPEL',   sector:'Aproa' },
+  { nombre:'Alexander Martínez Juárez', empresa:'VERFRUT', sector:'Punta Arenas' },
+  { nombre:'Flor Pulache Viera',        empresa:'RAPEL',   sector:'Los Olivares' },
+  { nombre:'Roberto Molero Abad',       empresa:'RAPEL',   sector:'Planta Packing Rapel' },
+  { nombre:'Jaime Siancas Viera',       empresa:'',        sector:'Fundos Varios' },
+  { nombre:'Jhonny Avendaño Granda',    empresa:'',        sector:'Fundos Varios' },
+  { nombre:'Muriel Mechato Navarro',    empresa:'',        sector:'Fundos Varios' },
+  { nombre:'Deysi Quispe Juárez',       empresa:'',        sector:'Fundos Varios' },
+];
+
+// ── Competencias y preguntas ──
+const COMPETENCIAS = [
+  {
+    nombre: 'Liderazgo',
+    preguntas: [
+      'Conduce a su equipo con claridad y ejemplo',
+      'Motiva y mantiene el compromiso del equipo',
+      'Toma decisiones oportunas y efectivas'
+    ]
+  },
+  {
+    nombre: 'Comunicación',
+    preguntas: [
+      'Transmite información de forma clara y oportuna',
+      'Escucha activamente y atiende consultas del equipo',
+      'Reporta incidencias y novedades a tiempo'
+    ]
+  },
+  {
+    nombre: 'Cumplimiento',
+    preguntas: [
+      'Cumple con los plazos establecidos',
+      'Sigue los procedimientos y normativas vigentes',
+      'Registra correctamente las atenciones y visitas'
+    ]
+  },
+  {
+    nombre: 'Gestión de Equipo',
+    preguntas: [
+      'Distribuye tareas equitativamente',
+      'Resuelve conflictos internos del equipo',
+      'Promueve un buen clima laboral'
+    ]
+  },
+  {
+    nombre: 'Resolución de Problemas',
+    preguntas: [
+      'Identifica problemas y busca soluciones rápidas',
+      'Maneja situaciones de presión con serenidad'
+    ]
+  },
+  {
+    nombre: 'Planificación',
+    preguntas: [
+      'Organiza su trabajo con anticipación',
+      'Coordina recursos y tiempos eficientemente'
+    ]
+  }
+];
+
+const ESCALA = ['Deficiente','Regular','Bueno','Muy Bueno','Excelente'];
+const TOTAL_PREGUNTAS = COMPETENCIAS.reduce((s,c) => s + c.preguntas.length, 0); // 16
+
+// ── Helpers ──
+function mostrarToast(msg, tipo='ok') {
+  let t = document.getElementById('_toast');
+  if(!t) {
+    t = document.createElement('div');
+    t.id = '_toast';
+    t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;transition:opacity .4s;box-shadow:0 4px 16px rgba(0,0,0,.15)';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = tipo === 'error' ? '#fee2e2' : '#dcfce7';
+  t.style.color = tipo === 'error' ? '#991b1b' : '#166534';
+  t.style.opacity = '1';
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.style.opacity = '0', 3000);
+}
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
+function hoy(){return new Date().toISOString().split('T')[0];}
+function abrir(id){document.getElementById(id).classList.add('on');}
+function cerrar(id){document.getElementById(id).classList.remove('on');}
+function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
+function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[String(e||'').toUpperCase()]||'bam';}
+
+document.addEventListener('click', e=>{ if(e.target.classList.contains('ov')) e.target.classList.remove('on'); });
+
+// ── Supervisores (base + custom) ──
+function getSupervisores() {
+  const custom = JSON.parse(localStorage.getItem(CUSTOM_SUPS_KEY) || '[]');
+  return [...SUPERVISORES_BASE, ...custom];
+}
+
+function poblarSelectSupervisores() {
+  const sups = getSupervisores();
+  const sel = document.getElementById('eval_supervisor');
+  if (!sel) return;
+  while (sel.options.length > 1) sel.remove(1);
+  sups.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.nombre;
+    o.dataset.empresa = s.empresa || '';
+    o.textContent = s.nombre + (s.empresa ? ' (' + s.empresa + ')' : '');
+    sel.appendChild(o);
+  });
+  // Select filtro ranking
+  const filtSup = document.getElementById('filtSupRank');
+  if (filtSup) {
+    while (filtSup.options.length > 1) filtSup.remove(1);
+    sups.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.nombre;
+      o.textContent = s.nombre;
+      filtSup.appendChild(o);
+    });
+  }
+}
+
+function actualizarEmpresaSup() {
+  const sel = document.getElementById('eval_supervisor');
+  if (!sel) return;
+  const opt = sel.options[sel.selectedIndex];
+  const emp = opt?.dataset?.empresa || '';
+  if (emp) document.getElementById('eval_empresa').value = emp;
+}
+
+function guardarSupCustom() {
+  const nombre = document.getElementById('cust_nombre').value.trim();
+  const empresa = document.getElementById('cust_empresa').value;
+  const sector = document.getElementById('cust_sector').value.trim();
+  if (!nombre) { mostrarToast('❌ Ingresa un nombre','error'); return; }
+  const custom = JSON.parse(localStorage.getItem(CUSTOM_SUPS_KEY) || '[]');
+  if (custom.find(s => s.nombre.toLowerCase() === nombre.toLowerCase()) ||
+      SUPERVISORES_BASE.find(s => s.nombre.toLowerCase() === nombre.toLowerCase())) {
+    mostrarToast('❌ Ese supervisor ya existe','error'); return;
+  }
+  custom.push({ nombre, empresa, sector });
+  localStorage.setItem(CUSTOM_SUPS_KEY, JSON.stringify(custom));
+  cerrar('mSupCustom');
+  document.getElementById('cust_nombre').value = '';
+  document.getElementById('cust_sector').value = '';
+  poblarSelectSupervisores();
+  mostrarToast('✅ Supervisor agregado');
+}
+
+// ── Historial ──
+function getHistorial() {
+  return JSON.parse(localStorage.getItem(HISTORIAL_KEY) || '[]');
+}
+function setHistorial(h) {
+  localStorage.setItem(HISTORIAL_KEY, JSON.stringify(h));
+}
+
+// ── Clasificación ──
+function clasificar(pct) {
+  if (pct >= 90) return { texto:'Excelente', color:'#16a34a', clase:'rank-ex', panelClase:'excelente' };
+  if (pct >= 75) return { texto:'Bueno',     color:'#3b82f6', clase:'rank-bu', panelClase:'bueno' };
+  if (pct >= 60) return { texto:'Regular',   color:'#f97316', clase:'rank-re', panelClase:'regular' };
+  return           { texto:'Crítico',   color:'#dc2626', clase:'rank-cr', panelClase:'critico' };
+}
+function recomendacion(nivel) {
+  const r = {
+    'Excelente': 'Mantener el nivel de desempeño. Considerar como mentor para otros supervisores.',
+    'Bueno':     'Continuar desarrollando las competencias identificadas. Participar en capacitaciones de liderazgo.',
+    'Regular':   'Requiere plan de mejora en las áreas de menor puntaje. Seguimiento mensual.',
+    'Crítico':   'Intervención inmediata requerida. Elaborar plan de acción correctivo urgente.'
+  };
+  return r[nivel] || '';
+}
+
+// ── Generar formulario de competencias ──
+function generarFormulario() {
+  const cont = document.getElementById('competeciasContainer');
+  if (!cont) return;
+  cont.innerHTML = '';
+  COMPETENCIAS.forEach((comp, ci) => {
+    const bloque = document.createElement('div');
+    bloque.className = 'competencia-bloque';
+    bloque.innerHTML = `
+      <div class="comp-titulo">
+        <span>${comp.nombre}</span>
+        <span class="comp-prom" id="prom_comp_${ci}">— / 5.0</span>
+      </div>
+      ${comp.preguntas.map((p, pi) => `
+        <div class="pregunta-row">
+          <span class="pregunta-txt">${p}</span>
+          <div class="escala-radios">
+            ${[1,2,3,4,5].map(n => `
+              <label>
+                <input type="radio" name="q_${ci}_${pi}" value="${n}" onchange="calcularResultado()">
+                ${n}
+              </label>
+            `).join('')}
+          </div>
+        </div>
+      `).join('')}
+    `;
+    cont.appendChild(bloque);
+  });
+}
+
+// ── Calcular resultado en tiempo real ──
+function calcularResultado() {
+  const panel = document.getElementById('panelResultado');
+  const resPct = document.getElementById('resPct');
+  const resNivel = document.getElementById('resNivel');
+  const resBars = document.getElementById('resBars');
+  if (!panel) return;
+
+  let totalPuntos = 0, totalRespondidas = 0;
+  const resultComp = [];
+
+  COMPETENCIAS.forEach((comp, ci) => {
+    let sumComp = 0, countComp = 0;
+    comp.preguntas.forEach((p, pi) => {
+      const checked = document.querySelector(`input[name="q_${ci}_${pi}"]:checked`);
+      if (checked) {
+        const val = parseInt(checked.value);
+        sumComp += val;
+        countComp++;
+        totalPuntos += val;
+        totalRespondidas++;
+      }
+    });
+    const promComp = countComp > 0 ? sumComp / countComp : 0;
+    const promEl = document.getElementById(`prom_comp_${ci}`);
+    if (promEl) promEl.textContent = countComp > 0 ? promComp.toFixed(1) + ' / 5.0' : '— / 5.0';
+    resultComp.push({ nombre: comp.nombre, prom: promComp, respondidas: countComp, total: comp.preguntas.length });
+  });
+
+  if (totalRespondidas === 0) {
+    resPct.textContent = '—%';
+    resNivel.textContent = 'Sin calificar';
+    panel.className = 'resultado-panel';
+    resBars.innerHTML = '';
+    return;
+  }
+
+  const promGlobal = totalPuntos / totalRespondidas;
+  const pct = Math.round((promGlobal / 5) * 100);
+  const cl = clasificar(pct);
+
+  resPct.textContent = pct + '%';
+  resPct.style.color = cl.color;
+  resNivel.textContent = cl.texto + (totalRespondidas < TOTAL_PREGUNTAS ? ` (${totalRespondidas}/${TOTAL_PREGUNTAS} respondidas)` : ' ✓');
+  resNivel.style.color = cl.color;
+  panel.className = 'resultado-panel ' + cl.panelClase;
+
+  resBars.innerHTML = resultComp.map(rc => {
+    const pctComp = rc.prom > 0 ? Math.round((rc.prom / 5) * 100) : 0;
+    const clComp = clasificar(pctComp);
+    return `
+      <div class="bar-row">
+        <span class="bar-label">${rc.nombre}</span>
+        <div class="bar-bg"><div class="bar-fill" style="width:${pctComp}%;background:${clComp.color}"></div></div>
+        <span class="bar-val" style="color:${clComp.color}">${rc.prom > 0 ? rc.prom.toFixed(1) : '—'}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+// ── Guardar evaluación ──
+function guardarEvaluacion() {
+  const supervisor = document.getElementById('eval_supervisor').value;
+  const empresa = document.getElementById('eval_empresa').value;
+  const fecha = document.getElementById('eval_fecha').value;
+  const evaluador = document.getElementById('eval_evaluador').value.trim();
+  const obs = document.getElementById('eval_obs').value.trim();
+
+  if (!supervisor) { mostrarToast('❌ Selecciona un supervisor','error'); return; }
+  if (!fecha) { mostrarToast('❌ Ingresa la fecha de evaluación','error'); return; }
+
+  let totalPuntos = 0, totalRespondidas = 0;
+  const resultComp = [];
+  let todasRespondidas = true;
+
+  COMPETENCIAS.forEach((comp, ci) => {
+    let sumComp = 0, countComp = 0;
+    const respuestas = [];
+    comp.preguntas.forEach((p, pi) => {
+      const checked = document.querySelector(`input[name="q_${ci}_${pi}"]:checked`);
+      if (checked) {
+        const val = parseInt(checked.value);
+        sumComp += val;
+        countComp++;
+        totalPuntos += val;
+        totalRespondidas++;
+        respuestas.push({ pregunta: p, valor: val });
+      } else {
+        todasRespondidas = false;
+        respuestas.push({ pregunta: p, valor: null });
+      }
+    });
+    const prom = countComp > 0 ? sumComp / countComp : 0;
+    resultComp.push({ nombre: comp.nombre, promedio: prom, respondidas: countComp, total: comp.preguntas.length, respuestas });
+  });
+
+  if (!todasRespondidas) {
+    if (!confirm('Hay preguntas sin responder. ¿Deseas guardar igual?')) return;
+  }
+
+  const promGlobal = totalRespondidas > 0 ? totalPuntos / totalRespondidas : 0;
+  const pct = Math.round((promGlobal / 5) * 100);
+  const cl = clasificar(pct);
+
+  const evaluacion = {
+    id: Date.now().toString(),
+    supervisor, empresa, fecha, evaluador, obs,
+    competencias: resultComp,
+    promGlobal: promGlobal.toFixed(2),
+    porcentaje: pct,
+    clasificacion: cl.texto,
+    fechaRegistro: hoy(),
+    evaluadorUser: USER.nombre
+  };
+
+  const historial = getHistorial();
+  historial.unshift(evaluacion);
+  setHistorial(historial);
+
+  mostrarToast('✅ Evaluación guardada correctamente');
+  renderRanking();
+  mostrarDashboard();
+}
+
+function limpiarFormulario() {
+  if (!confirm('¿Limpiar todos los campos del formulario?')) return;
+  document.getElementById('eval_supervisor').value = '';
+  document.getElementById('eval_empresa').value = 'RAPEL';
+  document.getElementById('eval_fecha').value = hoy();
+  document.getElementById('eval_evaluador').value = '';
+  document.getElementById('eval_obs').value = '';
+  document.querySelectorAll('#competeciasContainer input[type=radio]').forEach(r => r.checked = false);
+  calcularResultado();
+}
+
+// ── Emitir reporte ──
+function emitirReporte(id) {
+  const historial = getHistorial();
+  const ev = historial.find(e => e.id === id);
+  if (!ev) return;
+  const cl = clasificar(ev.porcentaje);
+
+  const radarLabels = ev.competencias.map(c => c.nombre);
+  const radarData = ev.competencias.map(c => parseFloat(c.promedio.toFixed(2)));
+
+  const recomendacionTxt = recomendacion(ev.clasificacion);
+
+  document.getElementById('reporteContenido').innerHTML = `
+    <style>
+      .rpt-header{background:linear-gradient(135deg,#0a2463,#1e3a8a);color:#fff;padding:24px;border-radius:10px;margin-bottom:24px}
+      .rpt-title{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:900;letter-spacing:2px}
+      .rpt-sub{font-size:12px;color:rgba(255,255,255,.7);margin-top:4px}
+      .rpt-info{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px;font-size:12px}
+      .rpt-info-item{background:rgba(255,255,255,.1);border-radius:6px;padding:8px 12px}
+      .rpt-info-label{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:rgba(255,255,255,.5)}
+      .rpt-info-val{font-size:13px;font-weight:700;color:#fff;margin-top:2px}
+      .rpt-section{margin-bottom:20px}
+      .rpt-section-title{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:#0a2463;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin-bottom:12px}
+      .rpt-comp-table{width:100%;border-collapse:collapse;font-size:12px}
+      .rpt-comp-table th{background:#0a2463;color:#fff;padding:8px 12px;text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase}
+      .rpt-comp-table td{padding:8px 12px;border-bottom:1px solid #f1f5f9}
+      .rpt-result-box{padding:20px;border-radius:10px;text-align:center;border:2px solid ${cl.color};background:${ev.porcentaje>=90?'#f0fdf4':ev.porcentaje>=75?'#eff6ff':ev.porcentaje>=60?'#fff7ed':'#fef2f2'}}
+      .rpt-pct{font-family:'Barlow Condensed',sans-serif;font-size:64px;font-weight:900;color:${cl.color};line-height:1}
+      .rpt-nivel{font-size:20px;font-weight:700;color:${cl.color};margin-top:4px}
+      .rpt-rec{background:#f8fafc;border-left:4px solid ${cl.color};padding:12px 16px;border-radius:6px;font-size:12px;margin-top:12px;color:#334155}
+      .rpt-canvas-wrap{text-align:center;margin:16px 0}
+      @media print{.no-print{display:none!important}}
+    </style>
+    <div class="rpt-header">
+      <div class="rpt-title">⭐ EVALUACIÓN 360° — SUPERVISORES</div>
+      <div class="rpt-sub">Sistema de Relaciones Laborales v3.0 · RAPEL / VERFRUT</div>
+      <div class="rpt-info">
+        <div class="rpt-info-item"><div class="rpt-info-label">Supervisor Evaluado</div><div class="rpt-info-val">${ev.supervisor}</div></div>
+        <div class="rpt-info-item"><div class="rpt-info-label">Empresa</div><div class="rpt-info-val">${ev.empresa}</div></div>
+        <div class="rpt-info-item"><div class="rpt-info-label">Fecha de Evaluación</div><div class="rpt-info-val">${ev.fecha}</div></div>
+        <div class="rpt-info-item"><div class="rpt-info-label">Evaluador</div><div class="rpt-info-val">${ev.evaluador || ev.evaluadorUser || '—'}</div></div>
+      </div>
+    </div>
+
+    <div class="rpt-section">
+      <div class="rpt-section-title">Resultado Global</div>
+      <div class="rpt-result-box">
+        <div class="rpt-pct">${ev.porcentaje}%</div>
+        <div class="rpt-nivel">${ev.clasificacion}</div>
+        <div class="rpt-rec">💡 ${recomendacionTxt}</div>
+      </div>
+    </div>
+
+    <div class="rpt-section">
+      <div class="rpt-section-title">Resultado por Competencia</div>
+      <table class="rpt-comp-table">
+        <thead>
+          <tr><th>Competencia</th><th>Promedio (1-5)</th><th>Porcentaje</th><th>Clasificación</th><th>Preguntas</th></tr>
+        </thead>
+        <tbody>
+          ${ev.competencias.map(c => {
+            const pctC = Math.round((c.promedio / 5) * 100);
+            const clC = clasificar(pctC);
+            return `<tr>
+              <td style="font-weight:700">${c.nombre}</td>
+              <td style="text-align:center;font-weight:800;color:${clC.color}">${parseFloat(c.promedio).toFixed(1)}</td>
+              <td style="text-align:center">${pctC}%</td>
+              <td style="text-align:center"><span style="background:${clC.color}22;color:${clC.color};padding:2px 8px;border-radius:20px;font-weight:700;font-size:11px">${clC.texto}</span></td>
+              <td style="text-align:center;color:#64748b">${c.respondidas}/${c.total}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rpt-section">
+      <div class="rpt-section-title">Gráfico de Radar por Competencia</div>
+      <div class="rpt-canvas-wrap">
+        <canvas id="chartRadarReporte" width="400" height="400" style="max-width:400px;max-height:400px"></canvas>
+      </div>
+    </div>
+
+    ${ev.obs ? `
+    <div class="rpt-section">
+      <div class="rpt-section-title">Observaciones</div>
+      <p style="font-size:12px;color:#334155;line-height:1.6">${ev.obs}</p>
+    </div>` : ''}
+
+    <div style="margin-top:24px;text-align:center;font-size:10px;color:#94a3b8">
+      Generado el ${new Date().toLocaleDateString('es-PE',{day:'numeric',month:'long',year:'numeric'})} · Sistema RL v3.0
+    </div>
+  `;
+
+  document.getElementById('panelDashboard').style.display = 'none';
+  document.getElementById('panelFormulario').style.display = 'none';
+  document.getElementById('panelReporte').style.display = 'block';
+
+  // Dibujar radar
+  setTimeout(() => {
+    const ctx = document.getElementById('chartRadarReporte');
+    if (ctx && window.Chart) {
+      new Chart(ctx, {
+        type: 'radar',
+        data: {
+          labels: radarLabels,
+          datasets: [{
+            label: ev.supervisor,
+            data: radarData,
+            borderColor: cl.color,
+            backgroundColor: cl.color + '22',
+            pointBackgroundColor: cl.color,
+            pointRadius: 5
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            r: {
+              min: 0, max: 5,
+              ticks: { stepSize: 1, font: { size: 10 } },
+              pointLabels: { font: { size: 11, weight: '700' } }
+            }
+          },
+          plugins: { legend: { position: 'bottom' } }
+        }
+      });
+    }
+  }, 100);
+}
+
+// ── Eliminar evaluación ──
+function eliminarEval(id) {
+  if (!confirm('¿Eliminar esta evaluación? Esta acción no se puede deshacer.')) return;
+  const historial = getHistorial().filter(e => e.id !== id);
+  setHistorial(historial);
+  renderRanking();
+  mostrarToast('🗑️ Evaluación eliminada');
+}
+
+// ── Render ranking ──
+function renderRanking() {
+  const historial = getHistorial();
+  const filtEmp = document.getElementById('filtEmpRank')?.value || '';
+  const filtSup = document.getElementById('filtSupRank')?.value || '';
+
+  const filtrado = historial.filter(ev =>
+    (!filtEmp || ev.empresa === filtEmp) &&
+    (!filtSup || ev.supervisor === filtSup)
+  );
+
+  const tb = document.getElementById('tbRanking');
+  if (!tb) return;
+
+  if (!filtrado.length) {
+    tb.innerHTML = '<tr><td colspan="7" class="empty">No hay evaluaciones registradas' + (filtEmp || filtSup ? ' con los filtros seleccionados' : '. Haga clic en "Nueva Evaluación" para comenzar') + '.</td></tr>';
+    return;
+  }
+
+  // Agrupar por supervisor: último puntaje
+  tb.innerHTML = filtrado.map((ev, i) => {
+    const cl = clasificar(ev.porcentaje);
+    return `<tr>
+      <td style="font-weight:700;color:var(--gr)">${i+1}</td>
+      <td style="font-weight:700;color:var(--azul)">${ev.supervisor}</td>
+      <td><span class="bg ${empC(ev.empresa)}">${ev.empresa}</span></td>
+      <td style="font-weight:900;color:${cl.color};font-size:14px">${ev.porcentaje}%</td>
+      <td><span class="rank-badge ${cl.clase}">${cl.texto}</span></td>
+      <td style="color:var(--gr)">${ev.fecha}</td>
+      <td>
+        <button class="btn-a bv" onclick="emitirReporte('${ev.id}')">📄 Reporte</button>
+        <button class="btn-a bd" onclick="eliminarEval('${ev.id}')">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Navegación paneles ──
+function mostrarDashboard() {
+  document.getElementById('panelDashboard').style.display = 'block';
+  document.getElementById('panelFormulario').style.display = 'none';
+  document.getElementById('panelReporte').style.display = 'none';
+  renderRanking();
+}
+
+function mostrarFormulario() {
+  document.getElementById('panelDashboard').style.display = 'none';
+  document.getElementById('panelFormulario').style.display = 'block';
+  document.getElementById('panelReporte').style.display = 'none';
+  generarFormulario();
+  calcularResultado();
+  document.getElementById('eval_fecha').value = hoy();
+  document.getElementById('eval_evaluador').value = USER.nombre || '';
+}
+
+// ── Init ──
+window.onload = function() {
+  const ini = USER.nombre || '?';
+  document.getElementById('av').textContent = ini.charAt(0).toUpperCase();
+  document.getElementById('avN').textContent = USER.nombre || '';
+  document.getElementById('avR').textContent = cap(USER.rol || '');
+  document.getElementById('tbE').textContent = USER.empresa || '';
+  document.getElementById('tbF').textContent = new Date().toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'short',year:'numeric'});
+  if (ROLES_ADMIN.includes(USER.rol)) {
+    const navUsr = document.getElementById('navUsr');
+    if (navUsr) navUsr.style.display = '';
+  }
+  poblarSelectSupervisores();
+  renderRanking();
+};
+</script>
+</body>
+</html>

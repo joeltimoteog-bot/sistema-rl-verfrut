@@ -3,7 +3,8 @@
     "allow": [
       "Bash(git -C \"C:/sistema-rl-verfrut\" add frontend/pages/dashboard.html)",
       "Bash(git -C \"C:/sistema-rl-verfrut\" status)",
-      "mcp__ide__executeCode"
+      "mcp__ide__executeCode",
+      "Bash(cmd /c \"tree C:\\\\sistema-rl-verfrut /F /A\")"
     ]
   }
 }
