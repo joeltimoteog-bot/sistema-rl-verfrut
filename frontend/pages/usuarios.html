@@ -163,6 +163,8 @@ const USER = JSON.parse(ud);
 const ROLES_ADMIN  = ['administrador','Administrador'];
 // Solo ROLES_ADMIN puede acceder a usuarios (no ROLES_ADMIN2)
 if (!ROLES_ADMIN.includes(USER.rol)) { location.href = 'dashboard.html'; throw 'no access'; }
+console.log('[usuarios] SESSION OK — usuario:', USER.usuario, '| rol:', USER.rol, '| empresa:', USER.empresa);
+console.log('[usuarios] API URL:', API);
 
 const CACHE_KEY = 'cache_usuarios';
 const CACHE_TTL = 10 * 60 * 1000;
@@ -224,16 +226,21 @@ async function cargarUs() {
   if (CACHE.usuarios) { _renderUs(CACHE.usuarios); return; }
   const tb = document.getElementById('tbUs');
   if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">⏳ Cargando...</td></tr>';
+  const reqParams = {action:'getUsuarios', usuario:USER.usuario, rol:USER.rol};
+  console.log('[usuarios] cargarUs → params:', reqParams);
   try{
-    const d=await apiGet({action:'getUsuarios', usuario:USER.usuario, rol:USER.rol});
+    const d=await apiGet(reqParams);
+    console.log('[usuarios] respuesta API:', d);
     if(!d.success){
+      console.warn('[usuarios] API devolvió error:', d.error);
       if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error: '+(d.error||'No autorizado')+'</td></tr>';
       return;
     }
+    console.log('[usuarios] registros recibidos:', (d.data||[]).length);
     CACHE.usuarios = d.data || [];
     _renderUs(CACHE.usuarios);
   }catch(e){
-    console.error('cargarUs:', e);
+    console.error('[usuarios] excepción en cargarUs:', e);
     if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error de conexión</td></tr>';
   }
 }

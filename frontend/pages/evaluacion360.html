@@ -311,6 +311,8 @@ const ROLES_ADMIN  = ['administrador','Administrador'];
 const ROLES_ADMIN2 = ['administrador 01','administrador 02','Administrador 01','Administrador 02'];
 const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
 if (!esAdmin) { location.href = 'dashboard.html'; throw 'no access'; }
+console.log('[eval360] SESSION OK — usuario:', USER.usuario, '| rol:', USER.rol, '| empresa:', USER.empresa);
+console.log('[eval360] API URL:', API);
 
 const HISTORIAL_KEY = 'eval360_historial';
 const CUSTOM_SUPS_KEY = 'eval360_supervisores_custom';
@@ -327,8 +329,10 @@ async function apiPost(b) {
 }
 
 async function cargarEvaluacionesAPI() {
+  console.log('[eval360] cargarEvaluacionesAPI → sincronizando con API...');
   try {
     const d = await apiGet({action:'getEvaluaciones360'});
+    console.log('[eval360] respuesta API:', d);
     if (!d.success || !d.data || !d.data.length) return;
     const local = getHistorial();
     const localIds = new Set(local.map(e => e.id));
@@ -337,13 +341,17 @@ async function cargarEvaluacionesAPI() {
       if (!localIds.has(ev.id)) { local.push(ev); agregados++; }
     });
     if (agregados > 0) { setHistorial(local); renderRanking(); }
-  } catch(e) { /* API no disponible, usar solo localStorage */ }
+  } catch(e) { console.warn('[eval360] cargarEvaluacionesAPI → API no disponible:', e.message); }
 }
 
 async function guardarEnAPI(evaluacion) {
   try {
-    await apiPost({action:'saveEvaluacion360', ...evaluacion});
-  } catch(e) { /* guardar solo en localStorage si API falla */ }
+    console.log('[eval360] guardarEnAPI → enviando evaluación ID:', evaluacion.id);
+    const r = await apiPost({action:'saveEvaluacion360', ...evaluacion});
+    console.log('[eval360] guardarEnAPI → respuesta:', r);
+  } catch(e) {
+    console.warn('[eval360] guardarEnAPI → error (solo localStorage):', e.message);
+  }
 }
 
 // ── Lista base de supervisores ──

@@ -264,6 +264,8 @@ const ROLES_ADMIN  = ['administrador','Administrador'];
 const ROLES_ADMIN2 = ['administrador 01','administrador 02','Administrador 01','Administrador 02'];
 const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
 if (!esAdmin) { location.href = 'dashboard.html'; throw 'no access'; }
+console.log('[estadisticas] SESSION OK — usuario:', USER.usuario, '| rol:', USER.rol, '| empresa:', USER.empresa);
+console.log('[estadisticas] API URL:', API);
 
 const CACHE_KEY = 'cache_estadisticas';
 const CACHE_TTL = 10 * 60 * 1000;
@@ -352,16 +354,22 @@ async function cargarEstadisticasAdmin() {
   const tb = document.getElementById('tbEstSupervisores');
   if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">⏳ Cargando datos...</td></tr>';
 
+  const reqParams = { action:'getEstadisticasAdmin', empresa, mes: mes||'', supervisor: sup };
+  console.log('[estadisticas] cargarEstadisticasAdmin → params:', reqParams);
   try {
-    const d = await apiGet({ action:'getEstadisticasAdmin', empresa, mes: mes||'', supervisor: sup });
+    const d = await apiGet(reqParams);
+    console.log('[estadisticas] respuesta API:', d);
     if (!d.success) {
+      console.warn('[estadisticas] API devolvió error:', d.error);
       if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ ' + (d.error||'Error al cargar') + '</td></tr>';
       return;
     }
+    console.log('[estadisticas] datos recibidos:', d.data);
     CACHE.estadisticasAdmin = d.data;
     guardarCacheLS(d.data);
     renderEstadisticasAdmin(d.data);
   } catch(e) {
+    console.error('[estadisticas] excepción en cargarEstadisticasAdmin:', e);
     if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error de conexión: ' + e.message + '</td></tr>';
   }
 }
