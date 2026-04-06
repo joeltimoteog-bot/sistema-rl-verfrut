@@ -1921,7 +1921,7 @@ window.onload = async () => {
   // Siempre usar la URL del Apps Script — si sessionStorage está vacío, usar la URL hardcodeada
   API = sessionStorage.getItem('api') || API_URL_DEFAULT;
   if (!API || API.trim() === '') API = API_URL_DEFAULT;
-  if (!ud) { location.href='index.html'; return; }
+  if (!ud) { location.href='../../index.html'; return; }
   USER = JSON.parse(ud);
   const rol = USER.rol || '';
 
