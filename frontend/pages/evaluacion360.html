@@ -315,6 +315,37 @@ if (!esAdmin) { location.href = 'dashboard.html'; throw 'no access'; }
 const HISTORIAL_KEY = 'eval360_historial';
 const CUSTOM_SUPS_KEY = 'eval360_supervisores_custom';
 
+async function apiGet(p) {
+  if (!API || API.trim() === '') API = API_URL_DEFAULT;
+  const r = await fetch(API+'?'+new URLSearchParams(p));
+  return r.json();
+}
+async function apiPost(b) {
+  if (!API || API.trim() === '') API = API_URL_DEFAULT;
+  const r = await fetch(API,{method:'POST',body:JSON.stringify(b),headers:{'Content-Type':'text/plain'}});
+  return r.json();
+}
+
+async function cargarEvaluacionesAPI() {
+  try {
+    const d = await apiGet({action:'getEvaluaciones360'});
+    if (!d.success || !d.data || !d.data.length) return;
+    const local = getHistorial();
+    const localIds = new Set(local.map(e => e.id));
+    let agregados = 0;
+    d.data.forEach(ev => {
+      if (!localIds.has(ev.id)) { local.push(ev); agregados++; }
+    });
+    if (agregados > 0) { setHistorial(local); renderRanking(); }
+  } catch(e) { /* API no disponible, usar solo localStorage */ }
+}
+
+async function guardarEnAPI(evaluacion) {
+  try {
+    await apiPost({action:'saveEvaluacion360', ...evaluacion});
+  } catch(e) { /* guardar solo en localStorage si API falla */ }
+}
+
 // ── Lista base de supervisores ──
 const SUPERVISORES_BASE = [
   { nombre:'Elberth Castro Bayona',     empresa:'RAPEL',   sector:'San Vicente' },
@@ -644,6 +675,9 @@ function guardarEvaluacion() {
   historial.unshift(evaluacion);
   setHistorial(historial);
 
+  // Intentar guardar en API (no bloqueante)
+  guardarEnAPI(evaluacion);
+
   mostrarToast('✅ Evaluación guardada correctamente');
   renderRanking();
   mostrarDashboard();
@@ -868,6 +902,8 @@ window.onload = function() {
   }
   poblarSelectSupervisores();
   renderRanking();
+  // Sincronizar con API en background
+  cargarEvaluacionesAPI();
 };
 </script>
 </body>

@@ -297,16 +297,24 @@ document.addEventListener('click', e=>{ if(e.target.classList.contains('ov')) e.
 async function cargarResumen() {
   const emp=v('rEmp'), mes=v('rMes'), anio=v('rAnio');
   const params = {action:'getResumenGeneral', empresa:emp, mes, anio};
+  document.getElementById('supR').innerHTML='<div class="empty">⏳ Cargando datos...</div>';
+  document.getElementById('tbRes').innerHTML='<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
   try{
     const d=await apiGet(params);
-    if(!d.success)return;
+    if(!d.success){
+      const err = d.error || 'Error al cargar los datos';
+      document.getElementById('supR').innerHTML='<div class="empty">❌ '+err+'</div>';
+      document.getElementById('tbRes').innerHTML='<tr><td colspan="9" class="empty">❌ '+err+'</td></tr>';
+      mostrarToast('❌ '+err,'error');
+      return;
+    }
     CACHE.resumen=d.data;
     resData=d.data.lista||[];
     const supSel=document.getElementById('rFiltroSup');
     if(supSel){ const sups=[...new Set(resData.map(a=>a.supervisor).filter(Boolean))].sort(); while(supSel.options.length>1) supSel.remove(1); sups.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;supSel.appendChild(o);}); }
     document.getElementById('rT').textContent=resData.length;
-    document.getElementById('rP').textContent=resData.filter(a=>String(a.estado).toUpperCase()==='PENDIENTE').length;
-    document.getElementById('rR').textContent=resData.filter(a=>String(a.estado).toUpperCase()==='RESUELTO').length;
+    document.getElementById('rP').textContent=resData.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
+    document.getElementById('rR').textContent=resData.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
     const ps=d.data.porSupervisor||{};
     document.getElementById('supR').innerHTML=Object.entries(ps).length?
       Object.entries(ps).sort((a,b)=>b[1].total-a[1].total).map(([k,val])=>`
@@ -319,9 +327,15 @@ async function cargarResumen() {
             <div class="sup-st"><div class="n" style="color:#22c55e">${val.resueltos}</div><div class="l">Resuelto</div></div>
           </div>
         </div>`).join('') :
-      '<div class="empty">No hay datos</div>';
+      '<div class="empty">No hay datos para los filtros seleccionados</div>';
     filtrarRes();
-  }catch(e){ console.error('cargarResumen:', e); }
+  }catch(e){
+    console.error('cargarResumen:', e);
+    const msg = 'Error de conexión: ' + e.message;
+    document.getElementById('supR').innerHTML='<div class="empty">❌ '+msg+'</div>';
+    document.getElementById('tbRes').innerHTML='<tr><td colspan="9" class="empty">❌ '+msg+'</td></tr>';
+    mostrarToast('❌ '+msg,'error');
+  }
 }
 
 function filtrarRes() {

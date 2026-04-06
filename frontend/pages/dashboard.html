@@ -1131,6 +1131,8 @@ function previsualizarFoto(input, prevId) {
 }
 
 function abrirNuevaFusion() {
+  const hr = verificarHorarioRegistro();
+  if (!hr.permitido) { mostrarAlertaHorario(hr.mensaje); return; }
   limpiarFormFusion();
   abrir('mFusion');
 }
@@ -1794,6 +1796,63 @@ const ROLES_ADMIN2  = ['administrador 01','administrador 02','Administrador 01',
 const ROLES_SUP     = ['supervisor','Supervisor'];
 const ROLES_VER_TODO = ['administrador','administrador 01','administrador 02','Administrador','Administrador 01','Administrador 02'];
 
+// ════════════════════════════════════════════════════════════
+// RESTRICCIÓN DE HORARIO — Solo aplica a supervisores
+// Temporada Baja (Ene 1 – Jun 26): Lun-Vie 05:30-17:00
+// Temporada Alta (Jun 27 – Dic 31): Lun-Vie 05:30-15:40, Sáb 05:30-13:00
+// ════════════════════════════════════════════════════════════
+function verificarHorarioRegistro() {
+  if (!ROLES_SUP.includes(USER.rol)) return { permitido: true };
+
+  const ahora = new Date();
+  const mes   = ahora.getMonth() + 1; // 1-12
+  const dia   = ahora.getDate();
+  const dow   = ahora.getDay();       // 0=Dom 1=Lun … 6=Sáb
+  const h     = ahora.getHours() + ahora.getMinutes() / 60;
+
+  const esAlta = mes > 6 || (mes === 6 && dia >= 27);
+
+  const horarioBaja  = 'Horario: Lunes a Viernes 05:30 – 17:00 (Temporada Baja)';
+  const horarioAlta  = 'Horario: Lun-Vie 05:30 – 15:40 · Sábado 05:30 – 13:00 (Temporada Alta)';
+  const horarioTexto = esAlta ? horarioAlta : horarioBaja;
+  const base = '⏰ El registro de atenciones no está disponible fuera del horario de trabajo.\n';
+
+  if (!esAlta) {
+    // Temporada baja: solo Lun-Vie 05:30-17:00
+    if (dow === 0 || dow === 6)
+      return { permitido: false, mensaje: base + horarioTexto };
+    if (h < 5.5 || h >= 17)
+      return { permitido: false, mensaje: base + horarioTexto };
+  } else {
+    // Temporada alta
+    if (dow === 0)
+      return { permitido: false, mensaje: base + horarioTexto };
+    if (dow === 6) {
+      // Sábado 05:30-13:00
+      if (h < 5.5 || h >= 13)
+        return { permitido: false, mensaje: base + horarioTexto };
+    } else {
+      // Lun-Vie 05:30-15:40
+      if (h < 5.5 || h >= 15 + 40/60)
+        return { permitido: false, mensaje: base + horarioTexto };
+    }
+  }
+  return { permitido: true };
+}
+
+function mostrarAlertaHorario(msg) {
+  let a = document.getElementById('_alertaHorario');
+  if (!a) {
+    a = document.createElement('div');
+    a.id = '_alertaHorario';
+    a.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#fef2f2;border:2px solid #dc2626;border-radius:12px;padding:18px 28px;font-size:13px;font-weight:600;color:#991b1b;z-index:9999;box-shadow:0 4px 24px rgba(220,38,38,.2);max-width:92vw;text-align:center;white-space:pre-line;line-height:1.6';
+    document.body.appendChild(a);
+  }
+  a.textContent = msg;
+  a.style.display = 'block';
+  clearTimeout(a._to);
+  a._to = setTimeout(() => a.style.display = 'none', 6000);
+}
 
 // verInformeGuardado (movido del fragmento suelto)
 function verInformeGuardado(idx) {
@@ -2106,6 +2165,8 @@ function _estadoPlazoColor(estadoCaso, diasRestantes) {
 // ── Apertura de modales ───────────────────────────────────────
 
 function abrirNuevoCaso() {
+  const hr = verificarHorarioRegistro();
+  if (!hr.permitido) { mostrarAlertaHorario(hr.mensaje); return; }
   abrir('mTipoCaso');
 }
 
@@ -3029,6 +3090,8 @@ function filtrarAt() {
 }
 
 function abrirAt() {
+  const hr = verificarHorarioRegistro();
+  if (!hr.permitido) { mostrarAlertaHorario(hr.mensaje); return; }
   modoEdicion=false;
   document.getElementById('mAtTitulo').textContent='Nueva Atención';
   document.getElementById('at_nro_edit').value='';
@@ -3907,6 +3970,8 @@ function autoFillFundoReemplazo() {
 }
 
 function abrirNuevaVisita() {
+  const hr = verificarHorarioRegistro();
+  if (!hr.permitido) { mostrarAlertaHorario(hr.mensaje); return; }
   window._editandoVisitaIdx = null;
   // Reset form
   ['vDNI','vCorreo','vEmp','vFundo','vPunto','vFI','vFF',

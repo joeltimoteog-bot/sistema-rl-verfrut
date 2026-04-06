@@ -74,8 +74,9 @@ function doGet(e) {
   var action = p.action || '';
   var result;
   try {
-    if      (action === 'getCasos')         result = getCasos(p);
-    else if (action === 'buscarTrabajador') result = buscarTrabajador(p);
+    if      (action === 'getCasos')            result = getCasos(p);
+    else if (action === 'buscarTrabajador')   result = buscarTrabajador(p);
+    else if (action === 'getEvaluaciones360') result = getEvaluaciones360(p);
     else result = { success: false, error: 'Acción GET no reconocida: ' + action };
   } catch (err) {
     result = { success: false, error: err.message };
@@ -92,9 +93,10 @@ function doPost(e) {
   var action = body.action || '';
   var result;
   try {
-    if      (action === 'subirArchivo') result = subirArchivo(body);
-    else if (action === 'saveCaso')     result = saveCaso(body);
-    else if (action === 'updateCaso')   result = updateCaso(body);
+    if      (action === 'subirArchivo')      result = subirArchivo(body);
+    else if (action === 'saveCaso')          result = saveCaso(body);
+    else if (action === 'updateCaso')        result = updateCaso(body);
+    else if (action === 'saveEvaluacion360') result = saveEvaluacion360(body);
     else result = { success: false, error: 'Acción POST no reconocida: ' + action };
   } catch (err) {
     result = { success: false, error: err.message };
@@ -350,6 +352,149 @@ function getCasos(params) {
     }
 
     rows.push(row);
+  }
+
+  return { success: true, data: rows };
+}
+
+// ════════════════════════════════════════════════════════════
+// EVALUACIÓN 360° — Gestión de supervisores y evaluaciones
+// ════════════════════════════════════════════════════════════
+
+var SHEET_EVAL360     = 'BB.DD-EVALUACIONES';
+var SHEET_SUPS_EVAL   = 'SUPERVISORES_EVAL';
+
+var COLS_EVAL360 = [
+  'id','fecha_registro','supervisor','empresa','fecha_evaluacion','evaluador','evaluador_user',
+  'promedio_global','porcentaje','clasificacion','observaciones',
+  'comp_liderazgo','comp_comunicacion','comp_cumplimiento',
+  'comp_gestion_equipo','comp_resolucion','comp_planificacion',
+  'detalle_json'
+];
+
+function getSheetEval360() {
+  var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var sh = ss.getSheetByName(SHEET_EVAL360);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_EVAL360);
+    sh.getRange(1, 1, 1, COLS_EVAL360.length).setValues([COLS_EVAL360]);
+    sh.setFrozenRows(1);
+    Logger.log('Hoja ' + SHEET_EVAL360 + ' creada');
+  }
+  return sh;
+}
+
+function getSheetSupsEval() {
+  var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var sh = ss.getSheetByName(SHEET_SUPS_EVAL);
+  if (!sh) {
+    sh = ss.insertSheet(SHEET_SUPS_EVAL);
+    sh.getRange(1, 1, 1, 3).setValues([['nombre','empresa','sector']]);
+    sh.setFrozenRows(1);
+    Logger.log('Hoja ' + SHEET_SUPS_EVAL + ' creada');
+  }
+  return sh;
+}
+
+/**
+ * Guarda una evaluación 360° en Google Sheets.
+ * Evita duplicados por id.
+ */
+function saveEvaluacion360(params) {
+  var sh = getSheetEval360();
+  var id = String(params.id || '');
+  if (!id) return { success: false, error: 'ID de evaluación requerido' };
+
+  // Verificar duplicado
+  var data = sh.getDataRange().getValues();
+  var headers = data[0] || [];
+  var idIdx = headers.indexOf('id');
+  if (idIdx !== -1) {
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][idIdx]) === id) {
+        return { success: true, msg: 'Evaluación ya registrada', nro: i };
+      }
+    }
+  }
+
+  // Extraer promedios por competencia
+  var comps = params.competencias || [];
+  var getComp = function(nombre) {
+    var c = comps.filter(function(x){ return x.nombre === nombre; })[0];
+    return c ? parseFloat(c.promedio).toFixed(2) : '';
+  };
+
+  var fila = COLS_EVAL360.map(function(col) {
+    switch(col) {
+      case 'id':                return id;
+      case 'fecha_registro':    return new Date().toISOString().split('T')[0];
+      case 'supervisor':        return params.supervisor || '';
+      case 'empresa':           return params.empresa || '';
+      case 'fecha_evaluacion':  return params.fecha || '';
+      case 'evaluador':         return params.evaluador || '';
+      case 'evaluador_user':    return params.evaluadorUser || '';
+      case 'promedio_global':   return params.promGlobal || '';
+      case 'porcentaje':        return params.porcentaje || '';
+      case 'clasificacion':     return params.clasificacion || '';
+      case 'observaciones':     return params.obs || '';
+      case 'comp_liderazgo':       return getComp('Liderazgo');
+      case 'comp_comunicacion':    return getComp('Comunicación');
+      case 'comp_cumplimiento':    return getComp('Cumplimiento');
+      case 'comp_gestion_equipo':  return getComp('Gestión de Equipo');
+      case 'comp_resolucion':      return getComp('Resolución de Problemas');
+      case 'comp_planificacion':   return getComp('Planificación');
+      case 'detalle_json':      return JSON.stringify(comps);
+      default: return '';
+    }
+  });
+
+  sh.appendRow(fila);
+  Logger.log('Evaluación 360° guardada: ' + (params.supervisor || '') + ' id=' + id);
+  return { success: true, id: id };
+}
+
+/**
+ * Retorna todas las evaluaciones 360° guardadas.
+ * Opcionalmente filtra por supervisor o empresa.
+ */
+function getEvaluaciones360(params) {
+  var sh   = getSheetEval360();
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return { success: true, data: [] };
+
+  var headers    = data[0];
+  var supervisor = (params.supervisor || '').toLowerCase();
+  var empresa    = params.empresa || '';
+
+  var rows = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = {};
+    headers.forEach(function(h, j) { row[h] = data[i][j]; });
+
+    if (supervisor && String(row.supervisor || '').toLowerCase().indexOf(supervisor) === -1) continue;
+    if (empresa    && row.empresa !== empresa) continue;
+
+    // Reconstruir objeto compatible con localStorage
+    var ev = {
+      id:            String(row.id || ''),
+      supervisor:    row.supervisor || '',
+      empresa:       row.empresa    || '',
+      fecha:         row.fecha_evaluacion || '',
+      evaluador:     row.evaluador  || '',
+      evaluadorUser: row.evaluador_user || '',
+      promGlobal:    row.promedio_global || '',
+      porcentaje:    parseInt(row.porcentaje) || 0,
+      clasificacion: row.clasificacion || '',
+      obs:           row.observaciones || '',
+      fechaRegistro: row.fecha_registro || '',
+      competencias:  []
+    };
+    // Parsear detalle JSON si existe
+    try {
+      if (row.detalle_json) ev.competencias = JSON.parse(row.detalle_json);
+    } catch(e) {}
+
+    rows.push(ev);
   }
 
   return { success: true, data: rows };
