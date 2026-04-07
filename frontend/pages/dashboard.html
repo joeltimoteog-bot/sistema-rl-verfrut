@@ -240,7 +240,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="filtros">
           <input class="fi" id="fAQ" placeholder="🔍 DNI o nombre..." oninput="filtrarAt()" style="flex:1.5">
           <select class="fi" id="fAE" onchange="filtrarAt()"><option value="">Todos los estados</option><option>PENDIENTE</option><option>EN PROCESO</option><option>RESUELTO</option></select>
-          <select class="fi" id="fAEmp" onchange="filtrarAt()"><option value="">Todas las empresas</option><option>RAPEL</option><option>VERFRUT</option></select>
+          <select class="fi" id="fAEmp" onchange="filtrarAt()"><option value="">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
           <select class="fi" id="fAM" onchange="filtrarAt()">
             <option value="">Todos los meses</option>
             <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
@@ -262,7 +262,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="card-h"><span class="card-t">Buscar Trabajador en Base de Datos</span></div>
         <div class="filtros">
           <input class="fi" id="fTQ" placeholder="🔍 Ingresa DNI o nombre completo..." style="flex:2">
-          <select class="fi" id="fTE"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL</option><option value="VERFRUT">VERFRUT</option></select>
+          <select class="fi" id="fTE"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
           <button class="btn-bus" onclick="buscarTrab()">🔍 Buscar</button>
         </div>
         <div class="tw">
@@ -297,7 +297,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <div class="fc"><label>Fecha Inicio *</label><input type="date" id="cFI"></div>
           <div class="fc"><label>Fecha Fin *</label><input type="date" id="cFF"></div>
           <div class="fc"><label>Empresa</label>
-            <select id="cEmp"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL</option><option value="VERFRUT">VERFRUT</option></select>
+            <select id="cEmp"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
           </div>
           <div class="fc">
             <label>Para (destinatarios) *</label>
@@ -359,7 +359,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       <div class="filtros" style="margin-bottom:14px">
         <select id="vFiltroEmp" onchange="cargarVisitas()">
           <option value="">Todas las empresas</option>
-          <option>RAPEL</option><option>VERFRUT</option>
+          <option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option>
         </select>
         <select id="vFiltroMes" onchange="cargarVisitas()">
           <option value="">Todos los meses</option>
@@ -411,8 +411,8 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       <div class="filtros" style="margin-bottom:14px">
         <select id="cFiltroEmp" onchange="cargarCasos()">
           <option value="">Todas las empresas</option>
-          <option value="RAPEL">RAPEL</option>
-          <option value="VERFRUT">VERFRUT</option>
+          <option value="RAPEL">RAPEL S.A.C</option>
+          <option value="VERFRUT">VERFRUT S.A.C</option>
         </select>
         <select id="cFiltroMotivo" onchange="cargarCasos()">
           <option value="">Todos los motivos</option>
@@ -549,8 +549,8 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <select id="estFiltroEmp" onchange="cargarEstadisticasAdmin()" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px">
             <option value="">Todas las empresas</option>
-            <option value="RAPEL">RAPEL</option>
-            <option value="VERFRUT">VERFRUT</option>
+            <option value="RAPEL">RAPEL S.A.C</option>
+            <option value="VERFRUT">VERFRUT S.A.C</option>
           </select>
           <select id="estFiltroMes" onchange="cargarEstadisticasAdmin()" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px">
             <option value="">Todos los meses</option>
@@ -749,7 +749,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <label>Empresa *</label>
         <select id="vEmp">
           <option value="">— Empresa —</option>
-          <option>RAPEL</option><option>VERFRUT</option>
+          <option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option>
         </select>
       </div>
       <div class="fc"><label>Fundo/Sector *</label><input type="text" id="vFundo" placeholder="Ej: El Papayo"></div>
@@ -849,7 +849,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <div class="fc"><label>Sexo</label><select id="at_sex"><option value="">--</option><option>M</option><option>F</option></select></div>
     <div class="fc"><label>Fecha Inicio Periodo</label><input type="date" id="at_fip"></div>
     <div class="fc"><label>Fecha Término Periodo</label><input type="date" id="at_ftp"></div>
-    <div class="fc"><label>Empresa *</label><select id="at_emp"><option>RAPEL</option><option>VERFRUT</option></select></div>
+    <div class="fc"><label>Empresa *</label><select id="at_emp"><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select></div>
     <div class="fc"><label>Fundo</label><input type="text" id="at_fundo" placeholder="Fundo de origen"></div>
     <div class="fc"><label>Cargo</label><input type="text" id="at_cargo" placeholder="Cargo"></div>
     <div class="fc"><label>Ruta</label><input type="text" id="at_ruta" placeholder="Ruta"></div>
@@ -967,7 +967,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <option value="supervisor" selected>Supervisor</option>
       </select>
     </div>
-    <div class="fc"><label>Empresa</label><select id="us_e"><option value="AMBAS">Ambas</option><option value="RAPEL">RAPEL</option><option value="VERFRUT">VERFRUT</option></select></div>
+    <div class="fc"><label>Empresa</label><select id="us_e"><option value="AMBAS">Ambas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select></div>
     <div class="fc"><label>Correo</label><input type="email" id="us_c" placeholder="usuario@verfrut.pe"></div>
   </div>
   <div class="modal-ft">
@@ -1799,10 +1799,12 @@ const ROLES_VER_TODO = ['administrador','administrador 01','administrador 02','A
 
 // ════════════════════════════════════════════════════════════
 // RESTRICCIÓN DE HORARIO — Solo aplica a supervisores
-// Temporada Baja (Ene 1 – Jun 26): Lun-Vie 05:30-17:00
-// Temporada Alta (Jun 27 – Dic 31): Lun-Vie 05:30-15:40, Sáb 05:30-13:00
+// Turno Normal:      T.Baja Lun-Vie 05:30-17:00 | T.Alta Lun-Vie 05:30-15:40 Sáb 05:30-13:00
+// Turno Planta RAPEL (rmolero, javendano): 24h excepto 23:00-00:00
+// Admins / coordinador / jefa_rl: sin restricción
 // ════════════════════════════════════════════════════════════
 function verificarHorarioRegistro() {
+  // Admins, coordinador, jefa_rl: sin restricción
   if (!ROLES_SUP.includes(USER.rol)) return { permitido: true };
 
   const ahora = new Date();
@@ -1810,7 +1812,21 @@ function verificarHorarioRegistro() {
   const dia   = ahora.getDate();
   const dow   = ahora.getDay();       // 0=Dom 1=Lun … 6=Sáb
   const h     = ahora.getHours() + ahora.getMinutes() / 60;
+  const usr   = (USER.usuario || '').toLowerCase();
 
+  // ── Turno Planta RAPEL: rmolero, javendano ──────────────────
+  if (usr === 'rmolero' || usr === 'javendano') {
+    // Bloqueado solo 23:00 – 00:00 (1 hora de cierre)
+    if (h >= 23) {
+      return {
+        permitido: false,
+        mensaje: '⏰ Registro no disponible en este momento.\nTurno Planta RAPEL S.A.C: bloqueado entre 23:00 y 00:00.'
+      };
+    }
+    return { permitido: true };
+  }
+
+  // ── Turno Normal: resto de supervisores ──────────────────────
   const esAlta = mes > 6 || (mes === 6 && dia >= 27);
 
   const horarioBaja  = 'Horario: Lunes a Viernes 05:30 – 17:00 (Temporada Baja)';
@@ -2278,7 +2294,7 @@ async function buscarTrabajadorCaso() {
   const dni = document.getElementById('mCasoDNI').value.trim();
   const msg = document.getElementById('cBuscarMsg');
   if(!dni || dni.length < 2) { msg.textContent='⚠️ Ingresa el DNI'; msg.style.color='#dc2626'; return; }
-  msg.textContent='🔍 Buscando en RAPEL y VERFRUT...';
+  msg.textContent='🔍 Buscando en RAPEL S.A.C y VERFRUT S.A.C...';
   msg.style.color='#64748b';
   try {
     const d = await apiGet({action:'buscarTrabajador', q:String(dni).trim().toUpperCase(), empresa:'AMBAS'});
@@ -2298,7 +2314,7 @@ async function buscarTrabajadorCaso() {
       msg.style.color = '#16a34a';
       window._casoTrabajador = t;
     } else {
-      msg.textContent = '⚠️ DNI no encontrado en RAPEL ni VERFRUT';
+      msg.textContent = '⚠️ DNI no encontrado en RAPEL S.A.C ni VERFRUT S.A.C';
       msg.style.color = '#dc2626';
       document.getElementById('panelDatosCaso').style.display = 'none';
     }
