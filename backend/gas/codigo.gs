@@ -74,9 +74,15 @@ function doGet(e) {
   var action = p.action || '';
   var result;
   try {
-    if      (action === 'getCasos')            result = getCasos(p);
-    else if (action === 'buscarTrabajador')   result = buscarTrabajador(p);
-    else if (action === 'getEvaluaciones360') result = getEvaluaciones360(p);
+    if      (action === 'getCasos')              result = getCasos(p);
+    else if (action === 'buscarTrabajador')     result = buscarTrabajador(p);
+    else if (action === 'getEvaluaciones360')   result = getEvaluaciones360(p);
+    else if (action === 'getAtenciones')        result = getAtenciones(p);
+    else if (action === 'getEstadisticas')      result = getEstadisticas(p);
+    else if (action === 'getEstadisticasAdmin') result = getEstadisticasAdmin(p);
+    else if (action === 'getResumenGeneral')    result = getResumenGeneral(p);
+    else if (action === 'consultaDNI')          result = consultaDNI(p);
+    else if (action === 'getPreload')           result = getPreload(p);
     else result = { success: false, error: 'Acción GET no reconocida: ' + action };
   } catch (err) {
     result = { success: false, error: err.message };
@@ -97,6 +103,8 @@ function doPost(e) {
     else if (action === 'saveCaso')          result = saveCaso(body);
     else if (action === 'updateCaso')        result = updateCaso(body);
     else if (action === 'saveEvaluacion360') result = saveEvaluacion360(body);
+    else if (action === 'saveAtencion')      result = saveAtencion(body);
+    else if (action === 'updateAtencion')    result = updateAtencion(body);
     else result = { success: false, error: 'Acción POST no reconocida: ' + action };
   } catch (err) {
     result = { success: false, error: err.message };
@@ -498,6 +506,589 @@ function getEvaluaciones360(params) {
   }
 
   return { success: true, data: rows };
+}
+
+// ════════════════════════════════════════════════════════════
+// ATENCIONES — Hojas multi-año (Sistema RL v3.0)
+// ════════════════════════════════════════════════════════════
+
+var SHEET_AT_BASE  = 'BB. DE REGISTROS';
+var SHEET_VISITAS  = 'BB. DE VISITAS';
+var SHEET_FUSIONES = 'BB. DE FUSIONES';
+
+// Años que tienen hoja propia. Ampliar cada 1 de enero.
+var ANIOS_CON_HOJA = [2024, 2025, 2026];
+
+var COLS_AT = [
+  'nro', 'fecha_registro', 'fecha_atencion', 'hora_inicio', 'hora_termino',
+  'nro_semana', 'mes', 'anio',
+  'dni', 'nombre', 'sexo',
+  'fecha_inicio_periodo', 'fecha_termino_periodo',
+  'empresa', 'fundo', 'cargo', 'ruta', 'codigo', 'fundo_actual', 'celular',
+  'detalle_documento', 'fecha_inicio_doc', 'fecha_termino_doc', 'dias_transcurridos',
+  'responsable_recepcion', 'observaciones', 'estado', 'supervisor',
+  'usuario_sistema', 'usuario_registro'
+];
+
+var ROLES_ADMIN_AT = ['admin', 'admin01', 'admin02', 'rrhh'];
+
+// ── Helpers de fecha ──────────────────────────────────────────
+function _hoyStr() {
+  return new Date().toISOString().split('T')[0];
+}
+function _pad2(n) {
+  return n < 10 ? '0' + n : String(n);
+}
+function _nroSemana(fecha) {
+  var inicio = new Date(fecha.getFullYear(), 0, 1);
+  var dias   = Math.floor((fecha - inicio) / 86400000);
+  return Math.ceil((dias + inicio.getDay() + 1) / 7);
+}
+function _strInicio(s, prefix) {
+  return String(s || '').indexOf(prefix) === 0;
+}
+
+// ─────────────────────────────────────────────────────────────
+/**
+ * Retorna la hoja de atenciones del año indicado.
+ * Si no existe la hoja del año → usa 'BB. DE REGISTROS' como respaldo.
+ * @param {string|number|null} anio  null = año actual
+ * @returns {Sheet|null}
+ */
+function getSheetAnio(anio) {
+  var ss         = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var target     = anio ? Number(anio) : new Date().getFullYear();
+  var nombreAnio = SHEET_AT_BASE + ' ' + target;
+
+  var sh = ss.getSheetByName(nombreAnio);
+  if (sh) return sh;
+
+  // Respaldo: hoja base sin sufijo
+  var shBase = ss.getSheetByName(SHEET_AT_BASE);
+  if (shBase) {
+    Logger.log('getSheetAnio: ' + nombreAnio + ' no existe → usando ' + SHEET_AT_BASE);
+    return shBase;
+  }
+
+  Logger.log('getSheetAnio: no se encontró hoja para año ' + target);
+  return null;
+}
+
+/**
+ * Obtiene o crea la hoja 'BB. DE REGISTROS {anio}' con headers.
+ */
+function _getOCrearSheetAnio(anio) {
+  var ss     = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var nombre = SHEET_AT_BASE + ' ' + anio;
+  var sh     = ss.getSheetByName(nombre);
+  if (sh) return sh;
+  sh = ss.insertSheet(nombre);
+  sh.getRange(1, 1, 1, COLS_AT.length).setValues([COLS_AT]);
+  sh.setFrozenRows(1);
+  Logger.log('Creada hoja: ' + nombre);
+  return sh;
+}
+
+/**
+ * Retorna [{anio, sh}] para cada año en ANIOS_CON_HOJA cuya hoja exista.
+ */
+function _todasLasHojas() {
+  var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var result = [];
+  ANIOS_CON_HOJA.forEach(function (a) {
+    var sh = ss.getSheetByName(SHEET_AT_BASE + ' ' + a);
+    if (sh) result.push({ anio: a, sh: sh });
+  });
+  return result;
+}
+
+/**
+ * Lee todas las filas de una hoja de atenciones aplicando filtros de
+ * empresa y visibilidad por rol.
+ */
+function _leerAtenciones(sh, filtros) {
+  filtros = filtros || {};
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return [];
+  var headers   = data[0];
+  var empresa   = filtros.empresa  || '';
+  var esAdmin   = filtros.esAdmin  || false;
+  var usuario   = (filtros.usuario || '').toLowerCase();
+  var nombre    = (filtros.nombre  || '').toLowerCase();
+  var primerNom = nombre.split(' ')[0];
+
+  var rows = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = {};
+    headers.forEach(function (h, j) { row[h] = data[i][j]; });
+
+    if (empresa && empresa !== 'AMBAS' && row.empresa !== empresa) continue;
+
+    if (!esAdmin) {
+      var supStr = String(row.supervisor       || '').toLowerCase();
+      var usrStr = String(row.usuario_sistema  || '').toLowerCase();
+      var regStr = String(row.usuario_registro || '').toLowerCase();
+      if (
+        supStr.indexOf(primerNom) === -1 &&
+        usrStr.indexOf(usuario)   === -1 &&
+        regStr.indexOf(usuario)   === -1
+      ) continue;
+    }
+
+    rows.push(row);
+  }
+  return rows;
+}
+
+/**
+ * Lee filas de cualquier hoja con filtros opcionales de empresa y supervisor.
+ */
+function _leerFilasSheet(sh, empresa, sup) {
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return [];
+  var headers = data[0];
+  var rows = [];
+  for (var i = 1; i < data.length; i++) {
+    var row = {};
+    headers.forEach(function (h, j) { row[h] = data[i][j]; });
+    if (empresa && empresa !== 'AMBAS' && row.empresa !== empresa) continue;
+    if (sup) {
+      var supVal = String(row.supervisor || '').toLowerCase();
+      if (supVal.indexOf(sup) === -1) continue;
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+// ─────────────────────────────────────────────────────────────
+/**
+ * getAtenciones — retorna atenciones con soporte multi-año.
+ * p.historial = 'todos'|true  → combina todas las hojas
+ * p.anio                      → hoja del año específico
+ * (default)                   → hoja del año actual
+ */
+function getAtenciones(p) {
+  var esAdmin = ROLES_ADMIN_AT.indexOf((p.rol || '').toLowerCase()) !== -1;
+  var filtros = { empresa: p.empresa, esAdmin: esAdmin, usuario: p.usuario, nombre: p.nombre };
+  var historial = p.historial;
+  var todasHojas = (historial === 'todos' || historial === 'true' || historial === true);
+
+  if (todasHojas) {
+    var todas = _todasLasHojas();
+    if (todas.length === 0) {
+      var shFb = getSheetAnio(null);
+      return shFb ? { success: true, data: _leerAtenciones(shFb, filtros) }
+                  : { success: false, error: 'No se encontró la hoja de atenciones' };
+    }
+    var acum = [];
+    todas.forEach(function (x) { acum = acum.concat(_leerAtenciones(x.sh, filtros)); });
+    return { success: true, data: acum };
+  }
+
+  var sh = p.anio ? getSheetAnio(p.anio) : getSheetAnio(null);
+  if (!sh) return { success: false, error: 'Hoja de atenciones no encontrada' };
+  return { success: true, data: _leerAtenciones(sh, filtros) };
+}
+
+/**
+ * saveAtencion — guarda en la hoja del año actual.
+ * En enero crea automáticamente la hoja del año siguiente.
+ */
+function saveAtencion(params) {
+  var hoy   = new Date();
+  var anio  = hoy.getFullYear();
+  var mes   = hoy.getMonth() + 1;
+  var sh    = _getOCrearSheetAnio(anio);
+  var nro   = sh.getLastRow(); // fila 1 = headers → nro empieza en 1
+
+  var fechaAt = params.fecha_atencion
+    ? new Date(params.fecha_atencion + 'T12:00:00')
+    : hoy;
+  var semana = _nroSemana(fechaAt);
+
+  var fila = COLS_AT.map(function (col) {
+    switch (col) {
+      case 'nro':              return nro;
+      case 'fecha_registro':   return hoy.toISOString().split('T')[0];
+      case 'nro_semana':       return semana;
+      case 'mes':              return mes;
+      case 'anio':             return anio;
+      case 'usuario_registro': return params.registrado_por || params.usuario_sistema || '';
+      default:
+        var v = params[col];
+        return (v !== undefined && v !== null) ? v : '';
+    }
+  });
+
+  sh.appendRow(fila);
+  Logger.log('Atención guardada N°' + nro + ' — ' + (params.nombre || '') + ' [' + anio + ']');
+
+  // Pre-crear hoja del año siguiente si estamos en enero
+  if (mes === 1) {
+    var ss       = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    var proxAnio = anio + 1;
+    if (!ss.getSheetByName(SHEET_AT_BASE + ' ' + proxAnio)) {
+      _getOCrearSheetAnio(proxAnio);
+      Logger.log('Pre-creada hoja para ' + proxAnio);
+    }
+  }
+
+  return { success: true, nro: nro, anio: anio };
+}
+
+/**
+ * updateAtencion — actualiza una atención por nro.
+ * Busca primero en año actual, luego en años anteriores.
+ */
+function updateAtencion(params) {
+  var esAdmin     = ROLES_ADMIN_AT.indexOf((params.rol || '').toLowerCase()) !== -1;
+  var nro         = String(params.nro);
+  var anioActual  = new Date().getFullYear();
+
+  // Hojas a buscar: año actual primero, luego históricos en orden descendente
+  var sheetsABuscar = [];
+  var shActual = getSheetAnio(null);
+  if (shActual) sheetsABuscar.push(shActual);
+  for (var ai = ANIOS_CON_HOJA.length - 1; ai >= 0; ai--) {
+    if (ANIOS_CON_HOJA[ai] !== anioActual) {
+      var shHist = getSheetAnio(ANIOS_CON_HOJA[ai]);
+      if (shHist) sheetsABuscar.push(shHist);
+    }
+  }
+
+  for (var s = 0; s < sheetsABuscar.length; s++) {
+    var sh      = sheetsABuscar[s];
+    var data    = sh.getDataRange().getValues();
+    var headers = data[0];
+    var nroIdx  = headers.indexOf('nro');
+    if (nroIdx === -1) continue;
+
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][nroIdx]) !== nro) continue;
+
+      // Verificar permiso
+      if (!esAdmin) {
+        var sup = String(data[i][headers.indexOf('supervisor')]      || '').toLowerCase();
+        var usr = String(data[i][headers.indexOf('usuario_sistema')] || '').toLowerCase();
+        var reg = String(data[i][headers.indexOf('usuario_registro')]|| '').toLowerCase();
+        var me  = (params.usuario || '').toLowerCase();
+        if (sup !== me && usr !== me && reg !== me) {
+          return { success: false, error: 'No tienes permiso para editar esta atención' };
+        }
+      }
+
+      // Actualizar campos (no tocar nro ni fecha_registro)
+      COLS_AT.forEach(function (col, j) {
+        if (col === 'nro' || col === 'fecha_registro') return;
+        var val = params[col];
+        if (val !== undefined && val !== null && val !== '') {
+          sh.getRange(i + 1, j + 1).setValue(val);
+        }
+      });
+      Logger.log('Atención actualizada N°' + nro);
+      return { success: true, nro: nro };
+    }
+  }
+
+  return { success: false, error: 'Atención N° ' + nro + ' no encontrada' };
+}
+
+/**
+ * getEstadisticas — conteos por período para el usuario/rol.
+ * p.anio → hoja específica (default: año actual)
+ */
+function getEstadisticas(p) {
+  var esAdmin = ROLES_ADMIN_AT.indexOf((p.rol || '').toLowerCase()) !== -1;
+  var filtros = { empresa: p.empresa, esAdmin: esAdmin, usuario: p.usuario, nombre: p.nombre };
+  var sh = p.anio ? getSheetAnio(p.anio) : getSheetAnio(null);
+  if (!sh) return { success: false, error: 'Hoja de atenciones no encontrada' };
+
+  var ats  = _leerAtenciones(sh, filtros);
+  var hoy  = _hoyStr();
+  var mesS = hoy.substring(0, 7);
+
+  var stats = { hoy: 0, mes: 0, anio: ats.length, pendientes: 0, porMes: {}, porEstado: {} };
+  ats.forEach(function (a) {
+    var fa  = String(a.fecha_atencion || '');
+    var est = String(a.estado || '').toUpperCase();
+    if (fa === hoy)                  stats.hoy++;
+    if (_strInicio(fa, mesS))        stats.mes++;
+    if (est === 'PENDIENTE')         stats.pendientes++;
+    var ym = fa.substring(0, 7);
+    if (ym) stats.porMes[ym] = (stats.porMes[ym] || 0) + 1;
+    stats.porEstado[est] = (stats.porEstado[est] || 0) + 1;
+  });
+
+  return { success: true, data: stats };
+}
+
+/**
+ * getEstadisticasAdmin — stats completas: módulos, por supervisor y tendencia 6 meses.
+ */
+function getEstadisticasAdmin(p) {
+  var ss      = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var empresa = p.empresa    || '';
+  var sup     = (p.supervisor || '').toLowerCase();
+  var mesStr  = _hoyStr().substring(0, 7);
+
+  // Atenciones (año actual)
+  var shAt = getSheetAnio(null);
+  var ats  = shAt ? _leerFilasSheet(shAt, empresa, sup) : [];
+
+  // Visitas
+  var shVis = ss.getSheetByName(SHEET_VISITAS);
+  var vis   = shVis ? _leerFilasSheet(shVis, empresa, sup) : [];
+
+  // Casos
+  var cas = [];
+  try {
+    var casRes = getCasos({ empresa: empresa, rol: 'admin', supervisor: sup });
+    if (casRes.success) cas = casRes.data;
+  } catch(e) { Logger.log('getEstadisticasAdmin-casos: ' + e.message); }
+
+  // Fusiones
+  var shFus = ss.getSheetByName(SHEET_FUSIONES);
+  var fus   = shFus ? _leerFilasSheet(shFus, empresa, sup) : [];
+
+  // ── Stats globales ─────────────────────────────────────
+  function estCount(arr, campo, val) {
+    return arr.filter(function(r){ return String(r[campo]||'').toUpperCase()===val; }).length;
+  }
+  function mesCount(arr, campo) {
+    return arr.filter(function(r){ return _strInicio(String(r[campo]||''), mesStr); }).length;
+  }
+
+  var stats = {
+    atenciones: {
+      total:      ats.length,
+      pendientes: estCount(ats, 'estado', 'PENDIENTE'),
+      enProceso:  estCount(ats, 'estado', 'EN PROCESO'),
+      resueltos:  estCount(ats, 'estado', 'RESUELTO'),
+      esteMes:    mesCount(ats, 'fecha_atencion')
+    },
+    visitas: {
+      total:      vis.length,
+      enPlazo:    estCount(vis, 'estado_plazo', 'EN PLAZO'),
+      retrasadas: estCount(vis, 'estado_plazo', 'RETRASADA'),
+      esteMes:    mesCount(vis, 'fecha_visita')
+    },
+    casos: {
+      total:      cas.length,
+      enPlazo:    estCount(cas, 'estado_plazo', 'EN PLAZO'),
+      retrasados: estCount(cas, 'estado_plazo', 'RETRASADO'),
+      esteMes:    mesCount(cas, 'fecha_reporte')
+    },
+    fusiones: {
+      total:        fus.length,
+      pendientes:   estCount(fus, 'estado', 'PENDIENTE'),
+      validados:    estCount(fus, 'estado', 'VALIDADO'),
+      esteMes:      mesCount(fus, 'fecha'),
+      trabajadores: fus.reduce(function(acc,f){ return acc + (parseInt(f.trabajadores||f.cantidad||0)||0); }, 0)
+    }
+  };
+
+  // ── Por supervisor ─────────────────────────────────────
+  var porSupervisor = {};
+
+  function agrupar(registros, modulo, campoFechaMes) {
+    registros.forEach(function (r) {
+      var k = String(r.supervisor || '— sin supervisor —').toLowerCase().trim();
+      if (!porSupervisor[k]) {
+        porSupervisor[k] = {
+          nombre:       r.supervisor || '— sin supervisor —',
+          atenciones:   0, atPendientes: 0, atResueltos: 0,
+          visitas:      0, viRetrasadas: 0,
+          casos:        0, caRetrasados: 0,
+          fusiones:     0
+        };
+      }
+      var ps  = porSupervisor[k];
+      var est = String(r.estado || r.estado_plazo || '').toUpperCase();
+      if (modulo === 'at') {
+        ps.atenciones++;
+        if (est === 'PENDIENTE') ps.atPendientes++;
+        if (est === 'RESUELTO')  ps.atResueltos++;
+      } else if (modulo === 'vis') {
+        ps.visitas++;
+        if (est === 'RETRASADA') ps.viRetrasadas++;
+      } else if (modulo === 'cas') {
+        ps.casos++;
+        if (est === 'RETRASADO') ps.caRetrasados++;
+      } else if (modulo === 'fus') {
+        ps.fusiones++;
+      }
+    });
+  }
+
+  agrupar(ats, 'at',  'fecha_atencion');
+  agrupar(vis, 'vis', 'fecha_visita');
+  agrupar(cas, 'cas', 'fecha_reporte');
+  agrupar(fus, 'fus', 'fecha');
+
+  // ── Tendencia últimos 6 meses ──────────────────────────
+  var tendencia = [];
+  for (var i = 5; i >= 0; i--) {
+    var d  = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
+    var ym = d.getFullYear() + '-' + _pad2(d.getMonth() + 1);
+    var lbl = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][d.getMonth() + 1]
+              + ' ' + d.getFullYear();
+    tendencia.push({
+      label:      lbl,
+      atenciones: ats.filter(function(a){ return _strInicio(String(a.fecha_atencion||''), ym); }).length,
+      visitas:    vis.filter(function(v){ return _strInicio(String(v.fecha_visita||v.fecha||''), ym); }).length,
+      casos:      cas.filter(function(c){ return _strInicio(String(c.fecha_reporte||c.fecha_registro||''), ym); }).length,
+      fusiones:   fus.filter(function(f){ return _strInicio(String(f.fecha||''), ym); }).length
+    });
+  }
+
+  return { success: true, data: { stats: stats, porSupervisor: porSupervisor, tendencia: tendencia } };
+}
+
+/**
+ * getResumenGeneral — lista de atenciones + totales por supervisor.
+ * p.anio = 'todos' → todas las hojas (solo admins deben llamarlo así)
+ * p.anio = año     → hoja específica
+ * (default)        → año actual
+ */
+function getResumenGeneral(p) {
+  var lista;
+  if (p.anio === 'todos') {
+    var todas = _todasLasHojas();
+    lista = [];
+    todas.forEach(function (x) { lista = lista.concat(_leerFilasSheet(x.sh, p.empresa || '', '')); });
+  } else {
+    var sh = p.anio ? getSheetAnio(p.anio) : getSheetAnio(null);
+    if (!sh) return { success: false, error: 'Hoja no encontrada' };
+    lista = _leerFilasSheet(sh, p.empresa || '', '');
+  }
+
+  // Filtro por mes si viene
+  if (p.mes) {
+    var mesN = parseInt(p.mes);
+    lista = lista.filter(function (a) {
+      var m = parseInt((String(a.fecha_atencion || '').split('-')[1] || '0'));
+      return m === mesN;
+    });
+  }
+
+  // Agrupar por supervisor
+  var ps = {};
+  lista.forEach(function (a) {
+    var k = String(a.supervisor || '— sin supervisor —').toLowerCase().trim();
+    if (!ps[k]) ps[k] = { nombre: a.supervisor || '— sin supervisor —', total: 0, pendientes: 0, enProceso: 0, resueltos: 0 };
+    ps[k].total++;
+    var est = String(a.estado || '').toUpperCase();
+    if (est === 'PENDIENTE')  ps[k].pendientes++;
+    if (est === 'EN PROCESO') ps[k].enProceso++;
+    if (est === 'RESUELTO')   ps[k].resueltos++;
+  });
+
+  return { success: true, data: { lista: lista, porSupervisor: ps } };
+}
+
+/**
+ * consultaDNI — historial de atenciones por DNI.
+ * p.anio = 'todos' → busca en todos los años (solo admins)
+ * p.anio = año     → hoja específica
+ * (default)        → año actual
+ */
+function consultaDNI(p) {
+  var esAdmin = ROLES_ADMIN_AT.indexOf((p.rol || '').toLowerCase()) !== -1;
+  var dni     = String(p.dni || '').trim();
+  if (!dni) return { success: false, error: 'DNI requerido' };
+
+  var buscarTodos = (p.anio === 'todos') && esAdmin;
+  var resultados  = [];
+
+  function _buscarEnSheet(sh) {
+    var data    = sh.getDataRange().getValues();
+    if (data.length < 2) return;
+    var headers = data[0];
+    var dniIdx  = headers.indexOf('dni');
+    if (dniIdx === -1) return;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][dniIdx]) === dni) {
+        var row = {};
+        headers.forEach(function (h, j) { row[h] = data[i][j]; });
+        resultados.push(row);
+      }
+    }
+  }
+
+  if (buscarTodos) {
+    _todasLasHojas().forEach(function (x) { _buscarEnSheet(x.sh); });
+  } else {
+    var sh = p.anio ? getSheetAnio(p.anio) : getSheetAnio(null);
+    if (!sh) return { success: false, error: 'Hoja no encontrada' };
+    _buscarEnSheet(sh);
+  }
+
+  var trabajador = resultados.length > 0 ? {
+    dni:     resultados[0].dni,
+    nombre:  resultados[0].nombre,
+    sexo:    resultados[0].sexo,
+    empresa: resultados[0].empresa,
+    cargo:   resultados[0].cargo,
+    fundo:   resultados[0].fundo
+  } : null;
+
+  return { success: true, data: resultados, trabajador: trabajador };
+}
+
+/**
+ * getPreload — carga inicial del dashboard.
+ * Lee solo 'BB. DE REGISTROS {año actual}' para máxima velocidad.
+ * Retorna el objeto CACHE completo: atenciones, visitas, casos, fusiones.
+ */
+function getPreload(p) {
+  var esAdmin = ROLES_ADMIN_AT.indexOf((p.rol || '').toLowerCase()) !== -1;
+  var filtros = { empresa: p.empresa, esAdmin: esAdmin, usuario: p.usuario, nombre: p.nombre };
+  var ss      = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+
+  // Atenciones: solo año actual
+  var shAt = getSheetAnio(null);
+  var ats  = shAt ? _leerAtenciones(shAt, filtros) : [];
+
+  // Visitas
+  var vis   = [];
+  var shVis = ss.getSheetByName(SHEET_VISITAS);
+  if (shVis) {
+    var supFilt = esAdmin ? '' : (p.nombre || p.usuario || '');
+    vis = _leerFilasSheet(shVis, p.empresa || '', supFilt);
+  }
+
+  // Casos
+  var cas = [];
+  try {
+    var casRes = getCasos({ empresa: p.empresa || '', rol: p.rol, usuario: p.usuario, nombre: p.nombre });
+    if (casRes.success) cas = casRes.data;
+  } catch(e) { Logger.log('getPreload-casos: ' + e.message); }
+
+  // Fusiones
+  var fus   = [];
+  var shFus = ss.getSheetByName(SHEET_FUSIONES);
+  if (shFus) {
+    var supFiltF = esAdmin ? '' : (p.nombre || p.usuario || '');
+    fus = _leerFilasSheet(shFus, p.empresa || '', supFiltF);
+  }
+
+  // Stats admin (solo si es admin, en segundo plano al precargar)
+  var estadisticasAdmin = null;
+  if (esAdmin) {
+    try {
+      var admRes = getEstadisticasAdmin({ empresa: p.empresa || '', supervisor: '' });
+      if (admRes.success) estadisticasAdmin = admRes.data;
+    } catch(e) { Logger.log('getPreload-estadisticasAdmin: ' + e.message); }
+  }
+
+  var cache = { atenciones: ats, visitas: vis, casos: cas, fusiones: fus };
+  if (estadisticasAdmin) cache.estadisticasAdmin = estadisticasAdmin;
+
+  Logger.log('getPreload: at=' + ats.length + ' vis=' + vis.length + ' cas=' + cas.length + ' fus=' + fus.length);
+  return { success: true, data: cache };
 }
 
 // ════════════════════════════════════════════════════════════
