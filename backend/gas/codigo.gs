@@ -832,8 +832,9 @@ function getEstadisticasAdmin(p) {
   var sup     = (p.supervisor || '').toLowerCase();
   var mesStr  = _hoyStr().substring(0, 7);
 
-  // Atenciones (año actual)
-  var shAt = getSheetAnio(null);
+  // Atenciones: solo hoja del año solicitado (default = año actual)
+  // Si p.anio está vacío o no viene → leer solo BB. DE REGISTROS 2026
+  var shAt = p.anio ? getSheetAnio(p.anio) : getSheetAnio(null);
   var ats  = shAt ? _leerFilasSheet(shAt, empresa, sup) : [];
 
   // Visitas

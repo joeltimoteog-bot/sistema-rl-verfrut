@@ -180,7 +180,9 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <option value="">Todos los supervisores</option>
       </select>
       <button class="btn-n" onclick="exportarResumen()" style="background:#1a7f4b">📥 Excel</button>
+      <button class="btn-n" id="btnActualizarR" onclick="forzarActualizacionR()" style="background:#475569">🔄 Actualizar</button>
     </div>
+    <div style="font-size:10px;color:#94a3b8;text-align:right;margin-bottom:6px" id="_cacheTsR"></div>
 
     <div class="sg">
       <div class="sc"><div class="sc-ic ia">📊</div><div><div class="sc-n" id="rT">0</div><div class="sc-l">TOTAL</div></div></div>
@@ -248,11 +250,26 @@ if (!esAdmin) { location.href = 'dashboard.html'; throw 'no access'; }
 console.log('[resumen] SESSION OK — usuario:', USER.usuario, '| rol:', USER.rol, '| empresa:', USER.empresa);
 console.log('[resumen] API URL:', API);
 
-const CACHE_KEY = 'cache_resumen';
-const CACHE_TTL = 10 * 60 * 1000;
+const CACHE_KEY = 'rl_resumen_cache';
+const CACHE_TTL = 15 * 60 * 1000;
 let CACHE = {};
 let resData = [];
 let charts = {};
+
+function cargarCacheLS() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return false;
+    const obj = JSON.parse(raw);
+    if (Date.now() - obj.ts > CACHE_TTL) { localStorage.removeItem(CACHE_KEY); return false; }
+    CACHE.resumen = obj.data;
+    return true;
+  } catch(e) { return false; }
+}
+
+function guardarCacheLS(data) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); } catch(e) {}
+}
 
 // ── Helpers ──
 function mostrarToast(msg, tipo='ok') {
@@ -296,52 +313,97 @@ async function apiPost(b) {
 document.addEventListener('click', e=>{ if(e.target.classList.contains('ov')) e.target.classList.remove('on'); });
 
 // ── Funciones resumen ──
-async function cargarResumen() {
+function _aplicarDatosResumen(data) {
+  CACHE.resumen = data;
+  resData = data.lista || [];
+  const supSel = document.getElementById('rFiltroSup');
+  if (supSel) {
+    const sups = [...new Set(resData.map(a=>a.supervisor).filter(Boolean))].sort();
+    while (supSel.options.length > 1) supSel.remove(1);
+    sups.forEach(s => { const o = document.createElement('option'); o.value=s; o.textContent=s; supSel.appendChild(o); });
+  }
+  document.getElementById('rT').textContent = resData.length;
+  document.getElementById('rP').textContent = resData.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
+  document.getElementById('rR').textContent = resData.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
+  const ps = data.porSupervisor || {};
+  document.getElementById('supR').innerHTML = Object.entries(ps).length ?
+    Object.entries(ps).sort((a,b)=>b[1].total-a[1].total).map(([k,val])=>`
+      <div class="sup-row">
+        <div><div class="sup-n">${val.nombre}</div></div>
+        <div class="sup-sts">
+          <div class="sup-st"><div class="n">${val.total}</div><div class="l">Total</div></div>
+          <div class="sup-st"><div class="n" style="color:#f97316">${val.pendientes}</div><div class="l">Pend.</div></div>
+          <div class="sup-st"><div class="n" style="color:#3b82f6">${val.enProceso}</div><div class="l">Proc.</div></div>
+          <div class="sup-st"><div class="n" style="color:#22c55e">${val.resueltos}</div><div class="l">Resuelto</div></div>
+        </div>
+      </div>`).join('') :
+    '<div class="empty">No hay datos para los filtros seleccionados</div>';
+  filtrarRes();
+  _actualizarIndicadorCacheR();
+}
+
+async function cargarResumen(forzar = false) {
   const emp=v('rEmp'), mes=v('rMes'), anio=v('rAnio');
-  const params = {action:'getResumenGeneral', empresa:emp, mes, anio};
-  console.log('[resumen] cargarResumen → params:', params);
+
+  // Con filtros o forzado: invalidar cache
+  if (forzar || emp !== 'AMBAS' || mes || anio) {
+    delete CACHE.resumen;
+    if (forzar) localStorage.removeItem(CACHE_KEY);
+  }
+
+  // Servir desde cache si está disponible y no hay filtros activos
+  if (!forzar && CACHE.resumen && !mes && !anio && emp === 'AMBAS') {
+    _aplicarDatosResumen(CACHE.resumen);
+    return;
+  }
+
   document.getElementById('supR').innerHTML='<div class="empty">⏳ Cargando datos...</div>';
   document.getElementById('tbRes').innerHTML='<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
-  try{
-    const d=await apiGet(params);
-    console.log('[resumen] respuesta API:', d);
-    if(!d.success){
+
+  const params = {action:'getResumenGeneral', empresa:emp, mes, anio};
+  console.log('[resumen] cargarResumen → params:', params);
+  try {
+    const d = await apiGet(params);
+    console.log('[resumen] respuesta API — lista:', (d.data?.lista||[]).length, 'registros');
+    if (!d.success) {
       const err = d.error || 'Error al cargar los datos';
-      console.warn('[resumen] API devolvió error:', err);
       document.getElementById('supR').innerHTML='<div class="empty">❌ '+err+'</div>';
       document.getElementById('tbRes').innerHTML='<tr><td colspan="9" class="empty">❌ '+err+'</td></tr>';
       mostrarToast('❌ '+err,'error');
       return;
     }
-    console.log('[resumen] datos recibidos — lista:', (d.data?.lista||[]).length, 'registros');
-    CACHE.resumen=d.data;
-    resData=d.data.lista||[];
-    const supSel=document.getElementById('rFiltroSup');
-    if(supSel){ const sups=[...new Set(resData.map(a=>a.supervisor).filter(Boolean))].sort(); while(supSel.options.length>1) supSel.remove(1); sups.forEach(s=>{const o=document.createElement('option');o.value=s;o.textContent=s;supSel.appendChild(o);}); }
-    document.getElementById('rT').textContent=resData.length;
-    document.getElementById('rP').textContent=resData.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
-    document.getElementById('rR').textContent=resData.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
-    const ps=d.data.porSupervisor||{};
-    document.getElementById('supR').innerHTML=Object.entries(ps).length?
-      Object.entries(ps).sort((a,b)=>b[1].total-a[1].total).map(([k,val])=>`
-        <div class="sup-row">
-          <div><div class="sup-n">${val.nombre}</div></div>
-          <div class="sup-sts">
-            <div class="sup-st"><div class="n">${val.total}</div><div class="l">Total</div></div>
-            <div class="sup-st"><div class="n" style="color:#f97316">${val.pendientes}</div><div class="l">Pend.</div></div>
-            <div class="sup-st"><div class="n" style="color:#3b82f6">${val.enProceso}</div><div class="l">Proc.</div></div>
-            <div class="sup-st"><div class="n" style="color:#22c55e">${val.resueltos}</div><div class="l">Resuelto</div></div>
-          </div>
-        </div>`).join('') :
-      '<div class="empty">No hay datos para los filtros seleccionados</div>';
-    filtrarRes();
-  }catch(e){
-    console.error('[resumen] excepción en cargarResumen:', e);
+    guardarCacheLS(d.data);
+    _aplicarDatosResumen(d.data);
+  } catch(e) {
     const msg = 'Error de conexión: ' + e.message;
     document.getElementById('supR').innerHTML='<div class="empty">❌ '+msg+'</div>';
     document.getElementById('tbRes').innerHTML='<tr><td colspan="9" class="empty">❌ '+msg+'</td></tr>';
     mostrarToast('❌ '+msg,'error');
   }
+}
+
+async function _actualizarEnBackgroundR() {
+  try {
+    const d = await apiGet({action:'getResumenGeneral', empresa:'AMBAS', mes:'', anio:''});
+    if (d.success) {
+      guardarCacheLS(d.data);
+      _aplicarDatosResumen(d.data);
+      console.log('[resumen] Background refresh completado');
+    }
+  } catch(e) { console.warn('[resumen] Background refresh error:', e.message); }
+}
+
+function forzarActualizacionR() {
+  const btn = document.getElementById('btnActualizarR');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Actualizando...'; }
+  cargarResumen(true).finally(() => {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar'; }
+  });
+}
+
+function _actualizarIndicadorCacheR() {
+  const el = document.getElementById('_cacheTsR');
+  if (el) el.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-PE', {hour:'2-digit',minute:'2-digit'});
 }
 
 function filtrarRes() {
@@ -452,7 +514,14 @@ window.onload = function() {
     const navUsr = document.getElementById('navUsr');
     if (navUsr) navUsr.style.display = '';
   }
-  cargarResumen();
+  if (cargarCacheLS()) {
+    // Cache válido: mostrar inmediatamente y refrescar en background
+    _aplicarDatosResumen(CACHE.resumen);
+    setTimeout(() => _actualizarEnBackgroundR(), 800);
+  } else {
+    // Sin cache: cargar desde API
+    cargarResumen();
+  }
 };
 </script>
 </body>

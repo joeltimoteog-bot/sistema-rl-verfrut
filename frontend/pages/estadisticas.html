@@ -122,8 +122,10 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <option value="2026">2026</option>
         </select>
         <button class="btn-n" onclick="exportarEstadisticasAdmin()" style="background:#1a7f4b">📥 Excel</button>
+        <button class="btn-n" id="btnActualizar" onclick="forzarActualizacion()" style="background:#475569">🔄 Actualizar</button>
       </div>
     </div>
+    <div style="font-size:10px;color:#94a3b8;text-align:right;margin-bottom:6px" id="_cacheTs"></div>
 
     <!-- RESUMEN GLOBAL: 4 módulos -->
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:22px" id="estCardsGlobales">
@@ -267,8 +269,8 @@ if (!esAdmin) { location.href = 'dashboard.html'; throw 'no access'; }
 console.log('[estadisticas] SESSION OK — usuario:', USER.usuario, '| rol:', USER.rol, '| empresa:', USER.empresa);
 console.log('[estadisticas] API URL:', API);
 
-const CACHE_KEY = 'cache_estadisticas';
-const CACHE_TTL = 10 * 60 * 1000;
+const CACHE_KEY = 'rl_estadisticas_cache';
+const CACHE_TTL = 15 * 60 * 1000;
 let CACHE = {};
 let charts = {};
 let _estTimer = null;
@@ -328,7 +330,7 @@ async function apiPost(b) {
 }
 
 // ── Estadísticas ──
-async function cargarEstadisticasAdmin() {
+async function cargarEstadisticasAdmin(forzar = false) {
   clearTimeout(_estTimer);
   await new Promise(r => { _estTimer = setTimeout(r, 200); });
 
@@ -337,9 +339,14 @@ async function cargarEstadisticasAdmin() {
   const sup     = (document.getElementById('estFiltroSup')?.value || '').toLowerCase().trim();
   const anio    = document.getElementById('estFiltroAnio')?.value || '';
 
-  if (empresa || mes || anio) delete CACHE.estadisticasAdmin;
+  // Con filtros activos o forzado: invalidar cache en memoria y localStorage
+  if (forzar || empresa || mes || anio) {
+    delete CACHE.estadisticasAdmin;
+    if (forzar) localStorage.removeItem(CACHE_KEY);
+  }
 
-  if (CACHE.estadisticasAdmin && typeof CACHE.estadisticasAdmin === 'object') {
+  // Servir desde cache en memoria (filtro de supervisor es local)
+  if (!forzar && CACHE.estadisticasAdmin && typeof CACHE.estadisticasAdmin === 'object') {
     const data = CACHE.estadisticasAdmin;
     let porSupFiltrado = Object.assign({}, data.porSupervisor);
     if (sup) {
@@ -352,26 +359,67 @@ async function cargarEstadisticasAdmin() {
   }
 
   const tb = document.getElementById('tbEstSupervisores');
-  if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">⏳ Cargando datos...</td></tr>';
+  if (tb) tb.innerHTML = '<tr><td colspan="10" class="empty">⏳ Cargando datos...</td></tr>';
+  _mostrarSkeletonCards();
 
-  const reqParams = { action:'getEstadisticasAdmin', empresa, mes: mes||'', supervisor: sup };
+  const reqParams = { action:'getEstadisticasAdmin', empresa, mes: mes||'', supervisor: sup, anio };
   console.log('[estadisticas] cargarEstadisticasAdmin → params:', reqParams);
   try {
     const d = await apiGet(reqParams);
     console.log('[estadisticas] respuesta API:', d);
     if (!d.success) {
       console.warn('[estadisticas] API devolvió error:', d.error);
-      if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ ' + (d.error||'Error al cargar') + '</td></tr>';
+      if (tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ ' + (d.error||'Error al cargar') + '</td></tr>';
       return;
     }
-    console.log('[estadisticas] datos recibidos:', d.data);
     CACHE.estadisticasAdmin = d.data;
     guardarCacheLS(d.data);
     renderEstadisticasAdmin(d.data);
+    _actualizarIndicadorCache();
   } catch(e) {
     console.error('[estadisticas] excepción en cargarEstadisticasAdmin:', e);
-    if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error de conexión: ' + e.message + '</td></tr>';
+    if (tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error de conexión: ' + e.message + '</td></tr>';
   }
+}
+
+// Actualización silenciosa en background (no muestra spinner)
+async function _actualizarEnBackground() {
+  try {
+    const empresa = (document.getElementById('estFiltroEmp')?.value || '').toUpperCase();
+    const mes     = parseInt(document.getElementById('estFiltroMes')?.value || '0');
+    const sup     = (document.getElementById('estFiltroSup')?.value || '').toLowerCase().trim();
+    const anio    = document.getElementById('estFiltroAnio')?.value || '';
+    const d = await apiGet({ action:'getEstadisticasAdmin', empresa, mes: mes||'', supervisor: sup, anio });
+    if (d.success) {
+      CACHE.estadisticasAdmin = d.data;
+      guardarCacheLS(d.data);
+      // Solo re-renderizar si no hay filtro de supervisor activo (podría alterar vista)
+      if (!sup) renderEstadisticasAdmin(d.data);
+      _actualizarIndicadorCache();
+      console.log('[estadisticas] Background refresh completado');
+    }
+  } catch(e) { console.warn('[estadisticas] Background refresh error:', e.message); }
+}
+
+function forzarActualizacion() {
+  const btn = document.getElementById('btnActualizar');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Actualizando...'; }
+  cargarEstadisticasAdmin(true).finally(() => {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar'; }
+  });
+}
+
+function _mostrarSkeletonCards() {
+  const ids = ['eAtTotal','eAtPend','eAtProc','eAtRes','eAtMes',
+               'eVisTotal','eVisPlazo','eVisRetras','eVisMes',
+               'eCasTotal','eCasPlazo','eCasRetras','eCasMes',
+               'eFusTotal','eFusPend','eFusValid','eFusMes','eFusTrab'];
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '…'; });
+}
+
+function _actualizarIndicadorCache() {
+  const el = document.getElementById('_cacheTs');
+  if (el) el.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-PE', {hour:'2-digit',minute:'2-digit'});
 }
 
 function renderEstadisticasAdmin(data) {
@@ -492,14 +540,18 @@ window.onload = function() {
   document.getElementById('avR').textContent = cap(USER.rol || '');
   document.getElementById('tbE').textContent = USER.empresa || '';
   document.getElementById('tbF').textContent = new Date().toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'short',year:'numeric'});
-  // Mostrar link de usuarios solo a ROLES_ADMIN
   if (ROLES_ADMIN.includes(USER.rol)) {
     const navUsr = document.getElementById('navUsr');
     if (navUsr) navUsr.style.display = '';
   }
   if (cargarCacheLS()) {
+    // Cache válido: mostrar inmediatamente y refrescar en background
     renderEstadisticasAdmin(CACHE.estadisticasAdmin);
+    _actualizarIndicadorCache();
+    setTimeout(() => _actualizarEnBackground(), 800);
   } else {
+    // Sin cache: mostrar spinner y cargar desde API
+    _mostrarSkeletonCards();
     cargarEstadisticasAdmin();
   }
 };
