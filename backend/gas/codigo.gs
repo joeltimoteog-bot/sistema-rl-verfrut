@@ -793,13 +793,16 @@ function saveAtencion(params) {
   var mes        = hoy.getMonth() + 1;
   var nombreHoja = SHEET_AT_BASE + ' ' + anio; // 'BB. DE REGISTROS 2026'
 
-  // Siempre escribe en la hoja del año actual; la crea si no existe
-  var sh  = _getOCrearSheetAnio(anio);
-  var nro = sh.getLastRow(); // fila 1 = headers → nro comienza en 1
+  // Obtiene o crea 'BB. DE REGISTROS {anio}' — NUNCA usa la hoja base como destino
+  var sh = _getOCrearSheetAnio(anio);
+  if (!sh) throw new Error('No se pudo obtener ni crear la hoja "' + nombreHoja + '"');
+  if (sh.getName() !== nombreHoja) {
+    throw new Error('Hoja incorrecta: se obtuvo "' + sh.getName() + '" pero se esperaba "' + nombreHoja + '"');
+  }
 
-  var fechaAt = params.fecha_atencion
-    ? new Date(params.fecha_atencion + 'T12:00:00')
-    : hoy;
+  var nro = sh.getLastRow(); // fila 1 = headers → primer registro nro=1
+
+  var fechaAt    = params.fecha_atencion ? new Date(params.fecha_atencion + 'T12:00:00') : hoy;
   var semana     = _nroSemana(fechaAt);
   var fechaHoyS  = hoy.toISOString().split('T')[0];
 
@@ -818,16 +821,11 @@ function saveAtencion(params) {
   });
 
   sh.appendRow(fila);
-  Logger.log('[saveAtencion] Guardado N°' + nro + ' en hoja "' + sh.getName() + '" — ' + (params.nombre || ''));
+  Logger.log('[saveAtencion] OK — N°' + nro + ' guardado en "' + sh.getName() + '" (' + (params.nombre || '') + ')');
 
-  // Verificar que se guardó en la hoja correcta
-  if (sh.getName() !== nombreHoja) {
-    Logger.log('[saveAtencion] ADVERTENCIA: se esperaba "' + nombreHoja + '" pero se usó "' + sh.getName() + '"');
-  }
-
-  // Pre-crear hoja del año siguiente si estamos en enero
+  // Pre-crear hoja del año siguiente en enero para evitar demora
   if (mes === 1) {
-    var ss       = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
     var proxAnio = anio + 1;
     if (!ss.getSheetByName(SHEET_AT_BASE + ' ' + proxAnio)) {
       _getOCrearSheetAnio(proxAnio);
@@ -836,13 +834,13 @@ function saveAtencion(params) {
   }
 
   return {
-    success:    true,
-    nro:        nro,
-    anio:       anio,
-    mes:        mes,
-    nro_semana: semana,
+    success:        true,
+    nro:            nro,
+    anio:           anio,
+    mes:            mes,
+    nro_semana:     semana,
     fecha_registro: fechaHoyS,
-    hoja:       sh.getName()   // para verificación desde el frontend
+    hoja:           sh.getName()
   };
 }
 

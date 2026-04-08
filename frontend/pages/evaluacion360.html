@@ -348,9 +348,16 @@ async function guardarEnAPI(evaluacion) {
   try {
     console.log('[eval360] guardarEnAPI → enviando evaluación ID:', evaluacion.id);
     const r = await apiPost({action:'saveEvaluacion360', ...evaluacion});
-    console.log('[eval360] guardarEnAPI → respuesta:', r);
+    if (r && r.success) {
+      console.log('[eval360] guardarEnAPI → guardado en Sheets OK, id:', evaluacion.id);
+    } else {
+      const msg = (r && r.error) ? r.error : 'Respuesta inesperada del servidor';
+      console.error('[eval360] guardarEnAPI → el servidor rechazó el guardado:', msg, r);
+      mostrarToast('⚠️ La evaluación se guardó localmente pero no en el servidor: ' + msg, 'error');
+    }
   } catch(e) {
-    console.warn('[eval360] guardarEnAPI → error (solo localStorage):', e.message);
+    console.error('[eval360] guardarEnAPI → error de red:', e.message);
+    mostrarToast('⚠️ Sin conexión: evaluación guardada solo localmente.', 'error');
   }
 }
 
