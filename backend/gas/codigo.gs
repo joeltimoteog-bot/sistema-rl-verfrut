@@ -5,8 +5,8 @@
 
 // ── Configuración (ajustar antes de desplegar) ────────────────
 var CONFIG = {
-  SHEET_ID:        'TU_SHEET_ID_AQUI',      // ID del Google Spreadsheet
-  DRIVE_FOLDER_ID: 'TU_CARPETA_RAIZ_ID',    // ID de la carpeta raíz en Drive
+  SHEET_ID:        '1q79u2S3ZI_Qc-YnDzgnQwyv4jL7pxTuARiXICPPXgZw', // ID del Google Spreadsheet
+  DRIVE_FOLDER_ID: '1gkdxFcHcJ7COW6r2h_0vlZ1KJEIk1PV-', // ID de la carpeta raíz en Drive
   SHEET_CASOS:     'Casos',                 // Nombre de la hoja de casos
   MAX_MB:          10                       // Tamaño máximo de archivos en MB
 };
