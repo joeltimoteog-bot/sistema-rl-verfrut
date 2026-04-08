@@ -2179,7 +2179,8 @@ function calcularAvance(diasRetraso) {
 /** Color semáforo según estado y días restantes */
 function _estadoPlazoColor(estadoCaso, diasRestantes) {
   if (!estadoCaso) return '#64748b';
-  if (estadoCaso.includes('VENCIDO') || estadoCaso.includes('CON_RETRASO')) return '#dc2626';
+  const _ec = String(estadoCaso||'');
+  if (_ec.includes('VENCIDO') || _ec.includes('CON_RETRASO')) return '#dc2626';
   if (diasRestantes <= 1) return '#d97706';
   return '#16a34a';
 }
@@ -2676,7 +2677,7 @@ function renderTablaCasos(data) {
         String(c.supervisor||'').toLowerCase().includes(miNombreC.split(' ')[0]) ||
         String(c.registrado_por||'').toLowerCase().includes(miNombreC.split(' ')[0]);
       // Estado: compatible con registros nuevos (estado_caso) y antiguos (estado)
-      const estadoCaso = c.estado_caso || c.estado || '';
+      const estadoCaso = String(c.estado_caso || c.estado || '');
       const diasRestantes = c.fecha_limite
         ? (new Date(c.fecha_limite+'T00:00:00') >= hoy
            ? calcularDiasHabilesTranscurridos(hoy, new Date(c.fecha_limite+'T00:00:00'))
@@ -2725,11 +2726,11 @@ function abrirUrlCaso(idx, tipo) {
 function actualizarStatsCasos(data) {
   document.getElementById('cTotalReg').textContent  = data.length;
   document.getElementById('cEnPlazo').textContent   = data.filter(c => {
-    const e = c.estado_caso || c.estado || '';
+    const e = String(c.estado_caso || c.estado || '');
     return e.includes('DENTRO_PLAZO') || e === 'EN PLAZO';
   }).length;
   document.getElementById('cRetrasado').textContent = data.filter(c => {
-    const e = c.estado_caso || c.estado || '';
+    const e = String(c.estado_caso || c.estado || '');
     return e.includes('VENCIDO') || e.includes('CON_RETRASO') || e === 'RETRASADO';
   }).length;
   const hoy = new Date();
@@ -2743,7 +2744,7 @@ function actualizarStatsCasos(data) {
 function verDetalleCaso(idx) {
   const c = casosData[idx];
   if (!c) return;
-  const estadoCaso = c.estado_caso || c.estado || '';
+  const estadoCaso = String(c.estado_caso || c.estado || '');
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   const diasRestantes = c.fecha_limite
     ? (new Date(c.fecha_limite+'T00:00:00') >= hoy
