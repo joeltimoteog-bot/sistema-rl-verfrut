@@ -83,6 +83,7 @@ function doGet(e) {
     else if (action === 'getResumenGeneral')    result = getResumenGeneral(p);
     else if (action === 'consultaDNI')          result = consultaDNI(p);
     else if (action === 'getPreload')           result = getPreload(p);
+    else if (action === 'getSupervisoresEval') result = getSupervisoresEval(p);
     else result = { success: false, error: 'Acción GET no reconocida: ' + action };
   } catch (err) {
     result = { success: false, error: err.message };
@@ -106,6 +107,8 @@ function doPost(e) {
     else if (action === 'saveAtencion')      result = saveAtencion(body);
     else if (action === 'updateAtencion')    result = updateAtencion(body);
     else if (action === 'login')             result = login(body);
+    else if (action === 'updateVisita')      result = updateVisita(body);
+    else if (action === 'saveSupervisorEval') result = saveSupervisorEval(body);
     else result = { success: false, error: 'Acción POST no reconocida: ' + action };
   } catch (err) {
     result = { success: false, error: err.message };
@@ -623,6 +626,46 @@ var COLS_AT = [
 ];
 
 var ROLES_ADMIN_AT = ['admin', 'admin01', 'admin02', 'rrhh'];
+
+// ─────────────────────────────────────────────────────────────
+/**
+ * matchSupervisor — convierte un nombre completo de supervisor
+ * en su clave de usuario del sistema (username).
+ * Útil para cruzar datos entre hojas con nombres distintos.
+ * @param {string} nombreCompleto
+ * @returns {string} username o el nombre original en minúsculas
+ */
+function matchSupervisor(nombreCompleto) {
+  if (!nombreCompleto) return '';
+  var s = String(nombreCompleto).toLowerCase().trim();
+  var NOMBRES_MAP = {
+    'tamayo':    'ptamayo',
+    'tineo':     'atineo',
+    'pulache':   'fpulache',
+    'luzon':     'yluzon',
+    'luzón':     'yluzon',
+    'viera':     'sviera',
+    'castro':    'ecastro',
+    'martinez':  'almartinez',
+    'martínez':  'almartinez',
+    'zapata':    'fzapata',
+    'molero':    'rmolero',
+    'mechato':   'mmechato',
+    'avendano':  'javendano',
+    'avendaño':  'javendano',
+    'siancas':   'jsiancas',
+    'miranda':   'smiranda',
+    'vilela':    'ovilela',
+    'chavez':    'jchavez',
+    'chávez':    'jchavez',
+    'timoteo':   'jtimoteo'
+  };
+  var keys = Object.keys(NOMBRES_MAP);
+  for (var i = 0; i < keys.length; i++) {
+    if (s.indexOf(keys[i]) !== -1) return NOMBRES_MAP[keys[i]];
+  }
+  return s;
+}
 
 // ── Helpers de fecha ──────────────────────────────────────────
 function _hoyStr() {
@@ -1197,6 +1240,160 @@ function getPreload(p) {
 
   Logger.log('getPreload: at=' + ats.length + ' vis=' + vis.length + ' cas=' + cas.length + ' fus=' + fus.length);
   return { success: true, data: cache };
+}
+
+// ════════════════════════════════════════════════════════════
+// VISITAS — updateVisita
+// ════════════════════════════════════════════════════════════
+
+/**
+ * updateVisita — actualiza una visita en 'BB. DE VISITAS' por nro.
+ * No sobrescribe nro ni fecha_registro.
+ */
+function updateVisita(params) {
+  var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var sh = ss.getSheetByName(SHEET_VISITAS);
+  if (!sh) return { success: false, error: 'Hoja BB. DE VISITAS no encontrada' };
+
+  var nro = String(params.nro || '');
+  if (!nro) return { success: false, error: 'Parámetro nro requerido' };
+
+  var data    = sh.getDataRange().getValues();
+  var headers = data[0];
+  var nroIdx  = headers.indexOf('nro');
+  if (nroIdx === -1) return { success: false, error: 'Columna nro no encontrada en BB. DE VISITAS' };
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][nroIdx]) !== nro) continue;
+
+    headers.forEach(function (col, j) {
+      if (col === 'nro' || col === 'fecha_registro') return;
+      var val = params[col];
+      if (val !== undefined && val !== null && val !== '') {
+        sh.getRange(i + 1, j + 1).setValue(val);
+      }
+    });
+
+    Logger.log('[updateVisita] Visita N°' + nro + ' actualizada');
+    return { success: true, nro: nro };
+  }
+
+  return { success: false, error: 'Visita N° ' + nro + ' no encontrada' };
+}
+
+// ════════════════════════════════════════════════════════════
+// EVALUACIÓN 360° — Supervisores evaluables
+// ════════════════════════════════════════════════════════════
+
+/**
+ * getSupervisoresEval — lista de supervisores del sheet SUPERVISORES_EVAL.
+ * Filtra por empresa si se proporciona.
+ */
+function getSupervisoresEval(params) {
+  var sh   = getSheetSupsEval();
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return { success: true, data: [] };
+
+  var headers = data[0];
+  var empresa = params.empresa || '';
+  var rows    = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var row = {};
+    headers.forEach(function (h, j) { row[h] = data[i][j]; });
+    if (!row.nombre) continue;
+    if (empresa && row.empresa && row.empresa !== empresa) continue;
+    rows.push(row);
+  }
+
+  return { success: true, data: rows };
+}
+
+/**
+ * saveSupervisorEval — agrega un supervisor a SUPERVISORES_EVAL.
+ * Evita duplicados por nombre.
+ * Parámetros: nombre, empresa, sector
+ */
+function saveSupervisorEval(params) {
+  var nombre = String(params.nombre || '').trim();
+  if (!nombre) return { success: false, error: 'Nombre de supervisor requerido' };
+
+  var sh      = getSheetSupsEval();
+  var data    = sh.getDataRange().getValues();
+  var headers = data[0] || ['nombre', 'empresa', 'sector'];
+  var nomIdx  = headers.indexOf('nombre');
+
+  // Verificar duplicado
+  if (nomIdx !== -1) {
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][nomIdx]).trim().toLowerCase() === nombre.toLowerCase()) {
+        return { success: true, msg: 'Supervisor ya registrado', nro: i };
+      }
+    }
+  }
+
+  sh.appendRow([nombre, params.empresa || '', params.sector || '']);
+  Logger.log('[saveSupervisorEval] Guardado: ' + nombre);
+  return { success: true, nombre: nombre };
+}
+
+// ════════════════════════════════════════════════════════════
+// TRABAJADORES — buscarTrabajador
+// ════════════════════════════════════════════════════════════
+
+/**
+ * buscarTrabajador — busca trabajadores en la hoja 'TRABAJADORES'
+ * por DNI o nombre parcial.
+ * Parámetros: q (DNI o nombre), empresa ('RAPEL'|'VERFRUT'|'AMBAS')
+ */
+function buscarTrabajador(params) {
+  var ss      = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var q       = String(params.q || '').trim().toLowerCase();
+  var empresa = (params.empresa || '').toUpperCase();
+
+  // Determinar qué hojas leer según empresa solicitada
+  var nombreHojas = [];
+  if (empresa === 'RAPEL') {
+    nombreHojas = ['Trabajadores_RAPEL'];
+  } else if (empresa === 'VERFRUT') {
+    nombreHojas = ['Trabajadores_VERFRUT'];
+  } else {
+    // AMBAS u omitido → buscar en ambas hojas
+    nombreHojas = ['Trabajadores_RAPEL', 'Trabajadores_VERFRUT'];
+  }
+
+  var rows = [];
+
+  nombreHojas.forEach(function (nombreHoja) {
+    var sh = ss.getSheetByName(nombreHoja);
+    if (!sh) {
+      Logger.log('[buscarTrabajador] Hoja no encontrada: ' + nombreHoja);
+      return;
+    }
+
+    var data = sh.getDataRange().getValues();
+    if (data.length < 2) return;
+
+    var headers = data[0];
+
+    for (var i = 1; i < data.length; i++) {
+      if (rows.length >= 50) break; // Límite global de resultados
+
+      var row = {};
+      headers.forEach(function (h, j) { row[h] = data[i][j]; });
+
+      // Filtro búsqueda por DNI o nombre
+      if (q) {
+        var dni    = String(row.dni    || '').toLowerCase();
+        var nombre = String(row.nombre || '').toLowerCase();
+        if (dni.indexOf(q) === -1 && nombre.indexOf(q) === -1) continue;
+      }
+
+      rows.push(row);
+    }
+  });
+
+  return { success: true, data: rows };
 }
 
 // ════════════════════════════════════════════════════════════
