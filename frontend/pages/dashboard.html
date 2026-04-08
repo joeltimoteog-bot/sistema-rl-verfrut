@@ -95,7 +95,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 /* MODAL */
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:center;justify-content:center}
 .ov.on{display:flex}
-.modal{background:#fff;border-radius:14px;padding:28px;width:900px;max-width:96vw;max-height:92vh;overflow-y:auto;animation:pop .3s ease}
+.modal{background:#fff;border-radius:14px;padding:28px;width:900px;max-width:96vw;max-height:95vh;overflow-y:auto;animation:pop .3s ease}
 @keyframes pop{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
 .modal-t{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:var(--azul);margin-bottom:20px}
 .fg{display:grid;grid-template-columns:1fr 1fr;gap:13px}
@@ -127,6 +127,10 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   .hamburger{display:flex}
   .overlay-sb{display:none}
   .overlay-sb.on{display:block;pointer-events:auto}
+  /* Modales: 1 columna en móvil */
+  .fg,.fg3{grid-template-columns:1fr!important}
+  .fg .fc[style*="grid-column"],.fg3 .fc[style*="grid-column"]{grid-column:1!important}
+  .modal{padding:16px;max-height:95vh;overflow-y:auto}
 }
 @media(min-width:769px){.hamburger{display:none}.overlay-sb{display:none!important}}
 </style>
@@ -704,7 +708,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 
 <!-- MODAL NUEVA VISITA DE CAMPO -->
 <div class="ov" id="mVisita">
-<div class="modal" style="max-width:700px;width:97vw;padding:0;max-height:92vh;overflow-y:auto">
+<div class="modal" style="max-width:900px;width:97vw;padding:0;max-height:95vh;overflow-y:auto">
   <div style="background:var(--azul);color:#fff;padding:14px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:10">
     <span style="font-weight:700;font-size:15px">🏕️ Nueva Visita de Campo</span>
     <span onclick="cerrar('mVisita')" style="cursor:pointer;font-size:20px;opacity:.8">✕</span>
@@ -836,8 +840,8 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   <div class="modal-t" id="mAtTitulo">Nueva Atención</div>
   <input type="hidden" id="at_nro_edit">
   <div class="sep">Datos del Trabajador</div>
-  <div class="fg">
-    <div class="fc">
+  <div class="fg3">
+    <div class="fc" style="grid-column:span 2">
       <label>DNI *</label>
       <div style="display:flex;gap:6px">
         <input type="text" id="at_dni" placeholder="Ingresa DNI..." oninput="buscarDni(this.value)" style="flex:1">
@@ -846,10 +850,10 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       <div class="trab-res" id="trabRes"></div>
     </div>
     <div class="fc"><label>Nombre Completo *</label><input type="text" id="at_nom" placeholder="Nombre del trabajador"></div>
+    <div class="fc"><label>Empresa *</label><select id="at_emp"><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select></div>
     <div class="fc"><label>Sexo</label><select id="at_sex"><option value="">--</option><option>M</option><option>F</option></select></div>
     <div class="fc"><label>Fecha Inicio Periodo</label><input type="date" id="at_fip"></div>
     <div class="fc"><label>Fecha Término Periodo</label><input type="date" id="at_ftp"></div>
-    <div class="fc"><label>Empresa *</label><select id="at_emp"><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select></div>
     <div class="fc"><label>Fundo</label><input type="text" id="at_fundo" placeholder="Fundo de origen"></div>
     <div class="fc"><label>Cargo</label><input type="text" id="at_cargo" placeholder="Cargo"></div>
     <div class="fc"><label>Ruta</label><input type="text" id="at_ruta" placeholder="Ruta"></div>
@@ -858,11 +862,11 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <div class="fc"><label>Celular</label><input type="text" id="at_cel" placeholder="N° celular"></div>
   </div>
   <div class="sep">Datos de la Atención</div>
-  <div class="fg">
+  <div class="fg3">
     <div class="fc"><label>Fecha Atención *</label><input type="date" id="at_fec"></div>
     <div class="fc"><label>Hora Inicio</label><input type="time" id="at_hi"></div>
     <div class="fc"><label>Hora Término</label><input type="time" id="at_ht"></div>
-    <div class="fc"><label>Detalle / Documento *</label>
+    <div class="fc" style="grid-column:span 3"><label>Detalle / Documento *</label>
       <select id="at_doc" onchange="autoResponsable()">
         <option value="">-- Seleccionar --</option>
         <option>01 CITT - EMPRESA VERFRUT</option>
@@ -906,7 +910,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <div class="fc"><label>Fecha Inicio Doc.</label><input type="date" id="at_fid" onchange="calcDias()"></div>
     <div class="fc"><label>Fecha Término Doc.</label><input type="date" id="at_ftd" onchange="calcDias()"></div>
     <div class="fc"><label>Días Transcurridos</label><input type="number" id="at_dias" placeholder="0"></div>
-    <div class="fc">
+    <div class="fc" style="grid-column:span 2">
       <label>Responsable Recepción</label>
       <select id="at_resp" style="padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc">
         <option value="">-- Seleccionar --</option>
@@ -4741,7 +4745,7 @@ function exportarEstadisticasAdmin() {
 
 <!-- MODAL NUEVO CASO -->
 <div class="ov" id="mCaso">
-<div class="modal" style="max-width:640px;width:96vw;max-height:92vh;overflow-y:auto;padding:0">
+<div class="modal" style="max-width:900px;width:96vw;max-height:95vh;overflow-y:auto;padding:0">
   <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
     <span id="mCasoTitulo" style="font-weight:700;font-size:15px">⚖️ Registro de Caso</span>
     <span onclick="cerrar('mCaso')" style="cursor:pointer;font-size:22px;line-height:1">✕</span>
@@ -4760,7 +4764,7 @@ function exportarEstadisticasAdmin() {
     </div>
 
     <!-- DATOS TRABAJADOR readonly -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
       <div>
         <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Nombre completo</label>
         <input id="cNombre" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9">
@@ -4791,7 +4795,7 @@ function exportarEstadisticasAdmin() {
     <div id="panelDatosCaso" style="display:none">
       <div style="border-top:2px solid #e2e8f0;padding-top:14px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:700;color:#0b1e45;margin-bottom:10px">📋 Datos del Caso</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
           <div>
             <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Supervisor *</label>
             <select id="cSupervisor" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
@@ -4917,7 +4921,7 @@ function exportarEstadisticasAdmin() {
 </div>
 </div>
 <div class="ov" id="mFusion">
-<div class="modal" style="max-width:660px;width:96vw;max-height:93vh;overflow-y:auto;padding:0">
+<div class="modal" style="max-width:900px;width:96vw;max-height:95vh;overflow-y:auto;padding:0">
   <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
     <span style="font-weight:700;font-size:15px">🚌 Registro de Fusión de Buses</span>
     <span onclick="cerrar('mFusion')" style="cursor:pointer;font-size:22px;line-height:1">✕</span>

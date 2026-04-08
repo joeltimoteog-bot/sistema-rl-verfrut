@@ -339,22 +339,15 @@ async function cargarEstadisticasAdmin(forzar = false) {
   const sup     = (document.getElementById('estFiltroSup')?.value || '').toLowerCase().trim();
   const anio    = document.getElementById('estFiltroAnio')?.value || '';
 
-  // Con filtros activos o forzado: invalidar cache en memoria y localStorage
-  if (forzar || empresa || mes || anio) {
+  // Con filtros activos o forzado: invalidar cache y llamar API
+  if (forzar || empresa || mes || anio || sup) {
     delete CACHE.estadisticasAdmin;
     if (forzar) localStorage.removeItem(CACHE_KEY);
   }
 
-  // Servir desde cache en memoria (filtro de supervisor es local)
-  if (!forzar && CACHE.estadisticasAdmin && typeof CACHE.estadisticasAdmin === 'object') {
-    const data = CACHE.estadisticasAdmin;
-    let porSupFiltrado = Object.assign({}, data.porSupervisor);
-    if (sup) {
-      porSupFiltrado = Object.fromEntries(
-        Object.entries(porSupFiltrado).filter(([k]) => k.toLowerCase().includes(sup))
-      );
-    }
-    renderEstadisticasAdmin({ stats: data.stats, porSupervisor: porSupFiltrado, tendencia: data.tendencia });
+  // Servir desde cache solo si no hay ningún filtro activo
+  if (!forzar && !empresa && !mes && !anio && !sup && CACHE.estadisticasAdmin && typeof CACHE.estadisticasAdmin === 'object') {
+    renderEstadisticasAdmin(CACHE.estadisticasAdmin);
     return;
   }
 
