@@ -3173,19 +3173,88 @@ async function guardarAt() {
       r=await apiPost({action:'saveAtencion',...d});
     }
     if(r.success){
-      invalidarCache('atenciones');
-      await cargarAtenciones();
-      await cargarStats();
-      filtrarAt();
-      guardarCacheLS();
-      if(modoEdicion){
+      if(modoEdicion && nroEdit){
+        // Edición: actualizar el registro en cache sin recargar
+        if(CACHE.atenciones){
+          const idx = CACHE.atenciones.findIndex(a => String(a.nro) === String(nroEdit));
+          if(idx !== -1) Object.assign(CACHE.atenciones[idx], d);
+        }
+        // También actualizar atTodas si está visible
+        const idxT = atTodas.findIndex(a => String(a.nro) === String(nroEdit));
+        if(idxT !== -1) Object.assign(atTodas[idxT], d);
+        renderAt(atTodas);
+        CACHE_TS = Date.now();
+        guardarCacheLS();
         cerrar('mAt');
         mostrarToast('✅ Atención actualizada');
+        // Sincronizar en background
+        setTimeout(() => refrescarEnBackground(), 500);
       } else {
-        // Mostrar éxito dentro del modal y limpiar para seguir registrando
+        // Nuevo registro: agregar al cache local SIN llamar a la API
+        console.log('[guardarAt] Guardado en hoja:', r.hoja, '— N°', r.nro);
+        const hoyStr = hoy();
+        const newRec = {
+          nro:                  r.nro,
+          fecha_registro:       r.fecha_registro || hoyStr,
+          fecha_atencion:       d.fecha_atencion || hoyStr,
+          hora_inicio:          d.hora_inicio          || '',
+          hora_termino:         d.hora_termino         || '',
+          nro_semana:           r.nro_semana           || '',
+          mes:                  r.mes                  || (new Date().getMonth() + 1),
+          anio:                 r.anio                 || new Date().getFullYear(),
+          dni:                  d.dni,
+          nombre:               d.nombre,
+          sexo:                 d.sexo                 || '',
+          fecha_inicio_periodo: d.fecha_inicio_periodo || '',
+          fecha_termino_periodo:d.fecha_termino_periodo|| '',
+          empresa:              d.empresa,
+          fundo:                d.fundo                || '',
+          cargo:                d.cargo                || '',
+          ruta:                 d.ruta                 || '',
+          codigo:               d.codigo               || '',
+          fundo_actual:         d.fundo_actual         || '',
+          celular:              d.celular              || '',
+          detalle_documento:    d.detalle_documento    || '',
+          fecha_inicio_doc:     d.fecha_inicio_doc     || '',
+          fecha_termino_doc:    d.fecha_termino_doc    || '',
+          dias_transcurridos:   d.dias_transcurridos   || '',
+          responsable_recepcion:d.responsable_recepcion|| '',
+          observaciones:        d.observaciones        || '',
+          estado:               d.estado               || 'PENDIENTE',
+          supervisor:           d.supervisor           || '',
+          usuario_sistema:      d.usuario_sistema      || '',
+          usuario_registro:     d.usuario_sistema      || ''
+        };
+
+        // Agregar al cache en memoria
+        if(!CACHE.atenciones) CACHE.atenciones = [];
+        CACHE.atenciones.push(newRec);
+
+        // Actualizar tabla si la atención es de hoy
+        if(newRec.fecha_atencion === hoyStr){
+          atTodas = [...atTodas, newRec];
+          renderAt(atTodas);
+        }
+
+        // Actualizar stats localmente
+        if(CACHE.stats){
+          CACHE.stats.anio  = (CACHE.stats.anio  || 0) + 1;
+          CACHE.stats.mes   = (CACHE.stats.mes   || 0) + 1;
+          if(newRec.fecha_atencion === hoyStr) CACHE.stats.hoy = (CACHE.stats.hoy || 0) + 1;
+          if((newRec.estado || '').toUpperCase() === 'PENDIENTE') CACHE.stats.pendientes = (CACHE.stats.pendientes || 0) + 1;
+        }
+
+        // Persistir en localStorage
+        CACHE_TS = Date.now();
+        guardarCacheLS();
+
+        // Mostrar éxito dentro del modal (listo para siguiente registro)
         const msg = document.getElementById('atSuccessMsg');
-        if(msg){ msg.textContent='✅ Atención registrada correctamente (N° '+r.nro+')'; msg.style.display='block'; setTimeout(()=>{ msg.style.display='none'; }, 5000); }
+        if(msg){ msg.textContent='✅ Atención N° '+r.nro+' registrada en '+r.hoja; msg.style.display='block'; setTimeout(()=>{ msg.style.display='none'; }, 5000); }
         abrirAt();
+
+        // Sincronizar con servidor en background (sin bloquear UI)
+        setTimeout(() => refrescarEnBackground(), 1000);
       }
     }else mostrarToast('❌ Error: '+(r.error||'Desconocido'),'error');
   }catch(e){mostrarToast('❌ Error de conexión','error');}

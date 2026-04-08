@@ -696,21 +696,25 @@ function getAtenciones(p) {
  * En enero crea automáticamente la hoja del año siguiente.
  */
 function saveAtencion(params) {
-  var hoy   = new Date();
-  var anio  = hoy.getFullYear();
-  var mes   = hoy.getMonth() + 1;
-  var sh    = _getOCrearSheetAnio(anio);
-  var nro   = sh.getLastRow(); // fila 1 = headers → nro empieza en 1
+  var hoy        = new Date();
+  var anio       = hoy.getFullYear();
+  var mes        = hoy.getMonth() + 1;
+  var nombreHoja = SHEET_AT_BASE + ' ' + anio; // 'BB. DE REGISTROS 2026'
+
+  // Siempre escribe en la hoja del año actual; la crea si no existe
+  var sh  = _getOCrearSheetAnio(anio);
+  var nro = sh.getLastRow(); // fila 1 = headers → nro comienza en 1
 
   var fechaAt = params.fecha_atencion
     ? new Date(params.fecha_atencion + 'T12:00:00')
     : hoy;
-  var semana = _nroSemana(fechaAt);
+  var semana     = _nroSemana(fechaAt);
+  var fechaHoyS  = hoy.toISOString().split('T')[0];
 
   var fila = COLS_AT.map(function (col) {
     switch (col) {
       case 'nro':              return nro;
-      case 'fecha_registro':   return hoy.toISOString().split('T')[0];
+      case 'fecha_registro':   return fechaHoyS;
       case 'nro_semana':       return semana;
       case 'mes':              return mes;
       case 'anio':             return anio;
@@ -722,7 +726,12 @@ function saveAtencion(params) {
   });
 
   sh.appendRow(fila);
-  Logger.log('Atención guardada N°' + nro + ' — ' + (params.nombre || '') + ' [' + anio + ']');
+  Logger.log('[saveAtencion] Guardado N°' + nro + ' en hoja "' + sh.getName() + '" — ' + (params.nombre || ''));
+
+  // Verificar que se guardó en la hoja correcta
+  if (sh.getName() !== nombreHoja) {
+    Logger.log('[saveAtencion] ADVERTENCIA: se esperaba "' + nombreHoja + '" pero se usó "' + sh.getName() + '"');
+  }
 
   // Pre-crear hoja del año siguiente si estamos en enero
   if (mes === 1) {
@@ -730,11 +739,19 @@ function saveAtencion(params) {
     var proxAnio = anio + 1;
     if (!ss.getSheetByName(SHEET_AT_BASE + ' ' + proxAnio)) {
       _getOCrearSheetAnio(proxAnio);
-      Logger.log('Pre-creada hoja para ' + proxAnio);
+      Logger.log('[saveAtencion] Pre-creada hoja para ' + proxAnio);
     }
   }
 
-  return { success: true, nro: nro, anio: anio };
+  return {
+    success:    true,
+    nro:        nro,
+    anio:       anio,
+    mes:        mes,
+    nro_semana: semana,
+    fecha_registro: fechaHoyS,
+    hoja:       sh.getName()   // para verificación desde el frontend
+  };
 }
 
 /**
