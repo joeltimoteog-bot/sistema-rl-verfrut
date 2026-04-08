@@ -454,6 +454,14 @@ function getCasos(params) {
       if (!visible) continue;
     }
 
+    // Alias explícitos para URLs de documentos — fuerza string para evitar
+    // que Google Sheets devuelva Date u otros tipos no-string
+    row.enlace_informe  = String(row.archivo_informe_url  || data[i][27] || '').trim();
+    row.enlace_reporte  = String(row.archivo_descargo_url || data[i][29] || '').trim();
+    // Normalizar también los campos originales
+    row.archivo_informe_url  = row.enlace_informe;
+    row.archivo_descargo_url = row.enlace_reporte;
+
     rows.push(row);
   }
 

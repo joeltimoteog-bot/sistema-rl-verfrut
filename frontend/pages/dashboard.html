@@ -2717,10 +2717,14 @@ function renderTablaCasos(data) {
 function abrirUrlCaso(idx, tipo) {
   const c = casosData[idx];
   if (!c) return;
-  const url = tipo === 'informe'
+  const url = String(tipo === 'informe'
     ? (c.archivo_informe_url || c.enlace_informe  || '')
-    : (c.archivo_descargo_url || c.enlace_reporte || '');
-  if (url) window.open(url, '_blank');
+    : (c.archivo_descargo_url || c.enlace_reporte || '')).trim();
+  if (url && url !== 'undefined' && url !== 'null') {
+    window.open(url, '_blank');
+  } else {
+    mostrarToast('⚠️ No hay URL disponible para este documento', 'error');
+  }
 }
 
 function actualizarStatsCasos(data) {
