@@ -105,6 +105,7 @@ function doPost(e) {
     else if (action === 'saveEvaluacion360') result = saveEvaluacion360(body);
     else if (action === 'saveAtencion')      result = saveAtencion(body);
     else if (action === 'updateAtencion')    result = updateAtencion(body);
+    else if (action === 'login')             result = login(body);
     else result = { success: false, error: 'Acción POST no reconocida: ' + action };
   } catch (err) {
     result = { success: false, error: err.message };
@@ -117,6 +118,97 @@ function _jsonResponse(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+// ════════════════════════════════════════════════════════════
+// AUTH: Login
+// ════════════════════════════════════════════════════════════
+
+// Fundos asignados por supervisor (login los incluye en user)
+var FUNDOS_SUPERVISOR = {
+  'ptamayo':    ['El Papayo', 'Limones'],
+  'atineo':     ['Olivares Bajo'],
+  'fpulache':   ['Los Olivares'],
+  'yluzon':     ['Santa Rosa'],
+  'sviera':     ['Algarrobos'],
+  'ecastro':    ['San Vicente'],
+  'almartinez': ['Punta Arenas'],
+  'fzapata':    ['Aproa'],
+  'rmolero':    ['Planta Rapel'],
+  'mmechato':   []
+};
+
+// Supervisores que atienden múltiples fundos → deben elegir fundo al ingresar
+var SUP_MULTI = ['ptamayo', 'mmechato', 'rmolero'];
+
+/**
+ * Valida credenciales contra la hoja 'Usuarios'.
+ * Columnas por índice (fila 1 = encabezado, datos desde fila 2):
+ *   A(0):id  B(1):usuario  C(2):password  D(3):nombre
+ *   E(4):rol  F(5):empresa  G(6):activo  H(7):fecha_creacion  I(8):correo
+ *
+ * @param {{usuario:string, password:string}} params
+ * @returns {{success:boolean, user?:object, error?:string}}
+ */
+function login(params) {
+  var usuario  = String(params.usuario  || '').trim().toLowerCase();
+  var password = String(params.password || '').trim();
+
+  if (!usuario || !password) {
+    return { success: false, error: 'Usuario y contraseña son requeridos.' };
+  }
+
+  var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var sh = ss.getSheetByName('Usuarios');
+  if (!sh) {
+    Logger.log('login: hoja Usuarios no encontrada');
+    return { success: false, error: 'Configuración de usuarios no disponible.' };
+  }
+
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) {
+    return { success: false, error: 'No hay usuarios registrados.' };
+  }
+
+  // data[0] = encabezados, data[1..] = filas de datos
+  for (var i = 1; i < data.length; i++) {
+    var r = data[i];
+    var rowUsr = String(r[1] || '').trim().toLowerCase();
+
+    if (rowUsr !== usuario) continue;
+
+    // Verificar cuenta activa: columna G (índice 6)
+    var activo = r[6];
+    var estaActivo = (activo === true) || (String(activo).toUpperCase() === 'TRUE');
+    if (!estaActivo) {
+      return { success: false, error: 'Cuenta inactiva. Contacta al administrador.' };
+    }
+
+    // Verificar contraseña: columna C (índice 2)
+    var rowPass = String(r[2] || '').trim();
+    if (rowPass !== password) {
+      return { success: false, error: 'Contraseña incorrecta.' };
+    }
+
+    // Credenciales correctas — construir objeto user
+    var fundos           = FUNDOS_SUPERVISOR[usuario] || [];
+    var necesitaElegirFundo = SUP_MULTI.indexOf(usuario) !== -1;
+
+    var user = {
+      usuario:             rowUsr,
+      nombre:              String(r[3] || rowUsr),
+      rol:                 String(r[4] || 'user').toLowerCase(),
+      empresa:             String(r[5] || ''),
+      correo:              String(r[8] || ''),
+      fundos:              fundos,
+      necesitaElegirFundo: necesitaElegirFundo
+    };
+
+    Logger.log('login OK: ' + rowUsr + ' | rol: ' + user.rol + ' | fundos: ' + fundos.join(', '));
+    return { success: true, user: user };
+  }
+
+  return { success: false, error: 'Usuario no encontrado.' };
 }
 
 // ════════════════════════════════════════════════════════════
