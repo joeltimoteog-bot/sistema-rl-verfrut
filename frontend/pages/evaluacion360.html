@@ -346,8 +346,14 @@ async function cargarEvaluacionesAPI() {
 
 async function guardarEnAPI(evaluacion) {
   try {
-    console.log('[eval360] guardarEnAPI → enviando evaluación ID:', evaluacion.id);
+    if (!API || API.trim() === '') {
+      console.error('[eval360] guardarEnAPI → API URL vacía, usando default');
+      API = API_URL_DEFAULT;
+    }
+    console.log('[eval360] guardarEnAPI → API URL:', API);
+    console.log('[eval360] guardarEnAPI → enviando evaluación ID:', evaluacion.id, '| supervisor:', evaluacion.supervisor);
     const r = await apiPost({action:'saveEvaluacion360', ...evaluacion});
+    console.log('[eval360] guardarEnAPI → respuesta raw:', JSON.stringify(r));
     if (r && r.success) {
       console.log('[eval360] guardarEnAPI → guardado en Sheets OK, id:', evaluacion.id);
     } else {

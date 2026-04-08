@@ -241,8 +241,8 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <button class="btn-n" onclick="exportarAtenciones()" style="background:#1a7f4b">📥 Excel</button>
         </div>
         <div style="font-size:13px;color:#1e3a8a;background:#eff6ff;border-radius:8px;padding:8px 14px;margin:0 0 8px 0">ℹ️ Solo se muestran las atenciones del día de hoy. Para ver el historial completo, usa <b>Consulta por DNI</b>.</div>
+        <input type="text" id="fAQ" placeholder="🔍 Buscar por DNI o nombre..." onkeyup="filtrarAt()" oninput="filtrarAt()" style="width:100%;padding:8px 12px;margin-bottom:10px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:14px;font-family:inherit;box-sizing:border-box">
         <div class="filtros">
-          <input class="fi" id="fAQ" placeholder="🔍 DNI o nombre..." oninput="filtrarAt()" style="flex:1.5">
           <select class="fi" id="fAE" onchange="filtrarAt()"><option value="">Todos los estados</option><option>PENDIENTE</option><option>EN PROCESO</option><option>RESUELTO</option></select>
           <select class="fi" id="fAEmp" onchange="filtrarAt()"><option value="">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
           <select class="fi" id="fAM" onchange="filtrarAt()">
