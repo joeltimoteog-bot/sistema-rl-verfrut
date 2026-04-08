@@ -166,6 +166,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <button class="ni" id="navUsr" style="display:none" onclick="location.href='usuarios.html'"><span class="ic">👥</span>Gestión Usuarios</button>
   </div>
   <div class="sb-ft">
+    <button class="ni" id="navInicio" style="display:none;margin-bottom:6px;background:rgba(255,255,255,.08);border-radius:8px" onclick="window.location.href='../../index.html'"><span class="ic">🏠</span>Inicio</button>
     <button class="logout" onclick="logout()"><span>🚪</span>Cerrar Sesión</button>
   </div>
 </nav>
@@ -1959,6 +1960,11 @@ window.onload = async () => {
   const esAdmin  = ROLES_ADMIN.includes(rol);
   const esAdmin2 = ROLES_ADMIN2.includes(rol);
   const esSup    = ROLES_SUP.includes(rol);
+  // Botón Inicio: visible para admins, coordinador y jefa_rl
+  const rolLower = (rol||'').toLowerCase();
+  if (esAdmin || esAdmin2 || rolLower === 'coordinador' || rolLower === 'jefa_rl') {
+    document.getElementById('navInicio').style.display='';
+  }
   if (esAdmin || esAdmin2) {
     document.getElementById('navAdmSec').style.display='';
     document.getElementById('navEstadisticas').style.display='';
