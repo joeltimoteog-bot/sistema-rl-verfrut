@@ -2291,31 +2291,34 @@ async function buscarTrabajadorCaso() {
   const dni = document.getElementById('mCasoDNI').value.trim();
   const msg = document.getElementById('cBuscarMsg');
   if(!dni || dni.length < 2) { msg.textContent='⚠️ Ingresa el DNI'; msg.style.color='#dc2626'; return; }
-  msg.textContent='🔍 Buscando en RAPEL S.A.C y VERFRUT S.A.C...';
+  const emp = USER.empresa || 'AMBAS';
+  console.log('[buscarTrabajadorCaso] DNI enviado:', dni, '| empresa:', emp);
+  msg.textContent='🔍 Buscando...';
   msg.style.color='#64748b';
   try {
-    const d = await apiGet({action:'buscarTrabajador', q:String(dni).trim().toUpperCase(), empresa:'AMBAS'});
+    const d = await apiGet({action:'buscarTrabajador', q:String(dni).trim(), empresa:emp});
+    console.log('[buscarTrabajadorCaso] Respuesta API:', JSON.stringify(d));
     if(d.success && d.data && d.data.length) {
       const t = d.data[0];
       document.getElementById('cNombre').value  = t.nombre  || '';
       document.getElementById('cEmpresa').value = t.empresa || '';
-      document.getElementById('cCargo').value   = t.cargo   || t.oficio || '';
-      document.getElementById('cSector').value  = t.fundo_actual || t.fundo || t.zona || '';
+      document.getElementById('cCargo').value   = t.cargo   || '';
+      document.getElementById('cSector').value  = t.fundo_actual || t.fundo || '';
       document.getElementById('cIngreso').value = t.fecha_inicio_periodo
-        ? String(t.fecha_inicio_periodo).split('T')[0]
-        : (t.fecha_inicio ? String(t.fecha_inicio).split('T')[0] : '');
-      document.getElementById('cTermino').value = t.fecha_termino
-        ? String(t.fecha_termino).split('T')[0] : '';
+        ? String(t.fecha_inicio_periodo).split('T')[0] : '';
+      document.getElementById('cTermino').value = t.fecha_termino_periodo
+        ? String(t.fecha_termino_periodo).split('T')[0] : '';
       document.getElementById('panelDatosCaso').style.display = 'block';
       msg.textContent = '✅ Encontrado: ' + t.nombre + ' — ' + t.empresa;
       msg.style.color = '#16a34a';
       window._casoTrabajador = t;
     } else {
-      msg.textContent = '⚠️ DNI no encontrado en RAPEL S.A.C ni VERFRUT S.A.C';
+      msg.textContent = '⚠️ DNI no encontrado';
       msg.style.color = '#dc2626';
       document.getElementById('panelDatosCaso').style.display = 'none';
     }
   } catch(e) {
+    console.error('[buscarTrabajadorCaso] Error:', e);
     msg.textContent = '❌ Error: ' + e.message;
     msg.style.color = '#dc2626';
   }
@@ -3366,12 +3369,15 @@ async function buscarDniBtn() {
   if(dni.length<2){mostrarToast('❌ Ingresa el DNI del trabajador','error');return;}
   const r=document.getElementById('trabRes');
   r.style.display='block';r.textContent='🔍 Buscando...';
+  const emp = USER.empresa || 'AMBAS';
+  console.log('[buscarDniBtn] DNI enviado:', dni, '| empresa:', emp);
   try{
-    const d=await apiGet({action:'buscarTrabajador',q:String(dni).trim(),empresa:'AMBAS'});
-    if(d.success&&d.data.length){
+    const d=await apiGet({action:'buscarTrabajador',q:String(dni).trim(),empresa:emp});
+    console.log('[buscarDniBtn] Respuesta API:', JSON.stringify(d));
+    if(d.success&&d.data&&d.data.length){
       const t=d.data[0];
       sv('at_nom',t.nombre||''); sv('at_sex',t.sexo||'');
-      sv('at_emp',t.empresa||'RAPEL'); sv('at_fundo',t.fundo||'');
+      sv('at_emp',t.empresa||USER.empresa||'RAPEL'); sv('at_fundo',t.fundo||'');
       sv('at_cargo',t.cargo||''); sv('at_ruta',t.ruta||'');
       sv('at_cod',t.codigo||''); sv('at_cel',t.celular||'');
       sv('at_fip', t.fecha_inicio_periodo ? String(t.fecha_inicio_periodo).split('T')[0] : '');
@@ -3386,7 +3392,7 @@ async function buscarDniBtn() {
       r.style.background='#fef2f2';r.style.borderColor='#fecaca';
       r.textContent='❌ No se encontró trabajador con DNI: '+dni;
     }
-  }catch(e){r.textContent='❌ Error de conexión';}
+  }catch(e){console.error('[buscarDniBtn] Error:',e);r.textContent='❌ Error de conexión: '+e.message;}
 }
 
 function regAt(dni,nom,emp,fundo,cargo,sexo,ruta,cod,fac,cel,fip,ftp){
