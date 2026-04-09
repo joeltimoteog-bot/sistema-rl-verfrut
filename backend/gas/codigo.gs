@@ -121,6 +121,33 @@ const COLS = [
   'fecha_registro','usuario_sistema'
 ];
 
+// ── Helper: obtener hoja por año ──
+// Retorna la hoja según el año. Si no existe la del año, usa 'BB. DE REGISTROS' como respaldo.
+function getSheetAnio(anio) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const anioActual = new Date().getFullYear();
+  const anioTarget = anio ? parseInt(anio) : anioActual;
+  const sheet = ss.getSheetByName('BB. DE REGISTROS ' + anioTarget);
+  if (sheet) return sheet;
+  return ss.getSheetByName('BB. DE REGISTROS');
+}
+
+// ── Helper: obtener todas las hojas de años disponibles ──
+function getSheetsAnios() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheets = [];
+  ss.getSheets().forEach(ws => {
+    const n = ws.getName();
+    if (/^BB\. DE REGISTROS \d{4}$/.test(n)) sheets.push(ws);
+  });
+  // También incluir la hoja base si no hay anuales
+  if (!sheets.length) {
+    const base = ss.getSheetByName('BB. DE REGISTROS');
+    if (base) sheets.push(base);
+  }
+  return sheets;
+}
+
 // ── Lectura optimizada: últimas N filas de una hoja ──
 // Evita leer miles de filas históricas innecesariamente
 function getRowsOptimized(sheet, maxRows) {
@@ -156,11 +183,41 @@ function getRowsCurrentYear(sheet, maxRows, colFecha) {
 // ATENCIONES - GET
 // ============================================================
 function getAtenciones(p) {
-  const sheet = getSheet('BB. DE REGISTROS');
-  // Leer max 1000 filas recientes (columna 1 = fecha_atencion = índice 1)
-  const rows = p.historial
-    ? sheet.getDataRange().getValues().slice(1)
-    : getRowsCurrentYear(sheet, 1000, 1);
+  let rows = [];
+  if (p.historial === 'todos') {
+    // Combinar todas las hojas de años
+    const sheets = getSheetsAnios();
+    sheets.forEach(ws => {
+      const wsRows = ws.getDataRange().getValues().slice(1);
+      rows = rows.concat(wsRows);
+    });
+    // También leer hoja base si tiene registros no cubiertos
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const base = ss.getSheetByName('BB. DE REGISTROS');
+    if (base) {
+      const baseRows = base.getDataRange().getValues().slice(1);
+      rows = rows.concat(baseRows);
+    }
+    // Deduplicar por nro
+    const vistos = new Set();
+    rows = rows.filter(r => {
+      const k = String(r[0]);
+      if (!k || vistos.has(k)) return false;
+      vistos.add(k); return true;
+    });
+  } else if (p.anio) {
+    // Hoja del año específico
+    const sheet = getSheetAnio(p.anio);
+    if (!sheet) return { success: true, data: [] };
+    rows = sheet.getDataRange().getValues().slice(1);
+  } else {
+    // Por defecto: año actual
+    const sheet = getSheetAnio(null);
+    if (!sheet) return { success: true, data: [] };
+    rows = p.historial
+      ? sheet.getDataRange().getValues().slice(1)
+      : getRowsCurrentYear(sheet, 1000, 1);
+  }
   if (!rows.length) return { success: true, data: [] };
 
   let lista = rows
@@ -238,29 +295,46 @@ function saveAtencion(d) {
 // ATENCIONES - UPDATE
 // ============================================================
 function updateAtencion(d) {
-  const sheet = getSheet('BB. DE REGISTROS');
-  const rows  = sheet.getDataRange().getValues();
-  for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(d.nro)) {
-      if (d.rol === 'supervisor' && String(rows[i][18]).trim() !== String(d.usuario).trim()) {
-        return { success: false, error: 'No tienes permiso para editar este registro.' };
+  // Buscar en la hoja del año actual primero, luego en hojas de otros años, y finalmente en la base
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const anioActual = new Date().getFullYear();
+  const candidatos = [];
+  // Hoja año actual
+  const sheetAnio = ss.getSheetByName('BB. DE REGISTROS ' + anioActual);
+  if (sheetAnio) candidatos.push(sheetAnio);
+  // Años anteriores
+  for (let y = anioActual - 1; y >= anioActual - 3; y--) {
+    const ws = ss.getSheetByName('BB. DE REGISTROS ' + y);
+    if (ws) candidatos.push(ws);
+  }
+  // Hoja base como respaldo
+  const base = ss.getSheetByName('BB. DE REGISTROS');
+  if (base) candidatos.push(base);
+
+  for (const sheet of candidatos) {
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(d.nro)) {
+        if (d.rol === 'supervisor' && String(rows[i][18]).trim() !== String(d.usuario).trim()) {
+          return { success: false, error: 'No tienes permiso para editar este registro.' };
+        }
+        const r = i + 1;
+        if (d.hora_termino  !== undefined) sheet.getRange(r, 4).setValue(d.hora_termino);
+        if (d.sexo          !== undefined) sheet.getRange(r, 10).setValue(d.sexo);
+        if (d.fundo         !== undefined) sheet.getRange(r, 13).setValue(d.fundo);
+        if (d.cargo         !== undefined) sheet.getRange(r, 14).setValue(d.cargo);
+        if (d.ruta          !== undefined) sheet.getRange(r, 15).setValue(d.ruta);
+        if (d.fundo_actual  !== undefined) sheet.getRange(r, 17).setValue(d.fundo_actual);
+        if (d.celular       !== undefined) sheet.getRange(r, 18).setValue(d.celular);
+        if (d.detalle_documento !== undefined) sheet.getRange(r, 20).setValue(d.detalle_documento);
+        if (d.fecha_inicio_doc  !== undefined) sheet.getRange(r, 21).setValue(d.fecha_inicio_doc);
+        if (d.fecha_termino_doc !== undefined) sheet.getRange(r, 22).setValue(d.fecha_termino_doc);
+        if (d.dias_transcurridos!== undefined) sheet.getRange(r, 23).setValue(d.dias_transcurridos);
+        if (d.responsable_recepcion !== undefined) sheet.getRange(r, 24).setValue(d.responsable_recepcion);
+        if (d.observaciones !== undefined) sheet.getRange(r, 25).setValue(d.observaciones);
+        if (d.estado        !== undefined) sheet.getRange(r, 26).setValue(d.estado);
+        return { success: true };
       }
-      const r = i + 1;
-      if (d.hora_termino  !== undefined) sheet.getRange(r, 4).setValue(d.hora_termino);
-      if (d.sexo          !== undefined) sheet.getRange(r, 10).setValue(d.sexo);
-      if (d.fundo         !== undefined) sheet.getRange(r, 13).setValue(d.fundo);
-      if (d.cargo         !== undefined) sheet.getRange(r, 14).setValue(d.cargo);
-      if (d.ruta          !== undefined) sheet.getRange(r, 15).setValue(d.ruta);
-      if (d.fundo_actual  !== undefined) sheet.getRange(r, 17).setValue(d.fundo_actual);
-      if (d.celular       !== undefined) sheet.getRange(r, 18).setValue(d.celular);
-      if (d.detalle_documento !== undefined) sheet.getRange(r, 20).setValue(d.detalle_documento);
-      if (d.fecha_inicio_doc  !== undefined) sheet.getRange(r, 21).setValue(d.fecha_inicio_doc);
-      if (d.fecha_termino_doc !== undefined) sheet.getRange(r, 22).setValue(d.fecha_termino_doc);
-      if (d.dias_transcurridos!== undefined) sheet.getRange(r, 23).setValue(d.dias_transcurridos);
-      if (d.responsable_recepcion !== undefined) sheet.getRange(r, 24).setValue(d.responsable_recepcion);
-      if (d.observaciones !== undefined) sheet.getRange(r, 25).setValue(d.observaciones);
-      if (d.estado        !== undefined) sheet.getRange(r, 26).setValue(d.estado);
-      return { success: true };
     }
   }
   return { success: false, error: 'Registro no encontrado.' };
@@ -270,15 +344,29 @@ function updateAtencion(d) {
 // ATENCIONES - DELETE
 // ============================================================
 function deleteAtencion(d) {
-  const sheet = getSheet('BB. DE REGISTROS');
-  const rows  = sheet.getDataRange().getValues();
-  for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(d.nro)) {
-      if (d.rol === 'supervisor' && String(rows[i][18]).trim() !== String(d.usuario).trim()) {
-        return { success: false, error: 'No tienes permiso para eliminar este registro.' };
+  // Buscar en la hoja del año actual primero, luego en hojas de otros años, y finalmente en la base
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const anioActual = new Date().getFullYear();
+  const candidatos = [];
+  const sheetAnio = ss.getSheetByName('BB. DE REGISTROS ' + anioActual);
+  if (sheetAnio) candidatos.push(sheetAnio);
+  for (let y = anioActual - 1; y >= anioActual - 3; y--) {
+    const ws = ss.getSheetByName('BB. DE REGISTROS ' + y);
+    if (ws) candidatos.push(ws);
+  }
+  const base = ss.getSheetByName('BB. DE REGISTROS');
+  if (base) candidatos.push(base);
+
+  for (const sheet of candidatos) {
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(d.nro)) {
+        if (d.rol === 'supervisor' && String(rows[i][18]).trim() !== String(d.usuario).trim()) {
+          return { success: false, error: 'No tienes permiso para eliminar este registro.' };
+        }
+        sheet.deleteRow(i + 1);
+        return { success: true };
       }
-      sheet.deleteRow(i + 1);
-      return { success: true };
     }
   }
   return { success: false, error: 'Registro no encontrado.' };
@@ -290,17 +378,46 @@ function deleteAtencion(d) {
 function consultaDNI(p) {
   const dni = String(p.dni || '').trim();
   if (!dni || dni.length < 7) return { success: false, error: 'Ingresa un DNI valido.' };
-  const rows = getSheet('BB. DE REGISTROS').getDataRange().getValues();
-  if (rows.length < 2) return { success: true, data: [], trabajador: null };
-  let lista = [], trabajador = null;
-  for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][7]).trim() === dni) {
-      let o = {};
-      COLS.forEach((h, j) => o[h] = rows[i][j]);
-      lista.push(o);
-      if (!trabajador) trabajador = { dni: rows[i][7], nombre: rows[i][8], empresa: rows[i][11], cargo: rows[i][13], fundo: rows[i][12] };
-    }
+
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const anioActual = new Date().getFullYear();
+  const esAdmin = (p.rol === 'administrador' || p.rol === 'administrador 01' || p.rol === 'administrador 02');
+
+  // Determinar qué hojas leer
+  let hojas = [];
+  if (p.anio === 'todos' && esAdmin) {
+    // Buscar en todas las hojas de años
+    hojas = getSheetsAnios();
+    const base = ss.getSheetByName('BB. DE REGISTROS');
+    if (base) hojas.push(base);
+  } else if (p.anio) {
+    const ws = getSheetAnio(p.anio);
+    if (ws) hojas.push(ws);
+  } else {
+    // Por defecto: año actual
+    const ws = getSheetAnio(null);
+    if (ws) hojas.push(ws);
   }
+
+  let lista = [], trabajador = null;
+  const vistos = new Set();
+
+  hojas.forEach(sheet => {
+    const rows = sheet.getDataRange().getValues();
+    if (rows.length < 2) return;
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][7]).trim() === dni) {
+        const k = String(rows[i][0]);
+        if (k && vistos.has(k)) continue;
+        if (k) vistos.add(k);
+        let o = {};
+        COLS.forEach((h, j) => o[h] = rows[i][j]);
+        lista.push(o);
+        if (!trabajador) trabajador = { dni: rows[i][7], nombre: rows[i][8], empresa: rows[i][11], cargo: rows[i][13], fundo: rows[i][12] };
+      }
+    }
+  });
+
   lista.sort((a, b) => String(b.fecha_atencion).localeCompare(String(a.fecha_atencion)));
   return { success: true, data: lista, trabajador };
 }
@@ -499,18 +616,44 @@ if (rol === 'supervisor') {
 // RESUMEN GENERAL
 // ============================================================
 function getResumenGeneral(p) {
-  const rows = getSheet('BB. DE REGISTROS').getDataRange().getValues();
-  if (rows.length < 2) return { success:true, data:{lista:[],porSupervisor:{}} };
-  let lista = [];
-  for (let i = 1; i < rows.length; i++) {
-    if (!rows[i][0] && !rows[i][7]) continue;
-    let o = {};
-    COLS.forEach((h, j) => o[h] = rows[i][j]);
-    lista.push(o);
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let rawRows = [];
+
+  if (p.anio === 'todos') {
+    // Combinar todas las hojas de años
+    const sheets = getSheetsAnios();
+    sheets.forEach(ws => { rawRows = rawRows.concat(ws.getDataRange().getValues().slice(1)); });
+    const base = ss.getSheetByName('BB. DE REGISTROS');
+    if (base) rawRows = rawRows.concat(base.getDataRange().getValues().slice(1));
+    // Deduplicar
+    const vistos = new Set();
+    rawRows = rawRows.filter(r => {
+      const k = String(r[0]);
+      if (!k || vistos.has(k)) return false;
+      vistos.add(k); return true;
+    });
+  } else if (p.anio) {
+    const sheet = getSheetAnio(p.anio);
+    if (!sheet) return { success:true, data:{lista:[],porSupervisor:{}} };
+    rawRows = sheet.getDataRange().getValues().slice(1);
+  } else {
+    // Por defecto: año actual
+    const sheet = getSheetAnio(null);
+    if (!sheet) return { success:true, data:{lista:[],porSupervisor:{}} };
+    rawRows = sheet.getDataRange().getValues().slice(1);
   }
+
+  if (!rawRows.length) return { success:true, data:{lista:[],porSupervisor:{}} };
+  let lista = [];
+  rawRows.forEach(r => {
+    if (!r[0] && !r[7]) return;
+    let o = {};
+    COLS.forEach((h, j) => o[h] = r[j]);
+    lista.push(o);
+  });
   if (p.empresa && p.empresa !== 'AMBAS') lista = lista.filter(a => String(a.empresa).toUpperCase() === p.empresa);
   if (p.mes)  lista = lista.filter(a => String(a.mes)  === p.mes);
-  if (p.anio) lista = lista.filter(a => String(a.anio) === p.anio);
+  if (p.anio && p.anio !== 'todos') lista = lista.filter(a => String(a.anio) === p.anio);
 
   const ps = {};
   lista.forEach(a => {

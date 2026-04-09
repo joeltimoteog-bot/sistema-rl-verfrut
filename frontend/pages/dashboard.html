@@ -3004,10 +3004,14 @@ async function cargarStats() {
     const ats = CACHE.atenciones || [];
     if (ats.length > 0) {
       const h = hoy();
+      // Normalizar fecha a string 'yyyy-MM-dd' aunque venga como Date object
+      const toFS = fa => fa instanceof Date
+        ? fa.toISOString().split('T')[0]
+        : String(fa||'').split('T')[0];
       const stats = {
-        hoy:        ats.filter(a => a.fecha_atencion === h).length,
-        mes:        ats.filter(a => (a.fecha_atencion||'').startsWith(h.slice(0,7))).length,
-        anio:       ats.filter(a => (a.fecha_atencion||'').startsWith(h.slice(0,4))).length,
+        hoy:        ats.filter(a => toFS(a.fecha_atencion) === h).length,
+        mes:        ats.filter(a => toFS(a.fecha_atencion).startsWith(h.slice(0,7))).length,
+        anio:       ats.filter(a => toFS(a.fecha_atencion).startsWith(h.slice(0,4))).length,
         pendientes: ats.filter(a => (a.estado||'').toUpperCase() === 'PENDIENTE').length
       };
       const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
