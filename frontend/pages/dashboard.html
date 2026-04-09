@@ -4488,8 +4488,20 @@ async function generarInformeVisita() {
 }
 
 function enviarInformeVisita(idx) {
+  console.log('[visita] enviarInformeVisita — idx:', idx,
+    '| _visitasData len:', (window._visitasData||[]).length,
+    '| _verInformeIdx:', window._verInformeIdx,
+    '| _currentVisitaEmail:', window._currentVisitaEmail);
   let v = (window._visitasData||[])[idx];
+  // Fallback 1: datos del formulario guardados al abrir el modal
   if(!v) v = window._currentVisitaEmail;
+  // Fallback 2: buscar en CACHE.visitas por nro de visita actual
+  if(!v && CACHE.visitas && Array.isArray(CACHE.visitas.lista)) {
+    const nroActual = window._currentVisitaNro;
+    if(nroActual) v = CACHE.visitas.lista.find(x => String(x.nro) === String(nroActual));
+    if(!v) v = CACHE.visitas.lista[idx];
+  }
+  console.log('[visita] datos encontrados:', v);
   if(!v) { mostrarToast('❌ No hay datos de visita','error'); return; }
   const ccFundo = CC_FUNDO[v.fundo||v.sector] || '';
   const ccAdmin = USER.usuario === 'jtimoteo' ? '' : 'jtimoteo@verfrut.pe';
@@ -4584,7 +4596,7 @@ function generarHTMLInforme(d) {
   return `
     <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:10px">
       <div style="flex-shrink:0">
-        <img src="https://joeltimoteog-bot.github.io/sistema-rl-verfrut/frontend/images/images.jpg" style="max-height:70px;max-width:180px;object-fit:contain" onerror="this.style.display='none'">
+        <img src="../images/images.jpg" style="max-height:70px;max-width:180px;object-fit:contain" onerror="this.style.display='none'">
         <div style="font-size:8pt;color:#333;margin-top:3px;max-width:180px;line-height:1.3">${empresaNombre}</div>
       </div>
       <div style="flex:1;text-align:center">
@@ -4631,19 +4643,6 @@ function generarHTMLInforme(d) {
     <br>
     ${d.observaciones ? `<p style="margin:6px 0"><b>V. OBSERVACIONES:</b></p><p style="margin:4px 0;white-space:pre-wrap">${d.observaciones}</p><br>` : ''}
     ${d.motivo ? `<p style="margin:6px 0"><b>MOTIVO DE RETRASO:</b></p><p style="margin:4px 0">${d.motivo}</p><br>` : ''}
-    <p style="margin:6px 0"><b>SUPERVISORES GH:</b></p>
-    <ul style="margin:4px 0;padding-left:20px;font-size:10.5pt;line-height:1.6">
-      <li>ELBERTH JAN PIERRE CASTRO BAYONA</li>
-      <li>SERGIO VIERA GIRON</li>
-      <li>ALEXANDER MARTINEZ JUAREZ</li>
-      <li>ROBERTO MOLERO ABAD</li>
-      <li>POOL WILFREDO TAMAYO RODRIGUEZ</li>
-      <li>ALEXANDER TINEO RAMOS</li>
-      <li>FLOR DE LOS MILAGROS VIERA PULACHE</li>
-      <li>ALEX FABIAN ZAPATA SUAREZ</li>
-      <li>YHANELLY GERALDENY LUZON VENEGAS</li>
-    </ul>
-    <br>
     ${fotosHTML ? `<p style="margin:6px 0"><b>EVIDENCIAS FOTOGRÁFICAS:</b></p><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">${fotosHTML}</div>` : ''}
     <br>
     <p style="margin:4px 0">Atentamente,</p>
