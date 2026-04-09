@@ -1919,6 +1919,16 @@ function verInformeGuardado(idx) {
 
 const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 
+// Precargar logo como base64 para usar en documentos generados
+fetch('../images/images.jpg')
+  .then(r => r.blob())
+  .then(blob => {
+    const reader = new FileReader();
+    reader.onload = e => { window._logoBase64 = e.target.result; };
+    reader.readAsDataURL(blob);
+  })
+  .catch(() => { window._logoBase64 = null; });
+
 window.onload = async () => {
   // Mover modales al body para evitar problemas con position:fixed
   ['mCaso','mFusion','mVisita','mSolicitud'].forEach(id => {
@@ -4517,7 +4527,12 @@ function enviarInformeVisita(idx) {
   const body = encodeURIComponent(cuerpo);
   const mailtoUrl = 'mailto:' + para + '?subject=' + subj + '&body=' + body + (ccFinal ? '&cc=' + cc : '');
   console.log('[visita] mailto generado:', mailtoUrl);
-  window.location.href = mailtoUrl;
+  const _link = document.createElement('a');
+  _link.href = mailtoUrl;
+  _link.target = '_blank';
+  document.body.appendChild(_link);
+  _link.click();
+  document.body.removeChild(_link);
 }
 
 function editarVisita(idx) {
@@ -4610,7 +4625,7 @@ function generarHTMLInforme(d) {
   return `
     <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:10px">
       <div style="flex-shrink:0">
-        <img src="/sistema-rl-verfrut/frontend/images/images.jpg" style="max-height:70px;max-width:180px;object-fit:contain" onerror="this.style.display='none'">
+        <img src="${window._logoBase64 || '/sistema-rl-verfrut/frontend/images/images.jpg'}" style="max-height:70px;max-width:180px;object-fit:contain" onerror="this.style.display='none'">
         <div style="font-size:8pt;color:#333;margin-top:3px;max-width:180px;line-height:1.3">${empresaNombre}</div>
       </div>
       <div style="flex:1;text-align:center">
