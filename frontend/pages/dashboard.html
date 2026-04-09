@@ -274,10 +274,10 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="tw">
           <table><thead><tr>
             <th>DNI</th><th>Nombre</th><th>Sexo</th><th>Empresa</th><th>Cargo</th>
-            <th>Fundo</th><th>Fundo Actual</th><th>Supervisor</th><th>Celular</th>
-            <th>Ruta</th><th>Código</th><th>F. Inicio Periodo</th><th>F. Término Periodo</th>
+            <th>Fundo</th><th>Fundo Actual</th><th>Ruta</th><th>Código</th>
+            <th>Tipo Régimen</th><th>F. Inicio Periodo</th><th>F. Término Periodo</th>
             <th>Acción</th>
-          </tr></thead><tbody id="tbTrab"><tr><td colspan="14" class="empty">Ingresa DNI o nombre para buscar</td></tr></tbody></table>
+          </tr></thead><tbody id="tbTrab"><tr><td colspan="13" class="empty">Ingresa DNI o nombre para buscar</td></tr></tbody></table>
         </div>
       </div>
     </div>
@@ -3329,10 +3329,10 @@ async function updateAt() {
 async function buscarTrab() {
   const q=v('fTQ').trim(), emp=v('fTE');
   if(q.length<2){mostrarToast('❌ Ingresa al menos 2 caracteres','error');return;}
-  document.getElementById('tbTrab').innerHTML='<tr><td colspan="14" class="empty">🔍 Buscando...</td></tr>';
+  document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">🔍 Buscando...</td></tr>';
   try{
     const d=await apiGet({action:'buscarTrabajador',q:q.trim(),empresa:emp||'AMBAS'});
-    if(!d.success||!d.data.length){document.getElementById('tbTrab').innerHTML='<tr><td colspan="14" class="empty">No se encontraron trabajadores</td></tr>';return;}
+    if(!d.success||!d.data.length){document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">No se encontraron trabajadores</td></tr>';return;}
     document.getElementById('tbTrab').innerHTML=d.data.map(t=>{
       const fiP=t.fecha_inicio_periodo?fmtF(String(t.fecha_inicio_periodo).split('T')[0]):'';
       const ftP=t.fecha_termino_periodo?fmtF(String(t.fecha_termino_periodo).split('T')[0]):'';
@@ -3341,12 +3341,12 @@ async function buscarTrab() {
         <td><span class="bg ${empC(t.empresa)}">${t.empresa||''}</span></td>
         <td>${t.cargo||''}</td><td>${t.fundo||''}</td>
         <td>${t.fundo_actual||''}</td>
-        <td>${t.supervisor||''}</td><td>${t.celular||''}</td>
         <td>${t.ruta||''}</td>
         <td>${t.codigo||''}</td>
+        <td>${t.regimen||''}</td>
         <td>${fiP}</td>
         <td>${ftP}</td>
-        <td><button class="btn-a bv" onclick="regAt('${esc(t.dni||'')}','${esc(t.nombre||'')}','${esc(t.empresa||'')}','${esc(t.fundo||'')}','${esc(t.cargo||'')}','${esc(t.sexo||'')}','${esc(t.ruta||'')}','${esc(t.codigo||'')}','${esc(t.fundo_actual||'')}','${esc(t.celular||'')}','${esc(String(t.fecha_inicio_periodo||'').split('T')[0])}','${esc(String(t.fecha_termino_periodo||'').split('T')[0])}')">+ Atención</button></td>
+        <td><button class="btn-a bv" onclick="regAt('${esc(t.dni||'')}','${esc(t.nombre||'')}','${esc(t.empresa||'')}','${esc(t.fundo||'')}','${esc(t.cargo||'')}','${esc(t.sexo||'')}','${esc(t.ruta||'')}','${esc(t.codigo||'')}','${esc(t.fundo_actual||'')}','','${esc(String(t.fecha_inicio_periodo||'').split('T')[0])}','${esc(String(t.fecha_termino_periodo||'').split('T')[0])}')">+ Atención</button></td>
       </tr>`;
     }).join('');
   }catch(e){ console.error('buscarTrab:', e); }

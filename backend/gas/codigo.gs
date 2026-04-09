@@ -1373,59 +1373,101 @@ function saveSupervisorEval(params) {
 // TRABAJADORES — buscarTrabajador
 // ════════════════════════════════════════════════════════════
 
+// Cache en memoria por ejecución (evita leer la misma hoja dos veces en una sola petición)
+var _trabCache = {};
+function getDatosCached(hoja) { return _trabCache[hoja] || null; }
+function setDatosCached(hoja, datos) { _trabCache[hoja] = datos; }
+
 /**
- * buscarTrabajador — busca trabajadores en la hoja 'TRABAJADORES'
- * por DNI o nombre parcial.
+ * cargarDatosTrabajadores — lee una hoja de trabajadores por índice de columna.
+ * Columnas usadas (base 0):
+ *   0=DNI  5=F.Inicio  6=Sexo  7=Cargo  8=TipoRégimen  10=Fundo
+ *  13=Empresa  14=Nombre  15=Ruta  16=Código  17=F.Término
+ * Retorna array de arrays: [dni, nombre, sexo, fip, fundo, cargo, ruta, codigo, ftp, empresa, regimen]
+ */
+function cargarDatosTrabajadores(hoja) {
+  var ss = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var sh = ss.getSheetByName(hoja);
+  if (!sh) return [];
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) return [];
+  var rows  = sh.getRange(2, 1, lastRow - 1, 18).getValues();
+  var datos = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r   = rows[i];
+    var dni = String(r[0]  || '').trim();
+    var nom = String(r[14] || '').trim();
+    if (!dni && !nom) continue;
+    var fip = r[5]  instanceof Date
+      ? Utilities.formatDate(r[5],  'GMT-5', 'yyyy-MM-dd')
+      : String(r[5]  || '').trim();
+    var ftp = r[17] instanceof Date
+      ? Utilities.formatDate(r[17], 'GMT-5', 'yyyy-MM-dd')
+      : String(r[17] || '').trim();
+    datos.push([
+      dni,                           // 0: DNI
+      nom,                           // 1: Nombre
+      String(r[6]  || '').trim(),    // 2: Sexo
+      fip,                           // 3: Fecha Inicio Periodo
+      String(r[10] || '').trim(),    // 4: Fundo
+      String(r[7]  || '').trim(),    // 5: Cargo
+      String(r[15] || '').trim(),    // 6: Ruta
+      String(r[16] || '').trim(),    // 7: Código
+      ftp,                           // 8: Fecha Término Periodo
+      String(r[13] || '').trim(),    // 9: Empresa
+      String(r[8]  || '').trim()     // 10: Tipo Régimen
+    ]);
+  }
+  return datos;
+}
+
+/**
+ * buscarTrabajador — busca por DNI o nombre parcial.
  * Parámetros: q (DNI o nombre), empresa ('RAPEL'|'VERFRUT'|'AMBAS')
  */
-function buscarTrabajador(params) {
-  var ss      = SpreadsheetApp.openById(CONFIG.SHEET_ID);
-  var q       = String(params.q || '').trim().toLowerCase();
-  var empresa = (params.empresa || '').toUpperCase();
+function buscarTrabajador(p) {
+  var q      = (p.q || '').toLowerCase().trim();
+  var emp    = (p.empresa || 'AMBAS').toUpperCase();
+  if (!q || q.length < 2) return { success: true, data: [] };
+  var esDNI  = /^[0-9]+$/.test(q);
+  var res    = [];
 
-  // Determinar qué hojas leer según empresa solicitada
-  var nombreHojas = [];
-  if (empresa === 'RAPEL') {
-    nombreHojas = ['Trabajadores_RAPEL'];
-  } else if (empresa === 'VERFRUT') {
-    nombreHojas = ['Trabajadores_VERFRUT'];
-  } else {
-    // AMBAS u omitido → buscar en ambas hojas
-    nombreHojas = ['Trabajadores_RAPEL', 'Trabajadores_VERFRUT'];
+  function buscar(hoja, empresaDefault) {
+    try {
+      var datos = getDatosCached(hoja);
+      if (!datos) { datos = cargarDatosTrabajadores(hoja); setDatosCached(hoja, datos); }
+      for (var i = 0; i < datos.length && res.length < 20; i++) {
+        var d        = datos[i];
+        var dniRaw   = d[0];
+        var nombre   = d[1];
+        // Normalizar DNI de 7 dígitos → 8 con cero inicial
+        var dni      = (esDNI && dniRaw.length === 7) ? '0' + dniRaw : dniRaw;
+        var qNorm    = (esDNI && q.length === 8 && q.charAt(0) === '0') ? q.substring(1) : q;
+        var coincide = esDNI
+          ? (dni === q || dniRaw === q || dniRaw === qNorm)
+          : nombre.toLowerCase().indexOf(q) !== -1;
+        if (!coincide) continue;
+        res.push({
+          dni:                  dni,
+          nombre:               nombre,
+          sexo:                 d[2],
+          fecha_inicio_periodo: d[3],
+          fundo:                d[4],
+          cargo:                d[5],
+          ruta:                 d[6],
+          codigo:               d[7],
+          fecha_termino_periodo: d[8],
+          empresa:              d[9] || empresaDefault,
+          regimen:              d[10],
+          fundo_actual:         d[4]
+        });
+      }
+    } catch (e) { Logger.log('buscarTrabajador error ' + hoja + ': ' + e.toString()); }
   }
 
-  var rows = [];
-
-  nombreHojas.forEach(function (nombreHoja) {
-    var sh = ss.getSheetByName(nombreHoja);
-    if (!sh) {
-      Logger.log('[buscarTrabajador] Hoja no encontrada: ' + nombreHoja);
-      return;
-    }
-
-    var data = sh.getDataRange().getValues();
-    if (data.length < 2) return;
-
-    var headers = data[0];
-
-    for (var i = 1; i < data.length; i++) {
-      if (rows.length >= 50) break; // Límite global de resultados
-
-      var row = {};
-      headers.forEach(function (h, j) { row[h] = data[i][j]; });
-
-      // Filtro búsqueda por DNI o nombre
-      if (q) {
-        var dni    = String(row.dni    || '').toLowerCase();
-        var nombre = String(row.nombre || '').toLowerCase();
-        if (dni.indexOf(q) === -1 && nombre.indexOf(q) === -1) continue;
-      }
-
-      rows.push(row);
-    }
-  });
-
-  return { success: true, data: rows };
+  if (emp === 'RAPEL'   || emp === 'AMBAS') buscar('Trabajadores_RAPEL',   'RAPEL');
+  if (emp === 'VERFRUT' || emp === 'AMBAS') buscar('Trabajadores_VERFRUT', 'VERFRUT');
+  return { success: true, data: res };
 }
 
 // ════════════════════════════════════════════════════════════
