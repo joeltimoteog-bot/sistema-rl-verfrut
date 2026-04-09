@@ -758,6 +758,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <select id="vPara">
           <option value="">— Seleccione destinatario —</option>
           <option value="JOEL ANGEL TIMOTEO GONZA|Coordinador de Relaciones Laborales">JOEL ANGEL TIMOTEO GONZA — Coordinador de Relaciones Laborales</option>
+          <option value="JORGE LUIS CHAVEZ CORDOVA|Coordinador de Relaciones Laborales">JORGE LUIS CHAVEZ CORDOVA — Coordinador de Relaciones Laborales</option>
           <option value="OLGA STEFFANA VILELA LUDEÑA|Jefe de Relaciones Laborales">OLGA STEFFANA VILELA LUDEÑA — Jefe de Relaciones Laborales</option>
         </select>
       </div>
@@ -4514,7 +4515,9 @@ function enviarInformeVisita(idx) {
   const para = encodeURIComponent('ovilela@verfrut.pe;jchavez@verfrut.pe;jtimoteo@verfrut.pe');
   const cc   = encodeURIComponent(ccFinal);
   const body = encodeURIComponent(cuerpo);
-  window.location.href = 'mailto:' + para + '?subject=' + subj + '&body=' + body + (ccFinal ? '&cc=' + cc : '');
+  const mailtoUrl = 'mailto:' + para + '?subject=' + subj + '&body=' + body + (ccFinal ? '&cc=' + cc : '');
+  console.log('[visita] mailto generado:', mailtoUrl);
+  window.location.href = mailtoUrl;
 }
 
 function editarVisita(idx) {
@@ -4593,10 +4596,21 @@ function generarHTMLInforme(d) {
     ? 'SOCIEDAD EXPORTADORA VERFRUT S.A.C'
     : 'SOCIEDAD AGRICOLA RAPEL S.A.C / SOCIEDAD EXPORTADORA VERFRUT S.A.C';
 
+  // Cargo dinámico según supervisor
+  const _supLower = (d.sup||'').toLowerCase();
+  const _ASISTENTES = ['mechato','avendaño','siancas','miranda'];
+  const cargoSup = _ASISTENTES.some(k => _supLower.includes(k))
+    ? 'Asistente de Relaciones Laborales'
+    : (() => {
+        const entry = (typeof SUPERVISORES_LISTA !== 'undefined' ? SUPERVISORES_LISTA : [])
+          .find(s => _supLower.includes(s.nombre.split(' ')[0].toLowerCase()));
+        return entry ? entry.cargo : 'Supervisor de Gestión Humana';
+      })();
+
   return `
     <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:10px">
       <div style="flex-shrink:0">
-        <img src="../images/images.jpg" style="max-height:70px;max-width:180px;object-fit:contain" onerror="this.style.display='none'">
+        <img src="/sistema-rl-verfrut/frontend/images/images.jpg" style="max-height:70px;max-width:180px;object-fit:contain" onerror="this.style.display='none'">
         <div style="font-size:8pt;color:#333;margin-top:3px;max-width:180px;line-height:1.3">${empresaNombre}</div>
       </div>
       <div style="flex:1;text-align:center">
@@ -4610,7 +4624,7 @@ function generarHTMLInforme(d) {
       <tr>
         <td style="padding:3px 0;font-weight:bold;width:70px;vertical-align:top">DE</td>
         <td style="padding:3px 6px;vertical-align:top">:</td>
-        <td style="padding:3px 0;vertical-align:top">${d.sup}<br><span style="font-size:10pt">Supervisor de Gestión Humana.</span></td>
+        <td style="padding:3px 0;vertical-align:top">${d.sup}<br><span style="font-size:10pt">${cargoSup}.</span></td>
       </tr>
       <tr>
         <td style="padding:3px 0;font-weight:bold;vertical-align:top">PARA</td>
@@ -4649,7 +4663,7 @@ function generarHTMLInforme(d) {
     <br><br>
     <p style="margin:4px 0">_________________________________</p>
     <p style="margin:4px 0"><b>${d.sup}</b></p>
-    <p style="margin:4px 0">Supervisor de Gestión Humana</p>
+    <p style="margin:4px 0">${cargoSup}</p>
     <p style="margin:4px 0">${empresaNombre}</p>
   `;
 }
