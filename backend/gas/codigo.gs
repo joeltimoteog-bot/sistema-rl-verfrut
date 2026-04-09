@@ -340,8 +340,12 @@ function cargarDatosTrabajadores(hoja) {
 }
 function buscarTrabajador(p) {
   const q   = (p.q || '').toLowerCase().trim();
-  const emp = p.empresa || 'AMBAS';
   if (!q || q.length < 2) return { success: true, data: [] };
+  // Normalizar empresa: acepta 'RAPEL S.A.C', 'VERFRUT S.A.C', 'RAPEL', 'VERFRUT', 'AMBAS' o vacío
+  const empUp   = (p.empresa || '').toUpperCase();
+  const empNorm = (empUp.indexOf('RAPEL') !== -1 && empUp.indexOf('VERFRUT') === -1) ? 'RAPEL'
+                : (empUp.indexOf('VERFRUT') !== -1) ? 'VERFRUT'
+                : 'AMBAS';
   const esDNI = /^[0-9]+$/.test(q);
   let res = [];
   const buscar = (hoja, empresa) => {
@@ -368,10 +372,10 @@ function buscarTrabajador(p) {
           });
         }
       }
-    } catch(e) { Logger.log('Error ' + hoja + ': ' + e.toString()); }
+    } catch(e) { Logger.log('buscarTrabajador error ' + hoja + ': ' + e.toString()); }
   };
-  if (emp === 'RAPEL'   || emp === 'AMBAS') buscar('Trabajadores_RAPEL',   'RAPEL');
-  if (emp === 'VERFRUT' || emp === 'AMBAS') buscar('Trabajadores_VERFRUT', 'VERFRUT');
+  if (empNorm === 'RAPEL'   || empNorm === 'AMBAS') buscar('Trabajadores_RAPEL',   'RAPEL');
+  if (empNorm === 'VERFRUT' || empNorm === 'AMBAS') buscar('Trabajadores_VERFRUT', 'VERFRUT');
   return { success: true, data: res };
 }
 // Limpiar cache manualmente (llamar cuando se actualice la base de trabajadores)

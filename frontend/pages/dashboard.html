@@ -2291,12 +2291,11 @@ async function buscarTrabajadorCaso() {
   const dni = document.getElementById('mCasoDNI').value.trim();
   const msg = document.getElementById('cBuscarMsg');
   if(!dni || dni.length < 2) { msg.textContent='⚠️ Ingresa el DNI'; msg.style.color='#dc2626'; return; }
-  const emp = USER.empresa || 'AMBAS';
-  console.log('[buscarTrabajadorCaso] DNI enviado:', dni, '| empresa:', emp);
+  console.log('[buscarTrabajadorCaso] DNI enviado:', dni, '| empresa: AMBAS');
   msg.textContent='🔍 Buscando...';
   msg.style.color='#64748b';
   try {
-    const d = await apiGet({action:'buscarTrabajador', q:String(dni).trim(), empresa:emp});
+    const d = await apiGet({action:'buscarTrabajador', q:String(dni).trim(), empresa:'AMBAS'});
     console.log('[buscarTrabajadorCaso] Respuesta API:', JSON.stringify(d));
     if(d.success && d.data && d.data.length) {
       const t = d.data[0];
@@ -3333,9 +3332,11 @@ async function buscarTrab() {
   const q=v('fTQ').trim(), emp=v('fTE');
   if(q.length<2){mostrarToast('❌ Ingresa al menos 2 caracteres','error');return;}
   document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">🔍 Buscando...</td></tr>';
+  console.log('[buscarTrab] q:', q, '| empresa:', emp||'AMBAS');
   try{
     const d=await apiGet({action:'buscarTrabajador',q:q.trim(),empresa:emp||'AMBAS'});
-    if(!d.success||!d.data.length){document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">No se encontraron trabajadores</td></tr>';return;}
+    console.log('[buscarTrab] Respuesta:', JSON.stringify(d));
+    if(!d.success||!d.data||!d.data.length){document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">⚠️ No se encontraron trabajadores</td></tr>';return;}
     document.getElementById('tbTrab').innerHTML=d.data.map(t=>{
       const fiP=t.fecha_inicio_periodo?fmtF(String(t.fecha_inicio_periodo).split('T')[0]):'';
       const ftP=t.fecha_termino_periodo?fmtF(String(t.fecha_termino_periodo).split('T')[0]):'';
@@ -3352,7 +3353,10 @@ async function buscarTrab() {
         <td><button class="btn-a bv" onclick="regAt('${esc(t.dni||'')}','${esc(t.nombre||'')}','${esc(t.empresa||'')}','${esc(t.fundo||'')}','${esc(t.cargo||'')}','${esc(t.sexo||'')}','${esc(t.ruta||'')}','${esc(t.codigo||'')}','${esc(t.fundo_actual||'')}','','${esc(String(t.fecha_inicio_periodo||'').split('T')[0])}','${esc(String(t.fecha_termino_periodo||'').split('T')[0])}')">+ Atención</button></td>
       </tr>`;
     }).join('');
-  }catch(e){ console.error('buscarTrab:', e); }
+  }catch(e){
+    console.error('[buscarTrab] Error:', e);
+    document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">❌ Error: '+e.message+'</td></tr>';
+  }
 }
 
 let dniTO;
@@ -3369,10 +3373,9 @@ async function buscarDniBtn() {
   if(dni.length<2){mostrarToast('❌ Ingresa el DNI del trabajador','error');return;}
   const r=document.getElementById('trabRes');
   r.style.display='block';r.textContent='🔍 Buscando...';
-  const emp = USER.empresa || 'AMBAS';
-  console.log('[buscarDniBtn] DNI enviado:', dni, '| empresa:', emp);
+  console.log('[buscarDniBtn] DNI enviado:', dni, '| empresa: AMBAS');
   try{
-    const d=await apiGet({action:'buscarTrabajador',q:String(dni).trim(),empresa:emp});
+    const d=await apiGet({action:'buscarTrabajador',q:String(dni).trim(),empresa:'AMBAS'});
     console.log('[buscarDniBtn] Respuesta API:', JSON.stringify(d));
     if(d.success&&d.data&&d.data.length){
       const t=d.data[0];
