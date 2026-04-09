@@ -757,9 +757,8 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <label>Para (destinatario) *</label>
         <select id="vPara">
           <option value="">— Seleccione destinatario —</option>
-          <option value="Joel Timoteo|Coordinador de Relaciones Laborales">Joel Timoteo — Coord. RRHH</option>
-          <option value="Gerente de Operaciones|Gerente de Operaciones">Gerente de Operaciones</option>
-          <option value="Jefe de Recursos Humanos|Jefe de Recursos Humanos">Jefe de Recursos Humanos</option>
+          <option value="JOEL ANGEL TIMOTEO GONZA|Coordinador de Relaciones Laborales">JOEL ANGEL TIMOTEO GONZA — Coordinador de Relaciones Laborales</option>
+          <option value="OLGA STEFFANA VILELA LUDEÑA|Jefe de Relaciones Laborales">OLGA STEFFANA VILELA LUDEÑA — Jefe de Relaciones Laborales</option>
         </select>
       </div>
     </div>
@@ -4115,6 +4114,12 @@ function abrirNuevaVisita() {
   document.getElementById('motivoRetrasoDiv').style.display='none';
   document.getElementById('reemplazoDivVisita').style.display='none';
   document.getElementById('vFechaInforme').value = hoy();
+  // Pre-seleccionar empresa según usuario
+  const vEmpEl = document.getElementById('vEmp');
+  if (vEmpEl && USER.empresa) {
+    if (USER.empresa === 'RAPEL') vEmpEl.value = 'RAPEL';
+    else if (USER.empresa === 'VERFRUT') vEmpEl.value = 'VERFRUT';
+  }
   abrir('mVisita');
 }
 
@@ -4461,14 +4466,10 @@ async function generarInformeVisita() {
   const ccFundo  = CC_FUNDO[fundo] || '';
   const ccAdmin  = USER.usuario === 'jtimoteo' ? '' : 'jtimoteo@verfrut.pe';
   const ccFinal  = [ccFundo, ccAdmin, 'jtimoteo@verfrut.pe'].filter(Boolean).join(';');
-  const cuerpoEmail = 'Estimados,' +
-    '\n\nAdjunto el informe de Visita de Campo - Semana ' + semana +
-    '\nEmpresa: ' + empresa +
-    '\nSupervisor: ' + sup +
-    '\nFundo: ' + fundo +
-    '\nPeriodo: ' + fmtF(fi) + ' al ' + fmtF(ff) +
-    '\n\nAtentamente,' +
-    '\n' + sup;
+  const cuerpoEmail = saludoHora() + '.\n\n' +
+    'Se adjunta el informe de las visitas realizadas a las áreas/rutas de campo ' +
+    'correspondientes al período indicado, para su conocimiento y fines pertinentes.\n\n' +
+    'Adj.: Informe de Visitas de Campo';
   const subj = encodeURIComponent('Informe Visita Campo Semana ' + semana + ' - ' + empresa + ' - ' + fundo);
   const para = encodeURIComponent('ovilela@verfrut.pe;jchavez@verfrut.pe;jtimoteo@verfrut.pe');
   const cc   = encodeURIComponent(ccFinal);
@@ -4489,18 +4490,10 @@ function enviarInformeVisita(idx) {
   const ccFundo = CC_FUNDO[v.fundo||v.sector] || '';
   const ccAdmin = USER.usuario === 'jtimoteo' ? '' : 'jtimoteo@verfrut.pe';
   const ccFinal = [ccFundo, ccAdmin].filter(Boolean).join(';');
-  const cuerpo =
-    'Estimados,\n\n' +
-    'Adjunto el Informe de Visita de Campo - Semana ' + (v.semana||'') + '\n' +
-    'Empresa: '       + (v.empresa||'') + '\n' +
-    'Supervisor: '    + (v.supervisor||'') + '\n' +
-    'Fundo/Sector: '  + (v.fundo||v.sector||'') + '\n' +
-    'Período: '       + (v.fecha_inicio||v.fi||'') + ' al ' + (v.fecha_fin||v.ff||'') + '\n\n' +
-    'DESARROLLO DE LA VISITA:\n' + (v.desarrollo||'—') + '\n\n' +
-    'ACCIONES CORRECTIVAS:\n'    + (v.acciones||'—')   + '\n\n' +
-    'COMPROMISOS:\n'              + (v.compromisos||'—') + '\n\n' +
-    'OBSERVACIONES:\n'            + (v.observaciones||'—') + '\n\n' +
-    'Atentamente,\n' + (v.supervisor||USER.nombre);
+  const cuerpo = saludoHora() + '.\n\n' +
+    'Se adjunta el informe de las visitas realizadas a las áreas/rutas de campo ' +
+    'correspondientes al período indicado, para su conocimiento y fines pertinentes.\n\n' +
+    'Adj.: Informe de Visitas de Campo';
   const subj = encodeURIComponent('Informe Visita Campo Semana ' + (v.semana||'') + ' - ' + (v.empresa||'') + ' - ' + (v.fundo||v.sector||''));
   const para = encodeURIComponent('ovilela@verfrut.pe;jchavez@verfrut.pe;jtimoteo@verfrut.pe');
   const cc   = encodeURIComponent(ccFinal);
@@ -4566,28 +4559,61 @@ function imprimirInforme() {
   setTimeout(() => ventana.print(), 400);
 }
 
+function saludoHora() {
+  const h = new Date().getHours();
+  if (h >= 5 && h < 12) return 'Estimados, buenos días';
+  if (h >= 12 && h < 18) return 'Estimados, buenas tardes';
+  return 'Estimados, buenas noches';
+}
+
 function generarHTMLInforme(d) {
   const fotosHTML = d.fotos.map(f =>
     `<img src="${f.data}" style="width:220px;height:160px;object-fit:cover;margin:4px;border:1px solid #ccc">`
   ).join('');
 
+  const empresaNombre = d.empresa === 'RAPEL'
+    ? 'SOCIEDAD AGRICOLA RAPEL S.A.C'
+    : d.empresa === 'VERFRUT'
+    ? 'SOCIEDAD EXPORTADORA VERFRUT S.A.C'
+    : 'SOCIEDAD AGRICOLA RAPEL S.A.C / SOCIEDAD EXPORTADORA VERFRUT S.A.C';
+
   return `
-    <div style="text-align:center;margin-bottom:10px">
-      <img src="${d.logo}" style="max-height:70px;max-width:200px">
+    <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:10px">
+      <div style="flex-shrink:0">
+        <img src="../../frontend/images/images.jpg" style="max-height:70px;max-width:180px;object-fit:contain" onerror="this.style.display='none'">
+        <div style="font-size:8pt;color:#333;margin-top:3px;max-width:180px;line-height:1.3">${empresaNombre}</div>
+      </div>
+      <div style="flex:1;text-align:center">
+        <div style="font-weight:bold;font-size:10pt;margin-bottom:4px">
+          "Año de la Esperanza y el Fortalecimiento de la Democracia"
+        </div>
+        <p style="margin:4px 0;font-weight:bold">Informe Semana ${d.semana} – Empresa ${d.empresa}/DPTO. G.H./ Relaciones Laborales.</p>
+      </div>
     </div>
-    <div style="text-align:center;font-weight:bold;font-size:11pt;margin-bottom:6px">
-      "Año del Fortalecimiento de la Soberanía Nacional"
-    </div>
-    <p style="margin:4px 0"><b>Informe Semana ${d.semana} – Empresa ${d.empresa}/DPTO. G.H./ Relaciones Laborales.</b></p>
-    <p style="margin:4px 0">De&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${d.sup}</p>
-    <p style="margin:4px 0">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Supervisor de Gestión Humana.</p>
-    <p style="margin:4px 0">Para&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${d.paraNombre}.</p>
-    <p style="margin:4px 0">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Jefe Recursos Humanos ${d.empresa}.</p>
-    <br>
-    <p style="margin:4px 0"><b>ASUNTO&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${d.asunto}</b></p>
-    <p style="margin:4px 0"><b>FECHA&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: ${d.fechaInf}</b></p>
+    <table style="border-collapse:collapse;width:100%;margin-bottom:8px;font-size:11pt">
+      <tr>
+        <td style="padding:3px 0;font-weight:bold;width:70px;vertical-align:top">DE</td>
+        <td style="padding:3px 6px;vertical-align:top">:</td>
+        <td style="padding:3px 0;vertical-align:top">${d.sup}<br><span style="font-size:10pt">Supervisor de Gestión Humana.</span></td>
+      </tr>
+      <tr>
+        <td style="padding:3px 0;font-weight:bold;vertical-align:top">PARA</td>
+        <td style="padding:3px 6px;vertical-align:top">:</td>
+        <td style="padding:3px 0;vertical-align:top">${d.paraNombre}<br><span style="font-size:10pt">${d.paraCargo}.</span></td>
+      </tr>
+      <tr>
+        <td style="padding:3px 0;font-weight:bold;vertical-align:top">ASUNTO</td>
+        <td style="padding:3px 6px;vertical-align:top">:</td>
+        <td style="padding:3px 0;vertical-align:top"><b>${d.asunto}</b></td>
+      </tr>
+      <tr>
+        <td style="padding:3px 0;font-weight:bold;vertical-align:top">FECHA</td>
+        <td style="padding:3px 6px;vertical-align:top">:</td>
+        <td style="padding:3px 0;vertical-align:top"><b>${d.fechaInf}</b></td>
+      </tr>
+    </table>
     <hr style="margin:10px 0">
-    <p style="margin:6px 0"><b>I. DESARROLLO DE ACTIVIDADES:</b></p>
+    <p style="margin:6px 0"><b>I. DESARROLLO:</b></p>
     <p style="margin:4px 0;white-space:pre-wrap">${d.desarrollo}</p>
     <br>
     <p style="margin:6px 0"><b>II. RUTAS RECORRIDAS:</b></p>
@@ -4601,6 +4627,19 @@ function generarHTMLInforme(d) {
     <br>
     ${d.observaciones ? `<p style="margin:6px 0"><b>V. OBSERVACIONES:</b></p><p style="margin:4px 0;white-space:pre-wrap">${d.observaciones}</p><br>` : ''}
     ${d.motivo ? `<p style="margin:6px 0"><b>MOTIVO DE RETRASO:</b></p><p style="margin:4px 0">${d.motivo}</p><br>` : ''}
+    <p style="margin:6px 0"><b>SUPERVISORES GH:</b></p>
+    <ul style="margin:4px 0;padding-left:20px;font-size:10.5pt;line-height:1.6">
+      <li>ELBERTH JAN PIERRE CASTRO BAYONA</li>
+      <li>SERGIO VIERA GIRON</li>
+      <li>ALEXANDER MARTINEZ JUAREZ</li>
+      <li>ROBERTO MOLERO ABAD</li>
+      <li>POOL WILFREDO TAMAYO RODRIGUEZ</li>
+      <li>ALEXANDER TINEO RAMOS</li>
+      <li>FLOR DE LOS MILAGROS VIERA PULACHE</li>
+      <li>ALEX FABIAN ZAPATA SUAREZ</li>
+      <li>YHANELLY GERALDENY LUZON VENEGAS</li>
+    </ul>
+    <br>
     ${fotosHTML ? `<p style="margin:6px 0"><b>EVIDENCIAS FOTOGRÁFICAS:</b></p><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">${fotosHTML}</div>` : ''}
     <br>
     <p style="margin:4px 0">Atentamente,</p>
@@ -4608,7 +4647,7 @@ function generarHTMLInforme(d) {
     <p style="margin:4px 0">_________________________________</p>
     <p style="margin:4px 0"><b>${d.sup}</b></p>
     <p style="margin:4px 0">Supervisor de Gestión Humana</p>
-    <p style="margin:4px 0">${d.empresa}</p>
+    <p style="margin:4px 0">${empresaNombre}</p>
   `;
 }
 
