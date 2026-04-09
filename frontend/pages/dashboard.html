@@ -208,6 +208,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <option value="EN PROCESO">En Proceso</option>
           <option value="RESUELTO">Resuelto</option>
         </select>
+        <button id="btnActualizarDash" onclick="forzarActualizacionDash()" style="padding:6px 14px;background:#0a2463;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;margin-left:auto">🔄 Actualizar</button>
       </div>
       <div class="gg">
         <div class="gc"><div class="gc-t">Atenciones últimos 6 meses</div><canvas id="cM" style="height:200px;max-height:200px"></canvas></div>
@@ -304,44 +305,27 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <div class="fc"><label>Empresa</label>
             <select id="cEmp"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
           </div>
-          <div class="fc">
-            <label>Para (destinatarios) *</label>
-            <div id="paraList" style="display:flex;flex-direction:column;gap:5px">
-              <div style="display:flex;gap:5px">
-                <select id="cPara" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
-                  <option value="">-- Seleccionar destinatario --</option>
-                  <option value="dreyna&#64;verfrut.pe">dreyna&#64;verfrut.pe</option>
-                  <option value="apacherre&#64;verfrut.pe">apacherre&#64;verfrut.pe</option>
-                  <option value="tvera&#64;verfrut.pe">tvera&#64;verfrut.pe</option>
-                  <option value="smiranda&#64;verfrut.pe">smiranda&#64;verfrut.pe</option>
-                  <option value="amarrufo&#64;verfrut.pe">amarrufo&#64;verfrut.pe</option>
-                  <option value="jmorales&#64;verfrut.pe">jmorales&#64;verfrut.pe</option>
-                </select>
-                <button type="button" onclick="agregarPara()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer">+ Agregar</button>
-              </div>
-              <div id="paraSeleccionados" style="display:flex;flex-wrap:wrap;gap:5px"></div>
-              <input type="text" id="cParaNuevo" placeholder="O escribe un correo nuevo..." style="padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+          <div class="fc" style="grid-column:1/-1">
+            <label>Filtrar por Responsable de Recepción <span style="font-weight:400;color:#94a3b8">(opcional — sin selección incluye todos)</span></label>
+            <select id="cRespMulti" multiple style="width:100%;padding:6px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;min-height:130px">
+              <option>ALBERT PACHERRE</option>
+              <option>ROSA MORENO</option>
+              <option>DANIELA REYNA</option>
+              <option>JAIME SIANCAS</option>
+              <option>ROSS MERY NAVARRO</option>
+              <option>ALISSON MARRUFO</option>
+              <option>LUCIA PONGO</option>
+              <option>ATENCIÓN</option>
+              <option>JAIRO FERNANDEZ</option>
+              <option>TANIA VERA</option>
+              <option>ELIZABETH DIOSES</option>
+            </select>
+            <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <span style="font-size:11px;color:#64748b">Ctrl+clic para seleccionar varios · clic sin Ctrl para deseleccionar</span>
+              <input type="text" id="cRespNuevo" placeholder="Agregar responsable nuevo..." style="flex:1;min-width:180px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+              <button type="button" onclick="agregarRespCorreo()" style="padding:7px 14px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer;white-space:nowrap">+ Agregar nuevo responsable</button>
             </div>
-          </div>
-          <div class="fc">
-            <label>CC (con copia) — Se copiarán automáticamente a los coordinadores</label>
-            <div style="background:#eff6ff;border-radius:8px;padding:8px 12px;font-size:12px;color:#1e40af;margin-bottom:8px">
-              ✅ <strong>CC fijo:</strong> jtimoteo&#64;verfrut.pe · jchavez&#64;verfrut.pe · ovilela&#64;verfrut.pe
-            </div>
-            <div style="display:flex;gap:5px">
-              <select id="cCC" style="flex:1;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
-                <option value="">-- Seleccionar --</option>
-                <option value="dreyna&#64;verfrut.pe">dreyna&#64;verfrut.pe</option>
-                <option value="apacherre&#64;verfrut.pe">apacherre&#64;verfrut.pe</option>
-                <option value="tvera&#64;verfrut.pe">tvera&#64;verfrut.pe</option>
-                <option value="smiranda&#64;verfrut.pe">smiranda&#64;verfrut.pe</option>
-                <option value="amarrufo&#64;verfrut.pe">amarrufo&#64;verfrut.pe</option>
-                <option value="jmorales&#64;verfrut.pe">jmorales&#64;verfrut.pe</option>
-              </select>
-              <button type="button" onclick="agregarCC()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer">+ Agregar</button>
-            </div>
-            <div id="ccSeleccionados" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px"></div>
-            <input type="text" id="cCCNuevo" placeholder="O escribe un correo nuevo..." style="margin-top:5px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+            <div id="respCorreoCustom" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px"></div>
           </div>
         </div>
         <div style="margin-top:14px">
@@ -925,7 +909,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       <button type="button" onclick="agregarResp()" style="margin-top:5px;padding:5px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;cursor:pointer">+ Agregar responsable</button>
       <div id="respExtra"></div>
     </div>
-    <div class="fc"><label>Estado</label><select id="at_est"><option value="PENDIENTE">PENDIENTE</option><option value="EN PROCESO">EN PROCESO</option><option value="RESUELTO">RESUELTO</option></select></div>
+    <div class="fc"><label>Estado</label><select id="at_est"><option value="FINALIZADO">FINALIZADO</option><option value="EN PROCESO">EN PROCESO</option></select></div>
   </div>
   <div class="fg1" style="margin-top:12px">
     <div class="fc"><label>Observaciones</label><textarea id="at_obs" placeholder="Observaciones del caso..."></textarea></div>
@@ -2625,14 +2609,17 @@ async function cargarCasos() {
   const motivo  = document.getElementById('cFiltroMotivo')?.value || '';
   const sup     = (document.getElementById('cFiltroSup')?.value || '').toLowerCase().trim();
   if (CACHE.casos && CACHE.casos.length > 0) {
-    const miNombre = (USER.nombre || USER.usuario).toLowerCase().trim();
+    const miNombre  = (USER.nombre || USER.usuario).toLowerCase().trim();
+    const miUsuario = (USER.usuario || '').toLowerCase().trim();
+    const miPrimerN = miNombre.split(' ')[0];
     casosData = CACHE.casos.filter(c =>
       (!empresa || c.empresa === empresa) &&
       (!motivo  || c.motivo === motivo) &&
       (!sup     || String(c.supervisor||'').toLowerCase().includes(sup)) &&
       (esAdmin  ||
-        String(c.supervisor||'').toLowerCase().trim().includes(miNombre.split(' ')[0]) ||
-        String(c.registrado_por||'').toLowerCase().trim().includes(miNombre.split(' ')[0]))
+        String(c.supervisor||'').toLowerCase().trim().includes(miPrimerN) ||
+        String(c.registrado_por||'').toLowerCase().trim().includes(miPrimerN) ||
+        String(c.usuario_registro||'').toLowerCase().trim() === miUsuario)
     );
     renderTablaCasos(casosData);
     if(ROLES_ADMIN.includes(USER.rol)) {
@@ -2967,6 +2954,24 @@ function invalidarCache(modulo) {
 }
 
 // Recarga completa en segundo plano (sin bloquear UI)
+async function forzarActualizacionDash() {
+  const btn = document.getElementById('btnActualizarDash');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Actualizando...'; }
+  CACHE_TS = 0;
+  CACHE.atenciones = null;
+  CACHE.stats = null;
+  try {
+    await refrescarEnBackground();
+    cargarStats();
+    if (typeof cargarAtenciones === 'function') cargarAtenciones();
+    mostrarToast('✅ Datos actualizados correctamente');
+  } catch(e) {
+    mostrarToast('❌ Error al actualizar: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar'; }
+  }
+}
+
 async function refrescarEnBackground() {
   const rol     = USER.rol;
   const empresa = (ROLES_ADMIN.includes(rol) || ROLES_ADMIN2.includes(rol)) ? '' : (USER.empresa || '');
@@ -3132,7 +3137,7 @@ function abrirAt() {
   document.getElementById('trabRes').style.display='none';
   // Reset campos
   ['at_dni','at_nom','at_fip','at_ftp','at_fundo','at_cargo','at_ruta','at_cod','at_fac','at_cel','at_fid','at_ftd','at_dias','at_resp','at_obs'].forEach(id=>sv(id,''));
-  sv('at_sex',''); sv('at_emp','RAPEL'); sv('at_doc',''); sv('at_est','PENDIENTE');
+  sv('at_sex',''); sv('at_emp','RAPEL'); sv('at_doc',''); sv('at_est','FINALIZADO');
   sv('at_fec',hoy()); sv('at_hi',new Date().toTimeString().substring(0,5)); sv('at_ht','');
   iniciarReloj();
   // Auto-rellenar fundo actual del supervisor
@@ -3155,7 +3160,7 @@ function editarAt(nro) {
   sv('at_doc',a.detalle_documento||''); sv('at_fid',a.fecha_inicio_doc||'');
   sv('at_ftd',a.fecha_termino_doc||''); sv('at_dias',a.dias_transcurridos||'');
   sv('at_resp',a.responsable_recepcion||''); sv('at_obs',a.observaciones||'');
-  sv('at_est',a.estado||'PENDIENTE');
+  sv('at_est',a.estado||'FINALIZADO');
   const r=document.getElementById('trabRes');r.style.display='block';r.textContent='✅ '+a.nombre+' · '+a.empresa;
   abrir('mAt');
 }
@@ -3512,19 +3517,21 @@ async function generarCorreo() {
   const fi=v('cFI'), ff=v('cFF');
   if(!fi||!ff){mostrarToast('❌ Selecciona el rango de fechas','error');return;}
   if(fi>ff){mostrarToast('❌ La fecha inicio no puede ser mayor a la fecha fin','error');return;}
-  const para = getParaFinal();
-  if(!para){mostrarToast('❌ Agrega al menos un destinatario en Para','error');return;}
   document.getElementById('correoPreview').innerHTML='<div class="empty">⏳ Generando reporte...</div>';
   try{
     let datos, resumen, total;
-    const empFiltro = v('cEmp');
+    const empFiltro   = v('cEmp');
+    const respFiltro  = getRespSeleccionados(); // [] = todos
 
     // ── Usar caché si está disponible (evita llamada a la API) ──
     const historial = CACHE.historialAtenciones || CACHE.atenciones || [];
     if (historial.length > 0) {
       datos = historial.filter(a => {
         const f = a.fecha_atencion || '';
-        return f >= fi && f <= ff && (!empFiltro || a.empresa === empFiltro);
+        const matchFecha = f >= fi && f <= ff;
+        const matchEmp   = !empFiltro || empFiltro === 'AMBAS' || a.empresa === empFiltro;
+        const matchResp  = !respFiltro.length || respFiltro.includes(String(a.responsable_recepcion||'').trim());
+        return matchFecha && matchEmp && matchResp;
       });
       if (!datos.length) {
         document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
@@ -3534,7 +3541,7 @@ async function generarCorreo() {
       total   = datos.length;
     } else {
       // Sin caché: llamar a la API
-      const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:empFiltro,rol:USER.rol,usuario:USER.nombre||USER.usuario,nombre:USER.nombre||USER.usuario});
+      const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:empFiltro,responsables:respFiltro.join(','),rol:USER.rol,usuario:USER.nombre||USER.usuario,nombre:USER.nombre||USER.usuario});
       if(!d.success){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ '+d.error+'</div>';return;}
       if(!d.data||!d.data.length){
         document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
@@ -3910,57 +3917,33 @@ function agregarResp() {
 // Destinatarios seleccionados
 let paraList=[], ccList=[];
 
-function agregarPara() {
-  const correos = [
-    'dreyna@verfrut.pe','apacherre@verfrut.pe','tvera@verfrut.pe',
-    'smiranda@verfrut.pe','amarrufo@verfrut.pe','jmorales@verfrut.pe'
-  ];
-  const sel = document.getElementById('cPara');
-  if(sel.options.length <= 1) {
-    correos.forEach(c => { const o=new Option(c,c); sel.appendChild(o); });
+function agregarRespCorreo() {
+  const inp = document.getElementById('cRespNuevo');
+  const val = (inp.value || '').trim().toUpperCase();
+  if (!val) return;
+  const sel = document.getElementById('cRespMulti');
+  for (let i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].value === val) { inp.value = ''; return; } // ya existe
   }
-  const v2 = sel.value;
-  if (v2 && !paraList.includes(v2)) { paraList.push(v2); renderPara(); }
+  const opt = new Option(val, val);
+  sel.appendChild(opt);
+  opt.selected = true;
+  inp.value = '';
 }
 
-function agregarCC() {
-  const sel = v('cCC');
-  if (sel && !ccList.includes(sel)) {
-    ccList.push(sel);
-    renderCC();
+function getRespSeleccionados() {
+  const sel = document.getElementById('cRespMulti');
+  if (!sel) return [];
+  const selected = [];
+  for (let i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].selected) selected.push(sel.options[i].value);
   }
+  return selected;
 }
 
-function renderPara() {
-  document.getElementById('paraSeleccionados').innerHTML = paraList.map((e,i)=>
-    `<span style="background:#dbeafe;color:#1e40af;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer" onclick="quitarPara(${i})">📧 ${e} ✕</span>`
-  ).join('');
-}
-
-function renderCC() {
-  document.getElementById('ccSeleccionados').innerHTML = ccList.map((e,i)=>
-    `<span style="background:#f0fdf4;color:#166534;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer" onclick="quitarCC(${i})">📧 ${e} ✕</span>`
-  ).join('');
-}
-
-function quitarPara(i) { paraList.splice(i,1); renderPara(); }
-function quitarCC(i)   { ccList.splice(i,1);   renderCC(); }
-
-function getParaFinal() {
-  const sel = document.getElementById('cPara');
-  const extra = v('cParaNuevo').trim();
-  const todos = [...paraList];
-  if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim()) todos.push(e.trim()); });
-  return todos.join('; ');
-}
-
-function getCCFinal() {
-  const extra = v('cCCNuevo').trim();
-  const CC_FIJOS = ['jtimoteo@verfrut.pe','jchavez@verfrut.pe','ovilela@verfrut.pe'];
-  const todos = [...CC_FIJOS, ...ccList];
-  if (extra) extra.split(/[;,]/).forEach(e=>{ if(e.trim() && !todos.includes(e.trim())) todos.push(e.trim()); });
-  return todos.join('; ');
-}
+// Compatibilidad: funciones antiguas de Para/CC que ya no se usan
+function getParaFinal() { return 'reporte@verfrut.pe'; }
+function getCCFinal()   { return ''; }
 
 function ir(id,btn){
   // Cerrar sidebar en móvil

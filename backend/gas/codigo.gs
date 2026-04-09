@@ -84,6 +84,7 @@ function doGet(e) {
     else if (action === 'consultaDNI')          result = consultaDNI(p);
     else if (action === 'getPreload')           result = getPreload(p);
     else if (action === 'getSupervisoresEval') result = getSupervisoresEval(p);
+    else if (action === 'getReporteCorreo')    result = getReporteCorreo(p);
     else result = { success: false, error: 'Acción GET no reconocida: ' + action };
   } catch (err) {
     result = { success: false, error: err.message };
@@ -1402,6 +1403,73 @@ function buscarTrabajador(params) {
   });
 
   return { success: true, data: rows };
+}
+
+// ════════════════════════════════════════════════════════════
+// REPORTE CORREO — getReporteCorreo
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Busca atenciones en 'BB. DE REGISTROS {año}' primero,
+ * luego en 'BB. DE REGISTROS' como fallback.
+ * Params: fecha_inicio, fecha_fin, empresa, responsables (CSV)
+ */
+function getReporteCorreo(p) {
+  var fi          = p.fecha_inicio || '';
+  var ff          = p.fecha_fin    || '';
+  var empresa     = p.empresa      || '';
+  var respFiltro  = p.responsables
+    ? p.responsables.split(',').map(function(r){ return r.trim(); }).filter(function(r){ return r; })
+    : [];
+
+  var ss   = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var anio = new Date().getFullYear();
+  var sh   = ss.getSheetByName(SHEET_AT_BASE + ' ' + anio);
+  if (!sh) sh = ss.getSheetByName(SHEET_AT_BASE); // fallback
+  if (!sh) return { success: false, error: 'Hoja de registros no encontrada' };
+
+  Logger.log('[getReporteCorreo] Leyendo hoja: ' + sh.getName());
+
+  var data = sh.getDataRange().getValues();
+  if (data.length < 2) return { success: true, data: [], resumen: [], total: 0 };
+
+  var headers = data[0];
+  var rows    = [];
+
+  for (var i = 1; i < data.length; i++) {
+    var row = {};
+    headers.forEach(function(h, j) { row[h] = data[i][j]; });
+
+    var fa = String(row.fecha_atencion || '');
+    if (fi && fa < fi) continue;
+    if (ff && fa > ff) continue;
+    if (empresa && empresa !== 'AMBAS' && row.empresa !== empresa) continue;
+    if (respFiltro.length > 0) {
+      var resp = String(row.responsable_recepcion || '').trim();
+      if (respFiltro.indexOf(resp) === -1) continue;
+    }
+
+    rows.push(row);
+  }
+
+  // Calcular resumen agrupado
+  var resumenMap = {};
+  rows.forEach(function(r) {
+    var k = (r.empresa||'') + '|' + (r.detalle_documento||'') + '|' + (r.responsable_recepcion||'');
+    if (!resumenMap[k]) {
+      resumenMap[k] = {
+        empresa:     r.empresa              || '',
+        tipo:        r.detalle_documento    || '—',
+        responsable: r.responsable_recepcion|| '—',
+        cantidad:    0
+      };
+    }
+    resumenMap[k].cantidad++;
+  });
+  var resumen = [];
+  for (var k in resumenMap) { if (resumenMap.hasOwnProperty(k)) resumen.push(resumenMap[k]); }
+
+  return { success: true, data: rows, resumen: resumen, total: rows.length };
 }
 
 // ════════════════════════════════════════════════════════════
