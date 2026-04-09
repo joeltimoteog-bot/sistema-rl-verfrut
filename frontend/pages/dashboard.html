@@ -321,7 +321,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
               <option>ELIZABETH DIOSES</option>
             </select>
             <div style="margin-top:6px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <span style="font-size:11px;color:#64748b">Ctrl+clic para seleccionar varios · clic sin Ctrl para deseleccionar</span>
+              <span style="font-size:11px;color:#64748b">💡 <strong>Mantén Ctrl</strong> para seleccionar varios · clic sin Ctrl para deseleccionar</span>
               <input type="text" id="cRespNuevo" placeholder="Agregar responsable nuevo..." style="flex:1;min-width:180px;padding:7px 12px;border:1.5px dashed #cbd5e1;border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
               <button type="button" onclick="agregarRespCorreo()" style="padding:7px 14px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer;white-space:nowrap">+ Agregar nuevo responsable</button>
             </div>
@@ -3555,6 +3555,7 @@ async function generarCorreo() {
     const hora=new Date().getHours();
     const saludo=hora<12?'Buenos días':hora<19?'Buenas tardes':'Buenas noches';
     const fiF=fmtFLargo(fi), ffF=fmtFLargo(ff);
+    const para = getParaFinal();
     const cc = getCCFinal();
     const asunto = `Atenciones Registradas - ${fiF} al ${ffF}`;
 

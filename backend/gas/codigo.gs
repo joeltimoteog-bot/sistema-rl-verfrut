@@ -830,9 +830,20 @@ function getAtenciones(p) {
     return { success: true, data: acum };
   }
 
-  var sh = p.anio ? getSheetAnio(p.anio) : getSheetAnio(null);
-  if (!sh) return { success: false, error: 'Hoja de atenciones no encontrada' };
-  return { success: true, data: _leerAtenciones(sh, filtros) };
+  if (p.anio) {
+    var sh = getSheetAnio(p.anio);
+    if (!sh) return { success: false, error: 'Hoja de atenciones no encontrada' };
+    return { success: true, data: _leerAtenciones(sh, filtros) };
+  }
+  // Sin año específico → leer TODAS las hojas de año + hoja base legacy
+  var ss3    = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+  var todasD = _todasLasHojas();
+  var shBaseD = ss3.getSheetByName(SHEET_AT_BASE);
+  if (todasD.length === 0 && !shBaseD) return { success: false, error: 'Hoja de atenciones no encontrada' };
+  var acumD = [];
+  todasD.forEach(function (x) { acumD = acumD.concat(_leerAtenciones(x.sh, filtros)); });
+  if (shBaseD) acumD = acumD.concat(_leerAtenciones(shBaseD, filtros));
+  return { success: true, data: acumD };
 }
 
 /**
@@ -960,10 +971,22 @@ function updateAtencion(params) {
 function getEstadisticas(p) {
   var esAdmin = ROLES_ADMIN_AT.indexOf((p.rol || '').toLowerCase()) !== -1;
   var filtros = { empresa: p.empresa, esAdmin: esAdmin, usuario: p.usuario, nombre: p.nombre };
-  var sh = p.anio ? getSheetAnio(p.anio) : getSheetAnio(null);
-  if (!sh) return { success: false, error: 'Hoja de atenciones no encontrada' };
 
-  var ats  = _leerAtenciones(sh, filtros);
+  var ats = [];
+  if (p.anio) {
+    // Año específico solicitado
+    var sh = getSheetAnio(p.anio);
+    if (!sh) return { success: false, error: 'Hoja de atenciones no encontrada' };
+    ats = _leerAtenciones(sh, filtros);
+  } else {
+    // Sin año → leer TODAS las hojas (2024, 2025, 2026...) + hoja base legacy
+    var ss2    = SpreadsheetApp.openById(CONFIG.SHEET_ID);
+    var todas  = _todasLasHojas();
+    var shBase = ss2.getSheetByName(SHEET_AT_BASE);
+    if (todas.length === 0 && !shBase) return { success: false, error: 'Hoja de atenciones no encontrada' };
+    todas.forEach(function (x) { ats = ats.concat(_leerAtenciones(x.sh, filtros)); });
+    if (shBase) ats = ats.concat(_leerAtenciones(shBase, filtros));
+  }
   var hoy  = _hoyStr();
   var mesS = hoy.substring(0, 7);
 
