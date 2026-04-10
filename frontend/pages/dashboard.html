@@ -810,7 +810,6 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <!-- Botones acción -->
     <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
       <button type="button" onclick="imprimirInforme()" style="padding:9px 18px;background:#0b1e45;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>
-      <button type="button" onclick="enviarInformeVisita(window._verInformeIdx)" style="padding:9px 18px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">📧 Enviar por Correo</button>
       <button type="button" onclick="cerrar('mVerInforme');editarVisita(window._verInformeIdx)" style="padding:9px 18px;background:#d97706;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✏️ Editar</button>
       <button type="button" onclick="cerrar('mVerInforme')" style="padding:9px 16px;background:#f1f5f9;border:none;border-radius:8px;font-size:13px;cursor:pointer">✕ Cerrar</button>
     </div>
@@ -1477,15 +1476,25 @@ function renderEstadisticasAdmin(data) {
 async function cargarVisitas() {
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   if (CACHE.visitas && CACHE.visitas.length > 0) {
+    const empF  = (document.getElementById('vFiltroEmp')?.value  || '').trim();
+    const mesF  = (document.getElementById('vFiltroMes')?.value  || '').trim();
+    const supF  = (document.getElementById('vFiltroSup')?.value  || '').toLowerCase().trim();
     const miLogin  = (USER.usuario||'').toLowerCase().trim();
     const miPrimer = (USER.nombre||USER.usuario).toLowerCase().trim().split(' ')[0];
-    const lista = esAdmin ? CACHE.visitas : CACHE.visitas.filter(v => {
+    let lista = esAdmin ? CACHE.visitas : CACHE.visitas.filter(v => {
       const sup = String(v.supervisor||'').toLowerCase().trim();
       const reg = String(v.registrado_por||'').toLowerCase().trim();
-      // sup puede ser login ("jtimoteo") o nombre; reg puede ser login o nombre completo
       return sup === miLogin || sup.includes(miPrimer) ||
              reg === miLogin || reg.includes(miPrimer);
     });
+    if (empF) lista = lista.filter(v => v.empresa === empF);
+    if (mesF) lista = lista.filter(v => {
+      const f = v.fecha_reg || v.fecha || '';
+      if (!f) return false;
+      const m = new Date(f).getMonth() + 1;
+      return String(m) === mesF;
+    });
+    if (supF) lista = lista.filter(v => String(v.supervisor||'').toLowerCase().includes(supF));
     renderVisitas(lista);
     return;
   }
@@ -1550,7 +1559,6 @@ function renderVisitas(data) {
         String(v.supervisor||'').toLowerCase().includes(miNombreR.split(' ')[0]) ||
         String(v.registrado_por||'').toLowerCase().includes(miNombreR.split(' ')[0]);
       const btnVer    = `<button onclick="verInformeGuardado(${i})" style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📄 Ver</button>`;
-      const btnEnviar = `<button onclick="enviarInformeVisita(${i})" style="background:#16a34a;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📧 Enviar</button>`;
       const btnEditar = puedeEditar ? `<button onclick="editarVisita(${i})" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button>` : '';
       const escT = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const supCol = esAdmin ? `<td>${escT(v.supervisor||'—')}</td>` : '';
@@ -1562,7 +1570,7 @@ function renderVisitas(data) {
         <td>${escT(v.sector||v.fundo||'—')}</td>
         <td>${escT(v.semana||'—')}</td>
         <td><span style="font-size:10px;font-weight:700;color:${colorEstado}">${estado}</span></td>
-        <td style="display:flex;gap:4px;flex-wrap:wrap">${btnVer}${btnEnviar}${btnEditar}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">${btnVer}${btnEditar}</td>
       </tr>`;
     }).join('');
   }, 0);
@@ -1920,7 +1928,7 @@ function verInformeGuardado(idx) {
 const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 
 // Precargar logo como base64 para usar en documentos generados
-fetch('../images/images.jpg')
+fetch('https://joeltimoteog-bot.github.io/sistema-rl-verfrut/frontend/images/images.jpg')
   .then(r => r.blob())
   .then(blob => {
     const reader = new FileReader();
@@ -3376,9 +3384,27 @@ async function buscarTrab() {
 let dniTO;
 async function buscarDni(dni) {
   clearTimeout(dniTO);
-  document.getElementById('trabRes').style.display='none';
-  if(dni.length<7)return;
-  dniTO=setTimeout(()=>buscarDniBtn(),500);
+  const r = document.getElementById('trabRes');
+  r.style.display = 'none';
+  if (dni.length < 7) return;
+  // 1. Buscar en atenciones locales (sin llamar API)
+  const cached = (atTodas || []).find(a => String(a.dni||'').trim() === dni.trim());
+  if (cached) {
+    sv('at_nom', cached.nombre || '');
+    sv('at_emp', cached.empresa || USER.empresa || 'RAPEL');
+    sv('at_fundo', cached.fundo || '');
+    if (cached.cargo)    sv('at_cargo', cached.cargo);
+    if (cached.sexo)     sv('at_sex',   cached.sexo);
+    if (cached.ruta)     sv('at_ruta',  cached.ruta);
+    if (cached.codigo)   sv('at_cod',   cached.codigo);
+    if (cached.celular)  sv('at_cel',   cached.celular);
+    r.style.display = 'block';
+    r.style.background = '#f0fdf4'; r.style.borderColor = '#bbf7d0';
+    r.textContent = '✅ ' + (cached.nombre||'') + ' · ' + (cached.empresa||'') + ' · ' + (cached.fundo||'') + ' (caché)';
+    return;
+  }
+  // 2. Si no está en caché, llamar API con debounce 400ms
+  dniTO = setTimeout(() => buscarDniBtn(), 400);
 }
 
 async function buscarDniBtn() {
