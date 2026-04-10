@@ -190,10 +190,10 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div style="font-size:42px;opacity:.5">🏛️</div>
       </div>
       <div class="sg">
-        <div class="sc"><div class="sc-ic ia">📅</div><div><div class="sc-n" id="sH">0</div><div class="sc-l">ATENCIONES HOY</div></div></div>
-        <div class="sc"><div class="sc-ic ir">📆</div><div><div class="sc-n" id="sM">0</div><div class="sc-l">ESTE MES</div></div></div>
-        <div class="sc"><div class="sc-ic iv">📊</div><div><div class="sc-n" id="sA">0</div><div class="sc-l">TOTAL AÑO</div></div></div>
-        <div class="sc"><div class="sc-ic in">⏳</div><div><div class="sc-n" id="sP">0</div><div class="sc-l">PENDIENTES</div></div></div>
+        <div class="sc"><div class="sc-ic ia">📅</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sH">0</div><span id="sH-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">ATENCIONES HOY</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sH-prog" style="height:100%;width:0%;background:#3b82f6;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
+        <div class="sc"><div class="sc-ic ir">📆</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sM">0</div><span id="sM-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">ESTE MES</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sM-prog" style="height:100%;width:0%;background:#ef4444;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
+        <div class="sc"><div class="sc-ic iv">📊</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sA">0</div><span id="sA-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">TOTAL AÑO</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sA-prog" style="height:100%;width:0%;background:#22c55e;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
+        <div class="sc"><div class="sc-ic in">⏳</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sP">0</div><span id="sP-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">PENDIENTES</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sP-prog" style="height:100%;width:0%;background:#f97316;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
       </div>
       <div style="background:#fff;border-radius:11px;border:1px solid var(--bd);padding:10px 16px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <span style="font-size:12px;font-weight:700;color:#0b1e45">📊 Filtrar:</span>
@@ -2907,62 +2907,51 @@ function cargarCacheLS() {
     return true;
   } catch(e) { return false; }
 }
-// ══════════════════ PRELOAD - CARGA INICIAL ══════════════════
+// ══════════════════ PRELOAD - CARGA INICIAL (paralela) ══════════════════
 async function preloadData() {
   const ind = document.getElementById('preloadIndicator');
   if(ind) ind.style.display='block';
-  try {
-    const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-    const empresa = esAdmin ? '' : (USER.empresa || '');
+  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  const empresa = esAdmin ? '' : (USER.empresa || '');
 
-    const d = await apiGet({
-      action:  'getPreload',
-      usuario: USER.usuario,
-      nombre:  USER.nombre || USER.usuario,
-      rol:     USER.rol,
-      empresa: empresa
-    });
+  // Lanzar los 4 módulos en paralelo — cada uno actualiza CACHE y UI al llegar
+  const pAtenciones = apiGet({action:'getAtenciones', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa})
+    .then(d => {
+      if(d.success && d.data) {
+        CACHE.atenciones = d.data;
+        CACHE._loaded    = true;
+        atTodas = d.data.filter(a => a.fecha_atencion === hoy());
+        cargarStats();
+      }
+    }).catch(e => console.error('[preload] atenciones:', e));
 
-    if (!d.success) {
-      if(ind) ind.style.display='none';
-      console.warn('Preload falló:', d.error);
-      cargarStats();
-      return;
-    }
+  const pVisitas = apiGet(Object.assign({action:'getVisitas', empresa, mes:''}, esAdmin ? {} : {supervisor: USER.nombre||USER.usuario}))
+    .then(d => { if(d.success && d.data) CACHE.visitas = d.data; })
+    .catch(e => console.error('[preload] visitas:', e));
 
-    // Guardar todo en CACHE
-    CACHE    = d.data;
-    CACHE_TS = Date.now();
-    // Usar _LOADED para distinguir "no cargado" de "cargado y vacío"
-    CACHE._loaded = true;
+  const pCasos = apiGet({action:'getCasos', empresa, nombre:USER.nombre||USER.usuario, usuario:USER.usuario, rol:USER.rol})
+    .then(d => { if(d.success && d.data) { CACHE.casos = d.data; casosData = d.data; } })
+    .catch(e => console.error('[preload] casos:', e));
 
-    // Persistir en localStorage para carga instantánea en próxima sesión
-    guardarCacheLS();
+  const pFusiones = apiGet({action:'getFusiones', usuario: esAdmin ? 'TODOS' : (USER.nombre||USER.email)})
+    .then(d => { if(d.success && d.data) { CACHE.fusiones = d.data; _fusionesData = d.data; } })
+    .catch(e => console.error('[preload] fusiones:', e));
 
-    // Aplicar stats al dashboard inmediatamente
-    cargarStats();
+  await Promise.all([pAtenciones, pVisitas, pCasos, pFusiones]);
 
-    if(ind) ind.style.display='none';
-    console.log('✅ Preload completo:', {
-      atenciones: (CACHE.atenciones||[]).length,
-      visitas:    (CACHE.visitas||[]).length,
-      casos:      (CACHE.casos||[]).length,
-      fusiones:   (CACHE.fusiones||[]).length,
-      estadisticasAdmin: CACHE.estadisticasAdmin ? '✅' : '❌ null'
-    });
+  CACHE_TS = Date.now();
+  CACHE._loaded = true;
+  guardarCacheLS();
+  if(ind) ind.style.display='none';
+  console.log('✅ Preload paralelo completo:', {
+    atenciones: (CACHE.atenciones||[]).length,
+    visitas:    (CACHE.visitas||[]).length,
+    casos:      (CACHE.casos||[]).length,
+    fusiones:   (CACHE.fusiones||[]).length
+  });
 
-    // Si estadísticas admin no vinieron en el preload → cargarlas por separado
-    if (esAdmin && !CACHE.estadisticasAdmin) {
-      setTimeout(() => cargarEstadisticasAdmin(), 500);
-    }
-
-  } catch(e) {
-    if(ind) ind.style.display='none';
-    console.error('preloadData error:', e);
-    // Mostrar aviso visible en el dashboard en vez de quedarse silencioso
-    const welcome = document.querySelector('#sec-dashboard .welcome p');
-    if(welcome) welcome.innerHTML = '⚠️ Error al conectar con el servidor. <a href="#" onclick="preloadData();return false;" style="color:#fbbf24;text-decoration:underline">Reintentar</a>';
-    cargarStats();
+  if(esAdmin && !CACHE.estadisticasAdmin) {
+    setTimeout(() => cargarEstadisticasAdmin(), 500);
   }
 }
 
@@ -3009,6 +2998,101 @@ async function refrescarEnBackground() {
   } catch(e){ console.error('refrescarEnBackground:', e); }
 }
 
+// ── Animación count-up 0→valor en 800ms con ease-out cúbico ──
+function countUp(id, target, duration) {
+  duration = duration || 800;
+  const el = document.getElementById(id);
+  if (!el) return;
+  const startVal = parseInt(el.textContent) || 0;
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min((now - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = Math.round(startVal + (target - startVal) * eased);
+    if (t < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Computa porMes desde raw atenciones (o usa CACHE.stats.porMes si existe) ──
+function _getPorMes() {
+  if (CACHE.stats && CACHE.stats.porMes) return CACHE.stats.porMes;
+  const porMes = {};
+  const toFS = fa => String(fa||'').substring(0, 10).replace(/T.*/, '');
+  (CACHE.historialAtenciones || CACHE.atenciones || []).forEach(a => {
+    const m = toFS(a.fecha_atencion).slice(0, 7);
+    if (m) porMes[m] = (porMes[m] || 0) + 1;
+  });
+  return porMes;
+}
+
+// ── Indicadores: flechas ↑↓ y barras de progreso en las 4 tarjetas ──
+function actualizarIndicadoresDash(stats) {
+  const porMes = _getPorMes();
+  const h = hoy(); // "2026-04-10"
+  const mesActual = h.slice(0, 7); // "2026-04"
+  const anioN = parseInt(mesActual.slice(0, 4));
+  const mesN  = parseInt(mesActual.slice(5, 7));
+
+  // Mes anterior
+  const dAnt  = new Date(anioN, mesN - 2, 1);
+  const mesAnt = dAnt.getFullYear() + '-' + String(dAnt.getMonth() + 1).padStart(2, '0');
+  const valMesAct = porMes[mesActual] || 0;
+  const valMesAnt = porMes[mesAnt]    || 0;
+
+  // Promedio últimos 3 meses completos
+  let sum3 = 0;
+  for (let i = 1; i <= 3; i++) {
+    const d = new Date(anioN, mesN - 1 - i, 1);
+    sum3 += porMes[d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')] || 0;
+  }
+  const avg3 = sum3 / 3 || 1;
+
+  function setArr(id, cur, prev) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (cur > prev) { el.textContent = '↑'; el.style.color = '#16a34a'; }
+    else if (cur < prev) { el.textContent = '↓'; el.style.color = '#dc2626'; }
+    else { el.textContent = ''; }
+  }
+  function setProg(id, pct) {
+    const el = document.getElementById(id);
+    if (el) setTimeout(() => { el.style.width = Math.min(pct, 100) + '%'; }, 120);
+  }
+
+  // HOY — comparar vs promedio diario del mes anterior
+  const diasMesAnt = new Date(anioN, mesN - 1, 0).getDate();
+  const avgDiario  = valMesAnt / diasMesAnt || 0;
+  setArr('sH-arr', stats.hoy, avgDiario);
+  setProg('sH-prog', avgDiario > 0 ? (stats.hoy / avgDiario) * 100 : 0);
+
+  // ESTE MES — comparar vs mes anterior
+  setArr('sM-arr', valMesAct, valMesAnt);
+  setProg('sM-prog', (valMesAct / avg3) * 100);
+
+  // TOTAL AÑO — comparar vs año anterior
+  const anioActStr = String(anioN);
+  const anioAntStr = String(anioN - 1);
+  const sumAct = Object.entries(porMes).filter(([k]) => k.startsWith(anioActStr)).reduce((s,[,v]) => s + v, 0);
+  const sumAnt = Object.entries(porMes).filter(([k]) => k.startsWith(anioAntStr)).reduce((s,[,v]) => s + v, 0);
+  if (sumAnt > 0) { setArr('sA-arr', sumAct, sumAnt); setProg('sA-prog', (sumAct / sumAnt) * 100); }
+
+  // PENDIENTES — % de pendientes sobre total del mes (barra de riesgo, sin flecha)
+  const pctP = stats.mes > 0 ? (stats.pendientes / stats.mes) * 100 : 0;
+  setProg('sP-prog', pctP);
+  const progP = document.getElementById('sP-prog');
+  if (progP) setTimeout(() => { progP.style.background = pctP > 30 ? '#dc2626' : '#f97316'; }, 120);
+}
+
+// ── Aplica las 4 stats al DOM con count-up + indicadores ──
+function _aplicarStats(stats) {
+  countUp('sH', stats.hoy        ?? 0);
+  countUp('sM', stats.mes        ?? 0);
+  countUp('sA', stats.anio       ?? 0);
+  countUp('sP', stats.pendientes ?? 0);
+  actualizarIndicadoresDash(stats);
+}
+
 async function cargarStats() {
   try {
     const h   = hoy();
@@ -3029,7 +3113,7 @@ async function cargarStats() {
         anio:       ats.filter(a => toFS(a.fecha_atencion).startsWith(h.slice(0, 4))).length,
         pendientes: ats.filter(a => (a.estado||'').toUpperCase() === 'PENDIENTE').length
       };
-      set('sH', stats.hoy); set('sM', stats.mes); set('sA', stats.anio); set('sP', stats.pendientes);
+      _aplicarStats(stats);
       dibujar(stats);
       return;
     }
@@ -3037,7 +3121,7 @@ async function cargarStats() {
     const s = CACHE.stats;
     if (s) {
       // BUG 2a: recalcular hoy desde atenciones si hay alguna disponible
-      set('sH', s.hoy); set('sM', s.mes); set('sA', s.anio); set('sP', s.pendientes);
+      _aplicarStats(s);
       dibujar(s);
       return;
     }
@@ -3045,7 +3129,7 @@ async function cargarStats() {
     const empresa = esAdmin ? '' : (USER.empresa || '');
     const d = await apiGet({action:'getEstadisticas', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
     if (!d.success) { console.error('getEstadisticas error:', d.error); return; }
-    set('sH', d.data.hoy); set('sM', d.data.mes); set('sA', d.data.anio); set('sP', d.data.pendientes);
+    _aplicarStats(d.data);
     dibujar(d.data);
   } catch(e){ console.error('cargarStats excepción:', e); }
 }
