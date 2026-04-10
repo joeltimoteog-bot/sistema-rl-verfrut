@@ -3589,8 +3589,8 @@ async function generarCorreo() {
     const historial = CACHE.historialAtenciones || CACHE.atenciones || [];
     console.log('[reporte] Caché disponible:', historial.length, 'registros');
 
-    let usoCacheFallido = false;
     if (historial.length > 0) {
+      // Filtrar localmente — sin llamar a la API
       const candidatos = historial.filter(a => {
         const fNorm = (a.fecha_atencion instanceof Date)
           ? a.fecha_atencion.toISOString().substring(0, 10)
@@ -3600,24 +3600,21 @@ async function generarCorreo() {
         const matchResp  = !respFiltro.length || respFiltro.includes(String(a.responsable_recepcion||'').trim());
         return matchFecha && matchEmp && matchResp;
       });
-      console.log('[reporte] Registros encontrados en caché:', candidatos.length);
-      if (candidatos.length > 0) {
-        datos   = candidatos;
-        resumen = _calcularResumenCorreo(datos);
-        total   = datos.length;
-      } else {
-        // Caché existe pero no cubre el rango → intentar API
-        usoCacheFallido = true;
-        console.log('[reporte] Sin registros en caché para el rango, consultando API...');
+      console.log('[reporte] Registros en caché para el rango:', candidatos.length);
+      if (!candidatos.length) {
+        document.getElementById('correoPreview').innerHTML =
+          '<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
+        return;
       }
-    }
-
-    if (!historial.length || usoCacheFallido) {
-      // Llamar a la API con console.log de la petición y respuesta
+      datos   = candidatos;
+      resumen = _calcularResumenCorreo(datos);
+      total   = datos.length;
+    } else {
+      // Caché vacío → llamar API
       const params = {action:'getReporteCorreo', fecha_inicio:fi, fecha_fin:ff,
         empresa:empFiltro, responsables:respFiltro.join(','),
         rol:USER.rol, usuario:USER.nombre||USER.usuario, nombre:USER.nombre||USER.usuario};
-      console.log('[reporte] Llamando API con params:', JSON.stringify(params));
+      console.log('[reporte] Caché vacío — llamando API con params:', JSON.stringify(params));
       const d = await apiGet(params);
       console.log('[reporte] Respuesta API — success:', d.success,
         '| total:', d.total, '| registros:', d.data ? d.data.length : 0);
@@ -4657,7 +4654,7 @@ function generarHTMLInforme(d) {
     ? 'SOCIEDAD EXPORTADORA VERFRUT S.A.C'
     : 'SOCIEDAD AGRICOLA RAPEL S.A.C / SOCIEDAD EXPORTADORA VERFRUT S.A.C';
 
-  // Cargo dinámico según supervisor
+  // Cargo del supervisor que emite el informe (campo DE)
   const _supLower = (d.sup||'').toLowerCase();
   const _ASISTENTES = ['mechato','avendaño','siancas','miranda'];
   const cargoSup = _ASISTENTES.some(k => _supLower.includes(k))
@@ -4667,6 +4664,14 @@ function generarHTMLInforme(d) {
           .find(s => _supLower.includes(s.nombre.split(' ')[0].toLowerCase()));
         return entry ? entry.cargo : 'Supervisor de Gestión Humana';
       })();
+
+  // Cargo del firmante (usuario logueado) según su rol
+  const _rolUser = (USER.rol||'').toLowerCase();
+  const cargoFirmante = _rolUser.includes('administrador') || _rolUser.includes('coordinador')
+    ? 'Coordinador de Relaciones Laborales'
+    : _rolUser.includes('jefa') || _rolUser.includes('jefe')
+    ? 'Jefe de Relaciones Laborales'
+    : cargoSup; // supervisor / asistente → mismo cargo que DE
 
   return `
     <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:10px">
@@ -4723,8 +4728,8 @@ function generarHTMLInforme(d) {
     <p style="margin:4px 0">Atentamente,</p>
     <br><br>
     <p style="margin:4px 0">_________________________________</p>
-    <p style="margin:4px 0"><b>${d.sup}</b></p>
-    <p style="margin:4px 0">${cargoSup}</p>
+    <p style="margin:4px 0"><b>${USER.nombre||d.sup}</b></p>
+    <p style="margin:4px 0">${cargoFirmante}</p>
     <p style="margin:4px 0">${empresaNombre}</p>
   `;
 }
