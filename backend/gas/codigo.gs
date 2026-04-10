@@ -394,9 +394,11 @@ function consultaDNI(p) {
     const ws = getSheetAnio(p.anio);
     if (ws) hojas.push(ws);
   } else {
-    // Por defecto: año actual
-    const ws = getSheetAnio(null);
-    if (ws) hojas.push(ws);
+    // Por defecto: año actual + hoja base (combinar resultados)
+    const wsAnio = ss.getSheetByName('BB. DE REGISTROS ' + anioActual);
+    if (wsAnio) hojas.push(wsAnio);
+    const wsBase = ss.getSheetByName('BB. DE REGISTROS');
+    if (wsBase) hojas.push(wsBase);
   }
 
   let lista = [], trabajador = null;
@@ -895,10 +897,8 @@ function getVisitas(p) {
     const ws = ss.getSheetByName('Visitas_Campo');
     if (!ws) return { success: true, data: [] };
 
-    // Leer max 500 filas recientes
-    const rawRows = p.historial
-      ? ws.getDataRange().getValues().slice(1)
-      : getRowsCurrentYear(ws, 500, 1);
+    // Leer todas las filas (getRowsCurrentYear filtraba por año y dejaba fuera registros válidos)
+    const rawRows = ws.getDataRange().getValues().slice(1);
     if (!rawRows.length) return { success: true, data: [] };
     const rows = [['header'], ...rawRows]; // compatibilidad con slice(1) abajo
 
@@ -1313,8 +1313,8 @@ function getEstadisticasAdmin(p) {
     var filtroMes   = p.mes ? parseInt(p.mes) : 0;
 
     // ── ATENCIONES: r[0]=nro r[1]=fecha r[11]=empresa r[18]=supervisor r[25]=estado ──
-    var wsAt    = ss.getSheetByName('BB. DE REGISTROS');
-    var rawAt   = wsAt ? getRowsCurrentYear(wsAt, 2000, 1) : [];
+    var wsAt    = ss.getSheetByName('BB. DE REGISTROS ' + anioActual) || ss.getSheetByName('BB. DE REGISTROS');
+    var rawAt   = wsAt ? wsAt.getDataRange().getValues().slice(1) : [];
     var atenciones = [];
     for (var i = 0; i < rawAt.length; i++) {
       var r = rawAt[i];

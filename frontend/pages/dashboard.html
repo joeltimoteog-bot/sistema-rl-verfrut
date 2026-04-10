@@ -158,7 +158,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <button class="ni" id="navRes" style="display:none" onclick="location.href='resumen.html'"><span class="ic">📈</span>Resumen General</button>
     <button class="ni" id="navCorreo" onclick="ir('correo',this)"><span class="ic">📧</span>Enviar Reporte</button>
     <button class="ni" id="navVisitas" onclick="ir('visitas',this)"><span class="ic">🏕️</span>Visitas de Campo</button>
-    <button class="ni" id="navCasos" onclick="ir('casos',this)"><span class="ic">⚖️</span>Registro de Casos</button>
+    <button class="ni" id="navCasos" onclick="ir('casos',this)" style="position:relative"><span class="ic">⚖️</span>Registro de Casos<span id="badgeCasos" style="display:none;background:#dc2626;color:#fff;border-radius:10px;font-size:10px;font-weight:700;min-width:17px;height:17px;line-height:17px;text-align:center;padding:0 4px;margin-left:auto;flex-shrink:0"></span></button>
     <button class="ni" id="navFusiones" onclick="ir('fusiones',this)"><span class="ic">🚌</span>Fusiones de Buses</button>
     <button class="ni" id="navEstadisticas" style="display:none" onclick="location.href='estadisticas.html'"><span class="ic">📊</span>Estadísticas Admin</button>
     <button class="ni" id="navEval360" style="display:none" onclick="location.href='evaluacion360.html'"><span class="ic">🔄</span>Evaluación 360°</button>
@@ -2626,6 +2626,37 @@ async function guardarCaso() {
   }
 }
 
+// ── Notificaciones: casos vencidos o por vencer en ≤2 días ──
+function verificarCasosPorVencer() {
+  const casos = CACHE.casos || [];
+  if (!casos.length) return;
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const en2dias = new Date(hoy); en2dias.setDate(en2dias.getDate() + 2);
+
+  const alertas = casos.filter(c => {
+    const estado = String(c.estado_caso || c.estado || '').toUpperCase();
+    if (['RESUELTO', 'CONCLUIDO', 'CERRADO'].some(s => estado.includes(s))) return false;
+    if (!c.fecha_limite) return false;
+    const lim = new Date(c.fecha_limite + 'T00:00:00');
+    return lim <= en2dias;
+  });
+
+  const badge = document.getElementById('badgeCasos');
+  if (badge) {
+    if (alertas.length) { badge.textContent = alertas.length; badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
+  }
+
+  if (alertas.length) {
+    const vencidos  = alertas.filter(c => new Date(c.fecha_limite + 'T00:00:00') < hoy).length;
+    const porVencer = alertas.length - vencidos;
+    let msg = '⚠️ Casos: ';
+    if (vencidos)  msg += vencidos  + ' vencido' + (vencidos  > 1 ? 's' : '');
+    if (porVencer) msg += (vencidos ? ', ' : '') + porVencer + ' por vencer (≤2 días)';
+    mostrarToast(msg, 'error');
+  }
+}
+
 async function cargarCasos() {
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   const empresa = document.getElementById('cFiltroEmp')?.value || '';
@@ -2930,7 +2961,7 @@ async function preloadData() {
     .catch(e => console.error('[preload] visitas:', e));
 
   const pCasos = apiGet({action:'getCasos', empresa, nombre:USER.nombre||USER.usuario, usuario:USER.usuario, rol:USER.rol})
-    .then(d => { if(d.success && d.data) { CACHE.casos = d.data; casosData = d.data; } })
+    .then(d => { if(d.success && d.data) { CACHE.casos = d.data; casosData = d.data; verificarCasosPorVencer(); } })
     .catch(e => console.error('[preload] casos:', e));
 
   const pFusiones = apiGet({action:'getFusiones', usuario: esAdmin ? 'TODOS' : (USER.nombre||USER.email)})
