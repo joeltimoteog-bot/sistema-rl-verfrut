@@ -227,6 +227,23 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       </div>
     </div>
 
+    <!-- RAPEL vs VERFRUT + RANKING -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px">
+      <!-- MEJORA 2: gráfico empresas -->
+      <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+        <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">🏭 RAPEL vs VERFRUT — mes actual</div>
+        <div id="chartEmpresaWrap" style="position:relative;height:200px">
+          <canvas id="chartEmpresa" style="height:200px;max-height:200px"></canvas>
+          <div id="chartEmpresaLoad" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:#94a3b8">⏳ Cargando...</div>
+        </div>
+      </div>
+      <!-- MEJORA 1: ranking supervisores -->
+      <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+        <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:12px">🏆 Ranking Supervisores</div>
+        <div id="estRankingBody" style="max-height:200px;overflow-y:auto"></div>
+      </div>
+    </div>
+
     <!-- TABLA POR SUPERVISOR -->
     <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
       <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">👥 Detalle por Supervisor</div>
@@ -417,8 +434,9 @@ function _actualizarIndicadorCache() {
 
 function renderEstadisticasAdmin(data) {
   if (!data) return;
-  const { stats, porSupervisor, tendencia } = data;
-  if (!stats || !porSupervisor || !tendencia) { console.error('renderEstadisticasAdmin: datos incompletos', data); return; }
+  const { stats, porSupervisor } = data;
+  const tendencia = data.tendencia || (CACHE.estadisticasAdmin && CACHE.estadisticasAdmin.tendencia) || [];
+  if (!stats || !porSupervisor) { console.error('renderEstadisticasAdmin: datos incompletos', data); return; }
   const tb = document.getElementById('tbEstSupervisores');
 
   const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
@@ -483,9 +501,7 @@ function renderEstadisticasAdmin(data) {
 
   if(filas.length === 0) {
     tb.innerHTML = '<tr><td colspan="10" class="empty">Sin datos para mostrar</td></tr>';
-    return;
-  }
-
+  } else {
   tb.innerHTML = filas.map((s,i) => {
     const total = s.atenciones + s.visitas + s.casos + s.fusiones;
     const nombreSup = (s.nombre && !s.nombre.includes('GMT') && !s.nombre.match(/^\d{4}-/)) ? s.nombre : '— sin nombre —';
@@ -503,6 +519,89 @@ function renderEstadisticasAdmin(data) {
       <td style="text-align:center;font-weight:900;color:#16a34a;font-size:15px">${total}</td>
     </tr>`;
   }).join('');
+  } // end else
+
+  // ── MEJORA 1: Ranking supervisores ──
+  const rankEl = document.getElementById('estRankingBody');
+  if (rankEl && filas.length) {
+    const medallas = ['🥇','🥈','🥉'];
+    const maxTotal = Math.max(...filas.map(s => s.atenciones + s.visitas + s.casos));
+    rankEl.innerHTML = filas.map((s, i) => {
+      const total = s.atenciones + s.visitas + s.casos;
+      const pct   = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
+      const nombre = (s.nombre && !s.nombre.includes('GMT') && !s.nombre.match(/^\d{4}-/)) ? s.nombre : '—';
+      const medalla = i < 3 ? medallas[i] : `<span style="font-weight:700;color:#94a3b8;font-size:11px">#${i+1}</span>`;
+      return `<div style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <span style="min-width:22px;text-align:center">${medalla}</span>
+          <span style="font-weight:600;color:#0b1e45;font-size:12px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${nombre}">${nombre}</span>
+          <span style="font-size:11px;color:#64748b">${s.atenciones} at · ${s.visitas} vis · ${s.casos} cas</span>
+          <span style="font-weight:800;color:#16a34a;font-size:13px;min-width:28px;text-align:right">${total}</span>
+        </div>
+        <div style="height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${i===0?'#f59e0b':i===1?'#94a3b8':i===2?'#c97c38':'#3b82f6'};border-radius:3px;transition:width .6s ease"></div>
+        </div>
+      </div>`;
+    }).join('');
+  } else if (rankEl) {
+    rankEl.innerHTML = '<div style="color:#94a3b8;font-size:12px;text-align:center;padding:20px 0">Sin datos de supervisores</div>';
+  }
+
+  // ── MEJORA 2: Gráfico RAPEL vs VERFRUT ──
+  _cargarChartEmpresa();
+}
+
+async function _cargarChartEmpresa() {
+  const ctxEmp = document.getElementById('chartEmpresa');
+  const loadEl = document.getElementById('chartEmpresaLoad');
+  if (!ctxEmp) return;
+
+  // Usar mes seleccionado en filtro, o mes actual si no hay filtro
+  const filtroMes = parseInt(document.getElementById('estFiltroMes')?.value || '0');
+  const filtroAnio = document.getElementById('estFiltroAnio')?.value || '';
+  const mesActual  = new Date().getMonth() + 1;
+  const anioActual = new Date().getFullYear();
+  const mes  = filtroMes  || mesActual;
+  const anio = filtroAnio || String(anioActual);
+
+  try {
+    const [dR, dV] = await Promise.all([
+      apiGet({ action:'getEstadisticasAdmin', empresa:'RAPEL',   mes, anio }),
+      apiGet({ action:'getEstadisticasAdmin', empresa:'VERFRUT', mes, anio })
+    ]);
+    if (loadEl) loadEl.style.display = 'none';
+
+    const sR = dR.success ? dR.data.stats : null;
+    const sV = dV.success ? dV.data.stats : null;
+
+    _destroyChart('empresa');
+    charts['empresa'] = new Chart(ctxEmp, {
+      type: 'bar',
+      data: {
+        labels: ['Atenciones', 'Visitas', 'Casos'],
+        datasets: [
+          {
+            label: 'RAPEL',
+            data: [ sR ? sR.atenciones.total : 0, sR ? sR.visitas.total : 0, sR ? sR.casos.total : 0 ],
+            backgroundColor: '#0b1e45', borderRadius: 6
+          },
+          {
+            label: 'VERFRUT',
+            data: [ sV ? sV.atenciones.total : 0, sV ? sV.visitas.total : 0, sV ? sV.casos.total : 0 ],
+            backgroundColor: '#3b82f6', borderRadius: 6
+          }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false, responsive: true,
+        plugins: { legend: { position:'bottom', labels:{ font:{size:10} } } },
+        scales:  { y: { beginAtZero:true, ticks:{ stepSize:1 } } }
+      }
+    });
+  } catch(e) {
+    if (loadEl) loadEl.textContent = '⚠️ Error al cargar empresas';
+    console.error('[chartEmpresa]', e);
+  }
 }
 
 function exportarEstadisticasAdmin() {
