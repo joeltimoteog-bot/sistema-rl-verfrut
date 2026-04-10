@@ -179,7 +179,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       <input type="text" id="globalSearch" placeholder="🔍 Buscar..." autocomplete="off"
         oninput="busquedaGlobal(this.value)"
         onblur="setTimeout(()=>{const p=document.getElementById('globalResults');if(p)p.style.display='none'},220)"
-        style="width:100%;padding:6px 11px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;outline:none;font-family:Barlow,sans-serif;color:#0f172a">
+        style="width:100%;padding:6px 11px;border:1.5px solid #cbd5e1;border-radius:8px;font-size:12px;outline:none;font-family:Barlow,sans-serif;color:#0f172a;background:#f8fafc">
       <div id="globalResults" style="display:none;position:absolute;top:calc(100%+4px);left:0;right:0;background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.13);z-index:200;max-height:320px;overflow-y:auto;font-size:12px"></div>
     </div>
     <div class="tb-r">
@@ -1351,9 +1351,9 @@ async function cargarEstadisticasAdmin() {
   // Debounce: evita múltiples renders al cambiar filtros rápido
   clearTimeout(_estTimer);
   await new Promise(r => { _estTimer = setTimeout(r, 200); });
-  if (!document.getElementById('sec-estadisticas')?.classList.contains('on')) return;
+  if (!document.getElementById('sec-estadisticas')?.classList.contains('on')) { console.log('[EST] abortado: sec-estadisticas no está activa'); return; }
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-  if (!esAdmin) return;
+  if (!esAdmin) { console.log('[EST] abortado: rol no admin →', USER.rol); return; }
 
   const empresa = (document.getElementById('estFiltroEmp')?.value || '').toUpperCase();
   const mes     = parseInt(document.getElementById('estFiltroMes')?.value || '0');
@@ -1366,6 +1366,7 @@ async function cargarEstadisticasAdmin() {
   // Si hay cache, filtrar directo en frontend sin llamar al backend
   if (CACHE.estadisticasAdmin && typeof CACHE.estadisticasAdmin === 'object') {
     const data = CACHE.estadisticasAdmin;
+    console.log('[EST] usando cache. stats:', !!data.stats, '| porSupervisor:', Object.keys(data.porSupervisor||{}).length, 'supervisores | tendencia:', !!data.tendencia);
     // Aplicar filtros al porSupervisor del cache
     let porSupFiltrado = Object.assign({}, data.porSupervisor);
     if (sup) {
@@ -1382,6 +1383,7 @@ async function cargarEstadisticasAdmin() {
 
   try {
     const d = await apiGet({ action:'getEstadisticasAdmin', empresa, mes: mes||'', supervisor: sup });
+    console.log('[EST] respuesta API success:', d.success, '| data.stats:', !!d.data?.stats, '| tendencia:', !!d.data?.tendencia, '| porSupervisor:', Object.keys(d.data?.porSupervisor||{}).length);
     if (!d.success) {
       if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ ' + (d.error||'Error al cargar') + '</td></tr>';
       return;
@@ -1394,9 +1396,12 @@ async function cargarEstadisticasAdmin() {
 }
 
 function renderEstadisticasAdmin(data) {
+  console.log('[RENDER-EST] llamado con data:', data ? 'ok' : 'null/undefined');
   if (!data) return;
-  const { stats, porSupervisor, tendencia } = data;
-  if (!stats || !porSupervisor || !tendencia) { console.error('renderEstadisticasAdmin: datos incompletos', data); return; }
+  const { stats, porSupervisor } = data;
+  const tendencia = data.tendencia || (CACHE.estadisticasAdmin && CACHE.estadisticasAdmin.tendencia) || [];
+  console.log('[RENDER-EST] stats:', !!stats, '| porSupervisor:', !!porSupervisor, Object.keys(porSupervisor||{}).length, 'entradas | tendencia:', tendencia.length, 'meses');
+  if (!stats || !porSupervisor) { console.error('[RENDER-EST] ❌ retorno por datos incompletos — stats:', !!stats, '| porSupervisor:', !!porSupervisor); return; }
   const tb = document.getElementById('tbEstSupervisores');
 
   // ── Cards globales ──
@@ -1464,15 +1469,15 @@ function renderEstadisticasAdmin(data) {
   }
 
   // ── Tabla por supervisor ──
-  if(!tb) return;
+  if(!tb) { console.error('[RENDER-EST] ❌ retorno: #tbEstSupervisores no existe en el DOM'); return; }
   const filas = Object.values(porSupervisor)
     .sort((a,b) => (b.atenciones+b.visitas+b.casos+b.fusiones) - (a.atenciones+a.visitas+a.casos+a.fusiones));
+  console.log('[RENDER-EST] filas de supervisores:', filas.length);
 
   if(filas.length === 0) {
     tb.innerHTML = '<tr><td colspan="10" class="empty">Sin datos para mostrar</td></tr>';
-    return;
-  }
-
+    console.log('[RENDER-EST] tabla vacía, continuando con ranking y chart');
+  } else {
   tb.innerHTML = filas.map((s,i) => {
     const total = s.atenciones + s.visitas + s.casos + s.fusiones;
     // Evitar mostrar fechas como nombre de supervisor
@@ -1491,9 +1496,12 @@ function renderEstadisticasAdmin(data) {
       <td style="text-align:center;font-weight:900;color:#16a34a;font-size:15px">${total}</td>
     </tr>`;
   }).join('');
+  } // end else filas.length > 0
 
   // ── MEJORA 1: Ranking supervisores ──
+  console.log('[RENDER-EST] ▶ iniciando ranking con', filas.length, 'supervisores');
   const rankEl = document.getElementById('estRankingBody');
+  console.log('[RENDER-EST] #estRankingBody encontrado:', !!rankEl);
   if (rankEl && filas.length) {
     const medallas = ['🥇','🥈','🥉'];
     const maxTotal = Math.max(...filas.map(s => s.atenciones + s.visitas + s.casos));
@@ -1517,7 +1525,9 @@ function renderEstadisticasAdmin(data) {
   }
 
   // ── MEJORA 2: Gráfico RAPEL vs VERFRUT (mes actual desde CACHE) ──
+  console.log('[RENDER-EST] ▶ iniciando gráfico empresa. CACHE.atenciones:', (CACHE.atenciones||[]).length, '| CACHE.visitas:', (CACHE.visitas||[]).length, '| CACHE.casos:', (CACHE.casos||[]).length);
   const ctxEmp = document.getElementById('chartEmpresa');
+  console.log('[RENDER-EST] #chartEmpresa encontrado:', !!ctxEmp);
   if (ctxEmp) {
     _destroyChart('empresa');
     const mesActual = new Date().getMonth() + 1;
@@ -4397,6 +4407,7 @@ let _globalTO;
 function busquedaGlobal(q) {
   clearTimeout(_globalTO);
   const panel = document.getElementById('globalResults');
+  console.log('[BUSQUEDA-GLOBAL] q="' + q + '" | panel encontrado:', !!panel, '| CACHE.atenciones:', (CACHE.atenciones||[]).length, '| CACHE.casos:', (CACHE.casos||[]).length, '| CACHE.visitas:', (CACHE.visitas||[]).length);
   if (!panel) return;
   if (q.length < 3) { panel.style.display = 'none'; return; }
   _globalTO = setTimeout(() => {
