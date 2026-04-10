@@ -3582,33 +3582,51 @@ async function generarCorreo() {
     const empFiltro   = v('cEmp');
     const respFiltro  = getRespSeleccionados(); // [] = todos
 
-    // ── Usar caché si está disponible (evita llamada a la API) ──
+    console.log('[reporte] Parámetros — fecha_inicio:', fi, '| fecha_fin:', ff,
+      '| empresa:', empFiltro || 'TODAS', '| responsables:', respFiltro.length ? respFiltro : 'todos');
+
+    // ── Intentar desde caché primero ──
     const historial = CACHE.historialAtenciones || CACHE.atenciones || [];
+    console.log('[reporte] Caché disponible:', historial.length, 'registros');
+
+    let usoCacheFallido = false;
     if (historial.length > 0) {
-      datos = historial.filter(a => {
-        const f = a.fecha_atencion || '';
+      const candidatos = historial.filter(a => {
+        const f = fmtF(a.fecha_atencion || ''); // normalizar a yyyy-MM-dd
         const matchFecha = f >= fi && f <= ff;
         const matchEmp   = !empFiltro || empFiltro === 'AMBAS' || a.empresa === empFiltro;
         const matchResp  = !respFiltro.length || respFiltro.includes(String(a.responsable_recepcion||'').trim());
         return matchFecha && matchEmp && matchResp;
       });
-      if (!datos.length) {
-        document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
-        return;
+      console.log('[reporte] Registros encontrados en caché:', candidatos.length);
+      if (candidatos.length > 0) {
+        datos   = candidatos;
+        resumen = _calcularResumenCorreo(datos);
+        total   = datos.length;
+      } else {
+        // Caché existe pero no cubre el rango → intentar API
+        usoCacheFallido = true;
+        console.log('[reporte] Sin registros en caché para el rango, consultando API...');
       }
-      resumen = _calcularResumenCorreo(datos);
-      total   = datos.length;
-    } else {
-      // Sin caché: llamar a la API
-      const d=await apiGet({action:'getReporteCorreo',fecha_inicio:fi,fecha_fin:ff,empresa:empFiltro,responsables:respFiltro.join(','),rol:USER.rol,usuario:USER.nombre||USER.usuario,nombre:USER.nombre||USER.usuario});
+    }
+
+    if (!historial.length || usoCacheFallido) {
+      // Llamar a la API con console.log de la petición y respuesta
+      const params = {action:'getReporteCorreo', fecha_inicio:fi, fecha_fin:ff,
+        empresa:empFiltro, responsables:respFiltro.join(','),
+        rol:USER.rol, usuario:USER.nombre||USER.usuario, nombre:USER.nombre||USER.usuario};
+      console.log('[reporte] Llamando API con params:', JSON.stringify(params));
+      const d = await apiGet(params);
+      console.log('[reporte] Respuesta API — success:', d.success,
+        '| total:', d.total, '| registros:', d.data ? d.data.length : 0);
       if(!d.success){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ '+d.error+'</div>';return;}
       if(!d.data||!d.data.length){
         document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
         return;
       }
       datos   = d.data;
-      resumen = d.resumen;
-      total   = d.total;
+      resumen = d.resumen || _calcularResumenCorreo(datos);
+      total   = d.total  || datos.length;
     }
 
     const hora=new Date().getHours();
