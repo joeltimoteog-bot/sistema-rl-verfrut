@@ -708,7 +708,13 @@ function getReporteCorreo(p) {
   });
 
   if (p.rol === 'supervisor') {
-    lista = lista.filter(a => String(a.supervisor).trim() === String(p.usuario).trim());
+    lista = lista.filter(a => {
+      const sup = String(a.supervisor || '').toLowerCase().trim();
+      const usr = String(p.usuario || '').toLowerCase().trim();
+      const nom = String(p.nombre  || '').toLowerCase().trim();
+      return sup.includes(usr) || sup.includes(nom) ||
+             usr.includes(sup) || nom.includes(sup);
+    });
   }
   if (p.empresa && p.empresa !== 'AMBAS') {
     lista = lista.filter(a => String(a.empresa).toUpperCase() === p.empresa);

@@ -3592,8 +3592,10 @@ async function generarCorreo() {
     let usoCacheFallido = false;
     if (historial.length > 0) {
       const candidatos = historial.filter(a => {
-        const f = fmtF(a.fecha_atencion || ''); // normalizar a yyyy-MM-dd
-        const matchFecha = f >= fi && f <= ff;
+        const fNorm = (a.fecha_atencion instanceof Date)
+          ? a.fecha_atencion.toISOString().substring(0, 10)
+          : String(a.fecha_atencion || '').substring(0, 10).replace(/T.*/, '');
+        const matchFecha = fNorm >= fi && fNorm <= ff;
         const matchEmp   = !empFiltro || empFiltro === 'AMBAS' || a.empresa === empFiltro;
         const matchResp  = !respFiltro.length || respFiltro.includes(String(a.responsable_recepcion||'').trim());
         return matchFecha && matchEmp && matchResp;
