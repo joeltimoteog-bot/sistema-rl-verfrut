@@ -175,6 +175,13 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   <div class="topbar">
     <button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
     <div class="tb-t" id="tbT">MI DASHBOARD</div>
+    <div style="position:relative;flex:1;max-width:280px;margin:0 14px" id="globalSearchWrap">
+      <input type="text" id="globalSearch" placeholder="🔍 Buscar..." autocomplete="off"
+        oninput="busquedaGlobal(this.value)"
+        onblur="setTimeout(()=>{const p=document.getElementById('globalResults');if(p)p.style.display='none'},220)"
+        style="width:100%;padding:6px 11px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:12px;outline:none;font-family:Barlow,sans-serif;color:#0f172a">
+      <div id="globalResults" style="display:none;position:absolute;top:calc(100%+4px);left:0;right:0;background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.13);z-index:200;max-height:320px;overflow-y:auto;font-size:12px"></div>
+    </div>
     <div class="tb-r">
       <span class="tb-f" id="tbF"></span>
       <span class="emp-b" id="tbE">--</span>
@@ -662,6 +669,20 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
           <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">🏢 Total general por módulo</div>
           <canvas id="chartModulos" style="height:220px;max-height:220px"></canvas>
+        </div>
+      </div>
+
+      <!-- RAPEL vs VERFRUT + RANKING (fila nueva) -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px">
+        <!-- MEJORA 2: gráfico empresas -->
+        <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+          <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">🏭 RAPEL vs VERFRUT — mes actual</div>
+          <canvas id="chartEmpresa" style="height:200px;max-height:200px"></canvas>
+        </div>
+        <!-- MEJORA 1: ranking supervisores (resumen compacto) -->
+        <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+          <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:12px">🏆 Ranking Supervisores</div>
+          <div id="estRankingBody" style="max-height:200px;overflow-y:auto"></div>
         </div>
       </div>
 
@@ -1470,6 +1491,61 @@ function renderEstadisticasAdmin(data) {
       <td style="text-align:center;font-weight:900;color:#16a34a;font-size:15px">${total}</td>
     </tr>`;
   }).join('');
+
+  // ── MEJORA 1: Ranking supervisores ──
+  const rankEl = document.getElementById('estRankingBody');
+  if (rankEl && filas.length) {
+    const medallas = ['🥇','🥈','🥉'];
+    const maxTotal = Math.max(...filas.map(s => s.atenciones + s.visitas + s.casos));
+    rankEl.innerHTML = filas.map((s, i) => {
+      const total = s.atenciones + s.visitas + s.casos;
+      const pct = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
+      const nombre = (s.nombre && !s.nombre.includes('GMT') && !s.nombre.match(/^\d{4}-/)) ? s.nombre : '—';
+      const medalla = i < 3 ? medallas[i] : `<span style="font-weight:700;color:#94a3b8;font-size:11px">#${i+1}</span>`;
+      return `<div style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <span style="min-width:22px;text-align:center">${medalla}</span>
+          <span style="font-weight:600;color:#0b1e45;font-size:12px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${nombre}">${nombre}</span>
+          <span style="font-size:11px;color:#64748b">${s.atenciones} at · ${s.visitas} vis · ${s.casos} cas</span>
+          <span style="font-weight:800;color:#16a34a;font-size:13px;min-width:28px;text-align:right">${total}</span>
+        </div>
+        <div style="height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:${i===0?'#f59e0b':i===1?'#94a3b8':i===2?'#c97c38':'#3b82f6'};border-radius:3px;transition:width .6s ease"></div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── MEJORA 2: Gráfico RAPEL vs VERFRUT (mes actual desde CACHE) ──
+  const ctxEmp = document.getElementById('chartEmpresa');
+  if (ctxEmp) {
+    _destroyChart('empresa');
+    const mesActual = new Date().getMonth() + 1;
+    const anioActual = new Date().getFullYear();
+    const _delMes = (arr, campo) => (arr||[]).filter(r => {
+      const f = new Date(String(r[campo]||'').substring(0,10));
+      return f.getMonth()+1 === mesActual && f.getFullYear() === anioActual;
+    });
+    const atMes  = _delMes(CACHE.atenciones, 'fecha_atencion');
+    const visMes = _delMes(CACHE.visitas,    'fecha_reg');
+    const casMes = _delMes(CACHE.casos,      'fecha_reporte');
+    const dat = (arr, emp) => arr.filter(r => String(r.empresa||'').toUpperCase() === emp).length;
+    charts['empresa'] = new Chart(ctxEmp, {
+      type: 'bar',
+      data: {
+        labels: ['Atenciones', 'Visitas', 'Casos'],
+        datasets: [
+          { label:'RAPEL',   data:[dat(atMes,'RAPEL'),  dat(visMes,'RAPEL'),  dat(casMes,'RAPEL')],  backgroundColor:'#0b1e45', borderRadius:6 },
+          { label:'VERFRUT', data:[dat(atMes,'VERFRUT'),dat(visMes,'VERFRUT'),dat(casMes,'VERFRUT')], backgroundColor:'#3b82f6', borderRadius:6 }
+        ]
+      },
+      options: {
+        maintainAspectRatio: false, responsive: true,
+        plugins: { legend: { position:'bottom', labels:{ font:{size:10} } } },
+        scales:  { y: { beginAtZero:true, ticks:{ stepSize:1 } } }
+      }
+    });
+  }
 
 }
 
@@ -4315,6 +4391,73 @@ function abrir(id){const el=document.getElementById(id);if(!el){console.warn('[a
 function cerrar(id){const el=document.getElementById(id);if(!el){console.warn('[cerrar] elemento no encontrado:',id);return;}el.classList.remove('on');}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
 window.addEventListener('beforeunload', () => { clearTimeout(dniTO); clearTimeout(_estTimer); });
+
+// ── Búsqueda global (topbar) ──
+let _globalTO;
+function busquedaGlobal(q) {
+  clearTimeout(_globalTO);
+  const panel = document.getElementById('globalResults');
+  if (!panel) return;
+  if (q.length < 3) { panel.style.display = 'none'; return; }
+  _globalTO = setTimeout(() => {
+    const ql = q.toLowerCase();
+    const grupos = { 'Atención':[], 'Caso':[], 'Visita':[] };
+
+    // Atenciones — nombre o DNI
+    (CACHE.atenciones || []).forEach(a => {
+      if (grupos['Atención'].length >= 5) return;
+      if (String(a.nombre||'').toLowerCase().includes(ql) || String(a.dni||'').includes(q)) {
+        grupos['Atención'].push({
+          icono:'🩺', color:'#0b1e45',
+          titulo: `N°${a.nro} · ${a.nombre||'—'} · DNI ${a.dni||'—'}`,
+          sub:    `${a.fecha_atencion||''} · ${a.empresa||''} · ${a.estado||''}`
+        });
+      }
+    });
+
+    // Casos — nombre o DNI
+    (CACHE.casos || []).forEach(c => {
+      if (grupos['Caso'].length >= 5) return;
+      if (String(c.nombre||'').toLowerCase().includes(ql) || String(c.dni||'').includes(q)) {
+        grupos['Caso'].push({
+          icono:'⚖️', color:'#d9292b',
+          titulo: `${c.nombre||'—'} · DNI ${c.dni||'—'}`,
+          sub:    `${c.motivo||''} · ${c.supervisor||''} · ${c.empresa||''}`
+        });
+      }
+    });
+
+    // Visitas — supervisor o fundo
+    (CACHE.visitas || []).forEach(v => {
+      if (grupos['Visita'].length >= 5) return;
+      if (String(v.supervisor||'').toLowerCase().includes(ql) || String(v.fundo||'').toLowerCase().includes(ql)) {
+        grupos['Visita'].push({
+          icono:'🏕️', color:'#7c3aed',
+          titulo: `${v.supervisor||'—'} · ${v.fundo||'—'}`,
+          sub:    `${v.fecha_reg||''} · ${v.empresa||''} · ${v.estado||''}`
+        });
+      }
+    });
+
+    const total = grupos['Atención'].length + grupos['Caso'].length + grupos['Visita'].length;
+    if (!total) {
+      panel.innerHTML = `<div style="padding:12px 16px;color:#64748b;text-align:center">Sin resultados para "${q}"</div>`;
+    } else {
+      panel.innerHTML = Object.entries(grupos)
+        .filter(([,items]) => items.length)
+        .map(([tipo, items]) =>
+          `<div style="padding:5px 12px 3px;background:#f8fafc;font-size:10px;font-weight:700;color:#64748b;letter-spacing:.5px;border-bottom:1px solid #e2e8f0">${items[0].icono} ${tipo}s</div>` +
+          items.map(r =>
+            `<div style="padding:8px 14px;border-bottom:1px solid #f1f5f9">
+              <div style="font-weight:600;color:${r.color};font-size:12px">${r.titulo}</div>
+              <div style="font-size:11px;color:#94a3b8;margin-top:1px">${r.sub}</div>
+            </div>`
+          ).join('')
+        ).join('');
+    }
+    panel.style.display = 'block';
+  }, 200);
+}
 
 // ── Atajos de teclado ──
 document.addEventListener('keydown', function(e) {
