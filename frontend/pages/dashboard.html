@@ -1475,6 +1475,7 @@ function renderEstadisticasAdmin(data) {
 
 async function cargarVisitas() {
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  console.log('[cargarVisitas] CACHE.visitas:', CACHE.visitas ? CACHE.visitas.length + ' registros' : 'vacío');
   if (CACHE.visitas && CACHE.visitas.length > 0) {
     const empF  = (document.getElementById('vFiltroEmp')?.value  || '').trim();
     const mesF  = (document.getElementById('vFiltroMes')?.value  || '').trim();
@@ -4077,8 +4078,8 @@ function ir(id,btn){
     }
   });
 }
-function abrir(id){document.getElementById(id).classList.add('on');}
-function cerrar(id){document.getElementById(id).classList.remove('on');}
+function abrir(id){const el=document.getElementById(id);if(!el){console.warn('[abrir] elemento no encontrado:',id);return;}el.classList.add('on');}
+function cerrar(id){const el=document.getElementById(id);if(!el){console.warn('[cerrar] elemento no encontrado:',id);return;}el.classList.remove('on');}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
 window.addEventListener('beforeunload', () => { clearTimeout(dniTO); clearTimeout(_estTimer); });
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
