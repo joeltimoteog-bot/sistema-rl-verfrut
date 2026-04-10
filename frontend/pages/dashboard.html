@@ -934,8 +934,10 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     <div class="fc"><label>Hora Término</label><input type="time" id="dHT"></div>
   </div>
   <div class="fc" style="margin-top:12px"><label>Observaciones</label><textarea id="dObs"></textarea></div>
+  <div id="detHistorialPanel" style="display:none;margin:12px 0 0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;max-height:200px;overflow-y:auto;font-size:11px"></div>
   <div class="modal-ft">
     <button class="btn-cancel" onclick="cerrar('mDet')">Cerrar</button>
+    <button class="btn-cancel" onclick="verHistorialAt(detNro)" style="background:#475569;color:#fff;border-color:#475569">📋 Historial</button>
     <button class="btn-save" onclick="updateAt()">💾 Actualizar</button>
   </div>
 </div>
@@ -1862,13 +1864,71 @@ function mostrarAlertaHorario(msg) {
   if (!a) {
     a = document.createElement('div');
     a.id = '_alertaHorario';
-    a.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#fef2f2;border:2px solid #dc2626;border-radius:12px;padding:18px 28px;font-size:13px;font-weight:600;color:#991b1b;z-index:9999;box-shadow:0 4px 24px rgba(220,38,38,.2);max-width:92vw;text-align:center;white-space:pre-line;line-height:1.6';
+    a.style.cssText = 'position:fixed;top:70px;left:50%;transform:translateX(-50%);background:#fef2f2;border:2px solid #dc2626;border-radius:12px;padding:18px 28px;font-size:13px;font-weight:600;color:#991b1b;z-index:9999;box-shadow:0 4px 24px rgba(220,38,38,.2);max-width:92vw;text-align:center;line-height:1.6';
     document.body.appendChild(a);
   }
-  a.textContent = msg;
+  const clave = '_acceso_' + (typeof hoy === 'function' ? hoy() : new Date().toISOString().slice(0,10));
+  const yaEnviado = sessionStorage.getItem(clave);
+  const extra = yaEnviado
+    ? `<div style="margin-top:10px;font-size:11px;color:#16a34a;font-weight:600">⏳ Solicitud enviada — espera autorización de Joel.</div>`
+    : `<button onclick="solicitarAccesoTemporal()" style="margin-top:10px;padding:7px 18px;background:#dc2626;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;display:block;margin-left:auto;margin-right:auto">📲 Solicitar acceso temporal</button>`;
+  a.innerHTML = `<div>${msg.replace(/\n/g,'<br>')}</div>${extra}`;
   a.style.display = 'block';
   clearTimeout(a._to);
-  a._to = setTimeout(() => a.style.display = 'none', 6000);
+  a._to = setTimeout(() => a.style.display = 'none', 10000);
+}
+
+// ── Historial de cambios en atenciones (localStorage) ──
+function _logCambioAt(nro, cambios) {
+  if (!cambios || !cambios.length) return;
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem('at_historial') || '[]'); } catch(e) {}
+  log.unshift({ nro: String(nro), ts: new Date().toLocaleString('es-PE'), usuario: USER.nombre || USER.usuario, cambios });
+  if (log.length > 300) log = log.slice(0, 300);
+  localStorage.setItem('at_historial', JSON.stringify(log));
+}
+
+function _getHistorialAt(nro) {
+  let log = [];
+  try { log = JSON.parse(localStorage.getItem('at_historial') || '[]'); } catch(e) {}
+  return log.filter(e => e.nro === String(nro));
+}
+
+function verHistorialAt(nro) {
+  const panel = document.getElementById('detHistorialPanel');
+  if (!panel) return;
+  if (panel.style.display !== 'none') { panel.style.display = 'none'; return; }
+  const hist = _getHistorialAt(nro);
+  if (!hist.length) {
+    panel.innerHTML = '<p style="color:#64748b;text-align:center;padding:6px 0">Sin historial de cambios registrado en este dispositivo.</p>';
+  } else {
+    panel.innerHTML = hist.map(e =>
+      `<div style="border-bottom:1px solid #e2e8f0;padding:7px 0">
+        <div style="font-weight:700;color:#0b1e45">${e.ts} · <span style="color:#64748b">${e.usuario}</span></div>
+        ${e.cambios.map(c => `<div style="margin-top:2px">· <b>${c.campo}</b>: <span style="color:#dc2626">"${c.anterior}"</span> → <span style="color:#16a34a">"${c.nuevo}"</span></div>`).join('')}
+      </div>`
+    ).join('');
+  }
+  panel.style.display = 'block';
+}
+
+function solicitarAccesoTemporal() {
+  const clave = '_acceso_' + (typeof hoy === 'function' ? hoy() : new Date().toISOString().slice(0,10));
+  if (sessionStorage.getItem(clave)) {
+    mostrarToast('⏳ Ya enviaste una solicitud. Joel te contactará pronto.', '');
+    return;
+  }
+  const ahora = new Date().toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'});
+  const nombre = USER.nombre || USER.usuario || 'Supervisor';
+  const texto = `Hola Joel, soy *${nombre}* y necesito acceso temporal al sistema RL fuera de horario (${ahora}). ¿Puede autorizarme?`;
+  window.open('https://wa.me/51960853224?text=' + encodeURIComponent(texto), '_blank');
+  sessionStorage.setItem(clave, JSON.stringify({supervisor: nombre, hora: ahora, estado: 'pendiente'}));
+  const a = document.getElementById('_alertaHorario');
+  if (a) {
+    a.innerHTML = '<div>✅ Solicitud enviada a Joel Timoteo.</div><div style="font-size:12px;margin-top:6px;font-weight:400">⏳ Espera autorización vía WhatsApp.</div>';
+    clearTimeout(a._to);
+    a._to = setTimeout(() => a.style.display = 'none', 8000);
+  }
 }
 
 // verInformeGuardado (movido del fragmento suelto)
@@ -3322,6 +3382,10 @@ async function guardarAt() {
     estado:v('at_est'), supervisor:USER.nombre||USER.usuario, usuario_sistema:USER.usuario
   };
   if(!d.dni||!d.nombre){mostrarToast('❌ DNI y Nombre son obligatorios.','error');return;}
+  // Snapshot del registro original para historial de cambios
+  const _snapAt = (modoEdicion && nroEdit)
+    ? Object.assign({}, (CACHE.atenciones||[]).find(a => String(a.nro) === String(nroEdit)) || {})
+    : null;
   const btnAt = document.getElementById('btnGuardarAt');
   if(btnAt){btnAt.disabled=true; btnAt.textContent='⏳ Guardando...';}
   try{
@@ -3346,6 +3410,14 @@ async function guardarAt() {
         guardarCacheLS();
         cerrar('mAt');
         mostrarToast('✅ Atención actualizada');
+        // Log de cambios en historial local
+        if (_snapAt) {
+          const _camposLog = ['nombre','empresa','fundo','cargo','ruta','estado','hora_inicio','hora_termino','observaciones','fecha_atencion'];
+          const _cambiosLog = _camposLog
+            .filter(f => String(_snapAt[f]||'') !== String(d[f]||''))
+            .map(f => ({campo: f, anterior: String(_snapAt[f]||''), nuevo: String(d[f]||'')}));
+          _logCambioAt(nroEdit, _cambiosLog);
+        }
         // Sincronizar en background
         setTimeout(() => refrescarEnBackground(), 500);
       } else {
@@ -3457,9 +3529,18 @@ function verDet(nro, fuente) {
 async function updateAt() {
   const btn = document.querySelector('#mDet .btn-save');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Actualizando...'; }
+  // Snapshot para historial
+  const _snapDet = Object.assign({}, (CACHE.atenciones||atTodas||[]).find(a => String(a.nro) === String(detNro)) || {});
+  const _nuevoDet = {estado: v('dEst'), hora_termino: v('dHT'), observaciones: v('dObs')};
   try {
-    const r=await apiPost({action:'updateAtencion',nro:detNro,estado:v('dEst'),hora_termino:v('dHT'),observaciones:v('dObs'),rol:USER.rol,usuario:USER.usuario});
-    if(r.success){cerrar('mDet');invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();mostrarToast('✅ Actualizado');}
+    const r=await apiPost({action:'updateAtencion',nro:detNro,..._nuevoDet,rol:USER.rol,usuario:USER.usuario});
+    if(r.success){
+      const _cambiosDet = Object.entries(_nuevoDet)
+        .filter(([k,nv]) => String(_snapDet[k]||'') !== String(nv||''))
+        .map(([k,nv]) => ({campo: k, anterior: String(_snapDet[k]||''), nuevo: String(nv||'')}));
+      _logCambioAt(detNro, _cambiosDet);
+      cerrar('mDet');invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();mostrarToast('✅ Actualizado');
+    }
     else mostrarToast('❌ Error: '+(r.error||'No tienes permiso'),'error');
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '💾 Actualizar'; }
@@ -4234,6 +4315,44 @@ function abrir(id){const el=document.getElementById(id);if(!el){console.warn('[a
 function cerrar(id){const el=document.getElementById(id);if(!el){console.warn('[cerrar] elemento no encontrado:',id);return;}el.classList.remove('on');}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
 window.addEventListener('beforeunload', () => { clearTimeout(dniTO); clearTimeout(_estTimer); });
+
+// ── Atajos de teclado ──
+document.addEventListener('keydown', function(e) {
+  const tag = document.activeElement ? document.activeElement.tagName : '';
+  const enInput = (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT');
+
+  // Enter en campo DNI → ejecutar búsqueda
+  if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'at_dni') {
+    e.preventDefault();
+    buscarDniBtn();
+    return;
+  }
+
+  // Escape → cerrar modal visible más reciente
+  if (e.key === 'Escape') {
+    const modales = [...document.querySelectorAll('.ov.on')];
+    if (modales.length) {
+      e.preventDefault();
+      modales[modales.length - 1].classList.remove('on');
+    }
+    return;
+  }
+
+  // Ctrl+N → Nueva Atención (solo fuera de campos de texto)
+  if (e.ctrlKey && e.key === 'n' && !enInput) {
+    e.preventDefault();
+    abrirAt();
+    return;
+  }
+
+  // Ctrl+B → Ir a Buscar Trabajador
+  if (e.ctrlKey && e.key === 'b' && !enInput) {
+    e.preventDefault();
+    const btnTrab = document.querySelector('.ni[onclick*="trabajadores"]');
+    if (btnTrab) btnTrab.click();
+    return;
+  }
+});
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
 function v(id){const el=document.getElementById(id);return el?el.value:'';}
 function sv(id,val){const el=document.getElementById(id);if(el)el.value=val;}
