@@ -3389,24 +3389,44 @@ async function buscarDni(dni) {
   const r = document.getElementById('trabRes');
   r.style.display = 'none';
   if (dni.length < 7) return;
-  // 1. Buscar en atenciones locales (sin llamar API)
-  const cached = (atTodas || []).find(a => String(a.dni||'').trim() === dni.trim());
+  const dniTrim = dni.trim();
+
+  // 1. Buscar en CACHE.atenciones (historial completo local)
+  const cached = (CACHE.atenciones || atTodas || []).find(a => String(a.dni||'').trim() === dniTrim);
   if (cached) {
-    sv('at_nom', cached.nombre || '');
-    sv('at_emp', cached.empresa || USER.empresa || 'RAPEL');
-    sv('at_fundo', cached.fundo || '');
-    if (cached.cargo)    sv('at_cargo', cached.cargo);
-    if (cached.sexo)     sv('at_sex',   cached.sexo);
-    if (cached.ruta)     sv('at_ruta',  cached.ruta);
-    if (cached.codigo)   sv('at_cod',   cached.codigo);
-    if (cached.celular)  sv('at_cel',   cached.celular);
-    r.style.display = 'block';
-    r.style.background = '#f0fdf4'; r.style.borderColor = '#bbf7d0';
-    r.textContent = '✅ ' + (cached.nombre||'') + ' · ' + (cached.empresa||'') + ' · ' + (cached.fundo||'') + ' (caché)';
+    sv('at_nom', cached.nombre||''); sv('at_sex', cached.sexo||'');
+    sv('at_emp', cached.empresa||USER.empresa||'RAPEL'); sv('at_fundo', cached.fundo||'');
+    if (cached.cargo)   sv('at_cargo', cached.cargo);
+    if (cached.ruta)    sv('at_ruta',  cached.ruta);
+    if (cached.codigo)  sv('at_cod',   cached.codigo);
+    if (cached.celular) sv('at_cel',   cached.celular);
+    r.style.display='block'; r.style.background='#f0fdf4'; r.style.borderColor='#bbf7d0';
+    r.textContent='✅ '+(cached.nombre||'')+' · '+(cached.empresa||'')+' · '+(cached.fundo||'')+' (caché)';
     return;
   }
-  // 2. Si no está en caché, llamar API con debounce 400ms
-  dniTO = setTimeout(() => buscarDniBtn(), 400);
+
+  // 2. Buscar en _trabajadoresCache (resultados previos de API)
+  if (window._trabajadoresCache && window._trabajadoresCache[dniTrim]) {
+    const t = window._trabajadoresCache[dniTrim];
+    sv('at_nom',t.nombre||''); sv('at_sex',t.sexo||'');
+    sv('at_emp',t.empresa||USER.empresa||'RAPEL'); sv('at_fundo',t.fundo||'');
+    sv('at_cargo',t.cargo||''); sv('at_ruta',t.ruta||'');
+    sv('at_cod',t.codigo||''); sv('at_cel',t.celular||'');
+    sv('at_fip', t.fecha_inicio_periodo ? String(t.fecha_inicio_periodo).split('T')[0] : '');
+    sv('at_ftp', t.fecha_termino_periodo ? String(t.fecha_termino_periodo).split('T')[0] : '');
+    if(USER.fundoHoy) sv('at_fac',USER.fundoHoy);
+    else if(USER.fundos&&USER.fundos.length===1) sv('at_fac',USER.fundos[0]);
+    else sv('at_fac',t.fundo_actual||'');
+    r.style.display='block'; r.style.background='#f0fdf4'; r.style.borderColor='#bbf7d0';
+    r.textContent='✅ '+(t.nombre||'')+' · '+(t.empresa||'')+' · '+(t.fundo||'')+' (caché)';
+    return;
+  }
+
+  // 3. No encontrado localmente → spinner en campo DNI + debounce 300ms
+  const inp = document.getElementById('at_dni');
+  inp.style.borderColor = '#3b82f6';
+  inp.style.boxShadow = '0 0 0 2px #bfdbfe';
+  dniTO = setTimeout(() => buscarDniBtn(), 300);
 }
 
 async function buscarDniBtn() {
@@ -3414,7 +3434,11 @@ async function buscarDniBtn() {
   const dni=v('at_dni').trim();
   if(dni.length<2){mostrarToast('❌ Ingresa el DNI del trabajador','error');return;}
   const r=document.getElementById('trabRes');
-  r.style.display='block';r.textContent='🔍 Buscando...';
+  const inp=document.getElementById('at_dni');
+  // Spinner solo en el campo DNI, no bloquear el formulario
+  inp.style.borderColor='#3b82f6';
+  inp.style.boxShadow='0 0 0 2px #bfdbfe';
+  r.style.display='none';
   console.log('[buscarDniBtn] DNI enviado:', dni, '| empresa: AMBAS');
   try{
     const d=await apiGet({action:'buscarTrabajador',q:String(dni).trim(),empresa:'AMBAS'});
@@ -3431,13 +3455,25 @@ async function buscarDniBtn() {
       if(USER.fundoHoy) sv('at_fac',USER.fundoHoy);
       else if(USER.fundos&&USER.fundos.length===1) sv('at_fac',USER.fundos[0]);
       else sv('at_fac',t.fundo_actual||'');
+      // Guardar en cache para futuras búsquedas sin API
+      if(!window._trabajadoresCache) window._trabajadoresCache={};
+      window._trabajadoresCache[dni]=t;
       r.style.display='block';r.style.background='#f0fdf4';r.style.borderColor='#bbf7d0';
       r.textContent='✅ '+t.nombre+' · '+t.empresa+' · '+(t.fundo||'');
     }else{
+      r.style.display='block';
       r.style.background='#fef2f2';r.style.borderColor='#fecaca';
       r.textContent='❌ No se encontró trabajador con DNI: '+dni;
     }
-  }catch(e){console.error('[buscarDniBtn] Error:',e);r.textContent='❌ Error de conexión: '+e.message;}
+  }catch(e){
+    console.error('[buscarDniBtn] Error:',e);
+    r.style.display='block';
+    r.textContent='❌ Error de conexión: '+e.message;
+  }finally{
+    // Restaurar estilo del campo DNI
+    inp.style.borderColor='';
+    inp.style.boxShadow='';
+  }
 }
 
 function regAt(dni,nom,emp,fundo,cargo,sexo,ruta,cod,fac,cel,fip,ftp){
