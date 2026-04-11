@@ -284,6 +284,44 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       </div>
     </div>
 
+    <!-- HISTORIAL POR SUPERVISOR -->
+    <div id="panelHistorial" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px" class="no-print">
+        <h3 style="color:var(--azul);font-size:16px">📊 Evolución — <span id="histSupNombre"></span></h3>
+        <button class="btn-cancel" onclick="mostrarDashboard()">← Volver al Ranking</button>
+      </div>
+      <!-- Stats rápidas -->
+      <div id="histStats" style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px"></div>
+      <!-- Gráfico progreso + Radar -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+        <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+          <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">📈 Progreso en el tiempo</div>
+          <canvas id="chartHistProgreso" style="height:220px;max-height:220px"></canvas>
+        </div>
+        <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+          <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">🕸️ Radar — Últimas 2 evaluaciones</div>
+          <canvas id="chartHistRadar" style="height:220px;max-height:220px"></canvas>
+        </div>
+      </div>
+      <!-- Tabla evolución -->
+      <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+        <div style="font-size:13px;font-weight:700;color:#0b1e45;margin-bottom:14px">📋 Historial Completo</div>
+        <div class="tw">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Fecha</th><th>% Global</th>
+                <th>Liderazgo</th><th>Comunicación</th><th>Cumplimiento</th>
+                <th>Gest. Equipo</th><th>Resolución</th><th>Planificación</th>
+                <th>Clasificación</th><th>Cambio</th><th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tbHistorial"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- REPORTE IMPRIMIBLE (oculto hasta emitir) -->
     <div id="panelReporte" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px" class="no-print">
@@ -873,9 +911,13 @@ function renderRanking() {
     return;
   }
 
-  // Agrupar por supervisor: último puntaje
+  // Contar evaluaciones por supervisor (para mostrar botón historial)
+  const conteoSup = {};
+  historial.forEach(e => { conteoSup[e.supervisor] = (conteoSup[e.supervisor] || 0) + 1; });
+
   tb.innerHTML = filtrado.map((ev, i) => {
     const cl = clasificar(ev.porcentaje);
+    const tieneHistorial = (conteoSup[ev.supervisor] || 0) > 1;
     return `<tr>
       <td style="font-weight:700;color:var(--gr)">${i+1}</td>
       <td style="font-weight:700;color:var(--azul)">${ev.supervisor}</td>
@@ -885,17 +927,161 @@ function renderRanking() {
       <td style="color:var(--gr)">${ev.fecha}</td>
       <td>
         <button class="btn-a bv" onclick="emitirReporte('${ev.id}')">📄 Reporte</button>
+        ${tieneHistorial ? `<button class="btn-a" style="background:#ede9fe;color:#5b21b6" onclick="verHistorialSupervisor('${ev.supervisor.replace(/'/g,"\\'")}')">📊 Historial</button>` : ''}
         <button class="btn-a bd" onclick="eliminarEval('${ev.id}')">🗑️</button>
       </td>
     </tr>`;
   }).join('');
 }
 
+// ── Historial por supervisor ──
+let _histCharts = {};
+function _destroyHistChart(key) { if (_histCharts[key]) { _histCharts[key].destroy(); delete _histCharts[key]; } }
+
+function verHistorialSupervisor(nombre) {
+  const todas = getHistorial().filter(e => e.supervisor === nombre)
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  document.getElementById('histSupNombre').textContent = nombre;
+
+  // ── Stats rápidas ──
+  const statsEl = document.getElementById('histStats');
+  const ultima  = todas[todas.length - 1];
+  const clU     = clasificar(ultima.porcentaje);
+  const mejora  = todas.length >= 2 ? ultima.porcentaje - todas[todas.length - 2].porcentaje : 0;
+  const mejoraT = todas.length >= 2 ? ultima.porcentaje - todas[0].porcentaje : 0;
+  const _sc = (label, val, color, sub) =>
+    `<div style="background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-top:3px solid ${color}">
+      <div style="font-size:11px;font-weight:700;color:${color};margin-bottom:4px">${label}</div>
+      <div style="font-size:26px;font-weight:900;color:${color}">${val}</div>
+      <div style="font-size:10px;color:#94a3b8;margin-top:2px">${sub}</div>
+    </div>`;
+  statsEl.style.gridTemplateColumns = 'repeat(4,1fr)';
+  statsEl.innerHTML =
+    _sc('📊 Última Evaluación', ultima.porcentaje + '%', clU.color, clU.texto) +
+    _sc('📝 Total Evaluaciones', todas.length, '#0b1e45', 'registradas') +
+    _sc((mejora >= 0 ? '▲' : '▼') + ' Cambio vs anterior',
+        (mejora >= 0 ? '+' : '') + mejora + '%',
+        mejora >= 0 ? '#16a34a' : '#dc2626',
+        todas.length >= 2 ? 'vs ' + todas[todas.length - 2].fecha : 'primera evaluación') +
+    _sc((mejoraT >= 0 ? '▲' : '▼') + ' Mejora total',
+        (mejoraT >= 0 ? '+' : '') + mejoraT + '%',
+        mejoraT >= 0 ? '#16a34a' : '#dc2626',
+        todas.length >= 2 ? todas[0].fecha + ' → ' + ultima.fecha : 'primera evaluación');
+
+  // ── Gráfico progreso ──
+  _destroyHistChart('progreso');
+  const ctxP = document.getElementById('chartHistProgreso');
+  if (ctxP) {
+    _histCharts['progreso'] = new Chart(ctxP, {
+      type: 'line',
+      data: {
+        labels: todas.map(e => e.fecha),
+        datasets: [{
+          label: '% Global',
+          data: todas.map(e => e.porcentaje),
+          borderColor: '#0b1e45',
+          backgroundColor: 'rgba(11,30,69,.1)',
+          pointBackgroundColor: todas.map(e => clasificar(e.porcentaje).color),
+          pointRadius: 6, pointHoverRadius: 9,
+          tension: .3, fill: true
+        }]
+      },
+      options: {
+        maintainAspectRatio: false, responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: i => ` ${i.parsed.y}% — ${clasificar(i.parsed.y).texto}` } }
+        },
+        scales: { y: { min: 0, max: 100, ticks: { callback: v => v + '%' } } }
+      }
+    });
+  }
+
+  // ── Radar: última vs anterior (o solo última) ──
+  _destroyHistChart('radar');
+  const ctxR = document.getElementById('chartHistRadar');
+  if (ctxR && ultima.competencias && ultima.competencias.length) {
+    const labels = ultima.competencias.map(c => c.nombre);
+    const datasets = [{
+      label: ultima.fecha,
+      data: ultima.competencias.map(c => parseFloat(c.promedio)),
+      borderColor: clU.color, backgroundColor: clU.color + '33',
+      pointBackgroundColor: clU.color, pointRadius: 4
+    }];
+    if (todas.length >= 2) {
+      const pen = todas[todas.length - 2];
+      if (pen.competencias && pen.competencias.length) {
+        datasets.push({
+          label: pen.fecha,
+          data: pen.competencias.map(c => parseFloat(c.promedio)),
+          borderColor: '#94a3b8', backgroundColor: 'rgba(148,163,184,.15)',
+          pointBackgroundColor: '#94a3b8', pointRadius: 4,
+          borderDash: [5, 4]
+        });
+      }
+    }
+    _histCharts['radar'] = new Chart(ctxR, {
+      type: 'radar',
+      data: { labels, datasets },
+      options: {
+        maintainAspectRatio: false, responsive: true,
+        scales: {
+          r: { min: 0, max: 5, ticks: { stepSize: 1, font: { size: 9 } },
+               pointLabels: { font: { size: 10, weight: '700' } } }
+        },
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }
+      }
+    });
+  }
+
+  // ── Tabla evolución (más reciente primero) ──
+  const desc = todas.slice().reverse();
+  const tb = document.getElementById('tbHistorial');
+  tb.innerHTML = desc.map((ev, i) => {
+    const cl = clasificar(ev.porcentaje);
+    const prevPct = desc[i + 1] ? desc[i + 1].porcentaje : null;
+    const cambio  = prevPct !== null ? ev.porcentaje - prevPct : null;
+    const cambioH = cambio !== null
+      ? `<span style="font-weight:700;color:${cambio >= 0 ? '#16a34a' : '#dc2626'}">${cambio >= 0 ? '▲ +' : '▼ '}${cambio}%</span>`
+      : '<span style="color:#94a3b8">—</span>';
+    const gC = n => {
+      const c = ev.competencias && ev.competencias.find(c => c.nombre.startsWith(n));
+      return c ? parseFloat(c.promedio).toFixed(1) : '—';
+    };
+    return `<tr>
+      <td style="font-weight:700;color:var(--gr)">${todas.length - i}</td>
+      <td style="color:#0b1e45;font-weight:600">${ev.fecha}</td>
+      <td style="font-weight:900;color:${cl.color};font-size:14px">${ev.porcentaje}%</td>
+      <td style="text-align:center">${gC('Liderazgo')}</td>
+      <td style="text-align:center">${gC('Comunicación')}</td>
+      <td style="text-align:center">${gC('Cumplimiento')}</td>
+      <td style="text-align:center">${gC('Gestión')}</td>
+      <td style="text-align:center">${gC('Resolución')}</td>
+      <td style="text-align:center">${gC('Planificación')}</td>
+      <td><span class="rank-badge ${cl.clase}">${cl.texto}</span></td>
+      <td>${cambioH}</td>
+      <td><button class="btn-a bv" onclick="emitirReporte('${ev.id}')">📄</button></td>
+    </tr>`;
+  }).join('');
+
+  mostrarHistorial();
+}
+
+function mostrarHistorial() {
+  document.getElementById('panelDashboard').style.display  = 'none';
+  document.getElementById('panelFormulario').style.display = 'none';
+  document.getElementById('panelReporte').style.display    = 'none';
+  document.getElementById('panelHistorial').style.display  = 'block';
+}
+
 // ── Navegación paneles ──
 function mostrarDashboard() {
-  document.getElementById('panelDashboard').style.display = 'block';
+  document.getElementById('panelDashboard').style.display  = 'block';
   document.getElementById('panelFormulario').style.display = 'none';
-  document.getElementById('panelReporte').style.display = 'none';
+  document.getElementById('panelReporte').style.display    = 'none';
+  document.getElementById('panelHistorial').style.display  = 'none';
   renderRanking();
 }
 
