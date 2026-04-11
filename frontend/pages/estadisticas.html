@@ -215,6 +215,14 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       </div>
     </div>
 
+    <!-- COMPARATIVA MES ACTUAL VS ANTERIOR -->
+    <div id="estComparativa" style="display:none;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px">
+      <div id="ecAt"  style="background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-top:3px solid #0b1e45"></div>
+      <div id="ecVis" style="background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-top:3px solid #7c3aed"></div>
+      <div id="ecCas" style="background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-top:3px solid #d9292b"></div>
+      <div id="ecFus" style="background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-top:3px solid #f59e0b"></div>
+    </div>
+
     <!-- GRÁFICO TENDENCIA + MÓDULOS -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px">
       <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07)">
@@ -462,18 +470,41 @@ function renderEstadisticasAdmin(data) {
   const ctxT = document.getElementById('chartTendencia');
   if(ctxT) {
     _destroyChart('tendencia');
+    const _tRango = tendencia.length >= 2
+      ? tendencia[0].label + ' — ' + tendencia[tendencia.length-1].label
+      : (tendencia.length === 1 ? tendencia[0].label : '');
+    const _mkDataset = (label, key, color, rgba) => ({
+      label, data: tendencia.map(t=>t[key]),
+      borderColor: color, backgroundColor: rgba,
+      pointBackgroundColor: color, pointRadius: 4, pointHoverRadius: 7,
+      tension: .4, fill: true
+    });
     charts['tendencia'] = new Chart(ctxT, {
       type: 'line',
       data: {
         labels: tendencia.map(t => t.label),
         datasets: [
-          { label:'Atenciones', data: tendencia.map(t=>t.atenciones), borderColor:'#0b1e45', backgroundColor:'rgba(11,30,69,.08)', tension:.4, fill:true },
-          { label:'Visitas',    data: tendencia.map(t=>t.visitas),    borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,.08)', tension:.4, fill:true },
-          { label:'Casos',      data: tendencia.map(t=>t.casos),      borderColor:'#d9292b', backgroundColor:'rgba(217,41,43,.08)', tension:.4, fill:true },
-          { label:'Fusiones',   data: tendencia.map(t=>t.fusiones),   borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,.08)', tension:.4, fill:true }
+          _mkDataset('Atenciones','atenciones','#0b1e45','rgba(11,30,69,.08)'),
+          _mkDataset('Visitas',   'visitas',   '#7c3aed','rgba(124,58,237,.08)'),
+          _mkDataset('Casos',     'casos',     '#d9292b','rgba(217,41,43,.08)'),
+          _mkDataset('Fusiones',  'fusiones',  '#f59e0b','rgba(245,158,11,.08)')
         ]
       },
-      options: { maintainAspectRatio: false, responsive:true, plugins:{ legend:{ position:'bottom', labels:{ font:{size:10} } } }, scales:{ y:{ beginAtZero:true } } }
+      options: {
+        maintainAspectRatio: false, responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position:'bottom', labels:{ font:{size:10}, padding:12 } },
+          title: { display: !!_tRango, text: _tRango, font:{size:11}, color:'#64748b', padding:{bottom:8} },
+          tooltip: {
+            callbacks: {
+              title: items => items[0].label,
+              label: item => ` ${item.dataset.label}: ${item.parsed.y}`
+            }
+          }
+        },
+        scales: { y:{ beginAtZero:true, ticks:{ stepSize:1 } } }
+      }
     });
   }
 
@@ -549,6 +580,34 @@ function renderEstadisticasAdmin(data) {
 
   // ── MEJORA 2: Gráfico RAPEL vs VERFRUT ──
   _cargarChartEmpresa();
+  // ── MEJORA 3: Comparativa mes actual vs anterior ──
+  _actualizarComparativaEst(tendencia);
+}
+
+function _actualizarComparativaEst(tendencia) {
+  const wrap = document.getElementById('estComparativa');
+  if (!wrap || !tendencia || tendencia.length < 2) return;
+  const act = tendencia[tendencia.length - 1];
+  const ant = tendencia[tendencia.length - 2];
+  const _pct = (a, b) => b === 0 ? (a > 0 ? 100 : 0) : Math.round(((a - b) / b) * 100);
+  const _html = (label, color, act, ant) => {
+    const pct = _pct(act, ant);
+    const up  = pct >= 0;
+    const arrow = up ? '▲' : '▼';
+    const clr   = up ? '#16a34a' : '#dc2626';
+    return `<div style="font-size:11px;font-weight:700;color:${color};margin-bottom:4px">${label}</div>
+      <div style="display:flex;align-items:baseline;gap:6px">
+        <span style="font-size:26px;font-weight:900;color:${color}">${act}</span>
+        <span style="font-size:11px;color:#64748b">este mes</span>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:${clr};margin-top:4px">${arrow} ${Math.abs(pct)}% vs ${ant ? ant.label || 'mes ant.' : 'mes ant.'}</div>
+      <div style="font-size:10px;color:#94a3b8">Mes anterior: ${ant}</div>`;
+  };
+  document.getElementById('ecAt').innerHTML  = _html('🩺 Atenciones', '#0b1e45', act.atenciones, ant.atenciones);
+  document.getElementById('ecVis').innerHTML = _html('🏕️ Visitas',    '#7c3aed', act.visitas,    ant.visitas);
+  document.getElementById('ecCas').innerHTML = _html('⚖️ Casos',      '#d9292b', act.casos,      ant.casos);
+  document.getElementById('ecFus').innerHTML = _html('🚌 Fusiones',   '#f59e0b', act.fusiones,   ant.fusiones);
+  wrap.style.display = 'grid';
 }
 
 async function _cargarChartEmpresa() {
@@ -605,23 +664,40 @@ async function _cargarChartEmpresa() {
 }
 
 function exportarEstadisticasAdmin() {
-  const ps = CACHE.estadisticasAdmin?.porSupervisor || {};
-  const datos = Object.values(ps);
-  if(!datos.length) { mostrarToast('❌ No hay datos para exportar.','error'); return; }
-  const filas = datos.map(s => ({
-    'Supervisor': s.nombre,
-    'Atenciones': s.atenciones,
-    'Pendientes': s.atPendientes,
-    'Resueltos': s.atResueltos,
-    'Visitas': s.visitas,
-    'Visitas Retrasadas': s.viRetrasadas,
-    'Casos': s.casos,
-    'Fusiones': s.fusiones
-  }));
-  const ws = XLSX.utils.json_to_sheet(filas);
+  const d = CACHE.estadisticasAdmin;
+  if (!d || !d.stats) { mostrarToast('❌ Sin datos. Carga Estadísticas Admin primero.', 'error'); return; }
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Estadísticas');
-  XLSX.writeFile(wb, 'EstadisticasAdmin_' + new Date().toLocaleDateString('es-PE').replace(/\//g,'-') + '.xlsx');
+
+  // Hoja 1: Resumen general
+  const s = d.stats;
+  const h1 = [
+    ['Módulo','Total','Este mes','Indicador 1','Valor 1','Indicador 2','Valor 2'],
+    ['Atenciones', s.atenciones.total, s.atenciones.esteMes, 'Pendientes', s.atenciones.pendientes, 'Resueltos',  s.atenciones.resueltos],
+    ['Visitas',    s.visitas.total,    s.visitas.esteMes,    'En plazo',   s.visitas.enPlazo,         'Retrasadas', s.visitas.retrasadas],
+    ['Casos',      s.casos.total,      s.casos.esteMes,      'En plazo',   s.casos.enPlazo,           'Retrasados', s.casos.retrasados],
+    ['Fusiones',   s.fusiones.total,   s.fusiones.esteMes,   'Pendientes', s.fusiones.pendientes,     'Validados',  s.fusiones.validados]
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h1), 'Resumen');
+
+  // Hoja 2: Por supervisor
+  const sup = Object.values(d.porSupervisor || {})
+    .sort((a,b) => (b.atenciones+b.visitas+b.casos+b.fusiones) - (a.atenciones+a.visitas+a.casos+a.fusiones));
+  const h2 = [['#','Supervisor','Atenciones','Pendientes','Resueltos','Visitas','V.Retrasadas','Casos','C.Retrasados','Fusiones','TOTAL']];
+  sup.forEach((r,i) => h2.push([
+    i+1, r.nombre, r.atenciones, r.atPendientes, r.atResueltos,
+    r.visitas, r.viRetrasadas, r.casos, r.caRetrasados||0, r.fusiones,
+    r.atenciones+r.visitas+r.casos+r.fusiones
+  ]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h2), 'Por Supervisor');
+
+  // Hoja 3: Tendencia 6 meses
+  const t = d.tendencia || [];
+  const h3 = [['Mes','Atenciones','Visitas','Casos','Fusiones']];
+  t.forEach(r => h3.push([r.label, r.atenciones, r.visitas, r.casos, r.fusiones]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h3), 'Tendencia 6 meses');
+
+  XLSX.writeFile(wb, 'EstadisticasAdmin_' + hoy() + '.xlsx');
+  mostrarToast('✅ Excel exportado — 3 hojas');
 }
 
 // ── Init ──
