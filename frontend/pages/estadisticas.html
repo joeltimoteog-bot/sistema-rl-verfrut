@@ -583,6 +583,11 @@ function renderEstadisticasAdmin(data) {
     });
   }
 
+  // ── Secciones que no dependen de la tabla ──
+  _actualizarComparativaEst(tendencia);
+  _renderVistaGerencial(data);
+  _cargarTendenciaAnioAnterior(tendencia);
+
   if(!tb) return;
   const filas = Object.values(porSupervisor)
     .sort((a,b) => (b.atenciones+b.visitas+b.casos+b.fusiones) - (a.atenciones+a.visitas+a.casos+a.fusiones));
@@ -637,11 +642,6 @@ function renderEstadisticasAdmin(data) {
 
   // ── MEJORA 2: Gráfico RAPEL vs VERFRUT ──
   _cargarChartEmpresa();
-  // ── MEJORA 3: Comparativa mes actual vs anterior ──
-  _actualizarComparativaEst(tendencia);
-  // ── Vista Gerencial + Año anterior ──
-  _renderVistaGerencial(data);
-  _cargarTendenciaAnioAnterior(tendencia);
 }
 
 function _actualizarComparativaEst(tendencia) {

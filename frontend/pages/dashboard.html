@@ -4509,8 +4509,10 @@ function ir(id,btn){
   if(ov) ov.classList.remove('on');
   // Cambiar sección en el siguiente frame — el navegador pinta el clic antes de procesar
   requestAnimationFrame(() => {
-    document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
-    document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
+    const prevSec=document.querySelector('.sec.on');
+    if(prevSec) prevSec.classList.remove('on');
+    const prevNi=document.querySelector('.ni.on');
+    if(prevNi) prevNi.classList.remove('on');
     const sec=document.getElementById('sec-'+id);
     if(sec) sec.classList.add('on');
     if(btn) btn.classList.add('on');
