@@ -133,7 +133,23 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   .modal{padding:16px;max-height:95vh;overflow-y:auto}
 }
 @media(min-width:769px){.hamburger{display:none}.overlay-sb{display:none!important}}
+/* ─── MODO OSCURO ─── */
+html.dark{--bg:#0f172a;--bd:#334155;--tx:#f1f5f9;--gr:#94a3b8}
+html.dark .topbar{background:#1e293b}
+html.dark .sb{background:#1e293b}
+html.dark .sc,html.dark .card,html.dark .gc,html.dark .sup-card,
+html.dark .modal,html.dark .correo-box,html.dark .dni-result{background:#1e293b}
+html.dark th{background:#0f172a;color:#94a3b8}
+html.dark td{border-color:#334155}
+html.dark tr:hover td{background:#253047}
+html.dark .fi,html.dark .fc input,html.dark .fc select,html.dark .fc textarea{background:#0f172a;color:#f1f5f9;border-color:#334155}
+html.dark .correo-preview{background:#0f172a;border-color:#334155}
+html.dark .btn-cancel{background:#334155;color:#f1f5f9;border-color:#475569}
+html.dark #globalSearch{background:#0f172a;color:#f1f5f9;border-color:#334155}
+html.dark #globalResults{background:#1e293b;border-color:#334155}
+html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
 </style>
+<script>if(localStorage.getItem('rl_dark')==='1')document.documentElement.classList.add('dark');</script>
 </head>
 <body>
 
@@ -175,6 +191,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   <div class="topbar">
     <button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
     <div class="tb-t" id="tbT">MI DASHBOARD</div>
+    <button id="dmToggle" onclick="toggleDarkMode()" title="Modo oscuro" style="background:none;border:1.5px solid var(--bd);border-radius:8px;cursor:pointer;font-size:15px;padding:4px 10px;line-height:1;color:var(--gr);transition:all .2s;flex-shrink:0">🌙</button>
     <div style="position:relative;flex:1;max-width:280px;margin:0 14px" id="globalSearchWrap">
       <input type="text" id="globalSearch" placeholder="🔍 Buscar..." autocomplete="off"
         oninput="busquedaGlobal(this.value)"
@@ -201,6 +218,13 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <div class="sc"><div class="sc-ic ir">📆</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sM">0</div><span id="sM-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">ESTE MES</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sM-prog" style="height:100%;width:0%;background:#ef4444;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
         <div class="sc"><div class="sc-ic iv">📊</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sA">0</div><span id="sA-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">TOTAL AÑO</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sA-prog" style="height:100%;width:0%;background:#22c55e;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
         <div class="sc"><div class="sc-ic in">⏳</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sP">0</div><span id="sP-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">PENDIENTES</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sP-prog" style="height:100%;width:0%;background:#f97316;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
+      </div>
+      <!-- COMPARATIVA MES ACTUAL VS ANTERIOR -->
+      <div id="dashComparativa" style="display:none;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:18px">
+        <div class="sc" id="dcH" style="flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px"></div>
+        <div class="sc" id="dcM" style="flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px"></div>
+        <div class="sc" id="dcA" style="flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px"></div>
+        <div class="sc" id="dcP" style="flex-direction:column;align-items:flex-start;gap:2px;padding:12px 14px"></div>
       </div>
       <div style="background:#fff;border-radius:11px;border:1px solid var(--bd);padding:10px 16px;margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
         <span style="font-size:12px;font-weight:700;color:#0b1e45">📊 Filtrar:</span>
@@ -3261,6 +3285,74 @@ function actualizarIndicadoresDash(stats) {
   if (progP) setTimeout(() => { progP.style.background = pctP > 30 ? '#dc2626' : '#f97316'; }, 120);
 }
 
+// ── Comparativa mes actual vs anterior ──
+function actualizarComparativaDash(stats) {
+  const wrap = document.getElementById('dashComparativa');
+  if (!wrap) return;
+  const porMes = _getPorMes();
+  const h = hoy();
+  const [anioN, mesN] = h.slice(0,7).split('-').map(Number);
+  const dAnt   = new Date(anioN, mesN - 2, 1);
+  const mesAct = h.slice(0, 7);
+  const mesAnt = dAnt.getFullYear() + '-' + String(dAnt.getMonth() + 1).padStart(2, '0');
+  const vAct   = porMes[mesAct] || 0;
+  const vAnt   = porMes[mesAnt] || 0;
+
+  function _ind(id, label, actual, anterior) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!anterior) {
+      el.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">${label}</div><div style="font-size:12px;color:#94a3b8;margin-top:6px">Sin datos anteriores</div>`;
+      return;
+    }
+    const pct = Math.round(((actual - anterior) / anterior) * 100);
+    const up  = pct >= 0;
+    const col = up ? '#16a34a' : '#dc2626';
+    el.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">${label}</div>
+      <div style="font-size:22px;font-weight:900;color:${col};line-height:1.1;margin-top:4px">${up?'▲':'▼'} ${Math.abs(pct)}%</div>
+      <div style="font-size:10px;color:var(--gr);margin-top:2px">${anterior} → ${actual}</div>`;
+  }
+
+  // HOY vs promedio diario del mes anterior
+  const diasAnt = new Date(anioN, mesN - 1, 0).getDate();
+  const promAnt = vAnt / diasAnt;
+  const hoyN    = stats.hoy || 0;
+  const elH = document.getElementById('dcH');
+  if (elH) {
+    if (promAnt > 0) {
+      const pct = Math.round(((hoyN - promAnt) / promAnt) * 100);
+      const up  = pct >= 0;
+      elH.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">HOY vs prom. diario ant.</div>
+        <div style="font-size:22px;font-weight:900;color:${up?'#16a34a':'#dc2626'};line-height:1.1;margin-top:4px">${up?'▲':'▼'} ${Math.abs(pct)}%</div>
+        <div style="font-size:10px;color:var(--gr);margin-top:2px">prom: ${promAnt.toFixed(1)}/día</div>`;
+    } else {
+      elH.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">HOY vs prom. diario ant.</div><div style="font-size:12px;color:#94a3b8;margin-top:6px">Sin datos anteriores</div>`;
+    }
+  }
+
+  // MES vs mes anterior
+  _ind('dcM', 'MES vs mes anterior', vAct, vAnt || null);
+
+  // AÑO vs año anterior
+  const anioActStr = String(anioN), anioAntStr = String(anioN - 1);
+  const sumAct2 = Object.entries(porMes).filter(([k]) => k.startsWith(anioActStr)).reduce((s,[,v])=>s+v,0);
+  const sumAnt2 = Object.entries(porMes).filter(([k]) => k.startsWith(anioAntStr)).reduce((s,[,v])=>s+v,0);
+  _ind('dcA', `AÑO ${anioN} vs ${anioN-1}`, sumAct2, sumAnt2 || null);
+
+  // PENDIENTES — ratio sobre total del mes
+  const dpEl = document.getElementById('dcP');
+  if (dpEl) {
+    const total = stats.mes || 1;
+    const pct   = Math.round(((stats.pendientes||0) / total) * 100);
+    const col   = pct > 30 ? '#dc2626' : pct > 15 ? '#f97316' : '#16a34a';
+    dpEl.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">PENDIENTES / MES ACTUAL</div>
+      <div style="font-size:22px;font-weight:900;color:${col};line-height:1.1;margin-top:4px">${pct}%</div>
+      <div style="font-size:10px;color:var(--gr);margin-top:2px">${stats.pendientes||0} de ${stats.mes||0} atenciones</div>`;
+  }
+
+  wrap.style.display = 'grid';
+}
+
 // ── Aplica las 4 stats al DOM con count-up + indicadores ──
 function _aplicarStats(stats) {
   countUp('sH', stats.hoy        ?? 0);
@@ -3268,6 +3360,7 @@ function _aplicarStats(stats) {
   countUp('sA', stats.anio       ?? 0);
   countUp('sP', stats.pendientes ?? 0);
   actualizarIndicadoresDash(stats);
+  actualizarComparativaDash(stats);
 }
 
 async function cargarStats() {
@@ -4231,6 +4324,21 @@ async function toggleUs(usr,act){
   if(!confirm((act?'Activar':'Desactivar')+' a '+usr+'?'))return;
   await apiPost({action:'updateUsuario',usuario:usr,activo:act});delete CACHE.usuarios;await cargarUs();
 }
+
+// ── Modo oscuro ──
+function toggleDarkMode() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('rl_dark', isDark ? '1' : '');
+  const btn = document.getElementById('dmToggle');
+  if (btn) btn.textContent = isDark ? '☀️' : '🌙';
+}
+// Sincronizar ícono del botón con estado actual
+(function() {
+  if (document.documentElement.classList.contains('dark')) {
+    const btn = document.getElementById('dmToggle');
+    if (btn) btn.textContent = '☀️';
+  }
+})();
 
 // HELPERS
 function toggleSidebar(){
@@ -5356,15 +5464,41 @@ function exportarFusiones() {
 }
 
 function exportarEstadisticasAdmin() {
-  const ps = CACHE.estadisticasAdmin?.porSupervisor || {};
-  const datos = Object.values(ps);
-  exportarExcelGen(datos, [
-    {key:'nombre',label:'Supervisor'},
-    {key:'atenciones',label:'Atenciones'},{key:'atPendientes',label:'Pendientes'},
-    {key:'atResueltos',label:'Resueltos'},{key:'visitas',label:'Visitas'},
-    {key:'viRetrasadas',label:'Visitas Retrasadas'},{key:'casos',label:'Casos'},
-    {key:'fusiones',label:'Fusiones'}
-  ], 'EstadisticasAdmin');
+  const d = CACHE.estadisticasAdmin;
+  if (!d || !d.stats) { mostrarToast('❌ Sin datos. Abre Estadísticas Admin primero.', 'error'); return; }
+
+  const wb = XLSX.utils.book_new();
+
+  // ── Hoja 1: Resumen general ──
+  const s = d.stats;
+  const h1 = [
+    ['Módulo', 'Total', 'Este mes', 'Indicador 1', 'Valor 1', 'Indicador 2', 'Valor 2'],
+    ['Atenciones', s.atenciones.total, s.atenciones.esteMes, 'Pendientes', s.atenciones.pendientes, 'Resueltos', s.atenciones.resueltos],
+    ['Visitas',    s.visitas.total,    s.visitas.esteMes,    'En plazo',   s.visitas.enPlazo,     'Retrasadas', s.visitas.retrasadas],
+    ['Casos',      s.casos.total,      s.casos.esteMes,      'En plazo',   s.casos.enPlazo,       'Retrasados', s.casos.retrasados],
+    ['Fusiones',   s.fusiones.total,   s.fusiones.esteMes,   'Pendientes', s.fusiones.pendientes, 'Validados',  s.fusiones.validados]
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h1), 'Resumen');
+
+  // ── Hoja 2: Por supervisor (ranking) ──
+  const sup = Object.values(d.porSupervisor || {})
+    .sort((a,b) => (b.atenciones+b.visitas+b.casos+b.fusiones) - (a.atenciones+a.visitas+a.casos+a.fusiones));
+  const h2 = [['#','Supervisor','Atenciones','Pendientes','Resueltos','Visitas','V.Retrasadas','Casos','C.Retrasados','Fusiones','TOTAL']];
+  sup.forEach((r, i) => h2.push([
+    i+1, r.nombre, r.atenciones, r.atPendientes, r.atResueltos,
+    r.visitas, r.viRetrasadas, r.casos, r.caRetrasados||0, r.fusiones,
+    r.atenciones + r.visitas + r.casos + r.fusiones
+  ]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h2), 'Por Supervisor');
+
+  // ── Hoja 3: Tendencia últimos 6 meses ──
+  const t = d.tendencia || [];
+  const h3 = [['Mes','Atenciones','Visitas','Casos','Fusiones']];
+  t.forEach(r => h3.push([r.label, r.atenciones, r.visitas, r.casos, r.fusiones]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(h3), 'Tendencia 6 meses');
+
+  XLSX.writeFile(wb, 'EstadisticasAdmin_' + hoy() + '.xlsx');
+  mostrarToast('✅ Excel exportado — 3 hojas');
 }
 </script>
 <!-- BOTÓN FLOTANTE WHATSAPP -->
