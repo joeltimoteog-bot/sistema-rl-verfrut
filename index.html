@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sistema RL | Relaciones Laborales</title>
+<link rel="manifest" href="/sistema-rl-verfrut/manifest.json">
+<meta name="theme-color" content="#0a2463">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sistema RL">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet">
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -184,6 +188,9 @@ function setLoading(v){
   document.getElementById('btnLogin').disabled=v;
 }
 document.addEventListener('keypress',e=>{if(e.key==='Enter'&&document.getElementById('pantallaModulo').style.display==='none')doLogin();});
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sistema-rl-verfrut/sw.js').then(r=>console.log('[SW] Registrado:',r.scope)).catch(e=>console.warn('[SW] Error registro:',e));
+}
 </script>
 </body>
 </html>

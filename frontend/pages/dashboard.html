@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard | Sistema RL v3.1</title>
+<link rel="manifest" href="/sistema-rl-verfrut/manifest.json">
+<meta name="theme-color" content="#0a2463">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sistema RL">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&amp;family=Barlow+Condensed:wght@700;800;900&amp;display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -394,6 +398,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
           <option value="11">Noviembre</option><option value="12">Diciembre</option>
         </select>
         <input type="text" id="vFiltroSup" placeholder="Buscar supervisor..." oninput="cargarVisitas()" style="padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;width:180px">
+        <button onclick="_limpiarFiltros('visitas',['vFiltroEmp','vFiltroMes','vFiltroSup'],cargarVisitas)" style="padding:7px 12px;border:1.5px solid var(--bd);border-radius:7px;font-size:11px;font-weight:600;background:#fff;cursor:pointer;color:var(--gr)" title="Limpiar todos los filtros">🔄 Limpiar</button>
       </div>
 
       <!-- Stats (solo admin) -->
@@ -451,6 +456,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
         </select>
         <input type="text" id="cFiltroSup" placeholder="Buscar supervisor..." oninput="cargarCasos()">
         <button class="btn-a" onclick="exportarCasosExcel()">📥 Exportar Excel</button>
+        <button onclick="_limpiarFiltros('casos',['cFiltroEmp','cFiltroMotivo','cFiltroSup'],cargarCasos)" style="padding:5px 10px;border:1.5px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600;background:#fff;cursor:pointer;color:var(--gr)" title="Limpiar todos los filtros">🔄 Limpiar</button>
       </div>
 
       <!-- STATS (solo admin) -->
@@ -1587,6 +1593,7 @@ function renderEstadisticasAdmin(data) {
 // ══════════════════ MÓDULO VISITAS DE CAMPO ══════════════════
 
 async function cargarVisitas() {
+  _guardarFiltros('visitas', ['vFiltroEmp','vFiltroMes','vFiltroSup']);
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   console.log('[cargarVisitas] CACHE.visitas:', CACHE.visitas ? CACHE.visitas.length + ' registros' : 'vacío');
   if (CACHE.visitas && CACHE.visitas.length > 0) {
@@ -2853,6 +2860,7 @@ function verificarCasosPorVencer() {
 }
 
 async function cargarCasos() {
+  _guardarFiltros('casos', ['cFiltroEmp','cFiltroMotivo','cFiltroSup']);
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   const empresa = document.getElementById('cFiltroEmp')?.value || '';
   const motivo  = document.getElementById('cFiltroMotivo')?.value || '';
@@ -4511,6 +4519,8 @@ function ir(id,btn){
     if(tbT) tbT.textContent=ts[id]||id.toUpperCase();
     // Diferir carga al tick siguiente para que el navegador pinte la sección primero
     setTimeout(() => {
+      if(id==='visitas') _restaurarFiltros('visitas', ['vFiltroEmp','vFiltroMes','vFiltroSup']);
+      if(id==='casos')   _restaurarFiltros('casos',   ['cFiltroEmp','cFiltroMotivo','cFiltroSup']);
       if(id==='atenciones'   && atTodas.length===0)         cargarAtenciones();
       if(id==='visitas'      && !visitasData.length)        cargarVisitas();
       if(id==='solicitudes')                                cargarSolicitudes();
@@ -5529,6 +5539,37 @@ function exportarEstadisticasAdmin() {
   mostrarToast('✅ Excel exportado — 3 hojas');
 }
 
+// ── Filtros persistentes en localStorage ──
+function _guardarFiltros(modulo, ids) {
+  const vals = {};
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) vals[id] = el.value;
+  });
+  try { localStorage.setItem('rl_filtros_' + modulo, JSON.stringify(vals)); } catch(e) {}
+}
+
+function _restaurarFiltros(modulo, ids) {
+  try {
+    const raw = localStorage.getItem('rl_filtros_' + modulo);
+    if (!raw) return;
+    const vals = JSON.parse(raw);
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && vals[id] !== undefined) el.value = vals[id];
+    });
+  } catch(e) {}
+}
+
+function _limpiarFiltros(modulo, ids, recargar) {
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  try { localStorage.removeItem('rl_filtros_' + modulo); } catch(e) {}
+  if (typeof recargar === 'function') recargar();
+}
+
 // ── Firebase: manejadores en script principal ──
 window._fbOnAlertas = function(alertas) {
   const badge = document.getElementById('badgeFbAlertas');
@@ -5547,9 +5588,11 @@ window._fbOnAlertas = function(alertas) {
     sessionStorage.setItem(claveVisto, '1');
     if (window.Notification && Notification.permission === 'granted') {
       try {
-        new Notification('⚠️ Sistema RL — Alerta', {
+        new Notification('⚠️ Sistema RL - Caso por vencer', {
           body: masReciente.mensaje,
-          icon: '../images/logo-unifrutti.jpg'
+          icon: '/sistema-rl-verfrut/frontend/images/logo-unifrutti.jpg',
+          tag: 'rl-alerta-' + (masReciente._fbKey || masReciente.id || Date.now()),
+          requireInteraction: false
         });
       } catch(e) {}
     }
@@ -5590,9 +5633,23 @@ function togglePanelFbAlertas() {
 }
 
 function _fbSolicitarPermiso() {
-  if (window.Notification && Notification.permission === 'default') {
-    Notification.requestPermission().catch(() => {});
+  if (!window.Notification) return;
+  // Solo pedir una vez — si ya se preguntó, no volver a molestar
+  const yaPreg = localStorage.getItem('rl_notif_perm');
+  if (yaPreg) return;
+  if (Notification.permission === 'granted') {
+    localStorage.setItem('rl_notif_perm', 'granted');
+    return;
   }
+  if (Notification.permission === 'denied') {
+    localStorage.setItem('rl_notif_perm', 'denied');
+    return;
+  }
+  // permission === 'default': pedir por primera y única vez
+  Notification.requestPermission().then(result => {
+    localStorage.setItem('rl_notif_perm', result);
+    console.log('[Notificaciones] Permiso:', result);
+  }).catch(() => {});
 }
 
 function _fbIniciarConRetry(usuarioId, intentos) {
@@ -6040,5 +6097,10 @@ window._fbMarcarLeida = async function(alertaId, usuarioId) {
   </div>
 </div>
 
+<script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sistema-rl-verfrut/sw.js').then(r=>console.log('[SW] Registrado:',r.scope)).catch(e=>console.warn('[SW] Error registro:',e));
+}
+</script>
 </body>
 </html>
