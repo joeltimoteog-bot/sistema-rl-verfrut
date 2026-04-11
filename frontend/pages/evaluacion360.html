@@ -370,18 +370,22 @@ async function apiPost(b) {
 }
 
 async function cargarEvaluacionesAPI() {
-  console.log('[eval360] cargarEvaluacionesAPI → sincronizando con API...');
+  // puedeVerTodo = admin/coordinador/jefa_rl → empresa AMBAS para recibir todo sin filtro
+  const empresaParam = puedeVerTodo ? 'AMBAS' : (USER.empresa || '');
+  console.log('[eval360] cargarEvaluacionesAPI → sincronizando... rol:', USER.rol, '| empresa param:', empresaParam);
   try {
-    const d = await apiGet({action:'getEvaluaciones360'});
-    console.log('[eval360] respuesta API:', d);
-    if (!d.success || !d.data || !d.data.length) return;
+    const d = await apiGet({action:'getEvaluaciones360', empresa: empresaParam});
+    if (!d.success || !d.data) { console.warn('[eval360] API sin datos:', d); return; }
+    console.log('[eval360] total recibidos de API:', d.data.length);
     const local = getHistorial();
     const localIds = new Set(local.map(e => e.id));
     let agregados = 0;
     d.data.forEach(ev => {
       if (!localIds.has(ev.id)) { local.push(ev); agregados++; }
     });
+    console.log('[eval360] nuevos agregados:', agregados, '| total historial local:', local.length);
     if (agregados > 0) { setHistorial(local); renderRanking(); }
+    console.log('[eval360] filas visibles en ranking:', document.querySelectorAll('#tbRanking tr:not(:has(.empty))').length);
   } catch(e) { console.warn('[eval360] cargarEvaluacionesAPI → API no disponible:', e.message); }
 }
 

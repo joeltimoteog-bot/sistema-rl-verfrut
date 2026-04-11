@@ -1587,8 +1587,9 @@ function getEvaluaciones360(p) {
       total: r[12], porcentaje: r[13], nivel: r[14],
       observaciones: r[15], recomendaciones: r[16], usuario_registro: r[17]
     }));
-    if (p.empresa)    data = data.filter(e => e.empresa === p.empresa);
+    if (p.empresa && p.empresa !== 'AMBAS') data = data.filter(e => e.empresa === p.empresa);
     if (p.supervisor) data = data.filter(e => e.supervisor.toLowerCase().includes(p.supervisor.toLowerCase()));
+    Logger.log('[getEvaluaciones360] total registros devueltos: ' + data.length);
     return { success: true, data: data };
   } catch(e) { return { success: false, error: e.toString() }; }
 }function updateVisita(d) {

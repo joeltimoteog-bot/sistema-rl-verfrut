@@ -3402,11 +3402,15 @@ async function cargarStats() {
     const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
     // BUG 2b: normalización robusta de fecha (maneja "2026-04-09T05:00:00" y Date objects)
     const toFS = fa => String(fa||'').substring(0, 10).replace(/T.*/, '');
-    // BUG 2c: para admins usar historial completo; para supervisores usar sus propias atenciones
+    // BUG 2c: para admins historial completo; para supervisores filtrar por su nombre/usuario
     const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-    const ats = esAdmin
+    const _esSup  = !esAdmin && (USER.rol || '').toLowerCase() === 'supervisor';
+    const _supNm  = String(USER.nombre  || '').toLowerCase();
+    const _supUsr = String(USER.usuario || '').toLowerCase();
+    const _filtSup = arr => _esSup ? arr.filter(a => { const sv = String(a.supervisor||'').toLowerCase(); return sv === _supNm || sv === _supUsr; }) : arr;
+    const ats = _filtSup(esAdmin
       ? (CACHE.historialAtenciones || CACHE.atenciones || [])
-      : (CACHE.atenciones || []);
+      : (CACHE.atenciones || []));
 
     if (ats.length > 0) {
       // BUG 2a+2b: calcular hoy siempre desde datos locales (evita valor stale del preload)
@@ -3437,7 +3441,12 @@ async function cargarStats() {
   } catch(e){ console.error('cargarStats excepción:', e); }
 }
 function dibujar(s) {
-  const datosParaGraficar = CACHE.historialAtenciones || CACHE.atenciones || [];
+  let datosParaGraficar = CACHE.historialAtenciones || CACHE.atenciones || [];
+  if ((USER.rol || '').toLowerCase() === 'supervisor') {
+    const _nm  = String(USER.nombre  || '').toLowerCase();
+    const _usr = String(USER.usuario || '').toLowerCase();
+    datosParaGraficar = datosParaGraficar.filter(a => { const sv = String(a.supervisor||'').toLowerCase(); return sv === _nm || sv === _usr; });
+  }
   if (datosParaGraficar.length) {
     // Diferir para no bloquear; dibujarEstadisticasDash recrea charts.m y charts.e
     setTimeout(() => dibujarEstadisticasDash(datosParaGraficar), 0);
@@ -5334,6 +5343,11 @@ function filtrarEstadisticasDash() {
   const est  = document.getElementById('dFiltroEst')?.value || '';
   // Si hay año seleccionado y hay historial cargado, usarlo
   let datos = CACHE.historialAtenciones || CACHE.atenciones || [];
+  if ((USER.rol || '').toLowerCase() === 'supervisor') {
+    const _nm  = String(USER.nombre  || '').toLowerCase();
+    const _usr = String(USER.usuario || '').toLowerCase();
+    datos = datos.filter(a => { const sv = String(a.supervisor||'').toLowerCase(); return sv === _nm || sv === _usr; });
+  }
   if (anio) datos = datos.filter(a => String(a.anio||a.fecha_atencion||'').substring(0,4) === anio);
   if (est)  datos = datos.filter(a => String(a.estado||'').toUpperCase() === est);
   dibujarEstadisticasDash(datos);
