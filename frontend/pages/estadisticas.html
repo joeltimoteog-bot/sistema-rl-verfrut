@@ -560,7 +560,7 @@ function renderEstadisticasAdmin(data) {
             }
           }
         },
-        scales: { y:{ beginAtZero:true, ticks:{ stepSize:1 } } }
+        scales: { y:{ beginAtZero:true, ticks:{ stepSize:undefined, maxTicksLimit:10 } } }
       }
     });
   }
@@ -714,7 +714,7 @@ async function _cargarChartEmpresa() {
       options: {
         maintainAspectRatio: false, responsive: true,
         plugins: { legend: { position:'bottom', labels:{ font:{size:10} } } },
-        scales:  { y: { beginAtZero:true, ticks:{ stepSize:1 } } }
+        scales:  { y: { beginAtZero:true, ticks:{ stepSize:undefined, maxTicksLimit:10 } } }
       }
     });
     // Donut para Vista Gerencial
