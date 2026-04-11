@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
@@ -96,6 +97,61 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   </div>
   <div class="content">
 
+    <!-- VISTA GERENCIAL -->
+    <div id="vistaGerencial" style="display:none;background:linear-gradient(135deg,#0a2463 0%,#1e3a8a 100%);border-radius:16px;padding:22px;margin-bottom:22px;color:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <h3 style="margin:0;font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;letter-spacing:1px">📊 VISTA GERENCIAL</h3>
+        <span style="font-size:11px;color:rgba(255,255,255,.5)" id="vgFecha">—</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;margin-bottom:16px">
+        <div style="background:rgba(255,255,255,.1);border-radius:12px;padding:14px">
+          <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Atenciones este mes</div>
+          <div style="font-size:28px;font-weight:900" id="vgAtMes">—</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:4px" id="vgAtCump">—</div>
+          <div style="width:100%;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin-top:8px;overflow:hidden"><div id="vgAtBar" style="height:100%;width:0%;background:#3b82f6;border-radius:2px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:rgba(255,255,255,.1);border-radius:12px;padding:14px">
+          <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Visitas en plazo</div>
+          <div style="font-size:28px;font-weight:900" id="vgVisCump">—</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:4px" id="vgVisPct">—</div>
+          <div style="width:100%;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin-top:8px;overflow:hidden"><div id="vgVisBar" style="height:100%;width:0%;background:#10b981;border-radius:2px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:rgba(255,255,255,.1);border-radius:12px;padding:14px">
+          <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Casos en plazo</div>
+          <div style="font-size:28px;font-weight:900" id="vgCasPlazo">—</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:4px" id="vgCasPct">—</div>
+          <div style="width:100%;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin-top:8px;overflow:hidden"><div id="vgCasBar" style="height:100%;width:0%;background:#f59e0b;border-radius:2px;transition:width .8s ease"></div></div>
+        </div>
+        <div style="background:rgba(255,255,255,.1);border-radius:12px;padding:14px">
+          <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Mejor supervisor</div>
+          <div style="font-size:13px;font-weight:800;line-height:1.3;margin-top:4px" id="vgTopSup">—</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:6px" id="vgTopSupVal">—</div>
+        </div>
+        <div style="background:rgba(255,255,255,.1);border-radius:12px;padding:14px">
+          <div style="font-size:9px;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Requiere atención</div>
+          <div style="font-size:13px;font-weight:800;line-height:1.3;margin-top:4px;color:#fca5a5" id="vgAlertSup">—</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.5);margin-top:6px" id="vgAlertVal">—</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div style="background:rgba(255,255,255,.08);border-radius:12px;padding:14px">
+          <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:10px;font-weight:700">Distribución por empresa (mes actual)</div>
+          <div style="position:relative;height:150px"><canvas id="chartDonutEmpresa"></canvas></div>
+        </div>
+        <div style="background:rgba(255,255,255,.08);border-radius:12px;padding:14px">
+          <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:14px;font-weight:700">Crecimiento vs año anterior</div>
+          <div id="gerGrowAt" style="margin-bottom:14px">
+            <div style="font-size:9px;color:rgba(255,255,255,.4);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Atenciones</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.4)">Cargando comparativa...</div>
+          </div>
+          <div id="gerGrowVis">
+            <div style="font-size:9px;color:rgba(255,255,255,.4);margin-bottom:3px;text-transform:uppercase;letter-spacing:1px">Visitas</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.4)">Cargando comparativa...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- HEADER -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
       <h2 style="margin:0;font-size:18px;color:#0b1e45">📊 Estadísticas Generales</h2>
@@ -122,6 +178,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <option value="2026">2026</option>
         </select>
         <button class="btn-n" onclick="exportarEstadisticasAdmin()" style="background:#1a7f4b">📥 Excel</button>
+        <button class="btn-n" onclick="generarReportePDF()" style="background:#7c3aed">📄 PDF</button>
         <button class="btn-n" id="btnActualizar" onclick="forzarActualizacion()" style="background:#475569">🔄 Actualizar</button>
       </div>
     </div>
@@ -582,6 +639,9 @@ function renderEstadisticasAdmin(data) {
   _cargarChartEmpresa();
   // ── MEJORA 3: Comparativa mes actual vs anterior ──
   _actualizarComparativaEst(tendencia);
+  // ── Vista Gerencial + Año anterior ──
+  _renderVistaGerencial(data);
+  _cargarTendenciaAnioAnterior(tendencia);
 }
 
 function _actualizarComparativaEst(tendencia) {
@@ -657,6 +717,27 @@ async function _cargarChartEmpresa() {
         scales:  { y: { beginAtZero:true, ticks:{ stepSize:1 } } }
       }
     });
+    // Donut para Vista Gerencial
+    const ctxD = document.getElementById('chartDonutEmpresa');
+    if (ctxD && sR && sV) {
+      _destroyChart('donutEmp');
+      const totR = sR.atenciones.total + sR.visitas.total + sR.casos.total;
+      const totV = sV.atenciones.total + sV.visitas.total + sV.casos.total;
+      charts['donutEmp'] = new Chart(ctxD, {
+        type: 'doughnut',
+        data: {
+          labels: ['RAPEL', 'VERFRUT'],
+          datasets: [{ data: [totR, totV], backgroundColor: ['#3b82f6','#10b981'], borderWidth: 0, hoverOffset: 6 }]
+        },
+        options: {
+          maintainAspectRatio: false, responsive: true,
+          plugins: {
+            legend: { position:'bottom', labels:{ color:'#cdd5e0', font:{ size:11 }, padding:10 } },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed} registros` } }
+          }
+        }
+      });
+    }
   } catch(e) {
     if (loadEl) loadEl.textContent = '⚠️ Error al cargar empresas';
     console.error('[chartEmpresa]', e);
@@ -698,6 +779,237 @@ function exportarEstadisticasAdmin() {
 
   XLSX.writeFile(wb, 'EstadisticasAdmin_' + hoy() + '.xlsx');
   mostrarToast('✅ Excel exportado — 3 hojas');
+}
+
+// ── Vista Gerencial ──
+function _renderVistaGerencial(data) {
+  const vg = document.getElementById('vistaGerencial');
+  if (!vg || !data || !data.stats) return;
+  vg.style.display = 'block';
+  const { stats, porSupervisor } = data;
+  const s = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  s('vgFecha', new Date().toLocaleDateString('es-PE', { day:'numeric', month:'long', year:'numeric' }));
+
+  // Atenciones este mes con barra de progreso (meta referencia 20)
+  const atMes = stats.atenciones.esteMes || 0;
+  const meta = Math.max(20, Math.round((stats.atenciones.total / 12) * 1.2) || 20);
+  const atPct = Math.min(100, Math.round((atMes / meta) * 100));
+  s('vgAtMes', atMes);
+  s('vgAtCump', `${atPct}% de meta est. (${meta})`);
+  setTimeout(() => { const b = document.getElementById('vgAtBar'); if(b) b.style.width = atPct+'%'; }, 150);
+
+  // Visitas en plazo
+  const visT = stats.visitas.total || 0;
+  const visP = stats.visitas.enPlazo || 0;
+  const visPct = visT > 0 ? Math.round((visP / visT) * 100) : 0;
+  s('vgVisCump', visP);
+  s('vgVisPct', `${visPct}% del total (${visT})`);
+  setTimeout(() => { const b = document.getElementById('vgVisBar'); if(b) b.style.width = visPct+'%'; }, 200);
+
+  // Casos en plazo
+  const casT = stats.casos.total || 0;
+  const casP = stats.casos.enPlazo || 0;
+  const casPct = casT > 0 ? Math.round((casP / casT) * 100) : 0;
+  s('vgCasPlazo', casP);
+  s('vgCasPct', `${casPct}% del total (${casT})`);
+  setTimeout(() => { const b = document.getElementById('vgCasBar'); if(b) b.style.width = casPct+'%'; }, 250);
+
+  // Supervisores
+  const filas = Object.values(porSupervisor || {})
+    .filter(f => f.nombre && !f.nombre.includes('GMT') && !f.nombre.match(/^\d{4}-/))
+    .sort((a,b) => (b.atenciones+b.visitas+b.casos) - (a.atenciones+a.visitas+a.casos));
+
+  if (filas.length > 0) {
+    const top = filas[0];
+    s('vgTopSup', top.nombre);
+    s('vgTopSupVal', `${top.atenciones} at · ${top.visitas} vis · ${top.casos} cas`);
+
+    const alerta = filas.slice().sort((a,b) =>
+      (b.atPendientes + b.viRetrasadas + b.caRetrasados) - (a.atPendientes + a.viRetrasadas + a.caRetrasados)
+    )[0];
+    const alertaTotal = (alerta.atPendientes||0) + (alerta.viRetrasadas||0) + (alerta.caRetrasados||0);
+    if (alertaTotal > 0) {
+      s('vgAlertSup', alerta.nombre);
+      s('vgAlertVal', `${alertaTotal} pend./retrasados`);
+    } else {
+      s('vgAlertSup', '✅ Sin alertas');
+      s('vgAlertVal', 'Todos al día');
+    }
+  }
+}
+
+// ── Tendencia año anterior (MEJORA 3) ──
+async function _cargarTendenciaAnioAnterior(tendenciaActual) {
+  if (!tendenciaActual || tendenciaActual.length === 0) return;
+  const anioAnterior = new Date().getFullYear() - 1;
+  try {
+    const empresa = (document.getElementById('estFiltroEmp')?.value || '').toUpperCase();
+    const d = await apiGet({ action:'getEstadisticasAdmin', empresa, anio: String(anioAnterior) });
+    if (!d.success || !d.data.tendencia || d.data.tendencia.length === 0) {
+      _actualizarGrowthIndicators(null, null, anioAnterior);
+      return;
+    }
+    const tendAnt = d.data.tendencia;
+    const chart = charts['tendencia'];
+    if (chart) {
+      const paleta = [
+        { border:'rgba(11,30,69,.55)',    fill:'rgba(11,30,69,.03)'    },
+        { border:'rgba(124,58,237,.55)',  fill:'rgba(124,58,237,.03)'  },
+        { border:'rgba(217,41,43,.55)',   fill:'rgba(217,41,43,.03)'   },
+        { border:'rgba(245,158,11,.55)',  fill:'rgba(245,158,11,.03)'  }
+      ];
+      ['atenciones','visitas','casos','fusiones'].forEach((k, i) => {
+        chart.data.datasets.push({
+          label: `${k.charAt(0).toUpperCase()+k.slice(1)} ${anioAnterior}`,
+          data: tendAnt.map(t => t[k]),
+          borderColor: paleta[i].border,
+          backgroundColor: paleta[i].fill,
+          borderDash: [5, 4],
+          pointRadius: 2,
+          pointHoverRadius: 5,
+          tension: .4,
+          fill: false
+        });
+      });
+      chart.update('none');
+    }
+
+    const sumA = k => tendenciaActual.reduce((acc, t) => acc + (t[k]||0), 0);
+    const sumP = k => tendAnt.reduce((acc, t) => acc + (t[k]||0), 0);
+    _actualizarGrowthIndicators(sumA, sumP, anioAnterior);
+  } catch(e) {
+    console.warn('[tendenciaAnioAnterior]', e.message);
+    _actualizarGrowthIndicators(null, null, anioAnterior);
+  }
+}
+
+function _actualizarGrowthIndicators(sumAct, sumAnt, anioAnterior) {
+  const _row = (act, ant) => {
+    if (ant === null) return `<div style="font-size:11px;color:rgba(255,255,255,.35)">Sin datos de ${anioAnterior}</div>`;
+    const pct = ant === 0 ? (act > 0 ? 100 : 0) : Math.round(((act-ant)/ant)*100);
+    const up = pct >= 0;
+    return `<div style="display:flex;align-items:baseline;gap:8px">
+      <span style="font-size:24px;font-weight:900;color:${up?'#6ee7b7':'#fca5a5'}">${up?'▲':'▼'} ${Math.abs(pct)}%</span>
+    </div>
+    <div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:2px">${anioAnterior}: ${ant} → actual: ${act}</div>`;
+  };
+  const gAt  = document.getElementById('gerGrowAt');
+  const gVis = document.getElementById('gerGrowVis');
+  if (gAt) gAt.innerHTML = `<div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Atenciones</div>` +
+    _row(sumAct ? sumAct('atenciones') : 0, sumAnt ? sumAnt('atenciones') : null);
+  if (gVis) gVis.innerHTML = `<div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Visitas</div>` +
+    _row(sumAct ? sumAct('visitas') : 0, sumAnt ? sumAnt('visitas') : null);
+}
+
+// ── Reporte PDF (MEJORA 2) ──
+async function generarReportePDF() {
+  const d = CACHE.estadisticasAdmin;
+  if (!d || !d.stats) { mostrarToast('❌ Sin datos. Carga estadísticas primero.', 'error'); return; }
+  if (!window.jspdf) { mostrarToast('❌ jsPDF no cargó. Verifica conexión.', 'error'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = 210;
+  let y = 0;
+
+  // ── Encabezado ──
+  doc.setFillColor(10, 36, 99);
+  doc.rect(0, 0, W, 38, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+  doc.text('REPORTE MENSUAL — SISTEMA RL', W/2, 14, { align:'center' });
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+  doc.text('VERFRUT / RAPEL  ·  Relaciones Laborales', W/2, 22, { align:'center' });
+  doc.setFontSize(8);
+  doc.text('Generado: ' + new Date().toLocaleString('es-PE'), W/2, 30, { align:'center' });
+  y = 48;
+
+  // ── 4 KPI boxes ──
+  doc.setTextColor(0, 0, 0);
+  const s = d.stats;
+  const kpis = [
+    { label:'Atenciones', total:s.atenciones.total, sub:`Este mes: ${s.atenciones.esteMes}`,  color:[11,30,69]    },
+    { label:'Visitas',    total:s.visitas.total,    sub:`En plazo: ${s.visitas.enPlazo}`,     color:[124,58,237]  },
+    { label:'Casos',      total:s.casos.total,      sub:`En plazo: ${s.casos.enPlazo}`,       color:[217,41,43]   },
+    { label:'Fusiones',   total:s.fusiones.total,   sub:`Validados: ${s.fusiones.validados}`, color:[245,158,11]  }
+  ];
+  const bw = 43, bh = 22, gap = 2, bx0 = 11;
+  kpis.forEach((k, i) => {
+    const bx = bx0 + i * (bw + gap);
+    doc.setFillColor(...k.color);
+    doc.roundedRect(bx, y, bw, bh, 3, 3, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text(k.label, bx + bw/2, y + 7, { align:'center' });
+    doc.setFontSize(16);
+    doc.text(String(k.total), bx + bw/2, y + 16, { align:'center' });
+    doc.setFontSize(7); doc.setFont('helvetica','normal');
+    doc.text(k.sub, bx + bw/2, y + 21, { align:'center' });
+  });
+  y += bh + 10;
+
+  // ── Gráfico tendencia ──
+  const canvT = document.getElementById('chartTendencia');
+  if (canvT && charts['tendencia']) {
+    try {
+      const img = canvT.toDataURL('image/png');
+      doc.setTextColor(11, 30, 69); doc.setFontSize(11); doc.setFont('helvetica','bold');
+      doc.text('Tendencia últimos 6 meses', 12, y); y += 5;
+      doc.addImage(img, 'PNG', 12, y, 130, 55);
+      y += 60;
+    } catch(e) { console.warn('[PDF] chart capture:', e.message); }
+  }
+
+  // ── Tabla supervisores ──
+  const filas = Object.values(d.porSupervisor || {})
+    .filter(f => f.nombre && !f.nombre.includes('GMT') && !f.nombre.match(/^\d{4}-/))
+    .sort((a,b) => (b.atenciones+b.visitas+b.casos+b.fusiones)-(a.atenciones+a.visitas+a.casos+a.fusiones))
+    .slice(0, 12);
+
+  if (filas.length) {
+    doc.setTextColor(11, 30, 69); doc.setFontSize(11); doc.setFont('helvetica','bold');
+    doc.text('Ranking de Supervisores', 12, y); y += 6;
+
+    // Cabecera tabla
+    doc.setFillColor(10, 36, 99); doc.rect(12, y, 186, 7, 'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(7); doc.setFont('helvetica','bold');
+    const cx = [13, 58, 88, 113, 138, 163, 183];
+    ['Supervisor','At.','Vis.','Cas.','Fus.','Total','%'].forEach((h, i) => doc.text(h, cx[i], y+5));
+    y += 7;
+
+    const maxTotal = Math.max(...filas.map(f => f.atenciones+f.visitas+f.casos+f.fusiones)) || 1;
+    filas.forEach((r, i) => {
+      if (y > 270) { doc.addPage(); y = 15; }
+      if (i % 2 === 0) { doc.setFillColor(248,250,252); doc.rect(12, y, 186, 6.5, 'F'); }
+      doc.setTextColor(0,0,0); doc.setFontSize(7);
+      doc.setFont('helvetica', i === 0 ? 'bold' : 'normal');
+      const nom = r.nombre.length > 32 ? r.nombre.substring(0,30)+'…' : r.nombre;
+      const tot = r.atenciones + r.visitas + r.casos + r.fusiones;
+      const pct = Math.round((tot/maxTotal)*100);
+      doc.text(nom,             cx[0], y+4.5);
+      doc.text(String(r.atenciones), cx[1], y+4.5);
+      doc.text(String(r.visitas),    cx[2], y+4.5);
+      doc.text(String(r.casos),      cx[3], y+4.5);
+      doc.text(String(r.fusiones),   cx[4], y+4.5);
+      doc.setFont('helvetica','bold');
+      doc.text(String(tot), cx[5], y+4.5);
+      doc.setFont('helvetica','normal'); doc.setFontSize(6);
+      doc.text(pct+'%', cx[6], y+4.5);
+      y += 6.5;
+    });
+  }
+
+  // ── Pie de página ──
+  const H = 297;
+  doc.setFillColor(241,245,249);
+  doc.rect(0, H-12, W, 12, 'F');
+  doc.setTextColor(100,116,139); doc.setFontSize(7); doc.setFont('helvetica','normal');
+  doc.text('Sistema RL — Verfrut / RAPEL  |  Relaciones Laborales', 12, H-5);
+  doc.text('Pág. 1', W-12, H-5, { align:'right' });
+
+  doc.save('Reporte_RL_' + hoy() + '.pdf');
+  mostrarToast('✅ PDF generado correctamente');
 }
 
 // ── Init ──
