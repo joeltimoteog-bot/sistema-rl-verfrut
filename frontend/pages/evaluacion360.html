@@ -345,10 +345,13 @@ let API = sessionStorage.getItem('api') || API_URL_DEFAULT;
 const ud = sessionStorage.getItem('user');
 if (!ud) { location.href = '../../index.html'; throw 'no session'; }
 const USER = JSON.parse(ud);
-const ROLES_ADMIN  = ['administrador','Administrador'];
-const ROLES_ADMIN2 = ['administrador 01','administrador 02','Administrador 01','Administrador 02'];
-const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-if (!esAdmin) { location.href = 'dashboard.html'; throw 'no access'; }
+const ROLES_ADMIN    = ['administrador','Administrador'];
+const ROLES_ADMIN2   = ['administrador 01','administrador 02','Administrador 01','Administrador 02'];
+const ROLES_VER_TODO = ['coordinador','Coordinador','jefa_rl','Jefa_rl'];
+const esAdmin       = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+const puedeVerTodo  = esAdmin || ROLES_VER_TODO.includes(USER.rol);
+const esSupervisor  = (USER.rol || '').toLowerCase() === 'supervisor';
+if (!puedeVerTodo && !esSupervisor) { location.href = 'dashboard.html'; throw 'no access'; }
 console.log('[eval360] SESSION OK — usuario:', USER.usuario, '| rol:', USER.rol, '| empresa:', USER.empresa);
 console.log('[eval360] API URL:', API);
 
@@ -894,7 +897,11 @@ function eliminarEval(id) {
 
 // ── Render ranking ──
 function renderRanking() {
-  const historial = getHistorial();
+  let historial = getHistorial();
+  // Supervisores solo ven evaluaciones propias (donde ellos son el evaluado)
+  if (esSupervisor) {
+    historial = historial.filter(ev => ev.supervisor === USER.nombre);
+  }
   const filtEmp = document.getElementById('filtEmpRank')?.value || '';
   const filtSup = document.getElementById('filtSupRank')?.value || '';
 
@@ -926,9 +933,9 @@ function renderRanking() {
       <td><span class="rank-badge ${cl.clase}">${cl.texto}</span></td>
       <td style="color:var(--gr)">${ev.fecha}</td>
       <td>
-        <button class="btn-a bv" onclick="emitirReporte('${ev.id}')">📄 Reporte</button>
-        ${tieneHistorial ? `<button class="btn-a" style="background:#ede9fe;color:#5b21b6" onclick="verHistorialSupervisor('${ev.supervisor.replace(/'/g,"\\'")}')">📊 Historial</button>` : ''}
-        <button class="btn-a bd" onclick="eliminarEval('${ev.id}')">🗑️</button>
+        ${!esSupervisor ? `<button class="btn-a bv" onclick="emitirReporte('${ev.id}')">📄 Reporte</button>` : ''}
+        ${!esSupervisor && tieneHistorial ? `<button class="btn-a" style="background:#ede9fe;color:#5b21b6" onclick="verHistorialSupervisor('${ev.supervisor.replace(/'/g,"\\'")}')">📊 Historial</button>` : ''}
+        ${!esSupervisor ? `<button class="btn-a bd" onclick="eliminarEval('${ev.id}')">🗑️</button>` : ''}
       </td>
     </tr>`;
   }).join('');
