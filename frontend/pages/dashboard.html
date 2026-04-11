@@ -179,6 +179,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
     <button class="ni" id="navEstadisticas" style="display:none" onclick="location.href='estadisticas.html'"><span class="ic">📊</span>Estadísticas Admin</button>
     <button class="ni" id="navEval360" style="display:none" onclick="location.href='evaluacion360.html'"><span class="ic">🔄</span>Evaluación 360°</button>
     <button class="ni" id="navSolicitudes" style="display:none" onclick="ir('solicitudes',this)"><span class="ic">🔔</span>Solicitudes <span id="badgeSol" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none">0</span></button>
+    <button class="ni" id="navFbAlertas" style="display:none" onclick="togglePanelFbAlertas()"><span class="ic">⚡</span>Alertas Sistema<span id="badgeFbAlertas" style="display:none;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;min-width:17px;height:17px;line-height:17px;text-align:center;padding:0 4px;margin-left:auto;flex-shrink:0"></span></button>
     <button class="ni" id="navUsr" style="display:none" onclick="location.href='usuarios.html'"><span class="ic">👥</span>Gestión Usuarios</button>
   </div>
   <div class="sb-ft">
@@ -2151,6 +2152,10 @@ window.onload = async () => {
   }
   document.getElementById('navRes').style.display='';
     if (esAdmin) document.getElementById('navUsr').style.display='';
+    // Firebase: activar escucha de alertas para admins
+    document.getElementById('navFbAlertas').style.display = 'flex';
+    const _fbUserId = (USER.usuario || USER.nombre || 'admin').replace(/[^a-zA-Z0-9]/g, '_');
+    _fbIniciarConRetry(_fbUserId, 8);
   }
   // Filtro año en Consulta por DNI: visible para todos los roles
   const cAnioWrap = document.getElementById('cAnioWrap');
@@ -2824,6 +2829,26 @@ function verificarCasosPorVencer() {
     if (vencidos)  msg += vencidos  + ' vencido' + (vencidos  > 1 ? 's' : '');
     if (porVencer) msg += (vencidos ? ', ' : '') + porVencer + ' por vencer (≤2 días)';
     mostrarToast(msg, 'error');
+
+    // Firebase: enviar alerta por cada caso (solo admins, ID determinístico para evitar duplicados)
+    const esAdminFb = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+    if (esAdminFb && typeof window._fbEnviarAlerta === 'function') {
+      alertas.forEach(c => {
+        const lim = new Date(c.fecha_limite + 'T00:00:00');
+        const diasRestantes = Math.ceil((lim - hoy) / (1000 * 60 * 60 * 24));
+        const cuando = diasRestantes <= 0 ? 'venció' : diasRestantes === 1 ? 'vence mañana' : 'vence en 2 días';
+        const nro  = c.nro || '?';
+        const trab = c.nombre || c.trabajador || 'sin nombre';
+        const fbId = 'caso_' + String(nro).replace(/[^a-zA-Z0-9]/g, '_') + '_' + (c.fecha_limite || '').replace(/-/g, '');
+        window._fbEnviarAlerta({
+          id: fbId,
+          tipo: 'caso_por_vencer',
+          mensaje: 'Caso #' + nro + ' — ' + trab + ' ' + cuando,
+          fecha: Date.now(),
+          caso_nro: nro
+        });
+      });
+    }
   }
 }
 
@@ -5503,7 +5528,159 @@ function exportarEstadisticasAdmin() {
   XLSX.writeFile(wb, 'EstadisticasAdmin_' + hoy() + '.xlsx');
   mostrarToast('✅ Excel exportado — 3 hojas');
 }
+
+// ── Firebase: manejadores en script principal ──
+window._fbOnAlertas = function(alertas) {
+  const badge = document.getElementById('badgeFbAlertas');
+  if (!alertas.length) {
+    if (badge) badge.style.display = 'none';
+    _fbRenderLista([]);
+    return;
+  }
+  if (badge) { badge.textContent = alertas.length; badge.style.display = 'inline-block'; }
+  _fbRenderLista(alertas);
+  // Toast solo para la más reciente que no se haya mostrado aún en esta sesión
+  const masReciente = alertas.reduce((a, b) => ((a.fecha || 0) > (b.fecha || 0) ? a : b), {});
+  const claveVisto  = '_fb_v_' + (masReciente._fbKey || masReciente.id || '');
+  if (masReciente.mensaje && !sessionStorage.getItem(claveVisto)) {
+    mostrarToast('⚡ ' + masReciente.mensaje, 'error');
+    sessionStorage.setItem(claveVisto, '1');
+    if (window.Notification && Notification.permission === 'granted') {
+      try {
+        new Notification('⚠️ Sistema RL — Alerta', {
+          body: masReciente.mensaje,
+          icon: '../images/logo-unifrutti.jpg'
+        });
+      } catch(e) {}
+    }
+  }
+};
+
+function _fbRenderLista(alertas) {
+  const el = document.getElementById('listaFbAlertas');
+  if (!el) return;
+  if (!alertas.length) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:12px">✅ Sin alertas pendientes</div>';
+    return;
+  }
+  const usuarioId = (USER.usuario || USER.nombre || 'user').replace(/[^a-zA-Z0-9]/g, '_');
+  el.innerHTML = alertas.map(a => {
+    const fbKey = a._fbKey || a.id || '';
+    const fecha = a.fecha ? new Date(a.fecha).toLocaleDateString('es-PE', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+    return `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;color:#991b1b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">⚠️ Caso por vencer</div>
+      <div style="font-size:12px;color:#0f172a;font-weight:600;margin-bottom:8px">${a.mensaje || ''}</div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:10px;color:#94a3b8">${fecha}</span>
+        <button onclick="_fbMarcarLeidaUI('${fbKey}')" style="padding:4px 12px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;transition:opacity .2s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">✓ Marcar leída</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function _fbMarcarLeidaUI(alertaId) {
+  if (!alertaId) return;
+  const usuarioId = (USER.usuario || USER.nombre || 'user').replace(/[^a-zA-Z0-9]/g, '_');
+  if (typeof window._fbMarcarLeida === 'function') window._fbMarcarLeida(alertaId, usuarioId);
+}
+
+function togglePanelFbAlertas() {
+  const panel = document.getElementById('ovFbAlertas');
+  if (panel) panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function _fbSolicitarPermiso() {
+  if (window.Notification && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+}
+
+function _fbIniciarConRetry(usuarioId, intentos) {
+  if (typeof window._fbIniciarEscucha === 'function') {
+    window._fbIniciarEscucha(usuarioId);
+    _fbSolicitarPermiso();
+    console.log('[Firebase] Escucha iniciada para usuario:', usuarioId);
+  } else if (intentos > 0) {
+    setTimeout(() => _fbIniciarConRetry(usuarioId, intentos - 1), 700);
+  } else {
+    console.warn('[Firebase] SDK no disponible tras reintentos — verifica CSP y conexión');
+  }
+}
 </script>
+<!-- FIREBASE SDK (módulo separado para exponer funciones al script principal) -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, update, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBTp4WHO5bGEoYDhTbyWZVfdQxbAQHwp4I",
+  authDomain: "sistema-rl-verfrut.firebaseapp.com",
+  projectId: "sistema-rl-verfrut",
+  storageBucket: "sistema-rl-verfrut.firebasestorage.app",
+  messagingSenderId: "769176418481",
+  appId: "1:769176418481:web:53a487fcaf736b11e24a90",
+  databaseURL: "https://sistema-rl-verfrut-default-rtdb.firebaseio.com"
+};
+
+let _db;
+try {
+  const app = initializeApp(firebaseConfig);
+  _db = getDatabase(app);
+  console.log('[Firebase] Inicializado OK — RTDB:', firebaseConfig.databaseURL);
+} catch(e) {
+  console.error('[Firebase] Error al inicializar:', e);
+}
+
+// Enviar alerta con update() para no resetear leido_por si la alerta ya existe
+window._fbEnviarAlerta = async function(alerta) {
+  if (!_db || !alerta.id) return;
+  try {
+    await update(ref(_db, 'alertas/' + alerta.id), {
+      tipo:     alerta.tipo,
+      mensaje:  alerta.mensaje,
+      fecha:    alerta.fecha,
+      caso_nro: alerta.caso_nro
+    });
+  } catch(e) {
+    console.error('[Firebase] Error enviando alerta:', e);
+  }
+};
+
+// Escuchar nodo /alertas y filtrar ya leídas por este usuario
+window._fbIniciarEscucha = function(usuarioId) {
+  if (!_db) return;
+  onValue(ref(_db, 'alertas'), snap => {
+    const raw = snap.val() || {};
+    const alertas = Object.entries(raw)
+      .map(([k, v]) => ({ ...v, _fbKey: k }))
+      .filter(a => !(a.leido_por && a.leido_por[usuarioId]))
+      .sort((a, b) => (b.fecha || 0) - (a.fecha || 0));
+    if (typeof window._fbOnAlertas === 'function') window._fbOnAlertas(alertas);
+  }, e => console.error('[Firebase] Error en onValue:', e));
+};
+
+// Marcar alerta como leída para este usuario
+window._fbMarcarLeida = async function(alertaId, usuarioId) {
+  if (!_db || !alertaId || !usuarioId) return;
+  try {
+    await set(ref(_db, 'alertas/' + alertaId + '/leido_por/' + usuarioId), true);
+  } catch(e) {
+    console.error('[Firebase] Error marcando leída:', e);
+  }
+};
+</script>
+
+<!-- PANEL ALERTAS FIREBASE -->
+<div id="ovFbAlertas" style="display:none;position:fixed;inset:0;z-index:400" onclick="if(event.target===this)this.style.display='none'">
+  <div style="position:absolute;left:var(--sw);top:57px;width:360px;max-height:500px;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.2);overflow:hidden;display:flex;flex-direction:column;border:1px solid #e2e8f0">
+    <div style="padding:13px 18px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;background:#fef2f2">
+      <span style="font-weight:700;font-size:13px;color:#991b1b">⚡ Alertas en tiempo real</span>
+      <button onclick="document.getElementById('ovFbAlertas').style.display='none'" style="background:none;border:none;cursor:pointer;color:#64748b;font-size:18px;line-height:1">✕</button>
+    </div>
+    <div id="listaFbAlertas" style="overflow-y:auto;flex:1;padding:10px"></div>
+  </div>
+</div>
+
 <!-- BOTÓN FLOTANTE WHATSAPP -->
 <a href="https://wa.me/51994190769?text=Hola%20Joel%2C%20tengo%20una%20consulta%20sobre%20el%20Sistema%20RL%20v3.0" 
    target="_blank" 
