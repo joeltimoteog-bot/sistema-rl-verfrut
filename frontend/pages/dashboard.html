@@ -3915,7 +3915,10 @@ async function consultarDNI() {
 
 // RESUMEN GENERAL — sección extraída a resumen.html
 async function cargarResumen() {
-  if (!document.getElementById('supR')) return; // sección ya no existe en dashboard
+  if (!document.getElementById('supR')) {
+    console.log('[cargarResumen] sección Resumen General extraída a resumen.html — ver location.href en navRes');
+    return; // sección ya no existe en dashboard
+  }
   const emp=v('rEmp'), mes=v('rMes'), anio=v('rAnio');
   // Si hay año, enviar también al backend para filtrar
   const params = {action:'getResumenGeneral', empresa:emp, mes, anio};

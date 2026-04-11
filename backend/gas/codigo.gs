@@ -639,10 +639,19 @@ function getResumenGeneral(p) {
     if (!sheet) return { success:true, data:{lista:[],porSupervisor:{}} };
     rawRows = sheet.getDataRange().getValues().slice(1);
   } else {
-    // Por defecto: año actual
-    const sheet = getSheetAnio(null);
-    if (!sheet) return { success:true, data:{lista:[],porSupervisor:{}} };
-    rawRows = sheet.getDataRange().getValues().slice(1);
+    // Por defecto: año actual + hoja base (combinando para no perder registros históricos)
+    const anioActual2 = new Date().getFullYear();
+    const wsAnio2 = ss.getSheetByName('BB. DE REGISTROS ' + anioActual2);
+    const wsBase2 = ss.getSheetByName('BB. DE REGISTROS');
+    if (wsAnio2) rawRows = rawRows.concat(wsAnio2.getDataRange().getValues().slice(1));
+    if (wsBase2) rawRows = rawRows.concat(wsBase2.getDataRange().getValues().slice(1));
+    // Deduplicar por nro de registro
+    const vistosDef = new Set();
+    rawRows = rawRows.filter(function(r) {
+      const k = String(r[0]);
+      if (!k || vistosDef.has(k)) return false;
+      vistosDef.add(k); return true;
+    });
   }
 
   if (!rawRows.length) return { success:true, data:{lista:[],porSupervisor:{}} };
