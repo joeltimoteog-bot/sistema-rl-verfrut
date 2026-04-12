@@ -116,7 +116,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   <div id="detC"></div>
   <div class="sep" style="margin-top:16px">Estado</div>
   <div class="fg">
-    <div class="fc"><label>Estado</label><select id="dEst"><option value="PENDIENTE">PENDIENTE</option><option value="EN PROCESO">EN PROCESO</option><option value="RESUELTO">RESUELTO</option></select></div>
+    <div class="fc"><label>Estado</label><select id="dEst"><option value="EN PROCESO">EN PROCESO</option><option value="FINALIZADO">FINALIZADO</option></select></div>
   </div>
   <div class="modal-ft">
     <button class="btn-cancel" onclick="cerrar('mDet')">Cerrar</button>
@@ -172,9 +172,8 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       <select class="fi" id="rAnio" onchange="filtrarRes()"><option value="">Todos los años</option><option value="2025">2025</option><option value="2026">2026</option></select>
       <select class="fi" id="rFiltroEst" onchange="filtrarRes()" style="min-width:130px">
         <option value="">Todos los estados</option>
-        <option value="PENDIENTE">Pendiente</option>
         <option value="EN PROCESO">En Proceso</option>
-        <option value="RESUELTO">Resuelto</option>
+        <option value="FINALIZADO">Finalizado</option>
       </select>
       <select class="fi" id="rFiltroSup" onchange="filtrarRes()" style="min-width:160px">
         <option value="">Todos los supervisores</option>
@@ -186,8 +185,8 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 
     <div class="sg">
       <div class="sc"><div class="sc-ic ia">📊</div><div><div class="sc-n" id="rT">0</div><div class="sc-l">TOTAL</div></div></div>
-      <div class="sc"><div class="sc-ic in">⏳</div><div><div class="sc-n" id="rP">0</div><div class="sc-l">PENDIENTES</div></div></div>
-      <div class="sc"><div class="sc-ic iv">✅</div><div><div class="sc-n" id="rR">0</div><div class="sc-l">RESUELTOS</div></div></div>
+      <div class="sc"><div class="sc-ic in">⏳</div><div><div class="sc-n" id="rP">0</div><div class="sc-l">EN PROCESO</div></div></div>
+      <div class="sc"><div class="sc-ic iv">✅</div><div><div class="sc-n" id="rR">0</div><div class="sc-l">FINALIZADO</div></div></div>
     </div>
 
     <div class="sup-card">
@@ -208,11 +207,10 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
             <thead><tr style="background:#0b1e45;color:#fff">
               <th style="padding:7px 10px;text-align:left">Año</th>
               <th style="padding:7px 10px;text-align:center">Total</th>
-              <th style="padding:7px 10px;text-align:center">Pendientes</th>
               <th style="padding:7px 10px;text-align:center">En Proceso</th>
-              <th style="padding:7px 10px;text-align:center">Resueltos</th>
+              <th style="padding:7px 10px;text-align:center">Finalizado</th>
             </tr></thead>
-            <tbody id="tbResAnualBodyAdmin"><tr><td colspan="5" style="text-align:center;padding:10px;color:#64748b">⏳ Cargando...</td></tr></tbody>
+            <tbody id="tbResAnualBodyAdmin"><tr><td colspan="4" style="text-align:center;padding:10px;color:#64748b">⏳ Cargando...</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -223,7 +221,7 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
         <span class="card-t">Todas las Atenciones</span>
         <div style="display:flex;gap:8px">
           <select class="fi" id="rFE" onchange="filtrarRes()" style="width:120px"><option value="">Todas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
-          <select class="fi" id="rFEst" onchange="filtrarRes()" style="width:140px"><option value="">Todos estados</option><option>PENDIENTE</option><option>EN PROCESO</option><option>RESUELTO</option></select>
+          <select class="fi" id="rFEst" onchange="filtrarRes()" style="width:140px"><option value="">Todos estados</option><option>EN PROCESO</option><option>FINALIZADO</option></select>
         </div>
       </div>
       <div class="tw">
@@ -293,7 +291,7 @@ function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
 function hoy(){return new Date().toISOString().split('T')[0];}
 function fmtF(f){if(!f)return '';return String(f).split('T')[0];}
 function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[String(e||'').toUpperCase()]||'bam';}
-function estC(e){const s=String(e||'').toUpperCase();return s==='PENDIENTE'?'bp':s==='EN PROCESO'?'bpr':'brs';}
+function estC(e){const s=String(e||'').toUpperCase();return s==='EN PROCESO'?'bpr':s==='FINALIZADO'?'brs':'bp';}
 function abrir(id){document.getElementById(id).classList.add('on');}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
 function _destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
@@ -323,8 +321,8 @@ function _aplicarDatosResumen(data) {
     sups.forEach(s => { const o = document.createElement('option'); o.value=s; o.textContent=s; supSel.appendChild(o); });
   }
   document.getElementById('rT').textContent = resData.length;
-  document.getElementById('rP').textContent = resData.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
-  document.getElementById('rR').textContent = resData.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
+  document.getElementById('rP').textContent = resData.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
+  document.getElementById('rR').textContent = resData.filter(a=>String(a.estado||'').toUpperCase()==='FINALIZADO').length;
   const ps = data.porSupervisor || {};
   document.getElementById('supR').innerHTML = Object.entries(ps).length ?
     Object.entries(ps).sort((a,b)=>b[1].total-a[1].total).map(([k,val])=>`
@@ -450,7 +448,7 @@ function verDet(nro) {
     ['Observaciones',a.observaciones],['Estado',a.estado],
   ];
   document.getElementById('detC').innerHTML=campos.map(([l,val])=>`<div class="det-row"><span class="det-l">${l}</span><span class="det-v">${val||'-'}</span></div>`).join('');
-  sv('dEst',a.estado||'PENDIENTE');
+  sv('dEst',a.estado||'EN PROCESO');
   abrir('mDet');
 }
 
@@ -468,12 +466,12 @@ function dibujarGraficosResumen(datos) {
   _destroyChart('rMes');
   const elRM=document.getElementById('rChartMes');
   if(elRM) charts.rMes=new Chart(elRM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#0b1e45',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
-  const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='PENDIENTE').length;
-  const proc=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
-  const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='RESUELTO').length;
+  const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
+  const proc=0;
+  const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='FINALIZADO').length;
   _destroyChart('rEst');
   const elRE=document.getElementById('rChartEst');
-  if(elRE) charts.rEst=new Chart(elRE,{type:'doughnut',data:{labels:['Pendiente','En Proceso','Resuelto'],datasets:[{data:[pend,proc,res],backgroundColor:['#f97316','#3b82f6','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+  if(elRE) charts.rEst=new Chart(elRE,{type:'doughnut',data:{labels:['En Proceso','Finalizado'],datasets:[{data:[pend,res],backgroundColor:['#f97316','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
   const porAnio={};
   datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
   _destroyChart('rAnual');
@@ -482,9 +480,9 @@ function dibujarGraficosResumen(datos) {
   const tbody=document.getElementById('tbResAnualBodyAdmin');
   if(tbody){
     const resAnio={};
-    datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(!y||y.length!==4) return;if(!resAnio[y]) resAnio[y]={total:0,pend:0,proc:0,res:0};resAnio[y].total++;const e=String(a.estado||'').toUpperCase();if(e==='PENDIENTE') resAnio[y].pend++;else if(e==='EN PROCESO') resAnio[y].proc++;else if(e==='RESUELTO') resAnio[y].res++;});
+    datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(!y||y.length!==4) return;if(!resAnio[y]) resAnio[y]={total:0,proc:0,res:0};resAnio[y].total++;const e=String(a.estado||'').toUpperCase();if(e==='EN PROCESO') resAnio[y].proc++;else if(e==='FINALIZADO') resAnio[y].res++;});
     const aniosOrden=Object.keys(resAnio).sort().reverse();
-    tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total}</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].pend}</td><td style="padding:7px 10px;text-align:center;color:#3b82f6">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
+    tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total}</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
   }
 }
 

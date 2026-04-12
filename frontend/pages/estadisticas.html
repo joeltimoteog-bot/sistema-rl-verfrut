@@ -394,7 +394,7 @@ function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
 function hoy(){return new Date().toISOString().split('T')[0];}
 function fmtF(f){if(!f)return '';return String(f).split('T')[0];}
 function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[String(e||'').toUpperCase()]||'bam';}
-function estC(e){const s=String(e||'').toUpperCase();return s==='PENDIENTE'?'bp':s==='EN PROCESO'?'bpr':'brs';}
+function estC(e){const s=String(e||'').toUpperCase();return s==='EN PROCESO'?'bpr':s==='FINALIZADO'?'brs':'bp';}
 function abrir(id){document.getElementById(id).classList.add('on');}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
 function _destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
