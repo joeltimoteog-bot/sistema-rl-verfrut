@@ -529,8 +529,8 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
       <div style="font-size:11px;color:#64748b;margin-top:2px">Total Fusiones</div>
     </div>
     <div style="background:#fff;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center">
-      <div style="font-size:22px;font-weight:800;color:#f59e0b" id="sfPendientes">—</div>
-      <div style="font-size:11px;color:#64748b;margin-top:2px">Pendientes</div>
+      <div style="font-size:22px;font-weight:800;color:#f59e0b" id="sfEnProceso">—</div>
+      <div style="font-size:11px;color:#64748b;margin-top:2px">En Proceso</div>
     </div>
     <div style="background:#fff;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);text-align:center">
       <div style="font-size:22px;font-weight:800;color:#16a34a" id="sfTrabajadores">—</div>
@@ -610,7 +610,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
           <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center">
             <div style="background:#fff7ed;border-radius:8px;padding:6px">
               <div style="font-size:18px;font-weight:800;color:#f97316" id="eAtPend">—</div>
-              <div style="font-size:10px;color:#64748b">Pendientes</div>
+              <div style="font-size:10px;color:#64748b">En Proceso</div>
             </div>
             <div style="background:#eff6ff;border-radius:8px;padding:6px">
               <div style="font-size:18px;font-weight:800;color:#3b82f6" id="eAtProc">—</div>
@@ -674,7 +674,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center">
             <div style="background:#fff7ed;border-radius:8px;padding:6px">
               <div style="font-size:18px;font-weight:800;color:#f59e0b" id="eFusPend">—</div>
-              <div style="font-size:10px;color:#64748b">Pendientes</div>
+              <div style="font-size:10px;color:#64748b">En Proceso</div>
             </div>
             <div style="background:#f0fdf4;border-radius:8px;padding:6px">
               <div style="font-size:18px;font-weight:800;color:#16a34a" id="eFusValid">—</div>
@@ -1870,7 +1870,7 @@ function renderFusiones(data) {
 
 function actualizarStatsFusiones(data) {
   document.getElementById('sfTotal').textContent       = data.length;
-  document.getElementById('sfPendientes').textContent  = data.filter(r=>r.estado==='Pendiente').length;
+  document.getElementById('sfEnProceso').textContent   = data.filter(r=>['Pendiente','EN PROCESO'].includes(r.estado)).length;
   document.getElementById('sfTrabajadores').textContent= data.reduce((a,r)=>a+(parseInt(r.total_trab)||0),0);
   const sectores = new Set(data.map(r=>r.sector).filter(Boolean));
   document.getElementById('sfSectores').textContent    = sectores.size;
@@ -2490,6 +2490,21 @@ async function buscarTrabajadorCaso() {
   const dni = document.getElementById('mCasoDNI').value.trim();
   const msg = document.getElementById('cBuscarMsg');
   if(!dni || dni.length < 2) { msg.textContent='⚠️ Ingresa el DNI'; msg.style.color='#dc2626'; return; }
+  // Revisar cache local primero
+  if(window._trabajadoresCache && window._trabajadoresCache[dni]) {
+    const tc = window._trabajadoresCache[dni];
+    document.getElementById('cNombre').value  = tc.nombre  || '';
+    document.getElementById('cEmpresa').value = tc.empresa || '';
+    document.getElementById('cCargo').value   = tc.cargo   || '';
+    document.getElementById('cSector').value  = tc.fundo_actual || tc.fundo || '';
+    document.getElementById('cIngreso').value = tc.fecha_inicio_periodo ? String(tc.fecha_inicio_periodo).split('T')[0] : '';
+    document.getElementById('cTermino').value = tc.fecha_termino_periodo ? String(tc.fecha_termino_periodo).split('T')[0] : '';
+    document.getElementById('panelDatosCaso').style.display = 'block';
+    msg.textContent = '✅ ' + tc.nombre + ' — ' + tc.empresa + ' (caché)';
+    msg.style.color = '#16a34a';
+    window._casoTrabajador = tc;
+    return;
+  }
   console.log('[buscarTrabajadorCaso] DNI enviado:', dni, '| empresa: AMBAS');
   msg.textContent='🔍 Buscando...';
   msg.style.color='#64748b';
@@ -2510,6 +2525,8 @@ async function buscarTrabajadorCaso() {
       msg.textContent = '✅ Encontrado: ' + t.nombre + ' — ' + t.empresa;
       msg.style.color = '#16a34a';
       window._casoTrabajador = t;
+      if(!window._trabajadoresCache) window._trabajadoresCache = {};
+      window._trabajadoresCache[dni] = t;
     } else {
       msg.textContent = '⚠️ DNI no encontrado';
       msg.style.color = '#dc2626';
@@ -3175,12 +3192,14 @@ async function preloadData() {
   cargarStats();
   guardarCacheLS();
   if(ind) ind.style.display='none';
+  const _aniosData = [...new Set((CACHE.atenciones||[]).map(a=>String(a.fecha_atencion||'').substring(0,4)).filter(y=>y.length===4))].sort();
   console.log('✅ Preload paralelo completo:', {
     atenciones: (CACHE.atenciones||[]).length,
     visitas:    (CACHE.visitas||[]).length,
     casos:      (CACHE.casos||[]).length,
     fusiones:   (CACHE.fusiones||[]).length
   });
+  console.log(`[preload] Rol: ${USER.rol} | Empresa: ${esAdmin?'TODAS':(USER.empresa||'—')} | Atenciones: ${(CACHE.atenciones||[]).length} | Años en datos: ${_aniosData.join(', ')||'(sin datos)'}`);
 
   if(esAdmin && !CACHE.estadisticasAdmin) {
     setTimeout(() => cargarEstadisticasAdmin(), 500);
@@ -3313,7 +3332,7 @@ function actualizarIndicadoresDash(stats) {
   if (sumAnt > 0) { setArr('sA-arr', sumAct, sumAnt); setProg('sA-prog', (sumAct / sumAnt) * 100); }
 
   // PENDIENTES — % de pendientes sobre total del mes (barra de riesgo, sin flecha)
-  const pctP = stats.mes > 0 ? (stats.pendientes / stats.mes) * 100 : 0;
+  const pctP = stats.mes > 0 ? (stats.enProceso / stats.mes) * 100 : 0;
   setProg('sP-prog', pctP);
   const progP = document.getElementById('sP-prog');
   if (progP) setTimeout(() => { progP.style.background = pctP > 30 ? '#dc2626' : '#f97316'; }, 120);
@@ -3377,11 +3396,11 @@ function actualizarComparativaDash(stats) {
   const dpEl = document.getElementById('dcP');
   if (dpEl) {
     const total = stats.mes || 1;
-    const pct   = Math.round(((stats.pendientes||0) / total) * 100);
+    const pct   = Math.round(((stats.enProceso||0) / total) * 100);
     const col   = pct > 30 ? '#dc2626' : pct > 15 ? '#f97316' : '#16a34a';
     dpEl.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">EN PROCESO / MES ACTUAL</div>
       <div style="font-size:22px;font-weight:900;color:${col};line-height:1.1;margin-top:4px">${pct}%</div>
-      <div style="font-size:10px;color:var(--gr);margin-top:2px">${stats.pendientes||0} de ${stats.mes||0} atenciones</div>`;
+      <div style="font-size:10px;color:var(--gr);margin-top:2px">${stats.enProceso||0} de ${stats.mes||0} atenciones</div>`;
   }
 
   wrap.style.display = 'grid';
@@ -3392,7 +3411,7 @@ function _aplicarStats(stats) {
   countUp('sH', stats.hoy        ?? 0);
   countUp('sM', stats.mes        ?? 0);
   countUp('sA', stats.anio       ?? 0);
-  countUp('sP', stats.pendientes ?? 0);
+  countUp('sP', stats.enProceso ?? 0);
   actualizarIndicadoresDash(stats);
   actualizarComparativaDash(stats);
 }
@@ -3417,7 +3436,7 @@ async function cargarStats() {
         hoy:        ats.filter(a => toFS(a.fecha_atencion) === h).length,
         mes:        ats.filter(a => toFS(a.fecha_atencion).startsWith(h.slice(0, 7))).length,
         anio:       ats.filter(a => toFS(a.fecha_atencion).startsWith(h.slice(0, 4))).length,
-        pendientes: ats.filter(a => (a.estado||'').toUpperCase() === 'EN PROCESO').length
+        enProceso: ats.filter(a => (a.estado||'').toUpperCase() === 'EN PROCESO').length
       };
       _aplicarStats(stats);
       dibujar(stats);
@@ -3444,7 +3463,7 @@ async function cargarStats() {
         hoy:        atsF.filter(a => toFS2(a.fecha_atencion) === h).length,
         mes:        atsF.filter(a => toFS2(a.fecha_atencion).startsWith(h.slice(0,7))).length,
         anio:       atsF.filter(a => toFS2(a.fecha_atencion).startsWith(h.slice(0,4))).length,
-        pendientes: atsF.filter(a => (a.estado||'').toUpperCase() === 'EN PROCESO').length
+        enProceso: atsF.filter(a => (a.estado||'').toUpperCase() === 'EN PROCESO').length
       };
       _aplicarStats(sf);
       dibujar(sf);
@@ -3703,7 +3722,7 @@ async function guardarAt() {
           CACHE.stats.anio  = (CACHE.stats.anio  || 0) + 1;
           CACHE.stats.mes   = (CACHE.stats.mes   || 0) + 1;
           if(newRec.fecha_atencion === hoyStr) CACHE.stats.hoy = (CACHE.stats.hoy || 0) + 1;
-          if((newRec.estado || '').toUpperCase() === 'EN PROCESO') CACHE.stats.pendientes = (CACHE.stats.pendientes || 0) + 1;
+          if((newRec.estado || '').toUpperCase() === 'EN PROCESO') CACHE.stats.enProceso = (CACHE.stats.enProceso || 0) + 1;
         }
 
         // Persistir en localStorage
@@ -3782,12 +3801,29 @@ async function updateAt() {
 async function buscarTrab() {
   const q=v('fTQ').trim(), emp=v('fTE');
   if(q.length<2){mostrarToast('❌ Ingresa al menos 2 caracteres','error');return;}
+  // Si es DNI numérico, verificar cache local primero
+  if(/^\d{6,8}$/.test(q) && window._trabajadoresCache && window._trabajadoresCache[q]) {
+    const tc = window._trabajadoresCache[q];
+    const fiP=tc.fecha_inicio_periodo?fmtF(String(tc.fecha_inicio_periodo).split('T')[0]):'';
+    const ftP=tc.fecha_termino_periodo?fmtF(String(tc.fecha_termino_periodo).split('T')[0]):'';
+    document.getElementById('tbTrab').innerHTML=`<tr>
+      <td><strong>${tc.dni||''}</strong></td><td>${tc.nombre||''}</td><td>${tc.sexo||''}</td>
+      <td><span class="bg ${empC(tc.empresa)}">${tc.empresa||''}</span></td>
+      <td>${tc.cargo||''}</td><td>${tc.fundo||''}</td><td>${tc.fundo_actual||''}</td>
+      <td>${tc.ruta||''}</td><td>${tc.codigo||''}</td><td>${tc.regimen||''}</td>
+      <td>${fiP}</td><td>${ftP}</td>
+      <td><button class="btn-a bv" onclick="regAt('${esc(tc.dni||'')}','${esc(tc.nombre||'')}','${esc(tc.empresa||'')}','${esc(tc.fundo||'')}','${esc(tc.cargo||'')}','${esc(tc.sexo||'')}','${esc(tc.ruta||'')}','${esc(tc.codigo||'')}','${esc(tc.fundo_actual||'')}','','${esc(String(tc.fecha_inicio_periodo||'').split('T')[0])}','${esc(String(tc.fecha_termino_periodo||'').split('T')[0])}')">+ Atención</button></td>
+    </tr>`;
+    return;
+  }
   document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">🔍 Buscando...</td></tr>';
   console.log('[buscarTrab] q:', q, '| empresa:', emp||'AMBAS');
   try{
     const d=await apiGet({action:'buscarTrabajador',q:q.trim(),empresa:emp||'AMBAS'});
     console.log('[buscarTrab] Respuesta:', JSON.stringify(d));
     if(!d.success||!d.data||!d.data.length){document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">⚠️ No se encontraron trabajadores</td></tr>';return;}
+    if(!window._trabajadoresCache) window._trabajadoresCache={};
+    d.data.forEach(t=>{ if(t.dni) window._trabajadoresCache[String(t.dni).trim()]=t; });
     document.getElementById('tbTrab').innerHTML=d.data.map(t=>{
       const fiP=t.fecha_inicio_periodo?fmtF(String(t.fecha_inicio_periodo).split('T')[0]):'';
       const ftP=t.fecha_termino_periodo?fmtF(String(t.fecha_termino_periodo).split('T')[0]):'';
@@ -4542,9 +4578,12 @@ function ir(id,btn){
     setTimeout(() => {
       if(id==='visitas') _restaurarFiltros('visitas', ['vFiltroEmp','vFiltroMes','vFiltroSup']);
       if(id==='casos')   _restaurarFiltros('casos',   ['cFiltroEmp','cFiltroMotivo','cFiltroSup']);
-      if(id==='atenciones'   && atTodas.length===0)         cargarAtenciones();
+      if(id==='atenciones') {
+        if(CACHE.atenciones && CACHE.atenciones.length > 0) { atTodas = CACHE.atenciones.filter(a => a.fecha_atencion === hoy()); renderAt(atTodas); }
+        else cargarAtenciones();
+      }
       if(id==='visitas'      && !visitasData.length)        cargarVisitas();
-      if(id==='solicitudes')                                cargarSolicitudes();
+      if(id==='solicitudes'  && !CACHE.solicitudes)         cargarSolicitudes();
       if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
       if(id==='casos'        && !casosData.length)          cargarCasos();
       if(id==='usuarios'     && !CACHE.usuarios)            cargarUs();
