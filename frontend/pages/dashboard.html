@@ -1383,8 +1383,8 @@ async function cargarEstadisticasAdmin() {
   clearTimeout(_estTimer);
   await new Promise(r => { _estTimer = setTimeout(r, 200); });
   if (!document.getElementById('sec-estadisticas')?.classList.contains('on')) { console.log('[EST] abortado: sec-estadisticas no está activa'); return; }
-  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-  if (!esAdmin) { console.log('[EST] abortado: rol no admin →', USER.rol); return; }
+  const esAdmin = ROLES_VER_TODO.includes(USER.rol);
+  if (!esAdmin) { console.log('[EST] abortado: rol sin acceso →', USER.rol); return; }
 
   const empresa = (document.getElementById('estFiltroEmp')?.value || '').toUpperCase();
   const mes     = parseInt(document.getElementById('estFiltroMes')?.value || '0');
@@ -1413,7 +1413,7 @@ async function cargarEstadisticasAdmin() {
   if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">⏳ Cargando datos...</td></tr>';
 
   try {
-    const d = await apiGet({ action:'getEstadisticasAdmin', empresa, mes: mes||'', supervisor: sup });
+    const d = await apiGet({ action:'getEstadisticasAdmin', empresa, mes: mes||'', supervisor: sup, rol: USER.rol });
     console.log('[EST] respuesta API success:', d.success, '| data.stats:', !!d.data?.stats, '| tendencia:', !!d.data?.tendencia, '| porSupervisor:', Object.keys(d.data?.porSupervisor||{}).length);
     if (!d.success) {
       if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ ' + (d.error||'Error al cargar') + '</td></tr>';
@@ -1915,7 +1915,7 @@ function verFotosFusion(idx) {
 const ROLES_ADMIN   = ['administrador','Administrador'];
 const ROLES_ADMIN2  = ['administrador 01','administrador 02','Administrador 01','Administrador 02'];
 const ROLES_SUP     = ['supervisor','Supervisor'];
-const ROLES_VER_TODO = ['administrador','administrador 01','administrador 02','Administrador','Administrador 01','Administrador 02'];
+const ROLES_VER_TODO = ['administrador','administrador 01','administrador 02','Administrador','Administrador 01','Administrador 02','coordinador','Coordinador','jefa_rl','Jefa_rl'];
 
 // ════════════════════════════════════════════════════════════
 // RESTRICCIÓN DE HORARIO — Solo aplica a supervisores
@@ -3145,7 +3145,7 @@ function cargarCacheLS() {
 async function preloadData() {
   const ind = document.getElementById('preloadIndicator');
   if(ind) ind.style.display='block';
-  const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  const esAdmin = ROLES_VER_TODO.includes(USER.rol);
   const empresa = esAdmin ? '' : (USER.empresa || '');
 
   // Lanzar los 4 módulos en paralelo — cada uno actualiza CACHE y UI al llegar
@@ -3405,15 +3405,13 @@ async function cargarStats() {
     const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
     // BUG 2b: normalización robusta de fecha (maneja "2026-04-09T05:00:00" y Date objects)
     const toFS = fa => String(fa||'').substring(0, 10).replace(/T.*/, '');
-    // BUG 2c: para admins historial completo; para supervisores filtrar por su nombre/usuario
-    const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+    // Admin = ROLES_VER_TODO (incluye coordinador/jefa_rl); supervisor filtra por nombre/usuario
+    const esAdmin = ROLES_VER_TODO.includes(USER.rol);
     const _esSup  = !esAdmin && (USER.rol || '').toLowerCase() === 'supervisor';
     const _supNm  = String(USER.nombre  || '').toLowerCase();
     const _supUsr = String(USER.usuario || '').toLowerCase();
     const _filtSup = arr => _esSup ? arr.filter(a => { const sv = String(a.supervisor||'').toLowerCase(); return sv === _supNm || sv === _supUsr; }) : arr;
-    const ats = _filtSup(esAdmin
-      ? (CACHE.historialAtenciones || CACHE.atenciones || [])
-      : (CACHE.atenciones || []));
+    const ats = _filtSup(CACHE.historialAtenciones || CACHE.atenciones || []);
 
     if (ats.length > 0) {
       // BUG 2a+2b: calcular hoy siempre desde datos locales (evita valor stale del preload)
@@ -3435,12 +3433,24 @@ async function cargarStats() {
       dibujar(s);
       return;
     }
-    // Último fallback: llamada directa a la API
+    // Último fallback: cargar atenciones raw y calcular desde ahí
     const empresa = esAdmin ? '' : (USER.empresa || '');
-    const d = await apiGet({action:'getEstadisticas', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
-    if (!d.success) { console.error('getEstadisticas error:', d.error); return; }
-    _aplicarStats(d.data);
-    dibujar(d.data);
+    console.log('[cargarStats] fallback → getAtenciones, rol:', USER.rol, '| empresa:', empresa||'todas');
+    const d = await apiGet({action:'getAtenciones', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
+    if (!d.success) { console.error('[cargarStats] getAtenciones error:', d.error); return; }
+    CACHE.atenciones = d.data;
+    const atsF = _filtSup(d.data || []);
+    if (atsF.length > 0) {
+      const toFS2 = fa => String(fa||'').substring(0, 10).replace(/T.*/,'');
+      const sf = {
+        hoy:        atsF.filter(a => toFS2(a.fecha_atencion) === h).length,
+        mes:        atsF.filter(a => toFS2(a.fecha_atencion).startsWith(h.slice(0,7))).length,
+        anio:       atsF.filter(a => toFS2(a.fecha_atencion).startsWith(h.slice(0,4))).length,
+        pendientes: atsF.filter(a => (a.estado||'').toUpperCase() === 'PENDIENTE').length
+      };
+      _aplicarStats(sf);
+      dibujar(sf);
+    }
   } catch(e){ console.error('cargarStats excepción:', e); }
 }
 function dibujar(s) {
