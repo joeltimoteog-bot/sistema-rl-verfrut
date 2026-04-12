@@ -1058,6 +1058,13 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutos antes de considerar stale
 let charts={};
 function _destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
 
+// Declaración anticipada — versión completa más abajo
+async function forzarActualizacionDash() {
+  await refrescarEnBackground();
+  cargarStats();
+  mostrarToast('✅ Dashboard actualizado', 'success');
+}
+
 function mostrarToast(msg, tipo='ok') {
   let t = document.getElementById('_toast');
   if(!t) {
