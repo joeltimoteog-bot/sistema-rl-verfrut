@@ -2181,8 +2181,12 @@ window.onload = async () => {
   // Carga instantánea: usar localStorage si hay datos frescos (< 10 min)
   if (cargarCacheLS()) {
     CACHE._loaded = true;
-    cargarStats();
-    // Actualizar silenciosamente en background
+    // Solo llamar cargarStats() si CACHE.stats ya está poblado.
+    // Si no, refrescarEnBackground lo llenará y llamará cargarStats al terminar.
+    if (CACHE.stats && Object.keys(CACHE.stats).length > 0) {
+      cargarStats();
+    }
+    // Actualizar silenciosamente en background y re-aplicar stats con datos frescos
     refrescarEnBackground().then(() => cargarStats());
   } else {
     preloadData();
@@ -3195,6 +3199,10 @@ async function preloadData() {
   } catch(e) {
     console.error('[preload] Error de red:', e);
   }
+
+  // Safety: si getPreload falló y CACHE.stats quedó undefined,
+  // asignar objeto vacío para que cargarStats() no caiga al fallback de getAtenciones.
+  if (!CACHE.stats) CACHE.stats = {};
 
   CACHE_TS = Date.now();
   CACHE._loaded = true;
