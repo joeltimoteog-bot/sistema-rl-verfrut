@@ -683,7 +683,7 @@ function calcularResultado() {
 }
 
 // ── Guardar evaluación ──
-function guardarEvaluacion() {
+async function guardarEvaluacion() {
   const supervisor = document.getElementById('eval_supervisor').value;
   const empresa = document.getElementById('eval_empresa').value;
   const fecha = document.getElementById('eval_fecha').value;
@@ -737,16 +737,33 @@ function guardarEvaluacion() {
     evaluadorUser: USER.nombre
   };
 
-  const historial = getHistorial();
-  historial.unshift(evaluacion);
-  setHistorial(historial);
-
-  // Intentar guardar en API (no bloqueante)
-  guardarEnAPI(evaluacion);
-
-  mostrarToast('✅ Evaluación guardada correctamente');
-  renderRanking();
-  mostrarDashboard();
+  // 1. Guardar en Google Sheets como fuente principal (bloqueante)
+  const btn = document.querySelector('#panelFormulario .btn-green');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
+  try {
+    if (!API || API.trim() === '') API = API_URL_DEFAULT;
+    console.log('[eval360] guardarEvaluacion → enviando a API, id:', evaluacion.id, '| supervisor:', evaluacion.supervisor);
+    const r = await apiPost({action: 'saveEvaluacion360', ...evaluacion});
+    console.log('[eval360] guardarEvaluacion → respuesta:', JSON.stringify(r));
+    if (!r || !r.success) {
+      const msg = (r && r.error) ? r.error : 'Respuesta inesperada del servidor';
+      mostrarToast('❌ No se pudo guardar en Google Sheets: ' + msg, 'error');
+      return;
+    }
+    // 2. API confirmó éxito → agregar al caché local
+    const historial = getHistorial();
+    historial.unshift(evaluacion);
+    setHistorial(historial);
+    // 3. Actualizar UI solo tras confirmación exitosa
+    mostrarToast('✅ Evaluación guardada correctamente');
+    renderRanking();
+    mostrarDashboard();
+  } catch(e) {
+    console.error('[eval360] guardarEvaluacion → error de red:', e);
+    mostrarToast('❌ Error de conexión al guardar: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar Evaluación'; }
+  }
 }
 
 function limpiarFormulario() {
