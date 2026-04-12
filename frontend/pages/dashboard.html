@@ -3451,6 +3451,7 @@ async function cargarStats() {
         anio:       ats.filter(a => toFS(a.fecha_atencion).startsWith(h.slice(0, 4))).length,
         enProceso: ats.filter(a => (a.estado||'').toUpperCase() === 'EN PROCESO').length
       };
+      CACHE.stats = stats;
       _aplicarStats(stats);
       dibujar(stats);
       return;
@@ -3478,6 +3479,7 @@ async function cargarStats() {
         anio:       atsF.filter(a => toFS2(a.fecha_atencion).startsWith(h.slice(0,4))).length,
         enProceso: atsF.filter(a => (a.estado||'').toUpperCase() === 'EN PROCESO').length
       };
+      CACHE.stats = sf;
       _aplicarStats(sf);
       dibujar(sf);
     }
