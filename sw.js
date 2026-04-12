@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sistema-rl-v1';
+const CACHE_NAME = 'sistema-rl-v3';
 const APPS_SCRIPT_ORIGIN = 'https://script.google.com';
 
 // Archivos estáticos a pre-cachear al instalar
