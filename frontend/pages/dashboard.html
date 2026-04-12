@@ -3160,57 +3160,55 @@ function cargarCacheLS() {
     return true;
   } catch(e) { return false; }
 }
-// ══════════════════ PRELOAD - CARGA INICIAL (paralela) ══════════════════
+// ══════════════════ PRELOAD - CARGA INICIAL ══════════════════
+// Usa getPreload (misma acción que refrescarEnBackground) para una sola llamada.
+// Para admins: getPreload devuelve atenciones:[] y stats calculadas (evita cargar miles de registros).
+// Para supervisores: getPreload devuelve atenciones completas.
 async function preloadData() {
   const ind = document.getElementById('preloadIndicator');
   if(ind) ind.style.display='block';
   const esAdmin = ROLES_VER_TODO.includes(USER.rol);
   const empresa = esAdmin ? '' : (USER.empresa || '');
 
-  // Para admins: atenciones son miles de registros, se cargan lazy al abrir el módulo.
-  // En su lugar se cargan solo las stats calculadas para poblar el dashboard.
-  // Para supervisores: se cargan las atenciones completas (pocos registros).
-  let pAtenciones = Promise.resolve();
-  if (esAdmin) {
-    pAtenciones = apiGet({action:'getEstadisticas', usuario:USER.usuario, rol:USER.rol, empresa})
-      .then(d => { if(d.success && d.data) CACHE.stats = d.data; })
-      .catch(e => console.error('[preload] stats admin:', e));
-  } else {
-    pAtenciones = apiGet({action:'getAtenciones', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa})
-      .then(d => {
-        if(d.success && d.data) {
-          CACHE.atenciones = d.data;
-          CACHE._loaded    = true;
-          atTodas = d.data.filter(a => a.fecha_atencion === hoy());
-        }
-      }).catch(e => console.error('[preload] atenciones:', e));
+  try {
+    const d = await apiGet({action:'getPreload', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
+    if (d.success && d.data) {
+      const data = d.data;
+      CACHE.stats      = data.stats      || {};
+      CACHE.visitas    = data.visitas    || [];
+      CACHE.casos      = data.casos      || [];
+      CACHE.fusiones   = data.fusiones   || [];
+      // Admins: atenciones vacías (lazy al abrir módulo); supervisores: cargadas aquí
+      CACHE.atenciones = data.atenciones || [];
+      if (data.solicitudes) CACHE.solicitudes  = data.solicitudes;
+      if (data.usuarios)    CACHE.usuarios     = data.usuarios;
+      if (data.supervisores) CACHE.supervisores = data.supervisores;
+
+      // Inicializar variables locales usadas por otros módulos
+      atTodas       = CACHE.atenciones.filter(a => a.fecha_atencion === hoy());
+      casosData     = CACHE.casos;
+      _fusionesData = CACHE.fusiones;
+      if (casosData.length) verificarCasosPorVencer();
+    } else {
+      console.error('[preload] getPreload falló:', d.error);
+    }
+  } catch(e) {
+    console.error('[preload] Error de red:', e);
   }
-
-  const pVisitas = apiGet(Object.assign({action:'getVisitas', empresa, mes:''}, esAdmin ? {} : {supervisor: USER.nombre||USER.usuario}))
-    .then(d => { if(d.success && d.data) CACHE.visitas = d.data; })
-    .catch(e => console.error('[preload] visitas:', e));
-
-  const pCasos = apiGet({action:'getCasos', empresa, nombre:USER.nombre||USER.usuario, usuario:USER.usuario, rol:USER.rol})
-    .then(d => { if(d.success && d.data) { CACHE.casos = d.data; casosData = d.data; verificarCasosPorVencer(); } })
-    .catch(e => console.error('[preload] casos:', e));
-
-  const pFusiones = apiGet({action:'getFusiones', usuario: esAdmin ? 'TODOS' : (USER.nombre||USER.email)})
-    .then(d => { if(d.success && d.data) { CACHE.fusiones = d.data; _fusionesData = d.data; } })
-    .catch(e => console.error('[preload] fusiones:', e));
-
-  await Promise.all([pAtenciones, pVisitas, pCasos, pFusiones]);
 
   CACHE_TS = Date.now();
   CACHE._loaded = true;
   cargarStats();
   guardarCacheLS();
   if(ind) ind.style.display='none';
+
   const _aniosData = [...new Set((CACHE.atenciones||[]).map(a=>String(a.fecha_atencion||'').substring(0,4)).filter(y=>y.length===4))].sort();
-  console.log('✅ Preload paralelo completo:', {
+  console.log('✅ Preload completo:', {
     atenciones: (CACHE.atenciones||[]).length,
     visitas:    (CACHE.visitas||[]).length,
     casos:      (CACHE.casos||[]).length,
-    fusiones:   (CACHE.fusiones||[]).length
+    fusiones:   (CACHE.fusiones||[]).length,
+    stats:      !!CACHE.stats
   });
   console.log(`[preload] Rol: ${USER.rol} | Empresa: ${esAdmin?'TODAS':(USER.empresa||'—')} | Atenciones: ${(CACHE.atenciones||[]).length} | Años en datos: ${_aniosData.join(', ')||'(sin datos)'}`);
 
