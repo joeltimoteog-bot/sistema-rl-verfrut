@@ -1560,12 +1560,14 @@ function getPreload(p) {
     const empresa = p.empresa || '';
     const esAdmin = (rol === 'administrador' || rol === 'administrador 01' || rol === 'administrador 02');
 
-    // ── Atenciones ──
+    // ── Atenciones ── (admins las cargan lazy al abrir el módulo — son miles de registros)
     let atenciones = [];
-    try { const d = getAtenciones(p);  if (d.success) atenciones = d.data; } catch(e){}
+    if (!esAdmin) {
+      try { const d = getAtenciones(p); if (d.success) atenciones = d.data; } catch(e){}
+    }
 
     // ── Stats dashboard ──
-    let stats = { hoy:0, mes:0, anio:0, total:0, pendientes:0, porMes:{}, porTipo:{}, porEstado:{} };
+    let stats = { hoy:0, mes:0, anio:0, total:0, enProceso:0, porMes:{}, porTipo:{}, porEstado:{} };
     try { const d = getEstadisticas(p); if (d.success) stats = d.data; } catch(e){}
 
     // ── Visitas ──

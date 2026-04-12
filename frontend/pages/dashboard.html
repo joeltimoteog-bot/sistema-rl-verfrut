@@ -3132,12 +3132,16 @@ function _lsCacheKey() { return 'rl_cache_' + USER.usuario; }
 
 function guardarCacheLS() {
   try {
-    localStorage.setItem(_lsCacheKey(), JSON.stringify({data: CACHE, ts: CACHE_TS}));
+    // Excluir atenciones e historial del localStorage: son grandes y se cargan lazy
+    const {atenciones: _a, historialAtenciones: _h, ...datosReducidos} = CACHE;
+    const payload = JSON.stringify({data: datosReducidos, ts: CACHE_TS});
+    localStorage.setItem(_lsCacheKey(), payload);
   } catch(e) {
     // Cuota excedida: liberar la clave propia y reintentar
     try {
       localStorage.removeItem(_lsCacheKey());
-      localStorage.setItem(_lsCacheKey(), JSON.stringify({data: CACHE, ts: CACHE_TS}));
+      const {atenciones: _a, historialAtenciones: _h, ...datosReducidos} = CACHE;
+      localStorage.setItem(_lsCacheKey(), JSON.stringify({data: datosReducidos, ts: CACHE_TS}));
     } catch(e2) {
       mostrarToast('⚠️ Almacenamiento local lleno. Los datos no se guardarán localmente hasta reiniciar sesión.', 'error');
       console.warn('localStorage lleno:', e2);
@@ -3163,15 +3167,24 @@ async function preloadData() {
   const esAdmin = ROLES_VER_TODO.includes(USER.rol);
   const empresa = esAdmin ? '' : (USER.empresa || '');
 
-  // Lanzar los 4 módulos en paralelo — cada uno actualiza CACHE y UI al llegar
-  const pAtenciones = apiGet({action:'getAtenciones', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa})
-    .then(d => {
-      if(d.success && d.data) {
-        CACHE.atenciones = d.data;
-        CACHE._loaded    = true;
-        atTodas = d.data.filter(a => a.fecha_atencion === hoy());
-      }
-    }).catch(e => console.error('[preload] atenciones:', e));
+  // Para admins: atenciones son miles de registros, se cargan lazy al abrir el módulo.
+  // En su lugar se cargan solo las stats calculadas para poblar el dashboard.
+  // Para supervisores: se cargan las atenciones completas (pocos registros).
+  let pAtenciones = Promise.resolve();
+  if (esAdmin) {
+    pAtenciones = apiGet({action:'getEstadisticas', usuario:USER.usuario, rol:USER.rol, empresa})
+      .then(d => { if(d.success && d.data) CACHE.stats = d.data; })
+      .catch(e => console.error('[preload] stats admin:', e));
+  } else {
+    pAtenciones = apiGet({action:'getAtenciones', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa})
+      .then(d => {
+        if(d.success && d.data) {
+          CACHE.atenciones = d.data;
+          CACHE._loaded    = true;
+          atTodas = d.data.filter(a => a.fecha_atencion === hoy());
+        }
+      }).catch(e => console.error('[preload] atenciones:', e));
+  }
 
   const pVisitas = apiGet(Object.assign({action:'getVisitas', empresa, mes:''}, esAdmin ? {} : {supervisor: USER.nombre||USER.usuario}))
     .then(d => { if(d.success && d.data) CACHE.visitas = d.data; })
@@ -3530,12 +3543,15 @@ async function cargarAtenciones(historial=false) {
     renderAt(atTodas);
     return;
   }
+  const tb = document.getElementById('tbAt');
+  if(tb) tb.innerHTML = '<tr><td colspan="11" class="empty">⏳ Cargando atenciones...</td></tr>';
   try {
-    const d=await apiGet({action:'getAtenciones',usuario:USER.usuario,nombre:USER.nombre||USER.usuario,rol:USER.rol,empresa:USER.empresa});
+    const _emp = ROLES_VER_TODO.includes(USER.rol) ? '' : (USER.empresa || '');
+    const d=await apiGet({action:'getAtenciones',usuario:USER.usuario,nombre:USER.nombre||USER.usuario,rol:USER.rol,empresa:_emp});
     if(d.success){CACHE.atenciones=d.data;atTodas=d.data.filter(a=>a.fecha_atencion===hoy());renderAt(atTodas);}
-    else { document.getElementById('tbAt').innerHTML='<tr><td colspan="11" class="empty">❌ '+(d.error||'Error al cargar atenciones')+'</td></tr>'; }
+    else { if(tb) tb.innerHTML='<tr><td colspan="11" class="empty">❌ '+(d.error||'Error al cargar atenciones')+'</td></tr>'; }
   } catch(e){
-    document.getElementById('tbAt').innerHTML='<tr><td colspan="11" class="empty">❌ Error de conexión</td></tr>';
+    if(tb) tb.innerHTML='<tr><td colspan="11" class="empty">❌ Error de conexión</td></tr>';
     console.error('cargarAtenciones:', e);
   }
 }
