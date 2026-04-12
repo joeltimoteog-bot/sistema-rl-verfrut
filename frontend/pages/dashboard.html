@@ -1581,7 +1581,7 @@ function renderEstadisticasAdmin(data) {
       options: {
         maintainAspectRatio: false, responsive: true,
         plugins: { legend: { position:'bottom', labels:{ font:{size:10} } } },
-        scales:  { y: { beginAtZero:true, ticks:{ stepSize:1 } } }
+        scales:  { y: { beginAtZero:true, ticks:{ maxTicksLimit:10 } } }
       }
     });
   }
@@ -3515,7 +3515,7 @@ function dibujar(s) {
       responsive: true,
       maintainAspectRatio: false,
       plugins: { legend: { display: false } },
-      scales:  { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+      scales:  { y: { beginAtZero: true, ticks: { maxTicksLimit: 10 } } }
     }
   });
 
