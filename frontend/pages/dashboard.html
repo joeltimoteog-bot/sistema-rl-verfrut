@@ -3250,7 +3250,10 @@ function countUp(id, target, duration) {
 
 // ── Computa porMes desde raw atenciones (o usa CACHE.stats.porMes si existe) ──
 function _getPorMes() {
-  if (CACHE.stats && CACHE.stats.porMes) return CACHE.stats.porMes;
+  // Admins: ignorar CACHE.stats.porMes (solo 6 meses) y calcular desde raw para comparativa multianual
+  const _isAdminPM = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol) ||
+                     ['coordinador','Coordinador','jefa_rl','Jefa_rl'].includes(USER.rol);
+  if (!_isAdminPM && CACHE.stats && CACHE.stats.porMes) return CACHE.stats.porMes;
   const porMes = {};
   const toFS = fa => String(fa||'').substring(0, 10).replace(/T.*/, '');
   (CACHE.historialAtenciones || CACHE.atenciones || []).forEach(a => {

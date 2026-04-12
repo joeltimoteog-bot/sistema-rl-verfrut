@@ -211,12 +211,27 @@ function getAtenciones(p) {
     if (!sheet) return { success: true, data: [] };
     rows = sheet.getDataRange().getValues().slice(1);
   } else {
-    // Por defecto: año actual
-    const sheet = getSheetAnio(null);
-    if (!sheet) return { success: true, data: [] };
-    rows = p.historial
-      ? sheet.getDataRange().getValues().slice(1)
-      : getRowsCurrentYear(sheet, 1000, 1);
+    const _rolAt = p.rol || '';
+    if (_rolAt === 'supervisor') {
+      // Supervisores: solo año actual
+      const sheet = getSheetAnio(null);
+      if (!sheet) return { success: true, data: [] };
+      rows = p.historial
+        ? sheet.getDataRange().getValues().slice(1)
+        : getRowsCurrentYear(sheet, 1000, 1);
+    } else {
+      // Administradores: combinar 2024, 2025 y 2026
+      const _ssAt = SpreadsheetApp.openById(SPREADSHEET_ID);
+      const _anioAt = new Date().getFullYear();
+      [_anioAt, _anioAt - 1, _anioAt - 2].forEach(function(a) {
+        const ws = _ssAt.getSheetByName('BB. DE REGISTROS ' + a);
+        if (ws) rows = rows.concat(ws.getDataRange().getValues().slice(1));
+      });
+      const _baseAt = _ssAt.getSheetByName('BB. DE REGISTROS');
+      if (_baseAt) rows = rows.concat(_baseAt.getDataRange().getValues().slice(1));
+      const _vistosAt = new Set();
+      rows = rows.filter(function(r) { const k = String(r[0]); if (!k || _vistosAt.has(k)) return false; _vistosAt.add(k); return true; });
+    }
   }
   if (!rows.length) return { success: true, data: [] };
 
@@ -540,12 +555,29 @@ function limpiarCacheTrabajadores() {
 function getEstadisticas(p) {
   const ss2 = SpreadsheetApp.openById(SPREADSHEET_ID);
   const anioActual2 = new Date().getFullYear();
-  const sheetNueva = ss2.getSheetByName('BB. DE REGISTROS ' + anioActual2);
-  const sheetBase  = ss2.getSheetByName('BB. DE REGISTROS');
-  const sheet = sheetNueva || sheetBase;
-  if (!sheet) return { success:true, data:{hoy:0,mes:0,anio:0,total:0,pendientes:0,porMes:{},porTipo:{},porEstado:{}} };
-  // Solo últimas 2000 filas para estadísticas (año actual + anterior)
-  const rows = [['hdr'], ...getRowsCurrentYear(sheet, 2000, 1)];
+  const _rolEst = p.rol || '';
+  const _esAdminEst = (_rolEst !== 'supervisor');
+  let rows;
+  if (_esAdminEst) {
+    // Administradores: combinar 2024, 2025 y 2026 deduplicando por nro
+    let _rawEst = [];
+    [anioActual2, anioActual2 - 1, anioActual2 - 2].forEach(function(a) {
+      const ws = ss2.getSheetByName('BB. DE REGISTROS ' + a);
+      if (ws) _rawEst = _rawEst.concat(ws.getDataRange().getValues().slice(1));
+    });
+    const _baseEst = ss2.getSheetByName('BB. DE REGISTROS');
+    if (_baseEst) _rawEst = _rawEst.concat(_baseEst.getDataRange().getValues().slice(1));
+    const _vistosEst = new Set();
+    _rawEst = _rawEst.filter(function(r) { const k = String(r[0]); if (!k || _vistosEst.has(k)) return false; _vistosEst.add(k); return true; });
+    rows = [['hdr'], ..._rawEst];
+  } else {
+    // Supervisores: solo año actual
+    const sheetNueva = ss2.getSheetByName('BB. DE REGISTROS ' + anioActual2);
+    const sheetBase  = ss2.getSheetByName('BB. DE REGISTROS');
+    const sheet = sheetNueva || sheetBase;
+    if (!sheet) return { success:true, data:{hoy:0,mes:0,anio:0,total:0,pendientes:0,porMes:{},porTipo:{},porEstado:{}} };
+    rows = [['hdr'], ...getRowsCurrentYear(sheet, 2000, 1)];
+  }
   if (rows.length < 2) return { success:true, data:{hoy:0,mes:0,anio:0,total:0,pendientes:0,porMes:{},porTipo:{},porEstado:{}} };
   
   const mesN  = new Date().getMonth() + 1;
@@ -639,11 +671,13 @@ function getResumenGeneral(p) {
     if (!sheet) return { success:true, data:{lista:[],porSupervisor:{}} };
     rawRows = sheet.getDataRange().getValues().slice(1);
   } else {
-    // Por defecto: año actual + hoja base (combinando para no perder registros históricos)
+    // Por defecto: combinar 2024, 2025 y 2026
     const anioActual2 = new Date().getFullYear();
-    const wsAnio2 = ss.getSheetByName('BB. DE REGISTROS ' + anioActual2);
+    [anioActual2, anioActual2 - 1, anioActual2 - 2].forEach(function(a) {
+      const ws = ss.getSheetByName('BB. DE REGISTROS ' + a);
+      if (ws) rawRows = rawRows.concat(ws.getDataRange().getValues().slice(1));
+    });
     const wsBase2 = ss.getSheetByName('BB. DE REGISTROS');
-    if (wsAnio2) rawRows = rawRows.concat(wsAnio2.getDataRange().getValues().slice(1));
     if (wsBase2) rawRows = rawRows.concat(wsBase2.getDataRange().getValues().slice(1));
     // Deduplicar por nro de registro
     const vistosDef = new Set();
@@ -1321,9 +1355,16 @@ function getEstadisticasAdmin(p) {
     var filtroSup   = (p.supervisor|| '').toLowerCase();
     var filtroMes   = p.mes ? parseInt(p.mes) : 0;
 
-    // ── ATENCIONES: r[0]=nro r[1]=fecha r[11]=empresa r[18]=supervisor r[25]=estado ──
-    var wsAt    = ss.getSheetByName('BB. DE REGISTROS ' + anioActual) || ss.getSheetByName('BB. DE REGISTROS');
-    var rawAt   = wsAt ? wsAt.getDataRange().getValues().slice(1) : [];
+    // ── ATENCIONES: combinar 2024, 2025 y 2026 deduplicando por nro ──
+    var _rawAtAll = [];
+    [anioActual, anioActual - 1, anioActual - 2].forEach(function(a) {
+      var ws = ss.getSheetByName('BB. DE REGISTROS ' + a);
+      if (ws) _rawAtAll = _rawAtAll.concat(ws.getDataRange().getValues().slice(1));
+    });
+    var _baseAt = ss.getSheetByName('BB. DE REGISTROS');
+    if (_baseAt) _rawAtAll = _rawAtAll.concat(_baseAt.getDataRange().getValues().slice(1));
+    var _vistosAtAdmin = new Set();
+    var rawAt = _rawAtAll.filter(function(r) { var k = String(r[0]); if (!k || _vistosAtAdmin.has(k)) return false; _vistosAtAdmin.add(k); return true; });
     var atenciones = [];
     for (var i = 0; i < rawAt.length; i++) {
       var r = rawAt[i];
