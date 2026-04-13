@@ -378,17 +378,15 @@ async function cargarResumen(forzar = false) {
   if (!forzar && CACHE.resumen && !mes && !anio && emp === 'AMBAS') {
     _aplicarDatosResumen(CACHE.resumen);
     // Intentar refrescar panel supervisor desde Firebase mientras hay datos cacheados
-    if (typeof window._fbDatosEstadisticas === 'function') {
-      const fb = window._fbDatosEstadisticas();
-      if (fb && fb.por_supervisor) _rFbCargarSuper(fb.por_supervisor);
+    if (_rFbEstadisticas && _rFbEstadisticas.por_supervisor) {
+      _rFbCargarSuper(_rFbEstadisticas.por_supervisor);
     }
     return;
   }
   // Firebase primero cuando no hay filtros: mostrar instantáneamente mientras llega la API
   if (!forzar && !mes && !anio && emp === 'AMBAS') {
-    if (typeof window._fbDatosEstadisticas === 'function') {
-      const fb = window._fbDatosEstadisticas();
-      if (fb && fb.por_supervisor) _rFbCargarSuper(fb.por_supervisor);
+    if (_rFbEstadisticas && _rFbEstadisticas.por_supervisor) {
+      _rFbCargarSuper(_rFbEstadisticas.por_supervisor);
     }
   }
 
