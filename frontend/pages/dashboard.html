@@ -4397,14 +4397,18 @@ function _construirCuerpoTextoPlano(datos, resumen, fi, ff, total) {
   const colR = (s, n)  => String(s||'').substring(0, n).padStart(n);
   const sep  = (widths) => widths.map(w => '-'.repeat(w)).join('-+-') + '\n';
   const MAX_DETALLE = 50;
+  const hora = new Date().getHours();
+  const saludo = hora < 12 ? 'Buenos días' : hora < 19 ? 'Buenas tardes' : 'Buenas noches';
 
-  // ── 1. Saludo ────────────────────────────────────────────
-  let c = 'Estimados,\n\n';
+  // ── 1. Saludo e introducción ─────────────────────────────
+  let c = 'Estimados, ' + saludo + '.\n\n';
+  c += 'Se adjunta el archivo Excel con el registro de atenciones registradas entre el ' + fi + ' y el ' + ff + '.\n';
+  c += 'Total de atenciones: ' + total + '\n\n';
 
   // ── 2. Resumen por empresa / tipo / responsable ──────────
-  c += 'RESUMEN DE ATENCIONES\n';
-  c += '='.repeat(72) + '\n';
-  c += col('EMPRESA',10) + ' | ' + col('TIPO DOCUMENTO',28) + ' | ' + col('RESPONSABLE',24) + ' | CANT\n';
+  c += 'RESUMEN POR EMPRESA / TIPO DE DOCUMENTO / RESPONSABLE:\n';
+  c += '='.repeat(76) + '\n';
+  c += col('EMPRESA',10) + ' | ' + col('TIPO DE DOCUMENTO',28) + ' | ' + col('RESPONSABLE RECEPCIÓN',24) + ' | CANT\n';
   c += sep([10, 28, 24, 4]);
   (resumen || []).forEach(r => {
     c += col(r.empresa,10) + ' | ' + col(r.tipo,28) + ' | ' + col(r.responsable,24) + ' | ' + colR(r.cantidad,4) + '\n';
@@ -4414,37 +4418,38 @@ function _construirCuerpoTextoPlano(datos, resumen, fi, ff, total) {
   // ── 3. Detalle de atenciones (máx 50 registros) ──────────
   const datosLimitados = (datos || []).slice(0, MAX_DETALLE);
   const truncado = (datos || []).length > MAX_DETALLE;
-  c += 'DETALLE DE ATENCIONES';
-  if (truncado) c += ' (mostrando primeros ' + MAX_DETALLE + ' de ' + total + ')';
-  c += '\n';
-  c += '='.repeat(72) + '\n';
-  c += col('N°',4)    + ' | ' + col('FECHA',10)      + ' | ' + col('DNI',9)
-     + ' | ' + col('NOMBRE',22)      + ' | ' + col('EMP',7)
-     + ' | ' + col('SUPERVISOR',18)  + ' | ' + col('DOCUMENTO',22)
-     + ' | ' + col('RESPONSABLE',20) + ' | ESTADO\n';
-  c += sep([4, 10, 9, 22, 7, 18, 22, 20, 12]);
+  c += 'DETALLE DE ATENCIONES (' + total + ' registros)';
+  if (truncado) c += ' — mostrando primeros ' + MAX_DETALLE;
+  c += ':\n';
+  c += '='.repeat(76) + '\n';
+  c += col('N°',4)   + ' | ' + col('FECHA',10)     + ' | ' + col('DNI',9)
+     + ' | ' + col('NOMBRE',22)           + ' | ' + col('EMPRESA',7)
+     + ' | ' + col('DOCUMENTO',22)        + ' | ' + col('F.INI DOC',10)
+     + ' | ' + col('F.FIN DOC',10)        + ' | ' + colR('DIAS',4)
+     + ' | ' + col('OBSERVACIONES',22)    + ' | ' + col('SUPERVISOR',18)
+     + ' | ESTADO\n';
+  c += sep([4, 10, 9, 22, 7, 22, 10, 10, 4, 22, 18, 12]);
   datosLimitados.forEach((a, idx) => {
     c += col(idx+1,4)                          + ' | '
        + col(fmtF(a.fecha_atencion),10)        + ' | '
        + col(a.dni,9)                          + ' | '
        + col(a.nombre,22)                      + ' | '
        + col(a.empresa,7)                      + ' | '
-       + col(a.supervisor,18)                  + ' | '
        + col(a.detalle_documento,22)           + ' | '
-       + col(a.responsable_recepcion,20)       + ' | '
+       + col(fmtF(a.fecha_inicio_doc),10)      + ' | '
+       + col(fmtF(a.fecha_termino_doc),10)     + ' | '
+       + colR(a.dias_transcurridos||'',4)      + ' | '
+       + col(a.observaciones,22)               + ' | '
+       + col(a.supervisor,18)                  + ' | '
        + (a.estado||'') + '\n';
   });
   c += '\n';
 
-  // ── 4. Totales ───────────────────────────────────────────
-  c += '='.repeat(72) + '\n';
-  c += 'Total de registros: ' + total + '\n';
-  c += 'Período: ' + fi + ' al ' + ff + '\n';
-  c += '='.repeat(72) + '\n\n';
-
-  // ── 5. Firma ─────────────────────────────────────────────
-  c += 'Generado por: ' + (USER.nombre || USER.usuario || 'Sistema RL') + '\n';
-  c += 'Sistema RL v3.0 - Verfrut & RAPEL';
+  // ── 4. Firma ─────────────────────────────────────────────
+  c += 'Atentamente,\n';
+  c += (USER.nombre || USER.usuario || 'Equipo RL') + '\n';
+  c += 'Coordinador de Relaciones Laborales\n';
+  c += 'Verfrut / Rapel — Sistema RL v3.0';
   return c;
 }
 
