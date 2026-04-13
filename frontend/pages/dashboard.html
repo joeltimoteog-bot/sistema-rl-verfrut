@@ -4220,6 +4220,9 @@ async function generarCorreo() {
 
     if (historial.length > 0) {
       // Filtrar localmente — sin llamar a la API
+      const _esAdminCorreo = ROLES_VER_TODO.includes(USER.rol) || ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+      const _supNm  = (USER.nombre  || '').trim().toLowerCase();
+      const _supUsr = (USER.usuario || '').trim().toLowerCase();
       const candidatos = historial.filter(a => {
         const fNorm = (a.fecha_atencion instanceof Date)
           ? a.fecha_atencion.toISOString().substring(0, 10)
@@ -4227,9 +4230,16 @@ async function generarCorreo() {
         const matchFecha = fNorm >= fi && fNorm <= ff;
         const matchEmp   = !empFiltro || empFiltro === 'AMBAS' || a.empresa === empFiltro;
         const matchResp  = !respFiltro.length || respFiltro.includes(String(a.responsable_recepcion||'').trim());
-        return matchFecha && matchEmp && matchResp;
+        // Filtro supervisor: admins ven todo; supervisores filtran por nombre/usuario con includes() para tolerancia a diferencias menores
+        const sv = String(a.supervisor || '').trim().toLowerCase();
+        const us = String(a.usuario_sistema || '').trim().toLowerCase();
+        const matchSup = _esAdminCorreo
+          || sv.includes(_supNm) || _supNm.includes(sv)
+          || sv.includes(_supUsr) || us === _supUsr;
+        return matchFecha && matchEmp && matchResp && matchSup;
       });
-      console.log('[reporte] Registros en caché para el rango:', candidatos.length);
+      console.log('[reporte] Registros en caché para el rango:', candidatos.length,
+        '| supervisor filtro:', _esAdminCorreo ? 'ADMIN (todos)' : (_supNm || _supUsr));
       if (!candidatos.length) {
         document.getElementById('correoPreview').innerHTML =
           '<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>';
