@@ -720,60 +720,89 @@ function getResumenGeneral(p) {
 function getReporteCorreo(p) {
   const fi = p.fecha_inicio, ff = p.fecha_fin;
   if (!fi || !ff) return { success:false, error:'Ingresa rango de fechas.' };
-  
+
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const anioActual = new Date().getFullYear();
-  
-  // Leer de ambas hojas
+
+  // Leer PRIMERO 2026, luego 2025 y 2024 como respaldo — NO la hoja base sin año
   let lista = [];
-  const hojas = ['BB. DE REGISTROS ' + anioActual, 'BB. DE REGISTROS'];
-  
-  hojas.forEach(nombreHoja => {
+  const anios = [anioActual, anioActual - 1, anioActual - 2]; // ej: 2026, 2025, 2024
+  const hojasInfo = [];
+
+  anios.forEach(function(anio) {
+    const nombreHoja = 'BB. DE REGISTROS ' + anio;
     const ws = ss.getSheetByName(nombreHoja);
-    if (!ws) return;
-    const rows = ws.getDataRange().getValues();
-    if (rows.length < 2) return;
-    for (let i = 1; i < rows.length; i++) {
-      if (!rows[i][0] && !rows[i][7]) continue;
-      let o = {};
-      COLS.forEach((h, j) => o[h] = rows[i][j]);
-      const f = o.fecha_atencion instanceof Date
-        ? Utilities.formatDate(o.fecha_atencion, 'GMT-5', 'yyyy-MM-dd')
-        : String(o.fecha_atencion).split('T')[0];
-      if (f >= fi && f <= ff) lista.push(o);
+    if (!ws) {
+      console.log('[getReporteCorreo] Hoja no existe: ' + nombreHoja);
+      return;
     }
+    const rows = ws.getDataRange().getValues();
+    if (rows.length < 2) {
+      console.log('[getReporteCorreo] Hoja sin datos: ' + nombreHoja);
+      return;
+    }
+    let countHoja = 0;
+    for (let i = 1; i < rows.length; i++) {
+      // Saltar fila si nro (col A, índice 0) Y fecha_atencion (col B, índice 1) están vacíos
+      if (!rows[i][0] && !rows[i][1]) continue;
+      let o = {};
+      COLS.forEach(function(h, j) { o[h] = rows[i][j]; });
+      // Normalizar fecha_atencion a yyyy-MM-dd para comparar con fi/ff
+      let f = '';
+      if (o.fecha_atencion instanceof Date) {
+        f = Utilities.formatDate(o.fecha_atencion, 'GMT-5', 'yyyy-MM-dd');
+      } else {
+        f = String(o.fecha_atencion || '').replace(/T.*/,'').substring(0, 10);
+      }
+      if (f >= fi && f <= ff) {
+        lista.push(o);
+        countHoja++;
+      }
+    }
+    console.log('[getReporteCorreo] ' + nombreHoja + ': ' + countHoja + ' registros en rango [' + fi + ' – ' + ff + ']');
+    hojasInfo.push({ hoja: nombreHoja, encontrados: countHoja });
   });
 
-  // Deduplicar por nro
+  // Deduplicar por nro (columna A, índice 0)
   const vistos = new Set();
-  lista = lista.filter(o => {
-    const k = String(o.nro);
-    if (vistos.has(k)) return false;
-    vistos.add(k); return true;
+  lista = lista.filter(function(o) {
+    const k = String(o.nro || '');
+    if (!k || vistos.has(k)) return false;
+    vistos.add(k);
+    return true;
   });
+  console.log('[getReporteCorreo] Total tras deduplicar: ' + lista.length);
 
+  // Filtrar por supervisor: columna S (índice 18) o usuario_sistema (columna AB, índice 27)
   if (p.rol === 'supervisor') {
-    lista = lista.filter(a => {
-      const sup = String(a.supervisor || '').toLowerCase().trim();
-      const usr = String(p.usuario || '').toLowerCase().trim();
-      const nom = String(p.nombre  || '').toLowerCase().trim();
+    const usr = String(p.usuario || '').toLowerCase().trim(); // username de login
+    const nom = String(p.nombre  || '').toLowerCase().trim(); // nombre completo
+    lista = lista.filter(function(a) {
+      const sup  = String(a.supervisor      || '').toLowerCase().trim();
+      const uSis = String(a.usuario_sistema || '').toLowerCase().trim();
       return sup.includes(usr) || sup.includes(nom) ||
-             usr.includes(sup) || nom.includes(sup);
+             usr.includes(sup) || nom.includes(sup) ||
+             uSis === usr || uSis === nom;
     });
+    console.log('[getReporteCorreo] Tras filtro supervisor (usr=' + usr + '): ' + lista.length);
   }
+
   if (p.empresa && p.empresa !== 'AMBAS') {
-    lista = lista.filter(a => String(a.empresa).toUpperCase() === p.empresa);
+    lista = lista.filter(function(a) { return String(a.empresa || '').toUpperCase() === p.empresa; });
+    console.log('[getReporteCorreo] Tras filtro empresa (' + p.empresa + '): ' + lista.length);
   }
 
   const resumenMap = {};
-  lista.forEach(a => {
+  lista.forEach(function(a) {
     const key = (a.empresa||'')+'||'+(a.detalle_documento||'')+'||'+(a.responsable_recepcion||'');
     if (!resumenMap[key]) resumenMap[key] = { empresa:a.empresa||'', tipo:a.detalle_documento||'', responsable:a.responsable_recepcion||'', cantidad:0 };
     resumenMap[key].cantidad++;
   });
-  const resumen = Object.values(resumenMap).sort((a,b) => b.cantidad - a.cantidad);
-  lista.sort((a,b) => String(a.fecha_atencion).localeCompare(String(b.fecha_atencion)));
-  return { success:true, data:lista, resumen, total:lista.length };
+  const resumen = Object.values(resumenMap).sort(function(a,b){ return b.cantidad - a.cantidad; });
+  lista.sort(function(a,b){ return String(a.fecha_atencion).localeCompare(String(b.fecha_atencion)); });
+
+  console.log('[getReporteCorreo] Respuesta final — total: ' + lista.length + ' | hojas consultadas: ' + JSON.stringify(hojasInfo));
+  return { success:true, data:lista, resumen:resumen, total:lista.length, hojasInfo:hojasInfo };
 }
 
 // ============================================================

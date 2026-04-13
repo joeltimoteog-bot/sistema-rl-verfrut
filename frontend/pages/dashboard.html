@@ -4178,13 +4178,25 @@ async function generarCorreo() {
       total   = datos.length;
     } else {
       // Caché vacío → llamar API
-      const params = {action:'getReporteCorreo', fecha_inicio:fi, fecha_fin:ff,
-        empresa:empFiltro, responsables:respFiltro.join(','),
-        rol:USER.rol, usuario:USER.nombre||USER.usuario, nombre:USER.nombre||USER.usuario};
+      // fecha_inicio/fecha_fin vienen de inputs type=date → formato yyyy-MM-dd correcto
+      // usuario = login key para filtro supervisor; nombre = nombre completo para matching
+      const params = {
+        action:        'getReporteCorreo',
+        fecha_inicio:  fi,
+        fecha_fin:     ff,
+        empresa:       empFiltro || (USER.empresa || ''),
+        responsables:  respFiltro.join(','),
+        rol:           USER.rol,
+        usuario:       USER.usuario,
+        nombre:        USER.nombre || USER.usuario
+      };
       console.log('[reporte] Caché vacío — llamando API con params:', JSON.stringify(params));
       const d = await apiGet(params);
       console.log('[reporte] Respuesta API — success:', d.success,
         '| total:', d.total, '| registros:', d.data ? d.data.length : 0);
+      if (d.hojasInfo) {
+        d.hojasInfo.forEach(h => console.log('[reporte] Hoja', h.hoja, '→', h.encontrados, 'registros en rango'));
+      }
       if(!d.success){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ '+d.error+'<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>';return;}
       if(!d.data||!d.data.length){
         document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>';
