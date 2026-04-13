@@ -215,7 +215,13 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
     <!-- DASHBOARD -->
     <div class="sec on" id="sec-dashboard">
       <div class="welcome">
-        <div><h2 id="wN">BIENVENIDO</h2><p id="wR">Cargando...</p></div>
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <h2 id="wN" style="margin:0">BIENVENIDO</h2>
+            <span id="fbBadgeDash" style="display:none;align-items:center;gap:4px;background:#dcfce7;color:#166534;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700">🟢 En tiempo real</span>
+          </div>
+          <p id="wR">Cargando...</p>
+        </div>
         <div style="font-size:42px;opacity:.5">🏛️</div>
       </div>
       <div class="sg">
@@ -271,7 +277,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
       <div id="fbDashWidgets" style="display:none;margin-top:20px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
           <span style="font-size:12px;font-weight:700;color:#0b1e45">⚡ Datos en tiempo real</span>
-          <span id="fbEstadoBadge" style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.3px">🔴 EN VIVO</span>
+          <span id="fbEstadoBadge" style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.3px">🟢 En tiempo real</span>
           <span id="fbActualizadoHace" style="font-size:10px;color:#94a3b8"></span>
         </div>
         <div class="gg">
@@ -4742,9 +4748,11 @@ function _fbAplicarEstadisticasFirebase(fbData) {
   // sA: usar total como proxy solo si no hay datos locales detallados
   const localLen = (CACHE.historialAtenciones || CACHE.atenciones || []).length;
   if (rg.total !== undefined && !localLen) countUp('sA', rg.total);
-  // Mostrar panel en vivo
+  // Mostrar panel en vivo y badge en header
   const wrap = document.getElementById('fbDashWidgets');
   if (wrap) wrap.style.display = '';
+  const headerBadge = document.getElementById('fbBadgeDash');
+  if (headerBadge) headerBadge.style.display = 'inline-flex';
   // Badge actualización
   const tsEl = document.getElementById('fbActualizadoHace');
   if (tsEl && rg.ultima_actualizacion) {

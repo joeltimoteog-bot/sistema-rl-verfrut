@@ -154,7 +154,10 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
 
     <!-- HEADER -->
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;flex-wrap:wrap;gap:10px">
-      <h2 style="margin:0;font-size:18px;color:#0b1e45">📊 Estadísticas Generales</h2>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <h2 style="margin:0;font-size:18px;color:#0b1e45">📊 Estadísticas Generales</h2>
+        <span id="fbBadgeEst" style="display:none;align-items:center;gap:4px;background:#dcfce7;color:#166534;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700">🟢 En tiempo real</span>
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <select id="estFiltroEmp" onchange="cargarEstadisticasAdmin()" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px">
           <option value="">Todas las empresas</option>
@@ -1012,6 +1015,127 @@ async function generarReportePDF() {
   mostrarToast('✅ PDF generado correctamente');
 }
 
+// ══════════════════ FIREBASE ESTADÍSTICAS ══════════════════
+
+let _fbEstEst = null;
+
+function _fbCargarEstadisticasEst(fbData) {
+  if (!fbData) return false;
+  const rg = fbData.resumen_global;
+  if (!rg) return false;
+  const edad = Date.now() - (rg.ultima_actualizacion || 0);
+  if (edad > 15 * 60 * 1000) return false; // datos viejos — usar API
+
+  _fbEstEst = fbData;
+
+  // Tarjetas de atenciones (Firebase solo tiene atenciones)
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.textContent = val; };
+  set('eAtTotal', rg.total);
+  set('eAtProc',  rg.en_proceso);
+  set('eAtRes',   rg.finalizados);
+  set('eAtMes',   rg.este_mes);
+
+  // Ranking supervisores desde Firebase
+  const rankEl = document.getElementById('estRankingBody');
+  const porSup = fbData.por_supervisor;
+  if (rankEl && porSup) {
+    const filas = Object.values(porSup)
+      .filter(s => s.nombre)
+      .sort((a, b) => (b.total || 0) - (a.total || 0));
+    if (filas.length) {
+      const medallas = ['🥇','🥈','🥉'];
+      const maxT = Math.max(...filas.map(s => s.total || 0)) || 1;
+      rankEl.innerHTML = filas.map((s, i) => {
+        const total = s.total || 0;
+        const pct   = Math.round((total / maxT) * 100);
+        const nombre = s.nombre;
+        const medalla = i < 3 ? medallas[i] : `<span style="font-weight:700;color:#94a3b8;font-size:11px">#${i+1}</span>`;
+        return `<div style="margin-bottom:10px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+            <span style="min-width:22px;text-align:center">${medalla}</span>
+            <span style="font-weight:600;color:#0b1e45;font-size:12px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${nombre}">${nombre}</span>
+            <span style="font-size:11px;color:#64748b">${total} at</span>
+            <span style="font-weight:800;color:#16a34a;font-size:13px;min-width:28px;text-align:right">${total}</span>
+          </div>
+          <div style="height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${i===0?'#f59e0b':i===1?'#94a3b8':i===2?'#c97c38':'#3b82f6'};border-radius:3px;transition:width .6s ease"></div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Donut RAPEL vs VERFRUT desde Firebase
+  const porEmp = fbData.por_empresa;
+  if (porEmp) {
+    const ctxD = document.getElementById('chartDonutEmpresa');
+    if (ctxD) {
+      _destroyChart('donutEmpFb');
+      const totR = (porEmp.RAPEL   || {}).total || 0;
+      const totV = (porEmp.VERFRUT || {}).total || 0;
+      charts['donutEmpFb'] = new Chart(ctxD, {
+        type: 'doughnut',
+        data: {
+          labels: ['RAPEL','VERFRUT'],
+          datasets: [{ data:[totR, totV], backgroundColor:['#3b82f6','#d9292b'], borderWidth:0 }]
+        },
+        options: { responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10 } } } } }
+      });
+    }
+  }
+
+  // Tendencia desde Firebase
+  const porMes = fbData.por_mes;
+  if (porMes) {
+    const meses = Object.keys(porMes).sort();
+    const ultimos = meses.slice(-6);
+    const ctxT = document.getElementById('chartTendencia');
+    if (ctxT && ultimos.length) {
+      _destroyChart('tendenciaFb');
+      charts['tendenciaFb'] = new Chart(ctxT, {
+        type: 'line',
+        data: {
+          labels: ultimos.map(k => { const [a,m] = k.split('-'); return ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'][parseInt(m)] + ' ' + a.slice(2); }),
+          datasets: [{
+            label: 'Atenciones',
+            data: ultimos.map(k => (porMes[k] || {}).total || 0),
+            borderColor: '#0b1e45', backgroundColor: 'rgba(11,30,69,.1)',
+            tension: 0.4, fill: true, pointRadius: 4
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { maxTicksLimit: 8 } },
+            x: { ticks: { maxTicksLimit: 10 } }
+          }
+        }
+      });
+    }
+  }
+
+  // Mostrar badge
+  const badge = document.getElementById('fbBadgeEst');
+  if (badge) badge.style.display = 'inline-flex';
+  console.log('[Firebase][Est] Estadísticas aplicadas desde Firebase (' + Math.round(edad/1000) + 's)');
+  return true;
+}
+
+function _fbIniciarEscuchaEst(intentos) {
+  if (typeof window._fbSuscribirEstEst === 'function') {
+    window._fbSuscribirEstEst(function(data) {
+      if (data) {
+        console.log('[Firebase][Est] Estadísticas actualizadas en tiempo real');
+        _fbCargarEstadisticasEst(data);
+      }
+    });
+    console.log('[Firebase][Est] Escucha /estadisticas iniciada');
+  } else if (intentos > 0) {
+    setTimeout(() => _fbIniciarEscuchaEst(intentos - 1), 700);
+  }
+}
+
 // ── Init ──
 window.onload = function() {
   const ini = USER.nombre || '?';
@@ -1034,8 +1158,38 @@ window.onload = function() {
     _mostrarSkeletonCards();
     cargarEstadisticasAdmin();
   }
+  // Firebase: iniciar escucha de estadísticas en tiempo real
+  _fbIniciarEscuchaEst(12);
 };
 window.addEventListener('beforeunload', () => { clearTimeout(_estTimer); });
+</script>
+
+<!-- Firebase SDK — Estadísticas en tiempo real -->
+<script type="module">
+import { initializeApp }        from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+const _fbConfigEst = {
+  apiKey:            "AIzaSyBTp4WHO5bGEoYDhTbyWZVfdQxbAQHwp4I",
+  authDomain:        "sistema-rl-verfrut.firebaseapp.com",
+  databaseURL:       "https://sistema-rl-verfrut-default-rtdb.firebaseio.com",
+  projectId:         "sistema-rl-verfrut",
+  storageBucket:     "sistema-rl-verfrut.firebasestorage.app",
+  messagingSenderId: "769176418481",
+  appId:             "1:769176418481:web:53a487fcaf736b11e24a90"
+};
+
+const _fbAppEst = initializeApp(_fbConfigEst, 'estadisticas-app');
+const _fbDbEst  = getDatabase(_fbAppEst);
+
+window._fbSuscribirEstEst = function(callback) {
+  const estadRef = ref(_fbDbEst, 'estadisticas');
+  onValue(estadRef, snap => {
+    callback(snap.val());
+  }, err => {
+    console.warn('[Firebase][Est] Error escucha:', err.message);
+  });
+};
 </script>
 </body>
 </html>
