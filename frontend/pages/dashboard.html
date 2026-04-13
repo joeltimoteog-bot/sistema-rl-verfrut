@@ -364,8 +364,21 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
             <div id="respCorreoCustom" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px"></div>
           </div>
         </div>
+        <!-- Campos Para y CC — se incluyen en el mailto al enviar -->
+        <div class="fg" style="margin-top:10px">
+          <div class="fc" style="grid-column:1/-1">
+            <label>Para (correos separados por coma): <span style="font-weight:400;color:#94a3b8">obligatorio</span></label>
+            <input type="text" id="cPara" value="ovilela@verfrut.pe, jchavez@verfrut.pe"
+                   style="width:100%;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+          </div>
+          <div class="fc" style="grid-column:1/-1">
+            <label>Con copia (CC): <span style="font-weight:400;color:#94a3b8">opcional</span></label>
+            <input type="text" id="cCC" value="jtimoteo@verfrut.pe"
+                   style="width:100%;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+          </div>
+        </div>
         <div style="margin-top:14px">
-          <button class="btn-n" onclick="generarCorreo()" style="padding:10px 24px;font-size:12px">🔍 Generar Vista Previa</button>
+          <button id="btnGenerarCorreo" class="btn-n" onclick="generarCorreo()" style="padding:10px 24px;font-size:12px">🔍 Generar Vista Previa</button>
         </div>
         <div id="correoPreview"></div>
       </div>
@@ -1082,6 +1095,7 @@ function mostrarToast(msg, tipo='ok') {
 }
 
 let _fusionesData=[], solicitudesData=[];
+let _atSavedState = { q:'', e:'', emp:'', m:'', scroll:0 }; // BUG1: estado guardado de atenciones
 
 // ══════════════════ MÓDULO FUSIONES DE BUSES ══════════════════
 
@@ -4111,6 +4125,9 @@ async function generarCorreo() {
   const fi=v('cFI'), ff=v('cFF');
   if(!fi||!ff){mostrarToast('❌ Selecciona el rango de fechas','error');return;}
   if(fi>ff){mostrarToast('❌ La fecha inicio no puede ser mayor a la fecha fin','error');return;}
+  // BUG2: deshabilitar botón mientras procesa
+  const _btnGen = document.getElementById('btnGenerarCorreo');
+  if (_btnGen) { _btnGen.disabled = true; _btnGen.textContent = '⏳ Generando...'; }
   document.getElementById('correoPreview').innerHTML='<div class="empty">⏳ Generando reporte...</div>';
   try{
     let datos, resumen, total;
@@ -4153,7 +4170,7 @@ async function generarCorreo() {
       console.log('[reporte] Registros en caché para el rango:', candidatos.length);
       if (!candidatos.length) {
         document.getElementById('correoPreview').innerHTML =
-          '<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
+          '<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>';
         return;
       }
       datos   = candidatos;
@@ -4168,9 +4185,9 @@ async function generarCorreo() {
       const d = await apiGet(params);
       console.log('[reporte] Respuesta API — success:', d.success,
         '| total:', d.total, '| registros:', d.data ? d.data.length : 0);
-      if(!d.success){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ '+d.error+'</div>';return;}
+      if(!d.success){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ '+d.error+'<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>';return;}
       if(!d.data||!d.data.length){
-        document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.</div>';
+        document.getElementById('correoPreview').innerHTML='<div class="empty">⚠️ No se encontraron atenciones en ese rango de fechas.<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>';
         return;
       }
       datos   = d.data;
@@ -4183,7 +4200,8 @@ async function generarCorreo() {
     const fiF=fmtFLargo(fi), ffF=fmtFLargo(ff);
     const para = getParaFinal();
     const cc = getCCFinal();
-    const asunto = `Atenciones Registradas - ${fiF} al ${ffF}`;
+    const empLabel = (!empFiltro || empFiltro === 'AMBAS') ? 'Todas las empresas' : empFiltro;
+    const asunto = `Reporte RR.LL. - ${empLabel} | ${fiF} al ${ffF}`;
 
     // Tabla resumen por empresa/tipo/responsable
     const tablaResumen=`
@@ -4254,8 +4272,8 @@ async function generarCorreo() {
         <p style="color:#64748b">Verfrut / Rapel — Sistema RL v3.0</p>
       </div>`;
 
-    // Guardar datos para exportar Excel
-    _correoData = { total, fi, ff, asunto, data: datos, resumen };
+    // Guardar datos para exportar Excel (incluye emp para nombre de archivo)
+    _correoData = { total, fi, ff, asunto, emp: empFiltro || 'AMBAS', data: datos, resumen };
 
     document.getElementById('correoPreview').innerHTML=`
       <div style="margin-top:20px;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:20px">
@@ -4283,9 +4301,19 @@ async function generarCorreo() {
           <button class="btn-n" onclick="exportarCorreoExcel()" style="padding:10px 20px;background:#1a7f4b">
             📥 Exportar Excel
           </button>
+          <button class="btn-n" onclick="nuevaBusquedaCorreo()" style="padding:10px 20px;background:#64748b">
+            🔄 Nueva búsqueda
+          </button>
         </div>
+        <div id="instruccionesEnvio"></div>
       </div>`;
-  }catch(e){document.getElementById('correoPreview').innerHTML='<div class="empty">❌ Error de conexión: '+e.message+'</div>';}
+  }catch(e){
+    document.getElementById('correoPreview').innerHTML=`<div class="empty">❌ Error de conexión: ${e.message}<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>`;
+  }finally{
+    // BUG2: siempre rehabilitar el botón al terminar
+    const _b=document.getElementById('btnGenerarCorreo');
+    if(_b){_b.disabled=false;_b.textContent='🔍 Generar Vista Previa';}
+  }
 }
 
 let _correoData = {};
@@ -4363,24 +4391,50 @@ function abrirOutlook(asunto, cuerpo, para, cc) {
 function enviarConConfirmacion() {
   const para = getParaFinal();
   const cc   = getCCFinal();
-  if (!para) { mostrarToast('❌ Agrega al menos un destinatario', 'error'); return; }
+  if (!para) { mostrarToast('❌ Agrega al menos un destinatario en el campo Para', 'error'); return; }
   if (!_correoData.fi) { mostrarToast('❌ Primero genera la vista previa', 'error'); return; }
-  const total = _correoData.total || 0;
-  const fi = fmtFLargo(_correoData.fi||'');
-  const ff = fmtFLargo(_correoData.ff||'');
-  const msg = `📋 CONFIRMACIÓN DE ENVÍO\n\nRango: ${fi} al ${ff}\nTotal de registros: ${total}\nDestinatarios: ${para}\n\n✅ El Excel se descargará automáticamente.\n⚠️ Adjúntalo manualmente al correo en Outlook.\n\n¿Continuar?`;
+  const total     = _correoData.total || 0;
+  const fiRaw     = _correoData.fi   || '';
+  const ffRaw     = _correoData.ff   || '';
+  const emp       = _correoData.emp  || 'AMBAS';
+  const fiF       = fmtFLargo(fiRaw);
+  const ffF       = fmtFLargo(ffRaw);
+  const empLabel  = (!emp || emp === 'AMBAS') ? 'Todas las empresas' : emp;
+  const nombreArchivo = `Reporte_RL_${emp}_${fiRaw}_${ffRaw}.xlsx`;
+  const asunto    = `Reporte RR.LL. - ${empLabel} | ${fiF} al ${ffF}`;
+  const msg = `📋 CONFIRMACIÓN DE ENVÍO\n\nRango: ${fiF} al ${ffF}\nEmpresa: ${empLabel}\nTotal de registros: ${total}\nDestinatarios: ${para}\n\n✅ El Excel se descargará automáticamente en Descargas.\n📎 Adjúntalo manualmente al correo en Outlook.\n\n¿Continuar?`;
   if (confirm(msg)) {
-    // 1. Descargar Excel automáticamente
+    // PASO 1: Descargar Excel
     exportarCorreoExcel();
-    // 2. Abrir Outlook con cuerpo en texto plano estructurado (compatible Outlook clásico)
-    const cuerpo = _construirCuerpoTextoPlano(_correoData.data||[], _correoData.resumen||[], fi, ff, total);
-    setTimeout(() => abrirOutlook(_correoData.asunto||'', cuerpo, para, cc), 600);
+    // PASO 2 y 3: Abrir Outlook + mostrar instrucciones
+    const cuerpo =
+`Estimados,
+
+Adjunto el reporte de atenciones del período ${fiF} al ${ffF}.
+
+Período: ${fiF} al ${ffF}
+
+El archivo Excel descargado está en su carpeta de Descargas con el nombre:
+${nombreArchivo}
+
+Por favor adjunte el archivo antes de enviar.
+
+Generado por: ${USER.nombre || 'Sistema RL'}
+Sistema RL v3.0 - Verfrut & RAPEL`;
+    setTimeout(() => {
+      abrirOutlook(asunto, cuerpo, para, cc);
+      // PASO 3: Mostrar instrucciones al usuario
+      _mostrarInstruccionesEnvio(nombreArchivo);
+    }, 600);
   }
 }
 
 function exportarCorreoExcel() {
   const datos = _correoData.data || [];
   if(!datos.length){ mostrarToast('❌ No hay datos para exportar. Genera primero la vista previa.', 'error'); return; }
+  const emp = _correoData.emp || 'AMBAS';
+  const fi  = _correoData.fi  || '';
+  const ff  = _correoData.ff  || '';
   exportarExcelGen(datos, [
     {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha'},
     {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},
@@ -4392,10 +4446,40 @@ function exportarCorreoExcel() {
     {key:'responsable_recepcion',label:'Responsable'},
     {key:'supervisor',label:'Supervisor'},
     {key:'estado',label:'Estado'},{key:'observaciones',label:'Observaciones'}
-  ], 'Reporte_Atenciones_'+(_correoData.fi||'')+'_'+(_correoData.ff||''));
+  ], `Reporte_RL_${emp}_${fi}_${ff}`);
 }
 
 function exportarExcel() { exportarCorreoExcel(); }
+
+// BUG2: limpiar preview y rehabilitar botón para nueva búsqueda
+function nuevaBusquedaCorreo() {
+  document.getElementById('correoPreview').innerHTML = '';
+  _correoData = {};
+  const btn = document.getElementById('btnGenerarCorreo');
+  if (btn) { btn.disabled = false; btn.textContent = '🔍 Generar Vista Previa'; }
+}
+
+// BUG3: mostrar instrucciones en pantalla después de abrir Outlook
+function _mostrarInstruccionesEnvio(nombreArchivo) {
+  let div = document.getElementById('instruccionesEnvio');
+  if (!div) {
+    div = document.createElement('div');
+    div.id = 'instruccionesEnvio';
+    const preview = document.getElementById('correoPreview');
+    if (preview) preview.appendChild(div);
+  }
+  div.innerHTML = `
+    <div style="margin-top:16px;padding:16px;background:#f0fdf4;border:2px solid #86efac;border-radius:10px;font-size:12px">
+      <div style="font-weight:700;color:#166534;margin-bottom:10px;font-size:13px">📋 Pasos para completar el envío:</div>
+      <div style="display:flex;flex-direction:column;gap:8px;line-height:1.6">
+        <div>✅ <strong>Excel descargado</strong> en tu carpeta Descargas<br><span style="color:#64748b;font-size:11px">Nombre: ${nombreArchivo}</span></div>
+        <div>📧 <strong>Outlook abierto</strong> — Completa los destinatarios</div>
+        <div>📎 <strong>Adjunta el archivo Excel</strong> desde tu carpeta Descargas</div>
+        <div>✉️ <strong>Revisa y envía</strong> el correo</div>
+      </div>
+    </div>`;
+  setTimeout(() => div.scrollIntoView({ behavior:'smooth', block:'center' }), 100);
+}
 
 // USUARIOS
 function _renderUs(data) {
@@ -4583,9 +4667,14 @@ function getRespSeleccionados() {
   return selected;
 }
 
-// Compatibilidad: funciones antiguas de Para/CC que ya no se usan
-function getParaFinal() { return 'reporte@verfrut.pe'; }
-function getCCFinal()   { return ''; }
+function getParaFinal() {
+  const el = document.getElementById('cPara');
+  return el ? (el.value || '').trim() : 'ovilela@verfrut.pe, jchavez@verfrut.pe';
+}
+function getCCFinal() {
+  const el = document.getElementById('cCC');
+  return el ? (el.value || '').trim() : 'jtimoteo@verfrut.pe';
+}
 
 function ir(id,btn){
   // Cerrar sidebar en móvil
@@ -4596,6 +4685,16 @@ function ir(id,btn){
   // Cambiar sección en el siguiente frame — el navegador pinta el clic antes de procesar
   requestAnimationFrame(() => {
     const prevSec=document.querySelector('.sec.on');
+    // BUG1: guardar filtros y scroll al salir de atenciones
+    if (prevSec && prevSec.id === 'sec-atenciones') {
+      _atSavedState = {
+        q:   (document.getElementById('fAQ')  ||{}).value || '',
+        e:   (document.getElementById('fAE')  ||{}).value || '',
+        emp: (document.getElementById('fAEmp')||{}).value || '',
+        m:   (document.getElementById('fAM')  ||{}).value || '',
+        scroll: window.scrollY || document.documentElement.scrollTop || 0
+      };
+    }
     if(prevSec) prevSec.classList.remove('on');
     const prevNi=document.querySelector('.ni.on');
     if(prevNi) prevNi.classList.remove('on');
@@ -4610,8 +4709,18 @@ function ir(id,btn){
       if(id==='visitas') _restaurarFiltros('visitas', ['vFiltroEmp','vFiltroMes','vFiltroSup']);
       if(id==='casos')   _restaurarFiltros('casos',   ['cFiltroEmp','cFiltroMotivo','cFiltroSup']);
       if(id==='atenciones') {
-        if(CACHE.atenciones && CACHE.atenciones.length > 0) { atTodas = CACHE.atenciones.filter(a => a.fecha_atencion === hoy()); renderAt(atTodas); }
-        else cargarAtenciones();
+        if(CACHE.atenciones && CACHE.atenciones.length > 0) {
+          // BUG1: restaurar desde CACHE inmediatamente, sin llamar API
+          atTodas = CACHE.atenciones;
+          sv('fAQ',  _atSavedState.q);
+          sv('fAE',  _atSavedState.e);
+          sv('fAEmp',_atSavedState.emp);
+          sv('fAM',  _atSavedState.m);
+          filtrarAt();
+          setTimeout(() => window.scrollTo(0, _atSavedState.scroll), 50);
+        } else {
+          cargarAtenciones();
+        }
       }
       if(id==='visitas'      && !visitasData.length)        cargarVisitas();
       if(id==='solicitudes'  && !CACHE.solicitudes)         cargarSolicitudes();
