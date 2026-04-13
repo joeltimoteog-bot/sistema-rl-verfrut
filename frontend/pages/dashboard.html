@@ -3318,9 +3318,25 @@ async function refrescarEnBackground() {
   try {
     const d = await apiGet({ action:'getPreload', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol, empresa });
     if (d.success) {
+      // Preservar registros guardados en memoria que aún no llegaron al servidor
+      const _prevAts = Array.isArray(CACHE.atenciones) ? [...CACHE.atenciones] : [];
       CACHE = d.data;
       CACHE_TS = Date.now();
       CACHE._loaded = true;
+      if (_prevAts.length > 0) {
+        if (Array.isArray(CACHE.atenciones)) {
+          // Supervisor: re-insertar los que no devolvió el API (race condition con Sheets)
+          const _nrosApi = new Set(CACHE.atenciones.map(a => a.nro));
+          const _pendientes = _prevAts.filter(a => a.nro && !_nrosApi.has(a.nro));
+          if (_pendientes.length) {
+            console.log('[refrescar] Re-insertando', _pendientes.length, 'registro(s) nuevo(s) aún no confirmados por servidor');
+            CACHE.atenciones = [...CACHE.atenciones, ..._pendientes];
+          }
+        } else {
+          // Admin: getPreload devuelve atenciones vacío — conservar los que teníamos en memoria
+          CACHE.atenciones = _prevAts;
+        }
+      }
       guardarCacheLS();
     }
   } catch(e){ console.error('refrescarEnBackground:', e); }
@@ -4884,8 +4900,8 @@ function ir(id,btn){
       if(id==='casos')   _restaurarFiltros('casos',   ['cFiltroEmp','cFiltroMotivo','cFiltroSup']);
       if(id==='atenciones') {
         if(CACHE.atenciones && CACHE.atenciones.length > 0) {
-          // BUG1: restaurar desde CACHE inmediatamente, sin llamar API
-          atTodas = CACHE.atenciones;
+          // Restaurar desde CACHE inmediatamente, sin llamar API — solo las de hoy
+          atTodas = CACHE.atenciones.filter(a => a.fecha_atencion === hoy());
           sv('fAQ',  _atSavedState.q);
           sv('fAE',  _atSavedState.e);
           sv('fAEmp',_atSavedState.emp);
