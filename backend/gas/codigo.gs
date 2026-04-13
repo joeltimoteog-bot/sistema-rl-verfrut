@@ -66,6 +66,7 @@ function handle(e) {
       case 'saveSupervisorEval':  result = saveSupervisorEval(body);     break;
       case 'updateVisita':        result = updateVisita(body);           break;
       case 'updateCaso':          result = updateCaso(body);             break;
+      case 'recalcularEstadisticasCompletas': result = recalcularEstadisticasCompletas(); break;
       default: result = { error: 'Accion no reconocida: ' + action };
     }
   } catch(err) {
@@ -304,6 +305,8 @@ function saveAtencion(d) {
     new Date(),
     d.usuario_sistema || ''
   ]);
+  // Actualizar estadísticas en Firebase en background (fire-and-forget)
+  try { actualizarEstadisticasFirebase(); } catch(e) { console.warn('[Firebase] Error al actualizar stats:', e.message); }
   return { success: true, nro: nro, hoja: nombreHoja };
 }
 // ============================================================
@@ -803,6 +806,185 @@ function getReporteCorreo(p) {
 
   console.log('[getReporteCorreo] Respuesta final — total: ' + lista.length + ' | hojas consultadas: ' + JSON.stringify(hojasInfo));
   return { success:true, data:lista, resumen:resumen, total:lista.length, hojasInfo:hojasInfo };
+}
+
+// ============================================================
+// FIREBASE ESTADÍSTICAS — actualización en tiempo real
+// CONFIGURACIÓN REQUERIDA:
+//   Apps Script > Configuración > Propiedades del script:
+//     FIREBASE_DB_SECRET = <Database Secret de Firebase RTDB>
+//   Firebase RTDB Rules /estadisticas:
+//     { ".read": true, ".write": "auth != null" }
+// ============================================================
+const FIREBASE_DB_URL = 'https://sistema-rl-verfrut-default-rtdb.firebaseio.com';
+
+function _fbPatchEstadisticas(stats) {
+  const secret = PropertiesService.getScriptProperties().getProperty('FIREBASE_DB_SECRET');
+  if (!secret) {
+    console.warn('[Firebase] FIREBASE_DB_SECRET no configurado. Ve a Apps Script > ' +
+      'Configuración > Propiedades del script y agrega FIREBASE_DB_SECRET con tu Database Secret.');
+    return;
+  }
+  try {
+    const url = FIREBASE_DB_URL + '/estadisticas.json?auth=' + secret;
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'PATCH',
+      contentType: 'application/json',
+      payload: JSON.stringify(stats),
+      muteHttpExceptions: true
+    });
+    const code = resp.getResponseCode();
+    if (code !== 200) {
+      console.warn('[Firebase] PATCH /estadisticas falló HTTP ' + code + ': ' + resp.getContentText().substring(0, 200));
+    } else {
+      console.log('[Firebase] /estadisticas actualizado OK — total: ' + (stats.resumen_global && stats.resumen_global.total));
+    }
+  } catch(e) {
+    console.error('[Firebase] Error en _fbPatchEstadisticas:', e.message);
+  }
+}
+
+function _buildListaParaFirebase(rawRows) {
+  var lista = [];
+  rawRows.forEach(function(row) {
+    if (!row[0] && !row[1]) return;
+    var o = {};
+    COLS.forEach(function(h, j) { o[h] = row[j]; });
+    if (o.fecha_atencion instanceof Date) {
+      o.fecha_atencion = Utilities.formatDate(o.fecha_atencion, 'GMT-5', 'yyyy-MM-dd');
+    } else {
+      o.fecha_atencion = String(o.fecha_atencion || '').substring(0, 10).replace(/T.*/,'');
+    }
+    o.mes  = parseInt(o.mes)  || 0;
+    o.anio = parseInt(o.anio) || 0;
+    if ((!o.mes || !o.anio) && o.fecha_atencion.length >= 7) {
+      var parts = o.fecha_atencion.split('-');
+      o.anio = parseInt(parts[0]) || 0;
+      o.mes  = parseInt(parts[1]) || 0;
+    }
+    lista.push(o);
+  });
+  return lista;
+}
+
+function _calcularStatsParaFirebase(lista) {
+  var ahora      = new Date();
+  var anioActual = ahora.getFullYear();
+  var mesActual  = ahora.getMonth() + 1;
+  var hoyStr     = Utilities.formatDate(ahora, 'GMT-5', 'yyyy-MM-dd');
+  var ts         = ahora.getTime();
+
+  var enProceso  = lista.filter(function(a){ return String(a.estado||'').toUpperCase() === 'EN PROCESO';  }).length;
+  var finalizados = lista.filter(function(a){ return String(a.estado||'').toUpperCase() === 'FINALIZADO'; }).length;
+
+  // ── resumen_global ──
+  var resumen_global = {
+    total:                lista.length,
+    hoy:                  lista.filter(function(a){ return a.fecha_atencion === hoyStr; }).length,
+    este_mes:             lista.filter(function(a){ return a.mes === mesActual && a.anio === anioActual; }).length,
+    en_proceso:           enProceso,
+    finalizados:          finalizados,
+    ultima_actualizacion: ts
+  };
+
+  // ── por_supervisor ──
+  var por_supervisor = {};
+  lista.forEach(function(a) {
+    var key = String(a.usuario_sistema || '').trim().toLowerCase().replace(/\s+/g,'_') ||
+              String(a.supervisor      || '').trim().toLowerCase().replace(/[^a-z0-9_]/g,'_');
+    if (!key) return;
+    if (!por_supervisor[key]) {
+      por_supervisor[key] = { nombre: a.supervisor || key, total:0, este_mes:0, en_proceso:0, finalizados:0 };
+    }
+    por_supervisor[key].total++;
+    if (a.mes === mesActual && a.anio === anioActual) por_supervisor[key].este_mes++;
+    var est = String(a.estado||'').toUpperCase();
+    if (est === 'EN PROCESO')  por_supervisor[key].en_proceso++;
+    if (est === 'FINALIZADO')  por_supervisor[key].finalizados++;
+  });
+
+  // ── por_mes ──
+  var por_mes = {};
+  lista.forEach(function(a) {
+    if (!a.anio || !a.mes) return;
+    var clave = a.anio + '-' + String(a.mes).padStart(2,'0');
+    if (!por_mes[clave]) por_mes[clave] = { total:0, rapel:0, verfrut:0 };
+    por_mes[clave].total++;
+    var emp = String(a.empresa||'').toUpperCase();
+    if (emp === 'RAPEL')   por_mes[clave].rapel++;
+    if (emp === 'VERFRUT') por_mes[clave].verfrut++;
+  });
+
+  // ── por_empresa ──
+  var por_empresa = {};
+  ['RAPEL','VERFRUT'].forEach(function(emp) {
+    var sub = lista.filter(function(a){ return String(a.empresa||'').toUpperCase() === emp; });
+    por_empresa[emp] = {
+      total:      sub.length,
+      este_mes:   sub.filter(function(a){ return a.mes === mesActual && a.anio === anioActual; }).length,
+      en_proceso: sub.filter(function(a){ return String(a.estado||'').toUpperCase() === 'EN PROCESO'; }).length
+    };
+  });
+
+  return {
+    resumen_global:       resumen_global,
+    por_supervisor:       por_supervisor,
+    por_mes:              por_mes,
+    por_empresa:          por_empresa,
+    ultima_actualizacion: ts
+  };
+}
+
+// Llamado automáticamente después de cada saveAtencion()
+function actualizarEstadisticasFirebase() {
+  var ss         = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var anioActual = new Date().getFullYear();
+  var rawRows    = [];
+  [anioActual, anioActual - 1].forEach(function(a) {
+    var ws = ss.getSheetByName('BB. DE REGISTROS ' + a);
+    if (ws) rawRows = rawRows.concat(ws.getDataRange().getValues().slice(1));
+  });
+  // Deduplicar por nro
+  var vistos = new Set();
+  rawRows = rawRows.filter(function(r) {
+    var k = String(r[0]); if (!k || vistos.has(k)) return false; vistos.add(k); return true;
+  });
+  var lista = _buildListaParaFirebase(rawRows);
+  var stats = _calcularStatsParaFirebase(lista);
+  _fbPatchEstadisticas(stats);
+  console.log('[Firebase] actualizarEstadisticasFirebase — ' + lista.length + ' registros procesados');
+}
+
+// Ejecutar manualmente desde Apps Script para sincronizar datos masivos
+// Endpoint: action=recalcularEstadisticasCompletas
+function recalcularEstadisticasCompletas() {
+  var ss         = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var anioActual = new Date().getFullYear();
+  var rawRows    = [];
+  [anioActual, anioActual - 1, anioActual - 2].forEach(function(a) {
+    var ws = ss.getSheetByName('BB. DE REGISTROS ' + a);
+    if (ws) {
+      var data = ws.getDataRange().getValues().slice(1);
+      rawRows = rawRows.concat(data);
+      console.log('[recalcular] BB. DE REGISTROS ' + a + ': ' + data.length + ' filas');
+    }
+  });
+  var base = ss.getSheetByName('BB. DE REGISTROS');
+  if (base) {
+    var data2 = base.getDataRange().getValues().slice(1);
+    rawRows = rawRows.concat(data2);
+    console.log('[recalcular] BB. DE REGISTROS (base): ' + data2.length + ' filas');
+  }
+  // Deduplicar por nro
+  var vistos2 = new Set();
+  rawRows = rawRows.filter(function(r) {
+    var k = String(r[0]); if (!k || vistos2.has(k)) return false; vistos2.add(k); return true;
+  });
+  var lista  = _buildListaParaFirebase(rawRows);
+  var stats  = _calcularStatsParaFirebase(lista);
+  _fbPatchEstadisticas(stats);
+  console.log('[recalcular] Completado — ' + lista.length + ' registros enviados a Firebase');
+  return { success: true, total: lista.length };
 }
 
 // ============================================================

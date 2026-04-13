@@ -190,7 +190,10 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     </div>
 
     <div class="sup-card">
-      <div class="sup-t">📋 Resumen por Supervisor</div>
+      <div class="sup-t" style="display:flex;align-items:center;gap:8px">
+        <span>📋 Resumen por Supervisor</span>
+        <span id="fbBadgeResumen" style="display:none;align-items:center;gap:4px;background:#dcfce7;color:#166534;border-radius:20px;padding:2px 10px;font-size:10px;font-weight:700">🔴 En tiempo real</span>
+      </div>
       <div id="supR"><div class="empty">⏳ Cargando...</div></div>
     </div>
 
@@ -340,6 +343,28 @@ function _aplicarDatosResumen(data) {
   _actualizarIndicadorCacheR();
 }
 
+// Cargar resumen por supervisor desde Firebase (cuando no hay filtros activos)
+function _rFbCargarSuper(porSupervisor) {
+  if (!porSupervisor) return false;
+  const el = document.getElementById('supR');
+  if (!el) return false;
+  const entries = Object.entries(porSupervisor).sort((a,b) => (b[1].total||0) - (a[1].total||0));
+  if (!entries.length) return false;
+  el.innerHTML = entries.map(([, v]) => `
+    <div class="sup-row">
+      <div><div class="sup-n">${v.nombre||'—'}</div></div>
+      <div class="sup-sts">
+        <div class="sup-st"><div class="n">${v.total||0}</div><div class="l">Total</div></div>
+        <div class="sup-st"><div class="n" style="color:#3b82f6">${v.en_proceso||0}</div><div class="l">Proc.</div></div>
+        <div class="sup-st"><div class="n" style="color:#22c55e">${v.finalizados||0}</div><div class="l">Finalizado</div></div>
+        <div class="sup-st"><div class="n" style="color:#f97316">${v.este_mes||0}</div><div class="l">Este mes</div></div>
+      </div>
+    </div>`).join('');
+  const badge = document.getElementById('fbBadgeResumen');
+  if (badge) badge.style.display = 'inline-flex';
+  return true;
+}
+
 async function cargarResumen(forzar = false) {
   const emp=v('rEmp'), mes=v('rMes'), anio=v('rAnio');
 
@@ -352,7 +377,19 @@ async function cargarResumen(forzar = false) {
   // Servir desde cache si está disponible y no hay filtros activos
   if (!forzar && CACHE.resumen && !mes && !anio && emp === 'AMBAS') {
     _aplicarDatosResumen(CACHE.resumen);
+    // Intentar refrescar panel supervisor desde Firebase mientras hay datos cacheados
+    if (typeof window._fbDatosEstadisticas === 'function') {
+      const fb = window._fbDatosEstadisticas();
+      if (fb && fb.por_supervisor) _rFbCargarSuper(fb.por_supervisor);
+    }
     return;
+  }
+  // Firebase primero cuando no hay filtros: mostrar instantáneamente mientras llega la API
+  if (!forzar && !mes && !anio && emp === 'AMBAS') {
+    if (typeof window._fbDatosEstadisticas === 'function') {
+      const fb = window._fbDatosEstadisticas();
+      if (fb && fb.por_supervisor) _rFbCargarSuper(fb.por_supervisor);
+    }
   }
 
   document.getElementById('supR').innerHTML='<div class="empty">⏳ Cargando datos...</div>';
@@ -520,7 +557,60 @@ window.onload = function() {
     // Sin cache: cargar desde API
     cargarResumen();
   }
+  // Firebase: iniciar escucha de estadísticas para ranking en tiempo real
+  _rFbIniciarConRetry(10);
 };
+
+let _rFbEstadisticas = null;
+function _rFbIniciarConRetry(intentos) {
+  if (typeof window._fbDatosEstadisticasR !== 'undefined' || typeof window._fbSuscribirEstadisticasR === 'function') {
+    window._fbSuscribirEstadisticasR(function(data) {
+      if (data && data.por_supervisor) {
+        _rFbEstadisticas = data;
+        const emp = v('rEmp'), mes = v('rMes'), anio = v('rAnio');
+        // Actualizar panel solo si no hay filtros activos (no sobreescribir resultados filtrados)
+        if (emp === 'AMBAS' && !mes && !anio) _rFbCargarSuper(data.por_supervisor);
+      }
+    });
+  } else if (intentos > 0) {
+    setTimeout(() => _rFbIniciarConRetry(intentos - 1), 700);
+  }
+}
+</script>
+
+<!-- Firebase SDK — estadísticas en tiempo real -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBTp4WHO5bGEoYDhTbyWZVfdQxbAQHwp4I",
+  authDomain: "sistema-rl-verfrut.firebaseapp.com",
+  projectId: "sistema-rl-verfrut",
+  storageBucket: "sistema-rl-verfrut.firebasestorage.app",
+  messagingSenderId: "769176418481",
+  appId: "1:769176418481:web:53a487fcaf736b11e24a90",
+  databaseURL: "https://sistema-rl-verfrut-default-rtdb.firebaseio.com"
+};
+
+let _dbR;
+try {
+  const app = initializeApp(firebaseConfig, 'resumen-app');
+  _dbR = getDatabase(app);
+  console.log('[Firebase Resumen] Inicializado OK');
+} catch(e) {
+  console.error('[Firebase Resumen] Error al inicializar:', e);
+}
+
+window._fbSuscribirEstadisticasR = function(callback) {
+  if (!_dbR) { callback(null); return; }
+  onValue(ref(_dbR, 'estadisticas'), snap => {
+    callback(snap.val());
+  }, e => { console.error('[Firebase Resumen] Error onValue:', e); callback(null); });
+};
+
+// Acceso directo a los datos en caché del listener
+window._fbDatosEstadisticas = function() { return null; }; // sobrescrito por listener
 </script>
 </body>
 </html>

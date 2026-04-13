@@ -266,6 +266,34 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
           </div>
         </div>
       </div>
+
+      <!-- ⚡ WIDGETS FIREBASE — estadísticas en tiempo real -->
+      <div id="fbDashWidgets" style="display:none;margin-top:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="font-size:12px;font-weight:700;color:#0b1e45">⚡ Datos en tiempo real</span>
+          <span id="fbEstadoBadge" style="display:inline-flex;align-items:center;gap:4px;background:#dcfce7;color:#166534;border-radius:20px;padding:3px 10px;font-size:10px;font-weight:700;letter-spacing:.3px">🔴 EN VIVO</span>
+          <span id="fbActualizadoHace" style="font-size:10px;color:#94a3b8"></span>
+        </div>
+        <div class="gg">
+          <div class="gc">
+            <div class="gc-t">🏭 RAPEL vs VERFRUT — este mes</div>
+            <canvas id="cFbEmpresa" style="height:180px;max-height:180px"></canvas>
+          </div>
+          <div class="gc">
+            <div class="gc-t" style="display:flex;justify-content:space-between;align-items:center">
+              <span>🏆 Ranking supervisores</span>
+              <span id="fbRankingMes" style="font-size:10px;color:#64748b;font-weight:400"></span>
+            </div>
+            <div id="fbRankingLista" style="overflow-y:auto;max-height:185px;font-size:12px;padding-right:4px"></div>
+          </div>
+        </div>
+        <div class="gg" style="margin-top:14px">
+          <div class="gc" style="grid-column:1/-1">
+            <div class="gc-t">📅 Tendencia mensual — RAPEL vs VERFRUT</div>
+            <canvas id="cFbTendencia" style="height:180px;max-height:180px"></canvas>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- MIS ATENCIONES -->
@@ -1096,6 +1124,7 @@ function mostrarToast(msg, tipo='ok') {
 
 let _fusionesData=[], solicitudesData=[];
 let _atSavedState = { q:'', e:'', emp:'', m:'', scroll:0 }; // BUG1: estado guardado de atenciones
+let _fbEstadisticas = null; // datos en tiempo real desde Firebase /estadisticas
 
 // ══════════════════ MÓDULO FUSIONES DE BUSES ══════════════════
 
@@ -2183,6 +2212,8 @@ window.onload = async () => {
     const _fbUserId = (USER.usuario || USER.nombre || 'admin').replace(/[^a-zA-Z0-9]/g, '_');
     _fbIniciarConRetry(_fbUserId, 8);
   }
+  // Firebase: escucha de estadísticas en tiempo real (todos los usuarios)
+  _fbIniciarEscuchaEstadisticasConRetry(10);
   // Filtro año en Consulta por DNI: visible para todos los roles
   const cAnioWrap = document.getElementById('cAnioWrap');
   if (cAnioWrap) { cAnioWrap.style.display=''; const cAnio=document.getElementById('cAnio'); if(cAnio) cAnio.value=new Date().getFullYear().toString(); }
@@ -3458,6 +3489,15 @@ function _aplicarStats(stats) {
 
 async function cargarStats() {
   try {
+    // FIREBASE PRIMERO: si hay datos en tiempo real y son frescos (< 15 min), aplicar ya
+    if (_fbEstadisticas && _fbEstadisticas.resumen_global) {
+      const edad = Date.now() - (_fbEstadisticas.resumen_global.ultima_actualizacion || 0);
+      if (edad < 15 * 60 * 1000) {
+        console.log('[cargarStats] Firebase fresco (' + Math.round(edad/1000) + 's) — aplicando stats inmediatos');
+        _fbAplicarEstadisticasFirebase(_fbEstadisticas);
+        // Continuar con lógica normal para dibujar charts locales si hay datos en CACHE
+      }
+    }
     const h   = hoy();
     const set = (id, val) => { const el = document.getElementById(id); if(el) el.textContent = val ?? 0; };
     // BUG 2b: normalización robusta de fecha (maneja "2026-04-09T05:00:00" y Date objects)
@@ -4686,6 +4726,120 @@ function getParaFinal() {
 function getCCFinal() {
   const el = document.getElementById('cCC');
   return el ? (el.value || '').trim() : 'jtimoteo@verfrut.pe';
+}
+
+// ══════════════════ FIREBASE ESTADÍSTICAS ══════════════════
+
+function _fbAplicarEstadisticasFirebase(fbData) {
+  if (!fbData) return;
+  _fbEstadisticas = fbData;
+  const rg = fbData.resumen_global;
+  if (!rg) return;
+  // Actualizar tarjetas principales con datos Firebase
+  if (rg.hoy        !== undefined) countUp('sH', rg.hoy);
+  if (rg.este_mes   !== undefined) countUp('sM', rg.este_mes);
+  if (rg.en_proceso !== undefined) countUp('sP', rg.en_proceso);
+  // sA: usar total como proxy solo si no hay datos locales detallados
+  const localLen = (CACHE.historialAtenciones || CACHE.atenciones || []).length;
+  if (rg.total !== undefined && !localLen) countUp('sA', rg.total);
+  // Mostrar panel en vivo
+  const wrap = document.getElementById('fbDashWidgets');
+  if (wrap) wrap.style.display = '';
+  // Badge actualización
+  const tsEl = document.getElementById('fbActualizadoHace');
+  if (tsEl && rg.ultima_actualizacion) {
+    const segs = Math.round((Date.now() - rg.ultima_actualizacion) / 1000);
+    tsEl.textContent = 'actualizado ' + (segs < 60 ? segs + 's' : Math.round(segs/60) + ' min') + ' atrás';
+  }
+  // Dibujar widgets
+  _fbDibujarEmpresa(fbData.por_empresa);
+  _fbRenderRankingSup(fbData.por_supervisor);
+  _fbDibujarTendencia(fbData.por_mes);
+}
+
+function _fbDibujarEmpresa(porEmpresa) {
+  if (!porEmpresa) return;
+  _destroyChart('fbEmpresa');
+  const el = document.getElementById('cFbEmpresa');
+  if (!el) return;
+  const rapel   = (porEmpresa.RAPEL   || {}).este_mes || 0;
+  const verfrut = (porEmpresa.VERFRUT || {}).este_mes || 0;
+  charts.fbEmpresa = new Chart(el, {
+    type: 'doughnut',
+    data: { labels:['RAPEL','VERFRUT'], datasets:[{ data:[rapel,verfrut], backgroundColor:['#0b1e45','#d9292b'] }] },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend:{ position:'bottom' },
+        tooltip:{ callbacks:{ label: ctx => ctx.label+': '+ctx.raw+' este mes' } }
+      }
+    }
+  });
+}
+
+function _fbRenderRankingSup(porSupervisor) {
+  const el  = document.getElementById('fbRankingLista');
+  const mes = document.getElementById('fbRankingMes');
+  if (!el || !porSupervisor) return;
+  if (mes) mes.textContent = 'mes ' + hoy().slice(0,7);
+  const sorted = Object.entries(porSupervisor)
+    .sort((a,b) => (b[1].este_mes||0) - (a[1].este_mes||0))
+    .slice(0, 12);
+  if (!sorted.length) { el.innerHTML = '<div style="padding:8px;color:#94a3b8;text-align:center">Sin datos</div>'; return; }
+  const maxVal = Math.max(sorted[0][1].este_mes || 1, 1);
+  el.innerHTML = sorted.map(([,v],i) => {
+    const pct = Math.round(((v.este_mes||0)/maxVal)*100);
+    return `<div style="display:flex;align-items:center;gap:7px;padding:4px 0;border-bottom:1px solid #f1f5f9">
+      <span style="font-size:10px;color:#94a3b8;width:14px;text-align:center;flex-shrink:0">${i+1}</span>
+      <span style="font-size:11px;font-weight:600;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${v.nombre||''}">${v.nombre||'—'}</span>
+      <div style="width:60px;height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;flex-shrink:0">
+        <div style="height:100%;width:${pct}%;background:#3b82f6;border-radius:3px;transition:width .5s"></div>
+      </div>
+      <span style="font-size:11px;font-weight:700;color:#0b1e45;width:22px;text-align:right;flex-shrink:0">${v.este_mes||0}</span>
+    </div>`;
+  }).join('');
+}
+
+function _fbDibujarTendencia(porMes) {
+  if (!porMes) return;
+  _destroyChart('fbTend');
+  const el = document.getElementById('cFbTendencia');
+  if (!el) return;
+  const claves = Object.keys(porMes).sort().slice(-8);
+  const lbs    = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const lm     = claves.map(k => lbs[parseInt(k.split('-')[1])-1]||k);
+  charts.fbTend = new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: lm,
+      datasets: [
+        { label:'RAPEL',   data:claves.map(k=>(porMes[k]||{}).rapel  ||0), backgroundColor:'#0b1e45', borderRadius:4 },
+        { label:'VERFRUT', data:claves.map(k=>(porMes[k]||{}).verfrut||0), backgroundColor:'#d9292b', borderRadius:4 }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom' } },
+      scales:{ y:{ beginAtZero:true, ticks:{ maxTicksLimit:8 } } }
+    }
+  });
+}
+
+// Iniciar escucha de estadísticas con reintentos hasta que el módulo Firebase esté listo
+function _fbIniciarEscuchaEstadisticasConRetry(intentos) {
+  if (typeof window._fbSuscribirEstadisticas === 'function') {
+    window._fbSuscribirEstadisticas(function(data) {
+      if (data) {
+        console.log('[Firebase] Estadísticas actualizadas en tiempo real');
+        _fbAplicarEstadisticasFirebase(data);
+      }
+    });
+    console.log('[Firebase] Escucha /estadisticas iniciada');
+  } else if (intentos > 0) {
+    setTimeout(() => _fbIniciarEscuchaEstadisticasConRetry(intentos - 1), 700);
+  } else {
+    console.warn('[Firebase] _fbSuscribirEstadisticas no disponible tras reintentos');
+  }
 }
 
 function ir(id,btn){
@@ -5939,6 +6093,17 @@ window._fbMarcarLeida = async function(alertaId, usuarioId) {
   } catch(e) {
     console.error('[Firebase] Error marcando leída:', e);
   }
+};
+
+// Suscribir a /estadisticas en tiempo real (actualiza automáticamente cuando GAS escribe)
+window._fbSuscribirEstadisticas = function(callback) {
+  if (!_db) { callback(null); return; }
+  onValue(ref(_db, 'estadisticas'), snap => {
+    callback(snap.val());
+  }, e => {
+    console.error('[Firebase] Error onValue /estadisticas:', e);
+    callback(null);
+  });
 };
 </script>
 
