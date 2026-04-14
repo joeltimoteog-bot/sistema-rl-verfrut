@@ -3533,21 +3533,27 @@ function actualizarComparativaDash(stats) {
   wrap.style.display = 'grid';
 }
 
-// ── Aplica las 4 stats al DOM con count-up + indicadores ──
-function _aplicarStats(stats) {
-  // Solución definitiva: si Firebase ya tiene datos válidos, nunca sobreescribir con 0s de la API
-  if (window._fbEstadisticas?.resumen_global?.total > 0) {
-    console.log('[_aplicarStats] Firebase tiene datos válidos (total=' + window._fbEstadisticas.resumen_global.total + ') — re-aplicando Firebase, ignorando API');
+// ── Aplica las stats al DOM — SIEMPRE prioriza Firebase si tiene datos ──
+function _aplicarStats(s) {
+  // SIEMPRE usar Firebase si tiene datos válidos
+  if (window._fbEstadisticas && window._fbEstadisticas.resumen_global &&
+      window._fbEstadisticas.resumen_global.total > 0) {
+    console.log('[_aplicarStats] Firebase válido (total=' + window._fbEstadisticas.resumen_global.total + ') — usando Firebase, ignorando API');
     _fbAplicarEstadisticasFirebase(window._fbEstadisticas);
     return;
   }
-  console.log('[_aplicarStats] escribiendo desde API → #sH:', stats.hoy ?? 0, '| #sM:', stats.mes ?? 0, '| #sP:', stats.enProceso ?? 0);
-  countUp('sH', stats.hoy        ?? 0);
-  countUp('sM', stats.mes        ?? 0);
-  countUp('sA', stats.anio       ?? 0);
-  countUp('sP', stats.enProceso ?? 0);
-  actualizarIndicadoresDash(stats);
-  actualizarComparativaDash(stats);
+  // Solo si Firebase no tiene datos, escribir valores de la API directamente al DOM
+  console.log('[_aplicarStats] sin Firebase — escribiendo API → #sH:', s.hoy || 0, '#sM:', s.mes || 0, '#sP:', s.enProceso || 0);
+  const sH = document.getElementById('sH');
+  const sM = document.getElementById('sM');
+  const sP = document.getElementById('sP');
+  const sF = document.getElementById('sF');
+  const sA = document.getElementById('sA');
+  if (sH) sH.textContent = s.hoy        || 0;
+  if (sM) sM.textContent = s.mes        || 0;
+  if (sP) sP.textContent = s.enProceso  || s.pendientes  || 0;
+  if (sF) sF.textContent = s.finalizados || 0;
+  if (sA) sA.textContent = s.anio       || s.total       || 0;
 }
 
 async function cargarStats() {
