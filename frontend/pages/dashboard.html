@@ -3612,20 +3612,46 @@ function dibujar(s) {
     return; // evita crear los charts dos veces
   }
   // Fallback: sin datos en cache, usar estadísticas básicas del preload
+  // BUG2: preferir Firebase por_mes si está disponible (API devuelve 0 en todos los meses)
+  // BUG3: preferir Firebase resumen_global para en_proceso/finalizados
   ['m','e'].forEach(k => _destroyChart(k));
 
   const elM = document.getElementById('cM');
   const elE = document.getElementById('cE');
   if (!elM || !elE) return;
 
-  const mks = Object.keys(s.porMes||{});
-  const lm  = mks.map(k => ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][parseInt(k.split('-')[1])] || k);
+  // BUG2: construir porMes desde Firebase si hay datos
+  let porMesObj = {};
+  const fbEst = window._fbEstadisticas;
+  if (fbEst && fbEst.por_mes) {
+    // Normalizar claves "2026_04" → "2026-04" y tomar últimos 6 meses explícitamente
+    const hoyD = new Date();
+    const ultimos6 = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoyD.getFullYear(), hoyD.getMonth() - i, 1);
+      ultimos6.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+    }
+    const porMesNorm = {};
+    Object.entries(fbEst.por_mes).forEach(([k, v]) => {
+      const nk = k.replace(/_/g, '-');
+      porMesNorm[nk] = (v && typeof v.total === 'number') ? v.total : (typeof v === 'number' ? v : 0);
+    });
+    ultimos6.forEach(k => { porMesObj[k] = porMesNorm[k] || 0; });
+    console.log('[dibujar] BUG2: usando Firebase por_mes →', JSON.stringify(porMesObj));
+  } else {
+    porMesObj = s.porMes || {};
+    console.log('[dibujar] BUG2: Firebase no disponible, usando CACHE.stats.porMes →', JSON.stringify(porMesObj));
+  }
+
+  const mks = Object.keys(porMesObj);
+  const lbs = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const lm  = mks.map(k => lbs[parseInt(k.split('-')[1])] || k);
 
   charts.m = new Chart(elM, {
     type: 'bar',
     data: {
       labels: lm,
-      datasets: [{ label:'Atenciones', data: Object.values(s.porMes||{}), backgroundColor:'#3b82f6', borderRadius:5 }]
+      datasets: [{ label:'Atenciones', data: Object.values(porMesObj), backgroundColor:'#3b82f6', borderRadius:5 }]
     },
     options: {
       responsive: true,
@@ -3635,14 +3661,20 @@ function dibujar(s) {
     }
   });
 
+  // BUG3: usar Firebase resumen_global para en_proceso y finalizados si están disponibles
+  let enProceso = s.porEstado?.['EN PROCESO'] || 0;
+  let finalizados = s.porEstado?.['FINALIZADO'] || 0;
+  if (fbEst && fbEst.resumen_global) {
+    enProceso  = fbEst.resumen_global.en_proceso  ?? enProceso;
+    finalizados = fbEst.resumen_global.finalizados ?? finalizados;
+    console.log('[dibujar] BUG3: usando Firebase en_proceso=' + enProceso + ' finalizados=' + finalizados);
+  }
+
   charts.e = new Chart(elE, {
     type: 'doughnut',
     data: {
       labels: ['En Proceso','Finalizado'],
-      datasets: [{ data: [
-        s.porEstado?.['EN PROCESO']||0,
-        s.porEstado?.['FINALIZADO']||0
-      ], backgroundColor: ['#f97316','#22c55e'] }]
+      datasets: [{ data: [enProceso, finalizados], backgroundColor: ['#f97316','#22c55e'] }]
     },
     options: {
       responsive: true,
@@ -4866,9 +4898,12 @@ function getCCFinal() {
 function _fbAplicarEstadisticasFirebase(fbData) {
   if (!fbData) return;
   _fbEstadisticas = fbData;
+  window._fbEstadisticas = fbData; // BUG1: exponer en window para acceso desde cargarStats y dibujar
   const rg = fbData.resumen_global;
   if (!rg) return;
-  // Actualizar las 4 tarjetas principales (siempre, sin condición de caché local)
+  // BUG4: log de valores antes de aplicar para diagnóstico
+  console.log('[Firebase] resumen_global recibido → hoy:', rg.hoy, '| este_mes:', rg.este_mes, '| en_proceso:', rg.en_proceso, '| finalizados:', rg.finalizados, '| total:', rg.total);
+  // Actualizar las 5 tarjetas principales (siempre, sin condición de caché local)
   const _fbSet = (id, val) => {
     if (val !== undefined) {
       if (!document.getElementById(id)) { console.warn('[Firebase] Elemento DOM no encontrado: #' + id); return; }
@@ -4878,7 +4913,7 @@ function _fbAplicarEstadisticasFirebase(fbData) {
   _fbSet('sH', rg.hoy);         // hoy         → resumen_global.hoy
   _fbSet('sM', rg.este_mes);    // este mes    → resumen_global.este_mes
   _fbSet('sP', rg.en_proceso);  // en proceso  → resumen_global.en_proceso
-  _fbSet('sF', rg.finalizados); // finalizados → resumen_global.finalizados (aviso si no hay #sF)
+  _fbSet('sF', rg.finalizados); // finalizados → resumen_global.finalizados
   _fbSet('sA', rg.total);       // total año   → resumen_global.total
   // Flechas ↑↓, barras de progreso y comparativa mes anterior
   _fbIndicadoresYComparativa(rg, fbData.por_mes);
