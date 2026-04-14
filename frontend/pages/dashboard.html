@@ -2269,8 +2269,11 @@ window.onload = async () => {
     if (CACHE.stats && Object.keys(CACHE.stats).length > 0) {
       cargarStats();
     }
-    // Actualizar silenciosamente en background y re-aplicar stats con datos frescos
-    refrescarEnBackground().then(() => cargarStats());
+    // Actualizar silenciosamente en background; si Firebase es fresco, no sobreescribir DOM
+    refrescarEnBackground().then(fbFresco => {
+      if (!fbFresco) cargarStats();
+      else console.log('[onload] refrescarEnBackground: Firebase fresco — skip cargarStats');
+    });
   } else {
     preloadData();
   }
@@ -3364,6 +3367,11 @@ async function refrescarEnBackground() {
         }
       }
       guardarCacheLS();
+      // Señalizar si Firebase tiene datos frescos para que el .then() no llame cargarStats
+      const _fbFresco = window._fbEstadisticas && window._fbEstadisticas.resumen_global &&
+        (Date.now() - (window._fbEstadisticas.resumen_global.ultima_actualizacion || 0)) < 15 * 60 * 1000;
+      if (_fbFresco) console.log('[refrescarEnBackground] Firebase fresco — se omitirá cargarStats tras refresh');
+      return _fbFresco;
     }
   } catch(e){ console.error('refrescarEnBackground:', e); }
 }
@@ -3527,23 +3535,30 @@ function actualizarComparativaDash(stats) {
 
 // ── Aplica las 4 stats al DOM con count-up + indicadores ──
 function _aplicarStats(stats) {
-  countUp('sH', stats.hoy        ?? 0);
-  countUp('sM', stats.mes        ?? 0);
-  countUp('sA', stats.anio       ?? 0);
-  countUp('sP', stats.enProceso ?? 0);
+  const _fbEst = window._fbEstadisticas;
+  const _fbFresco = _fbEst && _fbEst.resumen_global &&
+    (Date.now() - (_fbEst.resumen_global.ultima_actualizacion || 0)) < 15 * 60 * 1000;
+  console.log('[_aplicarStats] escribiendo → #sH:', stats.hoy ?? 0, '| #sM:', stats.mes ?? 0, '| #sP:', stats.enProceso ?? 0, '| fbFresco:', _fbFresco);
+  if (_fbFresco) {
+    console.log('[_aplicarStats] Firebase fresco — skip countUp, Firebase ya tiene valores correctos');
+  } else {
+    countUp('sH', stats.hoy        ?? 0);
+    countUp('sM', stats.mes        ?? 0);
+    countUp('sA', stats.anio       ?? 0);
+    countUp('sP', stats.enProceso ?? 0);
+  }
   actualizarIndicadoresDash(stats);
   actualizarComparativaDash(stats);
 }
 
 async function cargarStats() {
   try {
-    // FIREBASE PRIMERO: si hay datos en tiempo real y son frescos (< 15 min), aplicar ya
+    // FIREBASE PRIMERO: si hay datos frescos (< 15 min), skip sobreescritura DOM
     if (_fbEstadisticas && _fbEstadisticas.resumen_global) {
       const edad = Date.now() - (_fbEstadisticas.resumen_global.ultima_actualizacion || 0);
       if (edad < 15 * 60 * 1000) {
-        console.log('[cargarStats] Firebase fresco (' + Math.round(edad/1000) + 's) — aplicando stats inmediatos');
-        _fbAplicarEstadisticasFirebase(_fbEstadisticas);
-        // Continuar con lógica normal para dibujar charts locales si hay datos en CACHE
+        console.log('[cargarStats] Firebase fresco (' + Math.round(edad/1000) + 's) — skip sobreescritura DOM, Firebase ya tiene valores correctos');
+        return;
       }
     }
     const h   = hoy();
