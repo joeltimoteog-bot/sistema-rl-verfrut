@@ -197,18 +197,14 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
           <span style="font-size:13px;font-weight:700;color:#0b1e45">🩺 Atenciones</span>
           <span style="font-size:28px;font-weight:900;color:#0b1e45" id="eAtTotal">—</span>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;text-align:center">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;text-align:center">
           <div style="background:#fff7ed;border-radius:8px;padding:6px">
-            <div style="font-size:18px;font-weight:800;color:#f97316" id="eAtPend">—</div>
-            <div style="font-size:10px;color:#64748b">Pendientes</div>
-          </div>
-          <div style="background:#eff6ff;border-radius:8px;padding:6px">
-            <div style="font-size:18px;font-weight:800;color:#3b82f6" id="eAtProc">—</div>
-            <div style="font-size:10px;color:#64748b">En proceso</div>
+            <div style="font-size:18px;font-weight:800;color:#f97316" id="eAtProc">—</div>
+            <div style="font-size:10px;color:#64748b">En Proceso</div>
           </div>
           <div style="background:#f0fdf4;border-radius:8px;padding:6px">
-            <div style="font-size:18px;font-weight:800;color:#16a34a" id="eAtRes">—</div>
-            <div style="font-size:10px;color:#64748b">Resueltos</div>
+            <div style="font-size:18px;font-weight:800;color:#16a34a" id="eAtFin">—</div>
+            <div style="font-size:10px;color:#64748b">Finalizados</div>
           </div>
         </div>
         <div style="margin-top:10px;font-size:11px;color:#64748b">
@@ -490,7 +486,7 @@ function forzarActualizacion() {
 }
 
 function _mostrarSkeletonCards() {
-  const ids = ['eAtTotal','eAtPend','eAtProc','eAtRes','eAtMes',
+  const ids = ['eAtTotal','eAtProc','eAtFin','eAtMes',
                'eVisTotal','eVisPlazo','eVisRetras','eVisMes',
                'eCasTotal','eCasPlazo','eCasRetras','eCasMes',
                'eFusTotal','eFusPend','eFusValid','eFusMes','eFusTrab'];
@@ -511,9 +507,8 @@ function renderEstadisticasAdmin(data) {
 
   const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
   set('eAtTotal', stats.atenciones.total);
-  set('eAtPend',  stats.atenciones.pendientes);
   set('eAtProc',  stats.atenciones.enProceso);
-  set('eAtRes',   stats.atenciones.resueltos);
+  set('eAtFin',   stats.atenciones.resueltos);
   set('eAtMes',   stats.atenciones.esteMes);
   set('eVisTotal',  stats.visitas.total);
   set('eVisPlazo',  stats.visitas.enPlazo);
@@ -1020,8 +1015,10 @@ async function generarReportePDF() {
 // ══════════════════ FIREBASE ESTADÍSTICAS ══════════════════
 
 let _fbEstEst = null;
+let _fbYaCargo = false; // flag: Firebase respondió antes que la API
 
 function _fbCargarEstadisticasEst(fbData) {
+  _fbYaCargo = true;
   if (!fbData) return false;
   const rg = fbData.resumen_global;
   if (!rg) return false;
@@ -1032,7 +1029,7 @@ function _fbCargarEstadisticasEst(fbData) {
   const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.textContent = val; };
   set('eAtTotal', rg.total);
   set('eAtProc',  rg.en_proceso);
-  set('eAtRes',   rg.finalizados);
+  set('eAtFin',   rg.finalizados);
   set('eAtMes',   rg.este_mes);
 
   // Ranking supervisores desde Firebase
@@ -1221,18 +1218,18 @@ window.onload = function() {
     const navUsr = document.getElementById('navUsr');
     if (navUsr) navUsr.style.display = '';
   }
+  // Firebase PRIMERO — antes de cualquier llamada a la API
+  _fbIniciarEscuchaEst(12);
   if (cargarCacheLS()) {
-    // Cache válido: mostrar inmediatamente y refrescar en background
+    // Cache válido: mostrar inmediatamente y refrescar en background (si Firebase no tomó el relevo)
     renderEstadisticasAdmin(CACHE.estadisticasAdmin);
     _actualizarIndicadorCache();
-    setTimeout(() => _actualizarEnBackground(), 800);
-  } else {
-    // Sin cache: mostrar spinner y cargar desde API
+    if (!_fbYaCargo) setTimeout(() => _actualizarEnBackground(), 800);
+  } else if (!_fbYaCargo) {
+    // Sin cache y Firebase aún no respondió: cargar desde API
     _mostrarSkeletonCards();
     cargarEstadisticasAdmin();
   }
-  // Firebase: iniciar escucha de estadísticas en tiempo real
-  _fbIniciarEscuchaEst(12);
 };
 window.addEventListener('beforeunload', () => { clearTimeout(_estTimer); });
 </script>

@@ -231,7 +231,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
         <div class="sc"><div class="sc-ic ia">📅</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sH">0</div><span id="sH-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">ATENCIONES HOY</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sH-prog" style="height:100%;width:0%;background:#3b82f6;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
         <div class="sc"><div class="sc-ic ir">📆</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sM">0</div><span id="sM-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">ESTE MES</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sM-prog" style="height:100%;width:0%;background:#ef4444;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
         <div class="sc"><div class="sc-ic iv">📊</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sA">0</div><span id="sA-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">TOTAL AÑO</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sA-prog" style="height:100%;width:0%;background:#22c55e;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
-        <div class="sc"><div class="sc-ic in">⏳</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sP">0</div><span id="sP-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">PENDIENTES</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sP-prog" style="height:100%;width:0%;background:#f97316;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
+        <div class="sc"><div class="sc-ic in">⏳</div><div style="width:100%"><div style="display:flex;align-items:baseline;gap:5px"><div class="sc-n" id="sP">0</div><span id="sP-arr" style="font-size:12px;font-weight:700"></span></div><div class="sc-l">EN PROCESO</div><div style="margin-top:7px;height:4px;background:#e2e8f0;border-radius:2px;overflow:hidden"><div id="sP-prog" style="height:100%;width:0%;background:#f97316;border-radius:2px;transition:width .8s cubic-bezier(.4,0,.2,1)"></div></div></div></div>
       </div>
       <!-- COMPARATIVA MES ACTUAL VS ANTERIOR -->
       <div id="dashComparativa" style="display:none;grid-template-columns:repeat(4,1fr);gap:13px;margin-bottom:18px">
@@ -4786,8 +4786,8 @@ function autoResponsable() {
 function calcDias() {
   const fi = v('at_fid'), ff = v('at_ftd');
   if (fi && ff) {
-    const d = Math.round((new Date(ff) - new Date(fi)) / 86400000);
-    if (d >= 0) sv('at_dias', d);
+    const d = Math.floor((new Date(ff) - new Date(fi)) / (1000*60*60*24)) + 1;
+    if (d >= 1) sv('at_dias', d);
   }
 }
 
@@ -4868,11 +4868,17 @@ function _fbAplicarEstadisticasFirebase(fbData) {
   const rg = fbData.resumen_global;
   if (!rg) return;
   // Actualizar las 4 tarjetas principales (siempre, sin condición de caché local)
-  if (rg.hoy         !== undefined) countUp('sH', rg.hoy);
-  if (rg.este_mes    !== undefined) countUp('sM', rg.este_mes);
-  if (rg.en_proceso  !== undefined) countUp('sP', rg.en_proceso);
-  if (rg.finalizados !== undefined) countUp('sF', rg.finalizados);
-  if (rg.total       !== undefined) countUp('sA', rg.total);
+  const _fbSet = (id, val) => {
+    if (val !== undefined) {
+      if (!document.getElementById(id)) { console.warn('[Firebase] Elemento DOM no encontrado: #' + id); return; }
+      countUp(id, val);
+    }
+  };
+  _fbSet('sH', rg.hoy);         // hoy         → resumen_global.hoy
+  _fbSet('sM', rg.este_mes);    // este mes    → resumen_global.este_mes
+  _fbSet('sP', rg.en_proceso);  // en proceso  → resumen_global.en_proceso
+  _fbSet('sF', rg.finalizados); // finalizados → resumen_global.finalizados (aviso si no hay #sF)
+  _fbSet('sA', rg.total);       // total año   → resumen_global.total
   // Flechas ↑↓, barras de progreso y comparativa mes anterior
   _fbIndicadoresYComparativa(rg, fbData.por_mes);
   // Mostrar panel en vivo
@@ -4903,8 +4909,10 @@ function _fbIndicadoresYComparativa(rg, porMesFB) {
   // Construir mapa simple { 'YYYY-MM': total } desde Firebase por_mes
   const porMes = {};
   if (porMesFB) {
+    // Firebase usa "2026_04" (guión bajo); normalizar a "2026-04" (guión medio) para comparar con hoy()
     Object.entries(porMesFB).forEach(([k, v]) => {
-      porMes[k] = (v && typeof v.total === 'number') ? v.total : (typeof v === 'number' ? v : 0);
+      const normalK = k.replace(/_/g, '-');
+      porMes[normalK] = (v && typeof v.total === 'number') ? v.total : (typeof v === 'number' ? v : 0);
     });
   }
   const h = hoy();
@@ -5052,16 +5060,25 @@ function _fbDibujarTendencia(porMes) {
   _destroyChart('fbTend');
   const el = document.getElementById('cFbTendencia');
   if (!el) return;
-  const claves = Object.keys(porMes).sort().slice(-8);
-  const lbs    = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  const lm     = claves.map(k => lbs[parseInt(k.split('-')[1])-1]||k);
+  // Normalizar claves Firebase "2026_04" → "2026-04"
+  const porMesNorm = {};
+  Object.entries(porMes).forEach(([k, v]) => { porMesNorm[k.replace(/_/g, '-')] = v; });
+  // Construir los últimos 6 meses desde hoy
+  const hoyD = new Date();
+  const ultimos6 = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(hoyD.getFullYear(), hoyD.getMonth() - i, 1);
+    ultimos6.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+  }
+  const lbs = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const lm  = ultimos6.map(k => lbs[parseInt(k.split('-')[1]) - 1] || k);
   charts.fbTend = new Chart(el, {
     type: 'bar',
     data: {
       labels: lm,
       datasets: [
-        { label:'RAPEL',   data:claves.map(k=>(porMes[k]||{}).rapel  ||0), backgroundColor:'#0b1e45', borderRadius:4 },
-        { label:'VERFRUT', data:claves.map(k=>(porMes[k]||{}).verfrut||0), backgroundColor:'#d9292b', borderRadius:4 }
+        { label:'RAPEL',   data: ultimos6.map(k => (porMesNorm[k] || {}).rapel   || 0), backgroundColor:'#0b1e45', borderRadius:4 },
+        { label:'VERFRUT', data: ultimos6.map(k => (porMesNorm[k] || {}).verfrut || 0), backgroundColor:'#d9292b', borderRadius:4 }
       ]
     },
     options: {
