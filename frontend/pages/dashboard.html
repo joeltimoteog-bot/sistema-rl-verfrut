@@ -5127,7 +5127,9 @@ function _fbDibujarTendencia(porMes) {
 
 // Iniciar escucha de estadísticas con reintentos hasta que el módulo Firebase esté listo
 function _fbIniciarEscuchaEstadisticasConRetry(intentos) {
+  if (window._fbEstIniciado) { console.log('[Firebase] escucha /estadisticas ya activa — ignorando llamada duplicada'); return; }
   if (typeof window._fbSuscribirEstadisticas === 'function') {
+    window._fbEstIniciado = true;
     window._fbSuscribirEstadisticas(function(data) {
       if (data) {
         console.log('[Firebase] Estadísticas actualizadas en tiempo real');
@@ -6399,8 +6401,14 @@ window._fbMarcarLeida = async function(alertaId, usuarioId) {
 // Suscribir a /estadisticas en tiempo real (actualiza automáticamente cuando GAS escribe)
 window._fbSuscribirEstadisticas = function(callback) {
   if (!_db) { console.warn('[Firebase] _fbSuscribirEstadisticas: _db no disponible'); callback(null); return; }
+  // Cancelar listener anterior si existía para evitar listeners duplicados
+  if (typeof window._fbEstUnsubscribe === 'function') {
+    console.log('[Firebase] cancelando listener anterior de /estadisticas');
+    window._fbEstUnsubscribe();
+    window._fbEstUnsubscribe = null;
+  }
   console.log('[Firebase] _fbSuscribirEstadisticas: registrando onValue en /estadisticas');
-  onValue(ref(_db, 'estadisticas'), snap => {
+  window._fbEstUnsubscribe = onValue(ref(_db, 'estadisticas'), snap => {
     const val = snap.val();
     console.log('[Firebase] onValue /estadisticas disparado | exists:', snap.exists(), '| keys:', val ? Object.keys(val).join(',') : 'null');
     callback(val);
