@@ -6352,7 +6352,8 @@ let _db;
 try {
   const app = initializeApp(firebaseConfig);
   _db = getDatabase(app);
-  console.log('[Firebase] Inicializado OK — RTDB:', firebaseConfig.databaseURL);
+  window._fbEstDb = _db; // exponer al script principal para diagnóstico
+  console.log('[Firebase] Inicializado OK — RTDB:', firebaseConfig.databaseURL, '| window._fbEstDb disponible:', !!window._fbEstDb);
 } catch(e) {
   console.error('[Firebase] Error al inicializar:', e);
 }
@@ -6397,9 +6398,12 @@ window._fbMarcarLeida = async function(alertaId, usuarioId) {
 
 // Suscribir a /estadisticas en tiempo real (actualiza automáticamente cuando GAS escribe)
 window._fbSuscribirEstadisticas = function(callback) {
-  if (!_db) { callback(null); return; }
+  if (!_db) { console.warn('[Firebase] _fbSuscribirEstadisticas: _db no disponible'); callback(null); return; }
+  console.log('[Firebase] _fbSuscribirEstadisticas: registrando onValue en /estadisticas');
   onValue(ref(_db, 'estadisticas'), snap => {
-    callback(snap.val());
+    const val = snap.val();
+    console.log('[Firebase] onValue /estadisticas disparado | exists:', snap.exists(), '| keys:', val ? Object.keys(val).join(',') : 'null');
+    callback(val);
   }, e => {
     console.error('[Firebase] Error onValue /estadisticas:', e);
     callback(null);
