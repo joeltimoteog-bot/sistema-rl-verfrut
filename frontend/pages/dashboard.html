@@ -1973,6 +1973,26 @@ const ROLES_ADMIN2  = ['administrador 01','administrador 02','Administrador 01',
 const ROLES_SUP     = ['supervisor','Supervisor'];
 const ROLES_VER_TODO = ['administrador','administrador 01','administrador 02','Administrador','Administrador 01','Administrador 02','coordinador','Coordinador','jefa_rl','Jefa_rl'];
 
+const CARGOS_USUARIOS = {
+  'jtimoteo':   'Coordinador de Relaciones Laborales',
+  'ovilela':    'Jefa de Relaciones Laborales',
+  'jchavez':    'Coordinador de Relaciones Laborales',
+  'ptamayo':    'Supervisor de Gestion Humana',
+  'atineo':     'Supervisor de Gestion Humana',
+  'fpulache':   'Supervisor de Gestion Humana',
+  'yluzon':     'Supervisor de Gestion Humana',
+  'sviera':     'Supervisor de Gestion Humana',
+  'ecastro':    'Supervisor de Gestion Humana',
+  'almartinez': 'Supervisor de Gestion Humana',
+  'fzapata':    'Supervisor de Gestion Humana',
+  'rmolero':    'Supervisor de Gestion Humana',
+  'mmechato':   'Asistente de Relaciones Laborales',
+  'smiranda':   'Asistente de Relaciones Laborales',
+  'javendaño':  'Digitador',
+  'dquispe':    'Digitador',
+  'jsiancas':   'Asistente de Relaciones Laborales'
+};
+
 // ════════════════════════════════════════════════════════════
 // RESTRICCIÓN DE HORARIO — Solo aplica a supervisores
 // Turno Normal:      T.Baja Lun-Vie 05:30-17:00 | T.Alta Lun-Vie 05:30-15:40 Sáb 05:30-13:00
@@ -4366,11 +4386,12 @@ async function generarCorreo() {
       </div>`;
 
     // Firma
+    const _cargoCorreo = CARGOS_USUARIOS[USER.usuario] || 'Coordinador de Relaciones Laborales';
     const firma = `
       <div style="margin-top:20px;padding-top:14px;border-top:2px solid #e2e8f0;font-size:12px">
         <p>Atentamente,</p>
         <p style="margin-top:8px"><strong>${USER.nombre||'Joel Timoteo'}</strong></p>
-        <p style="color:#64748b">Coordinador de Relaciones Laborales</p>
+        <p style="color:#64748b">${_cargoCorreo}</p>
         <p style="color:#64748b">Verfrut / Rapel — Sistema RL v3.0</p>
       </div>`;
 
@@ -4479,7 +4500,7 @@ function _construirCuerpoTextoPlano(datos, resumen, fi, ff, total) {
   // ── 4. Firma ─────────────────────────────────────────────
   c += 'Atentamente,\n';
   c += (USER.nombre || USER.usuario || 'Equipo RL') + '\n';
-  c += 'Coordinador de Relaciones Laborales\n';
+  c += (CARGOS_USUARIOS[USER.usuario] || 'Coordinador de Relaciones Laborales') + '\n';
   c += 'Verfrut / Rapel — Sistema RL v3.0';
   return c;
 }
@@ -4490,23 +4511,54 @@ function _htmlToPlainText(html) {
   tmp.innerHTML = html;
   // Eliminar botones e instrucciones que no van en el cuerpo del correo
   tmp.querySelectorAll('button, #instruccionesEnvio').forEach(el => el.remove());
-  // Convertir cada tabla a texto: columnas separadas por " | ", filas por "\n"
-  tmp.querySelectorAll('table').forEach(table => {
-    let lines = '\n';
-    table.querySelectorAll('tr').forEach(tr => {
-      const cells = Array.from(tr.querySelectorAll('th, td'));
-      const row = cells.map(c => c.textContent.trim()).join(' | ');
-      if (row.trim()) lines += row + '\n';
+
+  // Convierte una tabla a texto con columnas alineadas y encabezados en mayúsculas
+  function _tableToAligned(table) {
+    const rows = Array.from(table.querySelectorAll('tr'));
+    if (!rows.length) return '';
+    const grid = rows.map(tr =>
+      Array.from(tr.querySelectorAll('th, td')).map(c => c.textContent.trim())
+    );
+    const hasHeader = rows[0].querySelector('th') !== null;
+    const cols = Math.max(...grid.map(r => r.length));
+    // Ancho máximo por columna
+    const widths = Array.from({length: cols}, (_, ci) =>
+      Math.max(...grid.map(r => (r[ci] || '').length))
+    );
+    const totalW = widths.reduce((a, w) => a + w, 0) + (cols - 1) * 3;
+    const sepLine = '='.repeat(totalW);
+    const divLine = '-'.repeat(totalW);
+    const pad = (s, w) => String(s || '').padEnd(w);
+
+    let out = '\n';
+    grid.forEach((row, i) => {
+      const isHdr = hasHeader && i === 0;
+      const line = row.map((cell, ci) => pad(isHdr ? cell.toUpperCase() : cell, widths[ci])).join(' | ');
+      if (isHdr) {
+        out += sepLine + '\n' + line + '\n' + divLine + '\n';
+      } else {
+        out += line + '\n';
+      }
     });
-    table.parentNode.replaceChild(document.createTextNode(lines + '\n'), table);
-  });
-  // Convertir <br> a saltos
-  tmp.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
-  // Extraer texto y limpiar espacios múltiples / líneas en blanco excesivas
-  return tmp.textContent
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
+    out += sepLine + '\n';
+    return out;
+  }
+
+  // Recorre el DOM preservando estructura; tablas se convierten alineadas
+  function _nodeToText(node) {
+    if (node.nodeType === 3) return node.textContent.replace(/\s+/g, ' ');
+    if (node.nodeType !== 1) return '';
+    const tag = node.tagName.toLowerCase();
+    if (tag === 'table') return _tableToAligned(node);
+    if (tag === 'br') return '\n';
+    const isBlock = ['div','p','h1','h2','h3','h4','h5','h6','li'].includes(tag);
+    let text = '';
+    for (const child of node.childNodes) text += _nodeToText(child);
+    if (isBlock && text.trim()) text = text.trim() + '\n';
+    return text;
+  }
+
+  return _nodeToText(tmp).replace(/\n{3,}/g, '\n\n').trim();
 }
 
 function abrirOutlook(asunto, cuerpo, para, cc) {
