@@ -4203,7 +4203,9 @@ async function generarCorreo() {
 
     // ── Para admins: asegurar que historialAtenciones esté cargado ──
     const esAdminR = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-    if (esAdminR && !CACHE.historialAtenciones) {
+    // Solo llamar API si no hay ningún caché local disponible
+    const _cacheLocal = CACHE.historialAtenciones || CACHE.atenciones || [];
+    if (esAdminR && !CACHE.historialAtenciones && !_cacheLocal.length) {
       document.getElementById('correoPreview').innerHTML = '<div class="empty">⏳ Cargando historial completo...</div>';
       try {
         const dH = await apiGet({action:'getAtenciones', usuario:USER.usuario,
@@ -4213,7 +4215,6 @@ async function generarCorreo() {
           console.log('[reporte] Historial cargado:', dH.data.length, 'registros');
         }
       } catch(eH) { console.warn('[reporte] No se pudo cargar historial:', eH); }
-      document.getElementById('correoPreview').innerHTML = '<div class="empty">⏳ Generando reporte...</div>';
     }
 
     // ── Intentar desde caché primero ──
@@ -4221,6 +4222,17 @@ async function generarCorreo() {
     console.log('[reporte] Caché disponible:', historial.length, 'registros');
 
     if (historial.length > 0) {
+      // Skeleton loading mientras filtra localmente (instantáneo tras render)
+      document.getElementById('correoPreview').innerHTML = `
+        <div style="margin-top:20px;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:20px">
+          <div style="height:14px;background:#e2e8f0;border-radius:4px;width:38%;margin-bottom:16px"></div>
+          <div style="height:11px;background:#e2e8f0;border-radius:4px;width:55%;margin-bottom:8px"></div>
+          <div style="height:11px;background:#e2e8f0;border-radius:4px;width:70%;margin-bottom:8px"></div>
+          <div style="height:11px;background:#e2e8f0;border-radius:4px;width:42%;margin-bottom:16px"></div>
+          <div style="height:80px;background:#e2e8f0;border-radius:4px;margin-bottom:12px"></div>
+          <div style="height:120px;background:#e2e8f0;border-radius:4px"></div>
+        </div>`;
+      await new Promise(r => setTimeout(r, 0));
       // Filtrar localmente — sin llamar a la API
       const _esAdminCorreo = ROLES_VER_TODO.includes(USER.rol) || ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
       const _supNm  = (USER.nombre  || '').trim().toLowerCase();
@@ -4363,7 +4375,7 @@ async function generarCorreo() {
       </div>`;
 
     // Guardar datos para exportar Excel (incluye emp para nombre de archivo)
-    _correoData = { total, fi, ff, asunto, emp: empFiltro || 'AMBAS', data: datos, resumen };
+    _correoData = { total, fi, ff, asunto, emp: empFiltro || 'AMBAS', data: datos, resumen, fechaInicio: fi, fechaFin: ff };
 
     document.getElementById('correoPreview').innerHTML=`
       <div style="margin-top:20px;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:20px">
@@ -4397,6 +4409,9 @@ async function generarCorreo() {
         </div>
         <div id="instruccionesEnvio"></div>
       </div>`;
+    // Capturar HTML de vista previa para garantizar consistencia con el correo
+    window._vistaPreviewHTML = document.getElementById('correoPreview').innerHTML;
+    _correoData.htmlPreview = window._vistaPreviewHTML;
   }catch(e){
     document.getElementById('correoPreview').innerHTML=`<div class="empty">❌ Error de conexión: ${e.message}<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>`;
   }finally{
@@ -4469,6 +4484,31 @@ function _construirCuerpoTextoPlano(datos, resumen, fi, ff, total) {
   return c;
 }
 
+// Convierte el HTML de la vista previa a texto plano manteniendo estructura de tablas
+function _htmlToPlainText(html) {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  // Eliminar botones e instrucciones que no van en el cuerpo del correo
+  tmp.querySelectorAll('button, #instruccionesEnvio').forEach(el => el.remove());
+  // Convertir cada tabla a texto: columnas separadas por " | ", filas por "\n"
+  tmp.querySelectorAll('table').forEach(table => {
+    let lines = '\n';
+    table.querySelectorAll('tr').forEach(tr => {
+      const cells = Array.from(tr.querySelectorAll('th, td'));
+      const row = cells.map(c => c.textContent.trim()).join(' | ');
+      if (row.trim()) lines += row + '\n';
+    });
+    table.parentNode.replaceChild(document.createTextNode(lines + '\n'), table);
+  });
+  // Convertir <br> a saltos
+  tmp.querySelectorAll('br').forEach(br => br.replaceWith('\n'));
+  // Extraer texto y limpiar espacios múltiples / líneas en blanco excesivas
+  return tmp.textContent
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function abrirOutlook(asunto, cuerpo, para, cc) {
   // Normalizar saltos de línea a CRLF para compatibilidad con Outlook clásico
   const cuerpoNorm = cuerpo.replace(/\r\n/g, '\n').replace(/\n/g, '\r\n');
@@ -4505,11 +4545,9 @@ function enviarConConfirmacion() {
     // PASO 1: Descargar Excel
     exportarCorreoExcel();
     // PASO 2 y 3: Abrir Outlook + mostrar instrucciones
-    const cuerpo = _construirCuerpoTextoPlano(
-      _correoData.data    || [],
-      _correoData.resumen || [],
-      fiF, ffF, total
-    );
+    const cuerpo = (window._vistaPreviewHTML && _correoData.htmlPreview)
+      ? _htmlToPlainText(window._vistaPreviewHTML)
+      : _construirCuerpoTextoPlano(_correoData.data || [], _correoData.resumen || [], fiF, ffF, total);
     setTimeout(() => {
       abrirOutlook(asunto, cuerpo, para, cc);
       // PASO 3: Mostrar instrucciones al usuario
@@ -4544,6 +4582,7 @@ function exportarExcel() { exportarCorreoExcel(); }
 function nuevaBusquedaCorreo() {
   document.getElementById('correoPreview').innerHTML = '';
   _correoData = {};
+  window._vistaPreviewHTML = null;
   const btn = document.getElementById('btnGenerarCorreo');
   if (btn) { btn.disabled = false; btn.textContent = '🔍 Generar Vista Previa'; }
 }
