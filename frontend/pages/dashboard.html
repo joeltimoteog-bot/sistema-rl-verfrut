@@ -2274,6 +2274,7 @@ window.onload = async () => {
   } else {
     preloadData();
   }
+  console.log('[DEBUG] window.onload completo | _fbEstIniciado:', window._fbEstIniciado, '| _fbEstUnsubscribe:', typeof window._fbEstUnsubscribe, '| _fbEstDb:', !!window._fbEstDb);
 };
 
 // Al volver a la pestaña: refrescar solo si han pasado más de 10 minutos
