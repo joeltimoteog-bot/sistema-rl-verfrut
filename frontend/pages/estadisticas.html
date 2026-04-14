@@ -1018,10 +1018,12 @@ let _fbEstEst = null;
 let _fbYaCargo = false; // flag: Firebase respondió antes que la API
 
 function _fbCargarEstadisticasEst(fbData) {
+  console.log('[Firebase][Est] _fbCargarEstadisticasEst entrada | fbData=' + (fbData ? 'OK' : 'null'));
   _fbYaCargo = true;
-  if (!fbData) return false;
+  if (!fbData) { console.warn('[Firebase][Est] fbData es null — abortando'); return false; }
   const rg = fbData.resumen_global;
-  if (!rg) return false;
+  console.log('[Firebase][Est] resumen_global:', rg ? JSON.stringify(rg) : 'FALTA resumen_global en Firebase');
+  if (!rg) { console.error('[Firebase][Est] resumen_global no existe en /estadisticas — verificar estructura Firebase'); return false; }
   // Renderizar inmediatamente sin esperar API (datos en tiempo real)
   _fbEstEst = fbData;
 
@@ -1193,16 +1195,24 @@ function _fbCargarEstadisticasEst(fbData) {
 }
 
 function _fbIniciarEscuchaEst(intentos) {
+  console.log('[Firebase][Est] _fbIniciarEscuchaEst intentos=' + intentos + ' | _fbSuscribirEstEst disponible=' + (typeof window._fbSuscribirEstEst === 'function'));
   if (typeof window._fbSuscribirEstEst === 'function') {
+    console.log('[Firebase][Est] Suscribiendo a /estadisticas...');
     window._fbSuscribirEstEst(function(data) {
+      console.log('[Firebase][Est] Callback recibido | data=' + (data ? 'OK' : 'null') + (data ? ' | keys=' + Object.keys(data).join(',') : ''));
       if (data) {
-        console.log('[Firebase][Est] Estadísticas actualizadas en tiempo real');
+        console.log('[Firebase][Est] resumen_global=' + JSON.stringify(data.resumen_global || null));
         _fbCargarEstadisticasEst(data);
+      } else {
+        console.warn('[Firebase][Est] data es null o undefined — /estadisticas vacío en Firebase');
       }
     });
     console.log('[Firebase][Est] Escucha /estadisticas iniciada');
   } else if (intentos > 0) {
+    console.log('[Firebase][Est] _fbSuscribirEstEst aún no disponible, reintentando... (' + intentos + ' intentos restantes)');
     setTimeout(() => _fbIniciarEscuchaEst(intentos - 1), 700);
+  } else {
+    console.error('[Firebase][Est] _fbSuscribirEstEst nunca se definió — el módulo Firebase no cargó o hay error en el script type="module"');
   }
 }
 
@@ -1219,16 +1229,21 @@ window.onload = function() {
     if (navUsr) navUsr.style.display = '';
   }
   // Firebase PRIMERO — antes de cualquier llamada a la API
+  console.log('[Firebase][Est] onload: iniciando escucha Firebase');
   _fbIniciarEscuchaEst(12);
   if (cargarCacheLS()) {
     // Cache válido: mostrar inmediatamente y refrescar en background (si Firebase no tomó el relevo)
     renderEstadisticasAdmin(CACHE.estadisticasAdmin);
     _actualizarIndicadorCache();
+    console.log('[Firebase][Est] onload: cache válido | _fbYaCargo=' + _fbYaCargo);
     if (!_fbYaCargo) setTimeout(() => _actualizarEnBackground(), 800);
   } else if (!_fbYaCargo) {
     // Sin cache y Firebase aún no respondió: cargar desde API
+    console.log('[Firebase][Est] onload: sin cache, _fbYaCargo=false → llamando API');
     _mostrarSkeletonCards();
     cargarEstadisticasAdmin();
+  } else {
+    console.log('[Firebase][Est] onload: sin cache pero _fbYaCargo=true → Firebase ya respondió, no se llama API');
   }
 };
 window.addEventListener('beforeunload', () => { clearTimeout(_estTimer); });
@@ -1253,11 +1268,14 @@ const _fbAppEst = initializeApp(_fbConfigEst, 'estadisticas-app');
 const _fbDbEst  = getDatabase(_fbAppEst);
 
 window._fbSuscribirEstEst = function(callback) {
+  console.log('[Firebase][Est][module] _fbSuscribirEstEst llamado — registrando onValue en /estadisticas');
   const estadRef = ref(_fbDbEst, 'estadisticas');
   onValue(estadRef, snap => {
-    callback(snap.val());
+    const val = snap.val();
+    console.log('[Firebase][Est][module] onValue disparado | snap.exists()=' + snap.exists() + ' | val=' + (val ? 'OK keys=' + Object.keys(val).join(',') : 'null'));
+    callback(val);
   }, err => {
-    console.warn('[Firebase][Est] Error escucha:', err.message);
+    console.error('[Firebase][Est][module] Error onValue:', err.code, err.message);
   });
 };
 </script>
