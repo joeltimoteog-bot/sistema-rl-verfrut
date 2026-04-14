@@ -2278,6 +2278,22 @@ window.onload = async () => {
     preloadData();
   }
   console.log('[DEBUG] window.onload completo | _fbEstIniciado:', window._fbEstIniciado, '| _fbEstUnsubscribe:', typeof window._fbEstUnsubscribe, '| _fbEstDb:', !!window._fbEstDb);
+  // Watchdog: si algo resetea los indicadores a 0, corregirlos en máximo 2 segundos
+  setInterval(function() {
+    if (!window._fbEstadisticas) return;
+    var fb = window._fbEstadisticas.resumen_global;
+    if (!fb || !fb.total) return;
+    var sH = document.getElementById('sH');
+    var sM = document.getElementById('sM');
+    var sP = document.getElementById('sP');
+    var sF = document.getElementById('sF');
+    var sA = document.getElementById('sA');
+    if (sH && sH.textContent == '0') sH.textContent = fb.hoy         || 0;
+    if (sM && sM.textContent == '0') sM.textContent = fb.este_mes    || 0;
+    if (sP && sP.textContent == '0') sP.textContent = fb.en_proceso  || 0;
+    if (sF && sF.textContent == '0') sF.textContent = fb.finalizados || 0;
+    if (sA && sA.textContent == '0') sA.textContent = fb.total       || 0;
+  }, 2000);
 };
 
 // Al volver a la pestaña: refrescar solo si han pasado más de 10 minutos
