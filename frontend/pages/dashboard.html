@@ -3535,18 +3535,17 @@ function actualizarComparativaDash(stats) {
 
 // ── Aplica las 4 stats al DOM con count-up + indicadores ──
 function _aplicarStats(stats) {
-  const _fbEst = window._fbEstadisticas;
-  const _fbFresco = _fbEst && _fbEst.resumen_global &&
-    (Date.now() - (_fbEst.resumen_global.ultima_actualizacion || 0)) < 15 * 60 * 1000;
-  console.log('[_aplicarStats] escribiendo → #sH:', stats.hoy ?? 0, '| #sM:', stats.mes ?? 0, '| #sP:', stats.enProceso ?? 0, '| fbFresco:', _fbFresco);
-  if (_fbFresco) {
-    console.log('[_aplicarStats] Firebase fresco — skip countUp, Firebase ya tiene valores correctos');
-  } else {
-    countUp('sH', stats.hoy        ?? 0);
-    countUp('sM', stats.mes        ?? 0);
-    countUp('sA', stats.anio       ?? 0);
-    countUp('sP', stats.enProceso ?? 0);
+  // Solución definitiva: si Firebase ya tiene datos válidos, nunca sobreescribir con 0s de la API
+  if (window._fbEstadisticas?.resumen_global?.total > 0) {
+    console.log('[_aplicarStats] Firebase tiene datos válidos (total=' + window._fbEstadisticas.resumen_global.total + ') — re-aplicando Firebase, ignorando API');
+    _fbAplicarEstadisticasFirebase(window._fbEstadisticas);
+    return;
   }
+  console.log('[_aplicarStats] escribiendo desde API → #sH:', stats.hoy ?? 0, '| #sM:', stats.mes ?? 0, '| #sP:', stats.enProceso ?? 0);
+  countUp('sH', stats.hoy        ?? 0);
+  countUp('sM', stats.mes        ?? 0);
+  countUp('sA', stats.anio       ?? 0);
+  countUp('sP', stats.enProceso ?? 0);
   actualizarIndicadoresDash(stats);
   actualizarComparativaDash(stats);
 }
