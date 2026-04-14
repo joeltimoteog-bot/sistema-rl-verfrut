@@ -55,6 +55,8 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   .hamburger{display:flex}
 }
 @media(min-width:769px){.hamburger{display:none}}
+@keyframes live-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.live-dot{display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;animation:live-pulse 1.5s infinite;margin-right:4px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -1023,9 +1025,7 @@ function _fbCargarEstadisticasEst(fbData) {
   if (!fbData) return false;
   const rg = fbData.resumen_global;
   if (!rg) return false;
-  const edad = Date.now() - (rg.ultima_actualizacion || 0);
-  if (edad > 15 * 60 * 1000) return false; // datos viejos — usar API
-
+  // Renderizar inmediatamente sin esperar API (datos en tiempo real)
   _fbEstEst = fbData;
 
   // Tarjetas de atenciones (Firebase solo tiene atenciones)
@@ -1115,10 +1115,83 @@ function _fbCargarEstadisticasEst(fbData) {
     }
   }
 
-  // Mostrar badge
+  // ── Vista Gerencial KPIs desde Firebase ──────────────────
+  const porSupFb = fbData.por_supervisor;
+  if (porSupFb) {
+    const supList = Object.values(porSupFb).filter(s => s.nombre);
+    if (supList.length) {
+      // Mejor supervisor (mayor total)
+      const top = supList.reduce((a, b) => (b.total || 0) > (a.total || 0) ? b : a);
+      const elTop = document.getElementById('vgTopSup');
+      const elTopV = document.getElementById('vgTopSupVal');
+      if (elTop)  elTop.textContent  = top.nombre || '—';
+      if (elTopV) elTopV.textContent = (top.total || 0) + ' atenciones · ' + (top.este_mes || 0) + ' este mes';
+      // Supervisor con menor actividad este mes (requiere atención)
+      const activos = supList.filter(s => (s.total || 0) > 0);
+      if (activos.length > 1) {
+        const low = activos.reduce((a, b) => (b.este_mes || 0) < (a.este_mes || 0) ? b : a);
+        const elA  = document.getElementById('vgAlertSup');
+        const elAV = document.getElementById('vgAlertVal');
+        if (elA)  elA.textContent  = low.nombre || '—';
+        if (elAV) elAV.textContent = (low.este_mes || 0) + ' atenciones este mes';
+      }
+    }
+  }
+
+  // ── Crecimiento atenciones vs año anterior (gerGrowAt) ────
+  const porMesFb = fbData.por_mes;
+  if (porMesFb) {
+    const h2   = new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+    const anioAct2 = h2.slice(0, 4);
+    const anioAnt2 = String(parseInt(anioAct2) - 1);
+    const sumA2 = Object.entries(porMesFb).filter(([k]) => k.startsWith(anioAct2))
+      .reduce((s, [, v]) => s + ((v && typeof v.total === 'number') ? v.total : (typeof v === 'number' ? v : 0)), 0);
+    const sumB2 = Object.entries(porMesFb).filter(([k]) => k.startsWith(anioAnt2))
+      .reduce((s, [, v]) => s + ((v && typeof v.total === 'number') ? v.total : (typeof v === 'number' ? v : 0)), 0);
+    const gAt = document.getElementById('gerGrowAt');
+    if (gAt) {
+      const pct = sumB2 > 0 ? Math.round(((sumA2 - sumB2) / sumB2) * 100) : null;
+      const up  = pct !== null && pct >= 0;
+      gAt.innerHTML = `<div style="font-size:9px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Atenciones</div>` + (
+        pct !== null
+          ? `<div style="font-size:18px;font-weight:900;color:${up ? '#86efac' : '#fca5a5'}">${up ? '▲' : '▼'} ${Math.abs(pct)}%</div>
+             <div style="font-size:10px;color:rgba(255,255,255,.45);margin-top:2px">${anioAnt2}: ${sumB2} → ${anioAct2}: ${sumA2}</div>`
+          : `<div style="font-size:11px;color:rgba(255,255,255,.4)">${sumA2} atenciones acumuladas</div>`
+      );
+    }
+  }
+
+  // ── Comparativa mes anterior en tarjetas ─────────────────
+  if (porMesFb) {
+    const mesActKey = new Date().toISOString().slice(0, 7);
+    const dAnt2 = new Date(parseInt(mesActKey.slice(0,4)), parseInt(mesActKey.slice(5,7)) - 2, 1);
+    const mesAntKey = dAnt2.getFullYear() + '-' + String(dAnt2.getMonth() + 1).padStart(2, '0');
+    const vAct2 = ((porMesFb[mesActKey] || {}).total) || (rg.este_mes || 0);
+    const vAnt2 = ((porMesFb[mesAntKey] || {}).total) || 0;
+    if (vAnt2 > 0) {
+      const pct2 = Math.round(((vAct2 - vAnt2) / vAnt2) * 100);
+      const up2  = pct2 >= 0;
+      const col2 = up2 ? '#16a34a' : '#dc2626';
+      // Mostrar comparativa junto a "Este mes"
+      const elMes = document.getElementById('eAtMes');
+      if (elMes) {
+        const parent = elMes.parentElement;
+        let span = parent && parent.querySelector('.fb-comp-mes');
+        if (!span && parent) { span = document.createElement('span'); span.className = 'fb-comp-mes'; span.style.cssText = 'font-size:10px;font-weight:700;margin-left:6px'; parent.appendChild(span); }
+        if (span) { span.style.color = col2; span.textContent = (up2 ? '▲' : '▼') + ' ' + Math.abs(pct2) + '% vs mes ant.'; }
+      }
+    }
+  }
+
+  // ── Badge "En vivo" con punto parpadeante ──────────────────
   const badge = document.getElementById('fbBadgeEst');
-  if (badge) badge.style.display = 'inline-flex';
-  console.log('[Firebase][Est] Estadísticas aplicadas desde Firebase (' + Math.round(edad/1000) + 's)');
+  if (badge) {
+    badge.style.display = 'inline-flex';
+    if (!badge.querySelector('.live-dot')) {
+      badge.innerHTML = '<span class="live-dot"></span>En vivo';
+    }
+  }
+  console.log('[Firebase][Est] Estadísticas aplicadas desde Firebase en tiempo real');
   return true;
 }
 

@@ -152,6 +152,8 @@ html.dark .btn-cancel{background:#334155;color:#f1f5f9;border-color:#475569}
 html.dark #globalSearch{background:#0f172a;color:#f1f5f9;border-color:#334155}
 html.dark #globalResults{background:#1e293b;border-color:#334155}
 html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
+@keyframes live-pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.live-dot{display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;animation:live-pulse 1.5s infinite;margin-right:4px;vertical-align:middle}
 </style>
 <script>if(localStorage.getItem('rl_dark')==='1')document.documentElement.classList.add('dark');</script>
 </head>
@@ -4865,28 +4867,141 @@ function _fbAplicarEstadisticasFirebase(fbData) {
   _fbEstadisticas = fbData;
   const rg = fbData.resumen_global;
   if (!rg) return;
-  // Actualizar tarjetas principales con datos Firebase
-  if (rg.hoy        !== undefined) countUp('sH', rg.hoy);
-  if (rg.este_mes   !== undefined) countUp('sM', rg.este_mes);
-  if (rg.en_proceso !== undefined) countUp('sP', rg.en_proceso);
-  // sA: usar total como proxy solo si no hay datos locales detallados
-  const localLen = (CACHE.historialAtenciones || CACHE.atenciones || []).length;
-  if (rg.total !== undefined && !localLen) countUp('sA', rg.total);
-  // Mostrar panel en vivo y badge en header
+  // Actualizar las 4 tarjetas principales (siempre, sin condición de caché local)
+  if (rg.hoy         !== undefined) countUp('sH', rg.hoy);
+  if (rg.este_mes    !== undefined) countUp('sM', rg.este_mes);
+  if (rg.en_proceso  !== undefined) countUp('sP', rg.en_proceso);
+  if (rg.finalizados !== undefined) countUp('sF', rg.finalizados);
+  if (rg.total       !== undefined) countUp('sA', rg.total);
+  // Flechas ↑↓, barras de progreso y comparativa mes anterior
+  _fbIndicadoresYComparativa(rg, fbData.por_mes);
+  // Mostrar panel en vivo
   const wrap = document.getElementById('fbDashWidgets');
   if (wrap) wrap.style.display = '';
+  // Badge "En vivo" con punto parpadeante
   const headerBadge = document.getElementById('fbBadgeDash');
-  if (headerBadge) headerBadge.style.display = 'inline-flex';
-  // Badge actualización
+  if (headerBadge) {
+    headerBadge.style.display = 'inline-flex';
+    if (!headerBadge.querySelector('.live-dot')) {
+      headerBadge.innerHTML = '<span class="live-dot"></span>En vivo';
+    }
+  }
+  // Timestamp de actualización
   const tsEl = document.getElementById('fbActualizadoHace');
   if (tsEl && rg.ultima_actualizacion) {
     const segs = Math.round((Date.now() - rg.ultima_actualizacion) / 1000);
     tsEl.textContent = 'actualizado ' + (segs < 60 ? segs + 's' : Math.round(segs/60) + ' min') + ' atrás';
   }
-  // Dibujar widgets
+  // Dibujar widgets Firebase
   _fbDibujarEmpresa(fbData.por_empresa);
   _fbRenderRankingSup(fbData.por_supervisor);
   _fbDibujarTendencia(fbData.por_mes);
+}
+
+// Flechas ↑↓, barras de progreso y sección comparativa calculadas desde Firebase por_mes
+function _fbIndicadoresYComparativa(rg, porMesFB) {
+  // Construir mapa simple { 'YYYY-MM': total } desde Firebase por_mes
+  const porMes = {};
+  if (porMesFB) {
+    Object.entries(porMesFB).forEach(([k, v]) => {
+      porMes[k] = (v && typeof v.total === 'number') ? v.total : (typeof v === 'number' ? v : 0);
+    });
+  }
+  const h = hoy();
+  const [anioN, mesN] = h.slice(0, 7).split('-').map(Number);
+  const dAnt   = new Date(anioN, mesN - 2, 1);
+  const mesAct = h.slice(0, 7);
+  const mesAnt = dAnt.getFullYear() + '-' + String(dAnt.getMonth() + 1).padStart(2, '0');
+  const valMesAct = porMes[mesAct] !== undefined ? porMes[mesAct] : (rg.este_mes || 0);
+  const valMesAnt = porMes[mesAnt] || 0;
+
+  function setArr(id, cur, prev) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (cur > prev) { el.textContent = '↑'; el.style.color = '#16a34a'; }
+    else if (cur < prev) { el.textContent = '↓'; el.style.color = '#dc2626'; }
+    else el.textContent = '';
+  }
+  function setProg(id, pct) {
+    const el = document.getElementById(id);
+    if (el) setTimeout(() => { el.style.width = Math.min(pct, 100) + '%'; }, 120);
+  }
+
+  // HOY vs promedio diario del mes anterior
+  const diasMesAnt = new Date(anioN, mesN - 1, 0).getDate();
+  const avgDiario  = valMesAnt / diasMesAnt || 0;
+  setArr('sH-arr', rg.hoy || 0, avgDiario);
+  setProg('sH-prog', avgDiario > 0 ? ((rg.hoy || 0) / avgDiario) * 100 : 0);
+
+  // ESTE MES vs mes anterior (barra relativa al promedio últimos 3 meses)
+  let sum3 = 0;
+  for (let i = 1; i <= 3; i++) {
+    const d = new Date(anioN, mesN - 1 - i, 1);
+    sum3 += porMes[d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')] || 0;
+  }
+  const avg3 = sum3 / 3 || 1;
+  setArr('sM-arr', valMesAct, valMesAnt);
+  setProg('sM-prog', (valMesAct / avg3) * 100);
+
+  // TOTAL AÑO vs año anterior
+  const anioActStr = String(anioN), anioAntStr = String(anioN - 1);
+  const sumAct = Object.entries(porMes).filter(([k]) => k.startsWith(anioActStr)).reduce((s, [, v]) => s + v, 0);
+  const sumAnt = Object.entries(porMes).filter(([k]) => k.startsWith(anioAntStr)).reduce((s, [, v]) => s + v, 0);
+  if (sumAnt > 0) { setArr('sA-arr', sumAct, sumAnt); setProg('sA-prog', (sumAct / sumAnt) * 100); }
+
+  // PENDIENTES — barra de riesgo sobre total del mes
+  const pctP = valMesAct > 0 ? ((rg.en_proceso || 0) / valMesAct) * 100 : 0;
+  setProg('sP-prog', pctP);
+  const progP = document.getElementById('sP-prog');
+  if (progP) setTimeout(() => { progP.style.background = pctP > 30 ? '#dc2626' : '#f97316'; }, 120);
+
+  // ── Sección comparativa mes actual vs anterior ──────────────
+  const wrap = document.getElementById('dashComparativa');
+  if (!wrap) return;
+
+  function _ind(id, label, actual, anterior) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!anterior) {
+      el.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">${label}</div><div style="font-size:12px;color:#94a3b8;margin-top:6px">Sin datos anteriores</div>`;
+      return;
+    }
+    const pct = Math.round(((actual - anterior) / anterior) * 100);
+    const up  = pct >= 0;
+    const col = up ? '#16a34a' : '#dc2626';
+    el.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">${label}</div>
+      <div style="font-size:22px;font-weight:900;color:${col};line-height:1.1;margin-top:4px">${up ? '▲' : '▼'} ${Math.abs(pct)}%</div>
+      <div style="font-size:10px;color:var(--gr);margin-top:2px">${anterior} → ${actual}</div>`;
+  }
+
+  // HOY vs promedio diario mes anterior
+  const elH = document.getElementById('dcH');
+  if (elH) {
+    const hoyN = rg.hoy || 0;
+    if (avgDiario > 0) {
+      const pct = Math.round(((hoyN - avgDiario) / avgDiario) * 100);
+      const up  = pct >= 0;
+      elH.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">HOY vs prom. diario ant.</div>
+        <div style="font-size:22px;font-weight:900;color:${up ? '#16a34a' : '#dc2626'};line-height:1.1;margin-top:4px">${up ? '▲' : '▼'} ${Math.abs(pct)}%</div>
+        <div style="font-size:10px;color:var(--gr);margin-top:2px">prom: ${avgDiario.toFixed(1)}/día</div>`;
+    } else {
+      elH.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">HOY vs prom. diario ant.</div><div style="font-size:12px;color:#94a3b8;margin-top:6px">Sin datos anteriores</div>`;
+    }
+  }
+  _ind('dcM', 'MES vs mes anterior', valMesAct, valMesAnt || null);
+  _ind('dcA', `AÑO ${anioN} vs ${anioN - 1}`, sumAct, sumAnt || null);
+
+  // PENDIENTES — ratio sobre mes actual
+  const dpEl = document.getElementById('dcP');
+  if (dpEl) {
+    const total = valMesAct || 1;
+    const pct   = Math.round(((rg.en_proceso || 0) / total) * 100);
+    const col   = pct > 30 ? '#dc2626' : pct > 15 ? '#f97316' : '#16a34a';
+    dpEl.innerHTML = `<div style="font-size:9px;color:#94a3b8;font-weight:700;letter-spacing:.5px;text-transform:uppercase">EN PROCESO / MES ACTUAL</div>
+      <div style="font-size:22px;font-weight:900;color:${col};line-height:1.1;margin-top:4px">${pct}%</div>
+      <div style="font-size:10px;color:var(--gr);margin-top:2px">${rg.en_proceso || 0} de ${valMesAct} atenciones</div>`;
+  }
+  wrap.style.display = 'grid';
 }
 
 function _fbDibujarEmpresa(porEmpresa) {
