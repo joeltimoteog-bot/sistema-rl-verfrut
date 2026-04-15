@@ -51,7 +51,7 @@ function handle(e) {
       case 'getVisitas':         result = getVisitas(params);       break;
       case 'getSupervisores':    result = getSupervisores();        break;
       case 'saveSupervisor':     result = saveSupervisor(body);     break;
-      case 'subirArchivo':     result = subirArchivo(body);       break;
+      case 'registrarArchivoAzure': result = registrarArchivoAzure(body); break;
       case 'saveCaso':          result = saveCaso(body);          break;
       case 'getCasos':          result = getCasos(params);        break;
       case 'saveFusion':        result = saveFusion(body);        break;
@@ -1241,48 +1241,106 @@ function saveSupervisor(d) {
 
 
 // ============================================================
-// SUBIR ARCHIVO A GOOGLE DRIVE
+// SUBIR ARCHIVO A GOOGLE DRIVE — DESACTIVADO (migrado a Azure)
 // ============================================================
-var CASOS_FOLDER_ID   = '1gkdxFcHcJ7COW6r2h_0vlZ1KJEIk1PV-';
-var FUSIONES_FOLDER_ID = ''; // Se crea automáticamente si está vacío
+// var CASOS_FOLDER_ID   = '1gkdxFcHcJ7COW6r2h_0vlZ1KJEIk1PV-';
+// var FUSIONES_FOLDER_ID = '';
+//
+// function subirArchivo(d) { ... }  // Reemplazado por registrarArchivoAzure
 
-function subirArchivo(d) {
+// ============================================================
+// AZURE BLOB STORAGE — Registro de archivos subidos
+// ============================================================
+var AZURE_LOG_SHEET = 'Archivos_Azure';
+
+function registrarArchivoAzure(d) {
   try {
-    var folder;
-    var carpeta = d.carpeta || '';
+    if (!d.urlArchivo)    return { success: false, error: 'urlArchivo requerido' };
+    if (!d.nombreArchivo) return { success: false, error: 'nombreArchivo requerido' };
+    if (!d.modulo)        return { success: false, error: 'modulo requerido' };
 
-    if (carpeta === 'Evidencias_Fusiones_Buses') {
-      try {
-        var folders = DriveApp.getFoldersByName('Evidencias_Fusiones_Buses');
-        if (folders.hasNext()) {
-          folder = folders.next();
-        } else {
-          folder = DriveApp.getRootFolder().createFolder('Evidencias_Fusiones_Buses');
-        }
-      } catch(eDrive) {
-        return { success: false, error: 'Error carpeta: ' + eDrive.toString() };
-      }
-    } else {
-      try {
-        folder = DriveApp.getFolderById(CASOS_FOLDER_ID);
-      } catch(eFolder) {
-        return { success: false, error: 'Carpeta casos no encontrada: ' + eFolder.toString() };
-      }
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var ws = ss.getSheetByName(AZURE_LOG_SHEET);
+    if (!ws) {
+      ws = ss.insertSheet(AZURE_LOG_SHEET);
+      ws.appendRow([
+        'Fecha', 'Módulo', 'Empresa', 'Usuario',
+        'Nombre Archivo', 'Tipo', 'Tamaño (bytes)', 'Tamaño (MB)',
+        'URL Azure', 'Contenedor', 'Referencia', 'Observaciones'
+      ]);
+      ws.getRange(1, 1, 1, 12).setFontWeight('bold');
     }
 
-    var b64 = d.base64 || d.datos || '';
-    if (!b64) return { success: false, error: 'base64 vacío' };
+    var fecha      = new Date();
+    var tamanoMb   = d.tamanoArchivo ? (d.tamanoArchivo / (1024 * 1024)).toFixed(2) : '';
+    var referencia = d.casoId ? 'Caso #' + d.casoId
+                   : d.visitaId ? 'Visita #' + d.visitaId : '';
 
-    var bytes  = Utilities.base64Decode(b64);
-    var mime   = d.mimeType || d.tipo || 'image/jpeg';
-    var nombre = d.nombre || ('archivo_' + Date.now() + '.jpg');
-    var blob   = Utilities.newBlob(bytes, mime, nombre);
-    var file   = folder.createFile(blob);
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    ws.appendRow([
+      fecha,
+      d.modulo        || '',
+      d.empresa       || '',
+      d.usuario       || '',
+      d.nombreArchivo || '',
+      d.tipoArchivo   || '',
+      d.tamanoArchivo || '',
+      tamanoMb,
+      d.urlArchivo    || '',
+      d.contenedor    || '',
+      referencia,
+      ''
+    ]);
 
-    return { success: true, enlace: file.getUrl(), url: file.getUrl(), id: file.getId() };
+    if (d.casoId)   _actualizarEnlaceCaso(ss, d.casoId, d.urlArchivo);
+    if (d.visitaId) _actualizarEnlaceVisita(ss, d.visitaId, d.urlArchivo);
+
+    return { success: true, url: d.urlArchivo, nombre: d.nombreArchivo };
   } catch(e) {
-    return { success: false, error: 'subirArchivo: ' + e.toString() };
+    return { success: false, error: 'registrarArchivoAzure: ' + e.toString() };
+  }
+}
+
+function _actualizarEnlaceCaso(ss, casoId, url) {
+  try {
+    var ws = ss.getSheetByName('BD_Casos');
+    if (!ws) return;
+    var data = ws.getDataRange().getValues();
+    var headers = data[0];
+    var colNro = headers.indexOf('N°');
+    var colEnlace = headers.indexOf('enlace_informe');
+    if (colNro === -1 || colEnlace === -1) return;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][colNro]) === String(casoId)) {
+        if (!data[i][colEnlace]) {
+          ws.getRange(i + 1, colEnlace + 1).setValue(url);
+        }
+        break;
+      }
+    }
+  } catch(e) {
+    Logger.log('_actualizarEnlaceCaso: ' + e.toString());
+  }
+}
+
+function _actualizarEnlaceVisita(ss, visitaId, url) {
+  try {
+    var ws = ss.getSheetByName('BD_Visitas');
+    if (!ws) return;
+    var data = ws.getDataRange().getValues();
+    var headers = data[0];
+    var colId = headers.indexOf('ID');
+    var colEnlace = headers.indexOf('enlace_archivo');
+    if (colId === -1 || colEnlace === -1) return;
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][colId]) === String(visitaId)) {
+        if (!data[i][colEnlace]) {
+          ws.getRange(i + 1, colEnlace + 1).setValue(url);
+        }
+        break;
+      }
+    }
+  } catch(e) {
+    Logger.log('_actualizarEnlaceVisita: ' + e.toString());
   }
 }
 

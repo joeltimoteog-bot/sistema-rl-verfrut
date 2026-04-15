@@ -156,6 +156,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
 .live-dot{display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;animation:live-pulse 1.5s infinite;margin-right:4px;vertical-align:middle}
 </style>
 <script>if(localStorage.getItem('rl_dark')==='1')document.documentElement.classList.add('dark');</script>
+<script src="azure-blob-upload.js"></script>
 </head>
 <body>
 
@@ -1291,36 +1292,35 @@ function limpiarFormFusion() {
 
 // Subir foto a Drive via Apps Script
 async function subirFotoFusion(file, sector, ruta, idx) {
+  if (!file) return '';
   return new Promise((resolve) => {
-    if(!file) { resolve(''); return; }
     const img = new Image();
     const reader0 = new FileReader();
     reader0.onload = (ev) => {
-      img.onload = () => {
+      img.onload = async () => {
         const MAX = 1024;
         let w = img.width, h = img.height;
-        if(w > MAX || h > MAX) {
-          if(w > h) { h = Math.round(h * MAX / w); w = MAX; }
-          else      { w = Math.round(w * MAX / h); h = MAX; }
+        if (w > MAX || h > MAX) {
+          if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+          else       { w = Math.round(w * MAX / h); h = MAX; }
         }
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        const base64 = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
-        const fecha = new Date();
-        const ts = fecha.getFullYear().toString() +
-          String(fecha.getMonth()+1).padStart(2,'0') +
-          String(fecha.getDate()).padStart(2,'0') + '_' +
-          String(fecha.getHours()).padStart(2,'0') +
-          String(fecha.getMinutes()).padStart(2,'0');
-        const nombre = ('FUSION_' + sector + '_' + ruta + '_' + ts + '_' + idx + '.jpg')
-          .replace(/[^a-zA-Z0-9_.-]/g,'_').toUpperCase();
-        apiPost({
-          action:'subirArchivo', base64, nombre,
-          mimeType: 'image/jpeg',
-          carpeta:'Evidencias_Fusiones_Buses'
-        }).then(d => resolve(d.enlace || d.url || d.link || ''))
-          .catch(() => resolve(''));
+        canvas.toBlob(async (blob) => {
+          const fecha = new Date();
+          const ts = fecha.getFullYear().toString() +
+            String(fecha.getMonth()+1).padStart(2,'0') +
+            String(fecha.getDate()).padStart(2,'0') + '_' +
+            String(fecha.getHours()).padStart(2,'0') +
+            String(fecha.getMinutes()).padStart(2,'0');
+          const nombre = ('FUSION_' + sector + '_' + ruta + '_' + ts + '_' + idx + '.jpg')
+            .replace(/[^a-zA-Z0-9_.-]/g, '_').toUpperCase();
+          const azureFile = new File([blob], nombre, { type: 'image/jpeg' });
+          const result = await subirArchivoAzure(azureFile, 'fusiones', null,
+            { usuario: typeof USER !== 'undefined' ? USER.usuario || '' : '' });
+          resolve(result ? (result.url || result.enlace || '') : '');
+        }, 'image/jpeg', 0.7);
       };
       img.src = ev.target.result;
     };
@@ -2732,70 +2732,6 @@ function nombreArchivoCaso(dni, tipo, fechaReporte) {
   return `${dni}_${tipo}_${yyyymmdd}.pdf`;
 }
 
-/**
- * Sube un archivo PDF a Drive en /rl/año/usuario
- * @param {HTMLInputElement} fileInput
- * @param {string} nombreCampo - 'cInforme' | 'cReporte'
- * @param {string} tipo        - 'informe'  | 'descargo'
- * @param {string} dni
- * @param {string} fechaReporte - YYYY-MM-DD
- */
-async function subirArchivoDrive(fileInput, nombreCampo, tipo, dni, fechaReporte) {
-  const file = fileInput.files[0];
-  if (!file) return null;
-  const msgEl = document.getElementById(nombreCampo + 'Msg');
-
-  // Solo PDF
-  const ext = file.name.split('.').pop().toLowerCase();
-  if (ext !== 'pdf' && file.type !== 'application/pdf') {
-    if (msgEl) { msgEl.textContent = '❌ Solo se aceptan archivos PDF'; msgEl.style.color = '#dc2626'; }
-    mostrarToast('❌ Solo se permiten archivos PDF', 'error');
-    return null;
-  }
-
-  // Tamaño máximo
-  if (file.size > CASOS_MAX_MB * 1024 * 1024) {
-    if (msgEl) { msgEl.textContent = '❌ Máx ' + CASOS_MAX_MB + 'MB'; msgEl.style.color = '#dc2626'; }
-    mostrarToast('❌ Archivo supera los ' + CASOS_MAX_MB + 'MB permitidos', 'error');
-    return null;
-  }
-
-  const nombreFinal = nombreArchivoCaso(dni, tipo, fechaReporte);
-  const carpeta     = getCarpetaUsuarioCaso();
-  const año         = String(new Date().getFullYear());
-
-  if (msgEl) { msgEl.textContent = '⏳ Subiendo ' + nombreFinal + '...'; msgEl.style.color = '#64748b'; }
-
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onload = async e => {
-      try {
-        const base64 = e.target.result.split(',')[1];
-        const res = await apiPost({
-          action: 'subirArchivo',
-          nombre: nombreFinal,
-          mimeType: 'application/pdf',
-          base64,
-          carpeta,
-          año
-        });
-        if (res.success) {
-          if (msgEl) { msgEl.textContent = '✅ ' + nombreFinal; msgEl.style.color = '#16a34a'; }
-          resolve({ nombre: nombreFinal, enlace: res.enlace, carpeta: res.carpeta || '' });
-        } else {
-          if (msgEl) { msgEl.textContent = '❌ ' + (res.error || 'Error al subir'); msgEl.style.color = '#dc2626'; }
-          console.error('[subirArchivoDrive]', res);
-          resolve(null);
-        }
-      } catch(err) {
-        if (msgEl) { msgEl.textContent = '❌ ' + err.message; msgEl.style.color = '#dc2626'; }
-        console.error('[subirArchivoDrive]', err);
-        resolve(null);
-      }
-    };
-    reader.readAsDataURL(file);
-  });
-}
 
 async function guardarCaso() {
   const dni         = document.getElementById('mCasoDNI').value.trim();
@@ -2851,13 +2787,13 @@ async function guardarCaso() {
   const btn = document.querySelector('#mCaso .btn-n:last-child');
   btn.textContent = '⏳ Guardando...'; btn.disabled = true;
 
-  let informe = null, reporte = null, carpetaDrive = '';
+  let informe = null, reporte = null;
 
   if (esConcluido && (informeFile.files[0] || reporteFile.files[0])) {
     btn.textContent = '⏳ Subiendo archivos...';
     const uploads = await Promise.all([
-      informeFile.files[0] ? subirArchivoDrive(informeFile, 'cInforme', 'informe',  dni, fechaRep) : Promise.resolve(null),
-      reporteFile.files[0] ? subirArchivoDrive(reporteFile, 'cReporte', 'descargo', dni, fechaRep) : Promise.resolve(null)
+      informeFile.files[0] ? subirArchivoAzure(informeFile, 'casos', 'cArchivoMsg', {usuario: USER.usuario||'', empresa}) : Promise.resolve(null),
+      reporteFile.files[0] ? subirArchivoAzure(reporteFile, 'casos', 'cArchivoMsg', {usuario: USER.usuario||'', empresa}) : Promise.resolve(null)
     ]);
     informe = uploads[0]; reporte = uploads[1];
     if ((informeFile.files[0] && !informe) || (reporteFile.files[0] && !reporte)) {
@@ -2865,7 +2801,6 @@ async function guardarCaso() {
       btn.textContent = '💾 Guardar Caso'; btn.disabled = false;
       return;
     }
-    carpetaDrive = (informe || reporte)?.carpeta || '';
     btn.textContent = '⏳ Guardando...';
   }
 
@@ -2892,7 +2827,6 @@ async function guardarCaso() {
       dias_restantes:             diasRestantes,
       porcentaje_avance:          pct,
       fecha_conclusion:           esConcluido ? new Date().toISOString().split('T')[0] : '',
-      carpeta_drive:              carpetaDrive,
       usuario_registro:           USER.usuario || '',
       registrado_por:             USER.nombre  || USER.usuario || ''
     };
@@ -2912,6 +2846,8 @@ async function guardarCaso() {
 
     const res = await apiPost({ action, ...payload });
     if (res.success) {
+      if (informe) registrarArchivoEnSheets(informe, { casoId: res.nro, modulo: 'casos', empresa });
+      if (reporte) registrarArchivoEnSheets(reporte, { casoId: res.nro, modulo: 'casos', empresa });
       cerrar('mCaso');
       invalidarCache('casos');
       await cargarCasos();
