@@ -1,6 +1,8 @@
 // ============================================================
-// AZURE BLOB STORAGE — Subida directa de archivos
+// AZURE BLOB STORAGE - MÓDULO DE SUBIDA DIRECTA
+// Sistema RL v3.0 | Verfrut / RAPEL SAC
 // ============================================================
+
 const AZURE_CONFIG = {
   storageUrl: 'https://sistemarlverfrut.blob.core.windows.net',
   sasToken: 'sp=racw&st=2026-04-15T13:41:47Z&se=2027-12-31T21:56:47Z&spr=https&sv=2025-11-05&sr=c&sig=7SyGQHquBgaXPNmMON40BqLgaxDxxvXtfzYgMEAvmAE%3D',
@@ -12,115 +14,108 @@ const AZURE_CONFIG = {
     default:    'documentos'
   },
   maxSizeMB: 20,
-  tiposPermitidos: [
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  tiposPermitidos: ['image/jpeg','image/png','image/gif','image/webp',
     'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   ]
 };
 
-/**
- * Sube un archivo directamente a Azure Blob Storage via PUT.
- * @param {HTMLInputElement|File} fileInput - input[type=file] o File directamente
- * @param {string} modulo  - 'casos' | 'visitas' | 'fusiones' | 'documentos'
- * @param {string|null} msgElId - ID del elemento donde mostrar estado (puede ser null)
- * @param {Object} meta    - { usuario, empresa }
- * @returns {Promise<{nombre,enlace,url,tipo,tamaño,contenedor}|null>}
- */
-async function subirArchivoAzure(fileInput, modulo, msgElId, meta) {
-  const file = (fileInput && fileInput.files) ? fileInput.files[0] : fileInput;
+async function subirArchivoAzure(fileInput, modulo, msgElId, meta = {}) {
+  const file = fileInput?.files?.[0];
   if (!file) return null;
+
   const msgEl = msgElId ? document.getElementById(msgElId) : null;
+  const setMsg = (txt, color = '#6b7280') => {
+    if (msgEl) { msgEl.textContent = txt; msgEl.style.color = color; }
+  };
 
-  // Validar tipo
+  const sizeMB = file.size / (1024 * 1024);
+  if (sizeMB > AZURE_CONFIG.maxSizeMB) {
+    setMsg(`❌ Archivo muy grande (${sizeMB.toFixed(1)} MB). Máximo ${AZURE_CONFIG.maxSizeMB} MB.`, '#dc2626');
+    return null;
+  }
+
   const mimeType = file.type || _detectarMime(file.name);
-  if (!AZURE_CONFIG.tiposPermitidos.includes(mimeType)) {
-    if (msgEl) { msgEl.textContent = '❌ Tipo de archivo no permitido'; msgEl.style.color = '#dc2626'; }
-    mostrarToast('❌ Tipo de archivo no permitido: ' + (file.name || ''), 'error');
+  if (AZURE_CONFIG.tiposPermitidos.length > 0 && !AZURE_CONFIG.tiposPermitidos.includes(mimeType)) {
+    setMsg(`❌ Tipo de archivo no permitido: ${mimeType}`, '#dc2626');
     return null;
   }
 
-  // Validar tamaño
-  if (file.size > AZURE_CONFIG.maxSizeMB * 1024 * 1024) {
-    if (msgEl) { msgEl.textContent = '❌ Máx ' + AZURE_CONFIG.maxSizeMB + 'MB'; msgEl.style.color = '#dc2626'; }
-    mostrarToast('❌ Archivo supera los ' + AZURE_CONFIG.maxSizeMB + 'MB permitidos', 'error');
-    return null;
-  }
+  const contenedor  = AZURE_CONFIG.contenedores[modulo] || AZURE_CONFIG.contenedores.default;
+  const nombreUnico = _generarNombreUnico(file.name, modulo, meta.usuario);
 
-  const usuario   = (meta && meta.usuario) ? meta.usuario
-                  : (typeof USER !== 'undefined' ? USER.usuario || 'user' : 'user');
-  const nombreBlob = _generarNombreUnico(file.name, modulo, usuario);
-  const contenedor = AZURE_CONFIG.contenedores[modulo] || AZURE_CONFIG.contenedores.default;
-  const uploadUrl  = AZURE_CONFIG.storageUrl + '/' + contenedor + '/' + nombreBlob
-                   + '?' + AZURE_CONFIG.sasToken;
-
-  if (msgEl) { msgEl.textContent = '⏳ Subiendo ' + file.name + '...'; msgEl.style.color = '#64748b'; }
+  setMsg(`⏳ Subiendo ${file.name}...`, '#f59e0b');
 
   try {
-    const resp = await fetch(uploadUrl, {
+    const blobUrl = `${AZURE_CONFIG.storageUrl}/${contenedor}/${nombreUnico}?${AZURE_CONFIG.sasToken}`;
+
+    const response = await fetch(blobUrl, {
       method: 'PUT',
       headers: {
-        'x-ms-blob-type': 'BlockBlob',
-        'Content-Type':   mimeType
+        'x-ms-blob-type':     'BlockBlob',
+        'Content-Type':       mimeType,
+        'x-ms-meta-sistema':  'sistema-rl-v3',
+        'x-ms-meta-modulo':   modulo,
+        'x-ms-meta-usuario':  meta.usuario || 'desconocido',
+        'x-ms-meta-empresa':  meta.empresa || 'verfrut',
+        'x-ms-meta-original': encodeURIComponent(file.name)
       },
       body: file
     });
 
-    if (!resp.ok) {
-      const errText = await resp.text().catch(() => String(resp.status));
-      if (msgEl) { msgEl.textContent = '❌ Error al subir (' + resp.status + ')'; msgEl.style.color = '#dc2626'; }
-      console.error('[subirArchivoAzure]', resp.status, errText);
-      return null;
+    if (!response.ok) {
+      const errText = await response.text().catch(() => response.statusText);
+      throw new Error(`Azure ${response.status}: ${errText}`);
     }
 
-    const urlFinal = AZURE_CONFIG.storageUrl + '/' + contenedor + '/' + nombreBlob;
-    if (msgEl) { msgEl.textContent = '✅ ' + file.name; msgEl.style.color = '#16a34a'; }
-
-    return {
-      nombre:     nombreBlob,
-      enlace:     urlFinal,
-      url:        urlFinal,
+    const urlPublica = `${AZURE_CONFIG.storageUrl}/${contenedor}/${nombreUnico}`;
+    const resultado  = {
+      nombre:     file.name,
+      nombreBlob: nombreUnico,
+      url:        urlPublica,
       tipo:       mimeType,
       tamaño:     file.size,
-      contenedor
+      tamañoMB:   sizeMB.toFixed(2),
+      contenedor: contenedor,
+      modulo:     modulo,
+      fecha:      new Date().toISOString(),
+      usuario:    meta.usuario || '',
+      empresa:    meta.empresa || ''
     };
-  } catch (err) {
-    if (msgEl) { msgEl.textContent = '❌ ' + err.message; msgEl.style.color = '#dc2626'; }
-    console.error('[subirArchivoAzure]', err);
+
+    setMsg(`✅ ${file.name} subido correctamente`, '#16a34a');
+    console.log('[Azure] Subida exitosa:', resultado);
+    return resultado;
+
+  } catch (error) {
+    console.error('[Azure] Error:', error);
+    setMsg(`❌ Error: ${error.message}`, '#dc2626');
     return null;
   }
 }
 
-/**
- * Registra los metadatos del archivo subido en la hoja Archivos_Azure de Sheets.
- * @param {Object} datosArchivo   - { nombre, url|enlace, tipo, tamaño, contenedor }
- * @param {Object} datosFormulario - { casoId?, visitaId?, modulo, empresa?, usuario? }
- */
-async function registrarArchivoEnSheets(datosArchivo, datosFormulario) {
-  const usuario = (datosFormulario && datosFormulario.usuario)
-    ? datosFormulario.usuario
-    : (typeof USER !== 'undefined' ? USER.usuario || '' : '');
-  return apiPost({
+async function registrarArchivoEnSheets(datosArchivo, datosFormulario = {}) {
+  if (!datosArchivo) return { success: false, error: 'Sin datos de archivo' };
+  const payload = {
     action:        'registrarArchivoAzure',
-    urlArchivo:    datosArchivo.url    || datosArchivo.enlace || '',
-    nombreArchivo: datosArchivo.nombre || '',
-    tipoArchivo:   datosArchivo.tipo   || '',
-    tamanoArchivo: datosArchivo.tamaño || 0,
-    contenedor:    datosArchivo.contenedor || '',
-    modulo:        (datosFormulario && datosFormulario.modulo)   || '',
-    casoId:        (datosFormulario && datosFormulario.casoId)   || '',
-    visitaId:      (datosFormulario && datosFormulario.visitaId) || '',
-    empresa:       (datosFormulario && datosFormulario.empresa)  || '',
-    usuario
-  });
+    urlArchivo:    datosArchivo.url,
+    nombreArchivo: datosArchivo.nombre,
+    tipoArchivo:   datosArchivo.tipo,
+    tamanoArchivo: datosArchivo.tamaño,
+    contenedor:    datosArchivo.contenedor,
+    modulo:        datosArchivo.modulo,
+    fechaSubida:   datosArchivo.fecha,
+    ...datosFormulario
+  };
+  try {
+    return await apiPost(payload);
+  } catch (error) {
+    console.error('[Sheets] Error al registrar:', error);
+    return { success: false, error: error.message };
+  }
 }
 
-/**
- * Genera un nombre único para el blob: modulo/usuario_timestamp_nombreBase.ext
- */
 function _generarNombreUnico(nombreOriginal, modulo, usuario) {
   const ts   = Date.now();
   const ext  = (nombreOriginal || 'archivo').split('.').pop().toLowerCase();
@@ -132,22 +127,14 @@ function _generarNombreUnico(nombreOriginal, modulo, usuario) {
   return modulo + '/' + usr + '_' + ts + '_' + base + '.' + ext;
 }
 
-/**
- * Detecta el MIME type por extensión cuando file.type está vacío.
- */
 function _detectarMime(nombreArchivo) {
-  const ext = (nombreArchivo || '').split('.').pop().toLowerCase();
-  const mimeMap = {
-    jpg:  'image/jpeg',
-    jpeg: 'image/jpeg',
-    png:  'image/png',
-    gif:  'image/gif',
-    webp: 'image/webp',
-    pdf:  'application/pdf',
-    doc:  'application/msword',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    xls:  'application/vnd.ms-excel',
-    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  const ext   = (nombreArchivo || '').split('.').pop().toLowerCase();
+  const mimes = {
+    'jpg':'image/jpeg','jpeg':'image/jpeg','png':'image/png',
+    'gif':'image/gif','webp':'image/webp','pdf':'application/pdf',
+    'doc':'application/msword','docx':'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls':'application/vnd.ms-excel',
+    'xlsx':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   };
-  return mimeMap[ext] || 'application/octet-stream';
+  return mimes[ext] || 'application/octet-stream';
 }
