@@ -67,6 +67,15 @@ async function subirArchivoAzure(fileInput, modulo, msgElId, meta = {}) {
 
     if (!response.ok) {
       const errText = await response.text().catch(() => response.statusText);
+      console.error('[Azure] Error detallado:', {
+        status:     response.status,
+        statusText: response.statusText,
+        url:        blobUrl.split('?')[0], // sin SAS token en el log
+        contenedor,
+        modulo,
+        mimeType,
+        errorBody:  errText
+      });
       throw new Error(`Azure ${response.status}: ${errText}`);
     }
 
@@ -90,7 +99,10 @@ async function subirArchivoAzure(fileInput, modulo, msgElId, meta = {}) {
     return resultado;
 
   } catch (error) {
-    console.error('[Azure] Error:', error);
+    // TypeError: Failed to fetch → probable CORS o red
+    // Error Azure 4xx/5xx → autenticación SAS, contenedor, permisos
+    console.error('[Azure] Error detallado:', error);
+    console.error('[Azure] Tipo:', error.name, '| Mensaje:', error.message);
     setMsg(`❌ Error: ${error.message}`, '#dc2626');
     return null;
   }
