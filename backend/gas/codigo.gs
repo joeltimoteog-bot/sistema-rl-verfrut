@@ -1174,9 +1174,10 @@ function getVisitas(p) {
       registrado_por: String(r[22]||'')
     }));
 
+    var normStr = function(s) { return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); };
     if (p.empresa)    data = data.filter(v => v.empresa === p.empresa);
     if (p.mes)        data = data.filter(v => v.fecha_reg && new Date(v.fecha_reg).getMonth()+1 == p.mes);
-    if (p.supervisor) data = data.filter(v => v.supervisor.toLowerCase().includes(p.supervisor.toLowerCase()));
+    if (p.supervisor) data = data.filter(v => normStr(v.supervisor).includes(normStr(p.supervisor)));
 
     return { success: true, data: data };
   } catch(e) {

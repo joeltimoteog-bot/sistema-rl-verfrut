@@ -1659,11 +1659,12 @@ async function cargarVisitas() {
     const empF  = (document.getElementById('vFiltroEmp')?.value  || '').trim();
     const mesF  = (document.getElementById('vFiltroMes')?.value  || '').trim();
     const supF  = (document.getElementById('vFiltroSup')?.value  || '').toLowerCase().trim();
-    const miLogin  = (USER.usuario||'').toLowerCase().trim();
-    const miPrimer = (USER.nombre||USER.usuario).toLowerCase().trim().split(' ')[0];
+    const _normV = s => String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+    const miLogin  = _normV(USER.usuario);
+    const miPrimer = _normV(USER.nombre||USER.usuario).split(' ')[0];
     let lista = esAdmin ? CACHE.visitas : CACHE.visitas.filter(v => {
-      const sup = String(v.supervisor||'').toLowerCase().trim();
-      const reg = String(v.registrado_por||'').toLowerCase().trim();
+      const sup = _normV(v.supervisor);
+      const reg = _normV(v.registrado_por);
       return sup === miLogin || sup.includes(miPrimer) ||
              reg === miLogin || reg.includes(miPrimer);
     });
@@ -5660,7 +5661,7 @@ async function generarInformeVisita() {
 
   // Recopilar datos
   const supOpt    = document.getElementById('vSup').options[document.getElementById('vSup').selectedIndex];
-  const sup       = supOpt.text.split(' - ')[0]; // solo nombre sin fundo
+  const sup       = supOpt.value || supOpt.text.split(' — ')[0]; // value = s.nombre (nombre limpio sin sector)
   const esReemplazo = supOpt.dataset.reemplazo === 'si';
   const supTitular  = document.getElementById('vSupTitular').value.trim();
   const dni      = document.getElementById('vDNI').value;
