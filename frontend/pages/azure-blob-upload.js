@@ -5,7 +5,11 @@
 
 const AZURE_CONFIG = {
   storageUrl: 'https://sistemarlverfrut.blob.core.windows.net',
-  sasToken: 'sp=racw&st=2026-04-15T13:41:47Z&se=2027-12-31T21:56:47Z&spr=https&sv=2025-11-05&sr=c&sig=7SyGQHquBgaXPNmMON40BqLgaxDxxvXtfzYgMEAvmAE%3D',
+  sasTokens: {
+    'casos-rl':      'st=2026-04-15T20:44:51Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=S5fnqbBE%2B1UuK507bOk%2FyttEeb5nBpHn%2BYuURV0dmrA%3D',
+    'visitas-campo': 'st=2026-04-15T20:52:03Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=RRnH64O2mJE0X46AjC8l7mi38uVUevgaN2njZZyWCrw%3D',
+    'documentos':    'st=2026-04-15T20:56:30Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=%2BO4IzMpomXLbMl4s6S0UnqsuuoIRG%2FcNyezHRXeQMHQ%3D'
+  },
   contenedores: {
     casos:      'casos-rl',
     visitas:    'visitas-campo',
@@ -49,7 +53,8 @@ async function subirArchivoAzure(fileInput, modulo, msgElId, meta = {}) {
   setMsg(`⏳ Subiendo ${file.name}...`, '#f59e0b');
 
   try {
-    const blobUrl = `${AZURE_CONFIG.storageUrl}/${contenedor}/${nombreUnico}?${AZURE_CONFIG.sasToken}`;
+    const sasToken = AZURE_CONFIG.sasTokens[contenedor] || AZURE_CONFIG.sasTokens['documentos'];
+    const blobUrl = `${AZURE_CONFIG.storageUrl}/${contenedor}/${nombreUnico}?${sasToken}`;
 
     const response = await fetch(blobUrl, {
       method: 'PUT',
