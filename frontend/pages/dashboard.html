@@ -911,11 +911,14 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
   </div>
   <div style="padding:20px">
     <!-- Botones acción -->
-    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
       <button type="button" onclick="imprimirInforme()" style="padding:9px 18px;background:#0b1e45;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>
+      <button type="button" id="btnGuardarAzure" onclick="guardarInformeEnAzure()" style="padding:9px 18px;background:#0369a1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">💾 Guardar en Azure</button>
+      <a id="btnVerAzure" href="#" target="_blank" style="display:none;padding:9px 18px;background:#059669;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;text-decoration:none;align-items:center">🔗 Ver en Azure</a>
       <button type="button" onclick="cerrar('mVerInforme');editarVisita(window._verInformeIdx)" style="padding:9px 18px;background:#d97706;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✏️ Editar</button>
       <button type="button" onclick="cerrar('mVerInforme')" style="padding:9px 16px;background:#f1f5f9;border:none;border-radius:8px;font-size:13px;cursor:pointer">✕ Cerrar</button>
     </div>
+    <div id="azureInformeMsg" style="display:none;font-size:12px;font-weight:600;padding:6px 10px;border-radius:6px;background:#f8fafc;margin-bottom:10px"></div>
     <!-- Vista previa del informe -->
     <div id="informeVistaPrevia" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:24px;font-size:11pt;line-height:1.6">
     </div>
@@ -2162,7 +2165,101 @@ function verInformeGuardado(idx) {
   });
 
   document.getElementById('informeVistaPrevia').innerHTML = html;
+
+  // Resetear estado del panel Azure
+  const msgAzure = document.getElementById('azureInformeMsg');
+  if (msgAzure) { msgAzure.textContent = ''; msgAzure.style.display = 'none'; }
+  const btnGuardar = document.getElementById('btnGuardarAzure');
+  if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '💾 Guardar en Azure'; }
+
+  // Si ya existe enlace Azure, mostrar botón directamente
+  const enlaceExistente = v.enlace_azure || v.enlace_informe || '';
+  const btnVer = document.getElementById('btnVerAzure');
+  if (btnVer) {
+    if (enlaceExistente && enlaceExistente.startsWith('https://sistemarlverfrut')) {
+      btnVer.href = enlaceExistente;
+      btnVer.style.display = 'inline-flex';
+    } else {
+      btnVer.href = '#';
+      btnVer.style.display = 'none';
+    }
+  }
+
   abrir('mVerInforme');
+}
+
+async function guardarInformeEnAzure() {
+  const idx = window._verInformeIdx;
+  const v   = idx !== undefined ? (window._visitasData || [])[idx] : null;
+
+  const msgEl     = document.getElementById('azureInformeMsg');
+  const btnGuardar = document.getElementById('btnGuardarAzure');
+  const setMsg = (txt, color) => {
+    if (msgEl) { msgEl.innerHTML = txt; msgEl.style.color = color || '#64748b'; msgEl.style.display = 'block'; }
+  };
+
+  if (btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = '⏳ Subiendo...'; }
+
+  try {
+    const contenido = document.getElementById('informeVistaPrevia').innerHTML;
+    if (!contenido || !contenido.trim()) {
+      setMsg('❌ No hay informe renderizado para guardar.', '#dc2626');
+      return;
+    }
+
+    // Construir documento HTML completo con UTF-8
+    const htmlDoc = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">` +
+      `<title>Informe Visita Campo</title></head>` +
+      `<body style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:20px">` +
+      contenido + `</body></html>`;
+
+    // Nombre de archivo según spec
+    const supSlug       = String(v && v.supervisor ? v.supervisor : 'supervisor').replace(/\s+/g, '_');
+    const nro           = v ? (v.nro || '') : '';
+    const nombreArchivo = 'informe_visita_' + nro + '_' + supSlug + '.html';
+
+    // Crear File desde Blob
+    const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
+    const file = new File([blob], nombreArchivo, { type: 'text/html' });
+
+    const meta = {
+      usuario: USER.usuario || '',
+      empresa: v ? (v.empresa || USER.empresa || '') : (USER.empresa || '')
+    };
+
+    setMsg('⏳ Subiendo informe a Azure...', '#f59e0b');
+
+    const resultado = await subirArchivoAzure(file, 'visitas', null, meta);
+    if (!resultado) {
+      setMsg('❌ No se pudo subir el informe. Verifica tu conexión.', '#dc2626');
+      return;
+    }
+
+    // Registrar en hoja Archivos_Azure
+    registrarArchivoEnSheets(resultado, {
+      visitaId: String(nro),
+      usuario:  USER.usuario || '',
+      empresa:  meta.empresa,
+      modulo:   'visitas'
+    });
+
+    // Guardar URL en el objeto en memoria para "Ver en Azure"
+    if (v) v.enlace_azure = resultado.url;
+
+    // Mostrar éxito con enlace
+    setMsg('✅ Guardado en Azure: <a href="' + resultado.url + '" target="_blank" ' +
+      'style="color:#0b1e45;text-decoration:underline;font-weight:700">📎 Abrir informe</a>', '#16a34a');
+
+    // Mostrar botón "Ver en Azure"
+    const btnVer = document.getElementById('btnVerAzure');
+    if (btnVer) { btnVer.href = resultado.url; btnVer.style.display = 'inline-flex'; }
+
+  } catch(err) {
+    setMsg('❌ Error inesperado: ' + err.message, '#dc2626');
+    console.error('[guardarInformeEnAzure]', err);
+  } finally {
+    if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '💾 Guardar en Azure'; }
+  }
 }
 
 
