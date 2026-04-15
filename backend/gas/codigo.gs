@@ -1158,20 +1158,34 @@ function getVisitas(p) {
 
     // Visitas_Campo: r[0]=N° r[1]=Fecha r[2]=Empresa r[3]=Supervisor r[4]=DNI
     // r[5]=Correo r[6]=Fundo r[7]=Punto r[8]=FechaInicio r[9]=FechaFin r[10]=Semana
-    // r[11]=FechaInforme r[21]=Estado r[22]=RegistradoPor
+    // r[11]=FechaInforme r[12]=Para r[13]=Asunto r[14]=Desarrollo r[15]=Rutas
+    // r[16]=Acciones r[17]=Compromisos r[18]=Observaciones r[19]=MotivoRetraso
+    // r[20]=NFotos r[21]=Estado r[22]=RegistradoPor r[23]=Temporada
     let data = rawRows.filter(r => r[0]).map(r => ({
-      nro:            r[0],
-      fecha_reg:      r[1] instanceof Date ? Utilities.formatDate(r[1],'America/Lima','yyyy-MM-dd') : String(r[1]||'').substring(0,10),
-      empresa:        String(r[2]||''),
-      supervisor:     String(r[3]||'').trim(),
-      dni:            r[4],
-      fundo:          String(r[6]||''),
-      sector:         String(r[6]||''),
-      semana:         r[10],
-      fecha_informe:  r[11] instanceof Date ? Utilities.formatDate(r[11],'America/Lima','yyyy-MM-dd') : String(r[11]||'').substring(0,10),
-      estado:         String(r[21]||''),
-      enlace_informe: String(r[23]||''),
-      registrado_por: String(r[22]||'')
+      nro:             r[0],
+      fecha_reg:       r[1] instanceof Date ? Utilities.formatDate(r[1],'America/Lima','yyyy-MM-dd') : String(r[1]||'').substring(0,10),
+      empresa:         String(r[2]||''),
+      supervisor:      String(r[3]||'').trim(),
+      dni:             r[4],
+      correo:          String(r[5]||''),
+      fundo:           String(r[6]||''),
+      sector:          String(r[6]||''),
+      punto:           String(r[7]||''),
+      fecha_inicio:    r[8] instanceof Date ? Utilities.formatDate(r[8],'America/Lima','yyyy-MM-dd') : String(r[8]||'').substring(0,10),
+      fecha_fin:       r[9] instanceof Date ? Utilities.formatDate(r[9],'America/Lima','yyyy-MM-dd') : String(r[9]||'').substring(0,10),
+      semana:          r[10],
+      fecha_informe:   r[11] instanceof Date ? Utilities.formatDate(r[11],'America/Lima','yyyy-MM-dd') : String(r[11]||'').substring(0,10),
+      para:            String(r[12]||''),
+      asunto:          String(r[13]||''),
+      desarrollo:      String(r[14]||''),
+      rutas:           String(r[15]||''),
+      acciones:        String(r[16]||''),
+      compromisos:     String(r[17]||''),
+      observaciones:   String(r[18]||''),
+      motivo_retraso:  String(r[19]||''),
+      n_fotos:         r[20] || 0,
+      estado:          String(r[21]||''),
+      registrado_por:  String(r[22]||'')
     }));
 
     var normStr = function(s) { return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); };
