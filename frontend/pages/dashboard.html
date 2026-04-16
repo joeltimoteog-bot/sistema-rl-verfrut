@@ -2255,7 +2255,10 @@ async function guardarInformeEnAzure() {
       return;
     }
 
-    // Registrar en hoja Archivos_Azure
+    // URL con token SAS para visualización directa
+    const urlConToken = resultado.url + '?' + (AZURE_CONFIG.sasTokens[resultado.contenedor] || AZURE_CONFIG.sasTokens['documentos']);
+
+    // Registrar en hoja Archivos_Azure (URL limpia, sin token)
     registrarArchivoEnSheets(resultado, {
       visitaId: String(nro),
       usuario:  USER.usuario || '',
@@ -2263,16 +2266,16 @@ async function guardarInformeEnAzure() {
       modulo:   'visitas'
     });
 
-    // Guardar URL en el objeto en memoria para "Ver en Azure"
-    if (v) v.enlace_azure = resultado.url;
+    // Guardar URL con token en el objeto en memoria para "Ver en Azure"
+    if (v) v.enlace_azure = urlConToken;
 
-    // Mostrar éxito con enlace
-    setMsg('✅ Guardado en Azure: <a href="' + resultado.url + '" target="_blank" ' +
+    // Mostrar éxito con enlace (URL con token)
+    setMsg('✅ Guardado en Azure: <a href="' + urlConToken + '" target="_blank" ' +
       'style="color:#0b1e45;text-decoration:underline;font-weight:700">📎 Abrir informe</a>', '#16a34a');
 
-    // Mostrar botón "Ver en Azure"
+    // Mostrar botón "Ver en Azure" (URL con token)
     const btnVer = document.getElementById('btnVerAzure');
-    if (btnVer) { btnVer.href = resultado.url; btnVer.style.display = 'inline-flex'; }
+    if (btnVer) { btnVer.href = urlConToken; btnVer.style.display = 'inline-flex'; }
 
   } catch(err) {
     setMsg('❌ Error inesperado: ' + err.message, '#dc2626');
