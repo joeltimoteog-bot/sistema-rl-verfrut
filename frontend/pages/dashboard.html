@@ -2234,9 +2234,22 @@ async function guardarInformeEnAzure() {
       empresa: v ? (v.empresa || USER.empresa || '') : (USER.empresa || '')
     };
 
+    console.log('[Azure] HTML length:', htmlDoc.length);
+    console.log('[Azure] File creado:', file.name, file.size, file.type);
+    console.log('[Azure] Llamando subirArchivoAzure con modulo: visitas');
+
     setMsg('⏳ Subiendo informe a Azure...', '#f59e0b');
 
-    const resultado = await subirArchivoAzure(file, 'visitas', null, meta);
+    let resultado;
+    try {
+      resultado = await subirArchivoAzure(file, 'visitas', null, meta);
+      console.log('[Azure] Resultado:', resultado);
+    } catch(err) {
+      console.error('[Azure] Error capturado:', err);
+      setMsg('❌ Error: ' + err.message, '#dc2626');
+      return;
+    }
+
     if (!resultado) {
       setMsg('❌ No se pudo subir el informe. Verifica tu conexión.', '#dc2626');
       return;
