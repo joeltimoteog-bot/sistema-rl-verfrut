@@ -27,74 +27,59 @@ const AZURE_CONFIG = {
 };
 
 async function subirArchivoAzure(fileInput, modulo, msgElId, meta = {}) {
-  const file = fileInput?.files?.[0];
-  if (!file) return null;
+  console.log('[Azure-DEBUG] Entrada:', {fileInput, modulo, msgElId, meta});
 
-  const msgEl = msgElId ? document.getElementById(msgElId) : null;
-  const setMsg = (txt, color = '#6b7280') => {
-    if (msgEl) { msgEl.textContent = txt; msgEl.style.color = color; }
-  };
-
-  const sizeMB = file.size / (1024 * 1024);
-  if (sizeMB > AZURE_CONFIG.maxSizeMB) {
-    setMsg(`❌ Archivo muy grande (${sizeMB.toFixed(1)} MB). Máximo ${AZURE_CONFIG.maxSizeMB} MB.`, '#dc2626');
+  // Verificar si fileInput es un File directamente o un input
+  let file;
+  if (fileInput instanceof File) {
+    file = fileInput;
+    console.log('[Azure-DEBUG] Es File directo');
+  } else if (fileInput?.files?.[0]) {
+    file = fileInput.files[0];
+    console.log('[Azure-DEBUG] Es input element');
+  } else {
+    console.error('[Azure-DEBUG] fileInput inválido:', fileInput);
     return null;
   }
 
-  const mimeType = file.type || _detectarMime(file.name);
-  console.log('[Azure] mimeType detectado:', mimeType);
-  console.log('[Azure] tiposPermitidos:', AZURE_CONFIG.tiposPermitidos);
-  console.log('[Azure] mimeType incluido:', AZURE_CONFIG.tiposPermitidos.includes(mimeType));
-  // if (AZURE_CONFIG.tiposPermitidos.length > 0 && !AZURE_CONFIG.tiposPermitidos.includes(mimeType)) {
-  //   setMsg(`❌ Tipo de archivo no permitido: ${mimeType}`, '#dc2626');
-  //   return null;
-  // }
+  console.log('[Azure-DEBUG] File:', file.name, file.size, file.type);
 
   const contenedor  = AZURE_CONFIG.contenedores[modulo] || AZURE_CONFIG.contenedores.default;
-  const nombreUnico = _generarNombreUnico(file.name, modulo, meta.usuario);
+  const sasToken    = AZURE_CONFIG.sasTokens[contenedor] || AZURE_CONFIG.sasTokens['documentos'];
+  const nombreUnico = `${modulo}/${Date.now()}_${file.name}`;
+  const blobUrl     = `${AZURE_CONFIG.storageUrl}/${contenedor}/${nombreUnico}?${sasToken}`;
 
-  setMsg(`⏳ Subiendo ${file.name}...`, '#f59e0b');
+  console.log('[Azure-DEBUG] URL (sin token):', blobUrl.split('?')[0]);
+  console.log('[Azure-DEBUG] Contenedor:', contenedor);
+  console.log('[Azure-DEBUG] SAS existe:', !!sasToken);
 
   try {
-    const sasToken = AZURE_CONFIG.sasTokens[contenedor] || AZURE_CONFIG.sasTokens['documentos'];
-    const blobUrl = `${AZURE_CONFIG.storageUrl}/${contenedor}/${nombreUnico}?${sasToken}`;
-
+    console.log('[Azure-DEBUG] Iniciando fetch PUT...');
     const response = await fetch(blobUrl, {
       method: 'PUT',
       headers: {
-        'x-ms-blob-type':     'BlockBlob',
-        'Content-Type':       mimeType,
-        'x-ms-meta-sistema':  'sistema-rl-v3',
-        'x-ms-meta-modulo':   modulo,
-        'x-ms-meta-usuario':  meta.usuario || 'desconocido',
-        'x-ms-meta-empresa':  meta.empresa || 'verfrut',
-        'x-ms-meta-original': encodeURIComponent(file.name)
+        'x-ms-blob-type': 'BlockBlob',
+        'Content-Type':   file.type || 'text/html'
       },
       body: file
     });
 
+    console.log('[Azure-DEBUG] Response status:', response.status);
+    console.log('[Azure-DEBUG] Response ok:', response.ok);
+
     if (!response.ok) {
-      const errText = await response.text().catch(() => response.statusText);
-      console.error('[Azure] Error detallado:', {
-        status:     response.status,
-        statusText: response.statusText,
-        url:        blobUrl.split('?')[0], // sin SAS token en el log
-        contenedor,
-        modulo,
-        mimeType,
-        errorBody:  errText
-      });
-      throw new Error(`Azure ${response.status}: ${errText}`);
+      const txt = await response.text();
+      console.error('[Azure-DEBUG] Error body:', txt);
+      return null;
     }
 
     const urlPublica = `${AZURE_CONFIG.storageUrl}/${contenedor}/${nombreUnico}`;
-    const resultado  = {
+    console.log('[Azure-DEBUG] Subida exitosa:', urlPublica);
+    return {
       nombre:     file.name,
-      nombreBlob: nombreUnico,
       url:        urlPublica,
-      tipo:       mimeType,
+      tipo:       file.type,
       tamaño:     file.size,
-      tamañoMB:   sizeMB.toFixed(2),
       contenedor: contenedor,
       modulo:     modulo,
       fecha:      new Date().toISOString(),
@@ -102,26 +87,8 @@ async function subirArchivoAzure(fileInput, modulo, msgElId, meta = {}) {
       empresa:    meta.empresa || ''
     };
 
-    setMsg(`✅ ${file.name} subido correctamente`, '#16a34a');
-    console.log('[Azure] Subida exitosa:', resultado);
-    return resultado;
-
-  } catch (error) {
-    // TypeError: Failed to fetch → probable CORS o red
-    // Error Azure 4xx/5xx → autenticación SAS, contenedor, permisos
-    console.error('[Azure] Error completo:', error);
-    console.error('[Azure] Error name:', error.name);
-    console.error('[Azure] Error message:', error.message);
-    console.error('[Azure] Stack:', error.stack);
-    // Intentar fetch de diagnóstico para verificar CORS
-    try {
-      const testUrl = `${AZURE_CONFIG.storageUrl}/${contenedor}?restype=container&comp=list&${sasToken}`;
-      const testResp = await fetch(testUrl, { method: 'GET' });
-      console.log('[Azure] Test GET status:', testResp.status);
-    } catch(testErr) {
-      console.error('[Azure] Test GET también falló:', testErr.message);
-    }
-    setMsg(`❌ Error: ${error.message}`, '#dc2626');
+  } catch(err) {
+    console.error('[Azure-DEBUG] Catch error:', err.name, err.message);
     return null;
   }
 }
