@@ -67,6 +67,10 @@ function handle(e) {
       case 'updateVisita':        result = updateVisita(body);           break;
       case 'updateCaso':          result = updateCaso(body);             break;
       case 'recalcularEstadisticasCompletas': result = recalcularEstadisticasCompletas(); break;
+      case 'saveSolicitudAcceso':    result = saveSolicitudAcceso(body);    break;
+      case 'getSolicitudesAcceso':   result = getSolicitudesAcceso(params); break;
+      case 'resolverAccesoTemporal': result = resolverAccesoTemporal(body); break;
+      case 'verificarAccesoTemporal':result = verificarAccesoTemporal(body);break;
       default: result = { error: 'Accion no reconocida: ' + action };
     }
   } catch(err) {
@@ -2052,4 +2056,115 @@ function testBuscar() {
   const q = '70356687';
   const encontrado = datos.filter(d => d[0] === q);
   Logger.log('Buscando ' + q + ': ' + encontrado.length + ' resultados');
+}
+
+// ══════════════════ ACCESOS TEMPORALES ══════════════════
+
+function saveSolicitudAcceso(d) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var ws = ss.getSheetByName('Solicitudes_Acceso');
+    if (!ws) {
+      ws = ss.insertSheet('Solicitudes_Acceso');
+      ws.appendRow(['N°','Fecha Solicitud','Usuario','Nombre','Empresa',
+        'Motivo','Horas Solicitadas','Estado','Resuelto Por','Hora Fin','Fecha Resolución']);
+      ws.getRange(1,1,1,11).setFontWeight('bold');
+    }
+    var nro = ws.getLastRow(); // fila anterior = número correlativo
+    ws.appendRow([
+      nro,
+      new Date(),
+      d.usuario         || '',
+      d.nombre          || '',
+      d.empresa         || '',
+      d.motivo          || '',
+      d.horas_solicitadas || '',
+      'PENDIENTE',
+      '', '', ''
+    ]);
+    return { success: true };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function getSolicitudesAcceso(p) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var ws = ss.getSheetByName('Solicitudes_Acceso');
+    if (!ws) return { success: true, data: [] };
+    var rows = ws.getDataRange().getValues();
+    if (rows.length <= 1) return { success: true, data: [] };
+    var data = rows.slice(1).filter(function(r){ return r[0] !== ''; }).map(function(r, i) {
+      return {
+        fila:             i + 2,
+        nro:              r[0],
+        fecha:            r[1] instanceof Date ? Utilities.formatDate(r[1],'America/Lima','yyyy-MM-dd HH:mm') : String(r[1]||'').substring(0,16),
+        usuario:          String(r[2]||''),
+        nombre:           String(r[3]||''),
+        empresa:          String(r[4]||''),
+        motivo:           String(r[5]||''),
+        horas_solicitadas: String(r[6]||''),
+        estado:           String(r[7]||'PENDIENTE'),
+        resuelto_por:     String(r[8]||''),
+        hora_fin:         String(r[9]||''),
+        fecha_resolucion: r[10] instanceof Date ? Utilities.formatDate(r[10],'America/Lima','yyyy-MM-dd HH:mm') : String(r[10]||'')
+      };
+    });
+    if (p && p.estado) data = data.filter(function(s){ return s.estado === p.estado; });
+    return { success: true, data: data };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function resolverAccesoTemporal(d) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var ws = ss.getSheetByName('Solicitudes_Acceso');
+    if (!ws) return { success: false, error: 'Hoja no encontrada' };
+    var fila  = parseInt(d.fila);
+    var horas = parseInt(ws.getRange(fila, 7).getValue()) || 1;
+    var horaFin = '';
+    if (d.decision === 'APROBADO') {
+      var fin = new Date();
+      fin.setHours(fin.getHours() + horas);
+      horaFin = Utilities.formatDate(fin, 'America/Lima', 'HH:mm');
+    }
+    ws.getRange(fila, 8).setValue(d.decision || '');
+    ws.getRange(fila, 9).setValue(d.resuelto_por || '');
+    ws.getRange(fila, 10).setValue(horaFin);
+    ws.getRange(fila, 11).setValue(new Date());
+    return { success: true, hora_fin: horaFin };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function verificarAccesoTemporal(d) {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var ws = ss.getSheetByName('Solicitudes_Acceso');
+    if (!ws) return { success: true, tieneAcceso: false };
+    var rows = ws.getDataRange().getValues();
+    var ahora = new Date();
+    var usuario = String(d.usuario || '').toLowerCase();
+    for (var i = rows.length - 1; i >= 1; i--) {
+      var r = rows[i];
+      if (String(r[2]||'').toLowerCase() !== usuario) continue;
+      if (String(r[7]||'') !== 'APROBADO') continue;
+      var horaFinStr = String(r[9]||'');
+      if (!horaFinStr) continue;
+      // Construir fecha/hora fin de hoy
+      var partes = horaFinStr.split(':');
+      var fin = new Date();
+      fin.setHours(parseInt(partes[0]), parseInt(partes[1]), 0, 0);
+      if (ahora <= fin) {
+        return { success: true, tieneAcceso: true, hasta: horaFinStr };
+      }
+    }
+    return { success: true, tieneAcceso: false };
+  } catch(e) {
+    return { success: true, tieneAcceso: false };
+  }
 }
