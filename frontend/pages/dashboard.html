@@ -5999,9 +5999,16 @@ function saludoHora() {
   return 'Estimados, buenas noches';
 }
 
+function fechaTexto(f) {
+  const meses = ['enero','febrero','marzo','abril','mayo','junio',
+    'julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const d = new Date(f + 'T12:00:00');
+  return d.getDate() + ' de ' + meses[d.getMonth()] + ' de ' + d.getFullYear();
+}
+
 function generarHTMLInforme(d) {
   const fotosHTML = d.fotos.map(f =>
-    `<img src="${f.data}" style="width:220px;height:160px;object-fit:cover;margin:4px;border:1px solid #ccc">`
+    `<img src="${f.data}" style="width:100%;height:160px;object-fit:cover;border-radius:4px">`
   ).join('');
 
   const empresaNombre = d.empresa === 'RAPEL'
@@ -6036,10 +6043,10 @@ function generarHTMLInforme(d) {
         <div style="font-size:8pt;color:#333;margin-top:3px;max-width:180px;line-height:1.3">${empresaNombre}</div>
       </div>
       <div style="flex:1;text-align:center">
-        <div style="font-weight:bold;font-size:10pt;margin-bottom:4px">
+        <div style="font-weight:bold;font-size:10pt;margin-bottom:4px;text-align:center">
           "Año de la Esperanza y el Fortalecimiento de la Democracia"
         </div>
-        <p style="margin:4px 0;font-weight:bold">Informe Semana ${d.semana} – Empresa ${d.empresa}/DPTO. G.H./ Relaciones Laborales.</p>
+        <p style="margin:4px 0;font-weight:bold;text-align:center">Informe Semana ${d.semana} – Empresa ${d.empresa}/DPTO. G.H./ Relaciones Laborales.</p>
       </div>
     </div>
     <table style="border-collapse:collapse;width:100%;margin-bottom:8px;font-size:11pt">
@@ -6061,7 +6068,7 @@ function generarHTMLInforme(d) {
       <tr>
         <td style="padding:3px 0;font-weight:bold;vertical-align:top">FECHA</td>
         <td style="padding:3px 6px;vertical-align:top">:</td>
-        <td style="padding:3px 0;vertical-align:top"><b>${d.fechaInf}</b></td>
+        <td style="padding:3px 0;vertical-align:top"><b>${fechaTexto(d.fechaInf)}</b></td>
       </tr>
     </table>
     <hr style="margin:10px 0">
@@ -6079,14 +6086,13 @@ function generarHTMLInforme(d) {
     <br>
     ${d.observaciones ? `<p style="margin:6px 0"><b>V. OBSERVACIONES:</b></p><p style="margin:4px 0;white-space:pre-wrap">${d.observaciones}</p><br>` : ''}
     ${d.motivo ? `<p style="margin:6px 0"><b>MOTIVO DE RETRASO:</b></p><p style="margin:4px 0">${d.motivo}</p><br>` : ''}
-    ${fotosHTML ? `<p style="margin:6px 0"><b>EVIDENCIAS FOTOGRÁFICAS:</b></p><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">${fotosHTML}</div>` : ''}
+    ${fotosHTML ? `<p style="margin:6px 0"><b>EVIDENCIAS FOTOGRÁFICAS:</b></p><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">${fotosHTML}</div>` : ''}
     <br>
     <p style="margin:4px 0">Atentamente,</p>
     <br><br>
     <p style="margin:4px 0">_________________________________</p>
     <p style="margin:4px 0"><b>${USER.nombre||d.sup}</b></p>
     <p style="margin:4px 0">${cargoFirmante}</p>
-    <p style="margin:4px 0">${empresaNombre}</p>
   `;
 }
 
