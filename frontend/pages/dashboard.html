@@ -4636,78 +4636,11 @@ async function generarCorreo() {
     const empLabel = (!empFiltro || empFiltro === 'AMBAS') ? 'Todas las empresas' : empFiltro;
     const asunto = `Reporte RR.LL. - ${empLabel} | ${fiF} al ${ffF}`;
 
-    // Tabla resumen por empresa/tipo/responsable
-    const tablaResumen=`
-      <div style="margin-top:12px">
-        <p style="font-weight:700;margin-bottom:6px">RESUMEN POR EMPRESA / TIPO DE DOCUMENTO / RESPONSABLE:</p>
-        <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead><tr style="background:#0b1e45;color:#fff">
-            <th style="padding:7px 10px;text-align:left">Empresa</th>
-            <th style="padding:7px 10px;text-align:left">Tipo de Documento</th>
-            <th style="padding:7px 10px;text-align:left">Responsable Recepción</th>
-            <th style="padding:7px 10px;text-align:center">Cantidad</th>
-          </tr></thead><tbody>
-          ${resumen.map((r,i)=>`<tr style="background:${i%2===0?'#f8fafc':'#fff'}">
-            <td style="padding:6px 10px"><span class="bg ${empC(r.empresa)}">${r.empresa}</span></td>
-            <td style="padding:6px 10px">${r.tipo}</td>
-            <td style="padding:6px 10px">${r.responsable}</td>
-            <td style="padding:6px 10px;text-align:center"><strong>${r.cantidad}</strong></td>
-          </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>`;
-
-    // Tabla detalle de atenciones
-    const tablaDetalle=`
-      <div style="margin-top:16px">
-        <p style="font-weight:700;margin-bottom:6px">DETALLE DE ATENCIONES (${total} registros):</p>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:11px">
-            <thead><tr style="background:#0b1e45;color:#fff">
-              <th style="padding:6px 8px">N°</th>
-              <th style="padding:6px 8px">Fecha</th>
-              <th style="padding:6px 8px">DNI</th>
-              <th style="padding:6px 8px">Nombre</th>
-              <th style="padding:6px 8px">Empresa</th>
-              <th style="padding:6px 8px">Documento</th>
-              <th style="padding:6px 8px">F. Inicio Doc.</th>
-              <th style="padding:6px 8px">F. Fin Doc.</th>
-              <th style="padding:6px 8px">Días</th>
-              <th style="padding:6px 8px">Observaciones</th>
-              <th style="padding:6px 8px">Supervisor</th>
-              <th style="padding:6px 8px">Estado</th>
-            </tr></thead><tbody>
-            ${datos.map((a,i)=>`<tr style="background:${i%2===0?'#f8fafc':'#fff'}">
-              <td style="padding:5px 8px">${a.nro||''}</td>
-              <td style="padding:5px 8px">${fmtF(a.fecha_atencion)}</td>
-              <td style="padding:5px 8px">${a.dni||''}</td>
-              <td style="padding:5px 8px">${a.nombre||''}</td>
-              <td style="padding:5px 8px">${a.empresa||''}</td>
-              <td style="padding:5px 8px">${a.detalle_documento||''}</td>
-              <td style="padding:5px 8px">${fmtF(a.fecha_inicio_doc)||''}</td>
-              <td style="padding:5px 8px">${fmtF(a.fecha_termino_doc)||''}</td>
-              <td style="padding:5px 8px;text-align:center">${a.dias_transcurridos||''}</td>
-              <td style="padding:5px 8px">${a.observaciones||''}</td>
-              <td style="padding:5px 8px">${a.supervisor||''}</td>
-              <td style="padding:5px 8px"><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
-            </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>`;
-
-    // Firma
-    const _cargoCorreo = CARGOS_USUARIOS[USER.usuario] || 'Coordinador de Relaciones Laborales';
-    const firma = `
-      <div style="margin-top:20px;padding-top:14px;border-top:2px solid #e2e8f0;font-size:12px">
-        <p>Atentamente,</p>
-        <p style="margin-top:8px"><strong>${USER.nombre||'Joel Timoteo'}</strong></p>
-        <p style="color:#64748b">${_cargoCorreo}</p>
-        <p style="color:#64748b">Verfrut / Rapel — Sistema RL v3.0</p>
-      </div>`;
-
     // Guardar datos para exportar Excel (incluye emp para nombre de archivo)
     _correoData = { total, fi, ff, asunto, emp: empFiltro || 'AMBAS', data: datos, resumen, fechaInicio: fi, fechaFin: ff };
+
+    // Construir cuerpo HTML profesional (usado en preview y como cuerpo del correo)
+    const _htmlBody = _construirHTMLEmailBody(datos, resumen, fi, ff, total, saludo, USER.usuario);
 
     document.getElementById('correoPreview').innerHTML=`
       <div style="margin-top:20px;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:20px">
@@ -4717,22 +4650,16 @@ async function generarCorreo() {
           <p><strong>CC:</strong> ${cc}</p>
           <p><strong>Asunto:</strong> ${asunto}</p>
         </div>
-        <div id="correoBodyContent" style="font-size:12px;line-height:1.8">
-          <div style="font-size:12px;line-height:1.8">
-            <p>Estimados, ${saludo}.</p>
-            <p>Se adjunta el archivo Excel con el registro de atenciones registradas entre el <strong>${fiF}</strong> y el <strong>${ffF}</strong>.</p>
-            <p>Total de atenciones: <strong>${total}</strong></p>
-          </div>
-          ${tablaResumen}
-          ${tablaDetalle}
-          ${firma}
-        </div>
+        <div id="correoBodyContent" style="background:#fff;padding:10px 0">${_htmlBody}</div>
         <div style="margin-top:16px;padding:12px;background:#fef9c3;border-radius:8px;font-size:11px;color:#854d0e">
           <strong>⚠️ Outlook clásico:</strong> Al hacer clic en "Enviar por Outlook", el Excel se descargará automáticamente. Adjúntalo manualmente al correo.
         </div>
         <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn-n" onclick="enviarConConfirmacion()" style="padding:10px 20px">
             📧 Enviar por Outlook
+          </button>
+          <button class="btn-n" id="btnCopiarHTML" onclick="copiarHTMLCorreo(this)" style="padding:10px 20px;background:#1e40af">
+            📋 Copiar HTML
           </button>
           <button class="btn-n" onclick="exportarCorreoExcel()" style="padding:10px 20px;background:#1a7f4b">
             📥 Exportar Excel
@@ -4743,8 +4670,8 @@ async function generarCorreo() {
         </div>
         <div id="instruccionesEnvio"></div>
       </div>`;
-    // Capturar solo el cuerpo del correo (sin chrome de la UI: header, botones, avisos)
-    window._vistaPreviewHTML = document.getElementById('correoBodyContent').innerHTML;
+    // Guardar HTML completo del correo (cuerpo listo para pegar en Outlook)
+    window._vistaPreviewHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Tahoma,sans-serif;font-size:10pt;background:#ffffff;margin:20px 24px">${_htmlBody}</body></html>`;
     _correoData.htmlPreview = window._vistaPreviewHTML;
   }catch(e){
     document.getElementById('correoPreview').innerHTML=`<div class="empty">❌ Error de conexión: ${e.message}<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>`;
@@ -4756,6 +4683,94 @@ async function generarCorreo() {
 }
 
 let _correoData = {};
+
+// ── Copia el HTML del correo al portapapeles ──────────────────────────────
+function copiarHTMLCorreo(btn) {
+  const html = _correoData.htmlPreview || '';
+  if (!html) { mostrarToast('❌ Genera primero la vista previa', 'error'); return; }
+  if (!navigator.clipboard) { mostrarToast('❌ Portapapeles no disponible en este navegador', 'error'); return; }
+  const blob = new Blob([html], { type: 'text/html' });
+  const item = new ClipboardItem({ 'text/html': blob });
+  navigator.clipboard.write([item]).then(() => {
+    mostrarToast('✅ HTML copiado. Pega con Ctrl+V en el cuerpo de Outlook.', 'ok');
+    if (btn) { const prev = btn.textContent; btn.textContent = '✅ Copiado'; setTimeout(() => { btn.textContent = prev; }, 2000); }
+  }).catch(() => mostrarToast('❌ No se pudo copiar al portapapeles', 'error'));
+}
+
+// ── Construye el cuerpo HTML del correo (Tahoma 10pt, tablas azul/EEF2FF) ─
+function _construirHTMLEmailBody(datos, resumen, fi, ff, total, saludo, usuario) {
+  const HDR     = '#1B3A6B';
+  const ALT     = '#EEF2FF';
+  const TH_STY  = `style="padding:7px 10px;text-align:left;border:1px solid #9ab;background:${HDR};color:#fff;font-family:Tahoma,sans-serif;font-size:10pt;font-weight:700"`;
+  const TH_C    = `style="padding:7px 10px;text-align:center;border:1px solid #9ab;background:${HDR};color:#fff;font-family:Tahoma,sans-serif;font-size:10pt;font-weight:700"`;
+  const TH_S    = `style="padding:6px 8px;text-align:left;border:1px solid #9ab;background:${HDR};color:#fff;font-family:Tahoma,sans-serif;font-size:9pt;font-weight:700;white-space:nowrap"`;
+  const fiF     = fmtFLargo(fi), ffF = fmtFLargo(ff);
+  const cargo   = CARGOS_USUARIOS[usuario] || 'Asistente de Relaciones Laborales';
+
+  let h = `<div style="font-family:Tahoma,sans-serif;font-size:10pt;color:#222;line-height:1.8;background:#fff">`;
+
+  // Saludo
+  h += `<p style="margin:0 0 6px">Estimados, ${saludo}.</p>`;
+  h += `<p style="margin:0 0 6px">Se adjunta el archivo Excel con el registro de atenciones registradas entre el <strong>${fiF}</strong> y el <strong>${ffF}</strong>.</p>`;
+  h += `<p style="margin:0 0 16px">Total de atenciones: <strong>${total}</strong></p>`;
+
+  // ── Tabla resumen ────────────────────────────────────────────────────────
+  h += `<p style="font-weight:700;margin:0 0 6px;font-family:Tahoma,sans-serif;font-size:10pt">RESUMEN POR EMPRESA / TIPO DE DOCUMENTO / RESPONSABLE:</p>`;
+  h += `<table style="border-collapse:collapse;font-family:Tahoma,sans-serif;font-size:10pt;width:100%">`;
+  h += `<thead><tr><th ${TH_STY}>EMPRESA</th><th ${TH_STY}>TIPO DE DOCUMENTO</th><th ${TH_STY}>RESPONSABLE RECEPCIÓN</th><th ${TH_C}>CANTIDAD</th></tr></thead><tbody>`;
+  (resumen || []).forEach((r, i) => {
+    const bg = i % 2 === 0 ? '#ffffff' : ALT;
+    h += `<tr style="background:${bg}">`;
+    h += `<td style="padding:6px 10px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:10pt">${r.empresa||''}</td>`;
+    h += `<td style="padding:6px 10px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:10pt">${r.tipo||''}</td>`;
+    h += `<td style="padding:6px 10px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:10pt">${r.responsable||''}</td>`;
+    h += `<td style="padding:6px 10px;border:1px solid #cdd;text-align:center;font-family:Tahoma,sans-serif;font-size:10pt"><strong>${r.cantidad||''}</strong></td>`;
+    h += `</tr>`;
+  });
+  h += `</tbody></table>`;
+
+  // ── Tabla detalle ────────────────────────────────────────────────────────
+  h += `<p style="font-weight:700;margin:20px 0 6px;font-family:Tahoma,sans-serif;font-size:10pt">DETALLE DE ATENCIONES (${total} registros):</p>`;
+  h += `<table style="border-collapse:collapse;font-family:Tahoma,sans-serif;font-size:9pt;width:100%">`;
+  h += `<thead><tr>`;
+  ['N°','FECHA','DNI','NOMBRE','EMPRESA','DOCUMENTO','F. INICIO DOC.','F. FIN DOC.','DÍAS','OBSERVACIONES','SUPERVISOR','ESTADO'].forEach(c => {
+    h += `<th ${TH_S}>${c}</th>`;
+  });
+  h += `</tr></thead><tbody>`;
+  (datos || []).forEach((a, i) => {
+    const bg   = i % 2 === 0 ? '#ffffff' : ALT;
+    const est  = (a.estado || '').toUpperCase();
+    const eClr = est.includes('FINALIZ') ? '#15803d' : est.includes('PROCESO') ? '#ea580c' : '#333';
+    const TD   = `style="padding:5px 8px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:9pt"`;
+    const TDnw = `style="padding:5px 8px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:9pt;white-space:nowrap"`;
+    const TDc  = `style="padding:5px 8px;border:1px solid #cdd;text-align:center;font-family:Tahoma,sans-serif;font-size:9pt"`;
+    h += `<tr style="background:${bg}">`;
+    h += `<td ${TDc}>${a.nro||i+1}</td>`;
+    h += `<td ${TDnw}>${fmtF(a.fecha_atencion)||''}</td>`;
+    h += `<td ${TD}>${a.dni||''}</td>`;
+    h += `<td ${TD}>${a.nombre||''}</td>`;
+    h += `<td ${TD}>${a.empresa||''}</td>`;
+    h += `<td ${TD}>${a.detalle_documento||''}</td>`;
+    h += `<td ${TDnw}>${fmtF(a.fecha_inicio_doc)||''}</td>`;
+    h += `<td ${TDnw}>${fmtF(a.fecha_termino_doc)||''}</td>`;
+    h += `<td ${TDc}>${a.dias_transcurridos||''}</td>`;
+    h += `<td ${TD}>${a.observaciones||''}</td>`;
+    h += `<td ${TD}>${a.supervisor||''}</td>`;
+    h += `<td style="padding:5px 8px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:9pt;color:${eClr};font-weight:700">${a.estado||''}</td>`;
+    h += `</tr>`;
+  });
+  h += `</tbody></table>`;
+
+  // ── Firma ────────────────────────────────────────────────────────────────
+  h += `<div style="margin-top:20px;padding-top:14px;border-top:2px solid #d1d5db;font-family:Tahoma,sans-serif;font-size:10pt">`;
+  h += `<p style="margin:0 0 4px">Atentamente,</p>`;
+  h += `<p style="margin:0 0 2px"><strong>${USER.nombre||'Equipo RL'}</strong></p>`;
+  h += `<p style="margin:0 0 2px;color:#555">${cargo}</p>`;
+  h += `<p style="margin:0;color:#555">Verfrut / Rapel — Sistema RL v3.0</p>`;
+  h += `</div></div>`;
+
+  return h;
+}
 
 function _construirCuerpoTextoPlano(datos, resumen, fi, ff, total) {
   const col  = (s, n)  => String(s||'').substring(0, n).padEnd(n);
@@ -4909,13 +4924,17 @@ function enviarConConfirmacion() {
   if (confirm(msg)) {
     // PASO 1: Descargar Excel
     exportarCorreoExcel();
-    // PASO 2 y 3: Abrir Outlook + mostrar instrucciones
-    const cuerpo = (window._vistaPreviewHTML && _correoData.htmlPreview)
-      ? _htmlToPlainText(window._vistaPreviewHTML)
-      : _construirCuerpoTextoPlano(_correoData.data || [], _correoData.resumen || [], fiF, ffF, total);
+    // PASO 2: Copiar HTML al portapapeles (para pegar en Outlook como cuerpo HTML)
+    const _htmlCorreo = _correoData.htmlPreview || '';
+    if (_htmlCorreo && navigator.clipboard) {
+      const blob = new Blob([_htmlCorreo], { type: 'text/html' });
+      const item = new ClipboardItem({ 'text/html': blob });
+      navigator.clipboard.write([item]).catch(() => {});
+    }
+    // PASO 3: Abrir Outlook con asunto/destinatarios (sin body — pegar el HTML copiado)
     setTimeout(() => {
-      abrirOutlook(asunto, cuerpo, para, cc);
-      // PASO 3: Mostrar instrucciones al usuario
+      abrirOutlook(asunto, '', para, cc);
+      // PASO 4: Mostrar instrucciones al usuario
       _mostrarInstruccionesEnvio(nombreArchivo);
     }, 600);
   }
@@ -4966,7 +4985,9 @@ function _mostrarInstruccionesEnvio(nombreArchivo) {
       <div style="font-weight:700;color:#166534;margin-bottom:10px;font-size:13px">📋 Pasos para completar el envío:</div>
       <div style="display:flex;flex-direction:column;gap:8px;line-height:1.6">
         <div>✅ <strong>Excel descargado</strong> en tu carpeta Descargas<br><span style="color:#64748b;font-size:11px">Nombre: ${nombreArchivo}</span></div>
-        <div>📧 <strong>Outlook abierto</strong> — Completa los destinatarios</div>
+        <div>📋 <strong>HTML del correo copiado al portapapeles</strong> — listo para pegar</div>
+        <div>📧 <strong>Outlook abierto</strong> — el asunto y destinatarios ya están cargados</div>
+        <div>🖱️ <strong>Haz clic en el cuerpo del correo</strong> y presiona <kbd style="background:#e2e8f0;border-radius:3px;padding:1px 5px">Ctrl+V</kbd> para pegar el correo HTML</div>
         <div>📎 <strong>Adjunta el archivo Excel</strong> desde tu carpeta Descargas</div>
         <div>✉️ <strong>Revisa y envía</strong> el correo</div>
       </div>
