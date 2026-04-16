@@ -4122,6 +4122,11 @@ async function buscarDni(dni) {
     if (cached.ruta)    sv('at_ruta',  cached.ruta);
     if (cached.codigo)  sv('at_cod',   cached.codigo);
     if (cached.celular) sv('at_cel',   cached.celular);
+    sv('at_fip', cached.fecha_inicio_periodo ? String(cached.fecha_inicio_periodo).split('T')[0] : '');
+    sv('at_ftp', cached.fecha_termino_periodo ? String(cached.fecha_termino_periodo).split('T')[0] : '');
+    if(USER.fundoHoy) sv('at_fac',USER.fundoHoy);
+    else if(USER.fundos&&USER.fundos.length===1) sv('at_fac',USER.fundos[0]);
+    else sv('at_fac',cached.fundo_actual||'');
     r.style.display='block'; r.style.background='#f0fdf4'; r.style.borderColor='#bbf7d0';
     r.textContent='✅ '+(cached.nombre||'')+' · '+(cached.empresa||'')+' · '+(cached.fundo||'')+' (caché)';
     return;
