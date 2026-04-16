@@ -106,8 +106,18 @@ async function subirArchivoAzure(fileInput, modulo, msgElId, meta = {}) {
   } catch (error) {
     // TypeError: Failed to fetch → probable CORS o red
     // Error Azure 4xx/5xx → autenticación SAS, contenedor, permisos
-    console.error('[Azure] Error detallado:', error);
-    console.error('[Azure] Tipo:', error.name, '| Mensaje:', error.message);
+    console.error('[Azure] Error completo:', error);
+    console.error('[Azure] Error name:', error.name);
+    console.error('[Azure] Error message:', error.message);
+    console.error('[Azure] Stack:', error.stack);
+    // Intentar fetch de diagnóstico para verificar CORS
+    try {
+      const testUrl = `${AZURE_CONFIG.storageUrl}/${contenedor}?restype=container&comp=list&${sasToken}`;
+      const testResp = await fetch(testUrl, { method: 'GET' });
+      console.log('[Azure] Test GET status:', testResp.status);
+    } catch(testErr) {
+      console.error('[Azure] Test GET también falló:', testErr.message);
+    }
     setMsg(`❌ Error: ${error.message}`, '#dc2626');
     return null;
   }
