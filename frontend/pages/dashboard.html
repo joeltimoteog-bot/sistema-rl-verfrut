@@ -4717,14 +4717,16 @@ async function generarCorreo() {
           <p><strong>CC:</strong> ${cc}</p>
           <p><strong>Asunto:</strong> ${asunto}</p>
         </div>
-        <div style="font-size:12px;line-height:1.8">
-          <p>Estimados, ${saludo}.</p>
-          <p>Se adjunta el archivo Excel con el registro de atenciones registradas entre el <strong>${fiF}</strong> y el <strong>${ffF}</strong>.</p>
-          <p>Total de atenciones: <strong>${total}</strong></p>
+        <div id="correoBodyContent" style="font-size:12px;line-height:1.8">
+          <div style="font-size:12px;line-height:1.8">
+            <p>Estimados, ${saludo}.</p>
+            <p>Se adjunta el archivo Excel con el registro de atenciones registradas entre el <strong>${fiF}</strong> y el <strong>${ffF}</strong>.</p>
+            <p>Total de atenciones: <strong>${total}</strong></p>
+          </div>
+          ${tablaResumen}
+          ${tablaDetalle}
+          ${firma}
         </div>
-        ${tablaResumen}
-        ${tablaDetalle}
-        ${firma}
         <div style="margin-top:16px;padding:12px;background:#fef9c3;border-radius:8px;font-size:11px;color:#854d0e">
           <strong>⚠️ Outlook clásico:</strong> Al hacer clic en "Enviar por Outlook", el Excel se descargará automáticamente. Adjúntalo manualmente al correo.
         </div>
@@ -4741,8 +4743,8 @@ async function generarCorreo() {
         </div>
         <div id="instruccionesEnvio"></div>
       </div>`;
-    // Capturar HTML de vista previa para garantizar consistencia con el correo
-    window._vistaPreviewHTML = document.getElementById('correoPreview').innerHTML;
+    // Capturar solo el cuerpo del correo (sin chrome de la UI: header, botones, avisos)
+    window._vistaPreviewHTML = document.getElementById('correoBodyContent').innerHTML;
     _correoData.htmlPreview = window._vistaPreviewHTML;
   }catch(e){
     document.getElementById('correoPreview').innerHTML=`<div class="empty">❌ Error de conexión: ${e.message}<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>`;
