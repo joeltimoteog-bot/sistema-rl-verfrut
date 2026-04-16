@@ -2203,6 +2203,10 @@ async function guardarInformeEnAzure() {
 
   if (btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = '⏳ Subiendo...'; }
 
+  console.log('[Azure] Iniciando subida de informe...');
+  console.log('[Azure] Elemento informe:', document.getElementById('informeVistaPrevia'));
+  console.log('[Azure] currentVisita:', typeof v !== 'undefined' ? v : 'NO DEFINIDA');
+
   try {
     const contenido = document.getElementById('informeVistaPrevia').innerHTML;
     if (!contenido || !contenido.trim()) {
