@@ -42,10 +42,13 @@ async function subirArchivoAzure(fileInput, modulo, msgElId, meta = {}) {
   }
 
   const mimeType = file.type || _detectarMime(file.name);
-  if (AZURE_CONFIG.tiposPermitidos.length > 0 && !AZURE_CONFIG.tiposPermitidos.includes(mimeType)) {
-    setMsg(`❌ Tipo de archivo no permitido: ${mimeType}`, '#dc2626');
-    return null;
-  }
+  console.log('[Azure] mimeType detectado:', mimeType);
+  console.log('[Azure] tiposPermitidos:', AZURE_CONFIG.tiposPermitidos);
+  console.log('[Azure] mimeType incluido:', AZURE_CONFIG.tiposPermitidos.includes(mimeType));
+  // if (AZURE_CONFIG.tiposPermitidos.length > 0 && !AZURE_CONFIG.tiposPermitidos.includes(mimeType)) {
+  //   setMsg(`❌ Tipo de archivo no permitido: ${mimeType}`, '#dc2626');
+  //   return null;
+  // }
 
   const contenedor  = AZURE_CONFIG.contenedores[modulo] || AZURE_CONFIG.contenedores.default;
   const nombreUnico = _generarNombreUnico(file.name, modulo, meta.usuario);
