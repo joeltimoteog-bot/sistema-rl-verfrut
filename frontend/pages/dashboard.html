@@ -537,19 +537,61 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
     </div>
 
     <div class="sec" id="sec-solicitudes">
-      <div class="sec-hd"><h2>🔔 Solicitudes de Edición</h2></div>
-      <div style="overflow-x:auto">
-        <table class="tbl">
-          <thead>
-            <tr>
-              <th>Fecha</th><th>Supervisor</th><th>Fundo</th><th>Semana</th>
-              <th>Motivo</th><th>Estado</th><th>Acción</th>
-            </tr>
-          </thead>
-          <tbody id="tbSolicitudes">
-            <tr><td colspan="7" class="empty">Sin solicitudes pendientes</td></tr>
-          </tbody>
-        </table>
+      <div class="sec-hd"><h2>🔔 Solicitudes</h2></div>
+      <!-- Pestañas -->
+      <div style="display:flex;gap:0;border-bottom:2px solid #e2e8f0;margin-bottom:16px">
+        <button id="tabBtnEdicion" onclick="switchTabSolicitudes('edicion')"
+          style="padding:9px 20px;background:none;border:none;border-bottom:3px solid #0b1e45;margin-bottom:-2px;font-size:13px;font-weight:700;color:#0b1e45;cursor:pointer">
+          ✏️ Solicitudes de Edición <span id="badgeSolEdicion" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none;margin-left:4px">0</span>
+        </button>
+        <button id="tabBtnAcceso" onclick="switchTabSolicitudes('acceso')"
+          style="padding:9px 20px;background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;font-size:13px;font-weight:700;color:#64748b;cursor:pointer">
+          🔑 Accesos Temporales <span id="badgeSolAcceso" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none;margin-left:4px">0</span>
+        </button>
+      </div>
+
+      <!-- PESTAÑA 1: Solicitudes de Edición -->
+      <div id="tabEdicion">
+        <div style="overflow-x:auto">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Fecha</th><th>Supervisor</th><th>Fundo</th><th>Semana</th>
+                <th>Motivo</th><th>Estado</th><th>Acción</th>
+              </tr>
+            </thead>
+            <tbody id="tbSolicitudes">
+              <tr><td colspan="7" class="empty">Sin solicitudes pendientes</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 2: Accesos Temporales -->
+      <div id="tabAcceso" style="display:none">
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:12px;color:#64748b;font-weight:600">Filtrar:</span>
+          <select id="filtroAccesoEst" onchange="filtrarAccesosTem()" style="padding:6px 10px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:12px">
+            <option value="">Todos</option>
+            <option value="PENDIENTE">Pendientes</option>
+            <option value="APROBADO">Aprobados</option>
+            <option value="RECHAZADO">Rechazados</option>
+          </select>
+          <button onclick="cargarAccesosTem(true)" style="padding:6px 12px;background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">↻ Refrescar</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Fecha</th><th>Usuario</th><th>Nombre</th><th>Motivo</th>
+                <th>Horas</th><th>Estado</th><th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbAccesosTem">
+              <tr><td colspan="7" class="empty">Sin solicitudes de acceso</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -1868,6 +1910,131 @@ async function resolverSolicitud(fila, decision) {
   } catch(e) {
     mostrarToast('❌ Error de conexión', 'error');
   }
+}
+
+// ══════════════════ MÓDULO ACCESOS TEMPORALES ══════════════════
+
+let _accesosTempData = [];
+let _accesosTempInterval = null;
+
+function switchTabSolicitudes(tab) {
+  const esEdicion = tab === 'edicion';
+  document.getElementById('tabEdicion').style.display = esEdicion ? '' : 'none';
+  document.getElementById('tabAcceso').style.display  = esEdicion ? 'none' : '';
+  document.getElementById('tabBtnEdicion').style.borderBottomColor = esEdicion ? '#0b1e45' : 'transparent';
+  document.getElementById('tabBtnEdicion').style.color = esEdicion ? '#0b1e45' : '#64748b';
+  document.getElementById('tabBtnAcceso').style.borderBottomColor = esEdicion ? 'transparent' : '#0b1e45';
+  document.getElementById('tabBtnAcceso').style.color = esEdicion ? '#64748b' : '#0b1e45';
+  if (!esEdicion) cargarAccesosTem();
+}
+
+async function cargarAccesosTem(forzar = false) {
+  if (!forzar && _accesosTempData.length) { renderAccesosTem(_accesosTempData); return; }
+  const tb = document.getElementById('tbAccesosTem');
+  if (tb) tb.innerHTML = '<tr><td colspan="7" class="empty">⏳ Cargando...</td></tr>';
+  try {
+    const d = await apiGet({ action: 'getSolicitudesAcceso' });
+    if (d.success && d.data) {
+      _accesosTempData = d.data;
+      renderAccesosTem(_accesosTempData);
+      actualizarBadgeSolicitudes();
+    } else {
+      if (tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error al cargar</td></tr>';
+    }
+  } catch(e) {
+    if (tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error de conexión</td></tr>';
+  }
+}
+
+function filtrarAccesosTem() {
+  const est = document.getElementById('filtroAccesoEst').value;
+  const datos = est ? _accesosTempData.filter(s => s.estado === est) : _accesosTempData;
+  renderAccesosTem(datos);
+}
+
+function renderAccesosTem(data) {
+  const tb = document.getElementById('tbAccesosTem');
+  if (!tb) return;
+  if (!data || !data.length) {
+    tb.innerHTML = '<tr><td colspan="7" class="empty">Sin solicitudes de acceso</td></tr>';
+    return;
+  }
+  tb.innerHTML = data.map(s => {
+    const est = s.estado || 'PENDIENTE';
+    const colorEst = est === 'APROBADO' ? '#16a34a' : est === 'RECHAZADO' ? '#dc2626' : '#f59e0b';
+    const bgEst    = est === 'APROBADO' ? '#f0fdf4'  : est === 'RECHAZADO' ? '#fef2f2'  : '#fffbeb';
+    let accionHtml;
+    if (est === 'PENDIENTE') {
+      accionHtml = `<div style="display:flex;gap:5px">
+        <button onclick="aprobarAccesoTemporal(${s.fila},'APROBADO')"
+          style="padding:4px 10px;background:#dcfce7;border:none;border-radius:5px;font-size:11px;cursor:pointer;font-weight:700;color:#166534">✅ Aprobar</button>
+        <button onclick="aprobarAccesoTemporal(${s.fila},'RECHAZADO')"
+          style="padding:4px 10px;background:#fee2e2;border:none;border-radius:5px;font-size:11px;cursor:pointer;font-weight:700;color:#991b1b">❌ Rechazar</button>
+      </div>`;
+    } else if (est === 'APROBADO' && s.hora_fin) {
+      accionHtml = `<span style="font-size:11px;color:#16a34a;font-weight:700">✅ Hasta ${s.hora_fin}</span>`;
+    } else {
+      accionHtml = `<span style="font-size:10px;color:#64748b">—</span>`;
+    }
+    return `<tr style="background:${bgEst}">
+      <td style="font-size:11px">${s.fecha||'—'}</td>
+      <td style="font-weight:700">${s.usuario||'—'}</td>
+      <td>${s.nombre||'—'}</td>
+      <td style="max-width:200px;font-size:11px">${s.motivo||'—'}</td>
+      <td style="text-align:center">${s.horas_solicitadas||'—'}h</td>
+      <td><span style="font-size:10px;font-weight:700;color:${colorEst}">${est}</span></td>
+      <td>${accionHtml}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function aprobarAccesoTemporal(fila, decision) {
+  try {
+    const d = await apiPost({
+      action:       'resolverAccesoTemporal',
+      fila,
+      decision,
+      resuelto_por: USER.nombre || USER.usuario
+    });
+    if (d.success) {
+      const msg = decision === 'APROBADO'
+        ? '✅ Acceso otorgado' + (d.hora_fin ? ' hasta las ' + d.hora_fin : '')
+        : '❌ Acceso rechazado';
+      mostrarToast(msg);
+      _accesosTempData = [];
+      await cargarAccesosTem(true);
+    } else {
+      mostrarToast('❌ Error: ' + (d.error||''), 'error');
+    }
+  } catch(e) {
+    mostrarToast('❌ Error de conexión', 'error');
+  }
+}
+
+async function cargarBadgeSolicitudes() {
+  try {
+    const [dEdit, dAcc] = await Promise.all([
+      apiGet({ action: 'getSolicitudes', estado: 'PENDIENTE' }),
+      apiGet({ action: 'getSolicitudesAcceso', estado: 'PENDIENTE' })
+    ]);
+    const nEdit = (dEdit.success && dEdit.data) ? dEdit.data.length : 0;
+    const nAcc  = (dAcc.success  && dAcc.data)  ? dAcc.data.length  : 0;
+    const total = nEdit + nAcc;
+    // Badge principal en el nav
+    const badgeNav = document.getElementById('badgeSol');
+    if (badgeNav) { badgeNav.textContent = total; badgeNav.style.display = total > 0 ? '' : 'none'; }
+    // Badges por pestaña
+    const bEdit = document.getElementById('badgeSolEdicion');
+    if (bEdit) { bEdit.textContent = nEdit; bEdit.style.display = nEdit > 0 ? '' : 'none'; }
+    const bAcc = document.getElementById('badgeSolAcceso');
+    if (bAcc) { bAcc.textContent = nAcc; bAcc.style.display = nAcc > 0 ? '' : 'none'; }
+  } catch(e) {}
+}
+
+function actualizarBadgeSolicitudes() {
+  const nAcc = _accesosTempData.filter(s => s.estado === 'PENDIENTE').length;
+  const bAcc = document.getElementById('badgeSolAcceso');
+  if (bAcc) { bAcc.textContent = nAcc; bAcc.style.display = nAcc > 0 ? '' : 'none'; }
 }
 
 async function cargarFusiones(forzar=false) {
@@ -5268,6 +5435,8 @@ function ir(id,btn){
       };
     }
     if(prevSec) prevSec.classList.remove('on');
+    // Limpiar auto-refresh si salimos de solicitudes
+    if(prevSec && prevSec.id === 'sec-solicitudes') clearInterval(_accesosTempInterval);
     const prevNi=document.querySelector('.ni.on');
     if(prevNi) prevNi.classList.remove('on');
     const sec=document.getElementById('sec-'+id);
@@ -5295,7 +5464,16 @@ function ir(id,btn){
         }
       }
       if(id==='visitas'      && !visitasData.length)        cargarVisitas();
-      if(id==='solicitudes'  && !CACHE.solicitudes)         cargarSolicitudes();
+      if(id==='solicitudes') {
+        if(!CACHE.solicitudes) cargarSolicitudes();
+        // Auto-refresh accesos temporales cada 2 min
+        clearInterval(_accesosTempInterval);
+        _accesosTempInterval = setInterval(() => {
+          _accesosTempData = [];
+          if(document.getElementById('tabAcceso').style.display !== 'none') cargarAccesosTem(true);
+          cargarBadgeSolicitudes();
+        }, 120000);
+      }
       if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
       if(id==='casos'        && !casosData.length)          cargarCasos();
       if(id==='usuarios'     && !CACHE.usuarios)            cargarUs();
