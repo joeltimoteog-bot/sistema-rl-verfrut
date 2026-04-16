@@ -6,9 +6,9 @@
 const AZURE_CONFIG = {
   storageUrl: 'https://sistemarlverfrut.blob.core.windows.net',
   sasTokens: {
-    'casos-rl':      'st=2026-04-15T21:14:30Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=TOtnRwFS%2B9zKyXG0Cs2VOlZlsP5jqXyswOKglaP%2F6BU%3D',
-    'visitas-campo': 'st=2026-04-15T21:11:20Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=iMnyjLhDBaNA4JkE0dLlk1cT6lgzemE0DvYUL87kvEU%3D',
-    'documentos':    'st=2026-04-15T21:13:11Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=fHHlUAPDWkKv6iG6%2Fnc%2FXO%2Bu8bXxaux8%2BeBwc4w8KU8%3D'
+    'casos-rl':      'st=2026-04-16T03:12:08Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=HHiVoXQN4a4S0W5qAS04%2Br1tIYt9jSEJprnPwK8LKkk%3D',
+    'visitas-campo': 'st=2026-04-16T03:09:16Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=yNpnqGq2zEesLw0y%2BUHRikEJjNJoGqsxrtEoO1NqrkA%3D',
+    'documentos':    'st=2026-04-16T03:11:14Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=tudMq%2FDsygMKoQl04XbOYmcNwZoCBEFUJCTgQ6lMEjA%3D'
   },
   contenedores: {
     casos:      'casos-rl',
