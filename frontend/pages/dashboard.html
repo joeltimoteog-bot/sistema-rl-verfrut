@@ -1239,8 +1239,6 @@ function previsualizarFoto(input, prevId) {
 }
 
 function abrirNuevaFusion() {
-  const hr = verificarHorarioRegistro();
-  if (!hr.permitido) { mostrarAlertaHorario(hr.mensaje); return; }
   limpiarFormFusion();
   abrir('mFusion');
 }
@@ -2331,6 +2329,16 @@ window.onload = async () => {
   USER = JSON.parse(ud);
   const rol = USER.rol || '';
 
+  // Banner de acceso temporal activo
+  const _bannerAcceso = sessionStorage.getItem('banner_acceso_temporal');
+  if (_bannerAcceso) {
+    const _b = document.createElement('div');
+    _b.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#16a34a;color:#fff;text-align:center;padding:7px 16px;font-size:12px;font-weight:700;z-index:9998;letter-spacing:.5px';
+    _b.textContent = '✅ Acceso temporal activo hasta las ' + _bannerAcceso;
+    document.body.prepend(_b);
+    setTimeout(() => _b.remove(), 30000);
+  }
+
   document.getElementById('av').textContent  = USER.nombre.charAt(0).toUpperCase();
   document.getElementById('avN').textContent = USER.nombre;
   document.getElementById('avR').textContent = cap(rol);
@@ -2608,8 +2616,6 @@ function _estadoPlazoColor(estadoCaso, diasRestantes) {
 // ── Apertura de modales ───────────────────────────────────────
 
 function abrirNuevoCaso() {
-  const hr = verificarHorarioRegistro();
-  if (!hr.permitido) { mostrarAlertaHorario(hr.mensaje); return; }
   abrir('mTipoCaso');
 }
 
@@ -3840,8 +3846,6 @@ function filtrarAt() {
 }
 
 function abrirAt() {
-  const hr = verificarHorarioRegistro();
-  if (!hr.permitido) { mostrarAlertaHorario(hr.mensaje); return; }
   modoEdicion=false;
   document.getElementById('mAtTitulo').textContent='Nueva Atención';
   document.getElementById('at_nro_edit').value='';
@@ -5486,8 +5490,6 @@ function autoFillFundoReemplazo() {
 }
 
 function abrirNuevaVisita() {
-  const hr = verificarHorarioRegistro();
-  if (!hr.permitido) { mostrarAlertaHorario(hr.mensaje); return; }
   window._editandoVisitaIdx = null;
   // Reset form
   ['vDNI','vCorreo','vEmp','vFundo','vPunto','vFI','vFF',

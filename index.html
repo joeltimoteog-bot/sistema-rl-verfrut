@@ -93,6 +93,31 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
   </div>
 </div>
 
+<!-- ── Pantalla de bloqueo por horario ───────────────────── -->
+<div id="pantallaBloqueo" style="display:none;position:fixed;inset:0;background:linear-gradient(140deg,#0a2463 0%,#1e3a8a 60%,#0f172a 100%);z-index:200;align-items:center;justify-content:center;animation:up .5s ease">
+  <div style="background:#fff;border-radius:22px;padding:40px 36px;max-width:480px;width:94vw;text-align:center;box-shadow:0 40px 100px rgba(0,0,0,.5);animation:up .5s ease">
+    <img src="frontend/images/logo-unifrutti.jpg" alt="Unifrutti" style="height:54px;object-fit:contain;margin-bottom:16px;border-radius:8px" onerror="this.style.display='none'">
+    <div style="font-size:38px;margin-bottom:10px">🔒</div>
+    <h2 style="color:#0a2463;font-family:'Barlow Condensed',sans-serif;font-size:21px;font-weight:900;margin-bottom:8px">Acceso restringido fuera del horario de trabajo</h2>
+    <div id="blNombre" style="color:#64748b;font-size:13px;margin-bottom:12px"></div>
+    <div id="blHorario" style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 14px;margin-bottom:20px;font-size:12px;color:#991b1b;line-height:1.7;text-align:left"></div>
+    <div id="blFormSol">
+      <textarea id="blMotivo" rows="3" placeholder="Describe el motivo de tu solicitud de acceso temporal..." style="width:100%;padding:10px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:'Barlow',sans-serif;margin-bottom:10px;resize:vertical;box-sizing:border-box"></textarea>
+      <select id="blHoras" style="width:100%;padding:10px 12px;border:2px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:'Barlow',sans-serif;margin-bottom:14px;box-sizing:border-box">
+        <option value="1">1 hora</option>
+        <option value="2">2 horas</option>
+        <option value="3">3 horas</option>
+        <option value="4">4 horas</option>
+      </select>
+      <button onclick="enviarSolicitudAcceso()" style="width:100%;padding:12px;background:linear-gradient(135deg,#0a2463,#1e3a8a);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-bottom:10px">📩 Solicitar acceso temporal</button>
+    </div>
+    <div id="blConfirmacion" style="display:none;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:12px 14px;color:#166534;font-size:13px;margin-bottom:14px;line-height:1.6">
+      ✅ Solicitud enviada. El administrador revisará tu solicitud.
+    </div>
+    <button onclick="volverLogin()" style="width:100%;padding:10px;background:#f1f5f9;color:#475569;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">← Volver</button>
+  </div>
+</div>
+
 <!-- ── Pantalla de selección de módulo ───────────────────── -->
 <div id="pantallaModulo" style="display:none;position:fixed;inset:0;background:linear-gradient(140deg,#0a2463 0%,#1e3a8a 60%,#0f172a 100%);z-index:100;align-items:center;justify-content:center;animation:up .5s ease">
   <div style="width:860px;max-width:96vw;animation:up .5s ease">
@@ -139,6 +164,8 @@ let intentos=0,MAX=3;
 
 // Roles que ven la selección de módulo
 const ROLES_SELECCION = ['administrador','coordinador','jefa_rl','admin','admin01','admin02','rrhh'];
+// Roles SIN restricción de horario (nunca ven pantalla de bloqueo)
+const ROLES_SIN_HORARIO = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl','jefe_rl'];
 
 function togglePass(){const p=document.getElementById('password');p.type=p.type==='password'?'text':'password';document.getElementById('eyeBtn').textContent=p.type==='password'?'👁️':'🙈';}
 function setAlert(m){const a=document.getElementById('alerta');a.textContent=m;a.classList.add('on');}
@@ -148,6 +175,106 @@ function updateDots(){
   for(let i=0;i<MAX;i++){const d=document.createElement('div');d.className='dot'+(i<intentos?' used':'');c.appendChild(d);}
   if(intentos>0){const t=document.createElement('span');t.className='dot-t';t.textContent=(MAX-intentos)+' intento(s) restante(s)';c.appendChild(t);}
 }
+
+// ── Verificación de horario para login ────────────────────────────
+function verificarHorarioLogin(user) {
+  const rol = (user.rol||'').toLowerCase().trim();
+  if (user.sin_restriccion) return { permitido: true };
+  if (ROLES_SIN_HORARIO.includes(rol)) return { permitido: true };
+  // Solo supervisores tienen restricción
+  if (rol !== 'supervisor') return { permitido: true };
+
+  const ahora = new Date();
+  const mes   = ahora.getMonth() + 1; // 1-12
+  const dia   = ahora.getDate();
+  const dow   = ahora.getDay();       // 0=Dom
+  const h     = ahora.getHours() + ahora.getMinutes() / 60;
+
+  // Temporada alta: 27 jun - 31 dic
+  const esAlta = mes > 6 || (mes === 6 && dia >= 27);
+
+  if (!esAlta) {
+    // Temporada baja: Lun-Vie 05:30-17:00
+    if (dow === 0 || dow === 6) return { permitido: false, temporada: 'baja' };
+    if (h < 5.5 || h >= 17)    return { permitido: false, temporada: 'baja' };
+  } else {
+    // Temporada alta: Lun-Sáb 05:30-17:00
+    if (dow === 0)           return { permitido: false, temporada: 'alta' };
+    if (h < 5.5 || h >= 17) return { permitido: false, temporada: 'alta' };
+  }
+  return { permitido: true };
+}
+
+async function verificarAccesoTemporal(usuario) {
+  try {
+    const r = await fetch(API, {
+      method: 'POST',
+      body: JSON.stringify({action:'verificarAccesoTemporal', usuario}),
+      headers: {'Content-Type':'text/plain'}
+    });
+    const d = await r.json();
+    return (d && d.success) ? d : { tieneAcceso: false };
+  } catch(e) {
+    return { tieneAcceso: false };
+  }
+}
+
+// ── Pantalla de bloqueo ───────────────────────────────────────────
+let _bloqueoUser = null;
+function mostrarPantallaBloqueo(user, bloqueo) {
+  _bloqueoUser = user;
+  const ahora  = new Date();
+  const hora   = ahora.toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'});
+  const esAlta = bloqueo.temporada === 'alta';
+  const diasTexto  = esAlta ? 'Lunes a Sábado' : 'Lunes a Viernes';
+  const tempTexto  = esAlta ? 'Alta (27 jun – 31 dic)' : 'Baja (1 ene – 26 jun)';
+
+  document.getElementById('blNombre').textContent = 'Usuario: ' + (user.nombre || user.usuario);
+  document.getElementById('blHorario').innerHTML =
+    `⏰ Hora actual: <b>${hora}</b><br>` +
+    `📅 Temporada ${tempTexto}<br>` +
+    `✅ Horario permitido: ${diasTexto} de <b>05:30</b> a <b>17:00</b>`;
+
+  document.querySelector('.card').style.display = 'none';
+  document.getElementById('blFormSol').style.display = 'block';
+  document.getElementById('blConfirmacion').style.display = 'none';
+  document.getElementById('blMotivo').value = '';
+  document.getElementById('pantallaBloqueo').style.display = 'flex';
+}
+
+async function enviarSolicitudAcceso() {
+  const motivo = document.getElementById('blMotivo').value.trim();
+  const horas  = document.getElementById('blHoras').value;
+  if (!motivo) { alert('Ingresa el motivo de tu solicitud.'); return; }
+  const user = _bloqueoUser;
+  try {
+    await fetch(API, {
+      method: 'POST',
+      body: JSON.stringify({
+        action:           'saveSolicitudAcceso',
+        usuario:          user.usuario,
+        nombre:           user.nombre || user.usuario,
+        empresa:          user.empresa || '',
+        motivo:           motivo,
+        horas_solicitadas: horas,
+        hora_solicitud:   new Date().toISOString()
+      }),
+      headers: {'Content-Type':'text/plain'}
+    });
+  } catch(e) {}
+  document.getElementById('blFormSol').style.display = 'none';
+  document.getElementById('blConfirmacion').style.display = 'block';
+}
+
+function volverLogin() {
+  document.getElementById('pantallaBloqueo').style.display = 'none';
+  document.querySelector('.card').style.display = 'flex';
+  document.getElementById('usuario').value = '';
+  document.getElementById('password').value = '';
+  document.getElementById('usuario').focus();
+}
+
+// ── Login principal ───────────────────────────────────────────────
 async function doLogin(){
   if(intentos>=MAX){setAlert('Cuenta bloqueada. Contacta al administrador.');return;}
   const u=document.getElementById('usuario').value.trim();
@@ -162,13 +289,25 @@ async function doLogin(){
       sessionStorage.setItem('api',API);
       const rol=(d.user.rol||'').toLowerCase().trim();
       if(ROLES_SELECCION.includes(rol)){
-        // Mostrar pantalla de selección de módulo
+        // Admin/coordinador → pantalla de selección de módulo (sin restricción de horario)
         document.getElementById('pmNombre').textContent=d.user.nombre||d.user.usuario||'';
         document.querySelector('.card').style.display='none';
-        const pm=document.getElementById('pantallaModulo');
-        pm.style.display='flex';
+        document.getElementById('pantallaModulo').style.display='flex';
       }else{
-        // Supervisor u otro rol → directo al dashboard
+        // Verificar horario ANTES de entrar al dashboard
+        const bloqueo = verificarHorarioLogin(d.user);
+        if(!bloqueo.permitido){
+          // Verificar si tiene acceso temporal activo aprobado
+          const acceso = await verificarAccesoTemporal(d.user.usuario);
+          setLoading(false);
+          if(acceso.tieneAcceso){
+            if(acceso.hasta) sessionStorage.setItem('banner_acceso_temporal', acceso.hasta);
+            window.location.href='frontend/pages/dashboard.html';
+          }else{
+            mostrarPantallaBloqueo(d.user, bloqueo);
+          }
+          return;
+        }
         window.location.href='frontend/pages/dashboard.html';
       }
     }else{
