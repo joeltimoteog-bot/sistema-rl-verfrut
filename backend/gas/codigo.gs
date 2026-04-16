@@ -2070,7 +2070,12 @@ function saveSolicitudAcceso(d) {
         'Motivo','Horas Solicitadas','Estado','Resuelto Por','Hora Fin','Fecha Resolución']);
       ws.getRange(1,1,1,11).setFontWeight('bold');
     }
-    var nro = ws.getLastRow(); // fila anterior = número correlativo
+    // N° correlativo: lastRow da la última fila ocupada.
+    // Si la hoja tiene header en fila 1, lastRow=1 → primer registro será nro=1.
+    // Si ya hay datos, lastRow=N → nuevo registro será nro=N (= cantidad actual de datos).
+    var lastRow = ws.getLastRow();
+    var tieneHeader = String(ws.getRange(1,1).getValue()).toLowerCase().indexOf('n') === 0;
+    var nro = tieneHeader ? lastRow : lastRow + 1; // sin header: filas = registros
     ws.appendRow([
       nro,
       new Date(),
@@ -2094,10 +2099,16 @@ function getSolicitudesAcceso(p) {
     var ws = ss.getSheetByName('Solicitudes_Acceso');
     if (!ws) return { success: true, data: [] };
     var rows = ws.getDataRange().getValues();
-    if (rows.length <= 1) return { success: true, data: [] };
-    var data = rows.slice(1).filter(function(r){ return r[0] !== ''; }).map(function(r, i) {
+    if (rows.length === 0) return { success: true, data: [] };
+    // Detectar si la primera fila es encabezado (columna A = 'N°' o texto)
+    var primeraCelda = String(rows[0][0]||'').toLowerCase();
+    var tieneHeader  = isNaN(Number(rows[0][0])) && primeraCelda !== '';
+    var dataRows     = tieneHeader ? rows.slice(1) : rows;
+    if (dataRows.length === 0) return { success: true, data: [] };
+    var data = dataRows.filter(function(r){ return r[0] !== ''; }).map(function(r, i) {
+      var filaReal = tieneHeader ? i + 2 : i + 1;
       return {
-        fila:             i + 2,
+        fila:             filaReal,
         nro:              r[0],
         fecha:            r[1] instanceof Date ? Utilities.formatDate(r[1],'America/Lima','yyyy-MM-dd HH:mm') : String(r[1]||'').substring(0,16),
         usuario:          String(r[2]||''),
