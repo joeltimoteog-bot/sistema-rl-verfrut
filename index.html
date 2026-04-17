@@ -118,6 +118,15 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
   </div>
 </div>
 
+<!-- ── Pantalla de bienvenida (transición post-login) ─────── -->
+<div id="pantallaBienvenida" style="display:none;position:fixed;inset:0;background:linear-gradient(140deg,#0a2463 0%,#1e3a8a 60%,#0f172a 100%);z-index:150;align-items:center;justify-content:center;animation:up .4s ease">
+  <div style="text-align:center;padding:40px 24px;animation:up .5s ease;max-width:640px;width:94vw">
+    <div id="pbLinea1" style="font-family:'Barlow Condensed',sans-serif;font-size:42px;font-weight:900;color:#fff;letter-spacing:-0.5px;margin-bottom:14px;line-height:1.1"></div>
+    <div id="pbLinea2" style="font-size:16px;color:rgba(255,255,255,.75);line-height:1.6;margin-bottom:36px"></div>
+    <div style="width:44px;height:44px;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite;margin:0 auto"></div>
+  </div>
+</div>
+
 <!-- ── Pantalla de selección de módulo ───────────────────── -->
 <div id="pantallaModulo" style="display:none;position:fixed;inset:0;background:linear-gradient(140deg,#0a2463 0%,#1e3a8a 60%,#0f172a 100%);z-index:100;align-items:center;justify-content:center;animation:up .5s ease">
   <div style="width:860px;max-width:96vw;animation:up .5s ease">
@@ -162,12 +171,32 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
 const API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 let intentos=0,MAX=3;
 
-// Roles que ven la selección de módulo
-const ROLES_SELECCION = ['administrador','coordinador','jefa_rl','admin','admin01','admin02','rrhh'];
+// Roles que ven la selección de módulo (admins y coordinadores)
+const ROLES_SELECCION = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl','jefe_rl','admin','admin01','admin02','rrhh'];
 // Roles SIN restricción de horario (nunca ven pantalla de bloqueo)
 const ROLES_SIN_HORARIO = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl','jefe_rl'];
 
 function togglePass(){const p=document.getElementById('password');p.type=p.type==='password'?'text':'password';document.getElementById('eyeBtn').textContent=p.type==='password'?'👁️':'🙈';}
+
+function mostrarBienvenida(user, callback) {
+  const usu = (user.usuario||'').toLowerCase().trim();
+  const nom  = (user.nombre||user.usuario||'').toUpperCase();
+  const esJoel = usu === 'jtimoteo' || nom.includes('JOEL');
+  let linea1, linea2;
+  if (esJoel) {
+    linea1 = '¡Hola Joel! 👨‍💻';
+    linea2  = 'Creador del sistema — trabajemos en las actualizaciones 🚀';
+  } else {
+    const primerNom = (user.nombre||user.usuario||'').split(' ')[0];
+    const nomFmt = primerNom.charAt(0).toUpperCase() + primerNom.slice(1).toLowerCase();
+    linea1 = '¡Hola ' + nomFmt + '! 👋';
+    linea2  = 'Te damos la bienvenida al Sistema de Relaciones Laborales ✅';
+  }
+  document.getElementById('pbLinea1').textContent = linea1;
+  document.getElementById('pbLinea2').textContent = linea2;
+  document.getElementById('pantallaBienvenida').style.display = 'flex';
+  setTimeout(callback, 1500);
+}
 function setAlert(m){const a=document.getElementById('alerta');a.textContent=m;a.classList.add('on');}
 function clearAlert(){document.getElementById('alerta').classList.remove('on');}
 function updateDots(){
@@ -292,10 +321,15 @@ function checkSessionCache() {
     // Restaurar sesión
     sessionStorage.setItem('user', JSON.stringify(user));
     sessionStorage.setItem('api', API);
-    // Mostrar pantalla de módulos para todos los usuarios con sesión válida
-    document.getElementById('pmNombre').textContent = user.nombre || user.usuario || '';
-    document.querySelector('.card').style.display = 'none';
-    document.getElementById('pantallaModulo').style.display = 'flex';
+    if (ROLES_SELECCION.includes(rol)) {
+      // Admin/coordinador → pantalla de módulos
+      document.getElementById('pmNombre').textContent = user.nombre || user.usuario || '';
+      document.querySelector('.card').style.display = 'none';
+      document.getElementById('pantallaModulo').style.display = 'flex';
+    } else {
+      // Supervisor/otros → ir directo al dashboard
+      window.location.href = 'frontend/pages/dashboard.html';
+    }
   } catch(e) { localStorage.removeItem('rl_session'); }
 }
 
@@ -315,31 +349,32 @@ async function doLogin(){
       sessionStorage.setItem('user',JSON.stringify(d.user));
       sessionStorage.setItem('api',API);
       const rol=(d.user.rol||'').toLowerCase().trim();
-      // Feedback visual inmediato
-      document.getElementById('btnTxt').textContent='¡Bienvenido, '+(d.user.nombre||d.user.usuario)+'! Cargando...';
-      // Precalentar caché del backend (fire & forget): cuando dashboard llame getPreload, ya estará cacheado
+      // Precalentar caché del backend (fire & forget)
       try { fetch(API,{method:'POST',body:JSON.stringify({action:'getPreload',usuario:d.user.usuario,rol:d.user.rol,empresa:d.user.empresa}),headers:{'Content-Type':'text/plain'}}).catch(()=>{}); } catch(e){}
+      setLoading(false);
       if(ROLES_SELECCION.includes(rol)){
-        // Admin/coordinador → pantalla de selección de módulo (sin restricción de horario)
-        document.getElementById('pmNombre').textContent=d.user.nombre||d.user.usuario||'';
-        document.querySelector('.card').style.display='none';
-        document.getElementById('pantallaModulo').style.display='flex';
+        // Admin/coordinador → bienvenida 1.5s → pantalla de módulos
+        mostrarBienvenida(d.user, function(){
+          document.getElementById('pantallaBienvenida').style.display='none';
+          document.getElementById('pmNombre').textContent=d.user.nombre||d.user.usuario||'';
+          document.querySelector('.card').style.display='none';
+          document.getElementById('pantallaModulo').style.display='flex';
+        });
       }else{
-        // Verificar horario ANTES de entrar al dashboard
+        // Supervisor/otros → verificar horario primero
         const bloqueo = verificarHorarioLogin(d.user);
         if(!bloqueo.permitido){
           const acceso = await verificarAccesoTemporal(d.user.usuario);
-          setLoading(false);
           if(acceso.tieneAcceso){
             if(acceso.hasta) sessionStorage.setItem('banner_acceso_temporal', acceso.hasta);
-            window.location.href='frontend/pages/dashboard.html';
+            mostrarBienvenida(d.user, function(){ window.location.href='frontend/pages/dashboard.html'; });
           }else{
             mostrarPantallaBloqueo(d.user, bloqueo);
           }
           return;
         }
-        // Delay mínimo para mostrar "¡Bienvenido!" antes de redirigir
-        setTimeout(()=>{ window.location.href='frontend/pages/dashboard.html'; }, 350);
+        // Sin bloqueo → bienvenida 1.5s → dashboard
+        mostrarBienvenida(d.user, function(){ window.location.href='frontend/pages/dashboard.html'; });
         return;
       }
     }else{
