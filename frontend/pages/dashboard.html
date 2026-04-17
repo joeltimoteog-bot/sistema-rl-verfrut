@@ -5203,7 +5203,8 @@ function _atDocInput(val) {
 
   if (!matches.length) {
     _closeAtDocDd();
-    if (btnManual) btnManual.style.display = 'block';
+    // No mostrar botón manual mientras escribe — solo al presionar Enter sin coincidencia
+    if (btnManual) btnManual.style.display = 'none';
     sv('at_doc', '');
     return;
   }
@@ -5234,12 +5235,29 @@ function _atDocKeydown(e) {
     _highlightAtDocItem(items);
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    if (dd && dd.style.display !== 'none' && _atDocHighlight >= 0 && items[_atDocHighlight]) {
-      items[_atDocHighlight].click();
+    if (dd && dd.style.display !== 'none' && items.length > 0) {
+      // Dropdown abierto con coincidencias
+      if (_atDocHighlight >= 0 && items[_atDocHighlight]) {
+        items[_atDocHighlight].click();               // seleccionar ítem resaltado
+      } else if (items.length === 1) {
+        items[0].click();                             // un único resultado → selección automática
+      } else {
+        _closeAtDocDd();                              // varios resultados, usar ↑↓ para elegir
+      }
     } else {
+      // Dropdown cerrado o vacío
       _closeAtDocDd();
-      // Si hay valor exacto seleccionado, pasar al siguiente campo
-      if (v('at_doc')) { const el = document.getElementById('at_fid'); if(el) el.focus(); }
+      if (v('at_doc')) {
+        // Ya hay un doc seleccionado → avanzar al siguiente campo
+        const el = document.getElementById('at_fid'); if(el) el.focus();
+      } else {
+        // Texto escrito pero sin coincidencia → mostrar botón "Agregar manualmente"
+        const txt = (document.getElementById('at_doc_txt') || {}).value?.trim() || '';
+        if (txt) {
+          const mb = document.getElementById('at_doc_manual_btn');
+          if (mb) mb.style.display = 'block';
+        }
+      }
     }
   } else if (e.key === 'Escape') {
     _closeAtDocDd();
