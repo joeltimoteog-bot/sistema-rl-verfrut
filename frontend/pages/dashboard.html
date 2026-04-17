@@ -3127,13 +3127,13 @@ async function guardarCaso() {
     };
     if (informe) {
       payload.nombre_informe      = informe.nombre;
-      payload.archivo_informe_url = informe.enlace;
-      payload.enlace_informe      = informe.enlace;
+      payload.archivo_informe_url = informe.url;
+      payload.enlace_informe      = informe.url;
     }
     if (reporte) {
       payload.nombre_reporte       = reporte.nombre;
-      payload.archivo_descargo_url = reporte.enlace;
-      payload.enlace_reporte       = reporte.enlace;
+      payload.archivo_descargo_url = reporte.url;
+      payload.enlace_reporte       = reporte.url;
     }
 
     const action = _editandoCasoNro ? 'updateCaso' : 'saveCaso';
