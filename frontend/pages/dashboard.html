@@ -5758,7 +5758,7 @@ function ir(id,btn){
 }
 function abrir(id){const el=document.getElementById(id);if(!el){console.warn('[abrir] elemento no encontrado:',id);return;}el.classList.add('on');}
 function cerrar(id){const el=document.getElementById(id);if(!el){console.warn('[cerrar] elemento no encontrado:',id);return;}el.classList.remove('on');}
-function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
+function logout(){sessionStorage.clear();localStorage.removeItem('rl_session');location.href='../../index.html';}
 window.addEventListener('beforeunload', () => { clearTimeout(dniTO); clearTimeout(_estTimer); });
 
 // ── Búsqueda global (topbar) ──

@@ -292,13 +292,10 @@ function checkSessionCache() {
     // Restaurar sesión
     sessionStorage.setItem('user', JSON.stringify(user));
     sessionStorage.setItem('api', API);
-    if (ROLES_SELECCION.includes(rol)) {
-      document.getElementById('pmNombre').textContent = user.nombre || user.usuario || '';
-      document.querySelector('.card').style.display = 'none';
-      document.getElementById('pantallaModulo').style.display = 'flex';
-    } else {
-      window.location.href = 'frontend/pages/dashboard.html';
-    }
+    // Mostrar pantalla de módulos para todos los usuarios con sesión válida
+    document.getElementById('pmNombre').textContent = user.nombre || user.usuario || '';
+    document.querySelector('.card').style.display = 'none';
+    document.getElementById('pantallaModulo').style.display = 'flex';
   } catch(e) { localStorage.removeItem('rl_session'); }
 }
 
