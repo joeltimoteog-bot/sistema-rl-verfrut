@@ -3781,13 +3781,16 @@ function actualizarComparativaDash(stats) {
 
 // ── Aplica las stats al DOM — SIEMPRE prioriza Firebase si tiene datos ──
 function _aplicarStats(s) {
-  // SIEMPRE usar Firebase si tiene datos válidos
-  if (window._fbEstadisticas && window._fbEstadisticas.resumen_global &&
+  // Para supervisores: usar SIEMPRE los datos filtrados (s), nunca Firebase global
+  const _esSupervisor = !ROLES_VER_TODO.includes(USER.rol) && (USER.rol || '').toLowerCase() === 'supervisor';
+  // SIEMPRE usar Firebase si tiene datos válidos — excepto para supervisores (Firebase tiene datos globales)
+  if (!_esSupervisor && window._fbEstadisticas && window._fbEstadisticas.resumen_global &&
       window._fbEstadisticas.resumen_global.total > 0) {
     console.log('[_aplicarStats] Firebase válido (total=' + window._fbEstadisticas.resumen_global.total + ') — usando Firebase, ignorando API');
     _fbAplicarEstadisticasFirebase(window._fbEstadisticas);
     return;
   }
+  if (_esSupervisor) console.log('[_aplicarStats] supervisor — usando datos filtrados. hoy:', s.hoy, 'mes:', s.mes, 'año:', s.anio);
   // Solo si Firebase no tiene datos, escribir valores de la API directamente al DOM
   console.log('[_aplicarStats] sin Firebase — escribiendo API → #sH:', s.hoy || 0, '#sM:', s.mes || 0, '#sP:', s.enProceso || 0);
   const sH = document.getElementById('sH');
@@ -3804,8 +3807,10 @@ function _aplicarStats(s) {
 
 async function cargarStats() {
   try {
-    // FIREBASE PRIMERO: si hay datos frescos (< 15 min), skip sobreescritura DOM
-    if (_fbEstadisticas && _fbEstadisticas.resumen_global) {
+    // Para supervisores: NUNCA usar el early-return de Firebase (tiene datos globales)
+    const _esSupervisorStats = !ROLES_VER_TODO.includes(USER.rol) && (USER.rol || '').toLowerCase() === 'supervisor';
+    // FIREBASE PRIMERO: si hay datos frescos (< 15 min), skip sobreescritura DOM — solo para no-supervisores
+    if (!_esSupervisorStats && _fbEstadisticas && _fbEstadisticas.resumen_global) {
       const edad = Date.now() - (_fbEstadisticas.resumen_global.ultima_actualizacion || 0);
       if (edad < 15 * 60 * 1000) {
         console.log('[cargarStats] Firebase fresco (' + Math.round(edad/1000) + 's) — skip sobreescritura DOM, Firebase ya tiene valores correctos');
@@ -4188,12 +4193,27 @@ async function guardarAt() {
 }
 
 async function eliminarAt(nro) {
+  console.log('[eliminarAt] iniciando nro:', nro, '| rol:', USER.rol, '| usuario:', USER.usuario);
   if(!confirm('¿Eliminar la atención N° '+nro+'? Esta acción no se puede deshacer.'))return;
   try{
+    console.log('[eliminarAt] llamando apiPost deleteAtencion...');
     const r=await apiPost({action:'deleteAtencion',nro,rol:USER.rol,usuario:USER.usuario});
-    if(r.success){invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();mostrarToast('✅ Atención eliminada');}
+    console.log('[eliminarAt] respuesta:', JSON.stringify(r));
+    if(r.success){
+      // Remover del CACHE local inmediatamente sin esperar recarga desde API
+      if(CACHE.atenciones) CACHE.atenciones = CACHE.atenciones.filter(a => String(a.nro) !== String(nro));
+      if(CACHE.historialAtenciones) CACHE.historialAtenciones = CACHE.historialAtenciones.filter(a => String(a.nro) !== String(nro));
+      atTodas = (atTodas||[]).filter(a => String(a.nro) !== String(nro));
+      console.log('[eliminarAt] CACHE actualizado — re-renderizando tabla');
+      renderAt(atTodas);
+      cargarStats();
+      mostrarToast('✅ Atención eliminada');
+      // Invalidar y refrescar en background para mantener sincronía con el servidor
+      invalidarCache('atenciones');
+      refrescarEnBackground();
+    }
     else mostrarToast('❌ Error: '+(r.error||'No tienes permiso'),'error');
-  }catch(e){mostrarToast('❌ Error de conexión','error');}
+  }catch(e){console.error('[eliminarAt] excepción:', e);mostrarToast('❌ Error de conexión','error');}
 }
 
 function verDet(nro, fuente) {
