@@ -5211,14 +5211,18 @@ function _atDocInput(val) {
 
   if (btnManual) btnManual.style.display = 'none';
 
-  // Construir dropdown
+  // Construir dropdown — data-val evita el problema de comillas en onclick inline
   dd.innerHTML = matches.map((d, i) =>
-    `<div data-idx="${i}" onclick="_selectAtDoc(${JSON.stringify(d)})"
+    `<div data-val="${d.replace(/&/g,'&amp;').replace(/"/g,'&quot;')}" data-idx="${i}"
           style="padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f1f5f9;line-height:1.4${i===0?';background:#dbeafe':''}"
           onmouseover="this.style.background='#dbeafe';_atDocHighlight=${i}"
           onmouseout="this.style.background=_atDocHighlight===${i}?'#dbeafe':''"
-     >${d}</div>`
+     >${d.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`
   ).join('');
+  // Adjuntar handlers de clic vía JS (evita cualquier problema de escaping HTML)
+  dd.querySelectorAll('[data-val]').forEach(el => {
+    el.addEventListener('click', () => _selectAtDoc(el.dataset.val));
+  });
   dd.style.display = 'block';
   // Auto-resaltar el primer ítem para que Enter lo seleccione inmediatamente
   _atDocHighlight = 0;
