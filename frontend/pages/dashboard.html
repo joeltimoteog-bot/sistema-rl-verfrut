@@ -977,9 +977,10 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
   <div class="fg3">
     <div class="fc" style="grid-column:span 2">
       <label>DNI *</label>
-      <div style="display:flex;gap:6px">
-        <input type="text" id="at_dni" placeholder="Ingresa DNI..." oninput="buscarDni(this.value)" style="flex:1">
-        <button type="button" onclick="buscarDniBtn()" style="padding:8px 12px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">🔍 Buscar</button>
+      <div style="position:relative">
+        <input type="text" id="at_dni" placeholder="8 dígitos — búsqueda automática" maxlength="8"
+               oninput="buscarDni(this.value)" onkeydown="_atDniKeydown(event)" style="width:100%">
+        <span id="at_dni_spin" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none">⏳</span>
       </div>
       <div class="trab-res" id="trabRes"></div>
     </div>
@@ -993,7 +994,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
     <div class="fc"><label>Ruta</label><input type="text" id="at_ruta" placeholder="Ruta"></div>
     <div class="fc"><label>Código</label><input type="text" id="at_cod" placeholder="Código"></div>
     <div class="fc"><label>Fundo Actual</label><input type="text" id="at_fac" placeholder="Fundo actual"></div>
-    <div class="fc"><label>Celular</label><input type="text" id="at_cel" placeholder="N° celular"></div>
+    <div class="fc"><label>Celular</label><input type="text" id="at_cel" placeholder="N° celular" onkeydown="_atNavKeydown(event,'at_doc_txt')"></div>
   </div>
   <div class="sep">Datos de la Atención</div>
   <div class="fg3">
@@ -1001,48 +1002,41 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
     <div class="fc"><label>Hora Inicio</label><input type="time" id="at_hi"></div>
     <div class="fc"><label>Hora Término</label><input type="time" id="at_ht"></div>
     <div class="fc" style="grid-column:span 3"><label>Detalle / Documento *</label>
-      <select id="at_doc" onchange="autoResponsable()">
-        <option value="">-- Seleccionar --</option>
-        <option>01 CITT - EMPRESA VERFRUT</option>
-        <option>02 CITT - EMPRESA RAPEL</option>
-        <option>03 REGULARIZAR CITT - GENERAR FORMULARIO</option>
-        <option>04 CMP - EMPRESA VERFRUT / RAPEL</option>
-        <option>05 REGULARIZAR CMP - GENERAR FORMULARIO</option>
-        <option>06 CERTIFICADO ODONTOLOGICO</option>
-        <option>07 REGULARIZAR CERTIFICADO ODONTOLOGICO - GENERAR FORMULARIO</option>
-        <option>08 INGRESO AL PROGRAMA DE GESTANTES VERFRUT / RAPEL</option>
-        <option>09 INGRESO A HORAS DE LACTANCIA VERFRUT / RAPEL</option>
-        <option>10 COPIAS PARA ASIGNACION FAMILIAR</option>
-        <option>11 CONSTANCIA DE ESTUDIOS - JUSTIFICACION</option>
-        <option>12 CONTROL GESTANTE - JUSTIFICACION</option>
-        <option>13 DECLARACION SEGUROS DE VIDA LEY</option>
-        <option>14 FORMULARIO DE INTERCONSULTA</option>
-        <option>15 HORAS DE LACTANCIA VERFRUT / RAPEL</option>
-        <option>16 CONSTANCIA DE HOSPITALIZACION - GENERAR FORMULARIO / JUSTIFICAR</option>
-        <option>17 ESSALUD CITA (JUSTIFICACION)</option>
-        <option>18 COMPRA DE MEDICINA (JUSTIFICACION)</option>
-        <option>19 LICENCIA POR PATERNIDAD VERFRUT / RAPEL</option>
-        <option>20 LICENCIA POR FALLECIMIENTO VERFRUT / RAPEL</option>
-        <option>21 LICENCIA POR ENFERMEDAD GRAVE VERFRUT / RAPEL</option>
-        <option>22 RECETA MEDICA (JUSTIFICACION)</option>
-        <option>23 REGULARIZAR LICENCIA POR MATERNIDAD - GENERAR FORMULARIO</option>
-        <option>24 REGULARIZAR LICENCIA POR PATERNIDAD - GENERAR FORMULARIO</option>
-        <option>25 REGULARIZAR LICENCIA POR DEFUNCION - GENERAR FORMULARIO</option>
-        <option>26 REGULARIZAR LICENCIA POR ENFERMEDAD GRAVE - GENERAR FORMULARIO</option>
-        <option>27 JUSTIFICACION DEL JUEZ DE PAZ</option>
-        <option>28 OTROS TRAMITES</option>
-        <option>29 CMP - VALIDADO POR SIS</option>
-        <option>30 FORMULARIO INTERCONSULTA</option>
-        <option>31 FORMULARIO DE TRAMITE GESTANTE</option>
-        <option>32 NUMERO DE CUENTA</option>
-        <option>33 ELECCION DE SISTEMA PENSIONARIO</option>
-        <option>34 LICENCIA POR MATERNIDAD</option>
-      </select>
-      <button type="button" onclick="agregarDoc()" style="margin-top:5px;padding:5px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;cursor:pointer">+ Agregar documento</button>
-      <div id="docsExtra"></div>
+      <div id="at_doc_wrap" style="position:relative">
+        <input type="text" id="at_doc_txt" placeholder="Buscar por nombre o código..." autocomplete="off"
+               oninput="_atDocInput(this.value)" onkeydown="_atDocKeydown(event)" style="width:100%">
+        <div id="at_doc_dd" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;z-index:600;background:#fff;border:2px solid var(--azul-c);border-radius:8px;max-height:200px;overflow-y:auto;box-shadow:0 6px 18px rgba(0,0,0,.15)"></div>
+      </div>
+      <input type="hidden" id="at_doc">
+      <div id="at_doc_manual_btn" style="display:none;margin-top:6px">
+        <button type="button" onclick="_mostrarFormDocManual()"
+                style="padding:5px 12px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;cursor:pointer;color:var(--azul);font-weight:600">
+          ➕ Agregar documento manualmente
+        </button>
+      </div>
+      <div id="at_doc_manual_form" style="display:none;margin-top:8px;padding:12px;background:#f8fafc;border:1.5px solid var(--bd);border-radius:8px">
+        <div style="display:grid;grid-template-columns:1fr 120px;gap:8px;margin-bottom:8px">
+          <div><label style="font-size:10px;font-weight:700;color:var(--azul);letter-spacing:1px;text-transform:uppercase">Nombre del documento</label>
+               <input type="text" id="at_doc_m_nombre" placeholder="Nombre del documento..." style="width:100%;margin-top:4px"></div>
+          <div><label style="font-size:10px;font-weight:700;color:var(--azul);letter-spacing:1px;text-transform:uppercase">Código</label>
+               <input type="text" id="at_doc_m_cod" placeholder="Código" style="width:100%;margin-top:4px"></div>
+        </div>
+        <div style="margin-bottom:10px">
+          <label style="font-size:10px;font-weight:700;color:var(--azul);letter-spacing:1px;text-transform:uppercase">Responsable recepción</label>
+          <select id="at_doc_m_resp" style="width:100%;margin-top:4px;padding:8px 10px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+            <option value="">-- Seleccionar --</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button type="button" onclick="_confirmarDocManual()"
+                  style="padding:6px 16px;background:var(--azul);color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">✅ Confirmar</button>
+          <button type="button" onclick="_cancelarDocManual()"
+                  style="padding:6px 14px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;cursor:pointer">Cancelar</button>
+        </div>
+      </div>
     </div>
-    <div class="fc"><label>Fecha Inicio Doc.</label><input type="date" id="at_fid" onchange="calcDias()"></div>
-    <div class="fc"><label>Fecha Término Doc.</label><input type="date" id="at_ftd" onchange="calcDias()"></div>
+    <div class="fc"><label>Fecha Inicio Doc.</label><input type="date" id="at_fid" onchange="calcDias()" onkeydown="_atNavKeydown(event,'at_ftd')"></div>
+    <div class="fc"><label>Fecha Término Doc.</label><input type="date" id="at_ftd" onchange="calcDias()" onkeydown="_atNavKeydown(event,'at_est')"></div>
     <div class="fc"><label>Días Transcurridos</label><input type="number" id="at_dias" placeholder="0"></div>
     <div class="fc" style="grid-column:span 2">
       <label>Responsable Recepción</label>
@@ -1058,10 +1052,10 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
       <button type="button" onclick="agregarResp()" style="margin-top:5px;padding:5px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;cursor:pointer">+ Agregar responsable</button>
       <div id="respExtra"></div>
     </div>
-    <div class="fc"><label>Estado</label><select id="at_est"><option value="FINALIZADO">FINALIZADO</option><option value="EN PROCESO">EN PROCESO</option></select></div>
+    <div class="fc"><label>Estado</label><select id="at_est" onkeydown="_atNavKeydown(event,'at_obs')"><option value="FINALIZADO">FINALIZADO</option><option value="EN PROCESO">EN PROCESO</option></select></div>
   </div>
   <div class="fg1" style="margin-top:12px">
-    <div class="fc"><label>Observaciones</label><textarea id="at_obs" placeholder="Observaciones del caso..."></textarea></div>
+    <div class="fc"><label>Observaciones <span style="font-weight:400;color:#94a3b8;font-size:10px">(Enter = guardar y nuevo · Shift+Enter = nueva línea)</span></label><textarea id="at_obs" placeholder="Observaciones del caso..." onkeydown="_atObsKeydown(event)"></textarea></div>
   </div>
   <div id="atSuccessMsg" style="display:none;margin:0 0 12px;padding:10px 14px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;color:#15803d;font-weight:600;font-size:13px;text-align:center"></div>
   <div class="modal-ft">
@@ -4028,10 +4022,21 @@ function abrirAt() {
   sv('at_sex',''); sv('at_emp','RAPEL'); sv('at_doc',''); sv('at_est','FINALIZADO');
   sv('at_fec',hoy()); sv('at_hi',new Date().toTimeString().substring(0,5)); sv('at_ht','');
   iniciarReloj();
+  // Reset autocomplete documento
+  const _atDocTxt = document.getElementById('at_doc_txt');
+  if(_atDocTxt) _atDocTxt.value = '';
+  _closeAtDocDd();
+  const _mb = document.getElementById('at_doc_manual_btn'); if(_mb) _mb.style.display='none';
+  const _mf = document.getElementById('at_doc_manual_form'); if(_mf) _mf.style.display='none';
+  _setRespMode('auto');
   // Auto-rellenar fundo actual del supervisor
   if (USER.fundoHoy) sv('at_fac', USER.fundoHoy);
   else if (USER.fundos && USER.fundos.length === 1) sv('at_fac', USER.fundos[0]);
+  // Inicializar lista de documentos desde caché
+  _initAtDoc();
   abrir('mAt');
+  // Focus en DNI para captura rápida de siguiente trabajador
+  setTimeout(()=>{ const el=document.getElementById('at_dni'); if(el) el.focus(); }, 120);
 }
 
 function editarAt(nro) {
@@ -4049,6 +4054,11 @@ function editarAt(nro) {
   sv('at_ftd',a.fecha_termino_doc||''); sv('at_dias',a.dias_transcurridos||'');
   sv('at_resp',a.responsable_recepcion||''); sv('at_obs',a.observaciones||'');
   sv('at_est',a.estado||'FINALIZADO');
+  // Sync texto visible del autocomplete
+  const _eTxt = document.getElementById('at_doc_txt'); if(_eTxt) _eTxt.value = a.detalle_documento||'';
+  _closeAtDocDd();
+  _setRespMode(DOC_RESP[a.detalle_documento||''] ? 'auto' : 'manual');
+  _initAtDoc();
   const r=document.getElementById('trabRes');r.style.display='block';r.textContent='✅ '+a.nombre+' · '+a.empresa;
   abrir('mAt');
 }
@@ -4284,7 +4294,8 @@ async function buscarTrab() {
 let dniTO;
 async function buscarDni(dni) {
   clearTimeout(dniTO);
-  const r = document.getElementById('trabRes');
+  const r    = document.getElementById('trabRes');
+  const spin = document.getElementById('at_dni_spin');
   r.style.display = 'none';
   if (dni.length < 7) return;
   const dniTrim = dni.trim();
@@ -4305,6 +4316,7 @@ async function buscarDni(dni) {
     else sv('at_fac',cached.fundo_actual||'');
     r.style.display='block'; r.style.background='#f0fdf4'; r.style.borderColor='#bbf7d0';
     r.textContent='✅ '+(cached.nombre||'')+' · '+(cached.empresa||'')+' · '+(cached.fundo||'')+' (caché)';
+    setTimeout(()=>document.getElementById('at_cel').focus(), 50);
     return;
   }
 
@@ -4322,14 +4334,22 @@ async function buscarDni(dni) {
     else sv('at_fac',t.fundo_actual||'');
     r.style.display='block'; r.style.background='#f0fdf4'; r.style.borderColor='#bbf7d0';
     r.textContent='✅ '+(t.nombre||'')+' · '+(t.empresa||'')+' · '+(t.fundo||'')+' (caché)';
+    setTimeout(()=>document.getElementById('at_cel').focus(), 50);
     return;
   }
 
-  // 3. No encontrado localmente → spinner en campo DNI + debounce 300ms
+  // 3. A exactamente 8 dígitos → búsqueda API inmediata (sin debounce)
+  if (dni.length === 8) {
+    if(spin) spin.style.display = 'block';
+    await buscarDniBtn();
+    if(spin) spin.style.display = 'none';
+    return;
+  }
+  // 7 dígitos → debounce corto (evita llamadas innecesarias)
   const inp = document.getElementById('at_dni');
   inp.style.borderColor = '#3b82f6';
   inp.style.boxShadow = '0 0 0 2px #bfdbfe';
-  dniTO = setTimeout(() => buscarDniBtn(), 300);
+  dniTO = setTimeout(() => buscarDniBtn(), 400);
 }
 
 async function buscarDniBtn() {
@@ -4363,6 +4383,7 @@ async function buscarDniBtn() {
       window._trabajadoresCache[dni]=t;
       r.style.display='block';r.style.background='#f0fdf4';r.style.borderColor='#bbf7d0';
       r.textContent='✅ '+t.nombre+' · '+t.empresa+' · '+(t.fundo||'');
+      setTimeout(()=>document.getElementById('at_cel').focus(), 50);
     }else{
       r.style.display='block';
       r.style.background='#fef2f2';r.style.borderColor='#fecaca';
@@ -5109,10 +5130,197 @@ const DOC_RESP = {
   '34 LICENCIA POR MATERNIDAD': 'ALBERT PACHERRE'
 };
 
+// ════════════════════════════════════════════════════════════════
+// NUEVA ATENCIÓN — FLUJO RÁPIDO
+// ════════════════════════════════════════════════════════════════
+
+// ── Responsable: modo automático (solo lectura) vs manual ───────
+function _setRespMode(mode) {
+  const sel = document.getElementById('at_resp');
+  if (!sel) return;
+  if (mode === 'auto') {
+    sel.style.pointerEvents = 'none';
+    sel.style.background    = '#f0f4f8';
+    sel.style.color         = '#475569';
+    sel.title = 'Responsable asignado automáticamente según el documento';
+  } else {
+    sel.style.pointerEvents = '';
+    sel.style.background    = '';
+    sel.style.color         = '';
+    sel.title               = '';
+  }
+}
+
+// ── Navegación Enter secuencial ─────────────────────────────────
+function _atDniKeydown(e) {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('at_cel').focus(); }
+}
+function _atNavKeydown(e, nextId) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const el = document.getElementById(nextId);
+    if (el) el.focus();
+  }
+}
+function _atObsKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    guardarAt();   // guarda y llama abrirAt() internamente → foco vuelve a DNI
+  }
+}
+
+// ── Autocompletar Tipo de Documento ─────────────────────────────
+let _atDocList      = [];   // lista maestra de documentos
+let _atDocHighlight = -1;   // índice resaltado en dropdown
+
+function _getDocList() {
+  const staticDocs = Object.keys(DOC_RESP);
+  const cacheDocs  = [...new Set(
+    (CACHE.atenciones || []).map(a => a.detalle_documento || '').filter(Boolean)
+  )];
+  return [...new Set([...staticDocs, ...cacheDocs])]; // estáticos primero (numerados 01…34)
+}
+
+function _initAtDoc() {
+  _atDocList = _getDocList();
+}
+
+function _atDocInput(val) {
+  _atDocHighlight = -1;
+  const dd        = document.getElementById('at_doc_dd');
+  const btnManual = document.getElementById('at_doc_manual_btn');
+
+  if (!val.trim()) {
+    _closeAtDocDd();
+    sv('at_doc', '');
+    if (btnManual) btnManual.style.display = 'none';
+    _setRespMode('manual');
+    return;
+  }
+
+  const q       = val.toLowerCase();
+  const matches = _atDocList.filter(d => d.toLowerCase().includes(q));
+
+  if (!matches.length) {
+    _closeAtDocDd();
+    if (btnManual) btnManual.style.display = 'block';
+    sv('at_doc', '');
+    return;
+  }
+
+  if (btnManual) btnManual.style.display = 'none';
+
+  // Construir dropdown
+  dd.innerHTML = matches.map((d, i) =>
+    `<div data-idx="${i}" onclick="_selectAtDoc(${JSON.stringify(d)})"
+          style="padding:7px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f1f5f9;line-height:1.4"
+          onmouseover="this.style.background='#eff6ff';_atDocHighlight=${i}"
+          onmouseout="this.style.background=_atDocHighlight===${i}?'#dbeafe':''"
+     >${d}</div>`
+  ).join('');
+  dd.style.display = 'block';
+}
+
+function _atDocKeydown(e) {
+  const dd    = document.getElementById('at_doc_dd');
+  const items = dd ? dd.querySelectorAll('div') : [];
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _atDocHighlight = Math.min(_atDocHighlight + 1, items.length - 1);
+    _highlightAtDocItem(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _atDocHighlight = Math.max(_atDocHighlight - 1, 0);
+    _highlightAtDocItem(items);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (dd && dd.style.display !== 'none' && _atDocHighlight >= 0 && items[_atDocHighlight]) {
+      items[_atDocHighlight].click();
+    } else {
+      _closeAtDocDd();
+      // Si hay valor exacto seleccionado, pasar al siguiente campo
+      if (v('at_doc')) { const el = document.getElementById('at_fid'); if(el) el.focus(); }
+    }
+  } else if (e.key === 'Escape') {
+    _closeAtDocDd();
+  }
+}
+
+function _highlightAtDocItem(items) {
+  items.forEach((it, i) => {
+    it.style.background = i === _atDocHighlight ? '#dbeafe' : '';
+  });
+  if (items[_atDocHighlight]) items[_atDocHighlight].scrollIntoView({ block: 'nearest' });
+}
+
+function _selectAtDoc(val) {
+  sv('at_doc', val);
+  const txt = document.getElementById('at_doc_txt'); if(txt) txt.value = val;
+  _closeAtDocDd();
+  const mb = document.getElementById('at_doc_manual_btn'); if(mb) mb.style.display = 'none';
+  const mf = document.getElementById('at_doc_manual_form'); if(mf) mf.style.display = 'none';
+  autoResponsable();   // REGLA CLAVE: llena responsable automáticamente
+  setTimeout(() => { const el = document.getElementById('at_fid'); if(el) el.focus(); }, 40);
+}
+
+function _closeAtDocDd() {
+  const dd = document.getElementById('at_doc_dd');
+  if (dd) { dd.style.display = 'none'; dd.innerHTML = ''; }
+  _atDocHighlight = -1;
+}
+
+// ── Documento manual ─────────────────────────────────────────────
+function _mostrarFormDocManual() {
+  const mf = document.getElementById('at_doc_manual_form');
+  if (!mf) return;
+  mf.style.display = 'block';
+  // Pre-llenar nombre con lo que el usuario escribió
+  const nm = document.getElementById('at_doc_m_nombre');
+  if (nm) nm.value = (document.getElementById('at_doc_txt') || {}).value || '';
+  // Poblar dropdown de responsables desde caché + estáticos
+  const cacheResps  = [...new Set((CACHE.atenciones||[]).map(a=>a.responsable_recepcion||'').filter(Boolean))].sort();
+  const staticResps = [...new Set(Object.values(DOC_RESP))].sort();
+  const allResps    = [...new Set([...cacheResps, ...staticResps])];
+  const sel = document.getElementById('at_doc_m_resp');
+  if (sel) sel.innerHTML = '<option value="">-- Seleccionar --</option>' + allResps.map(r=>`<option>${r}</option>`).join('');
+  // Responsable principal → editable en modo manual
+  _setRespMode('manual');
+  setTimeout(() => { if(nm) nm.focus(); }, 40);
+}
+
+function _cancelarDocManual() {
+  const mf = document.getElementById('at_doc_manual_form');
+  if (mf) mf.style.display = 'none';
+}
+
+function _confirmarDocManual() {
+  const nombre = (document.getElementById('at_doc_m_nombre') || {}).value?.trim() || '';
+  const resp   = (document.getElementById('at_doc_m_resp')   || {}).value || '';
+  if (!nombre) { mostrarToast('❌ Ingresa el nombre del documento', 'error'); return; }
+  // Añadir a la lista local para futuras búsquedas en esta sesión
+  if (!_atDocList.includes(nombre)) _atDocList.unshift(nombre);
+  // Seleccionar el documento
+  sv('at_doc', nombre);
+  const txt = document.getElementById('at_doc_txt'); if(txt) txt.value = nombre;
+  // Asignar responsable seleccionado manualmente
+  if (resp) { sv('at_resp', resp); }
+  _setRespMode('manual');
+  const mb = document.getElementById('at_doc_manual_btn'); if(mb) mb.style.display = 'none';
+  const mf = document.getElementById('at_doc_manual_form'); if(mf) mf.style.display = 'none';
+  setTimeout(() => { const el = document.getElementById('at_fid'); if(el) el.focus(); }, 40);
+}
+
+// ── Cerrar dropdown al hacer clic fuera ─────────────────────────
+document.addEventListener('click', function(e) {
+  const wrap = document.getElementById('at_doc_wrap');
+  if (wrap && !wrap.contains(e.target)) _closeAtDocDd();
+});
+
 function autoResponsable() {
   const doc  = v('at_doc');
   const resp = DOC_RESP[doc];
-  if (resp) sv('at_resp', resp);
+  if (resp) { sv('at_resp', resp); _setRespMode('auto'); }
+  else { _setRespMode('manual'); }
 }
 
 function calcDias() {
