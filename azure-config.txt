@@ -1,0 +1,4 @@
+AZURE_STORAGE_ACCOUNT: sistemarlverfrut
+AZURE_CONTAINER_CASOS: casos-rl
+AZURE_CONTAINER_VISITAS: visitas-campo
+AZURE_SAS_TOKEN: (pega aquí el token SAS)
