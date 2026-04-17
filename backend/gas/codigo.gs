@@ -366,24 +366,29 @@ function updateAtencion(d) {
     const rows = sheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][0]) === String(d.nro)) {
-        if (d.rol === 'supervisor' && String(rows[i][18]).trim() !== String(d.usuario).trim()) {
+        // Verificar permiso: comparar usuario_sistema (col 28, índice 27) con el username enviado
+        if (d.rol === 'supervisor' && String(rows[i][27]).trim() !== String(d.usuario).trim()) {
           return { success: false, error: 'No tienes permiso para editar este registro.' };
         }
         const r = i + 1;
-        if (d.hora_termino  !== undefined) sheet.getRange(r, 4).setValue(d.hora_termino);
-        if (d.sexo          !== undefined) sheet.getRange(r, 10).setValue(d.sexo);
-        if (d.fundo         !== undefined) sheet.getRange(r, 13).setValue(d.fundo);
-        if (d.cargo         !== undefined) sheet.getRange(r, 14).setValue(d.cargo);
-        if (d.ruta          !== undefined) sheet.getRange(r, 15).setValue(d.ruta);
-        if (d.fundo_actual  !== undefined) sheet.getRange(r, 17).setValue(d.fundo_actual);
-        if (d.celular       !== undefined) sheet.getRange(r, 18).setValue(d.celular);
+        if (d.fecha_atencion    !== undefined) sheet.getRange(r,  2).setValue(d.fecha_atencion);
+        if (d.hora_inicio       !== undefined) sheet.getRange(r,  3).setValue(d.hora_inicio);
+        if (d.hora_termino      !== undefined) sheet.getRange(r,  4).setValue(d.hora_termino);
+        if (d.sexo              !== undefined) sheet.getRange(r, 10).setValue(d.sexo);
+        if (d.fecha_inicio_periodo !== undefined) sheet.getRange(r, 11).setValue(d.fecha_inicio_periodo);
+        if (d.empresa           !== undefined) sheet.getRange(r, 12).setValue(d.empresa);
+        if (d.fundo             !== undefined) sheet.getRange(r, 13).setValue(d.fundo);
+        if (d.cargo             !== undefined) sheet.getRange(r, 14).setValue(d.cargo);
+        if (d.ruta              !== undefined) sheet.getRange(r, 15).setValue(d.ruta);
+        if (d.fundo_actual      !== undefined) sheet.getRange(r, 17).setValue(d.fundo_actual);
+        if (d.celular           !== undefined) sheet.getRange(r, 18).setValue(d.celular);
         if (d.detalle_documento !== undefined) sheet.getRange(r, 20).setValue(d.detalle_documento);
         if (d.fecha_inicio_doc  !== undefined) sheet.getRange(r, 21).setValue(d.fecha_inicio_doc);
         if (d.fecha_termino_doc !== undefined) sheet.getRange(r, 22).setValue(d.fecha_termino_doc);
         if (d.dias_transcurridos!== undefined) sheet.getRange(r, 23).setValue(d.dias_transcurridos);
         if (d.responsable_recepcion !== undefined) sheet.getRange(r, 24).setValue(d.responsable_recepcion);
-        if (d.observaciones !== undefined) sheet.getRange(r, 25).setValue(d.observaciones);
-        if (d.estado        !== undefined) sheet.getRange(r, 26).setValue(d.estado);
+        if (d.observaciones     !== undefined) sheet.getRange(r, 25).setValue(d.observaciones);
+        if (d.estado            !== undefined) sheet.getRange(r, 26).setValue(d.estado);
         return { success: true };
       }
     }
