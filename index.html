@@ -274,6 +274,34 @@ function volverLogin() {
   document.getElementById('usuario').focus();
 }
 
+// ── Caché de sesión local (evita login repetido dentro de 8 horas) ───
+function checkSessionCache() {
+  try {
+    const raw = localStorage.getItem('rl_session');
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (!s || !s.user || !s.timestamp) { localStorage.removeItem('rl_session'); return; }
+    if ((Date.now() - s.timestamp) > 8 * 60 * 60 * 1000) { localStorage.removeItem('rl_session'); return; }
+    const user = s.user;
+    const rol  = (user.rol||'').toLowerCase().trim();
+    // Supervisor fuera de horario → limpiar sesión, pedir login (flujo de acceso temporal)
+    if (!ROLES_SIN_HORARIO.includes(rol) && rol === 'supervisor') {
+      const bloqueo = verificarHorarioLogin(user);
+      if (!bloqueo.permitido) { localStorage.removeItem('rl_session'); return; }
+    }
+    // Restaurar sesión
+    sessionStorage.setItem('user', JSON.stringify(user));
+    sessionStorage.setItem('api', API);
+    if (ROLES_SELECCION.includes(rol)) {
+      document.getElementById('pmNombre').textContent = user.nombre || user.usuario || '';
+      document.querySelector('.card').style.display = 'none';
+      document.getElementById('pantallaModulo').style.display = 'flex';
+    } else {
+      window.location.href = 'frontend/pages/dashboard.html';
+    }
+  } catch(e) { localStorage.removeItem('rl_session'); }
+}
+
 // ── Login principal ───────────────────────────────────────────────
 async function doLogin(){
   if(intentos>=MAX){setAlert('Cuenta bloqueada. Contacta al administrador.');return;}
@@ -285,9 +313,15 @@ async function doLogin(){
     const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'login',usuario:u,password:p}),headers:{'Content-Type':'text/plain'}});
     const d=await r.json();
     if(d.success){
+      // Guardar sesión en localStorage (válida 8 horas)
+      try { localStorage.setItem('rl_session', JSON.stringify({user: d.user, timestamp: Date.now()})); } catch(e){}
       sessionStorage.setItem('user',JSON.stringify(d.user));
       sessionStorage.setItem('api',API);
       const rol=(d.user.rol||'').toLowerCase().trim();
+      // Feedback visual inmediato
+      document.getElementById('btnTxt').textContent='¡Bienvenido, '+(d.user.nombre||d.user.usuario)+'! Cargando...';
+      // Precalentar caché del backend (fire & forget): cuando dashboard llame getPreload, ya estará cacheado
+      try { fetch(API,{method:'POST',body:JSON.stringify({action:'getPreload',usuario:d.user.usuario,rol:d.user.rol,empresa:d.user.empresa}),headers:{'Content-Type':'text/plain'}}).catch(()=>{}); } catch(e){}
       if(ROLES_SELECCION.includes(rol)){
         // Admin/coordinador → pantalla de selección de módulo (sin restricción de horario)
         document.getElementById('pmNombre').textContent=d.user.nombre||d.user.usuario||'';
@@ -297,7 +331,6 @@ async function doLogin(){
         // Verificar horario ANTES de entrar al dashboard
         const bloqueo = verificarHorarioLogin(d.user);
         if(!bloqueo.permitido){
-          // Verificar si tiene acceso temporal activo aprobado
           const acceso = await verificarAccesoTemporal(d.user.usuario);
           setLoading(false);
           if(acceso.tieneAcceso){
@@ -308,7 +341,9 @@ async function doLogin(){
           }
           return;
         }
-        window.location.href='frontend/pages/dashboard.html';
+        // Delay mínimo para mostrar "¡Bienvenido!" antes de redirigir
+        setTimeout(()=>{ window.location.href='frontend/pages/dashboard.html'; }, 350);
+        return;
       }
     }else{
       intentos++;updateDots();
@@ -330,6 +365,8 @@ document.addEventListener('keypress',e=>{if(e.key==='Enter'&&document.getElement
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/sistema-rl-verfrut/sw.js').then(r=>console.log('[SW] Registrado:',r.scope)).catch(e=>console.warn('[SW] Error registro:',e));
 }
+// Verificar sesión cacheada al cargar la página
+checkSessionCache();
 </script>
 </body>
 </html>

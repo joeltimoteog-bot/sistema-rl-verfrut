@@ -85,13 +85,42 @@ function handle(e) {
 // LOGIN
 // ============================================================
 function login(d) {
-  const rows = getSheet('Usuarios').getDataRange().getValues();
+  // ── Caché de la hoja Usuarios (5 min) para logins concurrentes rápidos ──
+  const scriptCache = CacheService.getScriptCache();
+  const USUARIOS_KEY = 'login_usuarios_rows';
+  let rows = null;
+  try {
+    const cached = scriptCache.get(USUARIOS_KEY);
+    if (cached) rows = JSON.parse(cached);
+  } catch(e) {}
+
+  if (!rows) {
+    const sheet   = getSheet('Usuarios');
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    if (lastRow > 1) {
+      // Leer primeras 50 filas (usuarios frecuentes suelen estar al inicio)
+      const top  = Math.min(50, lastRow);
+      rows = sheet.getRange(1, 1, top, lastCol).getValues();
+      // Si hay más de 50, leer el resto y concatenar
+      if (lastRow > 50) {
+        const resto = sheet.getRange(51, 1, lastRow - 50, lastCol).getValues();
+        rows = rows.concat(resto);
+      }
+    } else {
+      rows = [];
+    }
+    try { scriptCache.put(USUARIOS_KEY, JSON.stringify(rows), 300); } catch(e) {}
+  }
+
+  const uBuscado = String(d.usuario).trim();
+  const pBuscado = String(d.password).trim();
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     const usuario  = String(r[1]).trim();
     const password = String(r[2]).trim();
     const activo   = String(r[6]).trim().toUpperCase();
-    if (usuario === String(d.usuario).trim() && password === String(d.password).trim()) {
+    if (usuario === uBuscado && password === pBuscado) {
       if (activo !== 'TRUE') return { success: false, error: 'Usuario inactivo. Contacta al administrador.' };
       const fundos = FUNDOS_SUPERVISOR[usuario] || [];
       const necesitaElegirFundo = SUP_MULTI.includes(usuario);
@@ -1837,7 +1866,7 @@ function getPreload(p) {
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        if (parsed._ts && (Date.now() - parsed._ts) < 3 * 60 * 1000) {
+        if (parsed._ts && (Date.now() - parsed._ts) < 10 * 60 * 1000) {
           return { success: true, data: parsed, fromCache: true };
         }
       } catch(eCached) {}
@@ -1893,8 +1922,8 @@ function getPreload(p) {
       _ts: Date.now()
     };
 
-    // Guardar en cache por 5 minutos
-    try { cache.put(cacheKey, JSON.stringify(result), 300); } catch(ePut){}
+    // Guardar en cache por 10 minutos
+    try { cache.put(cacheKey, JSON.stringify(result), 600); } catch(ePut){}
 
     return { success: true, data: result };
 
