@@ -2891,9 +2891,10 @@ async function buscarTrabajadorCaso() {
   const dni = document.getElementById('mCasoDNI').value.trim();
   const msg = document.getElementById('cBuscarMsg');
   if(!dni || dni.length < 2) { msg.textContent='⚠️ Ingresa el DNI'; msg.style.color='#dc2626'; return; }
-  // Revisar cache local primero
-  if(window._trabajadoresCache && window._trabajadoresCache[dni]) {
-    const tc = window._trabajadoresCache[dni];
+  // Revisar índice local primero (_indiceTrabs preconstruido al cargar)
+  const _tcLocal = (window._indiceTrabs && window._indiceTrabs[dni]) || (window._trabajadoresCache && window._trabajadoresCache[dni]);
+  if (_tcLocal) {
+    const tc = _tcLocal;
     document.getElementById('cNombre').value  = tc.nombre  || '';
     document.getElementById('cEmpresa').value = tc.empresa || '';
     document.getElementById('cCargo').value   = tc.cargo   || '';
@@ -3553,6 +3554,9 @@ async function preloadData() {
   });
   console.log(`[preload] Rol: ${USER.rol} | Empresa: ${esAdmin?'TODAS':(USER.empresa||'—')} | Atenciones: ${(CACHE.atenciones||[]).length} | Años en datos: ${_aniosData.join(', ')||'(sin datos)'}`);
 
+  // Construir índice local de trabajadores para búsquedas instantáneas
+  _construirIndiceTrabs();
+
   if(esAdmin && !CACHE.estadisticasAdmin) {
     setTimeout(() => cargarEstadisticasAdmin(), 500);
   }
@@ -3613,6 +3617,8 @@ async function refrescarEnBackground() {
         }
       }
       guardarCacheLS();
+      // Actualizar índice de trabajadores con datos frescos
+      _construirIndiceTrabs();
       // Señalizar si Firebase tiene datos frescos para que el .then() no llame cargarStats
       const _fbFresco = window._fbEstadisticas && window._fbEstadisticas.resumen_global &&
         (Date.now() - (window._fbEstadisticas.resumen_global.ultima_actualizacion || 0)) < 15 * 60 * 1000;
@@ -4262,52 +4268,93 @@ async function updateAt() {
   }
 }
 
+// ── Índice local de trabajadores — construido desde CACHE.atenciones al cargar ──
+function _construirIndiceTrabs() {
+  const ats = CACHE.atenciones || [];
+  if (!ats.length) return;
+  if (!window._trabajadoresCache) window._trabajadoresCache = {};
+  if (!window._indiceTrabs) window._indiceTrabs = {};
+  // Tomar el registro más reciente por DNI
+  const porDni = {};
+  ats.forEach(a => {
+    if (!a.dni) return;
+    const dni = String(a.dni).trim();
+    if (!porDni[dni] || String(a.fecha_atencion) > String(porDni[dni].fecha_atencion)) porDni[dni] = a;
+  });
+  Object.entries(porDni).forEach(([dni, a]) => {
+    const t = { dni, nombre: a.nombre||'', sexo: a.sexo||'', empresa: a.empresa||'', fundo: a.fundo||'',
+      cargo: a.cargo||'', ruta: a.ruta||'', codigo: a.codigo||'', fundo_actual: a.fundo_actual||'',
+      celular: a.celular||'', regimen: a.regimen||'',
+      fecha_inicio_periodo: a.fecha_inicio_periodo||'', fecha_termino_periodo: a.fecha_termino_periodo||'' };
+    window._trabajadoresCache[dni] = t;
+    window._indiceTrabs[dni] = t;
+    const nk = String(a.nombre||'').toLowerCase().trim();
+    if (nk) window._indiceTrabs[nk] = t;
+  });
+  console.log('[_construirIndiceTrabs] índice listo:', Object.keys(porDni).length, 'trabajadores únicos desde CACHE.atenciones');
+}
+
+function _renderTrabRows(lista) {
+  return lista.map(t => {
+    const fiP = t.fecha_inicio_periodo ? fmtF(String(t.fecha_inicio_periodo).split('T')[0]) : '';
+    const ftP = t.fecha_termino_periodo ? fmtF(String(t.fecha_termino_periodo).split('T')[0]) : '';
+    return `<tr>
+      <td><strong>${t.dni||''}</strong></td><td>${t.nombre||''}</td><td>${t.sexo||''}</td>
+      <td><span class="bg ${empC(t.empresa)}">${t.empresa||''}</span></td>
+      <td>${t.cargo||''}</td><td>${t.fundo||''}</td><td>${t.fundo_actual||''}</td>
+      <td>${t.ruta||''}</td><td>${t.codigo||''}</td><td>${t.regimen||''}</td>
+      <td>${fiP}</td><td>${ftP}</td>
+      <td><button class="btn-a bv" onclick="regAt('${esc(t.dni||'')}','${esc(t.nombre||'')}','${esc(t.empresa||'')}','${esc(t.fundo||'')}','${esc(t.cargo||'')}','${esc(t.sexo||'')}','${esc(t.ruta||'')}','${esc(t.codigo||'')}','${esc(t.fundo_actual||'')}','','${esc(String(t.fecha_inicio_periodo||'').split('T')[0])}','${esc(String(t.fecha_termino_periodo||'').split('T')[0])}')">+ Atención</button></td>
+    </tr>`;
+  }).join('');
+}
+
 // BUSCAR TRABAJADOR
 async function buscarTrab() {
   const q=v('fTQ').trim(), emp=v('fTE');
   if(q.length<2){mostrarToast('❌ Ingresa al menos 2 caracteres','error');return;}
-  // Si es DNI numérico, verificar cache local primero
-  if(/^\d{6,8}$/.test(q) && window._trabajadoresCache && window._trabajadoresCache[q]) {
-    const tc = window._trabajadoresCache[q];
-    const fiP=tc.fecha_inicio_periodo?fmtF(String(tc.fecha_inicio_periodo).split('T')[0]):'';
-    const ftP=tc.fecha_termino_periodo?fmtF(String(tc.fecha_termino_periodo).split('T')[0]):'';
-    document.getElementById('tbTrab').innerHTML=`<tr>
-      <td><strong>${tc.dni||''}</strong></td><td>${tc.nombre||''}</td><td>${tc.sexo||''}</td>
-      <td><span class="bg ${empC(tc.empresa)}">${tc.empresa||''}</span></td>
-      <td>${tc.cargo||''}</td><td>${tc.fundo||''}</td><td>${tc.fundo_actual||''}</td>
-      <td>${tc.ruta||''}</td><td>${tc.codigo||''}</td><td>${tc.regimen||''}</td>
-      <td>${fiP}</td><td>${ftP}</td>
-      <td><button class="btn-a bv" onclick="regAt('${esc(tc.dni||'')}','${esc(tc.nombre||'')}','${esc(tc.empresa||'')}','${esc(tc.fundo||'')}','${esc(tc.cargo||'')}','${esc(tc.sexo||'')}','${esc(tc.ruta||'')}','${esc(tc.codigo||'')}','${esc(tc.fundo_actual||'')}','','${esc(String(tc.fecha_inicio_periodo||'').split('T')[0])}','${esc(String(tc.fecha_termino_periodo||'').split('T')[0])}')">+ Atención</button></td>
-    </tr>`;
+  const tb = document.getElementById('tbTrab');
+  const qL = q.toLowerCase();
+  // Buscar local: primero en _indiceTrabs (DNI exacto o nombre parcial)
+  const cache = window._trabajadoresCache || {};
+  let locales = [];
+  if (/^\d+$/.test(q)) {
+    // Búsqueda por DNI: lookup directo O(1) + parcial
+    Object.values(cache).forEach(t => { if (String(t.dni||'').startsWith(q)) locales.push(t); });
+  } else {
+    // Búsqueda por nombre: filter sobre todos
+    Object.values(cache).forEach(t => { if (String(t.nombre||'').toLowerCase().includes(qL)) locales.push(t); });
+  }
+  if (emp) locales = locales.filter(t => (t.empresa||'').toUpperCase().includes(emp.toUpperCase()));
+  if (locales.length) {
+    console.log('[buscarTrab] local:', locales.length, 'resultados para "' + q + '"');
+    tb.innerHTML = _renderTrabRows(locales);
+    // Refinar en background con API si la búsqueda es por nombre (puede haber más)
+    if (!/^\d+$/.test(q)) {
+      apiGet({action:'buscarTrabajador',q:q.trim(),empresa:emp||'AMBAS'}).then(d => {
+        if (d.success && d.data && d.data.length) {
+          if (!window._trabajadoresCache) window._trabajadoresCache = {};
+          d.data.forEach(t => { if (t.dni) { window._trabajadoresCache[String(t.dni).trim()] = t; window._indiceTrabs = window._indiceTrabs||{}; window._indiceTrabs[String(t.dni).trim()] = t; } });
+          // Solo actualizar si el campo de búsqueda no cambió
+          if (v('fTQ').trim() === q) tb.innerHTML = _renderTrabRows(d.data);
+        }
+      }).catch(() => {});
+    }
     return;
   }
-  document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">🔍 Buscando...</td></tr>';
-  console.log('[buscarTrab] q:', q, '| empresa:', emp||'AMBAS');
+  // Sin resultados locales: llamar API
+  tb.innerHTML='<tr><td colspan="13" class="empty">🔍 Buscando...</td></tr>';
+  console.log('[buscarTrab] sin cache local — API q:', q, '| empresa:', emp||'AMBAS');
   try{
     const d=await apiGet({action:'buscarTrabajador',q:q.trim(),empresa:emp||'AMBAS'});
-    console.log('[buscarTrab] Respuesta:', JSON.stringify(d));
-    if(!d.success||!d.data||!d.data.length){document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">⚠️ No se encontraron trabajadores</td></tr>';return;}
+    if(!d.success||!d.data||!d.data.length){tb.innerHTML='<tr><td colspan="13" class="empty">⚠️ No se encontraron trabajadores</td></tr>';return;}
     if(!window._trabajadoresCache) window._trabajadoresCache={};
-    d.data.forEach(t=>{ if(t.dni) window._trabajadoresCache[String(t.dni).trim()]=t; });
-    document.getElementById('tbTrab').innerHTML=d.data.map(t=>{
-      const fiP=t.fecha_inicio_periodo?fmtF(String(t.fecha_inicio_periodo).split('T')[0]):'';
-      const ftP=t.fecha_termino_periodo?fmtF(String(t.fecha_termino_periodo).split('T')[0]):'';
-      return `<tr>
-        <td><strong>${t.dni||''}</strong></td><td>${t.nombre||''}</td><td>${t.sexo||''}</td>
-        <td><span class="bg ${empC(t.empresa)}">${t.empresa||''}</span></td>
-        <td>${t.cargo||''}</td><td>${t.fundo||''}</td>
-        <td>${t.fundo_actual||''}</td>
-        <td>${t.ruta||''}</td>
-        <td>${t.codigo||''}</td>
-        <td>${t.regimen||''}</td>
-        <td>${fiP}</td>
-        <td>${ftP}</td>
-        <td><button class="btn-a bv" onclick="regAt('${esc(t.dni||'')}','${esc(t.nombre||'')}','${esc(t.empresa||'')}','${esc(t.fundo||'')}','${esc(t.cargo||'')}','${esc(t.sexo||'')}','${esc(t.ruta||'')}','${esc(t.codigo||'')}','${esc(t.fundo_actual||'')}','','${esc(String(t.fecha_inicio_periodo||'').split('T')[0])}','${esc(String(t.fecha_termino_periodo||'').split('T')[0])}')">+ Atención</button></td>
-      </tr>`;
-    }).join('');
+    if(!window._indiceTrabs) window._indiceTrabs={};
+    d.data.forEach(t=>{ if(t.dni){ window._trabajadoresCache[String(t.dni).trim()]=t; window._indiceTrabs[String(t.dni).trim()]=t; }});
+    tb.innerHTML = _renderTrabRows(d.data);
   }catch(e){
     console.error('[buscarTrab] Error:', e);
-    document.getElementById('tbTrab').innerHTML='<tr><td colspan="13" class="empty">❌ Error: '+e.message+'</td></tr>';
+    tb.innerHTML='<tr><td colspan="13" class="empty">❌ Error: '+e.message+'</td></tr>';
   }
 }
 
@@ -4340,9 +4387,10 @@ async function buscarDni(dni) {
     return;
   }
 
-  // 2. Buscar en _trabajadoresCache (resultados previos de API)
-  if (window._trabajadoresCache && window._trabajadoresCache[dniTrim]) {
-    const t = window._trabajadoresCache[dniTrim];
+  // 2. Buscar en _indiceTrabs / _trabajadoresCache (índice local preconstruido)
+  const _localT = (window._indiceTrabs && window._indiceTrabs[dniTrim]) || (window._trabajadoresCache && window._trabajadoresCache[dniTrim]);
+  if (_localT) {
+    const t = _localT;
     sv('at_nom',t.nombre||''); sv('at_sex',t.sexo||'');
     sv('at_emp',t.empresa||USER.empresa||'RAPEL'); sv('at_fundo',t.fundo||'');
     sv('at_cargo',t.cargo||''); sv('at_ruta',t.ruta||'');
@@ -4369,7 +4417,7 @@ async function buscarDni(dni) {
   const inp = document.getElementById('at_dni');
   inp.style.borderColor = '#3b82f6';
   inp.style.boxShadow = '0 0 0 2px #bfdbfe';
-  dniTO = setTimeout(() => buscarDniBtn(), 400);
+  dniTO = setTimeout(() => buscarDniBtn(), 150);
 }
 
 async function buscarDniBtn() {
