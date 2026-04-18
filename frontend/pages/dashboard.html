@@ -2872,6 +2872,8 @@ function limpiarFormCaso() {
   if(cim) cim.textContent='';
   const crm = document.getElementById('cReporteMsg');
   if(crm) crm.textContent='';
+  const cgm = document.getElementById('cGuardarMsg');
+  if(cgm) { cgm.textContent=''; cgm.style.display='none'; }
   window._casoTrabajador = null;
   _editandoCasoNro = null;
   const titulo = document.getElementById('mCasoTitulo');
@@ -3136,14 +3138,41 @@ async function guardarCaso() {
     if (res.success) {
       if (informe) registrarArchivoEnSheets(informe, { casoId: res.nro, modulo: 'casos', empresa });
       if (reporte) registrarArchivoEnSheets(reporte, { casoId: res.nro, modulo: 'casos', empresa });
-      cerrar('mCaso');
-      invalidarCache('casos');
-      await cargarCasos();
-      guardarCacheLS();
-      mostrarToast(_editandoCasoNro
+
+      // BUG 3: actualizar tabla inmediatamente sin esperar recarga desde API
+      const nroCaso = res.nro || _editandoCasoNro;
+      const casoLocal = { ...payload, nro: nroCaso };
+      if (_editandoCasoNro) {
+        if (CACHE.casos) {
+          const idx = CACHE.casos.findIndex(c => String(c.nro) === String(_editandoCasoNro));
+          if (idx !== -1) CACHE.casos[idx] = Object.assign({}, CACHE.casos[idx], casoLocal);
+        }
+      } else {
+        if (!CACHE.casos) CACHE.casos = [];
+        CACHE.casos.unshift(casoLocal);
+      }
+      casosData = CACHE.casos;
+      renderTablaCasos(casosData);
+
+      // BUG 1: NO cerrar el modal — mostrar mensaje de éxito dentro
+      const msgEl = document.getElementById('cGuardarMsg');
+      const textoOk = _editandoCasoNro
         ? '✅ Caso actualizado correctamente'
-        : '✅ Caso registrado correctamente (N° ' + res.nro + ')');
+        : '✅ Caso registrado correctamente (N° ' + nroCaso + ')';
+      if (msgEl) {
+        msgEl.textContent = textoOk;
+        msgEl.style.display = 'block';
+        msgEl.style.background = '#dcfce7';
+        msgEl.style.color = '#15803d';
+        msgEl.style.border = '1px solid #bbf7d0';
+      }
+      mostrarToast(textoOk);
       _editandoCasoNro = null;
+
+      // Recargar desde API en background para sincronizar
+      invalidarCache('casos');
+      cargarCasos();
+      guardarCacheLS();
     } else {
       mostrarToast('❌ Error: ' + res.error, 'error');
     }
@@ -7310,9 +7339,12 @@ window._fbSuscribirEstadisticas = function(callback) {
         </div>
       </div>
 
+      <!-- Mensaje de éxito / error al guardar -->
+      <div id="cGuardarMsg" style="display:none;padding:10px 14px;border-radius:8px;font-size:13px;font-weight:600;margin-bottom:10px"></div>
+
       <!-- Botones -->
       <div style="display:flex;justify-content:flex-end;gap:8px">
-        <button class="btn-s" onclick="cerrar('mCaso')">Cancelar</button>
+        <button class="btn-s" onclick="cerrar('mCaso')">Cerrar</button>
         <button class="btn-n" onclick="guardarCaso()">💾 Guardar Caso</button>
       </div>
     </div>
