@@ -2339,15 +2339,19 @@ async function verInformeGuardado(idx) {
   const btnGuardar = document.getElementById('btnGuardarAzure');
   if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '💾 Guardar en Azure'; }
 
-  // Si ya existe enlace Azure, mostrar botón directamente
+  // Si ya existe enlace (Azure o Drive), mostrar botón directamente
   const enlaceExistente = v.enlace_azure || v.enlace_informe || '';
+  const enlaceResuelto  = _resolverUrlDoc(enlaceExistente);
   const btnVer = document.getElementById('btnVerAzure');
   if (btnVer) {
-    if (enlaceExistente && enlaceExistente.startsWith('https://sistemarlverfrut')) {
-      btnVer.href = enlaceExistente;
+    if (enlaceResuelto) {
+      console.log('[verInformeGuardado] enlace existente:', enlaceExistente, '| resuelto:', enlaceResuelto);
+      btnVer.href = '#';
+      btnVer.onclick = function(e) { e.preventDefault(); window.open(enlaceResuelto, '_blank'); };
       btnVer.style.display = 'inline-flex';
     } else {
       btnVer.href = '#';
+      btnVer.onclick = null;
       btnVer.style.display = 'none';
     }
   }
@@ -3318,15 +3322,25 @@ function renderTablaCasos(data) {
     `;}).join('');
 }
 
+// Convierte URL de Google Drive /file/d/ID/view → descarga directa /uc?export=download&id=ID
+// URLs de Azure Blob Storage se devuelven sin cambios
+function _resolverUrlDoc(url) {
+  if (!url) return '';
+  const m = String(url).match(/\/file\/d\/([^\/\?]+)/);
+  if (m) return 'https://drive.google.com/uc?export=download&id=' + m[1];
+  return String(url);
+}
+
 function abrirUrlCaso(idx, tipo) {
   const c = casosData[idx];
   console.log('[abrirUrlCaso] idx:', idx, '| tipo:', tipo, '| caso:', c ? c.nombre : 'NO ENCONTRADO');
   if (!c) { console.error('[abrirUrlCaso] casosData[' + idx + '] es undefined. casosData.length:', casosData.length); return; }
   console.log('[abrirUrlCaso] enlace_informe:', c.enlace_informe, '| archivo_informe_url:', c.archivo_informe_url, '| enlace_reporte:', c.enlace_reporte, '| archivo_descargo_url:', c.archivo_descargo_url);
-  const url = String(tipo === 'informe'
+  const rawUrl = String(tipo === 'informe'
     ? (c.archivo_informe_url || c.enlace_informe  || '')
     : (c.archivo_descargo_url || c.enlace_reporte || '')).trim();
-  console.log('[abrirUrlCaso] URL final:', url || '(vacío)');
+  const url = _resolverUrlDoc(rawUrl);
+  console.log('[abrirUrlCaso] URL raw:', rawUrl || '(vacío)', '| URL resuelta:', url || '(vacío)');
   if (url && url !== 'undefined' && url !== 'null') {
     window.open(url, '_blank');
   } else {
