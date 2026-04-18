@@ -156,7 +156,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
 .live-dot{display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;animation:live-pulse 1.5s infinite;margin-right:4px;vertical-align:middle}
 </style>
 <script>if(localStorage.getItem('rl_dark')==='1')document.documentElement.classList.add('dark');</script>
-<script src="azure-blob-upload.js"></script>
+<!-- azure-blob-upload.js eliminado: subida ahora va por backend Apps Script (action subirArchivoAzure) -->
 </head>
 <body>
 
@@ -1354,9 +1354,9 @@ async function subirFotoFusion(file, sector, ruta, idx) {
           const nombre = ('FUSION_' + sector + '_' + ruta + '_' + ts + '_' + idx + '.jpg')
             .replace(/[^a-zA-Z0-9_.-]/g, '_').toUpperCase();
           const azureFile = new File([blob], nombre, { type: 'image/jpeg' });
-          const result = await subirArchivoAzure(azureFile, 'fusiones', null,
-            { usuario: typeof USER !== 'undefined' ? USER.usuario || '' : '' });
-          resolve(result ? (result.url || result.enlace || '') : '');
+          const result = await _subirViaBackend(azureFile, 'casos-rl',
+            { modulo: 'fusiones', usuario: typeof USER !== 'undefined' ? USER.usuario || '' : '' });
+          resolve(result ? result.url : '');
         }, 'image/jpeg', 0.7);
       };
       img.src = ev.target.result;
@@ -2404,46 +2404,35 @@ async function guardarInformeEnAzure() {
 
     console.log('[Azure] HTML length:', htmlDoc.length);
     console.log('[Azure] File creado:', file.name, file.size, file.type);
-    console.log('[Azure] Llamando subirArchivoAzure con modulo: visitas');
 
     setMsg('⏳ Subiendo informe a Azure...', '#f59e0b');
 
-    let resultado;
-    try {
-      resultado = await subirArchivoAzure(file, 'visitas', null, meta);
-      console.log('[Azure] Resultado:', resultado);
-    } catch(err) {
-      console.error('[Azure] Error capturado:', err);
-      setMsg('❌ Error: ' + err.message, '#dc2626');
-      return;
-    }
-
-    if (!resultado) {
-      setMsg('❌ No se pudo subir el informe. Verifica tu conexión.', '#dc2626');
-      return;
-    }
-
-    // URL con token SAS para visualización directa
-    const urlConToken = resultado.url + '?' + (AZURE_CONFIG.sasTokens[resultado.contenedor] || AZURE_CONFIG.sasTokens['documentos']);
-
-    // Registrar en hoja Archivos_Azure (URL limpia, sin token)
-    registrarArchivoEnSheets(resultado, {
+    const resultado = await _subirViaBackend(file, 'visitas-campo', {
+      modulo:   'visitas',
       visitaId: String(nro),
-      usuario:  USER.usuario || '',
-      empresa:  meta.empresa,
-      modulo:   'visitas'
+      usuario:  meta.usuario,
+      empresa:  meta.empresa
     });
 
-    // Guardar URL con token en el objeto en memoria para "Ver en Azure"
-    if (v) v.enlace_azure = urlConToken;
+    if (!resultado) {
+      setMsg('❌ No se pudo subir el informe. Revisa la consola para más detalles.', '#dc2626');
+      return;
+    }
 
-    // Mostrar éxito con enlace (URL con token)
-    setMsg('✅ Guardado en Azure: <a href="' + urlConToken + '" target="_blank" ' +
+    // Guardar URL limpia en el objeto en memoria para "Ver en Azure"
+    if (v) v.enlace_azure = resultado.url;
+
+    // Mostrar éxito con enlace
+    setMsg('✅ Guardado en Azure: <a href="' + resultado.url + '" target="_blank" ' +
       'style="color:#0b1e45;text-decoration:underline;font-weight:700">📎 Abrir informe</a>', '#16a34a');
 
-    // Mostrar botón "Ver en Azure" (URL con token)
+    // Mostrar botón "Ver en Azure"
     const btnVer = document.getElementById('btnVerAzure');
-    if (btnVer) { btnVer.href = urlConToken; btnVer.style.display = 'inline-flex'; }
+    if (btnVer) {
+      btnVer.href = '#';
+      btnVer.onclick = function(e) { e.preventDefault(); window.open(resultado.url, '_blank'); };
+      btnVer.style.display = 'inline-flex';
+    }
 
   } catch(err) {
     setMsg('❌ Error inesperado: ' + err.message, '#dc2626');
@@ -3091,8 +3080,8 @@ async function guardarCaso() {
   if (esConcluido && (informeFile.files[0] || reporteFile.files[0])) {
     btn.textContent = '⏳ Subiendo archivos...';
     const uploads = await Promise.all([
-      informeFile.files[0] ? subirArchivoAzure(informeFile, 'casos', 'cArchivoMsg', {usuario: USER.usuario||'', empresa}) : Promise.resolve(null),
-      reporteFile.files[0] ? subirArchivoAzure(reporteFile, 'casos', 'cArchivoMsg', {usuario: USER.usuario||'', empresa}) : Promise.resolve(null)
+      informeFile.files[0] ? _subirViaBackend(informeFile.files[0], 'casos-rl', {modulo:'casos', usuario:USER.usuario||'', empresa}) : Promise.resolve(null),
+      reporteFile.files[0] ? _subirViaBackend(reporteFile.files[0], 'casos-rl', {modulo:'casos', usuario:USER.usuario||'', empresa}) : Promise.resolve(null)
     ]);
     informe = uploads[0]; reporte = uploads[1];
     if ((informeFile.files[0] && !informe) || (reporteFile.files[0] && !reporte)) {
@@ -3320,6 +3309,62 @@ function renderTablaCasos(data) {
         </td>
       </tr>
     `;}).join('');
+}
+
+// ── Subida de archivos vía backend Apps Script → Azure Blob Storage ──
+
+function _fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload  = e => resolve(e.target.result); // "data:tipo;base64,XXX"
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+// carpeta: 'casos-rl' | 'visitas-campo' | 'documentos'
+// meta: { usuario, empresa, casoId, visitaId, modulo }
+async function _subirViaBackend(file, carpeta, meta) {
+  if (!file) return null;
+  meta = meta || {};
+  const modulo = meta.modulo || carpeta.split('-')[0];
+  console.log('[subirViaBackend] subiendo', file.name, '→ carpeta:', carpeta);
+  try {
+    const base64 = await _fileToBase64(file);
+    const r = await apiPost({
+      action:   'subirArchivoAzure',
+      base64,
+      nombre:   file.name,
+      mimeType: file.type || 'application/octet-stream',
+      carpeta,
+      modulo,
+      usuario:  meta.usuario  || USER.usuario || '',
+      empresa:  meta.empresa  || USER.empresa  || '',
+      casoId:   meta.casoId   || '',
+      visitaId: meta.visitaId || ''
+    });
+    if (!r.success) { console.error('[subirViaBackend] error:', r.error); return null; }
+    console.log('[subirViaBackend] OK:', r.url);
+    return { url: r.url, nombre: r.nombre || file.name, contenedor: r.contenedor || carpeta, modulo, tipo: file.type, tamaño: file.size, fecha: new Date().toISOString(), usuario: meta.usuario || USER.usuario || '', empresa: meta.empresa || USER.empresa || '' };
+  } catch(e) { console.error('[subirViaBackend] excepción:', e); return null; }
+}
+
+// Registra en hoja Archivos_Azure (sin resubir — solo log)
+async function registrarArchivoEnSheets(datosArchivo, datosFormulario) {
+  if (!datosArchivo) return { success: false };
+  try {
+    return await apiPost({
+      action:        'registrarArchivoAzure',
+      urlArchivo:    datosArchivo.url,
+      nombreArchivo: datosArchivo.nombre,
+      tipoArchivo:   datosArchivo.tipo,
+      tamanoArchivo: datosArchivo.tamaño,
+      contenedor:    datosArchivo.contenedor,
+      modulo:        datosArchivo.modulo,
+      fechaSubida:   datosArchivo.fecha,
+      ...(datosFormulario || {})
+    });
+  } catch(e) { console.error('[registrarArchivoEnSheets]', e); return { success: false }; }
 }
 
 // Convierte URL de Google Drive /file/d/ID/view → descarga directa /uc?export=download&id=ID

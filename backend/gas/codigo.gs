@@ -52,6 +52,7 @@ function handle(e) {
       case 'getSupervisores':    result = getSupervisores();        break;
       case 'saveSupervisor':     result = saveSupervisor(body);     break;
       case 'registrarArchivoAzure': result = registrarArchivoAzure(body); break;
+      case 'subirArchivoAzure':    result = subirArchivoAzure(body);    break;
       case 'saveCaso':          result = saveCaso(body);          break;
       case 'getCasos':          result = getCasos(params);        break;
       case 'saveFusion':        result = saveFusion(body);        break;
@@ -1305,6 +1306,73 @@ function saveSupervisor(d) {
 // AZURE BLOB STORAGE — Registro de archivos subidos
 // ============================================================
 var AZURE_LOG_SHEET = 'Archivos_Azure';
+
+// ============================================================
+// AZURE BLOB STORAGE — Subida directa desde backend
+// Props requeridas: AZURE_SAS_CASOS_RL, AZURE_SAS_VISITAS_CAMPO, AZURE_SAS_DOCUMENTOS
+// ============================================================
+function subirArchivoAzure(d) {
+  try {
+    if (!d.base64)  return { success: false, error: 'base64 requerido' };
+    if (!d.nombre)  return { success: false, error: 'nombre requerido' };
+    if (!d.carpeta) return { success: false, error: 'carpeta requerido' };
+
+    var props    = PropertiesService.getScriptProperties();
+    var propKey  = 'AZURE_SAS_' + String(d.carpeta).toUpperCase().replace(/-/g, '_').replace(/\./g, '_');
+    var sasToken = props.getProperty(propKey) || props.getProperty('AZURE_SAS_TOKEN');
+    if (!sasToken) return { success: false, error: 'SAS token no configurado. Propiedad esperada: ' + propKey };
+
+    var storageUrl  = 'https://sistemarlverfrut.blob.core.windows.net';
+    var modulo      = d.modulo || d.carpeta.split('-')[0];
+    var ts          = new Date().getTime();
+    var nombreUnico = modulo + '/' + ts + '_' + d.nombre;
+    var blobUrl     = storageUrl + '/' + d.carpeta + '/' + nombreUnico + '?' + sasToken;
+
+    var base64Clean = String(d.base64).replace(/^data:[^;]+;base64,/, '');
+    var bytes       = Utilities.base64Decode(base64Clean);
+    var mimeType    = d.mimeType || 'application/octet-stream';
+
+    var response = UrlFetchApp.fetch(blobUrl, {
+      method:           'put',
+      contentType:      mimeType,
+      payload:          bytes,
+      headers:          { 'x-ms-blob-type': 'BlockBlob' },
+      muteHttpExceptions: true
+    });
+
+    var code = response.getResponseCode();
+    if (code !== 201) {
+      return { success: false, error: 'Azure HTTP ' + code + ': ' + response.getContentText().substring(0, 300) };
+    }
+
+    var urlPublica = storageUrl + '/' + d.carpeta + '/' + nombreUnico;
+
+    // Registrar en hoja Archivos_Azure si se envía contexto
+    if (d.modulo) {
+      try {
+        registrarArchivoAzure({
+          urlArchivo:    urlPublica,
+          nombreArchivo: d.nombre,
+          tipoArchivo:   mimeType,
+          tamanoArchivo: bytes.length,
+          contenedor:    d.carpeta,
+          modulo:        modulo,
+          fechaSubida:   new Date().toISOString(),
+          usuario:       d.usuario  || '',
+          empresa:       d.empresa  || '',
+          casoId:        d.casoId   || '',
+          visitaId:      d.visitaId || ''
+        });
+      } catch(regErr) {
+        Logger.log('subirArchivoAzure: error registrando en Sheets: ' + regErr);
+      }
+    }
+
+    return { success: true, url: urlPublica, nombre: d.nombre, contenedor: d.carpeta, modulo: modulo };
+  } catch(e) {
+    return { success: false, error: 'subirArchivoAzure: ' + e.toString() };
+  }
+}
 
 function registrarArchivoAzure(d) {
   try {
