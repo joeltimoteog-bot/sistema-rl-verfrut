@@ -72,6 +72,9 @@ function handle(e) {
       case 'getSolicitudesAcceso':   result = getSolicitudesAcceso(params); break;
       case 'resolverAccesoTemporal': result = resolverAccesoTemporal(body); break;
       case 'verificarAccesoTemporal':result = verificarAccesoTemporal(body);break;
+      case 'guardarCapacitacion':    result = capGuardar(body);             break;
+      case 'listarCapacitaciones':   result = capListar(params);            break;
+      case 'exportarCapacitaciones': result = capExportar(params);          break;
       default: result = { error: 'Accion no reconocida: ' + action };
     }
   } catch(err) {
@@ -2279,5 +2282,194 @@ function verificarAccesoTemporal(d) {
     return { success: true, tieneAcceso: false };
   } catch(e) {
     return { success: true, tieneAcceso: false };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MÓDULO CAPACITACIONES
+// Hojas: CAPACITACIONES_HDR (cabecera) + BD_Capacitaciones (asistentes)
+// ═══════════════════════════════════════════════════════════════
+
+function capSetupInicial() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  // Hoja cabecera
+  let hHdr = ss.getSheetByName('CAPACITACIONES_HDR');
+  if (!hHdr) {
+    hHdr = ss.insertSheet('CAPACITACIONES_HDR');
+    hHdr.appendRow([
+      'ID', 'EMPRESA', 'FECHA', 'TIPO', 'TEMA', 'FUENTE', 'AREA', 'LUGAR',
+      'HORA_INICIO', 'HORA_TERMINO', 'TOTAL_HORAS',
+      'CAP_DNI', 'CAP_NOMBRE', 'CAP_CARGO',
+      'N_HOMBRES', 'N_MUJERES', 'TOTAL_ASISTENTES',
+      'USUARIO', 'USUARIO_NOMBRE', 'TIMESTAMP'
+    ]);
+    hHdr.getRange(1, 1, 1, 20).setFontWeight('bold').setBackground('#0a2463').setFontColor('#ffffff');
+  }
+
+  // Hoja asistentes
+  let hAsis = ss.getSheetByName('BD_Capacitaciones');
+  if (!hAsis) {
+    hAsis = ss.insertSheet('BD_Capacitaciones');
+    hAsis.appendRow([
+      'ID_CAP', 'N', 'DNI', 'NOMBRE', 'EMPRESA', 'CARGO', 'SEXO', 'OBSERVACIONES', 'TIMESTAMP'
+    ]);
+    hAsis.getRange(1, 1, 1, 9).setFontWeight('bold').setBackground('#0a2463').setFontColor('#ffffff');
+  }
+
+  return { success: true };
+}
+
+function capGuardar(body) {
+  try {
+    capSetupInicial();
+    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const hHdr  = ss.getSheetByName('CAPACITACIONES_HDR');
+    const hAsis = ss.getSheetByName('BD_Capacitaciones');
+    const now   = new Date();
+
+    // Generar ID único: CAP-YYYYMMDD-HHMMSS
+    const pad2 = n => String(n).padStart(2, '0');
+    const id = 'CAP-' + now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()) +
+               '-' + pad2(now.getHours()) + pad2(now.getMinutes()) + pad2(now.getSeconds());
+
+    const asistentes = body.asistentes || [];
+
+    // Guardar cabecera
+    hHdr.appendRow([
+      id,
+      body.empresa       || '',
+      body.fecha         || '',
+      body.tipo          || '',
+      body.tema          || '',
+      body.fuente        || '',
+      body.area          || '',
+      body.lugar         || '',
+      body.hora_inicio   || '',
+      body.hora_termino  || '',
+      body.total_horas   || 0,
+      body.cap_dni       || '',
+      body.cap_nombre    || '',
+      body.cap_cargo     || '',
+      body.n_hombres     || 0,
+      body.n_mujeres     || 0,
+      asistentes.length,
+      body.usuario       || '',
+      body.usuario_nombre|| '',
+      now
+    ]);
+
+    // Guardar asistentes
+    asistentes.forEach(a => {
+      hAsis.appendRow([
+        id,
+        a.n         || '',
+        a.dni       || '',
+        a.nombre    || '',
+        a.empresa   || '',
+        a.cargo     || '',
+        a.sexo      || '',
+        a.obs       || '',
+        now
+      ]);
+    });
+
+    return { success: true, id: id, total: asistentes.length };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function capListar(p) {
+  try {
+    capSetupInicial();
+    const ss   = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const hHdr = ss.getSheetByName('CAPACITACIONES_HDR');
+    if (!hHdr || hHdr.getLastRow() < 2) return { success: true, data: [] };
+
+    const rows = hHdr.getDataRange().getValues();
+    const head = rows[0].map(h => String(h).toLowerCase().replace(/ /g, '_'));
+    const empresa = (p.empresa || '').toUpperCase();
+    const esAdmin = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'].indexOf(
+      (p.rol || '').toLowerCase()
+    ) !== -1;
+
+    const data = rows.slice(1)
+      .filter(r => {
+        if (empresa && String(r[1] || '').toUpperCase() !== empresa) return false;
+        if (!esAdmin && String(r[17] || '') !== (p.usuario || '')) return false;
+        return true;
+      })
+      .map(r => ({
+        id:               r[0],
+        empresa:          r[1],
+        fecha:            r[2] ? String(r[2]).split('T')[0] : '',
+        tipo:             r[3],
+        tema:             r[4],
+        fuente:           r[5],
+        area:             r[6],
+        lugar:            r[7],
+        hora_inicio:      r[8],
+        hora_termino:     r[9],
+        total_horas:      r[10],
+        cap_nombre:       r[12],
+        total_asistentes: r[16],
+        usuario:          r[17],
+        usuario_nombre:   r[18]
+      }))
+      .reverse(); // más recientes primero
+
+    return { success: true, data: data };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function capExportar(p) {
+  try {
+    capSetupInicial();
+    const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const hHdr  = ss.getSheetByName('CAPACITACIONES_HDR');
+    const hAsis = ss.getSheetByName('BD_Capacitaciones');
+    if (!hAsis || hAsis.getLastRow() < 2) return { success: true, data: [] };
+
+    const empresa = (p.empresa || '').toUpperCase();
+    const desde   = p.desde || '';
+    const hasta   = p.hasta || '';
+    const esAdmin = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'].indexOf(
+      (p.rol || '').toLowerCase()
+    ) !== -1;
+
+    // Mapa de cabeceras para filtro
+    const hdrRows = hHdr && hHdr.getLastRow() > 1 ? hHdr.getDataRange().getValues() : [];
+    const capMap  = {};
+    hdrRows.slice(1).forEach(r => { capMap[String(r[0])] = { empresa: String(r[1] || ''), fecha: String(r[2] || '').split('T')[0], tema: String(r[4] || ''), usuario: String(r[17] || '') }; });
+
+    const asisRows = hAsis.getDataRange().getValues();
+    const data = asisRows.slice(1)
+      .filter(r => {
+        const idCap = String(r[0]);
+        const cap   = capMap[idCap] || {};
+        if (empresa && (cap.empresa || '').toUpperCase() !== empresa) return false;
+        if (desde && (cap.fecha || '') < desde) return false;
+        if (hasta && (cap.fecha || '') > hasta) return false;
+        if (!esAdmin && (cap.usuario || '') !== (p.usuario || '')) return false;
+        return true;
+      })
+      .map(r => ({
+        id_cap:   r[0],
+        n:        r[1],
+        dni:      r[2],
+        nombre:   r[3],
+        empresa:  r[4],
+        cargo:    r[5],
+        sexo:     r[6],
+        fecha:    (capMap[String(r[0])] || {}).fecha || '',
+        tema:     (capMap[String(r[0])] || {}).tema  || ''
+      }));
+
+    return { success: true, data: data };
+  } catch(e) {
+    return { success: false, error: e.toString() };
   }
 }
