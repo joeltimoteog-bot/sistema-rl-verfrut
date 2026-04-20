@@ -3596,13 +3596,18 @@ function cargarCacheLS() {
 // Para admins: getPreload devuelve atenciones:[] y stats calculadas (evita cargar miles de registros).
 // Para supervisores: getPreload devuelve atenciones completas.
 async function preloadData() {
+  const _tPL0=performance.now();
+  console.time('[preload] TOTAL');
   const ind = document.getElementById('preloadIndicator');
   if(ind) ind.style.display='block';
   const esAdmin = ROLES_VER_TODO.includes(USER.rol);
   const empresa = esAdmin ? '' : (USER.empresa || '');
 
   try {
+    console.time('[preload] getPreload-API');
     const d = await apiGet({action:'getPreload', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
+    console.timeEnd('[preload] getPreload-API');
+    console.log('[preload] API: '+Math.round(performance.now()-_tPL0)+'ms | fromCache:'+(d.data&&d.data.fromCache||false)+' | atenciones:'+(d.data&&d.data.atenciones&&d.data.atenciones.length||0));
     if (d.success && d.data) {
       const data = d.data;
       CACHE.stats      = data.stats      || {};
@@ -3638,17 +3643,13 @@ async function preloadData() {
   if(ind) ind.style.display='none';
 
   const _aniosData = [...new Set((CACHE.atenciones||[]).map(a=>String(a.fecha_atencion||'').substring(0,4)).filter(y=>y.length===4))].sort();
-  console.log('✅ Preload completo:', {
-    atenciones: (CACHE.atenciones||[]).length,
-    visitas:    (CACHE.visitas||[]).length,
-    casos:      (CACHE.casos||[]).length,
-    fusiones:   (CACHE.fusiones||[]).length,
-    stats:      !!CACHE.stats
-  });
-  console.log(`[preload] Rol: ${USER.rol} | Empresa: ${esAdmin?'TODAS':(USER.empresa||'—')} | Atenciones: ${(CACHE.atenciones||[]).length} | Años en datos: ${_aniosData.join(', ')||'(sin datos)'}`);
+  console.timeEnd('[preload] TOTAL');
+  console.log('[preload] TOTAL: '+Math.round(performance.now()-_tPL0)+'ms | rol:'+USER.rol+' | empresa:'+(esAdmin?'TODAS':(USER.empresa||'—'))+' | atenciones:'+(CACHE.atenciones||[]).length+' | visitas:'+(CACHE.visitas||[]).length+' | casos:'+(CACHE.casos||[]).length+' | años:'+(_aniosData.join(',')||'(sin datos)'));
 
   // Construir índice local de trabajadores para búsquedas instantáneas
+  console.time('[preload] _construirIndiceTrabs');
   _construirIndiceTrabs();
+  console.timeEnd('[preload] _construirIndiceTrabs');
 
   if(esAdmin && !CACHE.estadisticasAdmin) {
     setTimeout(() => cargarEstadisticasAdmin(), 500);
@@ -4459,10 +4460,12 @@ async function buscarDni(dni) {
   r.style.display = 'none';
   if (dni.length < 7) return;
   const dniTrim = dni.trim();
+  const _tDni0 = performance.now();
 
   // 1. Buscar en CACHE.atenciones (historial completo local)
   const cached = (CACHE.atenciones || atTodas || []).find(a => String(a.dni||'').trim() === dniTrim);
   if (cached) {
+    console.log('[buscarDni] CACHE.atenciones hit: '+Math.round(performance.now()-_tDni0)+'ms | DNI:'+dniTrim);
     sv('at_nom', cached.nombre||''); sv('at_sex', cached.sexo||'');
     sv('at_emp', cached.empresa||USER.empresa||'RAPEL'); sv('at_fundo', cached.fundo||'');
     if (cached.cargo)   sv('at_cargo', cached.cargo);
@@ -4481,8 +4484,14 @@ async function buscarDni(dni) {
   }
 
   // 2. Buscar en _indiceTrabs / _trabajadoresCache (índice local preconstruido)
+  // Si el índice está vacío pero CACHE.atenciones tiene datos, construirlo ahora
+  if (!window._indiceTrabs && (CACHE.atenciones||[]).length) {
+    console.log('[buscarDni] índice vacío — construyendo lazy desde CACHE.atenciones ('+CACHE.atenciones.length+' reg)');
+    _construirIndiceTrabs();
+  }
   const _localT = (window._indiceTrabs && window._indiceTrabs[dniTrim]) || (window._trabajadoresCache && window._trabajadoresCache[dniTrim]);
   if (_localT) {
+    console.log('[buscarDni] _trabajadoresCache hit: '+Math.round(performance.now()-_tDni0)+'ms | DNI:'+dniTrim);
     const t = _localT;
     sv('at_nom',t.nombre||''); sv('at_sex',t.sexo||'');
     sv('at_emp',t.empresa||USER.empresa||'RAPEL'); sv('at_fundo',t.fundo||'');
@@ -4523,10 +4532,13 @@ async function buscarDniBtn() {
   inp.style.borderColor='#3b82f6';
   inp.style.boxShadow='0 0 0 2px #bfdbfe';
   r.style.display='none';
-  console.log('[buscarDniBtn] DNI enviado:', dni, '| empresa: AMBAS');
+  const _tApi0=performance.now();
+  console.log('[buscarDniBtn] DNI enviado:', dni, '| empresa: AMBAS | cache size:', Object.keys(window._trabajadoresCache||{}).length);
+  console.time('[buscarDniBtn] API');
   try{
     const d=await apiGet({action:'buscarTrabajador',q:String(dni).trim(),empresa:'AMBAS'});
-    console.log('[buscarDniBtn] Respuesta API:', JSON.stringify(d));
+    console.timeEnd('[buscarDniBtn] API');
+    console.log('[buscarDniBtn] API: '+Math.round(performance.now()-_tApi0)+'ms | encontrado:'+(d.success&&d.data&&d.data.length>0)+' | respuesta:', JSON.stringify(d));
     if(d.success&&d.data&&d.data.length){
       const t=d.data[0];
       sv('at_nom',t.nombre||''); sv('at_sex',t.sexo||'');
@@ -4551,6 +4563,7 @@ async function buscarDniBtn() {
       r.textContent='❌ No se encontró trabajador con DNI: '+dni;
     }
   }catch(e){
+    console.timeEnd('[buscarDniBtn] API');
     console.error('[buscarDniBtn] Error:',e);
     r.style.display='block';
     r.textContent='❌ Error de conexión: '+e.message;

@@ -340,18 +340,29 @@ async function doLogin(){
   const p=document.getElementById('password').value;
   if(!u||!p){setAlert('Ingresa tu usuario y contraseña.');return;}
   clearAlert();setLoading(true);
+  const _tLogin0=performance.now();
+  console.time('[login] 1-credenciales');
   try{
     const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'login',usuario:u,password:p}),headers:{'Content-Type':'text/plain'}});
     const d=await r.json();
+    console.timeEnd('[login] 1-credenciales');
+    console.log('[login] credenciales: '+Math.round(performance.now()-_tLogin0)+'ms');
     if(d.success){
       // Guardar sesión en localStorage (válida 8 horas)
       try { localStorage.setItem('rl_session', JSON.stringify({user: d.user, timestamp: Date.now()})); } catch(e){}
       sessionStorage.setItem('user',JSON.stringify(d.user));
       sessionStorage.setItem('api',API);
       const rol=(d.user.rol||'').toLowerCase().trim();
-      // Precalentar caché del backend (fire & forget)
-      try { fetch(API,{method:'POST',body:JSON.stringify({action:'getPreload',usuario:d.user.usuario,rol:d.user.rol,empresa:d.user.empresa}),headers:{'Content-Type':'text/plain'}}).catch(()=>{}); } catch(e){}
+      // Precalentar caché del backend (fire & forget) — medir respuesta
+      const _tPre=performance.now();
+      console.time('[login] 2-preload-backend');
+      try { fetch(API,{method:'POST',body:JSON.stringify({action:'getPreload',usuario:d.user.usuario,rol:d.user.rol,empresa:d.user.empresa}),headers:{'Content-Type':'text/plain'}})
+        .then(rp=>rp.json()).then(pd=>{
+          console.timeEnd('[login] 2-preload-backend');
+          console.log('[login] preload backend: '+Math.round(performance.now()-_tPre)+'ms | fromCache:'+(pd.data&&pd.data.fromCache||false)+' | rol:'+d.user.rol);
+        }).catch(()=>{console.timeEnd('[login] 2-preload-backend');}); } catch(e){}
       setLoading(false);
+      console.log('[login] 3-navegacion: '+Math.round(performance.now()-_tLogin0)+'ms desde inicio');
       if(ROLES_SELECCION.includes(rol)){
         // Admin/coordinador → bienvenida 1.5s → pantalla de módulos
         mostrarBienvenida(d.user, function(){
