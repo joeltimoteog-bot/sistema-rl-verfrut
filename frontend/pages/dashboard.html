@@ -269,10 +269,12 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
               <thead><tr style="background:#0b1e45;color:#fff">
                 <th style="padding:7px 10px;text-align:left">Año</th>
                 <th style="padding:7px 10px;text-align:center">Total</th>
+                <th style="padding:7px 10px;text-align:center">RAPEL</th>
+                <th style="padding:7px 10px;text-align:center">VERFRUT</th>
                 <th style="padding:7px 10px;text-align:center">En Proceso</th>
                 <th style="padding:7px 10px;text-align:center">Finalizado</th>
               </tr></thead>
-              <tbody id="tbResAnualBody"><tr><td colspan="4" style="text-align:center;padding:10px;color:#64748b">⏳ Cargando...</td></tr></tbody>
+              <tbody id="tbResAnualBody"><tr><td colspan="6" style="text-align:center;padding:10px;color:#64748b">⏳ Cargando...</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -5646,6 +5648,8 @@ function _fbAplicarEstadisticasFirebase(fbData) {
   _fbDibujarEmpresa(fbData.por_empresa);
   _fbRenderRankingSup(fbData.por_supervisor);
   _fbDibujarTendencia(fbData.por_mes);
+  // Indicadores principales del dashboard (cM, cTendAnual, tbResAnualBody) usando datos Firebase
+  _fbDibujarIndicadoresPrincipales(fbData);
 }
 
 // Flechas ↑↓, barras de progreso y sección comparativa calculadas desde Firebase por_mes
@@ -5797,6 +5801,122 @@ function _fbRenderRankingSup(porSupervisor) {
       <span style="font-size:11px;font-weight:700;color:#0b1e45;width:22px;text-align:right;flex-shrink:0">${v.este_mes||0}</span>
     </div>`;
   }).join('');
+}
+
+// ── Indicadores principales del dashboard para admins (cM, cTendAnual, tbResAnualBody) ──
+// Llamado desde _fbAplicarEstadisticasFirebase cuando CACHE.atenciones está vacío (lazy admin)
+function _fbDibujarIndicadoresPrincipales(fbData) {
+  if (!fbData) return;
+  const porMesFB  = fbData.por_mes;
+  const porAnioFB = fbData.por_anio;
+  const LBS_MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+  // Normalizar claves Firebase "2026_04" → "2026-04" → { 'YYYY-MM': total }
+  const porMesNorm = {};
+  if (porMesFB) {
+    Object.entries(porMesFB).forEach(([k, v]) => {
+      const nk = k.replace(/_/g, '-');
+      porMesNorm[nk] = (v && typeof v.total === 'number') ? v.total : (typeof v === 'number' ? v : 0);
+    });
+  }
+
+  // 1. cM — Atenciones últimos 6 meses
+  _destroyChart('m');
+  const elM = document.getElementById('cM');
+  if (elM && Object.keys(porMesNorm).length) {
+    const hoyD = new Date();
+    const ultimos6 = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoyD.getFullYear(), hoyD.getMonth() - i, 1);
+      ultimos6.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'));
+    }
+    charts.m = new Chart(elM, {
+      type: 'bar',
+      data: {
+        labels: ultimos6.map(k => LBS_MES[parseInt(k.split('-')[1]) - 1] || k),
+        datasets: [{ label: 'Atenciones', data: ultimos6.map(k => porMesNorm[k] || 0), backgroundColor: '#3b82f6', borderRadius: 5 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { maxTicksLimit: 8 } } } }
+    });
+    console.log('[FB-indicadores] cM dibujado | últimos 6:', ultimos6.map(k => k + ':' + (porMesNorm[k] || 0)).join(', '));
+  }
+
+  // 2. cTendAnual — Tendencia anual: sumar totales por año desde por_mes
+  _destroyChart('tendAnual');
+  const elT = document.getElementById('cTendAnual');
+  if (elT && Object.keys(porMesNorm).length) {
+    const porAnioCalc = {};
+    Object.entries(porMesNorm).forEach(([k, v]) => {
+      const anio = k.substring(0, 4);
+      if (anio && anio.length === 4) porAnioCalc[anio] = (porAnioCalc[anio] || 0) + v;
+    });
+    const anios = Object.keys(porAnioCalc).sort();
+    charts.tendAnual = new Chart(elT, {
+      type: 'line',
+      data: {
+        labels: anios,
+        datasets: [{ label: 'Total anual', data: anios.map(y => porAnioCalc[y]), borderColor: '#0b1e45', backgroundColor: 'rgba(11,30,69,0.1)', tension: 0.4, fill: true, pointRadius: 5 }]
+      },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+    console.log('[FB-indicadores] cTendAnual dibujado | años:', anios.join(', '));
+  }
+
+  // 3. tbResAnualBody — Resumen por año
+  const tbody = document.getElementById('tbResAnualBody');
+  if (!tbody) return;
+
+  // Preferir por_anio de Firebase (tiene RAPEL/VERFRUT/en_proceso/finalizados)
+  if (porAnioFB && Object.keys(porAnioFB).length) {
+    const anios = Object.keys(porAnioFB)
+      .map(k => ({ key: k, anio: k.replace(/^a/, '') }))
+      .filter(x => x.anio && x.anio.length === 4)
+      .sort((a, b) => b.anio.localeCompare(a.anio));
+    tbody.innerHTML = anios.map(({ key, anio }) => {
+      const d   = porAnioFB[key] || {};
+      const tot = d.total       !== undefined ? d.total       : '—';
+      const rap = d.rapel       !== undefined ? d.rapel       : '—';
+      const vrf = d.verfrut     !== undefined ? d.verfrut     : '—';
+      const pro = d.en_proceso  !== undefined ? d.en_proceso  : '—';
+      const fin = d.finalizados !== undefined ? d.finalizados : '—';
+      return `<tr style="border-bottom:1px solid #e2e8f0">
+        <td style="padding:7px 10px;font-weight:700">${anio}</td>
+        <td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${tot}</td>
+        <td style="padding:7px 10px;text-align:center;color:#0b1e45">${rap}</td>
+        <td style="padding:7px 10px;text-align:center;color:#d9292b">${vrf}</td>
+        <td style="padding:7px 10px;text-align:center;color:#f97316">${pro}</td>
+        <td style="padding:7px 10px;text-align:center;color:#22c55e">${fin}</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
+    console.log('[FB-indicadores] tbResAnualBody (por_anio):', anios.map(x => x.anio).join(', '));
+  } else if (Object.keys(porMesNorm).length) {
+    // Fallback: calcular desde por_mes si por_anio no existe en Firebase
+    const porAnioCalc2 = {};
+    if (porMesFB) {
+      Object.entries(porMesFB).forEach(([k, v]) => {
+        const nk = k.replace(/_/g, '-');
+        const anio = nk.substring(0, 4);
+        if (!anio || anio.length !== 4) return;
+        if (!porAnioCalc2[anio]) porAnioCalc2[anio] = { total: 0, rapel: 0, verfrut: 0 };
+        porAnioCalc2[anio].total   += (v && typeof v.total   === 'number') ? v.total   : 0;
+        porAnioCalc2[anio].rapel   += (v && typeof v.rapel   === 'number') ? v.rapel   : 0;
+        porAnioCalc2[anio].verfrut += (v && typeof v.verfrut === 'number') ? v.verfrut : 0;
+      });
+    }
+    const anios = Object.keys(porAnioCalc2).sort().reverse();
+    tbody.innerHTML = anios.map(y => {
+      const d = porAnioCalc2[y];
+      return `<tr style="border-bottom:1px solid #e2e8f0">
+        <td style="padding:7px 10px;font-weight:700">${y}</td>
+        <td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${d.total}</td>
+        <td style="padding:7px 10px;text-align:center;color:#0b1e45">${d.rapel || '—'}</td>
+        <td style="padding:7px 10px;text-align:center;color:#d9292b">${d.verfrut || '—'}</td>
+        <td style="padding:7px 10px;text-align:center;color:#f97316">—</td>
+        <td style="padding:7px 10px;text-align:center;color:#22c55e">—</td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="6" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
+    console.log('[FB-indicadores] tbResAnualBody (fallback por_mes):', anios.join(', '));
+  }
 }
 
 function _fbDibujarTendencia(porMes) {
@@ -6785,7 +6905,7 @@ function dibujarEstadisticasDash(datos) {
     const resAnio={};
     datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(!y||y.length!==4) return;if(!resAnio[y]) resAnio[y]={total:0,proc:0,res:0};resAnio[y].total++;const e=String(a.estado||'').toUpperCase();if(e==='EN PROCESO') resAnio[y].proc++;else if(e==='FINALIZADO') resAnio[y].res++;});
     const aniosOrden=Object.keys(resAnio).sort().reverse();
-    tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total}</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
+    tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total}</td><td style="padding:7px 10px;text-align:center;color:#64748b">—</td><td style="padding:7px 10px;text-align:center;color:#64748b">—</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res}</td></tr>`).join(''):'<tr><td colspan="6" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
   }
 }
 // ============================================================
