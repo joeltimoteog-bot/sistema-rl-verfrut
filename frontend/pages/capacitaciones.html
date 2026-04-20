@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capacitaciones · Sistema RL v3.0</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Barlow', sans-serif; background: #f1f5f9; color: #0f172a; min-height: 100vh; }
+
+    /* ── Top bar ── */
+    .topbar { background: #0a2463; color: #fff; display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 54px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+    .topbar-logo { height: 32px; border-radius: 4px; object-fit: contain; }
+    .topbar-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: .5px; flex: 1; }
+    .topbar-user { font-size: 12px; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 120px; }
+    .btn-back { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 7px; padding: 6px 13px; font-size: 13px; font-weight: 700; cursor: pointer; flex-shrink: 0; transition: background .15s; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+    .btn-back:hover { background: rgba(255,255,255,.28); }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; background: #fff; border-bottom: 2px solid #e2e8f0; padding: 0 16px; overflow-x: auto; }
+    .tab-btn { padding: 13px 18px; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700; color: #64748b; background: none; border: none; border-bottom: 3px solid transparent; cursor: pointer; letter-spacing: .2px; transition: all .15s; white-space: nowrap; }
+    .tab-btn.on { color: #0a2463; border-bottom-color: #dc2626; }
+    .tab-btn:hover:not(.on) { color: #0a2463; }
+
+    /* ── Content wrapper ── */
+    .tab-content { display: none; padding: 16px; max-width: 920px; margin: 0 auto; }
+    .tab-content.on { display: block; }
+
+    /* ── Cards ── */
+    .card { background: #fff; border-radius: 12px; padding: 20px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    .card-title { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; color: #0a2463; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+
+    /* ── Steps ── */
+    .steps { display: flex; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.06); margin-bottom: 14px; }
+    .step-item { flex: 1; padding: 11px 10px; text-align: center; font-size: 12px; font-weight: 700; color: #94a3b8; border-bottom: 3px solid transparent; }
+    .step-item.on   { color: #0a2463; border-bottom-color: #0a2463; background: #eff6ff; }
+    .step-item.done { color: #16a34a; border-bottom-color: #16a34a; }
+
+    /* ── Forms ── */
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 580px) { .form-grid { grid-template-columns: 1fr; } }
+    .fg { display: flex; flex-direction: column; gap: 5px; }
+    .fg.full { grid-column: 1 / -1; }
+    label.lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
+    input[type=text], input[type=date], input[type=time], input[type=number], select, textarea {
+      border: 2px solid #e2e8f0; border-radius: 8px; padding: 8px 11px;
+      font-family: 'Barlow', sans-serif; font-size: 14px; color: #0f172a;
+      width: 100%; transition: border-color .15s; background: #fff;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #0a2463; }
+
+    /* ── Checkboxes tipo ── */
+    .check-group { display: flex; flex-wrap: wrap; gap: 8px; }
+    .check-item { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 11px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 12px; font-weight: 600; transition: all .15s; user-select: none; }
+    .check-item input[type=checkbox] { width: 14px; height: 14px; accent-color: #0a2463; cursor: pointer; }
+    .check-item:hover { border-color: #0a2463; }
+    .check-item.checked { border-color: #0a2463; background: #eff6ff; color: #0a2463; }
+
+    /* ── Buttons ── */
+    .btn { padding: 9px 20px; border: none; border-radius: 8px; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .15s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-primary { background: #0a2463; color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: .85; }
+    .btn-red     { background: #dc2626; color: #fff; }
+    .btn-red:hover:not(:disabled) { opacity: .85; }
+    .btn-green   { background: #16a34a; color: #fff; }
+    .btn-green:hover:not(:disabled) { opacity: .85; }
+    .btn-gray    { background: #e2e8f0; color: #475569; }
+    .btn-gray:hover:not(:disabled) { background: #cbd5e1; }
+    .btn-sm { padding: 5px 11px; font-size: 12px; border-radius: 6px; }
+
+    /* ── Feedback banner ── */
+    #cap-feedback { display: none; padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; margin-bottom: 12px; text-align: center; }
+    .fb-ok  { background: #dcfce7; color: #166534; border: 1.5px solid #86efac; }
+    .fb-err { background: #fef2f2; color: #dc2626; border: 1.5px solid #fecaca; }
+    .fb-dup { background: #fef9c3; color: #854d0e; border: 1.5px solid #fde68a; }
+
+    /* ── QR ── */
+    #qr-reader { width: 100%; max-width: 380px; margin: 0 auto; border-radius: 10px; overflow: hidden; border: 2px solid #e2e8f0; }
+
+    /* ── Tables ── */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .data-table th { background: #0a2463; color: #fff; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .4px; }
+    .data-table td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+    .data-table tr:hover td { background: #f8fafc; }
+    .badge-emp { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 800; }
+    .badge-rap { background: #dbeafe; color: #1e40af; }
+    .badge-vrf { background: #fee2e2; color: #991b1b; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 36px 20px; color: #94a3b8; font-size: 13px; }
+    .empty-icon { font-size: 36px; margin-bottom: 8px; }
+
+    /* ── Actions row ── */
+    .act-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+    /* ── Spinner ── */
+    .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Resumen actividad ── */
+    #cap-resumen { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.9; }
+
+    /* ── Separador sección ── */
+    .sec-sep { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+
+    @media (max-width: 480px) {
+      .topbar-title { font-size: 14px; }
+      .tab-btn { padding: 12px 12px; font-size: 12px; }
+      .act-row { flex-direction: column; }
+      .act-row .btn { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ──────────────────── TOP BAR ──────────────────── -->
+<div class="topbar">
+  <img src="../images/logo-unifrutti.jpg" alt="Unifrutti" class="topbar-logo">
+  <a href="dashboard.html" class="btn-back">← Volver</a>
+  <div class="topbar-title">📚 Capacitaciones</div>
+  <div class="topbar-user" id="topNombre"></div>
+</div>
+
+<!-- ──────────────────── TABS ──────────────────── -->
+<div class="tabs">
+  <button class="tab-btn on"  id="tabBtnNueva"     onclick="showTab('nueva',this)">➕ Nueva</button>
+  <button class="tab-btn"     id="tabBtnRegistros"  onclick="showTab('registros',this)">📋 Registros</button>
+  <button class="tab-btn"     id="tabBtnExportar"   onclick="showTab('exportar',this)">📤 Exportar</button>
+</div>
+
+<!-- ══════════════════ TAB: NUEVA ══════════════════ -->
+<div class="tab-content on" id="tab-nueva">
+
+  <!-- Steps indicator -->
+  <div class="steps">
+    <div class="step-item on"  id="step1-ind">1 · Datos de la actividad</div>
+    <div class="step-item"     id="step2-ind">2 · Registro de asistentes</div>
+  </div>
+
+  <!-- ─── PASO 1: Formulario actividad ─── -->
+  <div id="paso1">
+    <div class="card">
+      <div class="card-title">📝 Datos de la actividad</div>
+      <div class="form-grid">
+
+        <div class="fg">
+          <label class="lbl">Empresa *</label>
+          <select id="capEmpresa">
+            <option value="">Seleccionar...</option>
+            <option value="RAPEL">RAPEL</option>
+            <option value="VERFRUT">VERFRUT</option>
+          </select>
+        </div>
+
+        <div class="fg">
+          <label class="lbl">Fecha *</label>
+          <input type="date" id="capFecha">
+        </div>
+
+        <div class="fg full">
+          <label class="lbl">Tipo de actividad *</label>
+          <div class="check-group" id="capTipoGroup">
+            <label class="check-item"><input type="checkbox" value="INDUCCIÓN"> INDUCCIÓN</label>
+            <label class="check-item"><input type="checkbox" value="PAUTA-CHARLA"> PAUTA-CHARLA</label>
+            <label class="check-item"><input type="checkbox" value="CAPACITACIÓN"> CAPACITACIÓN</label>
+            <label class="check-item"><input type="checkbox" value="ENTRENAMIENTO"> ENTRENAMIENTO</label>
+            <label class="check-item"><input type="checkbox" value="SIMULACRO"> SIMULACRO</label>
+          </div>
+        </div>
+
+        <div class="fg full">
+          <label class="lbl">Tema *</label>
+          <input type="text" id="capTema" placeholder="Ej: Uso correcto de EPP, Manejo seguro de agroquímicos...">
+        </div>
+
+        <div class="fg">
+          <label class="lbl">Fuente</label>
+          <input type="text" id="capFuente" placeholder="Ej: Normativa interna, MINSA, SUNAFIL...">
+        </div>
+
+        <div class="fg">
+          <label class="lbl">Área</label>
+          <input type="text" id="capArea" placeholder="Ej: Cosecha, Packing, Campo...">
+        </div>
+
+        <div class="fg full">
+          <label class="lbl">Lugar *</label>
+          <input type="text" id="capLugar" placeholder="Ej: Sala de reuniones Fundo El Papayo">
+        </div>
+
+        <div class="fg">
+          <label class="lbl">Hora inicio</label>
+          <input type="time" id="capHoraInicio" oninput="calcHoras()">
+        </div>
+
+        <div class="fg">
+          <label class="lbl">Hora término</label>
+          <input type="time" id="capHoraTermino" oninput="calcHoras()">
+        </div>
+
+        <div class="fg">
+          <label class="lbl">Total horas</label>
+          <input type="number" id="capHoras" min="0.5" step="0.5" placeholder="0.0">
+        </div>
+
+        <div class="fg"><!-- espacio --></div>
+
+      </div>
+
+      <!-- Capacitador -->
+      <hr class="sec-sep">
+      <div class="card-title" style="margin-bottom:12px">👤 Capacitador / Entrenador</div>
+      <div class="form-grid">
+        <div class="fg">
+          <label class="lbl">DNI capacitador</label>
+          <input type="text" id="capCapDni" maxlength="8" placeholder="DNI (8 dígitos)" oninput="buscarCapacitador(this.value)">
+        </div>
+        <div class="fg">
+          <label class="lbl">Nombre completo</label>
+          <input type="text" id="capCapNombre" placeholder="Auto-completa con el DNI">
+        </div>
+        <div class="fg full">
+          <label class="lbl">Cargo / Institución</label>
+          <input type="text" id="capCapCargo" placeholder="Ej: Ing. Agrónomo · Proveedor externo">
+        </div>
+      </div>
+
+      <div class="act-row">
+        <button class="btn btn-primary" onclick="irPaso2()">Continuar → Registro de asistentes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── PASO 2: QR + lista asistentes ─── -->
+  <div id="paso2" style="display:none">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div class="card-title" style="margin:0">📷 Lector QR de fotochecks</div>
+        <button class="btn btn-gray btn-sm" onclick="volverPaso1()">← Editar datos</button>
+      </div>
+
+      <!-- Feedback -->
+      <div id="cap-feedback"></div>
+
+      <!-- Resumen actividad -->
+      <div id="cap-resumen"></div>
+
+      <!-- Lector QR -->
+      <div style="display:flex;justify-content:center;margin-bottom:14px">
+        <div id="qr-reader"></div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-bottom:16px">
+        <button class="btn btn-primary" id="btnIniciarQR" onclick="iniciarScanner()">▶ Iniciar cámara</button>
+        <button class="btn btn-gray"    id="btnDetenerQR" onclick="detenerScanner()" style="display:none">⏹ Detener</button>
+      </div>
+
+      <!-- DNI manual -->
+      <hr class="sec-sep">
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <input type="text" id="dniManual" maxlength="8" placeholder="DNI manual (si el QR no funciona)" style="flex:1" onkeydown="if(event.key==='Enter')buscarDniManual()">
+        <button class="btn btn-primary" onclick="buscarDniManual()">Buscar</button>
+      </div>
+
+      <!-- Lista asistentes -->
+      <hr class="sec-sep">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div class="card-title" style="margin:0">👷 Asistentes</div>
+        <span id="contadorAsist" style="background:#0a2463;color:#fff;border-radius:12px;padding:2px 11px;font-size:12px;font-weight:800">0</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead>
+            <tr><th>N°</th><th>DNI</th><th>Apellidos y nombres</th><th>Empresa</th><th>Cargo / Área</th><th></th></tr>
+          </thead>
+          <tbody id="tbAsistentes">
+            <tr><td colspan="6" class="empty">Sin asistentes registrados</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="act-row">
+        <button class="btn btn-green"   id="btnGuardar" onclick="guardarCapacitacion()">💾 Guardar</button>
+        <button class="btn btn-primary" id="btnPDF"     onclick="generarPDF()">📄 Generar PDF R-SC-01</button>
+        <button class="btn btn-gray"                    onclick="resetearFormulario()">🔄 Nueva capacitación</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ TAB: REGISTROS ══════════════════ -->
+<div class="tab-content" id="tab-registros">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">📋 Registros de capacitaciones</div>
+      <button class="btn btn-primary btn-sm" onclick="cargarRegistros()">🔄 Actualizar</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <select id="filtroEmpReg" onchange="cargarRegistros()" style="padding:7px 11px;border:2px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:'Barlow',sans-serif">
+        <option value="">Todas las empresas</option>
+        <option value="RAPEL">RAPEL</option>
+        <option value="VERFRUT">VERFRUT</option>
+      </select>
+    </div>
+    <div id="tbRegistrosWrap" style="overflow-x:auto">
+      <div class="empty"><div class="empty-icon">⏳</div>Cargando registros...</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ TAB: EXPORTAR ══════════════════ -->
+<div class="tab-content" id="tab-exportar">
+  <div class="card" style="max-width:560px">
+    <div class="card-title">📤 Exportar a CSV</div>
+    <div class="form-grid">
+      <div class="fg">
+        <label class="lbl">Empresa</label>
+        <select id="expEmpresa">
+          <option value="">Todas</option>
+          <option value="RAPEL">RAPEL</option>
+          <option value="VERFRUT">VERFRUT</option>
+        </select>
+      </div>
+      <div class="fg"><!-- espacio --></div>
+      <div class="fg">
+        <label class="lbl">Fecha desde</label>
+        <input type="date" id="expDesde">
+      </div>
+      <div class="fg">
+        <label class="lbl">Fecha hasta</label>
+        <input type="date" id="expHasta">
+      </div>
+    </div>
+    <div class="act-row">
+      <button class="btn btn-primary" onclick="exportarCSV()">⬇ Exportar CSV</button>
+    </div>
+    <div id="expFeedback" style="margin-top:12px;font-size:13px;color:#64748b"></div>
+  </div>
+</div>
+
+<script src="../js/capacitaciones.js"></script>
+</body>
+</html>
