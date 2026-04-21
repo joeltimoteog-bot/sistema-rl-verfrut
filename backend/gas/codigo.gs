@@ -85,6 +85,16 @@ function handle(e) {
       case 'invRegistrarEntrega':    result = invRegistrarEntrega(body);    break;
       case 'invDatosReporte':        result = invDatosReporte(body);        break;
       case 'invGuardarReporteDrive': result = invGuardarReporteDrive(body); break;
+      case 'invListarProductos':    result = invListarProductos();         break;
+      case 'invAgregarProducto':    result = invAgregarProducto(body);     break;
+      case 'invEditarProducto':     result = invEditarProducto(body);      break;
+      case 'invEliminarProducto':   result = invEliminarProducto(body);    break;
+      case 'invEditarIngreso':      result = invEditarIngreso(body);       break;
+      case 'invEliminarIngreso':    result = invEliminarIngreso(body);     break;
+      case 'invEditarArmado':       result = invEditarArmado(body);        break;
+      case 'invEliminarArmado':     result = invEliminarArmado(body);      break;
+      case 'invEditarEntrega':      result = invEditarEntrega(body);       break;
+      case 'invEliminarEntrega':    result = invEliminarEntrega(body);     break;
       default: result = { error: 'Accion no reconocida: ' + action };
     }
   } catch(err) {
@@ -2489,6 +2499,7 @@ function capExportar(p) {
 // ============================================================
 
 const INV_SHEETS = {
+  productos:    'INV_Productos',
   receta:       'INV_Receta',
   responsables: 'INV_Responsables',
   meta:         'INV_Meta',
@@ -2509,7 +2520,7 @@ function invSetup() {
     { key: 'receta',       hdr: ['producto', 'cantidad', 'unidad', 'activo'] },
     { key: 'responsables', hdr: ['nombre', 'activo'] },
     { key: 'meta',         hdr: ['meta_canastas', 'actualizado_en', 'actualizado_por'] },
-    { key: 'ingresos',     hdr: ['id', 'producto', 'cantidad', 'fecha_vencimiento', 'responsable', 'fecha_ingreso', 'usuario'] },
+    { key: 'ingresos',     hdr: ['id', 'producto', 'cantidad', 'unidad', 'fecha_venc', 'responsable', 'fecha', 'usuario'] },
     { key: 'armados',      hdr: ['id', 'cantidad', 'fecha', 'usuario'] },
     { key: 'entregas',     hdr: ['id', 'empresa', 'sector', 'cantidad', 'responsable', 'fecha', 'usuario'] }
   ];
@@ -2570,15 +2581,21 @@ function invGetAll() {
     var metaRows = sheetRows('meta');
     var meta = metaRows.length > 0 ? Number(metaRows[metaRows.length - 1][0]) : 0;
 
+    var productos = sheetRows('productos')
+      .filter(function(r) { return String(r[2]).toUpperCase() !== 'FALSE'; })
+      .map(function(r) { return { id: String(r[0]), nombre: String(r[1]) }; });
+
+    // cols: id, producto, cantidad, unidad, fecha_venc, responsable, fecha, usuario
     var ingresos = sheetRows('ingresos').map(function(r) {
       return {
-        id:                String(r[0]),
-        producto:          String(r[1]),
-        cantidad:          Number(r[2]),
-        fecha_vencimiento: r[3] ? Utilities.formatDate(new Date(r[3]), 'America/Lima', 'yyyy-MM-dd') : '',
-        responsable:       String(r[4]),
-        fecha_ingreso:     r[5] ? Utilities.formatDate(new Date(r[5]), 'America/Lima', 'yyyy-MM-dd') : '',
-        usuario:           String(r[6])
+        id:          String(r[0]),
+        producto:    String(r[1]),
+        cantidad:    Number(r[2]),
+        unidad:      String(r[3] || ''),
+        fecha_venc:  r[4] ? Utilities.formatDate(new Date(r[4]), 'America/Lima', 'yyyy-MM-dd') : '',
+        responsable: String(r[5]),
+        fecha:       r[6] ? Utilities.formatDate(new Date(r[6]), 'America/Lima', 'yyyy-MM-dd') : '',
+        usuario:     String(r[7])
       };
     });
 
@@ -2603,7 +2620,7 @@ function invGetAll() {
       };
     });
 
-    return { success: true, data: { meta: meta, receta: receta, responsables: responsables, ingresos: ingresos, armados: armados, entregas: entregas } };
+    return { success: true, data: { meta: meta, productos: productos, receta: receta, responsables: responsables, ingresos: ingresos, armados: armados, entregas: entregas } };
   } catch(e) {
     return { success: false, error: e.toString() };
   }
@@ -2612,7 +2629,7 @@ function invGetAll() {
 function invGuardarMeta(body) {
   try {
     var sh = invSheet('meta');
-    sh.appendRow([Number(body.meta), new Date().toISOString(), String(body.usuario || '')]);
+    sh.appendRow([Number(body.meta_total || body.meta || 0), new Date().toISOString(), String(body.usuario || '')]);
     return { success: true };
   } catch(e) {
     return { success: false, error: e.toString() };
@@ -2672,14 +2689,17 @@ function invRegistrarIngreso(body) {
   try {
     var sh = invSheet('ingresos');
     var id = 'ING-' + Utilities.formatDate(new Date(), 'America/Lima', 'yyyyMMdd-HHmmss');
-    var fv = body.fecha_vencimiento ? new Date(body.fecha_vencimiento + 'T12:00:00') : '';
+    var fv = (body.fecha_venc || body.fecha_vencimiento) ? new Date((body.fecha_venc || body.fecha_vencimiento) + 'T12:00:00') : '';
+    var fechaIngreso = body.fecha ? new Date(body.fecha + 'T12:00:00') : new Date();
+    // cols: id, producto, cantidad, unidad, fecha_venc, responsable, fecha, usuario
     sh.appendRow([
       id,
       String(body.producto),
       Number(body.cantidad),
+      String(body.unidad || ''),
       fv,
       String(body.responsable || ''),
-      new Date(),
+      fechaIngreso,
       String(body.usuario || '')
     ]);
     return { success: true, id: id };
@@ -2760,6 +2780,315 @@ function invGuardarReporteDrive(body) {
     var file    = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return { success: true, url: file.getUrl(), id: file.getId() };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+
+// ── Catálogo de productos (INV_Productos) ──
+// Cols: ID, NOMBRE, ACTIVO, CREADO, CREADO_POR
+
+function invSetupCatalogo() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var sh = ss.getSheetByName(INV_SHEETS['productos']);
+  if (!sh) {
+    sh = ss.insertSheet(INV_SHEETS['productos']);
+    sh.appendRow(['id', 'nombre', 'activo', 'creado', 'creado_por']);
+    sh.getRange(1, 1, 1, 5).setFontWeight('bold');
+  }
+  var productos = [
+    'Arroz', 'Menestra', 'Azúcar', 'Gaseosa', 'Galleta',
+    'Chocolate', 'Panetón', 'Fideo', 'Fideo canuto',
+    'Avena', 'Leche', 'Aceite', 'Galleta vainilla'
+  ];
+  var existentes = sh.getLastRow() > 1
+    ? sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().map(function(r) { return String(r[1]).trim().toLowerCase(); })
+    : [];
+  productos.forEach(function(n) {
+    if (existentes.indexOf(n.toLowerCase()) === -1) {
+      var id = 'PROD-' + Utilities.formatDate(new Date(), 'America/Lima', 'yyyyMMddHHmmss') + '-' + Math.floor(Math.random()*1000);
+      sh.appendRow([id, n, 'TRUE', new Date().toISOString(), 'setup']);
+      Utilities.sleep(50);
+    }
+  });
+  return { success: true, msg: 'invSetupCatalogo completado' };
+}
+
+function invListarProductos() {
+  try {
+    var sh = invSheet('productos');
+    if (!sh || sh.getLastRow() < 2) return { success: true, data: [] };
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 5).getValues();
+    var data = rows.map(function(r) {
+      return { id: String(r[0]), nombre: String(r[1]), activo: String(r[2]).toUpperCase() !== 'FALSE' };
+    });
+    return { success: true, data: data };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invAgregarProducto(body) {
+  try {
+    var sh     = invSheet('productos');
+    var nombre = String(body.nombre || '').trim();
+    if (!nombre) return { success: false, error: 'Nombre requerido' };
+    var existentes = sh.getLastRow() > 1
+      ? sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues().map(function(r) { return String(r[1]).trim().toLowerCase(); })
+      : [];
+    if (existentes.indexOf(nombre.toLowerCase()) !== -1) return { success: false, error: 'Producto ya existe' };
+    var id = 'PROD-' + Utilities.formatDate(new Date(), 'America/Lima', 'yyyyMMddHHmmss');
+    sh.appendRow([id, nombre, 'TRUE', new Date().toISOString(), String(body.usuario || '')]);
+    return { success: true, id: id };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invEditarProducto(body) {
+  try {
+    var sh     = invSheet('productos');
+    var id     = String(body.id || '');
+    var nombre = String(body.nombre || '').trim();
+    if (!id || !nombre) return { success: false, error: 'id y nombre requeridos' };
+    if (sh.getLastRow() < 2) return { success: false, error: 'Sin productos' };
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 2).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === id) {
+        sh.getRange(i + 2, 2).setValue(nombre);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Producto no encontrado' };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invEliminarProducto(body) {
+  try {
+    var sh = invSheet('productos');
+    var id = String(body.id || '');
+    if (!id) return { success: false, error: 'id requerido' };
+    if (sh.getLastRow() < 2) return { success: false, error: 'Sin productos' };
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === id) {
+        sh.getRange(i + 2, 3).setValue('FALSE');
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Producto no encontrado' };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+// ── Editar / eliminar Ingresos ──
+// cols: id(0), producto(1), cantidad(2), unidad(3), fecha_venc(4), responsable(5), fecha(6), usuario(7)
+
+function invEditarIngreso(body) {
+  try {
+    var sh = invSheet('ingresos');
+    var id = String(body.id || '');
+    if (!id) return { success: false, error: 'id requerido' };
+    if (sh.getLastRow() < 2) return { success: false, error: 'Sin ingresos' };
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 8).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === id) {
+        var fv   = body.fecha_venc ? new Date(body.fecha_venc + 'T12:00:00') : rows[i][4];
+        var fing = body.fecha      ? new Date(body.fecha + 'T12:00:00')      : rows[i][6];
+        sh.getRange(i + 2, 2).setValue(String(body.producto   || rows[i][1]));
+        sh.getRange(i + 2, 3).setValue(Number(body.cantidad  !== undefined ? body.cantidad : rows[i][2]));
+        sh.getRange(i + 2, 4).setValue(String(body.unidad    || rows[i][3]));
+        sh.getRange(i + 2, 5).setValue(fv);
+        sh.getRange(i + 2, 6).setValue(String(body.responsable || rows[i][5]));
+        sh.getRange(i + 2, 7).setValue(fing);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Ingreso no encontrado' };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invEliminarIngreso(body) {
+  try {
+    var sh = invSheet('ingresos');
+    var id = String(body.id || '');
+    if (!id) return { success: false, error: 'id requerido' };
+    if (sh.getLastRow() < 2) return { success: false, error: 'Sin ingresos' };
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === id) {
+        sh.deleteRow(i + 2);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Ingreso no encontrado' };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+// ── Editar / eliminar Armados ──
+// Helpers para validar stock
+
+function _invTotalesActuales(ss) {
+  function shRows(name) {
+    var sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 2) return [];
+    return sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+  }
+  var recetaRows = shRows(INV_SHEETS['receta']).filter(function(r) { return String(r[3]).toUpperCase() !== 'FALSE'; });
+  var receta = recetaRows.map(function(r) { return { producto: String(r[0]), cantidad: Number(r[1]) }; });
+
+  var ingPorProd = {};
+  shRows(INV_SHEETS['ingresos']).forEach(function(r) {
+    var k = String(r[1]); ingPorProd[k] = (ingPorProd[k] || 0) + Number(r[2]);
+  });
+
+  var totalArmadas = 0;
+  shRows(INV_SHEETS['armados']).forEach(function(r) { totalArmadas += Number(r[1]); });
+
+  var totalEntregadas = 0;
+  shRows(INV_SHEETS['entregas']).forEach(function(r) { totalEntregadas += Number(r[3]); });
+
+  return { receta: receta, ingPorProd: ingPorProd, totalArmadas: totalArmadas, totalEntregadas: totalEntregadas };
+}
+
+function _invStockValido(t, nuevasArmadas) {
+  // Devuelve true si con nuevasArmadas el stock de todos los productos es >= 0
+  for (var i = 0; i < t.receta.length; i++) {
+    var r    = t.receta[i];
+    var ing  = t.ingPorProd[r.producto] || 0;
+    var cons = nuevasArmadas * r.cantidad;
+    if (ing - cons < 0) return false;
+  }
+  return true;
+}
+
+function invEditarArmado(body) {
+  try {
+    var sh  = invSheet('armados');
+    var id  = String(body.id || '');
+    var nuevaCant = Number(body.cantidad);
+    if (!id) return { success: false, error: 'id requerido' };
+    if (isNaN(nuevaCant) || nuevaCant < 0) return { success: false, error: 'cantidad inválida' };
+    if (sh.getLastRow() < 2) return { success: false, error: 'Sin armados' };
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+    var idx  = -1;
+    var oldCant = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === id) { idx = i; oldCant = Number(rows[i][1]); break; }
+    }
+    if (idx === -1) return { success: false, error: 'Armado no encontrado' };
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var t  = _invTotalesActuales(ss);
+    var nuevasTotales = t.totalArmadas - oldCant + nuevaCant;
+
+    // Si aumenta: validar stock
+    if (nuevaCant > oldCant && !_invStockValido(t, nuevasTotales)) {
+      return { success: false, error: 'Stock insuficiente para aumentar la cantidad' };
+    }
+    // Si reduce: no dejar disponibles negativos (armadas >= entregadas)
+    if (nuevaCant < oldCant && nuevasTotales < t.totalEntregadas) {
+      return { success: false, error: 'No se puede reducir: ya se entregaron ' + t.totalEntregadas + ' canastas' };
+    }
+
+    var fecha = body.fecha ? new Date(body.fecha + 'T12:00:00') : rows[idx][2];
+    sh.getRange(idx + 2, 2).setValue(nuevaCant);
+    sh.getRange(idx + 2, 3).setValue(fecha);
+    return { success: true };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invEliminarArmado(body) {
+  try {
+    var sh = invSheet('armados');
+    var id = String(body.id || '');
+    if (!id) return { success: false, error: 'id requerido' };
+    if (sh.getLastRow() < 2) return { success: false, error: 'Sin armados' };
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+    var idx     = -1;
+    var oldCant = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === id) { idx = i; oldCant = Number(rows[i][1]); break; }
+    }
+    if (idx === -1) return { success: false, error: 'Armado no encontrado' };
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var t  = _invTotalesActuales(ss);
+    var nuevasTotales = t.totalArmadas - oldCant;
+    if (nuevasTotales < t.totalEntregadas) {
+      return { success: false, error: 'No se puede eliminar: quedarían disponibles negativos (entregadas: ' + t.totalEntregadas + ')' };
+    }
+
+    sh.deleteRow(idx + 2);
+    return { success: true };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+// ── Editar / eliminar Entregas ──
+
+function invEditarEntrega(body) {
+  try {
+    var sh = invSheet('entregas');
+    var id = String(body.id || '');
+    var nuevaCant = Number(body.cantidad);
+    if (!id) return { success: false, error: 'id requerido' };
+    if (isNaN(nuevaCant) || nuevaCant < 0) return { success: false, error: 'cantidad inválida' };
+    if (sh.getLastRow() < 2) return { success: false, error: 'Sin entregas' };
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 7).getValues();
+    var idx     = -1;
+    var oldCant = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === id) { idx = i; oldCant = Number(rows[i][3]); break; }
+    }
+    if (idx === -1) return { success: false, error: 'Entrega no encontrada' };
+
+    if (nuevaCant > oldCant) {
+      var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+      var t  = _invTotalesActuales(ss);
+      var disponibles = t.totalArmadas - t.totalEntregadas + oldCant - nuevaCant;
+      if (disponibles < 0) {
+        return { success: false, error: 'Solo hay ' + (t.totalArmadas - t.totalEntregadas + oldCant) + ' disponibles para asignar' };
+      }
+    }
+
+    var fecha = body.fecha ? new Date(body.fecha + 'T12:00:00') : rows[idx][5];
+    sh.getRange(idx + 2, 2).setValue(String(body.empresa    || rows[idx][1]).toUpperCase());
+    sh.getRange(idx + 2, 3).setValue(String(body.sector     || rows[idx][2]));
+    sh.getRange(idx + 2, 4).setValue(nuevaCant);
+    sh.getRange(idx + 2, 5).setValue(String(body.responsable || rows[idx][4]));
+    sh.getRange(idx + 2, 6).setValue(fecha);
+    return { success: true };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invEliminarEntrega(body) {
+  try {
+    var sh = invSheet('entregas');
+    var id = String(body.id || '');
+    if (!id) return { success: false, error: 'id requerido' };
+    if (sh.getLastRow() < 2) return { success: false, error: 'Sin entregas' };
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() === id) {
+        sh.deleteRow(i + 2);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Entrega no encontrada' };
   } catch(e) {
     return { success: false, error: e.toString() };
   }

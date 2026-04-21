@@ -118,6 +118,18 @@
     .row-warn td { background: #fefce8 !important; }
     .row-err  td { background: #fef2f2 !important; }
 
+    /* ── Action buttons in tables ── */
+    .btn-tbl { padding: 3px 8px; font-size: 11px; border: none; border-radius: 5px; cursor: pointer; font-weight: 700; transition: opacity .15s; }
+    .btn-tbl:hover { opacity: .75; }
+    .btn-edit { background: #dbeafe; color: #1e40af; }
+    .btn-del  { background: #fee2e2; color: #dc2626; }
+
+    /* ── Modal overlay ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .modal-box { background: #fff; border-radius: 14px; padding: 24px; width: 100%; max-width: 480px; box-shadow: 0 8px 32px rgba(0,0,0,.22); }
+    .modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 800; color: #0a2463; margin-bottom: 18px; text-transform: uppercase; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
     @media (max-width: 480px) {
       .topbar-title { font-size: 14px; }
       .tab-btn { padding: 11px 10px; font-size: 11px; }
@@ -143,6 +155,7 @@
   <button class="tab-btn"    onclick="showTab('armar',this)">🧺 Armar</button>
   <button class="tab-btn"    onclick="showTab('entregar',this)">🚚 Entregar</button>
   <button class="tab-btn"    onclick="showTab('reportes',this)">📄 Reportes</button>
+  <button class="tab-btn"    onclick="showTab('productos',this)">📋 Productos</button>
   <button class="tab-btn"    onclick="showTab('config',this)">⚙️ Config</button>
 </div>
 
@@ -216,8 +229,8 @@
     <div class="grid2">
       <div class="fg full">
         <label class="lbl">Producto *</label>
-        <select id="ingProducto">
-          <option value="">Seleccionar producto de la receta...</option>
+        <select id="ingProducto" onchange="ingProductoCambia()">
+          <option value="">Seleccionar producto...</option>
         </select>
       </div>
       <div class="fg">
@@ -225,8 +238,8 @@
         <input type="number" id="ingCantidad" min="1" step="0.01" placeholder="0">
       </div>
       <div class="fg">
-        <label class="lbl">Unidad</label>
-        <input type="text" id="ingUnidad" placeholder="kg, L, unid..." readonly style="background:#f8fafc;color:#64748b">
+        <label class="lbl">Unidad *</label>
+        <input type="text" id="ingUnidad" placeholder="kg, L, unid...">
       </div>
       <div class="fg">
         <label class="lbl">Fecha de vencimiento *</label>
@@ -253,8 +266,8 @@
     <div class="card-title">📋 Historial de ingresos</div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Vence</th><th>Responsable</th></tr></thead>
-        <tbody id="tbIngresos"><tr><td colspan="5" class="empty">Sin ingresos</td></tr></tbody>
+        <thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Vence</th><th>Responsable</th><th></th></tr></thead>
+        <tbody id="tbIngresos"><tr><td colspan="6" class="empty">Sin ingresos</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -303,8 +316,8 @@
     <div class="card-title">📋 Historial de armados</div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Fecha</th><th>Cantidad</th><th>Usuario</th></tr></thead>
-        <tbody id="tbArmados"><tr><td colspan="3" class="empty">Sin armados</td></tr></tbody>
+        <thead><tr><th>Fecha</th><th>Cantidad</th><th>Usuario</th><th></th></tr></thead>
+        <tbody id="tbArmados"><tr><td colspan="4" class="empty">Sin armados</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -365,6 +378,17 @@
       </table>
     </div>
   </div>
+
+  <!-- Historial entregas -->
+  <div class="card">
+    <div class="card-title">📋 Historial de entregas</div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Fecha</th><th>Empresa</th><th>Sector</th><th>Cant.</th><th>Responsable</th><th></th></tr></thead>
+        <tbody id="tbEntregas"><tr><td colspan="6" class="empty">Sin entregas</td></tr></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════ TAB: REPORTES ══════════ -->
@@ -405,6 +429,27 @@
   </div>
 </div>
 
+<!-- ══════════ TAB: PRODUCTOS (CATÁLOGO) ══════════ -->
+<div class="tab-content" id="tab-productos">
+  <div class="card">
+    <div class="card-title">📋 Catálogo de productos</div>
+    <div id="alProductos"></div>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px">
+      <div class="fg" style="flex:1;min-width:200px">
+        <label class="lbl">Nombre del producto *</label>
+        <input type="text" id="cfgProdNombre" placeholder="Ej: Arroz, Aceite...">
+      </div>
+      <button class="btn btn-green" onclick="agregarProductoCatalogo()">➕ Agregar</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Producto</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tbProductos"><tr><td colspan="3" class="empty">⏳ Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════ TAB: CONFIGURACIÓN ══════════ -->
 <div class="tab-content" id="tab-config">
 
@@ -427,7 +472,9 @@
     <div class="grid3" style="margin-bottom:12px">
       <div class="fg">
         <label class="lbl">Producto *</label>
-        <input type="text" id="cfgProd" placeholder="Ej: Arroz, Aceite, Azúcar...">
+        <select id="cfgProd">
+          <option value="">Seleccionar del catálogo...</option>
+        </select>
       </div>
       <div class="fg">
         <label class="lbl">Cantidad *</label>
@@ -438,7 +485,7 @@
         <input type="text" id="cfgUnid" placeholder="kg, L, unid, bolsa...">
       </div>
     </div>
-    <button class="btn btn-green btn-sm" onclick="agregarProductoReceta()">➕ Agregar producto</button>
+    <button class="btn btn-green btn-sm" onclick="agregarProductoReceta()">➕ Agregar a receta</button>
     <div class="tbl-wrap" style="margin-top:14px">
       <table class="tbl">
         <thead><tr><th>Producto</th><th>Cantidad</th><th>Unidad</th><th></th></tr></thead>
@@ -465,6 +512,36 @@
     </div>
   </div>
 
+</div>
+
+<!-- ══════════ MODAL EDITAR ══════════ -->
+<div class="modal-overlay" id="modalEdit" style="display:none" onclick="cerrarModal(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-title" id="modalTitle">Editar</div>
+    <div id="modalForm"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="modalBtnGuardar" onclick="confirmarEditar()">💾 Guardar cambios</button>
+      <button class="btn btn-gray" onclick="cerrarModal()">✕ Cancelar</button>
+    </div>
+    <div id="modalAlert" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL EDITAR PRODUCTO ══════════ -->
+<div class="modal-overlay" id="modalProd" style="display:none" onclick="cerrarModalProd(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-title">✏️ Editar producto</div>
+    <div class="fg" style="margin-bottom:8px">
+      <label class="lbl">Nombre *</label>
+      <input type="text" id="modalProdNombre">
+    </div>
+    <input type="hidden" id="modalProdId">
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="confirmarEditarProducto()">💾 Guardar</button>
+      <button class="btn btn-gray" onclick="cerrarModalProd()">✕ Cancelar</button>
+    </div>
+    <div id="modalProdAlert" style="margin-top:12px"></div>
+  </div>
 </div>
 
 <script src="../js/inventario.js"></script>
