@@ -454,9 +454,9 @@ async function generarPDF() {
         },
         alternateRowStyles: { fillColor: [252, 252, 252] },
         didParseCell: d => {
-          if (d.section === 'body' && [1, 2, 3].includes(d.column.index)) {
+          if (d.section === 'body') {
             const val = String(d.cell.raw || '').trim();
-            d.cell.styles.textColor = val ? ROJO : [220, 220, 220];
+            d.cell.styles.textColor = val ? [0, 0, 0] : [200, 200, 200];
           }
         }
       });
@@ -518,15 +518,16 @@ async function generarPDF() {
   }
 }
 
-// Encabezado de sección (banda gris oscuro con texto blanco)
+// Encabezado de sección (banda gris oscuro con texto blanco, reset a negro al terminar)
 function _secHeader(doc, mg, y, W, texto) {
   doc.setFillColor(127, 127, 127);
   doc.rect(mg, y, W - 2 * mg, 6, 'F');
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(255, 255, 255);
   doc.text(texto, mg + 4, y + 4.2);
+  doc.setTextColor(0, 0, 0); // reset a negro
 }
 
-// Campo de datos: etiqueta en negro negrita, valor en rojo Unifrutti
+// Campo de datos: etiqueta en negro negrita, valor en rojo Unifrutti, reset a negro al terminar
 function _campo(doc, x, y, w, h, label, valor, sombreado) {
   doc.setFillColor(sombreado ? 240 : 255, sombreado ? 244 : 255, sombreado ? 248 : 255);
   doc.setDrawColor(200, 200, 200); doc.setLineWidth(0.2);
@@ -535,29 +536,36 @@ function _campo(doc, x, y, w, h, label, valor, sombreado) {
   doc.text(label, x + 1.5, y + 2.5);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(217, 31, 38);
   doc.text(String(valor || ''), x + 1.5, y + 5.8, { maxWidth: w - 3 });
+  doc.setTextColor(0, 0, 0); // reset a negro
 }
 
-// Cargar logo Unifrutti como base64 (fetch → canvas fallback)
-async function _getLogoBase64() {
+// Cargar logo Unifrutti como base64 (Image.onload con canvas — evita CORS de fetch)
+function _getLogoBase64() {
   const RUTAS = [
-    '../imagen/logo-unifrutti.jpg',
-    '/sistema-rl-verfrut/frontend/imagen/logo-unifrutti.jpg',
-    'https://joeltimoteog-bot.github.io/sistema-rl-verfrut/frontend/imagen/logo-unifrutti.jpg'
+    '../images/logo-unifrutti.jpg',
+    '/sistema-rl-verfrut/frontend/images/logo-unifrutti.jpg',
+    'https://joeltimoteog-bot.github.io/sistema-rl-verfrut/frontend/images/logo-unifrutti.jpg'
   ];
-  for (const ruta of RUTAS) {
-    try {
-      const res = await fetch(ruta);
-      if (!res.ok) continue;
-      const blob = await res.blob();
-      return await new Promise(resolve => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror   = () => resolve(null);
-        reader.readAsDataURL(blob);
-      });
-    } catch(e) { /* siguiente ruta */ }
-  }
-  return null;
+  return new Promise(resolve => {
+    let idx = 0;
+    function intentar() {
+      if (idx >= RUTAS.length) { resolve(null); return; }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function() {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width  = this.naturalWidth  || this.width;
+          canvas.height = this.naturalHeight || this.height;
+          canvas.getContext('2d').drawImage(this, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg', 0.95));
+        } catch(e) { idx++; intentar(); }
+      };
+      img.onerror = () => { idx++; intentar(); };
+      img.src = RUTAS[idx];
+    }
+    intentar();
+  });
 }
 
 /* ─────────────────────── REGISTROS ─────────────────────── */
