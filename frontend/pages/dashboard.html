@@ -1018,6 +1018,15 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
           ❓ Documento no encontrado — ➕ Agregar nuevo documento
         </button>
       </div>
+      <div id="at_cg_panel" style="display:none;margin-top:8px;padding:10px 14px;background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px">
+        <p style="font-size:11px;font-weight:700;color:#1d4ed8;margin:0 0 8px;text-transform:uppercase;letter-spacing:.5px">¿La consulta fue realizada…?</p>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:7px;font-size:12px;font-weight:600">
+          <input type="radio" name="at_cg_tipo" value="EN OFICINA" onchange="_selCGTipo(this.value)"> 🏢 Atención en oficina
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:600">
+          <input type="radio" name="at_cg_tipo" value="VÍA TELEFÓNICA" onchange="_selCGTipo(this.value)"> 📞 Atención vía telefónica
+        </label>
+      </div>
       <div id="at_doc_manual_form" style="display:none;margin-top:8px;padding:12px;background:#f8fafc;border:1.5px solid var(--bd);border-radius:8px">
         <div style="display:grid;grid-template-columns:120px 1fr;gap:8px;margin-bottom:8px">
           <div><label style="font-size:10px;font-weight:700;color:var(--azul);letter-spacing:1px;text-transform:uppercase">Código</label>
@@ -4145,6 +4154,8 @@ function abrirAt() {
   _closeAtDocDd();
   const _mb = document.getElementById('at_doc_manual_btn'); if(_mb) _mb.style.display='none';
   const _mf = document.getElementById('at_doc_manual_form'); if(_mf) _mf.style.display='none';
+  const _cp = document.getElementById('at_cg_panel'); if(_cp) _cp.style.display='none';
+  document.querySelectorAll('input[name="at_cg_tipo"]').forEach(r=>r.checked=false);
   _setRespMode('auto');
   // Auto-rellenar fundo actual del supervisor
   if (USER.fundoHoy) sv('at_fac', USER.fundoHoy);
@@ -5314,7 +5325,9 @@ const DOC_RESP = {
   '32 NUMERO DE CUENTA': 'ROSS MERY',
   '33 ELECCION DE SISTEMA PENSIONARIO': 'ELIZBETH DIOSES',
   '34 LICENCIA POR MATERNIDAD': 'ALBERT PACHERRE',
-  'CONSULTAS GENERALES': 'ALBERT PACHERRE'
+  'CONSULTAS GENERALES': 'ALBERT PACHERRE',
+  'CONSULTAS GENERALES - EN OFICINA': 'ALBERT PACHERRE',
+  'CONSULTAS GENERALES - VÍA TELEFÓNICA': 'ALBERT PACHERRE'
 };
 
 // ════════════════════════════════════════════════════════════════
@@ -5465,12 +5478,26 @@ function _highlightAtDocItem(items) {
 }
 
 function _selectAtDoc(val) {
-  sv('at_doc', val);
   const txt = document.getElementById('at_doc_txt'); if(txt) txt.value = val;
   _closeAtDocDd();
   const mb = document.getElementById('at_doc_manual_btn'); if(mb) mb.style.display = 'none';
   const mf = document.getElementById('at_doc_manual_form'); if(mf) mf.style.display = 'none';
+  const cp = document.getElementById('at_cg_panel');
+  document.querySelectorAll('input[name="at_cg_tipo"]').forEach(r=>r.checked=false);
+  if (val === 'CONSULTAS GENERALES') {
+    sv('at_doc', '');  // vacío hasta elegir tipo
+    if (cp) cp.style.display = 'block';
+    autoResponsable();
+    return;
+  }
+  if (cp) cp.style.display = 'none';
+  sv('at_doc', val);
   autoResponsable();   // REGLA CLAVE: llena responsable automáticamente
+  setTimeout(() => { const el = document.getElementById('at_fid'); if(el) el.focus(); }, 40);
+}
+
+function _selCGTipo(tipo) {
+  sv('at_doc', 'CONSULTAS GENERALES - ' + tipo);
   setTimeout(() => { const el = document.getElementById('at_fid'); if(el) el.focus(); }, 40);
 }
 
