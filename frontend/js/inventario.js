@@ -70,9 +70,18 @@ async function cargarDatos() {
     const d = await apiGet({ action: 'invGetAll' });
     if (!d.success) throw new Error(d.error || 'Error al cargar datos');
     DATA = d.data;
-    // Compatibilidad: 'armados' puede llegar como 'armadas'
+    if (!DATA || typeof DATA !== 'object') throw new Error('El backend no devolvió datos válidos. Verifica que el Web App esté desplegado y tenga la versión actualizada.');
+    // Compatibilidad: backend puede devolver 'armados' o 'armadas'
     if (!DATA.armadas && DATA.armados) DATA.armadas = DATA.armados;
     if (!DATA.armados && DATA.armadas) DATA.armados  = DATA.armadas;
+    // Garantizar arrays aunque vengan vacíos
+    DATA.productos  = DATA.productos  || [];
+    DATA.receta     = DATA.receta     || [];
+    DATA.ingresos   = DATA.ingresos   || [];
+    DATA.armadas    = DATA.armadas    || [];
+    DATA.armados    = DATA.armados    || [];
+    DATA.entregas   = DATA.entregas   || [];
+    DATA.responsables = DATA.responsables || [];
     calcular();
     renderAll();
   } catch(e) {
