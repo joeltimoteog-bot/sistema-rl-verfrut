@@ -331,8 +331,8 @@ async function generarPDF() {
       doc.setDrawColor(180, 180, 180); doc.setLineWidth(0.3);
       doc.rect(mg, y, bW, hdrH);
 
-      // Logo proporcional 45×15mm (ratio 3:1)
-      if (logoB64) { try { doc.addImage(logoB64, 'JPEG', mg + 2.5, y + 7.5, 45, 15); } catch(e) {} }
+      // Logo 35×18mm (ratio ~2:1, proporción Unifrutti)
+      if (logoB64) { try { doc.addImage(logoB64, 'JPEG', mg + 2.5, y + 6, 35, 18); } catch(e) {} }
       doc.setDrawColor(180, 180, 180);
       doc.line(mg + logoColW, y, mg + logoColW, y + hdrH);
 
@@ -537,23 +537,27 @@ function _campo(doc, x, y, w, h, label, valor, sombreado) {
   doc.text(String(valor || ''), x + 1.5, y + 5.8, { maxWidth: w - 3 });
 }
 
-// Cargar logo como base64 desde la imagen local
+// Cargar logo Unifrutti como base64 (fetch → canvas fallback)
 async function _getLogoBase64() {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const c = document.createElement('canvas');
-        c.width = img.naturalWidth || img.width;
-        c.height = img.naturalHeight || img.height;
-        c.getContext('2d').drawImage(img, 0, 0);
-        resolve(c.toDataURL('image/jpeg'));
-      } catch(e) { resolve(null); }
-    };
-    img.onerror = () => resolve(null);
-    img.src = '../images/logo-unifrutti.jpg';
-  });
+  const RUTAS = [
+    '../imagen/logo-unifrutti.jpg',
+    '/sistema-rl-verfrut/frontend/imagen/logo-unifrutti.jpg',
+    'https://joeltimoteog-bot.github.io/sistema-rl-verfrut/frontend/imagen/logo-unifrutti.jpg'
+  ];
+  for (const ruta of RUTAS) {
+    try {
+      const res = await fetch(ruta);
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      return await new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror   = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch(e) { /* siguiente ruta */ }
+  }
+  return null;
 }
 
 /* ─────────────────────── REGISTROS ─────────────────────── */
