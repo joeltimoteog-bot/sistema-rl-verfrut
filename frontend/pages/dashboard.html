@@ -344,7 +344,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
       <div class="card">
         <div class="card-h"><span class="card-t">Buscar Trabajador en Base de Datos</span></div>
         <div class="filtros">
-          <input class="fi" id="fTQ" placeholder="🔍 Ingresa DNI o nombre completo..." style="flex:2">
+          <input class="fi" id="fTQ" placeholder="🔍 Ingresa DNI o nombre completo..." style="flex:2" onkeydown="if(event.key==='Enter') buscarTrab()">
           <select class="fi" id="fTE"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
           <button class="btn-bus" onclick="buscarTrab()">🔍 Buscar</button>
         </div>
@@ -4166,6 +4166,11 @@ function abrirAt() {
   abrir('mAt');
   // Focus en DNI para captura rápida de siguiente trabajador
   setTimeout(()=>{ const el=document.getElementById('at_dni'); if(el) el.focus(); }, 120);
+  // Warm-up del backend: pre-calentar caché de buscarTrabajador (solo primera vez por sesión)
+  if (!window._busqWarmupHecho) {
+    window._busqWarmupHecho = true;
+    apiGet({action:'buscarTrabajador', q:'a', empresa:'AMBAS'}).catch(()=>{});
+  }
 }
 
 function editarAt(nro) {
@@ -4435,11 +4440,14 @@ function _renderTrabRows(lista) {
 }
 
 // BUSCAR TRABAJADOR
+const _busqQueryCache = new Map(); // cache por query text → resultados API
+
 async function buscarTrab() {
   const q=v('fTQ').trim(), emp=v('fTE');
   if(q.length<2){mostrarToast('❌ Ingresa al menos 2 caracteres','error');return;}
   const tb = document.getElementById('tbTrab');
   const qL = q.toLowerCase();
+  const cacheKey = q.toLowerCase() + '|' + (emp||'AMBAS');
   // Buscar local: primero en _indiceTrabs (DNI exacto o nombre parcial)
   const cache = window._trabajadoresCache || {};
   let locales = [];
@@ -4467,7 +4475,13 @@ async function buscarTrab() {
     }
     return;
   }
-  // Sin resultados locales: llamar API
+  // Sin resultados locales: revisar cache de query
+  if (_busqQueryCache.has(cacheKey)) {
+    console.log('[buscarTrab] query-cache hit:', cacheKey);
+    tb.innerHTML = _renderTrabRows(_busqQueryCache.get(cacheKey));
+    return;
+  }
+  // Llamar API
   tb.innerHTML='<tr><td colspan="13" class="empty">🔍 Buscando...</td></tr>';
   console.log('[buscarTrab] sin cache local — API q:', q, '| empresa:', emp||'AMBAS');
   try{
@@ -4476,6 +4490,7 @@ async function buscarTrab() {
     if(!window._trabajadoresCache) window._trabajadoresCache={};
     if(!window._indiceTrabs) window._indiceTrabs={};
     d.data.forEach(t=>{ if(t.dni){ window._trabajadoresCache[String(t.dni).trim()]=t; window._indiceTrabs[String(t.dni).trim()]=t; }});
+    _busqQueryCache.set(cacheKey, d.data);
     tb.innerHTML = _renderTrabRows(d.data);
   }catch(e){
     console.error('[buscarTrab] Error:', e);
@@ -4546,11 +4561,11 @@ async function buscarDni(dni) {
     if(spin) spin.style.display = 'none';
     return;
   }
-  // 7 dígitos → debounce corto (evita llamadas innecesarias)
+  // 7 dígitos → debounce (evita llamadas innecesarias mientras se sigue escribiendo)
   const inp = document.getElementById('at_dni');
   inp.style.borderColor = '#3b82f6';
   inp.style.boxShadow = '0 0 0 2px #bfdbfe';
-  dniTO = setTimeout(() => buscarDniBtn(), 150);
+  dniTO = setTimeout(() => buscarDniBtn(), 300);
 }
 
 async function buscarDniBtn() {
