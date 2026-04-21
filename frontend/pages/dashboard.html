@@ -5669,23 +5669,46 @@ function getCCFinal() {
 function _fbAplicarEstadisticasFirebase(fbData) {
   if (!fbData) return;
   _fbEstadisticas = fbData;
-  window._fbEstadisticas = fbData; // BUG1: exponer en window para acceso desde cargarStats y dibujar
+  window._fbEstadisticas = fbData;
   const rg = fbData.resumen_global;
   if (!rg) return;
-  // BUG4: log de valores antes de aplicar para diagnóstico
-  console.log('[Firebase] resumen_global recibido → hoy:', rg.hoy, '| este_mes:', rg.este_mes, '| en_proceso:', rg.en_proceso, '| finalizados:', rg.finalizados, '| total:', rg.total);
-  // Actualizar las 5 tarjetas principales (siempre, sin condición de caché local)
+
   const _fbSet = (id, val) => {
-    if (val !== undefined) {
-      if (!document.getElementById(id)) { console.warn('[Firebase] Elemento DOM no encontrado: #' + id); return; }
-      countUp(id, val);
+    if (val !== undefined && val !== null) {
+      const el = document.getElementById(id);
+      if (el) countUp(id, val);
     }
   };
-  _fbSet('sH', rg.hoy);         // hoy         → resumen_global.hoy
-  _fbSet('sM', rg.este_mes);    // este mes    → resumen_global.este_mes
-  _fbSet('sP', rg.en_proceso);  // en proceso  → resumen_global.en_proceso
-  _fbSet('sF', rg.finalizados); // finalizados → resumen_global.finalizados
-  _fbSet('sA', rg.total);       // total año   → resumen_global.total
+
+  // Supervisores: usar sus stats personales de por_supervisor en vez de resumen_global
+  const _esSup = USER && !ROLES_VER_TODO.includes(USER.rol) && (USER.rol || '').toLowerCase() === 'supervisor';
+  if (_esSup) {
+    const _supKey = (USER.usuario || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    const supStats = fbData.por_supervisor && _supKey ? fbData.por_supervisor[_supKey] : null;
+    if (supStats) {
+      console.log('[Firebase] supervisor', _supKey, '→ total:', supStats.total, '| este_mes:', supStats.este_mes);
+      _fbSet('sA', supStats.total);
+      _fbSet('sM', supStats.este_mes);
+      _fbSet('sP', supStats.en_proceso);
+      _fbSet('sF', supStats.finalizados);
+      // hoy: no viene en por_supervisor, usar incremento DOM directo (ya manejado en guardarAt)
+    }
+    // Actualizar badge y timestamp también para supervisores
+    const tsEl = document.getElementById('fbActualizadoHace');
+    if (tsEl && rg.ultima_actualizacion) {
+      const segs = Math.round((Date.now() - rg.ultima_actualizacion) / 1000);
+      tsEl.textContent = 'actualizado ' + (segs < 60 ? segs + 's' : Math.round(segs/60) + ' min') + ' atrás';
+    }
+    return; // supervisores no ven widgets globales (ranking, empresa, tendencia)
+  }
+
+  // Admin/coordinador: usar resumen_global
+  console.log('[Firebase] resumen_global → hoy:', rg.hoy, '| este_mes:', rg.este_mes, '| en_proceso:', rg.en_proceso, '| total:', rg.total);
+  _fbSet('sH', rg.hoy);
+  _fbSet('sM', rg.este_mes);
+  _fbSet('sP', rg.en_proceso);
+  _fbSet('sF', rg.finalizados);
+  _fbSet('sA', rg.total);
   // Flechas ↑↓, barras de progreso y comparativa mes anterior
   _fbIndicadoresYComparativa(rg, fbData.por_mes);
   // Mostrar panel en vivo

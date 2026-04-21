@@ -362,7 +362,8 @@ function saveAtencion(d) {
     new Date(),
     d.usuario_sistema || ''
   ]);
-  // Firebase se actualiza vía trigger programado cada 5 min (no bloquear la respuesta)
+  // Actualización incremental de Firebase (GET+PATCH, ~500ms, no lee hojas)
+  try { actualizarFirebaseRapido(d); } catch(e) { console.warn('[Firebase] incremento falló:', e.message); }
   return { success: true, nro: nro, hoja: nombreHoja };
 }
 // ============================================================
@@ -902,6 +903,74 @@ function _fbPatchEstadisticas(stats) {
     }
   } catch(e) {
     console.error('[Firebase] Error en _fbPatchEstadisticas:', e.message);
+  }
+}
+
+// Actualización incremental rápida de Firebase (GET + PATCH, sin leer hojas)
+// Llamada desde saveAtencion después de guardar la fila.
+function actualizarFirebaseRapido(d) {
+  var secret = PropertiesService.getScriptProperties().getProperty('FIREBASE_DB_SECRET');
+  if (!secret) { console.warn('[actualizarFirebaseRapido] FIREBASE_DB_SECRET no configurado'); return; }
+
+  var now        = new Date();
+  var hoyStr     = Utilities.formatDate(now, 'GMT-5', 'yyyy-MM-dd');
+  var mesActual  = now.getMonth() + 1;
+  var anioActual = now.getFullYear();
+  var fechaAt    = String(d.fecha_atencion || hoyStr).substring(0, 10);
+  var anioAt     = parseInt(fechaAt.substring(0, 4)) || anioActual;
+  var mesAt      = parseInt(fechaAt.substring(5, 7)) || mesActual;
+  var estado     = String(d.estado || '').toUpperCase();
+  var emp        = String(d.empresa || '').toUpperCase();
+  // Clave del supervisor: usuario_sistema o supervisor, sin caracteres especiales
+  var supKey     = String(d.usuario_sistema || d.supervisor || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '') || '';
+  var supNombre  = String(d.supervisor || d.usuario_sistema || supKey);
+  var mesKey     = anioAt + '_' + String(mesAt).padStart(2, '0');
+
+  var baseUrl = FIREBASE_DB_URL + '/estadisticas.json?auth=' + secret;
+  try {
+    // 1. Leer estadísticas actuales de Firebase
+    var getResp = UrlFetchApp.fetch(baseUrl, { method: 'GET', muteHttpExceptions: true });
+    var fb = {};
+    try { fb = JSON.parse(getResp.getContentText() || '{}') || {}; } catch(pe) { fb = {}; }
+
+    // 2. Incrementar resumen_global
+    var rg = fb.resumen_global || { total:0, hoy:0, este_mes:0, en_proceso:0, finalizados:0 };
+    rg.total = (rg.total || 0) + 1;
+    if (fechaAt === hoyStr)                             rg.hoy       = (rg.hoy       || 0) + 1;
+    if (mesAt === mesActual && anioAt === anioActual)   rg.este_mes  = (rg.este_mes  || 0) + 1;
+    if (estado === 'EN PROCESO')  rg.en_proceso  = (rg.en_proceso  || 0) + 1;
+    if (estado === 'FINALIZADO')  rg.finalizados = (rg.finalizados || 0) + 1;
+    rg.ultima_actualizacion = now.getTime();
+
+    // 3. Incrementar por_supervisor
+    var ps = fb.por_supervisor || {};
+    if (supKey) {
+      var ps_sup = ps[supKey] || { nombre: supNombre, total:0, este_mes:0, en_proceso:0, finalizados:0 };
+      ps_sup.nombre = supNombre;
+      ps_sup.total  = (ps_sup.total || 0) + 1;
+      if (mesAt === mesActual && anioAt === anioActual) ps_sup.este_mes  = (ps_sup.este_mes  || 0) + 1;
+      if (estado === 'EN PROCESO') ps_sup.en_proceso  = (ps_sup.en_proceso  || 0) + 1;
+      if (estado === 'FINALIZADO') ps_sup.finalizados = (ps_sup.finalizados || 0) + 1;
+      ps[supKey] = ps_sup;
+    }
+
+    // 4. Incrementar por_mes
+    var pm = fb.por_mes || {};
+    var pm_mes = pm[mesKey] || { total:0, rapel:0, verfrut:0 };
+    pm_mes.total = (pm_mes.total || 0) + 1;
+    if (emp === 'RAPEL')   pm_mes.rapel   = (pm_mes.rapel   || 0) + 1;
+    if (emp === 'VERFRUT') pm_mes.verfrut = (pm_mes.verfrut || 0) + 1;
+    pm[mesKey] = pm_mes;
+
+    // 5. Escribir todo en un solo PATCH
+    var patch = { resumen_global: rg, por_supervisor: ps, por_mes: pm, ultima_actualizacion: now.getTime() };
+    UrlFetchApp.fetch(baseUrl, {
+      method: 'PATCH', contentType: 'application/json',
+      payload: JSON.stringify(patch), muteHttpExceptions: true
+    });
+    console.log('[actualizarFirebaseRapido] OK — supervisor:', supKey, '| total global:', rg.total);
+  } catch(e) {
+    console.error('[actualizarFirebaseRapido] Error:', e.message);
   }
 }
 
