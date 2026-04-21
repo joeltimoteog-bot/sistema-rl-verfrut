@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventario Canastas · Sistema RL v3.0</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Barlow', sans-serif; background: #f1f5f9; color: #0f172a; min-height: 100vh; }
+
+    /* ── Top bar ── */
+    .topbar { background: #0a2463; color: #fff; display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 54px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.22); }
+    .topbar-logo { height: 32px; border-radius: 4px; object-fit: contain; }
+    .topbar-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: .5px; flex: 1; }
+    .topbar-user { font-size: 12px; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+    .btn-back { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 7px; padding: 6px 13px; font-size: 13px; font-weight: 700; cursor: pointer; flex-shrink: 0; transition: background .15s; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+    .btn-back:hover { background: rgba(255,255,255,.28); }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; background: #fff; border-bottom: 2px solid #e2e8f0; padding: 0 12px; overflow-x: auto; }
+    .tab-btn { padding: 12px 14px; font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700; color: #64748b; background: none; border: none; border-bottom: 3px solid transparent; cursor: pointer; letter-spacing: .2px; transition: all .15s; white-space: nowrap; }
+    .tab-btn.on { color: #0a2463; border-bottom-color: #dc2626; }
+    .tab-btn:hover:not(.on) { color: #0a2463; }
+
+    /* ── Layout ── */
+    .tab-content { display: none; padding: 16px; max-width: 960px; margin: 0 auto; }
+    .tab-content.on { display: block; }
+    .card { background: #fff; border-radius: 12px; padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    .card-title { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; color: #0a2463; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    @media (max-width: 640px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+    /* ── Stat cards ── */
+    .stat-card { background: #fff; border-radius: 12px; padding: 16px 18px; box-shadow: 0 1px 4px rgba(0,0,0,.07); border-left: 4px solid #0a2463; }
+    .stat-card.red   { border-left-color: #dc2626; }
+    .stat-card.green { border-left-color: #16a34a; }
+    .stat-card.amber { border-left-color: #f59e0b; }
+    .stat-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-val   { font-size: 32px; font-weight: 800; color: #0f172a; line-height: 1.1; margin-top: 4px; font-family: 'Barlow Condensed', sans-serif; }
+    .stat-sub   { font-size: 12px; color: #64748b; margin-top: 4px; }
+
+    /* ── Progress bar ── */
+    .prog-wrap { background: #e2e8f0; border-radius: 99px; height: 10px; overflow: hidden; margin-top: 6px; }
+    .prog-bar  { height: 100%; border-radius: 99px; background: #0a2463; transition: width .5s; }
+
+    /* ── Forms ── */
+    .fg { display: flex; flex-direction: column; gap: 5px; }
+    .fg.full { grid-column: 1 / -1; }
+    .lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
+    input, select, textarea { border: 2px solid #e2e8f0; border-radius: 8px; padding: 8px 11px; font-family: 'Barlow', sans-serif; font-size: 14px; color: #0f172a; width: 100%; transition: border-color .15s; background: #fff; }
+    input:focus, select:focus { outline: none; border-color: #0a2463; }
+
+    /* ── Buttons ── */
+    .btn { padding: 9px 18px; border: none; border-radius: 8px; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .15s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: #0a2463; color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: .85; }
+    .btn-red    { background: #dc2626; color: #fff; }
+    .btn-red:hover:not(:disabled) { opacity: .85; }
+    .btn-green  { background: #16a34a; color: #fff; }
+    .btn-green:hover:not(:disabled) { opacity: .85; }
+    .btn-amber  { background: #f59e0b; color: #fff; }
+    .btn-amber:hover:not(:disabled) { opacity: .85; }
+    .btn-gray   { background: #e2e8f0; color: #475569; }
+    .btn-gray:hover:not(:disabled) { background: #cbd5e1; }
+    .btn-sm     { padding: 5px 11px; font-size: 12px; border-radius: 6px; }
+    .act-row    { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+    /* ── Tables ── */
+    .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .tbl th { background: #0a2463; color: #fff; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .4px; }
+    .tbl td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+    .tbl tr:last-child td { border-bottom: none; }
+    .tbl tr:hover td { background: #f8fafc; }
+    .tbl-wrap { overflow-x: auto; }
+
+    /* ── Badges / alerts ── */
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 10px; font-weight: 800; }
+    .badge-ok    { background: #dcfce7; color: #166534; }
+    .badge-warn  { background: #fef9c3; color: #854d0e; }
+    .badge-err   { background: #fee2e2; color: #991b1b; }
+    .badge-blue  { background: #dbeafe; color: #1e40af; }
+    .badge-rap   { background: #dbeafe; color: #1e40af; }
+    .badge-vrf   { background: #fce7f3; color: #9d174d; }
+
+    /* ── Alert box ── */
+    .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    .alert-warn { background: #fef9c3; color: #854d0e; border: 1.5px solid #fde68a; }
+    .alert-err  { background: #fee2e2; color: #dc2626; border: 1.5px solid #fecaca; }
+    .alert-ok   { background: #dcfce7; color: #166534; border: 1.5px solid #86efac; }
+    .alert-info { background: #eff6ff; color: #1e40af; border: 1.5px solid #bfdbfe; }
+
+    /* ── Panel destacado (canastas posibles) ── */
+    .panel-max { background: #eff6ff; border: 2px solid #bfdbfe; border-radius: 12px; padding: 18px; text-align: center; margin-bottom: 16px; }
+    .panel-max-num { font-family: 'Barlow Condensed', sans-serif; font-size: 56px; font-weight: 800; color: #0a2463; line-height: 1; }
+    .panel-max-lbl { font-size: 13px; font-weight: 700; color: #1e40af; margin-top: 4px; }
+
+    /* ── Separador ── */
+    .sep { border: none; border-top: 1px solid #e2e8f0; margin: 16px 0; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 32px 20px; color: #94a3b8; font-size: 13px; }
+    .empty-icon { font-size: 34px; margin-bottom: 8px; }
+
+    /* ── Spinner ── */
+    .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Preview armado ── */
+    #previewArmado { display: none; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin-top: 12px; }
+
+    /* ── Stock row colors ── */
+    .row-warn td { background: #fefce8 !important; }
+    .row-err  td { background: #fef2f2 !important; }
+
+    @media (max-width: 480px) {
+      .topbar-title { font-size: 14px; }
+      .tab-btn { padding: 11px 10px; font-size: 11px; }
+      .stat-val { font-size: 26px; }
+      .panel-max-num { font-size: 42px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ───────────── TOP BAR ───────────── -->
+<div class="topbar">
+  <img src="../images/logo-unifrutti.jpg" alt="Unifrutti" class="topbar-logo">
+  <a href="dashboard.html" class="btn-back">← Volver</a>
+  <div class="topbar-title">📦 Inventario Canastas</div>
+  <div class="topbar-user" id="topNombre"></div>
+</div>
+
+<!-- ───────────── TABS ───────────── -->
+<div class="tabs">
+  <button class="tab-btn on" onclick="showTab('resumen',this)">📊 Resumen</button>
+  <button class="tab-btn"    onclick="showTab('ingreso',this)">📦 Ingreso</button>
+  <button class="tab-btn"    onclick="showTab('armar',this)">🧺 Armar</button>
+  <button class="tab-btn"    onclick="showTab('entregar',this)">🚚 Entregar</button>
+  <button class="tab-btn"    onclick="showTab('reportes',this)">📄 Reportes</button>
+  <button class="tab-btn"    onclick="showTab('config',this)">⚙️ Config</button>
+</div>
+
+<!-- ══════════ TAB: RESUMEN ══════════ -->
+<div class="tab-content on" id="tab-resumen">
+
+  <div id="alertasVenc" style="margin-bottom:4px"></div>
+
+  <!-- Stats -->
+  <div class="grid3" style="margin-bottom:14px">
+    <div class="stat-card">
+      <div class="stat-label">Meta total</div>
+      <div class="stat-val" id="stMeta">—</div>
+      <div class="stat-sub">canastas</div>
+    </div>
+    <div class="stat-card green">
+      <div class="stat-label">Canastas armadas</div>
+      <div class="stat-val" id="stArmadas">—</div>
+      <div class="stat-sub" id="stPct">— % de la meta</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="stat-label">Disponibles para entregar</div>
+      <div class="stat-val" id="stDisp">—</div>
+      <div class="stat-sub" id="stEntregadas">— entregadas</div>
+    </div>
+  </div>
+
+  <!-- Barra progreso -->
+  <div class="card" style="padding:14px 18px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px">
+      <span>Progreso hacia la meta</span>
+      <span id="progLabel">0 / 0</span>
+    </div>
+    <div class="prog-wrap"><div class="prog-bar" id="progBar" style="width:0%"></div></div>
+  </div>
+
+  <!-- Stock por producto -->
+  <div class="card">
+    <div class="card-title">🥫 Stock actual por producto</div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Producto</th><th>Cant. receta</th><th>Ingresado</th>
+          <th>Stock actual</th><th>Cubre</th><th>Vence</th><th>Estado</th>
+        </tr></thead>
+        <tbody id="tbStock"><tr><td colspan="7" class="empty">⏳ Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Entregas recientes por sector -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">🚚 Entregas recientes</div>
+      <button class="btn btn-primary btn-sm" onclick="cargarDatos()">🔄 Actualizar</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Fecha</th><th>Empresa</th><th>Sector</th><th>Cant.</th><th>Responsable</th></tr></thead>
+        <tbody id="tbEntregasRecientes"><tr><td colspan="5" class="empty">Sin entregas</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: INGRESO ══════════ -->
+<div class="tab-content" id="tab-ingreso">
+  <div class="card">
+    <div class="card-title">📦 Registrar ingreso de mercadería</div>
+    <div id="alIngreso"></div>
+    <div class="grid2">
+      <div class="fg full">
+        <label class="lbl">Producto *</label>
+        <select id="ingProducto">
+          <option value="">Seleccionar producto de la receta...</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Cantidad recibida *</label>
+        <input type="number" id="ingCantidad" min="1" step="0.01" placeholder="0">
+      </div>
+      <div class="fg">
+        <label class="lbl">Unidad</label>
+        <input type="text" id="ingUnidad" placeholder="kg, L, unid..." readonly style="background:#f8fafc;color:#64748b">
+      </div>
+      <div class="fg">
+        <label class="lbl">Fecha de vencimiento *</label>
+        <input type="date" id="ingFechaVenc">
+      </div>
+      <div class="fg">
+        <label class="lbl">Responsable *</label>
+        <select id="ingResponsable">
+          <option value="">Seleccionar...</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Fecha de ingreso</label>
+        <input type="date" id="ingFecha">
+      </div>
+    </div>
+    <div class="act-row">
+      <button class="btn btn-green" id="btnIngreso" onclick="registrarIngreso()">✅ Registrar ingreso</button>
+    </div>
+  </div>
+
+  <!-- Historial -->
+  <div class="card">
+    <div class="card-title">📋 Historial de ingresos</div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Vence</th><th>Responsable</th></tr></thead>
+        <tbody id="tbIngresos"><tr><td colspan="5" class="empty">Sin ingresos</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: ARMAR ══════════ -->
+<div class="tab-content" id="tab-armar">
+
+  <!-- Panel canastas posibles -->
+  <div class="panel-max">
+    <div class="panel-max-num" id="maxCanastas">0</div>
+    <div class="panel-max-lbl">canastas máximas armables con el stock actual</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🧺 Armar lote de canastas</div>
+    <div id="alArmar"></div>
+    <div class="grid2">
+      <div class="fg">
+        <label class="lbl">Cantidad a armar *</label>
+        <input type="number" id="armarCantidad" min="1" step="1" placeholder="0" oninput="actualizarPreview()">
+      </div>
+      <div class="fg">
+        <label class="lbl">Fecha</label>
+        <input type="date" id="armarFecha">
+      </div>
+    </div>
+
+    <!-- Preview de descuento -->
+    <div id="previewArmado">
+      <div style="font-size:12px;font-weight:700;color:#0a2463;margin-bottom:8px">📋 Preview — productos a descontar:</div>
+      <table class="tbl" id="tbPreview">
+        <thead><tr><th>Producto</th><th>Cant/canasta</th><th>Total a descontar</th><th>Stock restante</th></tr></thead>
+        <tbody id="tbPreviewBody"></tbody>
+      </table>
+    </div>
+
+    <div class="act-row">
+      <button class="btn btn-primary" onclick="actualizarPreview(true)">👁️ Ver preview</button>
+      <button class="btn btn-green"   id="btnConfirmarArmado" onclick="confirmarArmado()" disabled>✓ Confirmar armado</button>
+    </div>
+  </div>
+
+  <!-- Historial armado -->
+  <div class="card">
+    <div class="card-title">📋 Historial de armados</div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Fecha</th><th>Cantidad</th><th>Usuario</th></tr></thead>
+        <tbody id="tbArmados"><tr><td colspan="3" class="empty">Sin armados</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: ENTREGAR ══════════ -->
+<div class="tab-content" id="tab-entregar">
+  <div class="card">
+    <div class="card-title">🚚 Registrar entrega a sector</div>
+
+    <div class="alert alert-info" style="margin-bottom:14px">
+      Disponibles para entregar: <strong id="dispParaEntregar">0</strong> canastas
+    </div>
+
+    <div id="alEntregar"></div>
+    <div class="grid2">
+      <div class="fg">
+        <label class="lbl">Empresa *</label>
+        <select id="entEmpresa" onchange="filtrarSectores()">
+          <option value="">Seleccionar...</option>
+          <option value="RAPEL">RAPEL</option>
+          <option value="VERFRUT">VERFRUT</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Sector *</label>
+        <select id="entSector">
+          <option value="">— elige empresa primero —</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Cantidad *</label>
+        <input type="number" id="entCantidad" min="1" step="1" placeholder="0">
+      </div>
+      <div class="fg">
+        <label class="lbl">Responsable *</label>
+        <select id="entResponsable">
+          <option value="">Seleccionar...</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Fecha</label>
+        <input type="date" id="entFecha">
+      </div>
+    </div>
+    <div class="act-row">
+      <button class="btn btn-red" id="btnEntrega" onclick="registrarEntrega()">🚚 Registrar entrega</button>
+    </div>
+  </div>
+
+  <!-- Resumen por sector -->
+  <div class="card">
+    <div class="card-title">📍 Resumen de entregas por sector</div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Empresa</th><th>Sector</th><th>Total entregado</th></tr></thead>
+        <tbody id="tbPorSector"><tr><td colspan="3" class="empty">Sin entregas</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: REPORTES ══════════ -->
+<div class="tab-content" id="tab-reportes">
+  <div class="card" style="max-width:560px">
+    <div class="card-title">📄 Generar reporte PDF</div>
+    <div class="grid2">
+      <div class="fg">
+        <label class="lbl">Tipo de reporte</label>
+        <select id="repTipo">
+          <option value="general">Resumen general</option>
+          <option value="ingresos">Ingresos de mercadería</option>
+          <option value="armados">Armados de canastas</option>
+          <option value="entregas">Entregas por sector</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Empresa</label>
+        <select id="repEmpresa">
+          <option value="">Todas</option>
+          <option value="RAPEL">RAPEL</option>
+          <option value="VERFRUT">VERFRUT</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Fecha desde</label>
+        <input type="date" id="repDesde">
+      </div>
+      <div class="fg">
+        <label class="lbl">Fecha hasta</label>
+        <input type="date" id="repHasta">
+      </div>
+    </div>
+    <div class="act-row">
+      <button class="btn btn-primary" id="btnReporte" onclick="generarPDF()">📥 Generar y descargar PDF</button>
+    </div>
+    <div id="repFeedback" style="margin-top:12px;font-size:13px;color:#64748b"></div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: CONFIGURACIÓN ══════════ -->
+<div class="tab-content" id="tab-config">
+
+  <!-- Meta -->
+  <div class="card">
+    <div class="card-title">🎯 Meta de canastas</div>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div class="fg" style="flex:1;min-width:160px">
+        <label class="lbl">Meta total de canastas</label>
+        <input type="number" id="cfgMeta" min="1" step="1" placeholder="Ej: 15000">
+      </div>
+      <button class="btn btn-primary" onclick="guardarMeta()">💾 Guardar meta</button>
+    </div>
+  </div>
+
+  <!-- Receta -->
+  <div class="card">
+    <div class="card-title">🥫 Receta de la canasta</div>
+    <div id="alReceta"></div>
+    <div class="grid3" style="margin-bottom:12px">
+      <div class="fg">
+        <label class="lbl">Producto *</label>
+        <input type="text" id="cfgProd" placeholder="Ej: Arroz, Aceite, Azúcar...">
+      </div>
+      <div class="fg">
+        <label class="lbl">Cantidad *</label>
+        <input type="number" id="cfgCant" min="0.01" step="0.01" placeholder="0">
+      </div>
+      <div class="fg">
+        <label class="lbl">Unidad *</label>
+        <input type="text" id="cfgUnid" placeholder="kg, L, unid, bolsa...">
+      </div>
+    </div>
+    <button class="btn btn-green btn-sm" onclick="agregarProductoReceta()">➕ Agregar producto</button>
+    <div class="tbl-wrap" style="margin-top:14px">
+      <table class="tbl">
+        <thead><tr><th>Producto</th><th>Cantidad</th><th>Unidad</th><th></th></tr></thead>
+        <tbody id="tbReceta"><tr><td colspan="4" class="empty">Sin productos en la receta</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Responsables -->
+  <div class="card">
+    <div class="card-title">👥 Responsables</div>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+      <div class="fg" style="flex:1;min-width:200px">
+        <label class="lbl">Nombre *</label>
+        <input type="text" id="cfgRespNombre" placeholder="Nombre completo">
+      </div>
+      <button class="btn btn-green" onclick="agregarResponsable()">➕ Agregar responsable</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Nombre</th></tr></thead>
+        <tbody id="tbResponsables"><tr><td class="empty">Sin responsables</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="../js/inventario.js"></script>
+</body>
+</html>

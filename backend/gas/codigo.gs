@@ -75,6 +75,16 @@ function handle(e) {
       case 'guardarCapacitacion':    result = capGuardar(body);             break;
       case 'listarCapacitaciones':   result = capListar(params);            break;
       case 'exportarCapacitaciones': result = capExportar(params);          break;
+      case 'invGetAll':              result = invGetAll();                   break;
+      case 'invGuardarMeta':         result = invGuardarMeta(body);         break;
+      case 'invAgregarReceta':       result = invAgregarReceta(body);       break;
+      case 'invEliminarReceta':      result = invEliminarReceta(body);      break;
+      case 'invAgregarResponsable':  result = invAgregarResponsable(body);  break;
+      case 'invRegistrarIngreso':    result = invRegistrarIngreso(body);    break;
+      case 'invRegistrarArmado':     result = invRegistrarArmado(body);     break;
+      case 'invRegistrarEntrega':    result = invRegistrarEntrega(body);    break;
+      case 'invDatosReporte':        result = invDatosReporte(body);        break;
+      case 'invGuardarReporteDrive': result = invGuardarReporteDrive(body); break;
       default: result = { error: 'Accion no reconocida: ' + action };
     }
   } catch(err) {
@@ -2469,6 +2479,287 @@ function capExportar(p) {
       }));
 
     return { success: true, data: data };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+// ============================================================
+// MÓDULO INVENTARIO CANASTAS
+// ============================================================
+
+const INV_SHEETS = {
+  receta:       'INV_Receta',
+  responsables: 'INV_Responsables',
+  meta:         'INV_Meta',
+  ingresos:     'INV_Ingresos',
+  armados:      'INV_Canastas_Armadas',
+  entregas:     'INV_Entregas'
+};
+
+function invSheet(key) {
+  return SpreadsheetApp.openById(SPREADSHEET_ID).getSheetByName(INV_SHEETS[key]);
+}
+
+// Crea las 6 hojas y carga 7 responsables iniciales. Ejecutar UNA VEZ desde el editor.
+function invSetup() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  const defs = [
+    { key: 'receta',       hdr: ['producto', 'cantidad', 'unidad', 'activo'] },
+    { key: 'responsables', hdr: ['nombre', 'activo'] },
+    { key: 'meta',         hdr: ['meta_canastas', 'actualizado_en', 'actualizado_por'] },
+    { key: 'ingresos',     hdr: ['id', 'producto', 'cantidad', 'fecha_vencimiento', 'responsable', 'fecha_ingreso', 'usuario'] },
+    { key: 'armados',      hdr: ['id', 'cantidad', 'fecha', 'usuario'] },
+    { key: 'entregas',     hdr: ['id', 'empresa', 'sector', 'cantidad', 'responsable', 'fecha', 'usuario'] }
+  ];
+
+  defs.forEach(function(def) {
+    var sh = ss.getSheetByName(INV_SHEETS[def.key]);
+    if (!sh) {
+      sh = ss.insertSheet(INV_SHEETS[def.key]);
+      sh.appendRow(def.hdr);
+      sh.getRange(1, 1, 1, def.hdr.length).setFontWeight('bold');
+    }
+  });
+
+  var shResp = ss.getSheetByName(INV_SHEETS['responsables']);
+  var responsablesInit = [
+    'Jaime Siancas',
+    'Deysi Quispe',
+    'Joel Timoteo Gonza',
+    'Olga Vilela Ludeña',
+    'Jorge Chávez Córdova',
+    'Alex Tineo Ramos',
+    'Yhanelly Luzon Venegas'
+  ];
+  var existentes = shResp.getLastRow() > 1
+    ? shResp.getRange(2, 1, shResp.getLastRow() - 1, 1).getValues().map(function(r) { return String(r[0]).trim(); })
+    : [];
+  responsablesInit.forEach(function(n) {
+    if (existentes.indexOf(n) === -1) shResp.appendRow([n, 'TRUE']);
+  });
+
+  var shMeta = ss.getSheetByName(INV_SHEETS['meta']);
+  if (shMeta.getLastRow() < 2) {
+    shMeta.appendRow([0, new Date().toISOString(), 'setup']);
+  }
+
+  return { success: true, msg: 'invSetup completado' };
+}
+
+// Devuelve todo el estado del inventario en una sola llamada
+function invGetAll() {
+  try {
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    function sheetRows(key) {
+      var sh = ss.getSheetByName(INV_SHEETS[key]);
+      if (!sh || sh.getLastRow() < 2) return [];
+      return sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).getValues();
+    }
+
+    var receta = sheetRows('receta')
+      .filter(function(r) { return String(r[3]).toUpperCase() !== 'FALSE'; })
+      .map(function(r) { return { producto: String(r[0]), cantidad: Number(r[1]), unidad: String(r[2]) }; });
+
+    var responsables = sheetRows('responsables')
+      .filter(function(r) { return String(r[1]).toUpperCase() !== 'FALSE'; })
+      .map(function(r) { return String(r[0]); });
+
+    var metaRows = sheetRows('meta');
+    var meta = metaRows.length > 0 ? Number(metaRows[metaRows.length - 1][0]) : 0;
+
+    var ingresos = sheetRows('ingresos').map(function(r) {
+      return {
+        id:                String(r[0]),
+        producto:          String(r[1]),
+        cantidad:          Number(r[2]),
+        fecha_vencimiento: r[3] ? Utilities.formatDate(new Date(r[3]), 'America/Lima', 'yyyy-MM-dd') : '',
+        responsable:       String(r[4]),
+        fecha_ingreso:     r[5] ? Utilities.formatDate(new Date(r[5]), 'America/Lima', 'yyyy-MM-dd') : '',
+        usuario:           String(r[6])
+      };
+    });
+
+    var armados = sheetRows('armados').map(function(r) {
+      return {
+        id:       String(r[0]),
+        cantidad: Number(r[1]),
+        fecha:    r[2] ? Utilities.formatDate(new Date(r[2]), 'America/Lima', 'yyyy-MM-dd') : '',
+        usuario:  String(r[3])
+      };
+    });
+
+    var entregas = sheetRows('entregas').map(function(r) {
+      return {
+        id:          String(r[0]),
+        empresa:     String(r[1]),
+        sector:      String(r[2]),
+        cantidad:    Number(r[3]),
+        responsable: String(r[4]),
+        fecha:       r[5] ? Utilities.formatDate(new Date(r[5]), 'America/Lima', 'yyyy-MM-dd') : '',
+        usuario:     String(r[6])
+      };
+    });
+
+    return { success: true, data: { meta: meta, receta: receta, responsables: responsables, ingresos: ingresos, armados: armados, entregas: entregas } };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invGuardarMeta(body) {
+  try {
+    var sh = invSheet('meta');
+    sh.appendRow([Number(body.meta), new Date().toISOString(), String(body.usuario || '')]);
+    return { success: true };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invAgregarReceta(body) {
+  try {
+    var sh   = invSheet('receta');
+    var prod = String(body.producto).trim();
+    var rows = sh.getLastRow() > 1
+      ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(function(r) { return String(r[0]).trim().toLowerCase(); })
+      : [];
+    if (rows.indexOf(prod.toLowerCase()) !== -1) return { success: false, error: 'Producto ya existe en receta' };
+    sh.appendRow([prod, Number(body.cantidad), String(body.unidad || 'kg'), 'TRUE']);
+    return { success: true };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invEliminarReceta(body) {
+  try {
+    var sh   = invSheet('receta');
+    var prod = String(body.producto).trim().toLowerCase();
+    if (sh.getLastRow() < 2) return { success: false, error: 'Receta vacía' };
+    var rows = sh.getRange(2, 1, sh.getLastRow() - 1, 4).getValues();
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i][0]).trim().toLowerCase() === prod) {
+        sh.getRange(i + 2, 4).setValue('FALSE');
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Producto no encontrado' };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invAgregarResponsable(body) {
+  try {
+    var sh     = invSheet('responsables');
+    var nombre = String(body.nombre || '').trim();
+    if (!nombre) return { success: false, error: 'Nombre requerido' };
+    var existentes = sh.getLastRow() > 1
+      ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(function(r) { return String(r[0]).trim().toLowerCase(); })
+      : [];
+    if (existentes.indexOf(nombre.toLowerCase()) !== -1) return { success: false, error: 'Responsable ya existe' };
+    sh.appendRow([nombre, 'TRUE']);
+    return { success: true };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invRegistrarIngreso(body) {
+  try {
+    var sh = invSheet('ingresos');
+    var id = 'ING-' + Utilities.formatDate(new Date(), 'America/Lima', 'yyyyMMdd-HHmmss');
+    var fv = body.fecha_vencimiento ? new Date(body.fecha_vencimiento + 'T12:00:00') : '';
+    sh.appendRow([
+      id,
+      String(body.producto),
+      Number(body.cantidad),
+      fv,
+      String(body.responsable || ''),
+      new Date(),
+      String(body.usuario || '')
+    ]);
+    return { success: true, id: id };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invRegistrarArmado(body) {
+  try {
+    var sh = invSheet('armados');
+    var id = 'ARM-' + Utilities.formatDate(new Date(), 'America/Lima', 'yyyyMMdd-HHmmss');
+    sh.appendRow([
+      id,
+      Number(body.cantidad),
+      new Date(),
+      String(body.usuario || '')
+    ]);
+    return { success: true, id: id };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invRegistrarEntrega(body) {
+  try {
+    var sh = invSheet('entregas');
+    var id = 'ENT-' + Utilities.formatDate(new Date(), 'America/Lima', 'yyyyMMdd-HHmmss');
+    sh.appendRow([
+      id,
+      String(body.empresa || '').toUpperCase(),
+      String(body.sector  || ''),
+      Number(body.cantidad),
+      String(body.responsable || ''),
+      new Date(),
+      String(body.usuario || '')
+    ]);
+    return { success: true, id: id };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invDatosReporte(body) {
+  try {
+    var all = invGetAll();
+    if (!all.success) return all;
+    var d    = all.data;
+    var emp  = String(body.empresa || '').toUpperCase();
+    var desde = String(body.desde || '');
+    var hasta = String(body.hasta || '');
+
+    var entregas = d.entregas.filter(function(e) {
+      if (emp && e.empresa !== emp) return false;
+      if (desde && e.fecha < desde) return false;
+      if (hasta && e.fecha > hasta) return false;
+      return true;
+    });
+
+    var armados = d.armados.filter(function(a) {
+      if (desde && a.fecha < desde) return false;
+      if (hasta && a.fecha > hasta) return false;
+      return true;
+    });
+
+    return { success: true, data: { meta: d.meta, receta: d.receta, responsables: d.responsables, ingresos: d.ingresos, armados: armados, entregas: entregas } };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+function invGuardarReporteDrive(body) {
+  try {
+    if (!body.base64 || !body.nombre) return { success: false, error: 'base64 y nombre requeridos' };
+    var decoded = Utilities.base64Decode(body.base64);
+    var blob    = Utilities.newBlob(decoded, 'application/pdf', body.nombre);
+    var folder  = DriveApp.getRootFolder();
+    var file    = folder.createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return { success: true, url: file.getUrl(), id: file.getId() };
   } catch(e) {
     return { success: false, error: e.toString() };
   }
