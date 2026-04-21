@@ -2345,56 +2345,64 @@ function capGuardar(body) {
     const ss    = SpreadsheetApp.openById(SPREADSHEET_ID);
     const hHdr  = ss.getSheetByName('CAPACITACIONES_HDR');
     const hAsis = ss.getSheetByName('BD_Capacitaciones');
-    const now   = new Date();
 
-    // Generar ID único: CAP-YYYYMMDD-HHMMSS
+    if (!hHdr)  return { success: false, error: 'Hoja CAPACITACIONES_HDR no encontrada. Ejecuta capSetupInicial() manualmente.' };
+    if (!hAsis) return { success: false, error: 'Hoja BD_Capacitaciones no encontrada. Ejecuta capSetupInicial() manualmente.' };
+
+    const asistentes = body.asistentes;
+    if (!Array.isArray(asistentes) || asistentes.length === 0) {
+      return { success: false, error: 'No se recibieron asistentes. Total recibido: ' + JSON.stringify(asistentes) };
+    }
+
+    const now  = new Date();
     const pad2 = n => String(n).padStart(2, '0');
-    const id = 'CAP-' + now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()) +
-               '-' + pad2(now.getHours()) + pad2(now.getMinutes()) + pad2(now.getSeconds());
-
-    const asistentes = body.asistentes || [];
+    const id   = 'CAP-' + now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()) +
+                 '-' + pad2(now.getHours()) + pad2(now.getMinutes()) + pad2(now.getSeconds());
 
     // Guardar cabecera
     hHdr.appendRow([
       id,
-      body.empresa       || '',
-      body.fecha         || '',
-      body.tipo          || '',
-      body.tema          || '',
-      body.fuente        || '',
-      body.area          || '',
-      body.lugar         || '',
-      body.hora_inicio   || '',
-      body.hora_termino  || '',
-      body.total_horas   || 0,
-      body.cap_dni       || '',
-      body.cap_nombre    || '',
-      body.cap_cargo     || '',
-      body.n_hombres     || 0,
-      body.n_mujeres     || 0,
+      body.empresa        || '',
+      body.fecha          || '',
+      body.tipo           || '',
+      body.tema           || '',
+      body.fuente         || '',
+      body.area           || '',
+      body.lugar          || '',
+      body.hora_inicio    || '',
+      body.hora_termino   || '',
+      body.total_horas    || 0,
+      body.cap_dni        || '',
+      body.cap_nombre     || '',
+      body.cap_cargo      || '',
+      body.n_hombres      || 0,
+      body.n_mujeres      || 0,
       asistentes.length,
-      body.usuario       || '',
-      body.usuario_nombre|| '',
+      body.usuario        || '',
+      body.usuario_nombre || '',
       now
     ]);
 
     // Guardar asistentes
-    asistentes.forEach(a => {
+    asistentes.forEach(function(a) {
       hAsis.appendRow([
         id,
-        a.n         || '',
-        a.dni       || '',
-        a.nombre    || '',
-        a.empresa   || '',
-        a.cargo     || '',
-        a.sexo      || '',
-        a.obs       || '',
+        a.n      || '',
+        a.dni    || '',
+        a.nombre || '',
+        a.empresa|| '',
+        a.cargo  || '',
+        a.sexo   || '',
+        a.obs    || '',
         now
       ]);
     });
 
+    SpreadsheetApp.flush(); // forzar escritura inmediata
+    console.log('[capGuardar] OK — id:', id, '| asistentes:', asistentes.length);
     return { success: true, id: id, total: asistentes.length };
   } catch(e) {
+    console.error('[capGuardar] ERROR:', e.toString());
     return { success: false, error: e.toString() };
   }
 }
