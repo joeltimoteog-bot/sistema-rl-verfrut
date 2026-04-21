@@ -69,19 +69,24 @@ async function cargarDatos() {
   try {
     const d = await apiGet({ action: 'invGetAll' });
     if (!d.success) throw new Error(d.error || 'Error al cargar datos');
-    DATA = d.data;
-    if (!DATA || typeof DATA !== 'object') throw new Error('El backend no devolvió datos válidos. Verifica que el Web App esté desplegado y tenga la versión actualizada.');
-    // Compatibilidad: backend puede devolver 'armados' o 'armadas'
-    if (!DATA.armadas && DATA.armados) DATA.armadas = DATA.armados;
-    if (!DATA.armados && DATA.armadas) DATA.armados  = DATA.armadas;
-    // Garantizar arrays aunque vengan vacíos
-    DATA.productos  = DATA.productos  || [];
-    DATA.receta     = DATA.receta     || [];
-    DATA.ingresos   = DATA.ingresos   || [];
-    DATA.armadas    = DATA.armadas    || [];
-    DATA.armados    = DATA.armados    || [];
-    DATA.entregas   = DATA.entregas   || [];
+
+    // El backend devuelve { success, data: { ... } }
+    // Si d.data es undefined (backend antiguo o sin desplegar) intentar d como fallback
+    DATA = (d.data && typeof d.data === 'object') ? d.data : d;
+
+    if (!DATA || typeof DATA !== 'object') {
+      throw new Error('Backend no devolvió datos válidos. Pega codigo.gs en Apps Script, ejecuta invSetup() + invSetupCatalogo() y publica una nueva versión.');
+    }
+
+    // Normalizar nombres de campos (compatibilidad con variaciones del backend)
+    DATA.ingresos     = DATA.ingresos     || DATA.historialIngresos || [];
+    DATA.armados      = DATA.armados      || DATA.historialArmados  || [];
+    DATA.armadas      = DATA.armadas      || DATA.armados            || [];
+    DATA.entregas     = DATA.entregas     || DATA.historialEntregas || [];
+    DATA.productos    = DATA.productos    || [];
+    DATA.receta       = DATA.receta       || [];
     DATA.responsables = DATA.responsables || [];
+    DATA.meta         = DATA.meta         || 0;
     calcular();
     renderAll();
   } catch(e) {
