@@ -4299,6 +4299,13 @@ async function guardarAt() {
           if((newRec.estado || '').toUpperCase() === 'EN PROCESO') CACHE.stats.enProceso = (CACHE.stats.enProceso || 0) + 1;
         }
 
+        // Actualizar contadores del dashboard inmediatamente en el DOM
+        const _incStat = (id, n) => { const el=document.getElementById(id); if(el){ const vv=parseInt(el.textContent||'0',10); if(!isNaN(vv)) el.textContent=vv+n; }};
+        _incStat('sA', 1);
+        _incStat('sM', 1);
+        if(newRec.fecha_atencion === hoyStr) _incStat('sH', 1);
+        if((newRec.estado||'').toUpperCase() === 'EN PROCESO') _incStat('sP', 1);
+
         // Persistir en localStorage
         CACHE_TS = Date.now();
         guardarCacheLS();
@@ -4308,8 +4315,8 @@ async function guardarAt() {
         if(msg){ msg.textContent='✅ Atención N° '+r.nro+' registrada en '+r.hoja; msg.style.display='block'; setTimeout(()=>{ msg.style.display='none'; }, 5000); }
         abrirAt();
 
-        // Sincronizar con servidor en background (sin bloquear UI)
-        setTimeout(() => refrescarEnBackground(), 1000);
+        // Sincronizar con servidor en background y recalcular stats con datos confirmados
+        setTimeout(() => refrescarEnBackground().then(fbFresco => { if(!fbFresco) cargarStats(); }), 1000);
       }
     }else mostrarToast('❌ Error: '+(r.error||'Desconocido'),'error');
   }catch(e){mostrarToast('❌ Error de conexión','error');}
