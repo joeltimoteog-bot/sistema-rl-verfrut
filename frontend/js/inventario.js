@@ -78,7 +78,7 @@ async function cargarDatos() {
       throw new Error('Backend no devolvió datos válidos. Pega codigo.gs en Apps Script, ejecuta invSetup() + invSetupCatalogo() y publica una nueva versión.');
     }
 
-    // Normalizar nombres de campos (compatibilidad con variaciones del backend)
+    // Normalizar arrays (compatibilidad con variaciones del backend)
     DATA.ingresos     = DATA.ingresos     || DATA.historialIngresos || [];
     DATA.armados      = DATA.armados      || DATA.historialArmados  || [];
     DATA.armadas      = DATA.armadas      || DATA.armados            || [];
@@ -87,6 +87,20 @@ async function cargarDatos() {
     DATA.receta       = DATA.receta       || [];
     DATA.responsables = DATA.responsables || [];
     DATA.meta         = DATA.meta         || 0;
+
+    // Normalizar campos de fecha en cada registro (camelCase → snake_case)
+    // Así todas las funciones de render usan siempre snake_case sin cambios
+    DATA.ingresos = DATA.ingresos.map(i => Object.assign({}, i, {
+      fecha:      i.fecha      || i.fechaIngreso  || i.fechaRegistro || '',
+      fecha_venc: i.fecha_venc || i.fechaVenc     || ''
+    }));
+    DATA.armadas = DATA.armadas.map(a => Object.assign({}, a, {
+      fecha: a.fecha || a.fechaRegistro || ''
+    }));
+    DATA.armados = DATA.armadas; // mantener alias sincronizado
+    DATA.entregas = DATA.entregas.map(e => Object.assign({}, e, {
+      fecha: e.fecha || e.fechaRegistro || ''
+    }));
     calcular();
     renderAll();
   } catch(e) {
