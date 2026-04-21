@@ -362,8 +362,7 @@ function saveAtencion(d) {
     new Date(),
     d.usuario_sistema || ''
   ]);
-  // Actualizar estadísticas en Firebase en background (fire-and-forget)
-  try { actualizarEstadisticasFirebase(); } catch(e) { console.warn('[Firebase] Error al actualizar stats:', e.message); }
+  // Firebase se actualiza vía trigger programado cada 5 min (no bloquear la respuesta)
   return { success: true, nro: nro, hoja: nombreHoja };
 }
 // ============================================================
