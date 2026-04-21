@@ -301,9 +301,15 @@ async function registrarIngreso() {
   try {
     const d = await apiPost({
       action:     'invRegistrarIngreso',
-      fecha, producto: prod, cantidad: cant, unidad: unid,
-      fecha_venc: fvenc, responsable: resp,
-      usuario: USER.usuario, usuario_nombre: USER.nombre
+      // snake_case (backend repo) y camelCase (backend desplegado) simultáneos
+      producto: prod, cantidad: cant, unidad: unid, responsable: resp,
+      usuario: USER.usuario, usuario_nombre: USER.nombre,
+      fecha:        fecha,  fechaIngreso: fecha,
+      fecha_venc:   fvenc,  fechaVenc:    fvenc,
+      ingreso: { producto: prod, cantidad: cant, unidad: unid, responsable: resp,
+                 fecha: fecha, fechaIngreso: fecha,
+                 fecha_venc: fvenc, fechaVenc: fvenc,
+                 usuario: USER.usuario }
     });
     if (!d.success) throw new Error(d.error || 'Error al guardar');
     mostrarAlerta('alIngreso', 'ok', `✅ Ingreso registrado: ${cant} ${unid} de ${prod}`);
@@ -389,7 +395,10 @@ async function confirmarArmado() {
   const btn = document.getElementById('btnConfirmarArmado');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Procesando...';
   try {
-    const d = await apiPost({ action: 'invRegistrarArmado', fecha, cantidad: cant, usuario: USER.usuario, usuario_nombre: USER.nombre });
+    const d = await apiPost({ action: 'invRegistrarArmado',
+      fecha, cantidad: cant, usuario: USER.usuario, usuario_nombre: USER.nombre,
+      armado: { fecha, cantidad: cant, responsable: USER.nombre, usuario: USER.usuario }
+    });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
     mostrarAlerta('alArmar', 'ok', `✅ ${cant.toLocaleString('es-PE')} canastas armadas correctamente`);
     sv('armarCantidad', '');
@@ -477,7 +486,11 @@ async function registrarEntrega() {
   const btn = document.getElementById('btnEntrega');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Registrando...';
   try {
-    const d = await apiPost({ action: 'invRegistrarEntrega', fecha, empresa, sector, cantidad: cant, responsable: resp, usuario: USER.usuario, usuario_nombre: USER.nombre });
+    const d = await apiPost({ action: 'invRegistrarEntrega',
+      fecha, empresa, sector, cantidad: cant, responsable: resp,
+      usuario: USER.usuario, usuario_nombre: USER.nombre,
+      entrega: { fecha, empresa, sector, cantidad: cant, responsable: resp, usuario: USER.usuario }
+    });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
     mostrarAlerta('alEntregar', 'ok', `✅ Entrega registrada: ${cant} canastas → ${sector} (${empresa})`);
     sv('entCantidad', '');
