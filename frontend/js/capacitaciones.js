@@ -196,16 +196,22 @@ function showTab(tab, btn) {
 /* ─────────────────────── PASO 1 → 2 ─────────────────────── */
 function irPaso2() {
   const empresa = v('capEmpresa');
-  const tema    = v('capTema').trim();
-  const lugar   = v('capLugar').trim();
   const fecha   = v('capFecha');
   const tipos   = getTipos();
+  const tema    = v('capTema').trim();
+  const lugar   = v('capLugar').trim();
 
-  if (!empresa) { mostrarFeedback('err', 'Selecciona la empresa (RAPEL o VERFRUT)'); return; }
-  if (!tipos.length) { mostrarFeedback('err', 'Selecciona al menos un tipo de actividad'); return; }
-  if (!tema)    { mostrarFeedback('err', 'El tema de la actividad es obligatorio'); return; }
-  if (!lugar)   { mostrarFeedback('err', 'El lugar es obligatorio'); return; }
-  if (!fecha)   { mostrarFeedback('err', 'La fecha es obligatoria'); return; }
+  // Recopilar todos los campos faltantes (nunca validar N°TRAB/H/M — se autocalculan)
+  const faltan = [];
+  if (!empresa)      faltan.push('EMPRESA');
+  if (!fecha)        faltan.push('FECHA');
+  if (!tipos.length) faltan.push('TIPO DE ACTIVIDAD');
+  if (!tema)         faltan.push('TEMA');
+  if (!lugar)        faltan.push('LUGAR');
+  if (faltan.length) {
+    mostrarFeedback('err', '❌ Faltan estos campos: ' + faltan.join(' · '));
+    return;
+  }
 
   document.getElementById('paso1').style.display = 'none';
   document.getElementById('paso2').style.display = '';
@@ -420,7 +426,18 @@ function calcHoras() {
 
 /* ─────────────────────── GUARDAR ─────────────────────── */
 async function guardarCapacitacion() {
-  if (!asistentes.length) { mostrarFeedback('err', 'Registra al menos un asistente antes de guardar'); return; }
+  // ── Pre-validación completa ──
+  if (!asistentes.length) {
+    mostrarFeedback('err', '❌ Debes registrar al menos 1 asistente antes de guardar');
+    return;
+  }
+  // Capacitador (opcional pero si se ingresó DNI se requiere nombre)
+  const capDni = v('capCapDni').trim(), capNom = v('capCapNombre').trim();
+  if (capDni && !capNom) {
+    mostrarFeedback('err', '❌ Ingresaste el DNI del capacitador pero falta el nombre — búscalo o escríbelo');
+    return;
+  }
+
   const btn = document.getElementById('btnGuardar');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Guardando...';
@@ -441,22 +458,25 @@ async function guardarCapacitacion() {
 }
 
 function _buildBody() {
+  const nH = asistentes.filter(a => { const x=(a.sexo||'').toUpperCase(); return x==='M'||x==='H'||x==='MASCULINO'||x==='HOMBRE'; }).length;
+  const nM = asistentes.filter(a => { const x=(a.sexo||'').toUpperCase(); return x==='F'||x==='MUJ'||x==='FEMENINO'||x==='MUJER'; }).length;
   return {
     empresa:        v('capEmpresa'),
     fecha:          v('capFecha'),
     tipo:           getTipos().join(', '),
     tema:           v('capTema').trim(),
-    fuente:         v('capFuente').trim(),
-    area:           v('capArea').trim(),
+    fuente:         v('capFuente').trim() || '—',
+    area:           v('capArea').trim()   || '—',
     lugar:          v('capLugar').trim(),
-    hora_inicio:    v('capHoraInicio'),
-    hora_termino:   v('capHoraTermino'),
+    hora_inicio:    v('capHoraInicio') || '',
+    hora_termino:   v('capHoraTermino') || '',
     total_horas:    parseFloat(v('capHoras')) || 0,
+    n_trabajadores: asistentes.length,
+    n_hombres:      nH,
+    n_mujeres:      nM,
     cap_dni:        v('capCapDni').trim(),
     cap_nombre:     v('capCapNombre').trim(),
     cap_cargo:      v('capCapCargo').trim(),
-    n_hombres:      asistentes.filter(a => { const x=(a.sexo||'').toUpperCase(); return x==='M'||x==='H'||x==='MASCULINO'||x==='HOMBRE'; }).length,
-    n_mujeres:      asistentes.filter(a => { const x=(a.sexo||'').toUpperCase(); return x==='F'||x==='MUJ'||x==='FEMENINO'||x==='MUJER'; }).length,
     asistentes:     asistentes,
     usuario:        USER.usuario,
     usuario_nombre: USER.nombre
