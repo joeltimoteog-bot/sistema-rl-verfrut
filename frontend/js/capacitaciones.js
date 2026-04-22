@@ -477,8 +477,8 @@ async function generarPDF() {
 
     // ── Estilos reutilizables ──
     const sBorder  = { lineColor: C.negro, lineWidth: 0.3 };
-    const sBanner  = { fillColor: C.banner, textColor: C.negro, fontStyle: 'bold', halign: 'center', fontSize: 8, minCellHeight: 5, cellPadding: 1 };
-    const sCabHead = { fillColor: C.cabecera, textColor: C.negro, fontStyle: 'bold', halign: 'center', fontSize: 7.5, minCellHeight: 4 };
+    const sBanner  = { fillColor: C.banner, textColor: C.negro, fontStyle: 'bold', halign: 'center', valign: 'middle', fontSize: 10, minCellHeight: 6, cellPadding: 1 };
+    const sCabHead = { fillColor: C.cabecera, textColor: C.negro, fontStyle: 'bold', halign: 'center', valign: 'middle', fontSize: 9, minCellHeight: 6 };
 
     // Anchos encabezado (suman 190mm)
     const COL1 = 35, COL2 = 110, COL3 = 45;
@@ -540,7 +540,7 @@ async function generarPDF() {
     let yA = doc.lastAutoTable.finalY;
 
     // ── Helpers de dibujo manual ──
-    const ROW = 5;
+    const ROW = 7;
     const _lbl = (text, x, yd) => {
       doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...C.negro);
       doc.text(text, x, yd + 3.5);
@@ -573,7 +573,7 @@ async function generarPDF() {
     // ═══════════════════════════════════════════════════════
     // 4. TIPO DE ACTIVIDAD — checkboxes manuales (banda gris)
     // ═══════════════════════════════════════════════════════
-    const checkH = 6;
+    const checkH = 10;
     doc.setFillColor(...C.banner);
     doc.setDrawColor(...C.negro); doc.setLineWidth(0.3);
     doc.rect(MGS, yA, bW, checkH, 'FD');
@@ -633,8 +633,8 @@ async function generarPDF() {
     const prodV = v('capProductor') || nombreEmp;
     _lbl('PRODUCTOR:', MGS + 1, yA);
     _val(prodV, MGS + 27, yA, bW - 28);
-    _sub(MGS, yA + ROW, MGS + bW);
-    yA += ROW;
+    _sub(MGS, yA + 6, MGS + bW);
+    yA += 6;
 
     y = yA;
 
@@ -654,8 +654,8 @@ async function generarPDF() {
       body: [['1', v('capCapDni').trim(), v('capCapNombre').trim(), v('capCapCargo').trim(), '']],
       theme: 'grid',
       headStyles: { ...sCabHead },
-      styles: { ...sBorder, fontSize: 7.5, cellPadding: 1, textColor: C.negro },
-      bodyStyles: { halign: 'center', minCellHeight: 5 },
+      styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
+      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 10 },
       columnStyles: { 0:{cellWidth:12}, 1:{cellWidth:25}, 2:{cellWidth:75}, 3:{cellWidth:55}, 4:{cellWidth:23} }
     });
     y = doc.lastAutoTable.finalY;
@@ -679,9 +679,9 @@ async function generarPDF() {
       head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / ÁREA', 'FIRMA / HUELLA', 'OBS.']],
       body: filasPart,
       theme: 'grid',
-      headStyles: { ...sCabHead, minCellHeight: 4 },
-      styles: { ...sBorder, fontSize: 7, cellPadding: 0.7, textColor: C.negro, minCellHeight: 3.2 },
-      bodyStyles: { halign: 'center' },
+      headStyles: { ...sCabHead },
+      styles: { ...sBorder, cellPadding: 0.7, textColor: C.negro },
+      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 7 },
       columnStyles: {
         0: { cellWidth: 10 }, 1: { cellWidth: 22 },
         2: { cellWidth: 65, halign: 'left' }, 3: { cellWidth: 35, halign: 'left' },
@@ -711,8 +711,8 @@ async function generarPDF() {
       body: [['1', respDni, respNombre, respCargo, '']],
       theme: 'grid',
       headStyles: { ...sCabHead },
-      styles: { ...sBorder, fontSize: 8, cellPadding: 1, textColor: C.negro },
-      bodyStyles: { halign: 'center', minCellHeight: 7 },
+      styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
+      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 10 },
       columnStyles: { 0:{cellWidth:12}, 1:{cellWidth:25}, 2:{cellWidth:75}, 3:{cellWidth:55}, 4:{cellWidth:23} }
     });
 
