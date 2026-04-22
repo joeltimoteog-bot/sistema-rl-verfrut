@@ -284,6 +284,24 @@
         </table>
       </div>
 
+      <!-- Responsable del Registro (para PDF R-SC-01) -->
+      <hr class="sec-sep">
+      <div class="card-title" style="margin-bottom:12px">📋 Responsable del Registro</div>
+      <div class="form-grid">
+        <div class="fg">
+          <label class="lbl">DNI responsable</label>
+          <input type="text" id="capRespDni" maxlength="8" placeholder="DNI (8 dígitos)" onblur="buscarSupervisorPorDNI()">
+        </div>
+        <div class="fg">
+          <label class="lbl">Nombre completo</label>
+          <input type="text" id="capRespNombre" placeholder="Auto-completa con el DNI">
+        </div>
+        <div class="fg full">
+          <label class="lbl">Cargo / Área</label>
+          <input type="text" id="capRespCargo" placeholder="Ej: Jefe de RR.LL.">
+        </div>
+      </div>
+
       <div class="act-row">
         <button class="btn btn-green"   id="btnGuardar" onclick="guardarCapacitacion()">💾 Guardar</button>
         <button class="btn btn-primary" id="btnPDF"     onclick="generarPDF()">📄 Generar PDF R-SC-01</button>
