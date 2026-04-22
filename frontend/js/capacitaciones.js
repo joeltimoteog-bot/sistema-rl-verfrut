@@ -14,6 +14,112 @@ let _dniCooldown = {}; // { dni: timestamp } — anti-duplicado 3s
 
 const COOLDOWN_MS = 3000;
 
+/* ─────────────────────── LISTAS DESPLEGABLES ─────────────────────── */
+const LISTAS_DEFAULT = {
+  tema:   ['Uso correcto de EPP', 'Manejo seguro de agroquímicos', 'Seguridad e Higiene Industrial'],
+  fuente: ['Normativa interna'],
+  area:   ['Cosecha', 'Packing', 'Campo', 'Riego', 'Almacén', 'Administración']
+};
+
+let _listaActiva = null;
+
+function cargarLista(tipo) {
+  try {
+    const raw = localStorage.getItem('cap_lista_' + tipo);
+    return raw ? JSON.parse(raw) : [...LISTAS_DEFAULT[tipo]];
+  } catch(e) { return [...LISTAS_DEFAULT[tipo]]; }
+}
+
+function guardarLista(tipo, items) {
+  localStorage.setItem('cap_lista_' + tipo, JSON.stringify(items));
+}
+
+function poblarSelect(tipo) {
+  const id = 'cap' + tipo.charAt(0).toUpperCase() + tipo.slice(1);
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  const actual = sel.value;
+  const items = cargarLista(tipo);
+  const first = sel.options[0] ? sel.options[0].cloneNode(true) : null;
+  sel.innerHTML = '';
+  if (first) sel.appendChild(first);
+  items.forEach(item => {
+    const opt = document.createElement('option');
+    opt.value = item; opt.textContent = item;
+    sel.appendChild(opt);
+  });
+  if (actual) sel.value = actual;
+}
+
+function inicializarListasCapacitaciones() {
+  ['tema', 'fuente', 'area'].forEach(t => poblarSelect(t));
+}
+
+function gestionarLista(tipo) {
+  _listaActiva = tipo;
+  const titulos = { tema: 'Temas', fuente: 'Fuentes', area: 'Áreas' };
+  const el = document.getElementById('modalListaTitulo');
+  if (el) el.textContent = '✏️ Gestionar: ' + (titulos[tipo] || tipo);
+  renderizarItemsLista(tipo);
+  document.getElementById('modalListaOverlay').classList.add('open');
+  const inp = document.getElementById('modalListaInput');
+  if (inp) { inp.value = ''; setTimeout(() => inp.focus(), 80); }
+}
+
+function renderizarItemsLista(tipo) {
+  const items = cargarLista(tipo);
+  const cont = document.getElementById('modalListaItems');
+  if (!cont) return;
+  if (!items.length) {
+    cont.innerHTML = '<div style="color:#94a3b8;font-size:13px;padding:10px 0">Sin ítems. Agrega el primero.</div>';
+    return;
+  }
+  cont.innerHTML = items.map((item, i) => `
+    <div class="modal-item-row">
+      <span>${item}</span>
+      <button class="btn-editar"   onclick="editarItem(${i})">✏️</button>
+      <button class="btn-eliminar" onclick="eliminarItem(${i})">✕</button>
+    </div>`).join('');
+}
+
+function cerrarModalLista() {
+  document.getElementById('modalListaOverlay').classList.remove('open');
+  _listaActiva = null;
+}
+
+function agregarItem() {
+  if (!_listaActiva) return;
+  const inp = document.getElementById('modalListaInput');
+  const val = (inp ? inp.value : '').trim();
+  if (!val) return;
+  const items = cargarLista(_listaActiva);
+  if (!items.includes(val)) { items.push(val); guardarLista(_listaActiva, items); }
+  poblarSelect(_listaActiva);
+  renderizarItemsLista(_listaActiva);
+  if (inp) inp.value = '';
+}
+
+function editarItem(idx) {
+  if (!_listaActiva) return;
+  const items = cargarLista(_listaActiva);
+  const nuevo = prompt('Editar ítem:', items[idx]);
+  if (nuevo === null || !nuevo.trim()) return;
+  items[idx] = nuevo.trim();
+  guardarLista(_listaActiva, items);
+  poblarSelect(_listaActiva);
+  renderizarItemsLista(_listaActiva);
+}
+
+function eliminarItem(idx) {
+  if (!_listaActiva) return;
+  const items = cargarLista(_listaActiva);
+  if (!confirm(`¿Eliminar "${items[idx]}"?`)) return;
+  items.splice(idx, 1);
+  guardarLista(_listaActiva, items);
+  poblarSelect(_listaActiva);
+  renderizarItemsLista(_listaActiva);
+}
+
 /* ─────────────────────── INIT ─────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   const ud = sessionStorage.getItem('user');
@@ -45,6 +151,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const hace30 = new Date(Date.now() - 30 * 24 * 3600 * 1000);
   sv('expDesde', hace30.toISOString().split('T')[0]);
   sv('expHasta', now.toISOString().split('T')[0]);
+
+  // Poblar selects de listas
+  inicializarListasCapacitaciones();
+
+  // Auto-completar Productor al cambiar empresa
+  const empSel = document.getElementById('capEmpresa');
+  if (empSel) {
+    const _setProductor = () => {
+      const emp = empSel.value;
+      const prod = emp === 'RAPEL'   ? 'SOCIEDAD AGRÍCOLA RAPEL S.A.C.' :
+                   emp === 'VERFRUT' ? 'SOCIEDAD EXPORTADORA VERFRUT S.A.C.' : '';
+      sv('capProductor', prod);
+    };
+    empSel.addEventListener('change', _setProductor);
+    _setProductor(); // dispara una vez con el valor inicial
+  }
 
   cargarRegistros();
 });
@@ -206,6 +328,12 @@ function renderLista() {
   const tb = document.getElementById('tbAsistentes');
   const ct = document.getElementById('contadorAsist');
   if (ct) ct.textContent = asistentes.length;
+  // Auto-actualizar contadores nH/nM/nTrab en paso 1
+  const nHv = asistentes.filter(a => (a.sexo||'').toUpperCase()==='M').length;
+  const nMv = asistentes.filter(a => (a.sexo||'').toUpperCase()==='F').length;
+  sv('capNTrab', asistentes.length || '');
+  sv('capNH', nHv || '');
+  sv('capNM', nMv || '');
   if (!tb) return;
 
   if (!asistentes.length) {
@@ -402,97 +530,106 @@ async function generarPDF() {
       body: [[{ content: 'DATOS DE LA ACTIVIDAD', styles: sBanner }]],
       theme: 'grid', styles: sBorder
     });
-    y = doc.lastAutoTable.finalY;
+    let yA = doc.lastAutoTable.finalY;
+
+    // ── Helpers de dibujo manual ──
+    const ROW = 5;
+    const _lbl = (text, x, yd) => {
+      doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...C.negro);
+      doc.text(text, x, yd + 3.5);
+    };
+    const _val = (text, x, yd, maxW) => {
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(...C.negro);
+      doc.text(String(text||''), x, yd + 3.5, maxW ? { maxWidth: maxW } : undefined);
+    };
+    const _sub = (x1, y1, x2) => {
+      doc.setDrawColor(...C.negro); doc.setLineWidth(0.2);
+      doc.line(x1, y1, x2, y1);
+    };
 
     // ═══════════════════════════════════════════════════════
-    // 3. CAMPOS DE ACTIVIDAD
+    // 3. DATOS SIN CELDAS — solo texto + líneas horizontales
     // ═══════════════════════════════════════════════════════
-    doc.autoTable({
-      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
-      body: [[
-        { content: 'TEMA:', styles: { ...sLabel, cellWidth: 20 } },
-        { content: v('capTema').trim(), styles: sValor }
-      ]],
-      theme: 'grid', styles: sData
-    });
-    y = doc.lastAutoTable.finalY;
 
-    doc.autoTable({
-      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
-      body: [[
-        { content: 'FUENTE:', styles: { ...sLabel, cellWidth: 20 } },
-        { content: v('capFuente').trim(), styles: { ...sValor, cellWidth: 116 } },
-        { content: 'ÁREA:', styles: { ...sLabel, cellWidth: 16 } },
-        { content: v('capArea').trim(), styles: sValor }
-      ]],
-      theme: 'grid', styles: sData
-    });
-    y = doc.lastAutoTable.finalY;
+    // TEMA (ancho completo)
+    _lbl('TEMA:', MGS + 1, yA);
+    _val(v('capTema').trim(), MGS + 15, yA, bW - 16);
+    _sub(MGS, yA + ROW, MGS + bW);
+    yA += ROW;
+
+    // FUENTE (ancho completo)
+    _lbl('FUENTE:', MGS + 1, yA);
+    _val(v('capFuente').trim(), MGS + 20, yA, bW - 21);
+    _sub(MGS, yA + ROW, MGS + bW);
+    yA += ROW;
 
     // ═══════════════════════════════════════════════════════
-    // 4. TIPO DE ACTIVIDAD — checkboxes manuales
+    // 4. TIPO DE ACTIVIDAD — checkboxes manuales (banda gris)
     // ═══════════════════════════════════════════════════════
     const checkH = 6;
     doc.setFillColor(...C.banner);
-    doc.setDrawColor(...C.negro);
-    doc.setLineWidth(0.3);
-    doc.rect(MGS, y, bW, checkH, 'FD');
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.negro);
-    doc.text('TIPO DE ACTIVIDAD:', MGS + 2, y + 4);
+    doc.setDrawColor(...C.negro); doc.setLineWidth(0.3);
+    doc.rect(MGS, yA, bW, checkH, 'FD');
+    doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...C.negro);
+    doc.text('TIPO DE ACTIVIDAD:', MGS + 2, yA + 4);
     const labW2 = 50, colW2 = (bW - labW2) / tiposAll.length;
     tiposAll.forEach((t, i) => {
-      const bx = MGS + labW2 + i * colW2 + 1, by = y + 1.2;
+      const bx = MGS + labW2 + i * colW2 + 1, by = yA + 1.2;
       doc.setDrawColor(...C.negro); doc.setLineWidth(0.3);
       doc.rect(bx, by, 4, 4);
       if (tipos.includes(t)) {
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C.rojo);
+        doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...C.rojo);
         doc.text('X', bx + 2, by + 3.4, { align: 'center' });
       }
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C.negro);
-      doc.text(t, bx + 5.5, y + 4);
+      doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(...C.negro);
+      doc.text(t, bx + 5.5, yA + 4);
     });
-    y += checkH;
+    yA += checkH;
 
-    // ═══════════════════════════════════════════════════════
-    // 5. LUGAR/FECHA — HORAS — PRODUCTOR
-    // ═══════════════════════════════════════════════════════
-    doc.autoTable({
-      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
-      body: [[
-        { content: 'LUGAR:', styles: { ...sLabel, cellWidth: 20 } },
-        { content: v('capLugar').trim(), styles: { ...sValor, cellWidth: 135 } },
-        { content: 'FECHA:', styles: { ...sLabel, cellWidth: 20 } },
-        { content: v('capFecha'), styles: sValor }
-      ]],
-      theme: 'grid', styles: sData
-    });
-    y = doc.lastAutoTable.finalY;
+    // ÁREA (mitad izq) + N° TRAB H/M (mitad der)
+    const halfW = bW / 2;
+    const nTrabV = v('capNTrab') || String(asistentes.length);
+    const nHv    = v('capNH')   || String(nH);
+    const nMv    = v('capNM')   || String(nM);
+    _lbl('ÁREA:', MGS + 1, yA);
+    _val(v('capArea').trim(), MGS + 13, yA, halfW - 14);
+    _sub(MGS, yA + ROW, MGS + halfW);
+    _lbl('N° TRAB:', MGS + halfW + 1, yA);
+    _val(`${nTrabV}   H: ${nHv}   M: ${nMv}`, MGS + halfW + 22, yA, halfW - 23);
+    _sub(MGS + halfW, yA + ROW, MGS + bW);
+    yA += ROW;
 
-    doc.autoTable({
-      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
-      body: [[
-        { content: 'H. INICIO:', styles: { ...sLabel, cellWidth: 24 } },
-        { content: v('capHoraInicio') || '', styles: { ...sValor, cellWidth: 38 } },
-        { content: 'H. TÉRMINO:', styles: { ...sLabel, cellWidth: 28 } },
-        { content: v('capHoraTermino') || '', styles: { ...sValor, cellWidth: 38 } },
-        { content: 'TOTAL HORAS:', styles: { ...sLabel, cellWidth: 30 } },
-        { content: v('capHoras') || '—', styles: { ...sValor, cellWidth: 50 } },
-        { content: 'H / M:', styles: { ...sLabel, cellWidth: 18 } },
-        { content: `${nH} / ${nM}`, styles: sValor }
-      ]],
-      theme: 'grid', styles: sData
-    });
-    y = doc.lastAutoTable.finalY;
+    // LUGAR (65%) + FECHA (35%)
+    const lugW = Math.round(bW * 0.65);
+    _lbl('LUGAR:', MGS + 1, yA);
+    _val(v('capLugar').trim(), MGS + 15, yA, lugW - 16);
+    _sub(MGS, yA + ROW, MGS + lugW);
+    _lbl('FECHA:', MGS + lugW + 1, yA);
+    _val(v('capFecha'), MGS + lugW + 16, yA, bW - lugW - 17);
+    _sub(MGS + lugW, yA + ROW, MGS + bW);
+    yA += ROW;
 
-    doc.autoTable({
-      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
-      body: [[
-        { content: 'PRODUCTOR:', styles: { ...sLabel, cellWidth: 28 } },
-        { content: nombreEmp, styles: sValor }
-      ]],
-      theme: 'grid', styles: sData
-    });
-    y = doc.lastAutoTable.finalY;
+    // H. INICIO + H. TÉRMINO + TOTAL HORAS (tercios)
+    const segW = Math.round(bW / 3);
+    _lbl('H. INICIO:', MGS + 1, yA);
+    _val(v('capHoraInicio') || '', MGS + 24, yA);
+    _sub(MGS, yA + ROW, MGS + segW);
+    _lbl('H. TÉRMINO:', MGS + segW + 1, yA);
+    _val(v('capHoraTermino') || '', MGS + segW + 28, yA);
+    _sub(MGS + segW, yA + ROW, MGS + segW * 2);
+    _lbl('TOTAL HORAS:', MGS + segW * 2 + 1, yA);
+    _val(v('capHoras') || '—', MGS + segW * 2 + 30, yA);
+    _sub(MGS + segW * 2, yA + ROW, MGS + bW);
+    yA += ROW;
+
+    // PRODUCTOR (ancho completo)
+    const prodV = v('capProductor') || nombreEmp;
+    _lbl('PRODUCTOR:', MGS + 1, yA);
+    _val(prodV, MGS + 27, yA, bW - 28);
+    _sub(MGS, yA + ROW, MGS + bW);
+    yA += ROW;
+
+    y = yA;
 
     // ═══════════════════════════════════════════════════════
     // 6. CAPACITADOR

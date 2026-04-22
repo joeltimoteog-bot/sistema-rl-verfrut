@@ -115,6 +115,19 @@
       .act-row { flex-direction: column; }
       .act-row .btn { justify-content: center; }
     }
+
+    /* ── Modal gestión de listas ── */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:500; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .modal-lista { background:#fff; border-radius:14px; padding:22px; width:90%; max-width:420px; box-shadow:0 8px 32px rgba(0,0,0,.22); max-height:80vh; display:flex; flex-direction:column; }
+    .modal-lista h3 { font-family:'Barlow Condensed',sans-serif; font-size:16px; font-weight:700; color:#0a2463; margin-bottom:14px; flex-shrink:0; }
+    .modal-lista-items { flex:1; overflow-y:auto; }
+    .modal-item-row { display:flex; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid #f1f5f9; }
+    .modal-item-row span { flex:1; font-size:13px; }
+    .btn-editar  { background:#dbeafe; color:#1e40af; border:none; border-radius:6px; padding:3px 10px; font-size:11px; font-weight:700; cursor:pointer; }
+    .btn-eliminar{ background:#fee2e2; color:#dc2626; border:none; border-radius:6px; padding:3px 10px; font-size:11px; font-weight:700; cursor:pointer; }
+    .modal-add-row { display:flex; gap:8px; margin-top:12px; flex-shrink:0; }
+    .modal-add-row input { flex:1; }
   </style>
 </head>
 <body>
@@ -176,17 +189,26 @@
 
         <div class="fg full">
           <label class="lbl">Tema *</label>
-          <input type="text" id="capTema" placeholder="Ej: Uso correcto de EPP, Manejo seguro de agroquímicos...">
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="capTema" style="flex:1"><option value="">Seleccionar tema...</option></select>
+            <button type="button" class="btn btn-gray btn-sm" onclick="gestionarLista('tema')">✏️ Gestionar</button>
+          </div>
         </div>
 
         <div class="fg">
           <label class="lbl">Fuente</label>
-          <input type="text" id="capFuente" placeholder="Ej: Normativa interna, MINSA, SUNAFIL...">
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="capFuente" style="flex:1"><option value="">Seleccionar fuente...</option></select>
+            <button type="button" class="btn btn-gray btn-sm" onclick="gestionarLista('fuente')">✏️ Gestionar</button>
+          </div>
         </div>
 
         <div class="fg">
           <label class="lbl">Área</label>
-          <input type="text" id="capArea" placeholder="Ej: Cosecha, Packing, Campo...">
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="capArea" style="flex:1"><option value="">Seleccionar área...</option></select>
+            <button type="button" class="btn btn-gray btn-sm" onclick="gestionarLista('area')">✏️ Gestionar</button>
+          </div>
         </div>
 
         <div class="fg full">
@@ -206,10 +228,22 @@
 
         <div class="fg">
           <label class="lbl">Total horas</label>
-          <input type="number" id="capHoras" min="0.5" step="0.5" placeholder="0.0">
+          <input type="text" id="capHoras" readonly placeholder="Auto" style="background:#f8fafc;color:#475569">
         </div>
 
-        <div class="fg"><!-- espacio --></div>
+        <div class="fg">
+          <label class="lbl">N° Trabajadores</label>
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px">
+            <input type="number" id="capNTrab" min="0" placeholder="Total" style="min-width:0">
+            <input type="number" id="capNH" min="0" placeholder="H" style="min-width:0">
+            <input type="number" id="capNM" min="0" placeholder="M" style="min-width:0">
+          </div>
+        </div>
+
+        <div class="fg full">
+          <label class="lbl">Productor</label>
+          <input type="text" id="capProductor" readonly placeholder="Se auto-completa al seleccionar empresa" style="background:#f8fafc;color:#475569">
+        </div>
 
       </div>
 
@@ -358,6 +392,22 @@
       <button class="btn btn-primary" onclick="exportarCSV()">⬇ Exportar CSV</button>
     </div>
     <div id="expFeedback" style="margin-top:12px;font-size:13px;color:#64748b"></div>
+  </div>
+</div>
+
+<!-- ── Modal gestión de listas desplegables ── -->
+<div class="modal-overlay" id="modalListaOverlay" onclick="if(event.target===this)cerrarModalLista()">
+  <div class="modal-lista">
+    <h3 id="modalListaTitulo">Gestionar lista</h3>
+    <div class="modal-lista-items" id="modalListaItems"></div>
+    <div class="modal-add-row">
+      <input type="text" id="modalListaInput" placeholder="Nuevo ítem..." maxlength="120"
+             onkeydown="if(event.key==='Enter')agregarItem()">
+      <button class="btn btn-primary btn-sm" onclick="agregarItem()">+ Agregar</button>
+    </div>
+    <div style="margin-top:14px;text-align:right;flex-shrink:0">
+      <button class="btn btn-gray btn-sm" onclick="cerrarModalLista()">Cerrar</button>
+    </div>
   </div>
 </div>
 
