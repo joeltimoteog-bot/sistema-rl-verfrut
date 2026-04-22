@@ -16,8 +16,14 @@ const COOLDOWN_MS = 3000;
 
 /* ─────────────────────── LISTAS DESPLEGABLES ─────────────────────── */
 const LISTAS_DEFAULT = {
-  tema:   ['Uso correcto de EPP', 'Manejo seguro de agroquímicos', 'Seguridad e Higiene Industrial'],
-  fuente: ['Normativa interna'],
+  tema:   [
+    'BUENAS PRÁCTICAS SOCIALES, LABORALES, COMERCIO ÉTICO Y SUSTENTABILIDAD / ÉTICA EMPRESARIAL',
+    'Uso correcto de EPP', 'Manejo seguro de agroquímicos', 'Seguridad e Higiene Industrial'
+  ],
+  fuente: [
+    'CAP-SC-09 / CAP-SC-10 / CAP-SC-13 / PROCEDIMIENTOS Y CÓDIGO DE CONDUCTA',
+    'Normativa interna'
+  ],
   area:   ['Cosecha', 'Packing', 'Campo', 'Riego', 'Almacén', 'Administración']
 };
 
@@ -48,7 +54,12 @@ function poblarSelect(tipo) {
     opt.value = item; opt.textContent = item;
     sel.appendChild(opt);
   });
-  if (actual) sel.value = actual;
+  // Restaurar selección previa o elegir el primer ítem por defecto
+  if (actual && items.includes(actual)) {
+    sel.value = actual;
+  } else if (items.length > 0) {
+    sel.value = items[0];
+  }
 }
 
 function inicializarListasCapacitaciones() {
@@ -320,7 +331,8 @@ function agregarAsistente(t) {
 }
 
 function eliminarAsistente(dni) {
-  asistentes = asistentes.filter(a => a.dni !== dni).map((a, i) => ({ ...a, n: i + 1 }));
+  if (!confirm('¿Eliminar este asistente de la lista?')) return;
+  asistentes = asistentes.filter(a => String(a.dni) !== String(dni)).map((a, i) => ({ ...a, n: i + 1 }));
   renderLista();
 }
 
@@ -329,8 +341,10 @@ function renderLista() {
   const ct = document.getElementById('contadorAsist');
   if (ct) ct.textContent = asistentes.length;
   // Auto-actualizar contadores nH/nM/nTrab en paso 1
-  const nHv = asistentes.filter(a => (a.sexo||'').toUpperCase()==='M').length;
-  const nMv = asistentes.filter(a => (a.sexo||'').toUpperCase()==='F').length;
+  const _esH = s => { const x=(s||'').toUpperCase(); return x==='M'||x==='H'||x==='MASCULINO'||x==='HOMBRE'; };
+  const _esM = s => { const x=(s||'').toUpperCase(); return x==='F'||x==='MUJ'||x==='FEMENINO'||x==='MUJER'; };
+  const nHv = asistentes.filter(a => _esH(a.sexo)).length;
+  const nMv = asistentes.filter(a => _esM(a.sexo)).length;
   sv('capNTrab', asistentes.length || '');
   sv('capNH', nHv || '');
   sv('capNM', nMv || '');
@@ -363,6 +377,35 @@ async function buscarCapacitador(dni) {
       if (!v('capCapCargo'))  sv('capCapCargo',  t.cargo  || '');
     }
   } catch(e) { /* silencioso */ }
+}
+
+/* ─────────────────────── AGREGAR MANUAL ─────────────────────── */
+function abrirModalManual() {
+  const el = document.getElementById('modalManualOverlay');
+  if (!el) return;
+  el.classList.add('open');
+  sv('manDni', ''); sv('manNombre', ''); sv('manCargo', ''); sv('manSexo', '');
+  setTimeout(() => { const f = document.getElementById('manDni'); if (f) f.focus(); }, 80);
+}
+
+function cerrarModalManual() {
+  const el = document.getElementById('modalManualOverlay');
+  if (el) el.classList.remove('open');
+}
+
+function agregarAsistenteManual() {
+  const dni    = (v('manDni')    || '').trim().replace(/\D/g, '');
+  const nombre = (v('manNombre') || '').trim();
+  const cargo  = (v('manCargo')  || '').trim();
+  const sexo   = v('manSexo') || '';
+  if (!dni || dni.length !== 8) { alert('El DNI debe tener exactamente 8 dígitos'); return; }
+  if (!nombre) { alert('El nombre es obligatorio'); return; }
+  if (asistentes.some(a => String(a.dni) === dni)) {
+    alert(`⚠️ DNI ${dni} ya está en la lista`); return;
+  }
+  agregarAsistente({ dni, nombre, cargo, sexo, empresa: v('capEmpresa') || '' });
+  cerrarModalManual();
+  mostrarFeedback('ok', `✅ ${nombre} agregado manualmente`);
 }
 
 /* ─────────────────────── CALCULAR HORAS ─────────────────────── */
@@ -412,8 +455,8 @@ function _buildBody() {
     cap_dni:        v('capCapDni').trim(),
     cap_nombre:     v('capCapNombre').trim(),
     cap_cargo:      v('capCapCargo').trim(),
-    n_hombres:      asistentes.filter(a => (a.sexo || '').toUpperCase() === 'M').length,
-    n_mujeres:      asistentes.filter(a => (a.sexo || '').toUpperCase() === 'F').length,
+    n_hombres:      asistentes.filter(a => { const x=(a.sexo||'').toUpperCase(); return x==='M'||x==='H'||x==='MASCULINO'||x==='HOMBRE'; }).length,
+    n_mujeres:      asistentes.filter(a => { const x=(a.sexo||'').toUpperCase(); return x==='F'||x==='MUJ'||x==='FEMENINO'||x==='MUJER'; }).length,
     asistentes:     asistentes,
     usuario:        USER.usuario,
     usuario_nombre: USER.nombre
@@ -515,8 +558,8 @@ async function generarPDF() {
       styles: sBorder
     });
 
-    // Logo encima celda izquierda fila 1 (x:10→45, y:5→20)
-    if (logoB64) { try { doc.addImage(logoB64, 'JPEG', MGS + 4, y + 1, 27, 13); } catch(e) {} }
+    // Logo encima celda izquierda fila 1 (x:10→45, y:5→20) — 22×11mm
+    if (logoB64) { try { doc.addImage(logoB64, 'JPEG', MGS + 5.5, y + 2, 22, 11); } catch(e) {} }
 
     // Texto celda central fila 1: empresa (8pt normal) + título (10pt bold)
     // Centro horizontal de COL2: x = MGS + COL1 + COL2/2 = 10+35+55 = 100mm

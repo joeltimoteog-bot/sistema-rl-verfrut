@@ -234,9 +234,9 @@
         <div class="fg">
           <label class="lbl">N° Trabajadores</label>
           <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:6px">
-            <input type="number" id="capNTrab" min="0" placeholder="Total" style="min-width:0">
-            <input type="number" id="capNH" min="0" placeholder="H" style="min-width:0">
-            <input type="number" id="capNM" min="0" placeholder="M" style="min-width:0">
+            <input type="number" id="capNTrab" min="0" placeholder="Total" readonly style="min-width:0;background:#f8fafc;color:#475569">
+            <input type="number" id="capNH"    min="0" placeholder="H"     readonly style="min-width:0;background:#f8fafc;color:#475569">
+            <input type="number" id="capNM"    min="0" placeholder="M"     readonly style="min-width:0;background:#f8fafc;color:#475569">
           </div>
         </div>
 
@@ -297,8 +297,9 @@
       <!-- DNI manual -->
       <hr class="sec-sep">
       <div style="display:flex;gap:8px;margin-bottom:16px">
-        <input type="text" id="dniManual" maxlength="8" placeholder="DNI manual (si el QR no funciona)" style="flex:1" onkeydown="if(event.key==='Enter')buscarDniManual()">
-        <button class="btn btn-primary" onclick="buscarDniManual()">Buscar</button>
+        <input type="text" id="dniManual" maxlength="8" placeholder="Buscar por DNI (si el QR no funciona)" style="flex:1" onkeydown="if(event.key==='Enter')buscarDniManual()">
+        <button class="btn btn-primary" onclick="buscarDniManual()">🔍 Buscar</button>
+        <button class="btn btn-gray"    onclick="abrirModalManual()">➕ Manual</button>
       </div>
 
       <!-- Lista asistentes -->
@@ -392,6 +393,39 @@
       <button class="btn btn-primary" onclick="exportarCSV()">⬇ Exportar CSV</button>
     </div>
     <div id="expFeedback" style="margin-top:12px;font-size:13px;color:#64748b"></div>
+  </div>
+</div>
+
+<!-- ── Modal agregar asistente manualmente ── -->
+<div class="modal-overlay" id="modalManualOverlay" onclick="if(event.target===this)cerrarModalManual()">
+  <div class="modal-lista">
+    <h3>➕ Agregar asistente manualmente</h3>
+    <div class="form-grid" style="margin-bottom:14px">
+      <div class="fg">
+        <label class="lbl">DNI *</label>
+        <input type="text" id="manDni" maxlength="8" placeholder="8 dígitos" onkeydown="if(event.key==='Enter')agregarAsistenteManual()">
+      </div>
+      <div class="fg">
+        <label class="lbl">Sexo</label>
+        <select id="manSexo">
+          <option value="">— sin especificar —</option>
+          <option value="M">M – Masculino</option>
+          <option value="F">F – Femenino</option>
+        </select>
+      </div>
+      <div class="fg full">
+        <label class="lbl">Apellidos y nombres *</label>
+        <input type="text" id="manNombre" placeholder="Apellidos y nombres completos">
+      </div>
+      <div class="fg full">
+        <label class="lbl">Cargo / Área</label>
+        <input type="text" id="manCargo" placeholder="Ej: Operario Cosecha">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-shrink:0">
+      <button class="btn btn-gray btn-sm"    onclick="cerrarModalManual()">Cancelar</button>
+      <button class="btn btn-primary btn-sm" onclick="agregarAsistenteManual()">✔ Agregar</button>
+    </div>
   </div>
 </div>
 
