@@ -325,195 +325,202 @@ async function generarPDF() {
     const { jsPDF } = window.jspdf;
     // A4 HORIZONTAL — UNA SOLA HOJA (297 × 210 mm)
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-    const W = 297, H = 210, MG = 10, bW = W - 2 * MG; // bW = 277mm
+    const W = 297, H = 210, MGS = 10, MGT = 6; // margen lateral 10, superior 6
+    const bW = W - 2 * MGS; // 277mm
 
     const C = {
-      negro:     [0, 0, 0],
-      rojo:      [217, 31, 38],
-      banner:    [217, 217, 217],  // #D9D9D9
-      cabecera:  [232, 232, 232],  // #E8E8E8
+      negro:    [0, 0, 0],
+      rojo:     [217, 31, 38],
+      banner:   [217, 217, 217],  // #D9D9D9
+      cabecera: [232, 232, 232],  // #E8E8E8
     };
 
     const esRapel   = empresa === 'RAPEL';
     const nombreEmp = esRapel ? 'SOCIEDAD AGRÍCOLA RAPEL S.A.C.' : 'SOCIEDAD EXPORTADORA VERFRUT S.A.C.';
-    const rucEmp    = esRapel ? '20451779711' : '20601438586';
-    const tipos     = getTipos(); // valores de checkboxes marcados
+    const rucEmp    = esRapel ? 'RUC 20451779711' : 'RUC 20601438586';
+    const tipos     = getTipos();
     const tiposAll  = ['INDUCCIÓN', 'PAUTA-CHARLA', 'CAPACITACIÓN', 'ENTRENAMIENTO', 'SIMULACRO'];
     const nH        = asistentes.filter(a => (a.sexo || '').toUpperCase() === 'M').length;
     const nM        = asistentes.filter(a => (a.sexo || '').toUpperCase() === 'F').length;
     const logoB64   = await _getLogoBase64();
 
-    // Estilos reutilizables
+    // ── Estilos reutilizables ──
     const sBorder  = { lineColor: C.negro, lineWidth: 0.3 };
-    const sData    = { ...sBorder, textColor: C.negro, cellPadding: 1.2, minCellHeight: 5 };
-    const sBanner  = { fillColor: C.banner, textColor: C.negro, fontStyle: 'bold', halign: 'center', fontSize: 9, minCellHeight: 5.5, cellPadding: 1 };
-    const sCabHead = { fillColor: C.cabecera, textColor: C.negro, fontStyle: 'bold', halign: 'center', fontSize: 8, minCellHeight: 5 };
-    const sLabel   = { fontStyle: 'bold', fontSize: 7.5, textColor: C.negro };
-    const sValor   = { fontSize: 8.5, textColor: C.negro };
+    const sData    = { ...sBorder, textColor: C.negro, cellPadding: 1, minCellHeight: 4.5 };
+    const sBanner  = { fillColor: C.banner, textColor: C.negro, fontStyle: 'bold', halign: 'center', fontSize: 8.5, minCellHeight: 5, cellPadding: 1 };
+    const sCabHead = { fillColor: C.cabecera, textColor: C.negro, fontStyle: 'bold', halign: 'center', fontSize: 7.5, minCellHeight: 4 };
+    const sLabel   = { fontStyle: 'bold', fontSize: 7, textColor: C.negro };
+    const sValor   = { fontSize: 8, textColor: C.negro };
 
-    let y = MG;
+    // Anchos columnas encabezado (suman 277mm exacto)
+    const COL1 = 45, COL2 = 172, COL3 = 60;
 
-    // ═══════════════════════════════════════════════
-    // 1. ENCABEZADO (3 celdas: logo | título | código)
-    // ═══════════════════════════════════════════════
+    let y = MGT; // empieza en 6mm desde arriba
+
+    // ═══════════════════════════════════════════════════════
+    // 1. ENCABEZADO — 2 FILAS con 3 columnas cada una
+    // ═══════════════════════════════════════════════════════
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
-      body: [[
-        { content: '', styles: { cellWidth: 50, minCellHeight: 18 } },
-        { content: `${nombreEmp}\nREGISTRO DE INDUCCIÓN, CAPACITACIÓN,\nENTRENAMIENTO Y SIMULACROS DE EMERGENCIA\nCaserío El Papayo Mz. O, Castilla, Piura, Perú  ·  RUC ${rucEmp}`,
-          styles: { halign: 'center', valign: 'middle', fontSize: 8.5, fontStyle: 'bold', textColor: C.negro, cellWidth: 167, minCellHeight: 18 }
-        },
-        { content: 'R-SC-01\nVersión N.° 0.0\nÚltima revisión:\n24/03/2026\nFrecuencia: Cada actividad',
-          styles: { halign: 'center', valign: 'middle', fontSize: 8, textColor: C.negro, cellWidth: 60, minCellHeight: 18 }
-        }
-      ]],
-      theme: 'grid', styles: sBorder
+      startY: y,
+      margin: { left: MGS, right: MGS, bottom: 6 },
+      body: [
+        // ── Fila 1: Logo | Nombre empresa + Título | Código ──
+        [
+          { content: '', styles: { cellWidth: COL1, minCellHeight: 16, valign: 'middle' } },
+          { content: `${nombreEmp}\nREGISTRO DE INDUCCIÓN, CAPACITACIÓN,\nENTRENAMIENTO Y SIMULACROS DE EMERGENCIA`,
+            styles: { fontStyle: 'bold', halign: 'center', valign: 'middle', fontSize: 10,
+                      textColor: C.negro, cellWidth: COL2, minCellHeight: 16, cellPadding: 1.5 } },
+          { content: 'R-SC-01\nVersión N.° 0.0\nÚltima revisión:\n24/03/2026',
+            styles: { halign: 'center', valign: 'middle', fontSize: 9,
+                      textColor: C.negro, cellWidth: COL3, minCellHeight: 16, cellPadding: 1 } }
+        ],
+        // ── Fila 2: Dirección/RUC | Lema | Frecuencia ──
+        [
+          { content: `Caserío El Papayo Mz. O, Castilla,\nPiura, Piura, Perú\n${rucEmp}`,
+            styles: { halign: 'center', valign: 'middle', fontSize: 8,
+                      textColor: C.negro, cellWidth: COL1, minCellHeight: 9, cellPadding: 1 } },
+          { content: 'Empresa dedicada al cultivo, procesamiento y comercialización de fruta fresca.',
+            styles: { halign: 'center', valign: 'middle', fontStyle: 'italic', fontSize: 8.5,
+                      textColor: C.negro, cellWidth: COL2, minCellHeight: 9, cellPadding: 1 } },
+          { content: 'Frecuencia:\n_______________',
+            styles: { halign: 'left', valign: 'middle', fontSize: 9,
+                      textColor: C.negro, cellWidth: COL3, minCellHeight: 9, cellPadding: 2 } }
+        ]
+      ],
+      theme: 'grid',
+      styles: sBorder
     });
-    // Logo encima de la celda izquierda
-    if (logoB64) { try { doc.addImage(logoB64, 'JPEG', MG + 7, y + 1, 35, 16); } catch(e) {} }
+    // Logo sobre la celda superior-izquierda (fila 1, col 1: x=10..55, y=6..22)
+    if (logoB64) { try { doc.addImage(logoB64, 'JPEG', MGS + 6.5, y + 1, 32, 14); } catch(e) {} }
     y = doc.lastAutoTable.finalY;
 
-    // ═══════════════════════════════════════════════
-    // 2. BANNER DATOS DE LA ACTIVIDAD
-    // ═══════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
+    // 2. BANNER — DATOS DE LA ACTIVIDAD
+    // ═══════════════════════════════════════════════════════
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       body: [[{ content: 'DATOS DE LA ACTIVIDAD', styles: sBanner }]],
       theme: 'grid', styles: sBorder
     });
     y = doc.lastAutoTable.finalY;
 
-    // ═══════════════════════════════════════════════
-    // 3. CAMPOS: TEMA — FUENTE/ÁREA
-    // ═══════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
+    // 3. CAMPOS DE ACTIVIDAD
+    // ═══════════════════════════════════════════════════════
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       body: [[
-        { content: 'TEMA:', styles: { ...sLabel, cellWidth: 22 } },
-        { content: v('capTema').trim(), styles: { ...sValor } }
+        { content: 'TEMA:', styles: { ...sLabel, cellWidth: 20 } },
+        { content: v('capTema').trim(), styles: sValor }
       ]],
       theme: 'grid', styles: sData
     });
     y = doc.lastAutoTable.finalY;
 
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       body: [[
-        { content: 'FUENTE:', styles: { ...sLabel, cellWidth: 22 } },
-        { content: v('capFuente').trim(), styles: { ...sValor, cellWidth: 114 } },
-        { content: 'ÁREA:', styles: { ...sLabel, cellWidth: 18 } },
-        { content: v('capArea').trim(), styles: { ...sValor } }
+        { content: 'FUENTE:', styles: { ...sLabel, cellWidth: 20 } },
+        { content: v('capFuente').trim(), styles: { ...sValor, cellWidth: 116 } },
+        { content: 'ÁREA:', styles: { ...sLabel, cellWidth: 16 } },
+        { content: v('capArea').trim(), styles: sValor }
       ]],
       theme: 'grid', styles: sData
     });
     y = doc.lastAutoTable.finalY;
 
-    // ═══════════════════════════════════════════════
-    // 4. TIPO DE ACTIVIDAD (checkboxes dibujados a mano)
-    // ═══════════════════════════════════════════════
-    const checkH = 6.5;
+    // ═══════════════════════════════════════════════════════
+    // 4. TIPO DE ACTIVIDAD — checkboxes manuales
+    // ═══════════════════════════════════════════════════════
+    const checkH = 6;
     doc.setFillColor(...C.banner);
     doc.setDrawColor(...C.negro);
     doc.setLineWidth(0.3);
-    doc.rect(MG, y, bW, checkH, 'FD');
-
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(...C.negro);
-    doc.text('TIPO DE ACTIVIDAD:', MG + 2, y + 4.3);
-
-    const labW2 = 50;
-    const colW2 = (bW - labW2) / tiposAll.length;
+    doc.rect(MGS, y, bW, checkH, 'FD');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.negro);
+    doc.text('TIPO DE ACTIVIDAD:', MGS + 2, y + 4);
+    const labW2 = 50, colW2 = (bW - labW2) / tiposAll.length;
     tiposAll.forEach((t, i) => {
-      const cx  = MG + labW2 + i * colW2;
-      const bx  = cx + 1;
-      const by  = y + 1.3;
-      // Cuadrado checkbox
-      doc.setDrawColor(...C.negro);
-      doc.setLineWidth(0.3);
+      const bx = MGS + labW2 + i * colW2 + 1, by = y + 1.2;
+      doc.setDrawColor(...C.negro); doc.setLineWidth(0.3);
       doc.rect(bx, by, 4, 4);
-      // X roja si el tipo está marcado
       if (tipos.includes(t)) {
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(10);
-        doc.setTextColor(...C.rojo);
-        doc.text('X', bx + 2, by + 3.5, { align: 'center' });
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C.rojo);
+        doc.text('X', bx + 2, by + 3.4, { align: 'center' });
       }
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7.5);
-      doc.setTextColor(...C.negro);
-      doc.text(t, bx + 5.5, y + 4.3);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C.negro);
+      doc.text(t, bx + 5.5, y + 4);
     });
     y += checkH;
 
-    // ═══════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     // 5. LUGAR/FECHA — HORAS — PRODUCTOR
-    // ═══════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       body: [[
-        { content: 'LUGAR:', styles: { ...sLabel, cellWidth: 22 } },
-        { content: v('capLugar').trim(), styles: { ...sValor, cellWidth: 133 } },
-        { content: 'FECHA:', styles: { ...sLabel, cellWidth: 22 } },
-        { content: v('capFecha'), styles: { ...sValor } }
+        { content: 'LUGAR:', styles: { ...sLabel, cellWidth: 20 } },
+        { content: v('capLugar').trim(), styles: { ...sValor, cellWidth: 135 } },
+        { content: 'FECHA:', styles: { ...sLabel, cellWidth: 20 } },
+        { content: v('capFecha'), styles: sValor }
       ]],
       theme: 'grid', styles: sData
     });
     y = doc.lastAutoTable.finalY;
 
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       body: [[
-        { content: 'HORA INICIO:', styles: { ...sLabel, cellWidth: 30 } },
-        { content: v('capHoraInicio') || '', styles: { ...sValor, cellWidth: 38.75 } },
-        { content: 'HORA TÉRMINO:', styles: { ...sLabel, cellWidth: 34 } },
-        { content: v('capHoraTermino') || '', styles: { ...sValor, cellWidth: 38.75 } },
+        { content: 'H. INICIO:', styles: { ...sLabel, cellWidth: 24 } },
+        { content: v('capHoraInicio') || '', styles: { ...sValor, cellWidth: 38 } },
+        { content: 'H. TÉRMINO:', styles: { ...sLabel, cellWidth: 28 } },
+        { content: v('capHoraTermino') || '', styles: { ...sValor, cellWidth: 38 } },
         { content: 'TOTAL HORAS:', styles: { ...sLabel, cellWidth: 30 } },
-        { content: v('capHoras') || '—', styles: { ...sValor, cellWidth: 50.75 } },
+        { content: v('capHoras') || '—', styles: { ...sValor, cellWidth: 50 } },
         { content: 'H / M:', styles: { ...sLabel, cellWidth: 18 } },
-        { content: `${nH} / ${nM}`, styles: { ...sValor } }
+        { content: `${nH} / ${nM}`, styles: sValor }
       ]],
       theme: 'grid', styles: sData
     });
     y = doc.lastAutoTable.finalY;
 
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       body: [[
-        { content: 'PRODUCTOR:', styles: { ...sLabel, cellWidth: 30 } },
-        { content: nombreEmp, styles: { ...sValor } }
+        { content: 'PRODUCTOR:', styles: { ...sLabel, cellWidth: 28 } },
+        { content: nombreEmp, styles: sValor }
       ]],
       theme: 'grid', styles: sData
     });
     y = doc.lastAutoTable.finalY;
 
-    // ═══════════════════════════════════════════════
-    // 6. BANNER + TABLA CAPACITADOR
-    // ═══════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
+    // 6. CAPACITADOR
+    // ═══════════════════════════════════════════════════════
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       body: [[{ content: 'DATOS DE CAPACITADOR O ENTRENADOR', styles: sBanner }]],
       theme: 'grid', styles: sBorder
     });
     y = doc.lastAutoTable.finalY;
 
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / INSTITUCIÓN', 'FIRMA']],
       body: [['1', v('capCapDni').trim(), v('capCapNombre').trim(), v('capCapCargo').trim(), '']],
       theme: 'grid',
       headStyles: { ...sCabHead },
-      styles: { ...sBorder, fontSize: 8, cellPadding: 1.2, textColor: C.negro },
-      bodyStyles: { halign: 'center', minCellHeight: 6.5 },
+      styles: { ...sBorder, fontSize: 7.5, cellPadding: 1, textColor: C.negro },
+      bodyStyles: { halign: 'center', minCellHeight: 5 },
       columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 28 }, 2: { cellWidth: 110 }, 3: { cellWidth: 82 }, 4: { cellWidth: 45 } }
     });
     y = doc.lastAutoTable.finalY;
 
-    // ═══════════════════════════════════════════════
-    // 7. BANNER + TABLA PARTICIPANTES (siempre 20 filas)
-    // ═══════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
+    // 7. PARTICIPANTES — siempre 20 filas
+    // ═══════════════════════════════════════════════════════
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       body: [[{ content: 'PARTICIPANTES DE LA ACTIVIDAD', styles: sBanner }]],
       theme: 'grid', styles: sBorder
     });
@@ -524,12 +531,12 @@ async function generarPDF() {
     ]);
 
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / ÁREA', 'FIRMA / HUELLA', 'OBSERVACIONES']],
       body: filasPart,
       theme: 'grid',
-      headStyles: { ...sCabHead },
-      styles: { ...sBorder, fontSize: 7.5, cellPadding: 1, textColor: C.negro, minCellHeight: 3.8 },
+      headStyles: { ...sCabHead, minCellHeight: 4 },
+      styles: { ...sBorder, fontSize: 7, cellPadding: 0.8, textColor: C.negro, minCellHeight: 3.5 },
       bodyStyles: { halign: 'center' },
       columnStyles: {
         0: { cellWidth: 12 }, 1: { cellWidth: 28 },
@@ -544,38 +551,40 @@ async function generarPDF() {
     });
     y = doc.lastAutoTable.finalY;
 
-    // ═══════════════════════════════════════════════
-    // 8. BANNER + TABLA RESPONSABLE DEL REGISTRO
-    // ═══════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
+    // 8. RESPONSABLE DEL REGISTRO
+    // ═══════════════════════════════════════════════════════
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       body: [[{ content: 'RESPONSABLE DEL REGISTRO / SEGURIDAD ALIMENTARIA', styles: sBanner }]],
       theme: 'grid', styles: sBorder
     });
     y = doc.lastAutoTable.finalY;
 
     doc.autoTable({
-      startY: y, margin: { left: MG, right: MG },
+      startY: y, margin: { left: MGS, right: MGS, bottom: 6 },
       head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / ÁREA', 'FIRMA']],
       body: [['1', respDni, respNombre, respCargo, '']],
       theme: 'grid',
       headStyles: { ...sCabHead },
-      styles: { ...sBorder, fontSize: 8, cellPadding: 1.2, textColor: C.negro },
-      bodyStyles: { halign: 'center', minCellHeight: 7 },
+      styles: { ...sBorder, fontSize: 7.5, cellPadding: 1, textColor: C.negro },
+      bodyStyles: { halign: 'center', minCellHeight: 5 },
       columnStyles: { 0: { cellWidth: 12 }, 1: { cellWidth: 28 }, 2: { cellWidth: 110 }, 3: { cellWidth: 82 }, 4: { cellWidth: 45 } }
     });
 
-    // ── Verificar páginas (debug) ──
-    if (doc.internal.getNumberOfPages() > 1) {
-      console.warn('[PDF R-SC-01] ⚠️ El contenido excede 1 página — revisar alturas de filas');
+    // ── Forzar 1 sola página (eliminar excedentes) ──
+    const paginas = doc.internal.getNumberOfPages();
+    if (paginas > 1) {
+      console.error('[PDF R-SC-01] ❌ Generó ' + paginas + ' páginas, eliminando excedentes');
+      while (doc.internal.getNumberOfPages() > 1) doc.deletePage(doc.internal.getNumberOfPages());
     }
 
     // ── Footer ──
     doc.setPage(1);
     const fechaGen = new Date().toLocaleString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     doc.setFont('helvetica', 'normal'); doc.setFontSize(6); doc.setTextColor(140, 140, 140);
-    doc.text(`Generado: ${fechaGen}  |  Sistema RL v3.0  |  ${USER.nombre}`, MG, H - 3);
-    doc.text('Pág. 1 de 1', W - MG, H - 3, { align: 'right' });
+    doc.text(`Generado: ${fechaGen}  |  Sistema RL v3.0  |  ${USER.nombre}`, MGS, H - 3);
+    doc.text('Pág. 1 de 1', W - MGS, H - 3, { align: 'right' });
 
     const fname = `R-SC-01_${empresa}_${v('capFecha')}_${v('capTema').trim().substring(0, 20).replace(/[\s/\\:*?"<>|]+/g, '-')}.pdf`;
     doc.save(fname);
