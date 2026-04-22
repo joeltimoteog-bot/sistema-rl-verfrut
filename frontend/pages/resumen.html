@@ -189,6 +189,13 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
       <div class="sc"><div class="sc-ic iv">✅</div><div><div class="sc-n" id="rR">0</div><div class="sc-l">FINALIZADO</div></div></div>
     </div>
 
+    <div class="sg" style="grid-template-columns:repeat(4,1fr);margin-top:-8px" id="rModCards">
+      <div class="sc"><div class="sc-ic" style="background:#ede9fe;color:#7c3aed">🏕️</div><div><div class="sc-n" id="rMVisTotal" style="color:#7c3aed">—</div><div class="sc-l">VISITAS</div></div></div>
+      <div class="sc"><div class="sc-ic ir">⚖️</div><div><div class="sc-n" id="rMCasTotal" style="color:#d9292b">—</div><div class="sc-l">CASOS RL</div></div></div>
+      <div class="sc"><div class="sc-ic in">🚌</div><div><div class="sc-n" id="rMFusTotal" style="color:#d97706">—</div><div class="sc-l">FUSIONES</div></div></div>
+      <div class="sc"><div class="sc-ic" style="background:#cffafe;color:#0891b2">🎓</div><div><div class="sc-n" id="rMCapTotal" style="color:#0891b2">—</div><div class="sc-l">CAPACITACIONES</div></div></div>
+    </div>
+
     <div class="sup-card">
       <div class="sup-t" style="display:flex;align-items:center;gap:8px">
         <span>📋 Resumen por Supervisor</span>
@@ -557,7 +564,25 @@ window.onload = function() {
   }
   // Firebase: iniciar escucha de estadísticas para ranking en tiempo real
   _rFbIniciarConRetry(10);
+  _rFbIniciarModulos(10);
 };
+
+function _rFbCargarModulos(data) {
+  if (!data) return;
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.textContent = val; };
+  if (data.visitas)        set('rMVisTotal', data.visitas.total);
+  if (data.casos)          set('rMCasTotal', data.casos.total);
+  if (data.fusiones)       set('rMFusTotal', data.fusiones.total);
+  if (data.capacitaciones) set('rMCapTotal', data.capacitaciones.total);
+}
+
+function _rFbIniciarModulos(intentos) {
+  if (typeof window._fbSuscribirModulosR === 'function') {
+    window._fbSuscribirModulosR(function(data) { if (data) _rFbCargarModulos(data); });
+  } else if (intentos > 0) {
+    setTimeout(() => _rFbIniciarModulos(intentos - 1), 700);
+  }
+}
 
 let _rFbEstadisticas = null;
 function _rFbIniciarConRetry(intentos) {
@@ -605,6 +630,12 @@ window._fbSuscribirEstadisticasR = function(callback) {
   onValue(ref(_dbR, 'estadisticas'), snap => {
     callback(snap.val());
   }, e => { console.error('[Firebase Resumen] Error onValue:', e); callback(null); });
+};
+
+window._fbSuscribirModulosR = function(callback) {
+  if (!_dbR) { callback(null); return; }
+  onValue(ref(_dbR, 'estadisticas_modulos'), snap => { callback(snap.val()); },
+    e => { console.error('[Firebase Resumen] Error onValue estadisticas_modulos:', e); callback(null); });
 };
 
 // Acceso directo a los datos en caché del listener

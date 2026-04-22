@@ -1012,6 +1012,41 @@ async function generarReportePDF() {
   mostrarToast('✅ PDF generado correctamente');
 }
 
+// ══════════════════ FIREBASE MÓDULOS ══════════════════
+function _fbCargarModulosEst(data) {
+  if (!data) return;
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.textContent = val; };
+  if (data.visitas) {
+    set('eVisTotal',  data.visitas.total);
+    set('eVisPlazo',  data.visitas.en_plazo);
+    set('eVisRetras', data.visitas.retrasadas);
+    set('eVisMes',    data.visitas.este_mes);
+  }
+  if (data.casos) {
+    set('eCasTotal',  data.casos.total);
+    set('eCasPlazo',  data.casos.en_plazo);
+    set('eCasRetras', data.casos.retrasados);
+    set('eCasMes',    data.casos.este_mes);
+  }
+  if (data.fusiones) {
+    set('eFusTotal', data.fusiones.total);
+    set('eFusPend',  data.fusiones.pendientes);
+    set('eFusValid', data.fusiones.validados);
+    set('eFusMes',   data.fusiones.este_mes);
+    set('eFusTrab',  data.fusiones.trabajadores);
+  }
+  const badge = document.getElementById('fbBadgeEst');
+  if (badge) badge.style.display = 'inline-flex';
+}
+
+function _fbIniciarEscuchaModulosEst(intentos) {
+  if (typeof window._fbSuscribirModulosEst === 'function') {
+    window._fbSuscribirModulosEst(function(data) { if (data) _fbCargarModulosEst(data); });
+  } else if (intentos > 0) {
+    setTimeout(() => _fbIniciarEscuchaModulosEst(intentos - 1), 700);
+  }
+}
+
 // ══════════════════ FIREBASE ESTADÍSTICAS ══════════════════
 
 let _fbEstEst = null;
@@ -1231,6 +1266,7 @@ window.onload = function() {
   // Firebase PRIMERO — antes de cualquier llamada a la API
   console.log('[Firebase][Est] onload: iniciando escucha Firebase');
   _fbIniciarEscuchaEst(12);
+  _fbIniciarEscuchaModulosEst(12);
   if (cargarCacheLS()) {
     // Cache válido: mostrar inmediatamente y refrescar en background (si Firebase no tomó el relevo)
     renderEstadisticasAdmin(CACHE.estadisticasAdmin);
@@ -1276,6 +1312,13 @@ window._fbSuscribirEstEst = function(callback) {
     callback(val);
   }, err => {
     console.error('[Firebase][Est][module] Error onValue:', err.code, err.message);
+  });
+};
+
+window._fbSuscribirModulosEst = function(callback) {
+  const modRef = ref(_fbDbEst, 'estadisticas_modulos');
+  onValue(modRef, snap => { callback(snap.val()); }, err => {
+    console.error('[Firebase][Est][module] Error onValue estadisticas_modulos:', err.code, err.message);
   });
 };
 </script>

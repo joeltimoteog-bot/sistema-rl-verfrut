@@ -413,6 +413,7 @@ function updateAtencion(d) {
         if (d.responsable_recepcion !== undefined) sheet.getRange(r, 24).setValue(d.responsable_recepcion);
         if (d.observaciones     !== undefined) sheet.getRange(r, 25).setValue(d.observaciones);
         if (d.estado            !== undefined) sheet.getRange(r, 26).setValue(d.estado);
+        try { actualizarFirebaseModulos(); } catch(em) { console.warn('[Firebase] módulos falló:', em.message); }
         return { success: true };
       }
     }
@@ -445,6 +446,7 @@ function deleteAtencion(d) {
           return { success: false, error: 'No tienes permiso para eliminar este registro.' };
         }
         sheet.deleteRow(i + 1);
+        try { actualizarFirebaseModulos(); } catch(em) { console.warn('[Firebase] módulos falló:', em.message); }
         return { success: true };
       }
     }
@@ -974,6 +976,93 @@ function actualizarFirebaseRapido(d) {
   }
 }
 
+// ============================================================
+// FIREBASE — MÓDULOS (visitas, casos, fusiones, capacitaciones)
+// ============================================================
+function normalizarFechaStr(val) {
+  if (!val) return '';
+  if (val instanceof Date) return Utilities.formatDate(val, 'GMT-5', 'yyyy-MM-dd');
+  return String(val).substring(0, 10).replace(/T.*/,'');
+}
+
+function actualizarFirebaseModulos() {
+  var secret = PropertiesService.getScriptProperties().getProperty('FIREBASE_DB_SECRET');
+  if (!secret) { console.warn('[actualizarFirebaseModulos] FIREBASE_DB_SECRET no configurado'); return; }
+
+  var ss  = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var now = new Date();
+  var mesActStr = Utilities.formatDate(now, 'GMT-5', 'yyyy-MM');
+
+  // ─── VISITAS ───────────────────────────────────────────────
+  // Columnas: [0]=N° [1]=FechaReg [21]=Estado
+  var wsV = ss.getSheetByName('Visitas_Campo');
+  var vis = { total: 0, en_plazo: 0, retrasadas: 0, este_mes: 0 };
+  if (wsV && wsV.getLastRow() > 1) {
+    wsV.getDataRange().getValues().slice(1).forEach(function(r) {
+      if (!r[0]) return;
+      vis.total++;
+      var est = String(r[21] || '').toUpperCase();
+      if (est === 'EN PLAZO') vis.en_plazo++;
+      else if (est === 'RETRASADO') vis.retrasadas++;
+      if (normalizarFechaStr(r[1]).substring(0, 7) === mesActStr) vis.este_mes++;
+    });
+  }
+
+  // ─── CASOS ────────────────────────────────────────────────
+  // Columnas: [0]=N° [1]=FechaReg [15]=Estado
+  var wsC = ss.getSheetByName('BD_Casos');
+  var cas = { total: 0, en_plazo: 0, retrasados: 0, este_mes: 0 };
+  if (wsC && wsC.getLastRow() > 1) {
+    wsC.getDataRange().getValues().slice(1).forEach(function(r) {
+      if (!r[0]) return;
+      cas.total++;
+      var est = String(r[15] || '').toUpperCase();
+      if (est === 'EN PLAZO' || est === 'EN PROCESO') cas.en_plazo++;
+      else if (est === 'RETRASADO') cas.retrasados++;
+      if (normalizarFechaStr(r[1]).substring(0, 7) === mesActStr) cas.este_mes++;
+    });
+  }
+
+  // ─── FUSIONES ─────────────────────────────────────────────
+  // Columnas: [0]=ID [1]=Fecha [12]=TotalTrab [27]=Estado
+  var wsF = ss.getSheetByName('Fusiones_Buses');
+  var fus = { total: 0, pendientes: 0, validados: 0, este_mes: 0, trabajadores: 0 };
+  if (wsF && wsF.getLastRow() > 1) {
+    wsF.getDataRange().getValues().slice(1).forEach(function(r) {
+      if (!r[0]) return;
+      fus.total++;
+      var est = String(r[27] || '').toLowerCase();
+      if (est === 'pendiente') fus.pendientes++;
+      else if (est === 'validado') fus.validados++;
+      if (normalizarFechaStr(r[1]).substring(0, 7) === mesActStr) fus.este_mes++;
+      fus.trabajadores += parseInt(r[12]) || 0;
+    });
+  }
+
+  // ─── CAPACITACIONES ───────────────────────────────────────
+  // Columnas: [0]=ID [2]=Fecha [16]=TotalAsistentes
+  var wsK = ss.getSheetByName('CAPACITACIONES_HDR');
+  var cap = { total: 0, este_mes: 0, total_asistentes: 0 };
+  if (wsK && wsK.getLastRow() > 1) {
+    wsK.getDataRange().getValues().slice(1).forEach(function(r) {
+      if (!r[0]) return;
+      cap.total++;
+      if (normalizarFechaStr(r[2]).substring(0, 7) === mesActStr) cap.este_mes++;
+      cap.total_asistentes += parseInt(r[16]) || 0;
+    });
+  }
+
+  // ─── PUT a Firebase ───────────────────────────────────────
+  var url = FIREBASE_DB_URL + '/estadisticas_modulos.json?auth=' + secret;
+  var payload = { visitas: vis, casos: cas, fusiones: fus, capacitaciones: cap, ultima_actualizacion: now.getTime() };
+  try {
+    UrlFetchApp.fetch(url, { method: 'PUT', contentType: 'application/json', payload: JSON.stringify(payload), muteHttpExceptions: true });
+    console.log('[actualizarFirebaseModulos] OK — vis:', vis.total, '| cas:', cas.total, '| fus:', fus.total, '| cap:', cap.total);
+  } catch(e) {
+    console.error('[actualizarFirebaseModulos] Error:', e.message);
+  }
+}
+
 function _buildListaParaFirebase(rawRows) {
   var lista = [];
   rawRows.forEach(function(row) {
@@ -1269,6 +1358,7 @@ function saveVisita(d) {
       d.pct_avance || '0.00',
       d.pct_retraso || '0.00'
     ]);
+    try { actualizarFirebaseModulos(); } catch(em) { console.warn('[Firebase] módulos falló:', em.message); }
     return { success: true, nro: nro, estado: estado };
   } catch(e) {
     return { success: false, error: e.toString() };
@@ -1601,6 +1691,7 @@ function saveCaso(d) {
       d.enlace_reporte || '',
       d.registrado_por || ''
     ]);
+    try { actualizarFirebaseModulos(); } catch(em) { console.warn('[Firebase] módulos falló:', em.message); }
     return { success: true, nro: nro };
   } catch(e) {
     return { success: false, error: e.toString() };
@@ -1788,6 +1879,7 @@ function saveFusion(data) {
       data.foto1 || '', data.foto2 || '', data.foto3 || '',
       'Pendiente'
     ]);
+    try { actualizarFirebaseModulos(); } catch(em) { console.warn('[Firebase] módulos falló:', em.message); }
     return {success:true, id};
   } catch(e) {
     return {success:false, error:e.message};
@@ -2138,6 +2230,7 @@ function getEvaluaciones360(p) {
         ws.getRange(r, 18).setValue(d.compromisos||'');
         ws.getRange(r, 19).setValue(d.observaciones||'');
         ws.getRange(r, 20).setValue(d.motivo||'');
+        try { actualizarFirebaseModulos(); } catch(em) { console.warn('[Firebase] módulos falló:', em.message); }
         return { success: true };
       }
     }
@@ -2170,6 +2263,7 @@ function updateCaso(d) {
         if (d.enlace_reporte !== undefined) ws.getRange(r, 24).setValue(d.enlace_reporte);
         if (d.gravedad       !== undefined) ws.getRange(r, 26).setValue(d.gravedad);
         if (d.estado_gestion !== undefined) ws.getRange(r, 27).setValue(d.estado_gestion);
+        try { actualizarFirebaseModulos(); } catch(em) { console.warn('[Firebase] módulos falló:', em.message); }
         return { success: true };
       }
     }
@@ -2468,6 +2562,7 @@ function capGuardar(body) {
     });
 
     SpreadsheetApp.flush(); // forzar escritura inmediata
+    try { actualizarFirebaseModulos(); } catch(em) { console.warn('[Firebase] módulos falló:', em.message); }
     console.log('[capGuardar] OK — id:', id, '| asistentes:', asistentes.length);
     return { success: true, id: id, total: asistentes.length };
   } catch(e) {
