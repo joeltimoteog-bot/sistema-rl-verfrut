@@ -442,10 +442,12 @@ async function guardarCapacitacion() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Guardando...';
   try {
-    const body = _buildBody();
-    const d = await apiPost({ action: 'guardarCapacitacion', ...body });
+    const { actividad, asistentesEnvio } = _buildBody();
+    console.log('[GUARDAR CAP] Actividad a enviar:', actividad);
+    console.log('[GUARDAR CAP] Asistentes:', asistentesEnvio);
+    const d = await apiPost({ action: 'guardarCapacitacion', actividad, asistentes: asistentesEnvio });
     if (d.success) {
-      mostrarFeedback('ok', `✅ Capacitación guardada correctamente. ID: ${d.id || '—'}`);
+      mostrarFeedback('ok', `✅ Capacitación guardada. ID: ${d.idCapacitacion || d.id || '—'} | ${d.registrosGuardados || asistentesEnvio.length} asistente(s)`);
     } else {
       mostrarFeedback('err', '❌ ' + (d.error || 'Error al guardar en el servidor'));
     }
@@ -458,29 +460,29 @@ async function guardarCapacitacion() {
 }
 
 function _buildBody() {
-  const nH = asistentes.filter(a => { const x=(a.sexo||'').toUpperCase(); return x==='M'||x==='H'||x==='MASCULINO'||x==='HOMBRE'; }).length;
-  const nM = asistentes.filter(a => { const x=(a.sexo||'').toUpperCase(); return x==='F'||x==='MUJ'||x==='FEMENINO'||x==='MUJER'; }).length;
-  return {
-    empresa:        v('capEmpresa'),
-    fecha:          v('capFecha'),
-    tipo:           getTipos().join(', '),
-    tema:           v('capTema').trim(),
-    fuente:         v('capFuente').trim() || '—',
-    area:           v('capArea').trim()   || '—',
-    lugar:          v('capLugar').trim(),
-    hora_inicio:    v('capHoraInicio') || '',
-    hora_termino:   v('capHoraTermino') || '',
-    total_horas:    parseFloat(v('capHoras')) || 0,
-    n_trabajadores: asistentes.length,
-    n_hombres:      nH,
-    n_mujeres:      nM,
-    cap_dni:        v('capCapDni').trim(),
-    cap_nombre:     v('capCapNombre').trim(),
-    cap_cargo:      v('capCapCargo').trim(),
-    asistentes:     asistentes,
-    usuario:        USER.usuario,
-    usuario_nombre: USER.nombre
+  // Objeto actividad con los nombres exactos que espera capGuardar() del backend
+  const actividad = {
+    idCapacitacion:    'CAP-' + Date.now(),
+    empresa:           v('capEmpresa').trim(),
+    fecha:             v('capFecha').trim(),
+    tipo:              getTipos().join(', '),
+    tema:              v('capTema').trim(),
+    fuente:            v('capFuente').trim() || '—',
+    area:              v('capArea').trim()   || '—',
+    lugar:             v('capLugar').trim(),
+    horaInicio:        v('capHoraInicio') || '',
+    horaFin:           v('capHoraTermino') || '',
+    totalHoras:        parseFloat(v('capHoras')) || 0,
+    frecuencia:        v('capFrecuencia') || '',
+    capacitadorDni:    v('capCapDni').trim(),
+    capacitadorNombre: v('capCapNombre').trim(),
+    capacitadorCargo:  v('capCapCargo').trim(),
+    creadaPor:         USER.usuario,
+    creadaPorNombre:   USER.nombre
   };
+  // Asistentes como array separado (backend usa a.nombres || a.nombre)
+  const asistentesEnvio = asistentes;
+  return { actividad, asistentesEnvio };
 }
 
 /* ─────────────────────── PDF R-SC-01 ─────────────────────── */
