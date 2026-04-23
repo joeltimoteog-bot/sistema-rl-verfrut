@@ -75,9 +75,10 @@ function handle(e) {
       case 'subirArchivoAzure':       result = subirArchivoAzure(body);         break;
  
       // ═══════════════ MÓDULO CAPACITACIONES ═══════════════
-      case 'guardarCapacitacion':    result = capGuardar(body);    break;
-      case 'listarCapacitaciones':   result = capListar(body);     break;
-      case 'exportarCapacitaciones': result = capExportar(body);   break;
+      case 'guardarCapacitacion':          result = capGuardar(body);          break;
+      case 'listarCapacitaciones':         result = capListar(body);           break;
+      case 'exportarCapacitaciones':       result = capExportar(body);         break;
+      case 'estadisticasCapacitaciones':   result = capEstadisticas(body);     break;
       // ═════════════════════════════════════════════════════
      // ═══════════════ MÓDULO INVENTARIO ═══════════════════
       case 'invGetAll':                 result = invGetAll();                  break;
@@ -2511,46 +2512,160 @@ function capGuardar(body) {
 // ═══════════════════════════════════════════════════════════════════
 function capListar(body) {
   try {
-    // Acepta body (POST) o params (GET)
-    const filtros = body || {};
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const filtros    = body || {};
+    const rolesAdmin = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl', 'jefe_rl'];
+    const rol        = String(filtros.rol || '').toLowerCase().trim();
+    const esAdmin    = rolesAdmin.includes(rol);
+    const usuario    = String(filtros.usuario || '').toLowerCase().trim();
+    const supervisor = String(filtros.supervisor || '').toLowerCase().trim();
+
+    const ss  = SpreadsheetApp.openById(SPREADSHEET_ID);
     const hdr = ss.getSheetByName(CAP_SHEET_HDR);
-    if (!hdr) return { success: true, capacitaciones: [] };
- 
+    if (!hdr) return { success: true, capacitaciones: [], total: 0, esAdmin: esAdmin };
+
     const datos = hdr.getDataRange().getValues();
-    if (datos.length < 2) return { success: true, capacitaciones: [] };
- 
+    if (datos.length < 2) return { success: true, capacitaciones: [], total: 0, esAdmin: esAdmin };
+
     const headers = datos[0];
-    const desde   = filtros.desde;
-    const hasta   = filtros.hasta;
-    const empresa = filtros.empresa;
-    const usuario = filtros.usuario;
- 
+    const desde   = filtros.desde   || '';
+    const hasta   = filtros.hasta   || '';
+    const empresa = filtros.empresa || '';
+
     const resultado = [];
     for (let r = 1; r < datos.length; r++) {
       const obj = {};
       headers.forEach((h, i) => obj[capToCamel(h)] = datos[r][i]);
- 
+
       const f = (obj.fecha || '').toString().split('T')[0];
-      if (desde   && f < desde)               continue;
-      if (hasta   && f > hasta)               continue;
-      if (empresa && obj.empresa !== empresa) continue;
-      if (usuario && obj.creadaPor !== usuario) continue;
- 
+      if (desde   && f < desde) continue;
+      if (hasta   && f > hasta) continue;
+      if (empresa && empresa !== 'AMBAS' && obj.empresa !== empresa) continue;
+
+      // Supervisor solo ve sus propias capacitaciones
+      if (!esAdmin && usuario) {
+        if (String(obj.creadaPor || '').toLowerCase().trim() !== usuario) continue;
+      }
+      // Admin puede filtrar por supervisor específico
+      if (esAdmin && supervisor) {
+        if (String(obj.creadaPor || '').toLowerCase().trim() !== supervisor) continue;
+      }
+
       resultado.push(obj);
     }
- 
+
     resultado.sort((a, b) => {
       const fa = (a.fechaRegistro || a.fecha || '').toString();
       const fb = (b.fechaRegistro || b.fecha || '').toString();
       return fb.localeCompare(fa);
     });
- 
-    return { success: true, capacitaciones: resultado, total: resultado.length };
- 
+
+    return { success: true, capacitaciones: resultado, total: resultado.length, esAdmin: esAdmin };
+
   } catch (err) {
     Logger.log('ERROR capListar: ' + err.message);
     return { success: false, error: err.message };
+  }
+}
+
+function capEstadisticas(body) {
+  try {
+    const filtros    = body || {};
+    const rolesAdmin = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl', 'jefe_rl'];
+    const rol        = String(filtros.rol || '').toLowerCase().trim();
+    const esAdmin    = rolesAdmin.includes(rol);
+    if (!esAdmin) return { success: true, esAdmin: false, stats: {} };
+
+    const ss   = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const hdr  = ss.getSheetByName(CAP_SHEET_HDR);
+    const bbdd = ss.getSheetByName(CAP_SHEET_BBDD);
+    if (!hdr || !bbdd) return { success: true, esAdmin: true, stats: {} };
+
+    const filasHdr  = hdr.getDataRange().getValues().slice(1).filter(function(r){ return r[0]; });
+    const filasBdd  = bbdd.getDataRange().getValues().slice(1).filter(function(r){ return r[0]; });
+    const hoy       = new Date();
+    const mesActStr = Utilities.formatDate(hoy, 'America/Lima', 'yyyy-MM');
+
+    // Cabecera: ID[0] FECHA_REG[1] EMPRESA[2] TIPO[3] TEMA[4] FUENTE[5] AREA[6]
+    //           LUGAR[7] FECHA[8] HORA_INI[9] HORA_FIN[10] TOTAL_HORAS[11] FRECUENCIA[12]
+    //           CAP_DNI[13] CAP_NOMBRE[14] CAP_CARGO[15] TOTAL_ASIST[16] H[17] M[18]
+    //           CREADA_POR[19] CREADA_POR_NOMBRE[20]
+
+    const esteMes = filasHdr.filter(function(r){
+      return String(r[8] || '').substring(0, 7) === mesActStr;
+    });
+    const asistentesEsteMes = filasBdd.filter(function(r){
+      return String(r[5] || '').substring(0, 7) === mesActStr;
+    }).length;
+
+    // Por empresa (asistentes)
+    const porEmpresa = { RAPEL: 0, VERFRUT: 0 };
+    filasBdd.forEach(function(r){
+      const emp = String(r[2] || '').toUpperCase();
+      if (emp.indexOf('RAPEL') !== -1) porEmpresa.RAPEL++;
+      else if (emp.indexOf('VERFRUT') !== -1) porEmpresa.VERFRUT++;
+    });
+
+    // Top supervisores del mes
+    const porSupervisor = {};
+    esteMes.forEach(function(r){
+      const sup = String(r[19] || 'sin_asignar');
+      if (!porSupervisor[sup]) porSupervisor[sup] = { nombre: String(r[20] || r[19] || sup), capacitaciones: 0, asistentes: 0 };
+      porSupervisor[sup].capacitaciones++;
+      porSupervisor[sup].asistentes += parseInt(r[16]) || 0;
+    });
+    const topSupervisores = Object.keys(porSupervisor)
+      .sort(function(a, b){ return porSupervisor[b].asistentes - porSupervisor[a].asistentes; })
+      .slice(0, 5)
+      .map(function(u){ return { usuario: u, nombre: porSupervisor[u].nombre, capacitaciones: porSupervisor[u].capacitaciones, asistentes: porSupervisor[u].asistentes }; });
+
+    // Tendencia últimos 6 meses
+    const tendenciaMeses = {};
+    for (var i = 5; i >= 0; i--) {
+      var d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      var key = Utilities.formatDate(d, 'America/Lima', 'yyyy-MM');
+      tendenciaMeses[key] = { capacitaciones: 0, asistentes: 0 };
+    }
+    filasHdr.forEach(function(r){
+      var f = String(r[8] || '').substring(0, 7);
+      if (tendenciaMeses[f]) {
+        tendenciaMeses[f].capacitaciones++;
+        tendenciaMeses[f].asistentes += parseInt(r[16]) || 0;
+      }
+    });
+    const tendencia = Object.keys(tendenciaMeses).map(function(mes){
+      return { mes: mes, capacitaciones: tendenciaMeses[mes].capacitaciones, asistentes: tendenciaMeses[mes].asistentes };
+    });
+
+    // Top temas
+    const porTema = {};
+    filasHdr.forEach(function(r){
+      var t = String(r[4] || 'Sin especificar').substring(0, 60);
+      porTema[t] = (porTema[t] || 0) + 1;
+    });
+    const topTemas = Object.keys(porTema)
+      .sort(function(a, b){ return porTema[b] - porTema[a]; })
+      .slice(0, 5)
+      .map(function(t){ return { tema: t, count: porTema[t] }; });
+
+    const supervisoresActivos = new Set();
+    esteMes.forEach(function(r){ if (r[19]) supervisoresActivos.add(String(r[19])); });
+
+    return {
+      success: true, esAdmin: true,
+      stats: {
+        totalCapacitaciones:    filasHdr.length,
+        totalAsistentes:        filasBdd.length,
+        capacitacionesEsteMes:  esteMes.length,
+        asistentesEsteMes:      asistentesEsteMes,
+        supervisoresActivosMes: supervisoresActivos.size,
+        porEmpresa:             porEmpresa,
+        topSupervisores:        topSupervisores,
+        tendencia:              tendencia,
+        topTemas:               topTemas
+      }
+    };
+  } catch(e) {
+    return { success: false, error: e.toString() };
   }
 }
  

@@ -881,36 +881,164 @@ function _getLogoBase64() {
 }
 
 /* ─────────────────────── REGISTROS ─────────────────────── */
+let _chartTendenciaCap = null;
+let _chartEmpresaCap   = null;
+let _chartTopSupCap    = null;
+
 async function cargarRegistros() {
   const wrap = document.getElementById('tbRegistrosWrap');
   if (!wrap || !USER) return;
   wrap.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div>Cargando...</div>';
   try {
-    const empresa = v('filtroEmpReg');
-    const d = await apiGet({ action: 'listarCapacitaciones', empresa, usuario: USER.usuario, rol: USER.rol });
+    const d = await apiPost({
+      action:     'listarCapacitaciones',
+      rol:        USER.rol,
+      usuario:    USER.usuario,
+      empresa:    v('filtroEmpReg')     || '',
+      desde:      v('filtroDesdeCap')   || '',
+      hasta:      v('filtroHastaCap')   || '',
+      supervisor: v('filtroSupCap')     || ''
+    });
     if (!d.success) throw new Error(d.error || 'Error servidor');
-    if (!d.data || !d.data.length) {
+
+    const lista = d.capacitaciones || [];
+    const esAdmin = !!d.esAdmin;
+
+    // Mostrar/ocultar sección admin
+    const secAdmin = document.getElementById('seccionRegistrosAdmin');
+    if (secAdmin) secAdmin.style.display = esAdmin ? '' : 'none';
+
+    // Ocultar filtro supervisor si no es admin
+    const filtroSupRow = document.getElementById('filtroSupRow');
+    if (filtroSupRow) filtroSupRow.style.display = esAdmin ? '' : 'none';
+
+    if (!lista.length) {
       wrap.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>Sin registros aún</div>';
-      return;
+    } else {
+      esAdmin ? renderizarTablaAdmin(lista) : renderizarTablaSupervisor(lista, wrap);
     }
-    wrap.innerHTML = `
-      <table class="data-table">
-        <thead><tr>
-          <th>Empresa</th><th>Fecha</th><th>Tipo</th><th>Tema</th>
-          <th style="text-align:center">Asistentes</th><th>Registrado por</th>
-        </tr></thead>
-        <tbody>${d.data.map(r => `<tr>
-          <td><span class="badge-emp ${r.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${r.empresa || ''}</span></td>
-          <td>${r.fecha || ''}</td>
-          <td style="font-size:11px;color:#475569">${r.tipo || ''}</td>
-          <td>${r.tema || ''}</td>
-          <td style="text-align:center;font-weight:700">${r.total_asistentes || 0}</td>
-          <td style="font-size:11px;color:#64748b">${r.usuario_nombre || r.usuario || ''}</td>
-        </tr>`).join('')}</tbody>
-      </table>`;
+
+    if (esAdmin) await cargarEstadisticas();
+
   } catch(e) {
     wrap.innerHTML = `<div class="empty"><div class="empty-icon">❌</div>Error: ${e.message}</div>`;
   }
+}
+
+function renderizarTablaSupervisor(lista, wrap) {
+  if (!wrap) wrap = document.getElementById('tbRegistrosWrap');
+  wrap.innerHTML = `
+    <table class="data-table">
+      <thead><tr>
+        <th>Empresa</th><th>Fecha</th><th>Tipo</th><th>Tema</th>
+        <th style="text-align:center">Asistentes</th>
+      </tr></thead>
+      <tbody>${lista.map(r => `<tr>
+        <td><span class="badge-emp ${r.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${r.empresa || ''}</span></td>
+        <td>${String(r.fecha||'').substring(0,10)}</td>
+        <td style="font-size:11px;color:#475569">${r.tipo || ''}</td>
+        <td style="font-size:12px">${(r.tema||'').substring(0,60)}${(r.tema||'').length>60?'…':''}</td>
+        <td style="text-align:center;font-weight:700">${r.totalAsistentes || r.total_asistentes || 0}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+function renderizarTablaAdmin(lista) {
+  const wrap = document.getElementById('tbRegistrosWrap');
+  if (!wrap) return;
+  wrap.innerHTML = `
+    <table class="data-table">
+      <thead><tr>
+        <th>Empresa</th><th>Fecha</th><th>Tipo</th><th>Tema</th>
+        <th style="text-align:center">Asistentes</th><th>Supervisor</th>
+      </tr></thead>
+      <tbody>${lista.map(r => `<tr>
+        <td><span class="badge-emp ${r.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${r.empresa || ''}</span></td>
+        <td>${String(r.fecha||'').substring(0,10)}</td>
+        <td style="font-size:11px;color:#475569">${r.tipo || ''}</td>
+        <td style="font-size:12px">${(r.tema||'').substring(0,60)}${(r.tema||'').length>60?'…':''}</td>
+        <td style="text-align:center;font-weight:700">${r.totalAsistentes || r.total_asistentes || 0}</td>
+        <td style="font-size:11px;color:#64748b">${r.creadaPorNombre || r.creadaPor || '—'}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+async function cargarEstadisticas() {
+  try {
+    const d = await apiPost({ action: 'estadisticasCapacitaciones', rol: USER.rol, usuario: USER.usuario });
+    if (!d.success || !d.esAdmin) return;
+    renderizarCards(d.stats);
+    renderizarGraficoTendencia(d.stats.tendencia || []);
+    renderizarGraficoEmpresa(d.stats.porEmpresa || {});
+    renderizarGraficoTopSupervisores(d.stats.topSupervisores || []);
+  } catch(e) { console.warn('[capStats] Error:', e); }
+}
+
+function renderizarCards(stats) {
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? 0; };
+  set('statTotal',      stats.totalCapacitaciones);
+  set('statAsistentes', stats.totalAsistentes);
+  set('statEsteMes',    stats.capacitacionesEsteMes);
+  set('statSupActivos', stats.supervisoresActivosMes);
+}
+
+function renderizarGraficoTendencia(tendencia) {
+  const canvas = document.getElementById('chartTendenciaCap');
+  if (!canvas || !window.Chart) return;
+  if (_chartTendenciaCap) _chartTendenciaCap.destroy();
+  _chartTendenciaCap = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: tendencia.map(t => t.mes),
+      datasets: [
+        { label: 'Capacitaciones', data: tendencia.map(t => t.capacitaciones),
+          borderColor: '#0a2463', backgroundColor: 'rgba(10,36,99,0.1)', fill: true, tension: 0.4 },
+        { label: 'Asistentes', data: tendencia.map(t => t.asistentes),
+          borderColor: '#D91F26', backgroundColor: 'rgba(217,31,38,0.1)', fill: false, tension: 0.4, yAxisID: 'y1' }
+      ]
+    },
+    options: { responsive: true, scales: {
+      y:  { beginAtZero: true, position: 'left' },
+      y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }
+    }}
+  });
+}
+
+function renderizarGraficoEmpresa(porEmpresa) {
+  const canvas = document.getElementById('chartEmpresaCap');
+  if (!canvas || !window.Chart) return;
+  if (_chartEmpresaCap) _chartEmpresaCap.destroy();
+  _chartEmpresaCap = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels: ['RAPEL', 'VERFRUT'],
+      datasets: [{ data: [porEmpresa.RAPEL || 0, porEmpresa.VERFRUT || 0],
+        backgroundColor: ['#D91F26', '#0a2463'], borderWidth: 0 }]
+    },
+    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+  });
+}
+
+function renderizarGraficoTopSupervisores(topSup) {
+  const canvas = document.getElementById('chartTopSupCap');
+  if (!canvas || !window.Chart) return;
+  if (_chartTopSupCap) _chartTopSupCap.destroy();
+  if (!topSup.length) return;
+  _chartTopSupCap = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: topSup.map(s => s.nombre || s.usuario),
+      datasets: [{ label: 'Asistentes capacitados', data: topSup.map(s => s.asistentes),
+        backgroundColor: '#0a2463' }]
+    },
+    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } }
+  });
+}
+
+function aplicarFiltrosCap() { cargarRegistros(); }
+function limpiarFiltrosCap() {
+  ['filtroEmpReg','filtroDesdeCap','filtroHastaCap','filtroSupCap'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  cargarRegistros();
 }
 
 /* ─────────────────────── EXPORTAR CSV ─────────────────────── */

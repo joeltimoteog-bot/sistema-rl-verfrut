@@ -9,6 +9,7 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Barlow', sans-serif; background: #f1f5f9; color: #0f172a; min-height: 100vh; }
@@ -128,6 +129,20 @@
     .btn-eliminar{ background:#fee2e2; color:#dc2626; border:none; border-radius:6px; padding:3px 10px; font-size:11px; font-weight:700; cursor:pointer; }
     .modal-add-row { display:flex; gap:8px; margin-top:12px; flex-shrink:0; }
     .modal-add-row input { flex:1; }
+
+    /* ── Stats / Gráficos capacitaciones (admin) ── */
+    .stats-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:20px; }
+    .stat-card { background:#fff; border-radius:12px; padding:18px 16px; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,.08); border-left:4px solid #0a2463; }
+    .stat-icon { font-size:28px; margin-bottom:6px; }
+    .stat-value { font-size:26px; font-weight:800; color:#0a2463; }
+    .stat-label { font-size:12px; color:#64748b; margin-top:3px; }
+    .graficos-row { display:grid; grid-template-columns:2fr 1fr; gap:14px; }
+    @media(max-width:640px){ .graficos-row { grid-template-columns:1fr; } }
+    .grafico-box { background:#fff; border-radius:12px; padding:18px; box-shadow:0 2px 8px rgba(0,0,0,.08); }
+    .grafico-box h3 { margin:0 0 14px 0; font-family:'Barlow Condensed',sans-serif; font-size:14px; color:#0a2463; font-weight:700; text-transform:uppercase; letter-spacing:.4px; }
+    .filtros-avanzados { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+    .filtros-avanzados select, .filtros-avanzados input[type=date] { padding:7px 10px; border:2px solid #e2e8f0; border-radius:8px; font-size:12px; font-family:'Barlow',sans-serif; }
+    .filtros-avanzados .btn-sm { padding:6px 14px; font-size:12px; }
   </style>
 </head>
 <body>
@@ -348,17 +363,43 @@
 
 <!-- ══════════════════ TAB: REGISTROS ══════════════════ -->
 <div class="tab-content" id="tab-registros">
+
+  <!-- ESTADÍSTICAS (solo admin) -->
+  <div id="seccionRegistrosAdmin" style="display:none;margin-bottom:18px">
+    <div class="stats-cards">
+      <div class="stat-card"><div class="stat-icon">📚</div><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total Capacitaciones</div></div>
+      <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-value" id="statAsistentes">0</div><div class="stat-label">Personas Capacitadas</div></div>
+      <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-value" id="statEsteMes">0</div><div class="stat-label">Este Mes</div></div>
+      <div class="stat-card"><div class="stat-icon">👤</div><div class="stat-value" id="statSupActivos">0</div><div class="stat-label">Sup. Activos</div></div>
+    </div>
+    <div class="graficos-row">
+      <div class="grafico-box"><h3>📈 Tendencia últimos 6 meses</h3><canvas id="chartTendenciaCap"></canvas></div>
+      <div class="grafico-box"><h3>🏢 Por Empresa</h3><canvas id="chartEmpresaCap"></canvas></div>
+    </div>
+    <div class="grafico-box" style="margin-top:14px"><h3>🏆 Top Supervisores del Mes</h3><canvas id="chartTopSupCap"></canvas></div>
+  </div>
+
+  <!-- TABLA + FILTROS -->
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
       <div class="card-title" style="margin:0">📋 Registros de capacitaciones</div>
       <button class="btn btn-primary btn-sm" onclick="cargarRegistros()">🔄 Actualizar</button>
     </div>
-    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-      <select id="filtroEmpReg" onchange="cargarRegistros()" style="padding:7px 11px;border:2px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:'Barlow',sans-serif">
+    <div class="filtros-avanzados">
+      <select id="filtroEmpReg" style="padding:7px 11px;border:2px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:'Barlow',sans-serif">
         <option value="">Todas las empresas</option>
         <option value="RAPEL">RAPEL</option>
         <option value="VERFRUT">VERFRUT</option>
       </select>
+      <span id="filtroSupRow" style="display:none;align-items:center;gap:6px">
+        <select id="filtroSupCap" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:'Barlow',sans-serif;min-width:160px">
+          <option value="">Todos los supervisores</option>
+        </select>
+      </span>
+      <input type="date" id="filtroDesdeCap" placeholder="Desde" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:12px">
+      <input type="date" id="filtroHastaCap" placeholder="Hasta" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:12px">
+      <button class="btn btn-primary btn-sm" onclick="aplicarFiltrosCap()">🔍 Filtrar</button>
+      <button class="btn btn-sm" style="background:#f1f5f9;color:#475569;border:none;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer" onclick="limpiarFiltrosCap()">✖ Limpiar</button>
     </div>
     <div id="tbRegistrosWrap" style="overflow-x:auto">
       <div class="empty"><div class="empty-icon">⏳</div>Cargando registros...</div>
