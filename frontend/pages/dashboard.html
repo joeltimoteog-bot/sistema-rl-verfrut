@@ -2624,6 +2624,8 @@ window.onload = async () => {
     if (sF && sF.textContent == '0') sF.textContent = fb.finalizados || 0;
     if (sA && sA.textContent == '0') sA.textContent = fb.total       || 0;
   }, 2000);
+  // Countdown acceso temporal (si aplica)
+  iniciarCountdownAcceso();
 };
 
 // Al volver a la pestaña: refrescar solo si han pasado más de 10 minutos
@@ -6155,7 +6157,45 @@ function ir(id,btn){
 }
 function abrir(id){const el=document.getElementById(id);if(!el){console.warn('[abrir] elemento no encontrado:',id);return;}el.classList.add('on');}
 function cerrar(id){const el=document.getElementById(id);if(!el){console.warn('[cerrar] elemento no encontrado:',id);return;}el.classList.remove('on');}
-function logout(){sessionStorage.clear();localStorage.removeItem('rl_session');location.href='../../index.html';}
+function logout(){
+  sessionStorage.removeItem('accesoTemporal');
+  sessionStorage.removeItem('banner_acceso_temporal');
+  sessionStorage.clear();
+  localStorage.removeItem('rl_session');
+  location.href='../../index.html';
+}
+
+function iniciarCountdownAcceso() {
+  const raw = sessionStorage.getItem('accesoTemporal');
+  if (!raw) return;
+  let acceso;
+  try { acceso = JSON.parse(raw); } catch(e) { return; }
+  if (!acceso || !acceso.activo || !acceso.expiraEn) return;
+
+  let indicador = document.getElementById('countdown-acceso');
+  if (!indicador) {
+    indicador = document.createElement('div');
+    indicador.id = 'countdown-acceso';
+    indicador.style.cssText = 'position:fixed;top:70px;right:20px;background:#fef3c7;color:#92400e;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:700;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15);cursor:default';
+    document.body.appendChild(indicador);
+  }
+
+  const intervalo = setInterval(() => {
+    const restanteMs = acceso.expiraEn - Date.now();
+    if (restanteMs <= 0) {
+      clearInterval(intervalo);
+      sessionStorage.removeItem('accesoTemporal');
+      if (indicador.parentNode) indicador.remove();
+      alert('⏰ Tu acceso temporal ha expirado. Serás desconectado.');
+      logout();
+      return;
+    }
+    const h = Math.floor(restanteMs / 3600000);
+    const m = Math.floor((restanteMs % 3600000) / 60000);
+    const s = Math.floor((restanteMs % 60000) / 1000);
+    indicador.textContent = '⏱️ Acceso temporal: ' + (h > 0 ? h + 'h ' : '') + m + 'm ' + s + 's';
+  }, 1000);
+}
 window.addEventListener('beforeunload', () => { clearTimeout(dniTO); clearTimeout(_estTimer); });
 
 // ── Búsqueda global (topbar) ──

@@ -375,9 +375,23 @@ async function doLogin(){
         // Supervisor/otros → verificar horario primero
         const bloqueo = verificarHorarioLogin(d.user);
         if(!bloqueo.permitido){
+          console.log('[LOGIN] Usuario fuera de horario, verificando acceso temporal...');
           const acceso = await verificarAccesoTemporal(d.user.usuario);
+          console.log('[LOGIN] Respuesta verificarAccesoTemporal:', acceso);
           if(acceso.tieneAcceso){
-            if(acceso.hasta) sessionStorage.setItem('banner_acceso_temporal', acceso.hasta);
+            // Persistir datos del acceso para countdown en dashboard
+            sessionStorage.setItem('banner_acceso_temporal', acceso.hastaHora || acceso.hasta || '');
+            sessionStorage.setItem('accesoTemporal', JSON.stringify({
+              hastaHora:       acceso.hastaHora || acceso.hasta || '',
+              expiraEn:        acceso.expiraEn  || 0,
+              minutosRestantes: acceso.minutosRestantes || 0,
+              activo:          true
+            }));
+            const min = acceso.minutosRestantes || 0;
+            const hR  = Math.floor(min / 60);
+            const mR  = min % 60;
+            const tiempoTxt = hR > 0 ? hR + 'h ' + mR + 'min' : mR + ' min';
+            alert('✅ Acceso temporal vigente\n\nHasta: ' + (acceso.hastaHora || acceso.hasta) + '\nTiempo restante: ' + tiempoTxt);
             mostrarBienvenida(d.user, function(){ window.location.href='frontend/pages/dashboard.html'; });
           }else{
             mostrarPantallaBloqueo(d.user, bloqueo);

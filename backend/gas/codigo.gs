@@ -2460,15 +2460,30 @@ function verificarAccesoTemporal(d) {
     for (var i = rows.length - 1; i >= 1; i--) {
       var r = rows[i];
       if (String(r[2]||'').toLowerCase() !== usuario) continue;
-      if (String(r[7]||'') !== 'APROBADO') continue;
-      var horaFinStr = String(r[9]||'');
+      if (String(r[7]||'').trim().toUpperCase() !== 'APROBADO') continue;
+      // hora_fin puede ser Date (Sheets lo parsea como 30/12/1899 HH:mm) → extraer HH:mm
+      var horaFinRaw = r[9];
+      var horaFinStr = '';
+      if (horaFinRaw instanceof Date) {
+        horaFinStr = Utilities.formatDate(horaFinRaw, 'America/Lima', 'HH:mm');
+      } else {
+        var s = String(horaFinRaw||'').trim();
+        horaFinStr = s.match(/^\d{1,2}:\d{2}/) ? s.substring(0, 5) : '';
+      }
       if (!horaFinStr) continue;
-      // Construir fecha/hora fin de hoy
+      // Construir timestamp de expiración en el día actual
       var partes = horaFinStr.split(':');
       var fin = new Date();
-      fin.setHours(parseInt(partes[0]), parseInt(partes[1]), 0, 0);
+      fin.setHours(parseInt(partes[0], 10), parseInt(partes[1], 10), 0, 0);
       if (ahora <= fin) {
-        return { success: true, tieneAcceso: true, hasta: horaFinStr };
+        return {
+          success:    true,
+          tieneAcceso: true,
+          hasta:      horaFinStr,
+          hastaHora:  horaFinStr,
+          expiraEn:   fin.getTime(),
+          minutosRestantes: Math.round((fin.getTime() - ahora.getTime()) / 60000)
+        };
       }
     }
     return { success: true, tieneAcceso: false };
