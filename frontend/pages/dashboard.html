@@ -1984,10 +1984,20 @@ function renderAccesosTem(data) {
     const bgEst    = est === 'APROBADO' ? '#f0fdf4'  : est === 'RECHAZADO' ? '#fef2f2'  : '#fffbeb';
     let accionHtml;
     if (est === 'PENDIENTE') {
-      accionHtml = `<div style="display:flex;gap:5px">
-        <button onclick="aprobarAccesoTemporal(${s.fila},'APROBADO','${s.usuario}')"
+      const hDef = s.horas_solicitadas || 2;
+      accionHtml = `<div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap">
+        <select id="horasAcc_${s.fila}" style="padding:3px 6px;border:1.5px solid #cbd5e1;border-radius:5px;font-size:11px">
+          <option value="1"${hDef==1?' selected':''}>1h</option>
+          <option value="2"${hDef==2?' selected':''}>2h</option>
+          <option value="4"${hDef==4?' selected':''}>4h</option>
+          <option value="6"${hDef==6?' selected':''}>6h</option>
+          <option value="8"${hDef==8?' selected':''}>8h</option>
+        </select>
+        <button data-fila="${s.fila}" data-dec="APROBADO"
+          onclick="aprobarAccesoTemporal(${s.fila},'APROBADO','${s.usuario}',document.getElementById('horasAcc_${s.fila}').value)"
           style="padding:4px 10px;background:#dcfce7;border:none;border-radius:5px;font-size:11px;cursor:pointer;font-weight:700;color:#166534">✅ Aprobar</button>
-        <button onclick="aprobarAccesoTemporal(${s.fila},'RECHAZADO','${s.usuario}')"
+        <button data-fila="${s.fila}" data-dec="RECHAZADO"
+          onclick="aprobarAccesoTemporal(${s.fila},'RECHAZADO','${s.usuario}')"
           style="padding:4px 10px;background:#fee2e2;border:none;border-radius:5px;font-size:11px;cursor:pointer;font-weight:700;color:#991b1b">❌ Rechazar</button>
       </div>`;
     } else if (est === 'APROBADO' && s.hora_fin) {
@@ -2007,15 +2017,14 @@ function renderAccesosTem(data) {
   }).join('');
 }
 
-async function aprobarAccesoTemporal(fila, decision, usuario) {
+async function aprobarAccesoTemporal(fila, decision, usuario, horas) {
+  if (decision === 'RECHAZADO' && !confirm(`¿Rechazar la solicitud de acceso de ${usuario}?`)) return;
+  const btn = document.querySelector(`button[data-fila="${fila}"][data-dec="${decision}"]`);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
   try {
-    const d = await apiPost({
-      action:       'resolverAccesoTemporal',
-      fila,
-      usuario,
-      decision,
-      aprobado_por: USER.usuario
-    });
+    const body = { action: 'resolverAccesoTemporal', fila, usuario, decision, aprobado_por: USER.usuario };
+    if (horas) body.horas = horas;
+    const d = await apiPost(body);
     if (d.success) {
       const msg = decision === 'APROBADO'
         ? '✅ Acceso otorgado' + (d.hora_fin ? ' hasta las ' + d.hora_fin : '')
@@ -2025,9 +2034,11 @@ async function aprobarAccesoTemporal(fila, decision, usuario) {
       await cargarAccesosTem(true);
     } else {
       mostrarToast('❌ Error: ' + (d.error||''), 'error');
+      if (btn) { btn.disabled = false; btn.textContent = decision === 'APROBADO' ? '✅ Aprobar' : '❌ Rechazar'; }
     }
   } catch(e) {
     mostrarToast('❌ Error de conexión', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = decision === 'APROBADO' ? '✅ Aprobar' : '❌ Rechazar'; }
   }
 }
 
@@ -2056,6 +2067,13 @@ function actualizarBadgeSolicitudes() {
   const bAcc = document.getElementById('badgeSolAcceso');
   if (bAcc) { bAcc.textContent = nAcc; bAcc.style.display = nAcc > 0 ? '' : 'none'; }
 }
+
+// Exponer en scope global para onclick inline en HTML dinámico
+window.switchTabSolicitudes   = switchTabSolicitudes;
+window.cargarAccesosTem       = cargarAccesosTem;
+window.filtrarAccesosTem      = filtrarAccesosTem;
+window.renderAccesosTem       = renderAccesosTem;
+window.aprobarAccesoTemporal  = aprobarAccesoTemporal;
 
 async function cargarFusiones(forzar=false) {
   if (!forzar && CACHE.fusiones) {
