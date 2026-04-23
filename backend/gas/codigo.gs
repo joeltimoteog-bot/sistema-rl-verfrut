@@ -3649,3 +3649,105 @@ function debugAccesosTemporales() {
     }
   }
 }
+
+function testVerificarAccesoRmolero() {
+  var resultado = verificarAccesoTemporal({ usuario: 'rmolero' });
+  Logger.log(JSON.stringify(resultado, null, 2));
+}
+// ═══════════════════════════════════════════
+// ACTUALIZAR FIREBASE MÓDULOS (tiempo real)
+// ═══════════════════════════════════════════
+function normalizarFechaStr(val) {
+  if (!val) return '';
+  if (val instanceof Date) return Utilities.formatDate(val, 'GMT-5', 'yyyy-MM-dd');
+  return String(val).substring(0, 10).replace(/T.*/, '');
+}
+
+function actualizarFirebaseModulos() {
+  try {
+    const secret = PropertiesService.getScriptProperties().getProperty('FIREBASE_DB_SECRET');
+    if (!secret) {
+      Logger.log('⚠️ FIREBASE_DB_SECRET no configurado');
+      return;
+    }
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const urlBase = 'https://sistema-rl-verfrut-default-rtdb.firebaseio.com';
+    const hoy = new Date();
+    const mesActStr = Utilities.formatDate(hoy, 'GMT-5', 'yyyy-MM');
+
+    // VISITAS
+    const wsV = ss.getSheetByName('Visitas_Campo');
+    const vis = { total: 0, en_plazo: 0, retrasadas: 0, este_mes: 0 };
+    if (wsV && wsV.getLastRow() > 1) {
+      wsV.getDataRange().getValues().slice(1).forEach(function(r) {
+        if (!r[0]) return;
+        vis.total++;
+        const est = String(r[21] || '').toUpperCase();
+        if (est === 'EN PLAZO') vis.en_plazo++;
+        else if (est === 'RETRASADO') vis.retrasadas++;
+        if (normalizarFechaStr(r[1]).substring(0, 7) === mesActStr) vis.este_mes++;
+      });
+    }
+
+    // CASOS
+    const wsC = ss.getSheetByName('BD_Casos');
+    const cas = { total: 0, en_plazo: 0, retrasados: 0, este_mes: 0 };
+    if (wsC && wsC.getLastRow() > 1) {
+      wsC.getDataRange().getValues().slice(1).forEach(function(r) {
+        if (!r[0]) return;
+        cas.total++;
+        const est = String(r[15] || '').toUpperCase();
+        if (est === 'EN PLAZO' || est === 'EN PROCESO') cas.en_plazo++;
+        else if (est === 'RETRASADO') cas.retrasados++;
+        if (normalizarFechaStr(r[1]).substring(0, 7) === mesActStr) cas.este_mes++;
+      });
+    }
+
+    // FUSIONES
+    const wsF = ss.getSheetByName('Fusiones_Buses');
+    const fus = { total: 0, pendientes: 0, validados: 0, este_mes: 0, trabajadores: 0 };
+    if (wsF && wsF.getLastRow() > 1) {
+      wsF.getDataRange().getValues().slice(1).forEach(function(r) {
+        if (!r[0]) return;
+        fus.total++;
+        const est = String(r[27] || '').toLowerCase();
+        if (est === 'pendiente') fus.pendientes++;
+        else if (est === 'validado') fus.validados++;
+        if (normalizarFechaStr(r[1]).substring(0, 7) === mesActStr) fus.este_mes++;
+        fus.trabajadores += parseInt(r[12]) || 0;
+      });
+    }
+
+    // CAPACITACIONES
+    const wsK = ss.getSheetByName('CAPACITACIONES_HDR');
+    const cap = { total: 0, este_mes: 0, total_asistentes: 0 };
+    if (wsK && wsK.getLastRow() > 1) {
+      wsK.getDataRange().getValues().slice(1).forEach(function(r) {
+        if (!r[0]) return;
+        cap.total++;
+        if (normalizarFechaStr(r[8]).substring(0, 7) === mesActStr) cap.este_mes++;
+        cap.total_asistentes += parseInt(r[16]) || 0;
+      });
+    }
+
+    const url = urlBase + '/estadisticas_modulos.json?auth=' + secret;
+    const payload = {
+      visitas: vis,
+      casos: cas,
+      fusiones: fus,
+      capacitaciones: cap,
+      ultima_actualizacion: hoy.getTime()
+    };
+
+    UrlFetchApp.fetch(url, {
+      method: 'PUT',
+      contentType: 'application/json',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+    Logger.log('✓ Firebase módulos OK');
+  } catch(e) {
+    Logger.log('actualizarFirebaseModulos error: ' + e.toString());
+  }
+}
