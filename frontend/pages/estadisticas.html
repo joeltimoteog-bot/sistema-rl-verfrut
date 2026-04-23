@@ -1104,10 +1104,10 @@ function _fbCargarEstadisticasEst(fbData) {
   if (porEmp) {
     const ctxD = document.getElementById('chartDonutEmpresa');
     if (ctxD) {
-      _destroyChart('donutEmpFb');
+      _destroyChart('donutEmp');
       const totR = (porEmp.RAPEL   || {}).total || 0;
       const totV = (porEmp.VERFRUT || {}).total || 0;
-      charts['donutEmpFb'] = new Chart(ctxD, {
+      charts['donutEmp'] = new Chart(ctxD, {
         type: 'doughnut',
         data: {
           labels: ['RAPEL','VERFRUT'],
@@ -1125,8 +1125,8 @@ function _fbCargarEstadisticasEst(fbData) {
     const ultimos = meses.slice(-6);
     const ctxT = document.getElementById('chartTendencia');
     if (ctxT && ultimos.length) {
-      _destroyChart('tendenciaFb');
-      charts['tendenciaFb'] = new Chart(ctxT, {
+      _destroyChart('tendencia');
+      charts['tendencia'] = new Chart(ctxT, {
         type: 'line',
         data: {
           labels: ultimos.map(k => { const [a,m] = k.split('-'); return ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'][parseInt(m)] + ' ' + a.slice(2); }),
