@@ -1978,8 +1978,9 @@ function renderAccesosTem(data) {
     tb.innerHTML = '<tr><td colspan="7" class="empty">Sin solicitudes de acceso</td></tr>';
     return;
   }
+  if (data[0]) console.log('[DEBUG AccesosTem] Primera solicitud:', JSON.stringify(data[0], null, 2));
   tb.innerHTML = data.map(s => {
-    const est = s.estado || 'PENDIENTE';
+    const est = (s.estado || 'PENDIENTE').trim().toUpperCase();
     const colorEst = est === 'APROBADO' ? '#16a34a' : est === 'RECHAZADO' ? '#dc2626' : '#f59e0b';
     const bgEst    = est === 'APROBADO' ? '#f0fdf4'  : est === 'RECHAZADO' ? '#fef2f2'  : '#fffbeb';
     let accionHtml;
@@ -2010,7 +2011,7 @@ function renderAccesosTem(data) {
       <td style="font-weight:700">${s.usuario||'—'}</td>
       <td>${s.nombre||'—'}</td>
       <td style="max-width:200px;font-size:11px">${s.motivo||'—'}</td>
-      <td style="text-align:center">${s.horas_solicitadas||'—'}h</td>
+      <td style="text-align:center">${s.horas_solicitadas > 0 ? s.horas_solicitadas + 'h' : (s.horas_solicitadas || '—')}</td>
       <td><span style="font-size:10px;font-weight:700;color:${colorEst}">${est}</span></td>
       <td>${accionHtml}</td>
     </tr>`;

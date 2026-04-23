@@ -2394,19 +2394,28 @@ function getSolicitudesAcceso(p) {
     if (dataRows.length === 0) return { success: true, data: [] };
     var data = dataRows.filter(function(r){ return r[0] !== ''; }).map(function(r, i) {
       var filaReal = tieneHeader ? i + 2 : i + 1;
+      // hora_fin puede ser Date (Sheets lo parsea como fecha 30/12/1899 HH:mm) → formatear como HH:mm
+      var horaFinRaw = r[9];
+      var horaFinStr = '';
+      if (horaFinRaw instanceof Date) {
+        horaFinStr = Utilities.formatDate(horaFinRaw, 'America/Lima', 'HH:mm');
+      } else {
+        var s = String(horaFinRaw||'').trim();
+        horaFinStr = s.match(/^\d{1,2}:\d{2}/) ? s.substring(0,5) : '';
+      }
       return {
         fila:             filaReal,
         nro:              r[0],
-        fecha:            r[1] instanceof Date ? Utilities.formatDate(r[1],'America/Lima','yyyy-MM-dd HH:mm') : String(r[1]||'').substring(0,16),
+        fecha:            r[1] instanceof Date ? Utilities.formatDate(r[1],'America/Lima','dd/MM/yyyy HH:mm') : String(r[1]||'').substring(0,16),
         usuario:          String(r[2]||''),
         nombre:           String(r[3]||''),
         empresa:          String(r[4]||''),
         motivo:           String(r[5]||''),
-        horas_solicitadas: String(r[6]||''),
+        horas_solicitadas: parseInt(r[6]) || 0,
         estado:           String(r[7]||'PENDIENTE'),
         resuelto_por:     String(r[8]||''),
-        hora_fin:         String(r[9]||''),
-        fecha_resolucion: r[10] instanceof Date ? Utilities.formatDate(r[10],'America/Lima','yyyy-MM-dd HH:mm') : String(r[10]||'')
+        hora_fin:         horaFinStr,
+        fecha_resolucion: r[10] instanceof Date ? Utilities.formatDate(r[10],'America/Lima','dd/MM/yyyy HH:mm') : String(r[10]||'')
       };
     });
     if (p && p.estado) data = data.filter(function(s){ return s.estado === p.estado; });
@@ -2422,7 +2431,8 @@ function resolverAccesoTemporal(d) {
     var ws = ss.getSheetByName('Solicitudes_Acceso');
     if (!ws) return { success: false, error: 'Hoja no encontrada' };
     var fila  = parseInt(d.fila);
-    var horas = parseInt(ws.getRange(fila, 7).getValue()) || 1;
+    // Usar horas del cuerpo si viene (selector frontend), sino leer de la hoja
+    var horas = parseInt(d.horas) || parseInt(ws.getRange(fila, 7).getValue()) || 1;
     var horaFin = '';
     if (d.decision === 'APROBADO') {
       var fin = new Date();
@@ -2430,7 +2440,7 @@ function resolverAccesoTemporal(d) {
       horaFin = Utilities.formatDate(fin, 'America/Lima', 'HH:mm');
     }
     ws.getRange(fila, 8).setValue(d.decision || '');
-    ws.getRange(fila, 9).setValue(d.resuelto_por || '');
+    ws.getRange(fila, 9).setValue(d.resuelto_por || d.aprobado_por || '');
     ws.getRange(fila, 10).setValue(horaFin);
     ws.getRange(fila, 11).setValue(new Date());
     return { success: true, hora_fin: horaFin };
