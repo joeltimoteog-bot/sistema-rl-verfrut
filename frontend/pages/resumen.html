@@ -105,6 +105,39 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
   .hamburger{display:flex}
 }
 @media(min-width:769px){.hamburger{display:none}}
+
+/* ══ RESUMEN EJECUTIVO ══ */
+.rej-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+.rej-header h2{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:var(--azul);margin:0}
+.rej-header-r{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.kpis-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px}
+.kpi-card{background:#fff;border-radius:12px;padding:20px 16px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.08);border-top:4px solid}
+.kpi-card.verde{border-top-color:#16a34a}
+.kpi-card.azul{border-top-color:#0a2463}
+.kpi-card.naranja{border-top-color:#f59e0b}
+.kpi-card.rojo{border-top-color:#D91F26}
+.kpi-icon{font-size:30px;margin-bottom:6px}
+.kpi-value{font-size:34px;font-weight:800;color:#0a2463;line-height:1}
+.kpi-label{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+.modulos-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:20px}
+.modulo-card{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.modulo-card h3{margin:0 0 14px 0;font-family:'Barlow Condensed',sans-serif;font-size:15px;color:var(--azul);font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.modulo-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.modulo-stats>div{font-size:12px;color:#475569}
+.modulo-stats>div.verde{color:#16a34a}
+.modulo-stats>div.rojo{color:#D91F26}
+.modulo-stats span{font-size:22px;font-weight:800;display:block;line-height:1.1}
+.alertas-box{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:20px}
+.alertas-box h3{font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--azul);font-weight:800;text-transform:uppercase;margin:0 0 12px 0}
+.alerta{padding:10px 14px;border-radius:8px;margin-bottom:8px;display:flex;gap:10px;align-items:center;font-size:13px}
+.alerta:last-child{margin-bottom:0}
+.alerta.critico{background:#fee2e2;border-left:4px solid #D91F26;color:#7f1d1d}
+.alerta.advertencia{background:#fef3c7;border-left:4px solid #f59e0b;color:#78350f}
+.alerta.info{background:#dbeafe;border-left:4px solid #0a2463;color:#1e3a8a}
+.alerta-icon{font-size:20px;flex-shrink:0}
+.rej-divider{border:none;border-top:2px solid var(--bd);margin:24px 0}
+.fi-rej{padding:7px 12px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc}
+.btn-rej{padding:7px 16px;background:var(--rojo);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer}
 </style>
 </head>
 <body>
@@ -161,6 +194,94 @@ tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
     </div>
   </div>
   <div class="content">
+
+    <!-- ══════════════ RESUMEN EJECUTIVO ══════════════ -->
+    <div id="secEjecutivo">
+      <div class="rej-header">
+        <h2>📊 Resumen Ejecutivo General</h2>
+        <div class="rej-header-r">
+          <select class="fi-rej" id="filtroEmpresaResumen" onchange="cargarResumenEjecutivo()">
+            <option value="AMBAS">Ambas Empresas</option>
+            <option value="RAPEL">Solo RAPEL</option>
+            <option value="VERFRUT">Solo VERFRUT</option>
+          </select>
+          <button class="btn-rej" onclick="cargarResumenEjecutivo()">🔄 Actualizar</button>
+          <span id="rejTimestamp" style="font-size:10px;color:#94a3b8"></span>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpis-grid">
+        <div class="kpi-card verde"><div class="kpi-icon">📅</div><div class="kpi-value" id="kpiHoy">—</div><div class="kpi-label">Atenciones HOY</div></div>
+        <div class="kpi-card azul"><div class="kpi-icon">📆</div><div class="kpi-value" id="kpiMes">—</div><div class="kpi-label">Este Mes</div></div>
+        <div class="kpi-card naranja"><div class="kpi-icon">⏳</div><div class="kpi-value" id="kpiProceso">—</div><div class="kpi-label">En Proceso</div></div>
+        <div class="kpi-card rojo"><div class="kpi-icon">📊</div><div class="kpi-value" id="kpiTotal">—</div><div class="kpi-label">Total Histórico</div></div>
+      </div>
+
+      <!-- Cards de módulos -->
+      <div class="modulos-grid">
+        <div class="modulo-card">
+          <h3>🎯 Visitas de Campo</h3>
+          <div class="modulo-stats">
+            <div><span id="visTotal">—</span>Total</div>
+            <div><span id="visMes">—</span>Este Mes</div>
+            <div class="verde"><span id="visEnPlazo">—</span>En Plazo</div>
+            <div class="rojo"><span id="visRetrasadas">—</span>Retrasadas</div>
+          </div>
+          <canvas id="chartVisitas" style="max-height:120px"></canvas>
+        </div>
+        <div class="modulo-card">
+          <h3>⚖️ Casos RL</h3>
+          <div class="modulo-stats">
+            <div><span id="casTotal">—</span>Total</div>
+            <div><span id="casMes">—</span>Este Mes</div>
+            <div class="naranja"><span id="casProceso">—</span>En Proceso</div>
+            <div class="verde"><span id="casFin">—</span>Finalizados</div>
+          </div>
+          <canvas id="chartCasos" style="max-height:120px"></canvas>
+        </div>
+        <div class="modulo-card">
+          <h3>🚌 Fusiones</h3>
+          <div class="modulo-stats">
+            <div><span id="fusTotal">—</span>Total</div>
+            <div><span id="fusMes">—</span>Este Mes</div>
+            <div><span id="fusRapel">—</span>RAPEL</div>
+            <div><span id="fusVerfrut">—</span>VERFRUT</div>
+          </div>
+          <canvas id="chartFusiones" style="max-height:120px"></canvas>
+        </div>
+        <div class="modulo-card">
+          <h3>🎓 Capacitaciones</h3>
+          <div class="modulo-stats">
+            <div><span id="capTotal">—</span>Total</div>
+            <div><span id="capMes">—</span>Este Mes</div>
+            <div><span id="capAsistentes">—</span>Capacitados</div>
+            <div><span id="capRapel">—</span>RAPEL</div>
+          </div>
+          <canvas id="chartCapacitaciones" style="max-height:120px"></canvas>
+        </div>
+      </div>
+
+      <!-- Gráficos comparativa + tendencia -->
+      <div class="gg" style="margin-bottom:20px">
+        <div class="gc">
+          <div class="gc-t">📊 Comparativa RAPEL vs VERFRUT</div>
+          <canvas id="chartComparativa" style="max-height:220px"></canvas>
+        </div>
+        <div class="gc">
+          <div class="gc-t">📈 Tendencia últimos 6 meses</div>
+          <canvas id="chartTendenciaGral" style="max-height:220px"></canvas>
+        </div>
+      </div>
+
+      <!-- Alertas -->
+      <div class="alertas-box">
+        <h3>🔔 Alertas del Sistema</h3>
+        <div id="listaAlertas"><p style="text-align:center;color:#94a3b8;font-size:12px">⏳ Cargando alertas...</p></div>
+      </div>
+    </div>
+
+    <hr class="rej-divider">
 
     <div class="filtros" style="background:#fff;border-radius:11px;border:1px solid var(--bd);margin-bottom:16px">
       <select class="fi" id="rEmp" onchange="cargarResumen()"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
@@ -542,6 +663,155 @@ function exportarResumen() {
   XLSX.writeFile(wb, 'ResumenGeneral_' + new Date().toLocaleDateString('es-PE').replace(/\//g,'-') + '.xlsx');
 }
 
+// ══════════════ RESUMEN EJECUTIVO ══════════════
+let _rejCharts = {};
+function _rejDestroy(key) { if (_rejCharts[key]) { _rejCharts[key].destroy(); delete _rejCharts[key]; } }
+function _set(id, val) { const el = document.getElementById(id); if (el) el.textContent = val ?? '—'; }
+
+async function cargarResumenEjecutivo() {
+  const empresa = document.getElementById('filtroEmpresaResumen')?.value || 'AMBAS';
+  try {
+    const resp = await apiPost({ action: 'resumenEjecutivo', empresa });
+    if (!resp.success) { console.warn('[RejEjec] Error:', resp.error); return; }
+
+    // KPIs
+    const visHoy = resp.visitas?.hoy || 0;
+    const casHoy = resp.casos?.hoy || 0;
+    _set('kpiHoy',     visHoy + casHoy);
+    _set('kpiMes',     (resp.visitas?.este_mes || 0) + (resp.casos?.este_mes || 0));
+    _set('kpiProceso', resp.casos?.en_proceso || 0);
+    const totalHist = (resp.visitas?.total || 0) + (resp.casos?.total || 0);
+    _set('kpiTotal', totalHist.toLocaleString('es-PE'));
+
+    // Módulo Visitas
+    _set('visTotal',      resp.visitas?.total);
+    _set('visMes',        resp.visitas?.este_mes);
+    _set('visEnPlazo',    resp.visitas?.en_plazo);
+    _set('visRetrasadas', resp.visitas?.retrasadas);
+
+    // Módulo Casos
+    _set('casTotal',   resp.casos?.total);
+    _set('casMes',     resp.casos?.este_mes);
+    _set('casProceso', resp.casos?.en_proceso);
+    _set('casFin',     resp.casos?.finalizados);
+
+    // Módulo Fusiones
+    _set('fusTotal',   resp.fusiones?.total);
+    _set('fusMes',     resp.fusiones?.este_mes);
+    _set('fusRapel',   resp.comparativa?.fusiones?.RAPEL);
+    _set('fusVerfrut', resp.comparativa?.fusiones?.VERFRUT);
+
+    // Módulo Capacitaciones
+    _set('capTotal',      resp.capacitaciones?.total);
+    _set('capMes',        resp.capacitaciones?.este_mes);
+    _set('capAsistentes', resp.capacitaciones?.total_asistentes);
+    _set('capRapel',      resp.comparativa?.capacitaciones?.RAPEL);
+
+    // Mini-charts módulos
+    _rejRenderMiniVisitas(resp.visitas || {});
+    _rejRenderMiniCasos(resp.casos || {});
+    _rejRenderMiniFusiones(resp.comparativa?.fusiones || {});
+    _rejRenderMiniCapacitaciones(resp.comparativa?.capacitaciones || {});
+
+    // Gráficos grandes
+    renderizarComparativa(resp.comparativa || {});
+    renderizarTendenciaGeneral(resp.tendencia || []);
+    renderizarAlertas(resp.alertas || []);
+
+    const ts = document.getElementById('rejTimestamp');
+    if (ts) ts.textContent = 'Act. ' + new Date().toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'});
+
+  } catch(e) {
+    console.error('[RejEjec] Error:', e);
+  }
+}
+
+function _rejMiniDoughnut(id, labels, data, colors) {
+  _rejDestroy(id);
+  const el = document.getElementById(id);
+  if (!el || !window.Chart) return;
+  _rejCharts[id] = new Chart(el, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } } }
+  });
+}
+
+function _rejRenderMiniVisitas(v) {
+  _rejMiniDoughnut('chartVisitas', ['En Plazo', 'Retrasadas'],
+    [v.en_plazo || 0, v.retrasadas || 0], ['#16a34a', '#D91F26']);
+}
+function _rejRenderMiniCasos(c) {
+  _rejMiniDoughnut('chartCasos', ['En Proceso', 'Finalizados'],
+    [c.en_proceso || 0, c.finalizados || 0], ['#f59e0b', '#16a34a']);
+}
+function _rejRenderMiniFusiones(f) {
+  _rejMiniDoughnut('chartFusiones', ['RAPEL', 'VERFRUT'],
+    [f.RAPEL || 0, f.VERFRUT || 0], ['#D91F26', '#0a2463']);
+}
+function _rejRenderMiniCapacitaciones(c) {
+  _rejMiniDoughnut('chartCapacitaciones', ['RAPEL', 'VERFRUT'],
+    [c.RAPEL || 0, c.VERFRUT || 0], ['#D91F26', '#0a2463']);
+}
+
+function renderizarComparativa(comp) {
+  _rejDestroy('chartComparativa');
+  const el = document.getElementById('chartComparativa');
+  if (!el || !window.Chart) return;
+  _rejCharts.chartComparativa = new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: ['Visitas', 'Casos', 'Fusiones', 'Capacitaciones'],
+      datasets: [
+        { label: 'RAPEL',   data: [comp.visitas?.RAPEL||0, comp.casos?.RAPEL||0, comp.fusiones?.RAPEL||0, comp.capacitaciones?.RAPEL||0],   backgroundColor: '#D91F26' },
+        { label: 'VERFRUT', data: [comp.visitas?.VERFRUT||0, comp.casos?.VERFRUT||0, comp.fusiones?.VERFRUT||0, comp.capacitaciones?.VERFRUT||0], backgroundColor: '#0a2463' }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+      scales: { x: { beginAtZero: true } }
+    }
+  });
+}
+
+function renderizarTendenciaGeneral(tend) {
+  _rejDestroy('chartTendenciaGral');
+  const el = document.getElementById('chartTendenciaGral');
+  if (!el || !window.Chart) return;
+  _rejCharts.chartTendenciaGral = new Chart(el, {
+    type: 'line',
+    data: {
+      labels: tend.map(t => t.mes),
+      datasets: [
+        { label: 'Visitas',         data: tend.map(t => t.visitas         || 0), borderColor: '#0a2463', tension: 0.4, pointRadius: 3 },
+        { label: 'Casos',           data: tend.map(t => t.casos           || 0), borderColor: '#D91F26', tension: 0.4, pointRadius: 3 },
+        { label: 'Fusiones',        data: tend.map(t => t.fusiones        || 0), borderColor: '#16a34a', tension: 0.4, pointRadius: 3 },
+        { label: 'Capacitaciones',  data: tend.map(t => t.capacitaciones  || 0), borderColor: '#f59e0b', tension: 0.4, pointRadius: 3 }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+}
+
+function renderizarAlertas(alertas) {
+  const cont = document.getElementById('listaAlertas');
+  if (!cont) return;
+  if (!alertas || !alertas.length) {
+    cont.innerHTML = '<p style="text-align:center;color:#16a34a;font-size:13px">✅ Sin alertas activas</p>';
+    return;
+  }
+  cont.innerHTML = alertas.map(a => `
+    <div class="alerta ${a.tipo || 'info'}">
+      <span class="alerta-icon">${a.icon || 'ℹ️'}</span>
+      <span>${a.msg || ''}</span>
+    </div>`).join('');
+}
+
+window.cargarResumenEjecutivo = cargarResumenEjecutivo;
+
 // ── Init ──
 window.onload = function() {
   const ini = USER.nombre || '?';
@@ -565,6 +835,9 @@ window.onload = function() {
   // Firebase: iniciar escucha de estadísticas para ranking en tiempo real
   _rFbIniciarConRetry(10);
   _rFbIniciarModulos(10);
+  // Resumen ejecutivo (todos los módulos)
+  cargarResumenEjecutivo();
+  setInterval(cargarResumenEjecutivo, 60000);
 };
 
 function _rFbCargarModulos(data) {
