@@ -86,7 +86,11 @@ async function cargarDatos() {
     DATA.productos    = DATA.productos    || [];
     DATA.receta       = DATA.receta       || [];
     DATA.responsables = DATA.responsables || [];
-    DATA.meta         = DATA.meta         || 0;
+    // Normalizar meta: puede venir como { total: N } o como número directo
+    const _rawMeta = DATA.meta;
+    DATA.meta = (_rawMeta && typeof _rawMeta === 'object')
+      ? Number(_rawMeta.total || _rawMeta.meta_total || 0)
+      : Number(_rawMeta || 0);
 
     // Normalizar campos de fecha en cada registro (camelCase → snake_case)
     // Así todas las funciones de render usan siempre snake_case sin cambios
@@ -181,7 +185,11 @@ function renderAll() {
 
 /* ─────────────── TAB RESUMEN ─────────────── */
 function renderResumen() {
-  const meta    = Number(DATA.meta || 0);
+  console.log('[ARMAR] meta total recibida:', DATA.meta);
+  const metaTotal = Number(DATA.meta) || 0;
+  console.log('[ARMAR] formateado:', metaTotal.toLocaleString('es-PE'));
+
+  const meta    = metaTotal;
   const armadas = CALC.totalArmadas;
   const disp    = CALC.disponibles;
   const entrega = CALC.totalEntregadas;
@@ -189,7 +197,7 @@ function renderResumen() {
 
   setText('stMeta',       meta.toLocaleString('es-PE'));
   setText('stArmadas',    armadas.toLocaleString('es-PE'));
-  setText('stPct',        pct + '% de la meta');
+  setText('stPct',        pct.toFixed(2) + '% de la meta');
   setText('stDisp',       disp.toLocaleString('es-PE'));
   setText('stEntregadas', entrega.toLocaleString('es-PE') + ' entregadas');
   setText('progLabel',    armadas.toLocaleString('es-PE') + ' / ' + meta.toLocaleString('es-PE'));
