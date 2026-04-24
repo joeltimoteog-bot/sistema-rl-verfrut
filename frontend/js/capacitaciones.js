@@ -12,7 +12,15 @@ let escaneando = false;
 let asistentes = []; // [{ n, dni, nombre, empresa, cargo, sexo }]
 let _dniCooldown = {}; // { dni: timestamp } — anti-duplicado 3s
 
-const COOLDOWN_MS = 3000;
+const COOLDOWN_MS       = 3000;
+const FILAS_POR_FORMATO = 20;
+
+/* ─── Paso previo + retroactivo ─── */
+let _trabajadoresProgramados = 0;
+let _totalFormatos           = 1;
+let _esRetroactivo           = false;
+let _fechaRetroactiva        = null;
+let _motivoRetroactivo       = '';
 
 /* ─────────────────────── LISTAS DESPLEGABLES ─────────────────────── */
 const LISTAS_DEFAULT = {
@@ -163,6 +171,10 @@ document.addEventListener('DOMContentLoaded', () => {
   sv('expDesde', hace30.toISOString().split('T')[0]);
   sv('expHasta', now.toISOString().split('T')[0]);
 
+  // Mostrar paso0 al iniciar
+  _mostrarPaso(0);
+  _actualizarPreviewFormatos(20);
+
   // Poblar selects de listas
   inicializarListasCapacitaciones();
 
@@ -181,6 +193,157 @@ document.addEventListener('DOMContentLoaded', () => {
 
   cargarRegistros();
 });
+
+/* ─────────────────────── PASO 0: TRABAJADORES ─────────────────────── */
+function _mostrarPaso(n) {
+  ['paso0','paso1','paso2'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (i === n) ? '' : 'none';
+  });
+  ['step0-ind','step1-ind','step2-ind'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('on','done');
+    if (i < n) el.classList.add('done');
+    else if (i === n) el.classList.add('on');
+  });
+}
+
+function _activarTabNueva(btnId) {
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('on'));
+  const btn = document.getElementById(btnId);
+  if (btn) btn.classList.add('on');
+  const tc = document.getElementById('tab-nueva');
+  if (tc) tc.classList.add('on');
+  if (typeof detenerScanner === 'function') detenerScanner();
+}
+
+function abrirNuevaCapacitacion() {
+  _esRetroactivo = false; _fechaRetroactiva = null; _motivoRetroactivo = '';
+  asistentes = []; _dniCooldown = {};
+  _activarTabNueva('tabBtnNueva');
+  _mostrarPaso(0);
+  sv('cantTrabajadores', '20');
+  const sl = document.getElementById('sliderTrabajadores');
+  if (sl) sl.value = 20;
+  _actualizarPreviewFormatos(20);
+  const br = document.getElementById('bannerRetroactivo');
+  if (br) br.style.display = 'none';
+}
+
+function abrirCapacitacionRetroactiva() {
+  const rawFecha = (prompt('📅 Ingresa la fecha de la capacitación (DD/MM/AAAA):') || '').trim();
+  if (!rawFecha) return;
+  const mF = rawFecha.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!mF) { alert('❌ Formato incorrecto. Usa DD/MM/AAAA'); return; }
+  const dia = parseInt(mF[1]), mes = parseInt(mF[2]) - 1, anio = parseInt(mF[3]);
+  const fechaParsed = new Date(anio, mes, dia);
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  if (fechaParsed >= hoy) { alert('❌ La fecha retroactiva no puede ser hoy ni futura. Usa una fecha anterior.'); return; }
+
+  const motivo = (prompt('📝 Motivo del registro retroactivo (mín. 5 caracteres):') || '').trim();
+  if (motivo.length < 5) { alert('❌ El motivo debe tener al menos 5 caracteres'); return; }
+
+  _esRetroactivo     = true;
+  _fechaRetroactiva  = `${anio}-${String(mes + 1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+  _motivoRetroactivo = motivo;
+
+  asistentes = []; _dniCooldown = {};
+  _activarTabNueva('tabBtnRetroactivo');
+  _mostrarPaso(0);
+  sv('cantTrabajadores', '20');
+  const sl = document.getElementById('sliderTrabajadores');
+  if (sl) sl.value = 20;
+  _actualizarPreviewFormatos(20);
+}
+
+function sincronizarCantidad(origen) {
+  const n = document.getElementById('cantTrabajadores');
+  const s = document.getElementById('sliderTrabajadores');
+  if (!n || !s) return;
+  if (origen === 'n') {
+    let val = parseInt(n.value) || 1;
+    if (val < 1) val = 1; if (val > 500) val = 500;
+    n.value = val;
+    s.value = Math.min(val, 100);
+  } else {
+    n.value = parseInt(s.value) || 1;
+  }
+  _actualizarPreviewFormatos(parseInt(n.value) || 1);
+}
+
+function calcularFormatos() {
+  _actualizarPreviewFormatos(parseInt(v('cantTrabajadores')) || 1);
+}
+
+function _actualizarPreviewFormatos(n) {
+  const formatos = Math.ceil(n / FILAS_POR_FORMATO);
+  _totalFormatos = formatos;
+  const el = document.getElementById('paso0Preview');
+  if (!el) return;
+  el.textContent = formatos === 1
+    ? `📋 1 formato R-SC-01 · hasta ${FILAS_POR_FORMATO} asistentes`
+    : `📋 ${formatos} formatos R-SC-01 · hasta ${n} asistentes (${FILAS_POR_FORMATO} por hoja)`;
+}
+
+function cancelarCapacitacion() {
+  asistentes = []; _dniCooldown = {};
+  _esRetroactivo = false; _fechaRetroactiva = null; _motivoRetroactivo = '';
+  showTab('registros', document.getElementById('tabBtnRegistros'));
+}
+
+function continuarAPaso1() {
+  const n = parseInt(v('cantTrabajadores')) || 0;
+  if (n < 1) { alert('Ingresa al menos 1 trabajador'); return; }
+  _trabajadoresProgramados = n;
+  _totalFormatos = Math.ceil(n / FILAS_POR_FORMATO);
+  _mostrarPaso(1);
+
+  if (_esRetroactivo && _fechaRetroactiva) {
+    sv('capFecha', _fechaRetroactiva);
+    const capFechaEl = document.getElementById('capFecha');
+    if (capFechaEl) capFechaEl.style.background = '#fef9c3';
+    const br = document.getElementById('bannerRetroactivo');
+    const lblF = document.getElementById('lblFechaRetro');
+    const lblM = document.getElementById('lblMotivoRetro');
+    if (br) br.style.display = '';
+    if (lblF) { const [ay, am, ad] = _fechaRetroactiva.split('-'); lblF.textContent = `${ad}/${am}/${ay}`; }
+    if (lblM) lblM.textContent = _motivoRetroactivo;
+  } else {
+    const capFechaEl = document.getElementById('capFecha');
+    if (capFechaEl) capFechaEl.style.background = '';
+    const br = document.getElementById('bannerRetroactivo');
+    if (br) br.style.display = 'none';
+  }
+}
+
+function actualizarProgresoAsistentes() {
+  const el = document.getElementById('progresoAsistentes');
+  if (!el || !_trabajadoresProgramados) { if (el) el.style.display = 'none'; return; }
+  el.style.display = '';
+  const n = asistentes.length;
+  const total = _trabajadoresProgramados;
+  const pct = Math.min(100, Math.round(n / total * 100));
+  const elAct  = document.getElementById('progActual');
+  const elTot  = document.getElementById('progTotal');
+  const elBar  = document.getElementById('progBar');
+  const elLbl  = document.getElementById('progFormLabel');
+  if (elAct) elAct.textContent = n;
+  if (elTot) elTot.textContent = total;
+  if (elBar) {
+    elBar.style.width = pct + '%';
+    elBar.classList.toggle('completo', pct >= 100);
+  }
+  if (elLbl && _totalFormatos > 1) {
+    const formato = Math.ceil(Math.max(n, 1) / FILAS_POR_FORMATO);
+    const fi = (formato - 1) * FILAS_POR_FORMATO + 1;
+    const ff = Math.min(formato * FILAS_POR_FORMATO, total);
+    elLbl.textContent = `Formato ${Math.min(formato, _totalFormatos)} de ${_totalFormatos} (Filas ${fi}–${ff})`;
+  } else if (elLbl) {
+    elLbl.textContent = '';
+  }
+}
 
 /* ─────────────────────── TABS ─────────────────────── */
 function showTab(tab, btn) {
@@ -213,11 +376,8 @@ function irPaso2() {
     return;
   }
 
-  document.getElementById('paso1').style.display = 'none';
-  document.getElementById('paso2').style.display = '';
-  document.getElementById('step1-ind').classList.remove('on');
-  document.getElementById('step1-ind').classList.add('done');
-  document.getElementById('step2-ind').classList.add('on');
+  _mostrarPaso(2);
+  actualizarProgresoAsistentes();
 
   // Mostrar resumen de la actividad
   const horaI = v('capHoraInicio'), horaT = v('capHoraTermino'), horas = v('capHoras');
@@ -235,11 +395,7 @@ function irPaso2() {
 
 function volverPaso1() {
   detenerScanner();
-  document.getElementById('paso1').style.display = '';
-  document.getElementById('paso2').style.display = 'none';
-  document.getElementById('step1-ind').classList.add('on');
-  document.getElementById('step1-ind').classList.remove('done');
-  document.getElementById('step2-ind').classList.remove('on');
+  _mostrarPaso(1);
 }
 
 /* ─────────────────────── QR SCANNER ─────────────────────── */
@@ -346,6 +502,7 @@ function renderLista() {
   const tb = document.getElementById('tbAsistentes');
   const ct = document.getElementById('contadorAsist');
   if (ct) ct.textContent = asistentes.length;
+  actualizarProgresoAsistentes();
   // Auto-actualizar contadores nH/nM/nTrab en paso 1
   const _esH = s => { const x=(s||'').toUpperCase(); return x==='M'||x==='H'||x==='MASCULINO'||x==='HOMBRE'; };
   const _esM = s => { const x=(s||'').toUpperCase(); return x==='F'||x==='MUJ'||x==='FEMENINO'||x==='MUJER'; };
@@ -477,45 +634,73 @@ function _buildBody() {
     capacitadorDni:    v('capCapDni').trim(),
     capacitadorNombre: v('capCapNombre').trim(),
     capacitadorCargo:  v('capCapCargo').trim(),
-    creadaPor:         USER.usuario,
-    creadaPorNombre:   USER.nombre
+    creadaPor:              USER.usuario,
+    creadaPorNombre:        USER.nombre,
+    esRetroactivo:          _esRetroactivo,
+    motivoRetroactivo:      _esRetroactivo ? _motivoRetroactivo : '',
+    trabajadoresProgramados: _trabajadoresProgramados,
+    totalFormatos:          _totalFormatos
   };
-  // Asistentes como array separado (backend usa a.nombres || a.nombre)
   const asistentesEnvio = asistentes;
   return { actividad, asistentesEnvio };
 }
 
 /* ─────────────────────── PDF R-SC-01 ─────────────────────── */
-async function generarPDF() {
-  // ── Validaciones previas ──
+async function generarPDFsFormatos() {
   const empresa = v('capEmpresa');
   if (!empresa) { mostrarFeedback('err', 'Selecciona la empresa antes de generar el PDF'); return; }
-
-  const respDni    = v('capRespDni').trim();
-  const respNombre = v('capRespNombre').trim();
-  const respCargo  = v('capRespCargo').trim();
+  const respDni = v('capRespDni').trim(), respNombre = v('capRespNombre').trim(), respCargo = v('capRespCargo').trim();
   if (!respDni || !respNombre || !respCargo) {
     alert('⚠️ Debes ingresar el DNI del responsable del registro.\n\nEl DNI debe existir en BD_Supervisores para auto-completar el nombre y cargo.');
     document.getElementById('capRespDni').focus();
     return;
   }
+  const n = asistentes.length;
+  if (n === 0) { mostrarFeedback('err', '❌ No hay asistentes registrados'); return; }
 
-  // ── Truncar a 20 participantes con aviso ──
-  let partList = [...asistentes];
-  if (partList.length > 20) {
+  const totalFormatos = Math.ceil(n / FILAS_POR_FORMATO);
+  if (totalFormatos > 1) {
     const ok = confirm(
-      `⚠️ El formato oficial R-SC-01 tiene solo 20 filas.\n\n` +
-      `Tienes ${partList.length} participantes.\n` +
-      `Solo se incluirán los primeros 20 en el PDF.\n\n¿Deseas continuar?`
+      `📋 Se generarán ${totalFormatos} formatos R-SC-01\n` +
+      `• ${n} asistentes en total\n` +
+      `• ${FILAS_POR_FORMATO} asistentes por hoja\n\n¿Continuar?`
     );
     if (!ok) return;
-    partList = partList.slice(0, 20);
   }
-  while (partList.length < 20) partList.push({ dni: '', nombre: '', cargo: '', obs: '' });
 
   const btn = document.getElementById('btnPDF');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span> Generando PDF...';
+  try {
+    for (let i = 0; i < totalFormatos; i++) {
+      const inicio = i * FILAS_POR_FORMATO;
+      const fin    = Math.min(inicio + FILAS_POR_FORMATO, n);
+      const chunk  = asistentes.slice(inicio, fin);
+      const label  = totalFormatos > 1 ? `Formato ${i + 1} de ${totalFormatos}` : '';
+      btn.innerHTML = totalFormatos > 1
+        ? `<span class="spin"></span> Formato ${i + 1}/${totalFormatos}...`
+        : '<span class="spin"></span> Generando PDF...';
+      await generarPDF(chunk, label);
+    }
+    mostrarFeedback('ok', totalFormatos > 1
+      ? `✅ ${totalFormatos} PDFs generados (${n} asistentes)`
+      : `✅ PDF generado correctamente`);
+  } catch(e) {
+    mostrarFeedback('err', '❌ Error al generar PDF: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '📄 Generar PDF R-SC-01';
+  }
+}
+
+async function generarPDF(asistentesOverride = null, formatoLabel = '') {
+  // Sólo se llama desde generarPDFsFormatos (validaciones ya hechas)
+  const empresa = v('capEmpresa');
+  const respDni    = v('capRespDni').trim();
+  const respNombre = v('capRespNombre').trim();
+  const respCargo  = v('capRespCargo').trim();
+
+  let partList = [...(asistentesOverride || asistentes)];
+  while (partList.length < FILAS_POR_FORMATO) partList.push({ dni: '', nombre: '', cargo: '', obs: '' });
 
   try {
     const { jsPDF } = window.jspdf;
@@ -789,17 +974,15 @@ async function generarPDF() {
     const fechaGen = new Date().toLocaleString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
     doc.setFont('helvetica','normal'); doc.setFontSize(6); doc.setTextColor(140,140,140);
     doc.text(`Generado: ${fechaGen}  |  Sistema RL v3.0  |  ${USER.nombre}`, MGS, H - 4);
+    if (formatoLabel) doc.text(formatoLabel, W / 2, H - 4, { align: 'center' });
     doc.text('Pág. 1 de 1', W - MGS, H - 4, { align: 'right' });
 
-    const fname = `R-SC-01_${empresa}_${v('capFecha')}_${v('capTema').trim().substring(0,20).replace(/[\s/\\:*?"<>|]+/g,'-')}.pdf`;
+    const fmtSuffix = formatoLabel ? `_${formatoLabel.replace(/[^a-zA-Z0-9]/g,'_')}` : '';
+    const fname = `R-SC-01_${empresa}_${v('capFecha')}${fmtSuffix}_${v('capTema').trim().substring(0,20).replace(/[\s/\\:*?"<>|]+/g,'-')}.pdf`;
     doc.save(fname);
-    mostrarFeedback('ok', `✅ PDF generado: ${fname}`);
   } catch(e) {
     console.error('[PDF] Error:', e);
-    mostrarFeedback('err', '❌ Error al generar PDF: ' + e.message);
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = '📄 Generar PDF R-SC-01';
+    throw e;
   }
 }
 
@@ -1076,8 +1259,16 @@ function resetearFormulario() {
   if (!confirm('¿Iniciar una nueva capacitación? Se perderá la lista actual de asistentes.')) return;
   asistentes = [];
   _dniCooldown = {};
+  _esRetroactivo = false; _fechaRetroactiva = null; _motivoRetroactivo = '';
+  _trabajadoresProgramados = 0; _totalFormatos = 1;
   renderLista();
-  volverPaso1();
+  _mostrarPaso(0);
+  sv('cantTrabajadores', '20');
+  const sl = document.getElementById('sliderTrabajadores');
+  if (sl) sl.value = 20;
+  _actualizarPreviewFormatos(20);
+  const br = document.getElementById('bannerRetroactivo');
+  if (br) br.style.display = 'none';
   ocultarFeedback();
 }
 
@@ -1132,3 +1323,13 @@ async function apiPost(b) {
   const r = await fetch(API, { method: 'POST', body: JSON.stringify(b), headers: { 'Content-Type': 'text/plain' } });
   return r.json();
 }
+
+/* ── Exposiciones globales para onclick ── */
+window.abrirNuevaCapacitacion       = abrirNuevaCapacitacion;
+window.abrirCapacitacionRetroactiva = abrirCapacitacionRetroactiva;
+window.calcularFormatos             = calcularFormatos;
+window.sincronizarCantidad          = sincronizarCantidad;
+window.cancelarCapacitacion         = cancelarCapacitacion;
+window.continuarAPaso1              = continuarAPaso1;
+window.actualizarProgresoAsistentes = actualizarProgresoAsistentes;
+window.generarPDFsFormatos          = generarPDFsFormatos;

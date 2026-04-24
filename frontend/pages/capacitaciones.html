@@ -143,6 +143,19 @@
     .filtros-avanzados { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
     .filtros-avanzados select, .filtros-avanzados input[type=date] { padding:7px 10px; border:2px solid #e2e8f0; border-radius:8px; font-size:12px; font-family:'Barlow',sans-serif; }
     .filtros-avanzados .btn-sm { padding:6px 14px; font-size:12px; }
+
+    /* ── Paso 0 ── */
+    .paso0-n-input { font-size:32px; font-weight:800; color:#0a2463; border:2px solid #e2e8f0; border-radius:10px; text-align:center; width:130px; display:block; margin:0 auto; background:#fff; }
+    .paso0-n-input:focus { outline:none; border-color:#0a2463; }
+    .paso0-slider { width:100%; accent-color:#0a2463; margin-top:4px; }
+    .paso0-preview { background:#eff6ff; border:1.5px solid #bfdbfe; border-radius:8px; padding:12px 16px; font-size:14px; font-weight:700; color:#1e40af; text-align:center; margin:16px 0; }
+    /* ── Registro retroactivo ── */
+    .banner-retroactivo { background:#fef9c3; border:1.5px solid #fde68a; border-radius:8px; padding:10px 14px; font-size:13px; font-weight:700; color:#854d0e; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+    /* ── Progress bar asistentes ── */
+    .prog-wrap { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:14px; }
+    .prog-bar-bg { background:#e2e8f0; border-radius:6px; height:8px; margin-top:8px; }
+    .prog-bar-fill { background:#0a2463; border-radius:6px; height:8px; width:0%; transition:width .3s; }
+    .prog-bar-fill.completo { background:#16a34a; }
   </style>
 </head>
 <body>
@@ -157,9 +170,10 @@
 
 <!-- ──────────────────── TABS ──────────────────── -->
 <div class="tabs">
-  <button class="tab-btn on"  id="tabBtnNueva"     onclick="showTab('nueva',this)">➕ Nueva</button>
-  <button class="tab-btn"     id="tabBtnRegistros"  onclick="showTab('registros',this)">📋 Registros</button>
-  <button class="tab-btn"     id="tabBtnExportar"   onclick="showTab('exportar',this)">📤 Exportar</button>
+  <button class="tab-btn on"  id="tabBtnNueva"       onclick="abrirNuevaCapacitacion()">➕ Nueva Capacitación</button>
+  <button class="tab-btn"     id="tabBtnRetroactivo"  onclick="abrirCapacitacionRetroactiva()">📅 Fecha Anterior</button>
+  <button class="tab-btn"     id="tabBtnRegistros"    onclick="showTab('registros',this)">📋 Registros</button>
+  <button class="tab-btn"     id="tabBtnExportar"     onclick="showTab('exportar',this)">📤 Exportar</button>
 </div>
 
 <!-- ══════════════════ TAB: NUEVA ══════════════════ -->
@@ -167,13 +181,34 @@
 
   <!-- Steps indicator -->
   <div class="steps">
-    <div class="step-item on"  id="step1-ind">1 · Datos de la actividad</div>
-    <div class="step-item"     id="step2-ind">2 · Registro de asistentes</div>
+    <div class="step-item on"  id="step0-ind">0 · Trabajadores</div>
+    <div class="step-item"     id="step1-ind">1 · Datos actividad</div>
+    <div class="step-item"     id="step2-ind">2 · Asistentes</div>
+  </div>
+
+  <!-- ─── PASO 0: Trabajadores programados ─── -->
+  <div id="paso0">
+    <div class="card">
+      <div class="card-title">👥 Trabajadores programados</div>
+      <p style="color:#475569;font-size:13px;margin-bottom:16px">Indica cuántos trabajadores participarán. Esto determina los formatos R-SC-01 necesarios.</p>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:8px">
+        <input type="number" id="cantTrabajadores" class="paso0-n-input" min="1" max="500" value="20" oninput="sincronizarCantidad('n')">
+        <input type="range"  id="sliderTrabajadores" class="paso0-slider" min="1" max="100" value="20" oninput="sincronizarCantidad('s')">
+      </div>
+      <div id="paso0Preview" class="paso0-preview">📋 1 formato R-SC-01 · hasta 20 asistentes</div>
+      <div class="act-row" style="justify-content:center;gap:16px">
+        <button class="btn btn-gray"    onclick="cancelarCapacitacion()">✖ Cancelar</button>
+        <button class="btn btn-primary" onclick="continuarAPaso1()">Continuar → Datos de la actividad</button>
+      </div>
+    </div>
   </div>
 
   <!-- ─── PASO 1: Formulario actividad ─── -->
-  <div id="paso1">
+  <div id="paso1" style="display:none">
     <div class="card">
+      <div id="bannerRetroactivo" class="banner-retroactivo" style="display:none">
+        📅 <b>Registro retroactivo</b> — Fecha: <span id="lblFechaRetro"></span> &nbsp;·&nbsp; Motivo: <span id="lblMotivoRetro"></span>
+      </div>
       <div class="card-title">📝 Datos de la actividad</div>
       <div class="form-grid">
 
@@ -294,6 +329,15 @@
         <button class="btn btn-gray btn-sm" onclick="volverPaso1()">← Editar datos</button>
       </div>
 
+      <!-- Barra de progreso asistentes -->
+      <div id="progresoAsistentes" class="prog-wrap" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;font-weight:700;color:#0a2463">📊 Asistentes: <span id="progActual">0</span> / <span id="progTotal">0</span></span>
+          <span id="progFormLabel" style="font-size:12px;color:#64748b;font-weight:700"></span>
+        </div>
+        <div class="prog-bar-bg"><div id="progBar" class="prog-bar-fill"></div></div>
+      </div>
+
       <!-- Feedback -->
       <div id="cap-feedback"></div>
 
@@ -354,7 +398,7 @@
 
       <div class="act-row">
         <button class="btn btn-green"   id="btnGuardar" onclick="guardarCapacitacion()">💾 Guardar</button>
-        <button class="btn btn-primary" id="btnPDF"     onclick="generarPDF()">📄 Generar PDF R-SC-01</button>
+        <button class="btn btn-primary" id="btnPDF"     onclick="generarPDFsFormatos()">📄 Generar PDF R-SC-01</button>
         <button class="btn btn-gray"                    onclick="resetearFormulario()">🔄 Nueva capacitación</button>
       </div>
     </div>
