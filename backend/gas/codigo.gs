@@ -486,9 +486,9 @@ function setDatosCached(hoja, datos) {
   const size   = 90000;
   const chunks = Math.ceil(json.length / size);
   for (let i = 0; i < chunks; i++) {
-    cache.put(key + '_' + i, json.substring(i * size, (i + 1) * size), 600);
+    cache.put(key + '_' + i, json.substring(i * size, (i + 1) * size), 21600);
   }
-  cache.put(key + '_meta', JSON.stringify({ chunks }), 600);
+  cache.put(key + '_meta', JSON.stringify({ chunks }), 21600);
 }
 function buscarTrabajador(p) {
   const q      = (p.q || '').toLowerCase().trim();
