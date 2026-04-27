@@ -3648,9 +3648,9 @@ async function preloadData() {
 
   try {
     console.time('[preload] getPreload-API');
-    const d = await apiGet({action:'getPreload', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
+    const d = await apiGet({action:'getPreloadOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
     console.timeEnd('[preload] getPreload-API');
-    console.log('[preload] API: '+Math.round(performance.now()-_tPL0)+'ms | fromCache:'+(d.data&&d.data.fromCache||false)+' | atenciones:'+(d.data&&d.data.atenciones&&d.data.atenciones.length||0));
+    console.log('[preload] API: '+Math.round(performance.now()-_tPL0)+'ms | fromCache:'+(d.data&&d.data.fromCache||false)+' | atenciones:'+(d.data&&d.data.atenciones&&d.data.atenciones.length||0)+' | fuente_stats:'+(d.data&&d.data.fuente_atenciones||'?')+' | stats_ms:'+(d.data&&d.data.tiempo_atenciones_ms||0));
     if (d.success && d.data) {
       const data = d.data;
       CACHE.stats      = data.stats      || {};
@@ -3732,7 +3732,7 @@ async function refrescarEnBackground() {
   const rol     = USER.rol;
   const empresa = (ROLES_ADMIN.includes(rol) || ROLES_ADMIN2.includes(rol)) ? '' : (USER.empresa || '');
   try {
-    const d = await apiGet({ action:'getPreload', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol, empresa });
+    const d = await apiGet({ action:'getPreloadOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol, empresa });
     if (d.success) {
       // Preservar registros guardados en memoria que aún no llegaron al servidor
       const _prevAts = Array.isArray(CACHE.atenciones) ? [...CACHE.atenciones] : [];

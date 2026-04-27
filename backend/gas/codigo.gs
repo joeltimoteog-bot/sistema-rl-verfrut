@@ -33,6 +33,7 @@ function handle(e) {
     switch(action) {
       case 'login':             result = login(body);              break;
       case 'getPreload':        result = getPreload(params);        break;
+      case 'getPreloadOptimizado': result = getPreloadOptimizado(params); break;
       case 'getAtenciones':     result = getAtenciones(params);    break;
       case 'getAtencionesOptimizado': result = getAtencionesOptimizado(params); break;
       case 'saveAtencion':      result = saveAtencion(body);       break;
@@ -3852,4 +3853,154 @@ function getAtencionesOptimizado(p) {
   var fb = getAtenciones(p);
   if (fb && fb.success) fb.fuente = 'SHEETS';
   return fb;
+}
+
+// ============================================================
+// FASE 7.5: STATS VIA AZURE SQL + getPreload optimizado
+// ============================================================
+function getEstadisticasAzure(filtros) {
+  filtros = filtros || {};
+  try {
+    var qs = [];
+    if (filtros.anio)    qs.push('anio=' + encodeURIComponent(filtros.anio));
+    if (filtros.empresa) qs.push('empresa=' + encodeURIComponent(filtros.empresa));
+    var url = _azureBaseUrl_() + '/atenciones/stats' + (qs.length ? '?' + qs.join('&') : '');
+    var t0 = Date.now();
+    var resp = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: _azureAuthHeaders_(),
+      muteHttpExceptions: true,
+      followRedirects: true
+    });
+    var elapsed = Date.now() - t0;
+    var code = resp.getResponseCode();
+    if (code !== 200) {
+      console.log('[getEstadisticasAzure] HTTP ' + code + ': ' + resp.getContentText().substring(0, 200));
+      return { success: false, error: 'HTTP ' + code };
+    }
+    var data = JSON.parse(resp.getContentText());
+    data.tiempo_apps_script = elapsed;
+    return data;
+  } catch(e) {
+    console.log('[getEstadisticasAzure] error: ' + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+// Mapea respuesta Azure stats → shape de stats que usa el frontend (CACHE.stats)
+// Frontend espera: { hoy, mes, anio, total, enProceso, finalizados, porMes, porTipo, porEstado }
+function _statsAzureToFrontend_(az) {
+  var r = (az && az.resumen_global) || {};
+  return {
+    hoy:        Number(r.hoy)         || 0,
+    mes:        Number(r.este_mes)    || 0,
+    anio:       Number(r.este_anio)   || 0,
+    total:      Number(r.total)       || 0,
+    enProceso:  Number(r.en_proceso)  || 0,
+    finalizados:Number(r.finalizados) || 0,
+    porMes:     az.por_mes    || {},
+    porTipo:    az.por_tipo   || {},
+    porEstado:  az.por_estado || {}
+  };
+}
+
+// Versión optimizada de getPreload. Mismo shape de respuesta:
+//   { success, data: { atenciones, stats, visitas, casos, fusiones, solicitudes,
+//                      estadisticasAdmin, usuarios, supervisores, timestamp, _ts } }
+// Diferencia: stats se obtiene desde Azure SQL (~500ms) en vez de getEstadisticas
+// (que itera 47k filas en Apps Script, ~30s). Si Azure falla, fallback a getEstadisticas.
+function getPreloadOptimizado(p) {
+  p = p || {};
+  var startTime = Date.now();
+  try {
+    var cache = CacheService.getUserCache();
+    var cacheKey = 'preload_opt_' + (p.usuario||'') + '_' + (p.rol||'');
+    var cached = cache.get(cacheKey);
+    if (cached) {
+      try {
+        var parsed = JSON.parse(cached);
+        if (parsed._ts && (Date.now() - parsed._ts) < 10 * 60 * 1000) {
+          return { success: true, data: parsed, fromCache: true };
+        }
+      } catch(eCached) {}
+    }
+
+    var rol     = p.rol || '';
+    var empresa = p.empresa || '';
+    var esAdmin = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl'].indexOf(rol) >= 0;
+
+    // Atenciones: solo para supervisores (admins lazy)
+    var atenciones = [];
+    if (!esAdmin) {
+      try { var dA = getAtencionesOptimizado(p); if (dA && dA.success) atenciones = dA.data; } catch(e){}
+    }
+
+    // ── STATS via AZURE (la pieza que reemplaza el bottleneck) ──
+    var stats = { hoy:0, mes:0, anio:0, total:0, enProceso:0, finalizados:0, porMes:{}, porTipo:{}, porEstado:{} };
+    var fuenteStats = 'NONE';
+    var tiempoStatsMs = 0;
+    var t0 = Date.now();
+
+    var filtrosAz = {};
+    if (empresa && empresa !== 'TODAS' && empresa !== 'AMBAS') filtrosAz.empresa = empresa;
+    var az = getEstadisticasAzure(filtrosAz);
+    tiempoStatsMs = Date.now() - t0;
+
+    if (az && az.success) {
+      stats = _statsAzureToFrontend_(az);
+      fuenteStats = 'AZURE';
+    } else {
+      // Fallback: Sheets (lento, pero seguro)
+      try {
+        var dS = getEstadisticas(p);
+        if (dS && dS.success) { stats = dS.data; fuenteStats = 'SHEETS'; }
+      } catch(eS){}
+    }
+
+    var visitas = [];
+    try { var dV = getVisitas(p); if (dV.success) visitas = dV.data; } catch(e){}
+
+    var casos = [];
+    try { var dC = getCasos(p); if (dC.success) casos = dC.data; } catch(e){}
+
+    var fusiones = [];
+    try { var dF = getFusiones(p); if (dF.success) fusiones = dF.data; } catch(e){}
+
+    var solicitudes = [];
+    try { if (esAdmin) { var dSo = getSolicitudes(p); if (dSo.success) solicitudes = dSo.data; } } catch(e){}
+
+    var estadisticasAdmin = null;
+
+    var supervisores = [];
+    try { var dSup = getSupervisores(); if (dSup.success) supervisores = dSup.data; } catch(e){}
+
+    var usuarios = [];
+    try { if (rol === 'administrador') { var dU = getUsuarios(p); if (dU.success) usuarios = dU.data; } } catch(e){}
+
+    var elapsed = Date.now() - startTime;
+    var result = {
+      atenciones: atenciones,
+      stats: stats,
+      visitas: visitas,
+      casos: casos,
+      fusiones: fusiones,
+      solicitudes: solicitudes,
+      estadisticasAdmin: estadisticasAdmin,
+      usuarios: usuarios,
+      supervisores: supervisores,
+      timestamp: new Date().getTime(),
+      _ts: Date.now(),
+      fuente_atenciones: fuenteStats,
+      tiempo_atenciones_ms: tiempoStatsMs,
+      tiempo_total_ms: elapsed
+    };
+
+    try { cache.put(cacheKey, JSON.stringify(result), 600); } catch(ePut){}
+    console.log('[getPreloadOptimizado] total=' + elapsed + 'ms | stats=' + tiempoStatsMs + 'ms | fuente=' + fuenteStats);
+    return { success: true, data: result };
+
+  } catch(e) {
+    console.log('[getPreloadOptimizado] error general, fallback a getPreload original: ' + e.toString());
+    return getPreload(p);
+  }
 }
