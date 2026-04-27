@@ -34,6 +34,7 @@ function handle(e) {
       case 'login':             result = login(body);              break;
       case 'getPreload':        result = getPreload(params);        break;
       case 'getAtenciones':     result = getAtenciones(params);    break;
+      case 'getAtencionesOptimizado': result = getAtencionesOptimizado(params); break;
       case 'saveAtencion':      result = saveAtencion(body);       break;
       case 'updateAtencion':    result = updateAtencion(body);     break;
       case 'deleteAtencion':    result = deleteAtencion(body);     break;
@@ -3750,4 +3751,105 @@ function actualizarFirebaseModulos() {
   } catch(e) {
     Logger.log('actualizarFirebaseModulos error: ' + e.toString());
   }
+}
+
+// ============================================================
+// FASE A: ATENCIONES VIA AZURE SQL (con fallback a Sheets)
+// ============================================================
+function _azureBaseUrl_() {
+  var url = PropertiesService.getScriptProperties().getProperty('AZURE_API_URL');
+  if (!url) throw new Error('AZURE_API_URL no configurada en Script Properties');
+  return url.replace(/\/+$/, '');
+}
+
+function _azureAuthHeaders_() {
+  var key = PropertiesService.getScriptProperties().getProperty('AZURE_API_KEY');
+  if (!key) throw new Error('AZURE_API_KEY no configurada en Script Properties');
+  return { 'x-functions-key': key };
+}
+
+function listAtencionesAzure(filtros) {
+  filtros = filtros || {};
+  var qs = [];
+  ['supervisor','empresa','desde','hasta','dni','estado','limite','pagina'].forEach(function(k){
+    var v = filtros[k];
+    if (v !== undefined && v !== null && v !== '') {
+      qs.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
+    }
+  });
+  var url = _azureBaseUrl_() + '/atenciones' + (qs.length ? '?' + qs.join('&') : '');
+  var resp = UrlFetchApp.fetch(url, {
+    method: 'get',
+    headers: _azureAuthHeaders_(),
+    muteHttpExceptions: true,
+    followRedirects: true
+  });
+  var code = resp.getResponseCode();
+  if (code !== 200) {
+    throw new Error('Azure HTTP ' + code + ': ' + resp.getContentText().substring(0, 300));
+  }
+  return JSON.parse(resp.getContentText());
+}
+
+function consultarAtencionesOptimizado(filtros) {
+  filtros = filtros || {};
+  try {
+    var t0 = Date.now();
+    var result = listAtencionesAzure(filtros);
+    var elapsed = Date.now() - t0;
+    if (result && result.success) {
+      console.log('[consultarAtencionesOptimizado] Azure OK ' + (result.total || 0) + ' regs en ' + elapsed + 'ms');
+      return {
+        success: true,
+        data: result.data || [],
+        total: result.total,
+        pagina: result.pagina,
+        limite: result.limite,
+        fuente: 'AZURE',
+        tiempo: elapsed
+      };
+    }
+  } catch(e) {
+    console.log('[consultarAtencionesOptimizado] Azure error: ' + e.toString());
+  }
+  return { success: false, error: 'Azure no disponible', fuente: 'NONE' };
+}
+
+// Wrapper compatible con getAtenciones(p): mismo shape de salida.
+// Mapea filtros del frontend al schema de Azure y, si Azure falla, hace fallback a getAtenciones.
+function getAtencionesOptimizado(p) {
+  p = p || {};
+  var azFiltros = { limite: 50000, pagina: 1 };
+  var rol = String(p.rol || '').toLowerCase();
+  if (rol === 'supervisor') {
+    azFiltros.supervisor = String(p.nombre || p.usuario || '').trim();
+  }
+  if (p.empresa && p.empresa !== 'AMBAS') {
+    azFiltros.empresa = p.empresa;
+  }
+  // Sin historial: replica getRowsCurrentYear restringiendo al año en curso
+  if (!p.historial) {
+    var anio = new Date().getFullYear();
+    azFiltros.desde = anio + '-01-01';
+    azFiltros.hasta = anio + '-12-31';
+  }
+
+  var r = consultarAtencionesOptimizado(azFiltros);
+  if (r.success) {
+    var lista = r.data || [];
+    // Filtros adicionales por compat futura (mes/anio/estado/q): hoy ningún callsite los pasa.
+    if (p.mes)    lista = lista.filter(function(a){ return String(a.mes) === String(p.mes); });
+    if (p.anio)   lista = lista.filter(function(a){ return String(a.anio) === String(p.anio); });
+    if (p.estado) lista = lista.filter(function(a){ return String(a.estado||'').toUpperCase() === String(p.estado).toUpperCase(); });
+    if (p.q) {
+      var q = String(p.q).toLowerCase();
+      lista = lista.filter(function(a){ return String(a.dni||'').indexOf(q) >= 0 || String(a.nombre||'').toLowerCase().indexOf(q) >= 0; });
+    }
+    console.log('[getAtencionesOptimizado] Azure ' + r.tiempo + 'ms, total=' + (r.total||lista.length) + ', filtrado=' + lista.length);
+    return { success: true, data: lista, fuente: 'AZURE', tiempo: r.tiempo };
+  }
+  console.log('[getAtencionesOptimizado] Fallback → Sheets (getAtenciones)');
+  var fb = getAtenciones(p);
+  if (fb && fb.success) fb.fuente = 'SHEETS';
+  return fb;
 }
