@@ -72,7 +72,7 @@ function handle(e) {
       case 'recalcularEstadisticasCompletas': result = recalcularEstadisticasCompletas(); break;
       case 'saveSolicitudAcceso':     result = saveSolicitudAcceso(body);       break;
       case 'aprobarAccesoTemporal':   result = aprobarAccesoTemporal(body);     break;
-      case 'verificarAccesoTemporal': result = verificarAccesoTemporal(params); break;
+      case 'verificarAccesoTemporal': result = verificarAccesoTemporal(Object.assign({}, params, body)); break;
       case 'getSolicitudesAcceso':    result = getSolicitudesAcceso(params);    break;
       case 'resolverAccesoTemporal':  result = aprobarAccesoTemporal(body);     break;
       case 'subirArchivoAzure':       result = subirArchivoAzure(body);         break;
@@ -2166,37 +2166,58 @@ function aprobarAccesoTemporal(d) {
     // Admin: desde d.aprobado_por o d.admin
     var aprobadoPor = String(d.aprobado_por || d.admin || '').trim();
 
-    for (var i = startIndex; i < rows.length; i++) {
-      if (String(rows[i][2]).trim() === String(d.usuario).trim() &&
-          String(rows[i][6]).toUpperCase().trim() === 'PENDIENTE') {
-
-        // Si admin no especificó horas, usar las solicitadas
-        if (!horasAprobadas) horasAprobadas = parseInt(rows[i][5]) || 1;
-
-        var ahora = new Date();
-        var hastaMillis = ahora.getTime() + (horasAprobadas * 60 * 60 * 1000);
-        var horaFin = new Date(hastaMillis);
-
-        var filaSheet = i + 1;
-        ws.getRange(filaSheet, 7).setValue(d.decision || 'APROBADO');
-        ws.getRange(filaSheet, 8).setValue(aprobadoPor);
-        ws.getRange(filaSheet, 9).setValue(Utilities.formatDate(ahora, 'GMT-5', 'HH:mm'));
-        ws.getRange(filaSheet, 10).setValue(Utilities.formatDate(horaFin, 'GMT-5', 'HH:mm'));
-        ws.getRange(filaSheet, 11).setValue(ahora);
-        ws.getRange(filaSheet, 12).setValue(hastaMillis);
-        ws.getRange(filaSheet, 6).setValue(horasAprobadas);
-
-        return {
-          success: true,
-          hastaHora: Utilities.formatDate(horaFin, 'GMT-5', 'HH:mm'),
-          hastaFecha: Utilities.formatDate(horaFin, 'GMT-5', 'dd/MM/yyyy HH:mm'),
-          horasAprobadas: horasAprobadas,
-          expiraEn: hastaMillis,
-          decision: d.decision || 'APROBADO'
-        };
+    // 1) Localización por d.fila (1-based del sheet, lo que envía getSolicitudesAcceso).
+    //    Esto evita aprobar la solicitud equivocada cuando hay varias PENDIENTE del mismo usuario.
+    var filaObjetivo = -1;
+    var filaInputNum = parseInt(d.fila);
+    if (filaInputNum && filaInputNum > startIndex && filaInputNum <= rows.length) {
+      var idxArr = filaInputNum - 1; // a 0-based
+      var rUsr = String(rows[idxArr][2] || '').trim();
+      var rEst = String(rows[idxArr][6] || '').toUpperCase().trim();
+      if (rEst === 'PENDIENTE' && (!d.usuario || rUsr === String(d.usuario).trim())) {
+        filaObjetivo = idxArr;
       }
     }
-    return { success: false, error: 'Solicitud pendiente no encontrada para: ' + d.usuario };
+
+    // 2) Fallback compatibilidad: primer PENDIENTE del usuario
+    if (filaObjetivo === -1 && d.usuario) {
+      for (var i = startIndex; i < rows.length; i++) {
+        if (String(rows[i][2]).trim() === String(d.usuario).trim() &&
+            String(rows[i][6]).toUpperCase().trim() === 'PENDIENTE') {
+          filaObjetivo = i; break;
+        }
+      }
+    }
+
+    if (filaObjetivo === -1) {
+      return { success: false, error: 'Solicitud pendiente no encontrada para: ' + (d.usuario || 'fila ' + d.fila) };
+    }
+
+    // Si admin no especificó horas, usar las solicitadas en la fila
+    if (!horasAprobadas) horasAprobadas = parseInt(rows[filaObjetivo][5]) || 1;
+
+    var ahora = new Date();
+    var hastaMillis = ahora.getTime() + (horasAprobadas * 60 * 60 * 1000);
+    var horaFin = new Date(hastaMillis);
+
+    var filaSheet = filaObjetivo + 1;
+    ws.getRange(filaSheet, 7).setValue(d.decision || 'APROBADO');
+    ws.getRange(filaSheet, 8).setValue(aprobadoPor);
+    ws.getRange(filaSheet, 9).setValue(Utilities.formatDate(ahora, 'America/Lima', 'HH:mm'));
+    ws.getRange(filaSheet, 10).setValue(Utilities.formatDate(horaFin, 'America/Lima', 'HH:mm'));
+    ws.getRange(filaSheet, 11).setValue(ahora);
+    ws.getRange(filaSheet, 12).setValue(hastaMillis);
+    ws.getRange(filaSheet, 6).setValue(horasAprobadas);
+
+    return {
+      success: true,
+      hastaHora:  Utilities.formatDate(horaFin, 'America/Lima', 'HH:mm'),
+      hastaFecha: Utilities.formatDate(horaFin, 'America/Lima', 'dd/MM/yyyy HH:mm'),
+      hora_fin:   Utilities.formatDate(horaFin, 'America/Lima', 'HH:mm'),
+      horasAprobadas: horasAprobadas,
+      expiraEn: hastaMillis,
+      decision: d.decision || 'APROBADO'
+    };
   } catch(e) {
     return { success: false, error: e.toString() };
   }
