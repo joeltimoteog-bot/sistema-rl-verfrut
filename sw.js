@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3.1.0-capacitaciones';
+const CACHE_VERSION = 'v3.2.0-icons-unifrutti';
 const CACHE_NAME    = 'sistema-rl-' + CACHE_VERSION;
 const BASE          = '/sistema-rl-verfrut';
 
@@ -7,6 +7,12 @@ const ARCHIVOS_BASE = [
   BASE + '/',
   BASE + '/index.html',
   BASE + '/manifest.json',
+  BASE + '/favicon.ico',
+  BASE + '/frontend/images/icon-192.png',
+  BASE + '/frontend/images/icon-512.png',
+  BASE + '/frontend/images/apple-touch-icon.png',
+  BASE + '/frontend/images/favicon-32.png',
+  BASE + '/frontend/images/favicon-16.png',
 ];
 
 // ── Instalar: pre-cachear mínimo offline ──
