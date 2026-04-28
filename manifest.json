@@ -1,10 +1,10 @@
 {
-  "name": "Sistema RL - Verfrut RAPEL",
-  "short_name": "Sistema RL",
+  "name": "Sistema RL - Unifrutti",
+  "short_name": "Unifrutti RL",
   "description": "Sistema de Relaciones Laborales",
   "start_url": "/sistema-rl-verfrut/",
   "display": "standalone",
-  "background_color": "#0a2463",
+  "background_color": "#ffffff",
   "theme_color": "#0a2463",
   "orientation": "portrait-primary",
   "icons": [
