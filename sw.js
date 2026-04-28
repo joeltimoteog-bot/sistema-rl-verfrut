@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3.2.0-icons-unifrutti';
+const CACHE_VERSION = 'v3.3.0-update-toast';
 const CACHE_NAME    = 'sistema-rl-' + CACHE_VERSION;
 const BASE          = '/sistema-rl-verfrut';
 
@@ -16,6 +16,10 @@ const ARCHIVOS_BASE = [
 ];
 
 // ── Instalar: pre-cachear mínimo offline ──
+// NOTA: NO hacemos skipWaiting() aqui. Queremos que el SW nuevo quede en
+// estado "waiting" hasta que el usuario decida activarlo via toast
+// (boton Recargar -> mensaje SKIP_WAITING -> skipWaiting()). Esto evita
+// recargas automaticas en medio de un trabajo en curso.
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -24,7 +28,6 @@ self.addEventListener('install', (event) => {
           cache.add(url).catch(e => console.warn('[SW] No se pudo cachear:', url, e.message))
         )
       ))
-      .then(() => self.skipWaiting())
   );
 });
 
@@ -95,6 +98,11 @@ self.addEventListener('fetch', (event) => {
 });
 
 // ── Mensaje desde el cliente para forzar activación inmediata ──
+// Acepta tanto el formato nuevo {type:'SKIP_WAITING'} (toast de actualización)
+// como el legacy event.data === 'skipWaiting' por compatibilidad.
 self.addEventListener('message', (event) => {
-  if (event.data === 'skipWaiting') self.skipWaiting();
+  if (event.data === 'skipWaiting' ||
+      (event.data && event.data.type === 'SKIP_WAITING')) {
+    self.skipWaiting();
+  }
 });

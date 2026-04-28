@@ -7900,8 +7900,65 @@ window._fbSuscribirEstadisticas = function(callback) {
 </div>
 
 <script>
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('/sistema-rl-verfrut/sw.js').then(r=>console.log('[SW] Registrado:',r.scope)).catch(e=>console.warn('[SW] Error registro:',e));
+// ── Service Worker + toast "Nueva versión disponible" ──────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sistema-rl-verfrut/sw.js')
+      .then(registration => {
+        console.log('[SW] Registrado:', registration.scope);
+
+        // Detectar cuando hay una nueva versión disponible
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            // Cuando el nuevo SW está instalado y hay uno controlando
+            if (newWorker.state === 'installed' &&
+                navigator.serviceWorker.controller) {
+              mostrarToastActualizacion(newWorker);
+            }
+          });
+        });
+
+        // Verificar updates cada 60 segundos mientras la app está abierta
+        setInterval(() => { registration.update(); }, 60000);
+      })
+      .catch(err => console.error('[SW] Error registro:', err));
+
+    // Recargar la página cuando el nuevo SW toma control
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+  });
+}
+
+function mostrarToastActualizacion(newWorker) {
+  // Evitar duplicados
+  if (document.getElementById('toast-update')) return;
+  const toast = document.createElement('div');
+  toast.id = 'toast-update';
+  toast.innerHTML = `
+    <div style="position:fixed;bottom:24px;right:24px;background:linear-gradient(135deg,#0a2463 0%,#1e40af 100%);color:#fff;padding:16px 20px;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.3);z-index:99999;display:flex;align-items:center;gap:12px;font-family:system-ui,-apple-system,sans-serif;font-size:14px;max-width:380px;animation:slideUp .4s ease-out">
+      <span style="font-size:24px">🔄</span>
+      <div style="flex:1">
+        <div style="font-weight:600;margin-bottom:2px">Nueva versión disponible</div>
+        <div style="font-size:12px;opacity:.9">Recarga para ver las últimas mejoras</div>
+      </div>
+      <button id="btnReloadUpdate" style="background:#fff;color:#0a2463;border:none;padding:8px 14px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px">Recargar</button>
+      <button id="btnCloseUpdate" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.3);padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px">✕</button>
+    </div>
+    <style>@keyframes slideUp{from{transform:translateY(100px);opacity:0}to{transform:translateY(0);opacity:1}}</style>
+  `;
+  document.body.appendChild(toast);
+  document.getElementById('btnReloadUpdate').onclick = () => {
+    newWorker.postMessage({ type: 'SKIP_WAITING' });
+  };
+  document.getElementById('btnCloseUpdate').onclick = () => {
+    toast.remove();
+  };
 }
 </script>
 </body>
