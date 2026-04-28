@@ -948,6 +948,39 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
 </div>
 </div>
 
+<!-- MODAL CONFIRMAR ELIMINAR VISITA (solo admins jtimoteo / ovilela / jchavez) -->
+<div class="ov" id="mConfirmarEliminarVisita">
+<div class="modal" style="max-width:520px;width:97vw;padding:0;max-height:95vh;overflow-y:auto">
+  <div style="background:#dc2626;color:#fff;padding:14px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-weight:700;font-size:15px">🗑️ Eliminar visita</span>
+    <span onclick="_cerrarModalEliminarVisita()" style="cursor:pointer;font-size:20px;opacity:.8">✕</span>
+  </div>
+  <div style="padding:20px">
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px;margin-bottom:14px;color:#991b1b;font-size:13px;line-height:1.5">
+      <b>⚠️ Acción irreversible.</b> La visita se moverá a la hoja <b>Visitas_Eliminadas</b> con el motivo y tu usuario. No se borra físicamente, pero deja de aparecer en el listado.
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px;line-height:1.7">
+      <div><b>N°:</b> <span id="elimVisitaNro">—</span></div>
+      <div><b>Supervisor:</b> <span id="elimVisitaSup">—</span></div>
+      <div><b>Empresa:</b> <span id="elimVisitaEmp">—</span></div>
+      <div><b>Fecha:</b> <span id="elimVisitaFecha">—</span></div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;font-weight:600;color:#0b1e45;display:block;margin-bottom:4px">Motivo de eliminación (opcional)</label>
+      <input type="text" id="elimVisitaMotivo" placeholder="Ej: registro duplicado, datos incorrectos…" style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:12px;font-weight:600;color:#0b1e45;display:block;margin-bottom:4px">Para confirmar, escribe <b style="color:#dc2626">ELIMINAR</b> en mayúsculas</label>
+      <input type="text" id="elimVisitaConfirmTxt" oninput="_validarTextoEliminarVisita()" placeholder="ELIMINAR" autocomplete="off" style="width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;letter-spacing:1px">
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button type="button" onclick="_cerrarModalEliminarVisita()" style="padding:9px 18px;background:#f1f5f9;color:#0b1e45;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">Cancelar</button>
+      <button type="button" id="btnConfirmarEliminarVisita" onclick="_confirmarEliminarVisita()" disabled style="padding:9px 18px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;opacity:.5">🗑️ Eliminar</button>
+    </div>
+  </div>
+</div>
+</div>
+
 <!-- MODAL VER INFORME VISITA -->
 <div class="ov" id="mVerInforme">
 <div class="modal" style="max-width:820px;width:97vw;padding:0;max-height:95vh;overflow-y:auto">
@@ -1799,6 +1832,8 @@ function renderVisitas(data) {
         String(v.registrado_por||'').toLowerCase().includes(miNombreR.split(' ')[0]);
       const btnVer    = `<button onclick="verInformeGuardado(${i})" style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📄 Ver</button>`;
       const btnEditar = puedeEditar ? `<button onclick="editarVisita(${i})" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button>` : '';
+      const puedeEliminar = ADMINS_ELIMINAR_VISITA.includes(String(USER.usuario||'').toLowerCase());
+      const btnEliminar = puedeEliminar ? `<button onclick="eliminarVisitaConfirmada(${i})" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">🗑️ Eliminar</button>` : '';
       const escT = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const supCol = esAdmin ? `<td>${escT(v.supervisor||'—')}</td>` : '';
       return `<tr>
@@ -1809,7 +1844,7 @@ function renderVisitas(data) {
         <td>${escT(v.sector||v.fundo||'—')}</td>
         <td>${escT(v.semana||'—')}</td>
         <td><span style="font-size:10px;font-weight:700;color:${colorEstado}">${estado}</span></td>
-        <td style="display:flex;gap:4px;flex-wrap:wrap">${btnVer}${btnEditar}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">${btnVer}${btnEditar}${btnEliminar}</td>
       </tr>`;
     }).join('');
   }, 0);
@@ -2181,6 +2216,9 @@ function verFotosFusion(idx) {
 
 const ROLES_ADMIN   = ['administrador','Administrador'];
 const ROLES_ADMIN2  = ['administrador 01','administrador 02','Administrador 01','Administrador 02'];
+// Lista blanca de usuarios autorizados a eliminar visitas (espejo de codigo.gs).
+// Si se modifica aquí, actualizar también ADMINS_ELIMINAR_VISITA en backend/gas/codigo.gs
+const ADMINS_ELIMINAR_VISITA = ['jtimoteo','ovilela','jchavez'];
 const ROLES_SUP     = ['supervisor','Supervisor'];
 const ROLES_VER_TODO = ['administrador','administrador 01','administrador 02','Administrador','Administrador 01','Administrador 02','coordinador','Coordinador','jefa_rl','Jefa_rl'];
 
@@ -2428,10 +2466,13 @@ async function guardarInformeEnAzure() {
       `<body style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:20px">` +
       contenido + `</body></html>`;
 
-    // Nombre de archivo según spec
-    const supSlug       = String(v && v.supervisor ? v.supervisor : 'supervisor').replace(/\s+/g, '_');
+    // Nombre estandarizado por N° de visita: garantiza que al re-subir un
+    // informe editado el blob se sobreescriba (PUT con mismo path) en vez
+    // de generar un duplicado con sufijo de supervisor.
     const nro           = v ? (v.nro || '') : '';
-    const nombreArchivo = 'informe_visita_' + nro + '_' + supSlug + '.html';
+    const nombreArchivo = nro
+      ? 'informe_visita_' + nro + '.html'
+      : 'informe_visita_sin_nro_' + Date.now() + '.html';
 
     // Crear File desde Blob
     const blob = new Blob([htmlDoc], { type: 'text/html;charset=utf-8' });
@@ -6858,6 +6899,83 @@ function editarVisita(idx) {
       }
     }
   }, 150);
+}
+
+// ══════════════════ ELIMINAR VISITA (solo admins) ══════════════════
+function eliminarVisitaConfirmada(idx) {
+  const usr = String(USER.usuario||'').toLowerCase();
+  if (!ADMINS_ELIMINAR_VISITA.includes(usr)) {
+    mostrarToast('❌ No tienes permiso para eliminar visitas','error');
+    return;
+  }
+  const v = (window._visitasData||[])[idx];
+  if (!v) { mostrarToast('❌ No se encontró la visita','error'); return; }
+
+  window._visitaAEliminarIdx = idx;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set('elimVisitaNro',   v.nro || (idx+1));
+  set('elimVisitaSup',   v.supervisor || '—');
+  set('elimVisitaEmp',   v.empresa || '—');
+  set('elimVisitaFecha', v.fecha_reg || v.fecha || '—');
+
+  const inp = document.getElementById('elimVisitaConfirmTxt');
+  const mot = document.getElementById('elimVisitaMotivo');
+  if (inp) inp.value = '';
+  if (mot) mot.value = '';
+  _validarTextoEliminarVisita();
+  abrir('mConfirmarEliminarVisita');
+  setTimeout(() => { if (inp) inp.focus(); }, 100);
+}
+
+function _validarTextoEliminarVisita() {
+  const inp = document.getElementById('elimVisitaConfirmTxt');
+  const btn = document.getElementById('btnConfirmarEliminarVisita');
+  if (!inp || !btn) return;
+  const ok = inp.value === 'ELIMINAR';
+  btn.disabled = !ok;
+  btn.style.opacity = ok ? '1' : '.5';
+  btn.style.cursor  = ok ? 'pointer' : 'not-allowed';
+}
+
+function _cerrarModalEliminarVisita() {
+  cerrar('mConfirmarEliminarVisita');
+  window._visitaAEliminarIdx = null;
+}
+
+async function _confirmarEliminarVisita() {
+  const idx = window._visitaAEliminarIdx;
+  if (idx === undefined || idx === null) return;
+  const v = (window._visitasData||[])[idx];
+  if (!v) { mostrarToast('❌ Visita no encontrada','error'); _cerrarModalEliminarVisita(); return; }
+  const inp = document.getElementById('elimVisitaConfirmTxt');
+  if (!inp || inp.value !== 'ELIMINAR') return;
+
+  const motivo = String((document.getElementById('elimVisitaMotivo')||{}).value||'').trim();
+  const btn = document.getElementById('btnConfirmarEliminarVisita');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Eliminando...'; }
+
+  try {
+    const r = await apiPost({
+      action:  'eliminarVisita',
+      nro:     v.nro,
+      usuario: USER.usuario,
+      rol:     USER.rol,
+      motivo:  motivo
+    });
+    if (!r.success) {
+      mostrarToast('❌ ' + (r.error || 'Error al eliminar'), 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '🗑️ Eliminar'; }
+      return;
+    }
+    invalidarCache('visitas');
+    guardarCacheLS();
+    _cerrarModalEliminarVisita();
+    mostrarToast('✅ Visita N° ' + v.nro + ' archivada en Visitas_Eliminadas');
+    cargarVisitas();
+  } catch(e) {
+    mostrarToast('❌ Error de conexión: ' + e.message, 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🗑️ Eliminar'; }
+  }
 }
 
 function imprimirInforme() {

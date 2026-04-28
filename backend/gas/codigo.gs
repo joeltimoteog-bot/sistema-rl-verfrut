@@ -67,6 +67,7 @@ function handle(e) {
       case 'getSupervisoresEval': result = getSupervisoresEval();        break;
       case 'saveSupervisorEval':  result = saveSupervisorEval(body);     break;
       case 'updateVisita':        result = updateVisita(body);           break;
+      case 'eliminarVisita':      result = eliminarVisita(body);         break;
       case 'updateCaso':          result = updateCaso(body);             break;
       case 'recalcularEstadisticasCompletas': result = recalcularEstadisticasCompletas(); break;
       case 'saveSolicitudAcceso':     result = saveSolicitudAcceso(body);       break;
@@ -1671,6 +1672,65 @@ function getEvaluaciones360(p) {
     }
     return { success: false, error: 'Visita no encontrada.' };
   } catch(e) { return { success: false, error: e.toString() }; }
+}
+
+// Lista blanca de usuarios autorizados a eliminar visitas (debe coincidir
+// con la validación del frontend en dashboard.html → renderVisitas)
+var ADMINS_ELIMINAR_VISITA = ['jtimoteo', 'ovilela', 'jchavez'];
+
+function eliminarVisita(d) {
+  try {
+    var usuario = String(d.usuario || '').toLowerCase().trim();
+    if (ADMINS_ELIMINAR_VISITA.indexOf(usuario) === -1) {
+      return { success: false, error: 'Sin permisos para eliminar visitas.' };
+    }
+    if (d.nro === undefined || d.nro === null || d.nro === '') {
+      return { success: false, error: 'N° de visita requerido.' };
+    }
+
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    var wsOrigen = ss.getSheetByName('Visitas_Campo');
+    if (!wsOrigen) return { success: false, error: 'Hoja Visitas_Campo no encontrada.' };
+
+    // Encabezados originales (incluyendo cualquier columna extra que se haya añadido)
+    var totalCols = wsOrigen.getLastColumn();
+    var encabezados = wsOrigen.getRange(1, 1, 1, totalCols).getValues()[0];
+
+    // Buscar fila por N°
+    var rows = wsOrigen.getDataRange().getValues();
+    var filaIdx = -1;
+    for (var i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(d.nro)) { filaIdx = i; break; }
+    }
+    if (filaIdx === -1) return { success: false, error: 'Visita N° ' + d.nro + ' no encontrada.' };
+
+    var datosFila = rows[filaIdx];
+
+    // Asegurar hoja de archivo "Visitas_Eliminadas" con encabezados + 3 columnas extra
+    var wsArchivo = ss.getSheetByName('Visitas_Eliminadas');
+    if (!wsArchivo) {
+      wsArchivo = ss.insertSheet('Visitas_Eliminadas');
+      var encabezadosArchivo = encabezados.concat(['Eliminado_por', 'Fecha_eliminacion', 'Motivo_eliminacion']);
+      wsArchivo.appendRow(encabezadosArchivo);
+      wsArchivo.getRange(1, 1, 1, encabezadosArchivo.length).setFontWeight('bold');
+    }
+
+    // Mover fila (datos originales + metadata de eliminación)
+    var nuevaFila = datosFila.concat([
+      d.usuario || '',
+      new Date(),
+      d.motivo || 'Sin motivo'
+    ]);
+    wsArchivo.appendRow(nuevaFila);
+
+    // Borrar fila original (filaIdx es 0-based en el array; +1 para 1-based de Sheets)
+    wsOrigen.deleteRow(filaIdx + 1);
+
+    try { actualizarFirebaseModulos(); } catch(em) { Logger.log('Firebase módulos: ' + em); }
+    return { success: true, mensaje: 'Visita N° ' + d.nro + ' movida a Visitas_Eliminadas.' };
+  } catch(e) {
+    return { success: false, error: e.toString() };
+  }
 }
 
 function updateCaso(d) {
