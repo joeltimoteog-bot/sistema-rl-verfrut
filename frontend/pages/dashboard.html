@@ -6914,13 +6914,9 @@ function generarHTMLInforme(d) {
         return entry ? entry.cargo : 'Supervisor de Gestión Humana';
       })();
 
-  // Cargo del firmante (usuario logueado) según su rol
-  const _rolUser = (USER.rol||'').toLowerCase();
-  const cargoFirmante = _rolUser.includes('administrador') || _rolUser.includes('coordinador')
-    ? 'Coordinador de Relaciones Laborales'
-    : _rolUser.includes('jefa') || _rolUser.includes('jefe')
-    ? 'Jefe de Relaciones Laborales'
-    : cargoSup; // supervisor / asistente → mismo cargo que DE
+  // El firmante SIEMPRE es el supervisor que registró la visita (d.sup),
+  // no el usuario logueado que está viendo/generando el PDF.
+  const cargoFirmante = cargoSup;
 
   return `
     <div style="display:flex;align-items:flex-start;gap:16px;margin-bottom:10px">
@@ -6977,7 +6973,7 @@ function generarHTMLInforme(d) {
     <p style="margin:4px 0">Atentamente,</p>
     <br><br>
     <p style="margin:4px 0">_________________________________</p>
-    <p style="margin:4px 0"><b>${USER.nombre||d.sup}</b></p>
+    <p style="margin:4px 0"><b>${d.sup||USER.nombre}</b></p>
     <p style="margin:4px 0">${cargoFirmante}</p>
   `;
 }
