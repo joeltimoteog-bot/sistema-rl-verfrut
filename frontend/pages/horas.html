@@ -113,6 +113,19 @@
     .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
 
+    /* ── DNI auto-search ── */
+    .dni-wrap { position: relative; }
+    .dni-wrap .spin-dni {
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      width: 14px; height: 14px;
+      border: 2px solid #e2e8f0; border-top-color: #0a2463;
+      border-radius: 50%; animation: spin .6s linear infinite;
+      display: none; pointer-events: none;
+    }
+    .dni-wrap.loading .spin-dni { display: block; }
+    .dni-wrap input.dni-ok  { border-color: #4ade80 !important; background: #f0fdf4; }
+    .dni-wrap input.dni-err { border-color: #ef4444 !important; background: #fef2f2; }
+
     /* ── Action buttons in tables ── */
     .btn-tbl { padding: 3px 8px; font-size: 11px; border: none; border-radius: 5px; cursor: pointer; font-weight: 700; transition: opacity .15s; margin-right: 3px; }
     .btn-tbl:hover { opacity: .75; }
@@ -171,9 +184,11 @@
     <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
       <div class="fg" style="flex:1;min-width:180px">
         <label class="lbl">DNI *</label>
-        <input type="text" id="regDni" maxlength="8" inputmode="numeric" placeholder="8 dígitos">
+        <div class="dni-wrap">
+          <input type="text" id="regDni" maxlength="8" inputmode="numeric" placeholder="8 dígitos">
+          <div class="spin-dni"></div>
+        </div>
       </div>
-      <button class="btn btn-primary" id="btnBuscar" onclick="buscarTrabajador()">🔎 Buscar</button>
     </div>
   </div>
 
@@ -237,9 +252,11 @@
     <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
       <div class="fg" style="flex:1;min-width:180px">
         <label class="lbl">DNI del trabajador *</label>
-        <input type="text" id="indDni" maxlength="8" inputmode="numeric" placeholder="8 dígitos">
+        <div class="dni-wrap">
+          <input type="text" id="indDni" maxlength="8" inputmode="numeric" placeholder="8 dígitos">
+          <div class="spin-dni"></div>
+        </div>
       </div>
-      <button class="btn btn-primary" id="btnIndCargar" onclick="cargarResumenIndividual()">📥 Cargar</button>
       <button class="btn btn-gray btn-sm" onclick="cargarResumenIndividual()">🔄 Actualizar</button>
     </div>
   </div>

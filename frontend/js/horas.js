@@ -44,19 +44,79 @@ document.addEventListener('DOMContentLoaded', () => {
   sv('regFechaEntrada', hoy);
   sv('regFechaSalida', hoy);
 
-  // Enter en DNI = buscar
-  const dniInput = document.getElementById('regDni');
-  if (dniInput) {
-    dniInput.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); buscarTrabajador(); } });
-  }
-  const indDniInput = document.getElementById('indDni');
-  if (indDniInput) {
-    indDniInput.addEventListener('keypress', e => { if (e.key === 'Enter') { e.preventDefault(); cargarResumenIndividual(); } });
-  }
+  // Búsqueda instantánea de DNI con debounce + cache + spinner inline
+  _setupDniAutoSearch('regDni', {
+    fetch: (dni) => apiPost({ action: 'horasBuscarTrabajador', dni }),
+    isFound: (d) => !!(d && d.success && d.trabajador),
+    onFound: (d) => { _aplicarTrabajadorAlForm(d.trabajador); cargarSaldoTrabajador(d.trabajador.dni); },
+    onNotFound: _limpiarTrabajadorEnForm,
+    onClear: _limpiarTrabajadorEnForm
+  });
+  _setupDniAutoSearch('indDni', {
+    fetch: (dni) => apiPost({ action: 'horasResumenIndividual', dni }),
+    isFound: (d) => !!(d && d.success && Array.isArray(d.registros)),
+    onFound: (d) => { window.horasCache.resumenIndividual = d; renderResumenIndividual(d); },
+    onNotFound: _limpiarResumenIndividual,
+    onClear:    _limpiarResumenIndividual
+  });
 
   // Cargar motivos al inicio (cacheado)
   cargarMotivos();
 });
+
+/* ─────────────── DNI AUTO-SEARCH (instant + debounce + cache + spinner) ─────────────── */
+function _setupDniAutoSearch(inputId, opts) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const wrap  = input.closest('.dni-wrap');
+  const cache = {};
+  let timer   = null;
+
+  const setLoading = (b) => { if (wrap) wrap.classList.toggle('loading', !!b); };
+  const setFound   = ()  => { input.classList.add('dni-ok');  input.classList.remove('dni-err'); };
+  const setMissing = ()  => { input.classList.add('dni-err'); input.classList.remove('dni-ok'); };
+  const setNeutral = ()  => { input.classList.remove('dni-ok','dni-err'); };
+
+  input.addEventListener('input', (e) => {
+    const cleaned = (e.target.value || '').replace(/\D/g, '').substring(0, 8);
+    if (cleaned !== e.target.value) e.target.value = cleaned;
+    const dni = cleaned;
+    if (timer) { clearTimeout(timer); timer = null; }
+
+    if (dni.length < 8) {
+      setNeutral();
+      setLoading(false);
+      if (opts.onClear) opts.onClear();
+      return;
+    }
+
+    if (cache[dni]) {
+      setFound();
+      setLoading(false);
+      opts.onFound(cache[dni]);
+      return;
+    }
+
+    timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const data = await opts.fetch(dni);
+        setLoading(false);
+        if (opts.isFound(data)) {
+          cache[dni] = data;
+          setFound();
+          opts.onFound(data);
+        } else {
+          setMissing();
+          if (opts.onNotFound) opts.onNotFound();
+        }
+      } catch (err) {
+        setLoading(false);
+        console.error('[HORAS] DNI search:', err);
+      }
+    }, 300);
+  });
+}
 
 /* ─────────────── TABS (SPA puro) ─────────────── */
 function showTab(tab, btn) {
@@ -172,40 +232,33 @@ function renderMotivos() {
 }
 
 /* ─────────────── TAB 1: BUSCAR + REGISTRAR ─────────────── */
-async function buscarTrabajador() {
-  limpiarAlerta('alBuscar');
-  const dni = v('regDni').trim();
-  if (!/^\d{8}$/.test(dni)) {
-    mostrarAlerta('alBuscar', 'err', 'Ingresa un DNI válido (8 dígitos)');
-    return;
-  }
-  const btn = document.getElementById('btnBuscar');
-  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Buscando...';
-  try {
-    const d = await apiPost({ action: 'horasBuscarTrabajador', dni });
-    if (!d || !d.success || !d.trabajador) {
-      window.horasCache.trabajadorActual = null;
-      document.getElementById('cardDatos').style.display = 'none';
-      document.getElementById('cardRegistro').style.display = 'none';
-      document.getElementById('saldoWrap').innerHTML = '';
-      throw new Error('DNI no encontrado en RAPEL ni VERFRUT');
-    }
-    const t = d.trabajador;
-    window.horasCache.trabajadorActual = t;
-    sv('regNombre', t.nombre || '');
-    sv('regEmpresa', t.empresa || '');
-    sv('regCargo', t.cargo || '');
-    sv('regRegimen', t.regimen || '');
-    sv('regFechaInicio', formatFecha(t.fechaInicio));
-    document.getElementById('cardDatos').style.display = '';
-    document.getElementById('cardRegistro').style.display = '';
-    await cargarSaldoTrabajador(dni);
-    recalcularHoras();
-  } catch (e) {
-    mostrarAlerta('alBuscar', 'err', '❌ ' + e.message);
-  } finally {
-    btn.disabled = false; btn.innerHTML = '🔎 Buscar';
-  }
+function _aplicarTrabajadorAlForm(t) {
+  if (!t) return;
+  window.horasCache.trabajadorActual = t;
+  sv('regNombre', t.nombre || '');
+  sv('regEmpresa', t.empresa || '');
+  sv('regCargo', t.cargo || '');
+  sv('regRegimen', t.regimen || '');
+  sv('regFechaInicio', formatFecha(t.fechaInicio));
+  document.getElementById('cardDatos').style.display = '';
+  document.getElementById('cardRegistro').style.display = '';
+  recalcularHoras();
+}
+
+function _limpiarTrabajadorEnForm() {
+  window.horasCache.trabajadorActual = null;
+  ['regNombre','regEmpresa','regCargo','regRegimen','regFechaInicio'].forEach(id => sv(id, ''));
+  document.getElementById('cardDatos').style.display = 'none';
+  document.getElementById('cardRegistro').style.display = 'none';
+  document.getElementById('saldoWrap').innerHTML = '';
+}
+
+function _limpiarResumenIndividual() {
+  window.horasCache.resumenIndividual = null;
+  document.getElementById('tbIndiv').innerHTML = '<tr><td colspan="9" class="empty">Sin datos</td></tr>';
+  document.getElementById('indHeader').innerHTML = '';
+  document.getElementById('indSaldos').innerHTML = '';
+  document.getElementById('indComentario').innerHTML = '';
 }
 
 async function cargarSaldoTrabajador(dni) {
@@ -238,6 +291,46 @@ function renderSaldoCard(data) {
 }
 
 /* ─────────────── CÁLCULO EN VIVO ─────────────── */
+// Réplica exacta de la fórmula del backend.
+// Usa parseo TZ-local para que getDay()/getMonth() reflejen el día tipeado.
+function _parseFechaLocal(s) {
+  if (!s) return null;
+  const [y, m, d] = String(s).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d);
+}
+
+function horasCalcularJornadaUnDia(fecha) {
+  const f = (fecha instanceof Date) ? fecha : _parseFechaLocal(fecha);
+  if (!f || isNaN(f.getTime())) return 0;
+  const mes = f.getMonth() + 1;  // 1-12
+  const dia = f.getDay();         // 0=dom, 1=lun, ..., 6=sab
+  if (mes <= 5) {
+    // Temporada alta: enero-mayo
+    return (dia >= 1 && dia <= 5) ? 9.6 : 0;
+  } else {
+    // Temporada baja: junio-diciembre
+    if (dia >= 1 && dia <= 5) return 8.75;
+    if (dia === 6) return 5.75;
+    return 0;
+  }
+}
+
+function horasCalcularJornadaTotal(fechaIni, fechaFin) {
+  if (!fechaIni) return 0;
+  if (!fechaFin) return horasCalcularJornadaUnDia(fechaIni);
+  const f1 = _parseFechaLocal(fechaIni);
+  const f2 = _parseFechaLocal(fechaFin);
+  if (!f1 || !f2 || isNaN(f1.getTime()) || isNaN(f2.getTime())) return 0;
+  let total = 0;
+  const cur = new Date(f1);
+  while (cur <= f2) {
+    total += horasCalcularJornadaUnDia(cur);
+    cur.setDate(cur.getDate() + 1);
+  }
+  return Math.round(total * 100) / 100;
+}
+
 function recalcularHoras() {
   const fE = v('regFechaEntrada'); const hE = v('regHoraEntrada');
   const fS = v('regFechaSalida');  const hS = v('regHoraSalida');
@@ -268,14 +361,16 @@ function recalcularHoras() {
   }
 
   // Acumuladas: si motivo es "Acumulación", la hora trabajada se acumula tal cual.
-  // Para otros motivos lo dejamos = horasTrab como referencia (backend dará el valor real).
+  // Para otros motivos lo dejamos = 0 como referencia (backend dará el valor real).
   const horasAcum = motivo.includes('acumulaci') ? horasTrab : 0;
+
+  // Jornada esperada — réplica de la fórmula backend
+  const jornada = horasCalcularJornadaTotal(fE, fS);
 
   setText('calcTrab', horasTrab.toFixed(2));
   setText('calcAcum', horasAcum.toFixed(2));
   setText('calcPerm', horasPerm.toFixed(2));
-  // Jornada esperada — sin fórmula garantizada, dejamos placeholder
-  setText('calcJornada', '—');
+  setText('calcJornada', jornada.toFixed(2) + ' h');
 }
 
 async function registrarHoras() {
@@ -349,8 +444,6 @@ async function cargarResumenIndividual() {
   limpiarAlerta('alIndiv');
   const dni = v('indDni').trim();
   if (!/^\d{8}$/.test(dni)) { mostrarAlerta('alIndiv', 'err', 'DNI inválido'); return; }
-  const btn = document.getElementById('btnIndCargar');
-  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Cargando...';
   try {
     const d = await apiPost({ action: 'horasResumenIndividual', dni });
     if (!d.success) throw new Error(d.error || 'Error al cargar');
@@ -358,12 +451,7 @@ async function cargarResumenIndividual() {
     renderResumenIndividual(d);
   } catch (e) {
     mostrarAlerta('alIndiv', 'err', '❌ ' + e.message);
-    document.getElementById('tbIndiv').innerHTML = '<tr><td colspan="9" class="empty">Sin datos</td></tr>';
-    document.getElementById('indHeader').innerHTML = '';
-    document.getElementById('indSaldos').innerHTML = '';
-    document.getElementById('indComentario').innerHTML = '';
-  } finally {
-    btn.disabled = false; btn.innerHTML = '📥 Cargar';
+    _limpiarResumenIndividual();
   }
 }
 
