@@ -261,11 +261,11 @@
       </div>
       <div class="fg">
         <label class="lbl">Sector</label>
-        <select id="ingSector"><option value="">Seleccionar sector...</option></select>
+        <select id="ingresoSector" name="sector"><option value="">Seleccionar sector...</option></select>
       </div>
       <div class="fg">
         <label class="lbl">Supervisor</label>
-        <select id="ingSupervisor"><option value="">Seleccionar supervisor...</option></select>
+        <select id="ingresoSupervisor" name="supervisor"><option value="">Seleccionar supervisor...</option></select>
       </div>
     </div>
     <div class="act-row">
@@ -308,11 +308,11 @@
       </div>
       <div class="fg">
         <label class="lbl">Sector</label>
-        <select id="armarSector"><option value="">Seleccionar sector...</option></select>
+        <select id="armadoSector" name="sector"><option value="">Seleccionar sector...</option></select>
       </div>
       <div class="fg">
         <label class="lbl">Supervisor</label>
-        <select id="armarSupervisor"><option value="">Seleccionar supervisor...</option></select>
+        <select id="armadoSupervisor" name="supervisor"><option value="">Seleccionar supervisor...</option></select>
       </div>
     </div>
 
@@ -356,7 +356,7 @@
     <div class="grid2">
       <div class="fg">
         <label class="lbl">Empresa *</label>
-        <select id="entEmpresa" onchange="filtrarSectores()">
+        <select id="entEmpresa">
           <option value="">Seleccionar...</option>
           <option value="RAPEL">RAPEL</option>
           <option value="VERFRUT">VERFRUT</option>
@@ -364,8 +364,8 @@
       </div>
       <div class="fg">
         <label class="lbl">Sector *</label>
-        <select id="entSector">
-          <option value="">— elige empresa primero —</option>
+        <select id="entregaSector" name="sector">
+          <option value="">Seleccionar sector...</option>
         </select>
       </div>
       <div class="fg">
@@ -384,7 +384,7 @@
       </div>
       <div class="fg">
         <label class="lbl">Supervisor</label>
-        <select id="entSupervisor"><option value="">Seleccionar supervisor...</option></select>
+        <select id="entregaSupervisor" name="supervisor"><option value="">Seleccionar supervisor...</option></select>
       </div>
     </div>
     <div class="act-row">
@@ -518,6 +518,25 @@
     </div>
   </div>
 
+  <!-- Sectores -->
+  <div class="card">
+    <div class="card-title">📍 Sectores</div>
+    <div id="alSectores"></div>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+      <div class="fg" style="flex:1;min-width:200px">
+        <label class="lbl">Nombre del sector *</label>
+        <input type="text" id="cfgSectorNombre" placeholder="Ej: El Papayo, Limones...">
+      </div>
+      <button class="btn btn-green" onclick="agregarSector()">➕ Agregar Sector</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Nombre</th><th></th></tr></thead>
+        <tbody id="tbSectores"><tr><td colspan="2" class="empty">⏳ Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- Responsables -->
   <div class="card">
     <div class="card-title">👥 Responsables</div>
@@ -548,6 +567,23 @@
       <button class="btn btn-gray" onclick="cerrarModal()">✕ Cancelar</button>
     </div>
     <div id="modalAlert" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL EDITAR SECTOR ══════════ -->
+<div class="modal-overlay" id="modalSector" style="display:none" onclick="cerrarModalSector(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-title">✏️ Editar sector</div>
+    <div class="fg" style="margin-bottom:8px">
+      <label class="lbl">Nombre *</label>
+      <input type="text" id="modalSectorNombre">
+    </div>
+    <input type="hidden" id="modalSectorId">
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="confirmarEditarSector()">💾 Guardar</button>
+      <button class="btn btn-gray" onclick="cerrarModalSector()">✕ Cancelar</button>
+    </div>
+    <div id="modalSectorAlert" style="margin-top:12px"></div>
   </div>
 </div>
 

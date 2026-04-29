@@ -10,19 +10,7 @@ const ROLES_PERMITIDOS = [
   'admin', 'admin01', 'admin02'
 ];
 
-const SECTORES = {
-  RAPEL:   ['San Vicente', 'El Papayo', 'Limones', 'Los Olivares', 'APROA',
-             'Algarrobos', 'Operaciones Campo', 'Administración', 'Planta Rapel'],
-  VERFRUT: ['Olivares Bajo', 'Santa Rosa', 'Inversiones', 'Arándanos',
-             'Riego', 'Departamento Técnico Verfrut', 'Punta Arenas']
-};
-
-// Lista plana usada en Ingreso/Armado (no hay selector de empresa en esos forms)
-const SECTORES_INV = [
-  'El Papayo', 'Limones', 'Olivares Bajo', 'Los Olivares',
-  'Santa Rosa', 'Algarrobos', 'San Vicente', 'Punta Arenas',
-  'Aproa', 'Planta Rapel'
-];
+// Sectores y supervisores se cargan dinámicamente del backend (window.invSectores / window.invSupervisores)
 
 const DIAS_ALERTA_VENC = 7;
 
@@ -31,8 +19,10 @@ let USER = null;
 let API  = '';
 let DATA = null; // { meta, productos, receta, responsables, ingresos, armadas, entregas }
 let CALC = null; // { stockPorProd, vencPorProd, ingPorProd, totalArmadas, maxCanastas, totalEntregadas, disponibles }
-let SUPERVISORES = []; // [{ nombre, sector, ... }] cargado desde getSupervisores
 let _modalCtx = null; // { tipo:'ingreso'|'armado'|'entrega', id, rowData }
+let _sectorEditCtx = null; // { id, nombre } para modal editar sector
+window.invSectores = window.invSectores || [];
+window.invSupervisores = window.invSupervisores || [];
 
 /* ─────────────── INIT ─────────────── */
 document.addEventListener('DOMContentLoaded', () => {
@@ -60,40 +50,52 @@ document.addEventListener('DOMContentLoaded', () => {
   sv('repHasta', hoy);
   sv('repDesde', new Date(Date.now() - 30 * 864e5).toISOString().split('T')[0]);
 
-  cargarSupervisores();
+  cargarSectoresInv();
+  cargarSupervisoresInv();
   cargarDatos();
 });
 
-async function cargarSupervisores() {
+async function cargarSectoresInv() {
   try {
-    const d = await apiGet({ action: 'getSupervisores' });
-    SUPERVISORES = (d && d.success && Array.isArray(d.data)) ? d.data : [];
-    poblarSelectsSupervisorSector();
+    const res = await fetch(`${API}?action=invListarSectores`);
+    const data = await res.json();
+    if (data && data.success && Array.isArray(data.sectores)) {
+      window.invSectores = data.sectores;
+      document.querySelectorAll(
+        'select[name="sector"], #ingresoSector, #armadoSector, #entregaSector'
+      ).forEach(sel => {
+        const valActual = sel.value;
+        sel.innerHTML = '<option value="">Seleccionar sector...</option>' +
+          data.sectores.map(s => `<option value="${esc(s.nombre)}">${s.nombre}</option>`).join('');
+        if (valActual) sel.value = valActual;
+      });
+      renderSectoresCfg();
+    }
   } catch (e) {
-    console.warn('[INV] No se pudo cargar supervisores:', e);
-    SUPERVISORES = [];
+    console.error('Error cargando sectores:', e);
   }
 }
 
-function poblarSelectsSupervisorSector() {
-  // Sectores planos para Ingreso y Armado
-  ['ingSector', 'armarSector'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">Seleccionar sector...</option>' +
-      SECTORES_INV.map(s => `<option value="${s}">${s}</option>`).join('');
-    if (prev) sel.value = prev;
-  });
-  // Supervisores en Ingreso/Armado/Entrega
-  ['ingSupervisor', 'armarSupervisor', 'entSupervisor'].forEach(id => {
-    const sel = document.getElementById(id);
-    if (!sel) return;
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">Seleccionar supervisor...</option>' +
-      SUPERVISORES.map(s => `<option value="${esc(s.nombre)}">${s.nombre}</option>`).join('');
-    if (prev) sel.value = prev;
-  });
+async function cargarSupervisoresInv() {
+  try {
+    const res = await fetch(`${API}?action=invListarSupervisores`);
+    const data = await res.json();
+    if (data && data.success && Array.isArray(data.supervisores)) {
+      window.invSupervisores = data.supervisores;
+      document.querySelectorAll(
+        'select[name="supervisor"], #ingresoSupervisor, #armadoSupervisor, #entregaSupervisor'
+      ).forEach(sel => {
+        const valActual = sel.value;
+        sel.innerHTML = '<option value="">Seleccionar supervisor...</option>' +
+          data.supervisores.map(s =>
+            `<option value="${esc(s.nombre)}" data-sector="${esc(s.sector || '')}" data-usuario="${esc(s.usuario || '')}">${s.nombre}</option>`
+          ).join('');
+        if (valActual) sel.value = valActual;
+      });
+    }
+  } catch (e) {
+    console.error('Error cargando supervisores:', e);
+  }
 }
 
 /* ─────────────── TABS ─────────────── */
@@ -103,6 +105,10 @@ function showTab(tab, btn) {
   const tc = document.getElementById('tab-' + tab);
   if (tc) tc.classList.add('on');
   if (btn) btn.classList.add('on');
+  if (['ingreso', 'armar', 'entregar', 'config'].includes(tab)) {
+    cargarSectoresInv();
+    cargarSupervisoresInv();
+  }
 }
 
 /* ─────────────── CARGAR DATOS ─────────────── */
@@ -353,8 +359,8 @@ async function registrarIngreso() {
   const unid  = v('ingUnidad').trim();
   const resp  = v('ingResponsable');
   const fecha = v('ingFecha');
-  const sector     = v('ingSector');
-  const supervisor = v('ingSupervisor');
+  const sector     = v('ingresoSector');
+  const supervisor = v('ingresoSupervisor');
 
   if (!prod)               { mostrarAlerta('alIngreso', 'err', 'Selecciona el producto'); return; }
   if (!cant || cant <= 0)  { mostrarAlerta('alIngreso', 'err', 'La cantidad debe ser mayor a 0'); return; }
@@ -382,7 +388,7 @@ async function registrarIngreso() {
     if (!d.success) throw new Error(d.error || 'Error al guardar');
     mostrarAlerta('alIngreso', 'ok', `✅ Ingreso registrado: ${cant} ${unid} de ${prod}`);
     sv('ingCantidad', ''); sv('ingFechaVenc', ''); sv('ingUnidad', '');
-    sv('ingSector', ''); sv('ingSupervisor', '');
+    sv('ingresoSector', ''); sv('ingresoSupervisor', '');
     await cargarDatos();
   } catch(e) {
     mostrarAlerta('alIngreso', 'err', '❌ ' + e.message);
@@ -458,8 +464,8 @@ async function confirmarArmado() {
   limpiarAlerta('alArmar');
   const cant  = parseInt(v('armarCantidad'));
   const fecha = v('armarFecha');
-  const sector     = v('armarSector');
-  const supervisor = v('armarSupervisor');
+  const sector     = v('armadoSector');
+  const supervisor = v('armadoSupervisor');
 
   if (!cant || cant <= 0) { mostrarAlerta('alArmar', 'err', 'Ingresa la cantidad de canastas a armar'); return; }
   if (cant > CALC.maxCanastas) { mostrarAlerta('alArmar', 'err', `Stock insuficiente. Máximo: ${CALC.maxCanastas}`); return; }
@@ -475,7 +481,7 @@ async function confirmarArmado() {
     if (!d.success) throw new Error(d.error || 'Error al registrar');
     mostrarAlerta('alArmar', 'ok', `✅ ${cant.toLocaleString('es-PE')} canastas armadas correctamente`);
     sv('armarCantidad', '');
-    sv('armarSector', ''); sv('armarSupervisor', '');
+    sv('armadoSector', ''); sv('armadoSupervisor', '');
     document.getElementById('previewArmado').style.display = 'none';
     await cargarDatos();
   } catch(e) {
@@ -486,20 +492,6 @@ async function confirmarArmado() {
 }
 
 /* ─────────────── TAB ENTREGAR ─────────────── */
-function filtrarSectores() {
-  const empresa = v('entEmpresa');
-  const sel = document.getElementById('entSector');
-  if (!sel) return;
-  sel.innerHTML = '<option value="">Seleccionar sector...</option>';
-  if (empresa && SECTORES[empresa]) {
-    SECTORES[empresa].forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = s; opt.textContent = s;
-      sel.appendChild(opt);
-    });
-  }
-}
-
 function renderPorSector() {
   const tb = document.getElementById('tbPorSector');
   if (!tb) return;
@@ -545,11 +537,11 @@ function renderEntregasHistorial() {
 async function registrarEntrega() {
   limpiarAlerta('alEntregar');
   const empresa = v('entEmpresa');
-  const sector  = v('entSector');
+  const sector  = v('entregaSector');
   const cant    = parseInt(v('entCantidad'));
   const resp    = v('entResponsable');
   const fecha   = v('entFecha');
-  const supervisor = v('entSupervisor');
+  const supervisor = v('entregaSupervisor');
 
   if (!empresa)            { mostrarAlerta('alEntregar', 'err', 'Selecciona la empresa'); return; }
   if (!sector)             { mostrarAlerta('alEntregar', 'err', 'Selecciona el sector'); return; }
@@ -570,7 +562,7 @@ async function registrarEntrega() {
     if (!d.success) throw new Error(d.error || 'Error al registrar');
     mostrarAlerta('alEntregar', 'ok', `✅ Entrega registrada: ${cant} canastas → ${sector} (${empresa})`);
     sv('entCantidad', '');
-    sv('entSupervisor', '');
+    sv('entregaSupervisor', '');
     await cargarDatos();
   } catch(e) {
     mostrarAlerta('alEntregar', 'err', '❌ ' + e.message);
@@ -955,14 +947,14 @@ function abrirEditarEntrega(id) {
   _modalCtx = { tipo: 'entrega', id };
 
   const optsEmp  = ['RAPEL','VERFRUT'].map(e => `<option value="${e}" ${e===item.empresa?'selected':''}>${e}</option>`).join('');
-  const optsSec  = _optsSectores(item.empresa, item.sector);
+  const optsSec  = _optsSectoresInv(item.sector);
   const optsResp = _optsResponsables(item.responsable);
   const optsSup  = _optsSupervisores(item.supervisor);
 
   document.getElementById('modalTitle').textContent = '✏️ Editar entrega';
   document.getElementById('modalForm').innerHTML = `
     <div class="grid2" style="gap:12px">
-      <div class="fg"><label class="lbl">Empresa</label><select id="mEntEmpresa" onchange="mEntFiltrarSectores()">${optsEmp}</select></div>
+      <div class="fg"><label class="lbl">Empresa</label><select id="mEntEmpresa">${optsEmp}</select></div>
       <div class="fg"><label class="lbl">Sector</label><select id="mEntSector">${optsSec}</select></div>
       <div class="fg"><label class="lbl">Cantidad</label><input type="number" id="mEntCantidad" value="${item.cantidad}" min="1" step="1"></div>
       <div class="fg"><label class="lbl">Responsable</label><select id="mEntResponsable">${optsResp}</select></div>
@@ -972,13 +964,6 @@ function abrirEditarEntrega(id) {
     <div class="alert alert-info" style="margin-top:12px;font-size:12px">Disponibles actuales: <b>${CALC.disponibles.toLocaleString('es-PE')}</b></div>`;
   document.getElementById('modalAlert').innerHTML = '';
   document.getElementById('modalEdit').style.display = 'flex';
-}
-
-function mEntFiltrarSectores() {
-  const empresa = document.getElementById('mEntEmpresa')?.value;
-  const sel = document.getElementById('mEntSector');
-  if (!sel) return;
-  sel.innerHTML = _optsSectores(empresa, '');
 }
 
 function cerrarModal(e) {
@@ -1045,6 +1030,72 @@ async function confirmarEditar() {
   }
 }
 
+/* ─────────────── SECTORES (CONFIG) ─────────────── */
+function renderSectoresCfg() {
+  const tb = document.getElementById('tbSectores');
+  if (!tb) return;
+  const sectores = window.invSectores || [];
+  if (!sectores.length) { tb.innerHTML = '<tr><td colspan="2" class="empty">Sin sectores</td></tr>'; return; }
+  tb.innerHTML = sectores.map(s => `<tr>
+    <td><b>${s.nombre}</b></td>
+    <td style="white-space:nowrap">
+      <button class="btn-tbl btn-edit" onclick="abrirEditarSector('${esc(s.id)}','${esc(s.nombre)}')">✏️</button>
+      <button class="btn-tbl btn-del"  onclick="eliminarSector('${esc(s.id)}','${esc(s.nombre)}')">🗑️</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function agregarSector() {
+  limpiarAlerta('alSectores');
+  const nombre = v('cfgSectorNombre').trim();
+  if (!nombre) { mostrarAlerta('alSectores', 'err', 'El nombre es obligatorio'); return; }
+  try {
+    const d = await apiPost({ action: 'invAgregarSector', nombre, usuario: USER.usuario });
+    if (!d.success) throw new Error(d.error || 'Error al guardar');
+    sv('cfgSectorNombre', '');
+    await cargarSectoresInv();
+    mostrarAlerta('alSectores', 'ok', `✅ Sector "${nombre}" agregado`);
+  } catch(e) { mostrarAlerta('alSectores', 'err', '❌ ' + e.message); }
+}
+
+function abrirEditarSector(id, nombre) {
+  _sectorEditCtx = { id, nombre };
+  sv('modalSectorId', id);
+  sv('modalSectorNombre', nombre);
+  document.getElementById('modalSectorAlert').innerHTML = '';
+  document.getElementById('modalSector').style.display = 'flex';
+  setTimeout(() => document.getElementById('modalSectorNombre').focus(), 50);
+}
+
+function cerrarModalSector(e) {
+  if (e && e.target !== document.getElementById('modalSector')) return;
+  document.getElementById('modalSector').style.display = 'none';
+  _sectorEditCtx = null;
+}
+
+async function confirmarEditarSector() {
+  const id     = v('modalSectorId');
+  const nombre = v('modalSectorNombre').trim();
+  const al     = document.getElementById('modalSectorAlert');
+  if (!nombre) { al.innerHTML = '<div class="alert alert-err">El nombre es obligatorio</div>'; return; }
+  try {
+    const d = await apiPost({ action: 'invEditarSector', id, nombre, usuario: USER.usuario });
+    if (!d.success) throw new Error(d.error || 'Error al guardar');
+    document.getElementById('modalSector').style.display = 'none';
+    _sectorEditCtx = null;
+    await cargarSectoresInv();
+  } catch(e) { al.innerHTML = `<div class="alert alert-err">❌ ${e.message}</div>`; }
+}
+
+async function eliminarSector(id, nombre) {
+  if (!confirm(`¿Eliminar el sector "${nombre}"?`)) return;
+  try {
+    const d = await apiPost({ action: 'invEliminarSector', id, usuario: USER.usuario });
+    if (!d.success) throw new Error(d.error || 'Error al eliminar');
+    await cargarSectoresInv();
+  } catch(e) { alert('❌ ' + e.message); }
+}
+
 /* ─────────────── ELIMINAR REGISTROS ─────────────── */
 async function eliminarIngreso(id) {
   if (!confirm('¿Eliminar este ingreso? Afectará el cálculo de stock.')) return;
@@ -1087,21 +1138,15 @@ function _optsCatalogo(selected) {
   }).join('');
 }
 
-function _optsSectores(empresa, selected) {
-  const sects = empresa && SECTORES[empresa] ? SECTORES[empresa] : [];
-  return '<option value="">Seleccionar...</option>' + sects.map(s =>
-    `<option value="${s}" ${s === selected ? 'selected' : ''}>${s}</option>`
-  ).join('');
-}
-
 function _optsSectoresInv(selected) {
-  return '<option value="">Seleccionar...</option>' + SECTORES_INV.map(s =>
-    `<option value="${s}" ${s === selected ? 'selected' : ''}>${s}</option>`
+  const list = (window.invSectores || []).map(s => s.nombre || s);
+  return '<option value="">Seleccionar...</option>' + list.map(s =>
+    `<option value="${esc(s)}" ${s === selected ? 'selected' : ''}>${s}</option>`
   ).join('');
 }
 
 function _optsSupervisores(selected) {
-  return '<option value="">Seleccionar...</option>' + (SUPERVISORES || []).map(s =>
+  return '<option value="">Seleccionar...</option>' + (window.invSupervisores || []).map(s =>
     `<option value="${esc(s.nombre)}" ${s.nombre === selected ? 'selected' : ''}>${s.nombre}</option>`
   ).join('');
 }
