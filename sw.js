@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3.3.0-update-toast';
+const CACHE_VERSION = 'v3.6.0-horas';
 const CACHE_NAME    = 'sistema-rl-' + CACHE_VERSION;
 const BASE          = '/sistema-rl-verfrut';
 
@@ -13,6 +13,8 @@ const ARCHIVOS_BASE = [
   BASE + '/frontend/images/apple-touch-icon.png',
   BASE + '/frontend/images/favicon-32.png',
   BASE + '/frontend/images/favicon-16.png',
+  BASE + '/frontend/pages/horas.html',
+  BASE + '/frontend/js/horas.js',
 ];
 
 // ── Instalar: pre-cachear mínimo offline ──

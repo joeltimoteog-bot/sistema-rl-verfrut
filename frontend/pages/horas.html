@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acumulación de Horas · Sistema RL v3.0</title>
+  <link rel="manifest" href="/sistema-rl-verfrut/manifest.json">
+  <link rel="icon" type="image/png" sizes="32x32" href="/sistema-rl-verfrut/frontend/images/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/sistema-rl-verfrut/frontend/images/favicon-16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/sistema-rl-verfrut/frontend/images/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Barlow', sans-serif; background: #f1f5f9; color: #0f172a; min-height: 100vh; }
+
+    /* ── Top bar ── */
+    .topbar { background: #0a2463; color: #fff; display: flex; align-items: center; gap: 12px; padding: 0 16px; height: 54px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.22); }
+    .topbar-logo { height: 32px; border-radius: 4px; object-fit: contain; }
+    .topbar-title { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px; letter-spacing: .5px; flex: 1; }
+    .topbar-user { font-size: 12px; opacity: .75; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+    .btn-back { background: rgba(255,255,255,.15); color: #fff; border: none; border-radius: 7px; padding: 6px 13px; font-size: 13px; font-weight: 700; cursor: pointer; flex-shrink: 0; transition: background .15s; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+    .btn-back:hover { background: rgba(255,255,255,.28); }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; background: #fff; border-bottom: 2px solid #e2e8f0; padding: 0 12px; overflow-x: auto; }
+    .tab-btn { padding: 12px 14px; font-family: 'Barlow', sans-serif; font-size: 12px; font-weight: 700; color: #64748b; background: none; border: none; border-bottom: 3px solid transparent; cursor: pointer; letter-spacing: .2px; transition: all .15s; white-space: nowrap; }
+    .tab-btn.on { color: #0a2463; border-bottom-color: #dc2626; }
+    .tab-btn:hover:not(.on) { color: #0a2463; }
+
+    /* ── Layout ── */
+    .tab-content { display: none; padding: 16px; max-width: 1100px; margin: 0 auto; }
+    .tab-content.on { display: block; }
+    .card { background: #fff; border-radius: 12px; padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+    .card-title { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 700; color: #0a2463; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 14px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+    .grid4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; }
+    @media (max-width: 720px) { .grid2, .grid3, .grid4 { grid-template-columns: 1fr; } }
+
+    /* ── Stat cards ── */
+    .stat-card { background: #fff; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 4px rgba(0,0,0,.07); border-left: 4px solid #0a2463; }
+    .stat-card.green { border-left-color: #16a34a; }
+    .stat-card.blue  { border-left-color: #2563eb; }
+    .stat-card.red   { border-left-color: #dc2626; }
+    .stat-card.amber { border-left-color: #f59e0b; }
+    .stat-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
+    .stat-val   { font-size: 26px; font-weight: 800; color: #0f172a; line-height: 1.1; margin-top: 4px; font-family: 'Barlow Condensed', sans-serif; }
+
+    /* ── Forms ── */
+    .fg { display: flex; flex-direction: column; gap: 5px; }
+    .fg.full { grid-column: 1 / -1; }
+    .lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
+    input, select, textarea { border: 2px solid #e2e8f0; border-radius: 8px; padding: 8px 11px; font-family: 'Barlow', sans-serif; font-size: 14px; color: #0f172a; width: 100%; transition: border-color .15s; background: #fff; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #0a2463; }
+    input[readonly] { background: #f1f5f9; color: #475569; }
+    textarea { resize: vertical; min-height: 64px; font-family: 'Barlow', sans-serif; }
+
+    /* ── Buttons ── */
+    .btn { padding: 9px 18px; border: none; border-radius: 8px; font-family: 'Barlow', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity .15s; display: inline-flex; align-items: center; gap: 6px; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: #0a2463; color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: .85; }
+    .btn-red    { background: #dc2626; color: #fff; }
+    .btn-red:hover:not(:disabled) { opacity: .85; }
+    .btn-green  { background: #16a34a; color: #fff; }
+    .btn-green:hover:not(:disabled) { opacity: .85; }
+    .btn-amber  { background: #f59e0b; color: #fff; }
+    .btn-amber:hover:not(:disabled) { opacity: .85; }
+    .btn-gray   { background: #e2e8f0; color: #475569; }
+    .btn-gray:hover:not(:disabled) { background: #cbd5e1; }
+    .btn-sm     { padding: 5px 11px; font-size: 12px; border-radius: 6px; }
+    .act-row    { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; }
+
+    /* ── Tables ── */
+    .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .tbl th { background: #0a2463; color: #fff; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .4px; }
+    .tbl td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+    .tbl tr:last-child td { border-bottom: none; }
+    .tbl tr:hover td { background: #f8fafc; }
+    .tbl-wrap { overflow-x: auto; }
+    .tbl tr.row-green  td { background: #f0fdf4; }
+    .tbl tr.row-amber  td { background: #fffbeb; }
+    .tbl tr.row-red    td { background: #fef2f2; }
+    .tbl tr.row-totales td { background: #0a2463; color: #fff; font-weight: 700; }
+
+    /* ── Badges / alerts ── */
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 10px; font-weight: 800; }
+    .badge-ok    { background: #dcfce7; color: #166534; }
+    .badge-warn  { background: #fef9c3; color: #854d0e; }
+    .badge-err   { background: #fee2e2; color: #991b1b; }
+    .badge-blue  { background: #dbeafe; color: #1e40af; }
+    .badge-rap   { background: #dbeafe; color: #1e40af; }
+    .badge-vrf   { background: #fce7f3; color: #9d174d; }
+    .badge-pend  { background: #fef3c7; color: #92400e; }
+    .badge-aprob { background: #dcfce7; color: #166534; }
+
+    /* ── Alert box ── */
+    .alert { padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+    .alert-warn { background: #fef9c3; color: #854d0e; border: 1.5px solid #fde68a; }
+    .alert-err  { background: #fee2e2; color: #dc2626; border: 1.5px solid #fecaca; }
+    .alert-ok   { background: #dcfce7; color: #166534; border: 1.5px solid #86efac; }
+    .alert-info { background: #eff6ff; color: #1e40af; border: 1.5px solid #bfdbfe; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 32px 20px; color: #94a3b8; font-size: 13px; }
+    .empty-icon { font-size: 34px; margin-bottom: 8px; }
+
+    /* ── Spinner ── */
+    .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; border-radius: 50%; animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Action buttons in tables ── */
+    .btn-tbl { padding: 3px 8px; font-size: 11px; border: none; border-radius: 5px; cursor: pointer; font-weight: 700; transition: opacity .15s; margin-right: 3px; }
+    .btn-tbl:hover { opacity: .75; }
+    .btn-edit { background: #dbeafe; color: #1e40af; }
+    .btn-del  { background: #fee2e2; color: #dc2626; }
+    .btn-aprob { background: #dcfce7; color: #166534; }
+
+    /* ── Modal overlay ── */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 500; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .modal-box { background: #fff; border-radius: 14px; padding: 24px; width: 100%; max-width: 480px; box-shadow: 0 8px 32px rgba(0,0,0,.22); }
+    .modal-title { font-family: 'Barlow Condensed', sans-serif; font-size: 16px; font-weight: 800; color: #0a2463; margin-bottom: 18px; text-transform: uppercase; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+    /* ── Saldo card ── */
+    .saldo-card { background: linear-gradient(135deg,#0a2463 0%,#1e40af 100%); color: #fff; border-radius: 12px; padding: 18px 20px; margin-bottom: 14px; }
+    .saldo-card .lbl-w { font-size: 11px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; opacity: .85; }
+    .saldo-card .val-w { font-family: 'Barlow Condensed', sans-serif; font-size: 32px; font-weight: 800; line-height: 1.05; margin-top: 2px; }
+    .saldo-card .row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 12px; }
+    .saldo-card .mini { background: rgba(255,255,255,.12); border-radius: 8px; padding: 9px 12px; font-size: 12px; }
+    .saldo-card .mini b { font-size: 18px; font-family: 'Barlow Condensed', sans-serif; display: block; }
+
+    @media (max-width: 480px) {
+      .topbar-title { font-size: 14px; }
+      .tab-btn { padding: 11px 10px; font-size: 11px; }
+      .stat-val { font-size: 22px; }
+      .saldo-card .val-w { font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ───────────── TOP BAR ───────────── -->
+<div class="topbar">
+  <img src="../images/logo-unifrutti.jpg" alt="Unifrutti" class="topbar-logo">
+  <a href="dashboard.html" class="btn-back">← Volver</a>
+  <div class="topbar-title">⏱️ Acumulación de Horas</div>
+  <div class="topbar-user" id="topNombre"></div>
+</div>
+
+<!-- ───────────── TABS ───────────── -->
+<div class="tabs">
+  <button class="tab-btn on" data-tab="registrar"   onclick="showTab('registrar', this)">📝 Registrar</button>
+  <button class="tab-btn"    data-tab="individual"  onclick="showTab('individual', this)">📊 Resumen Individual</button>
+  <button class="tab-btn"    data-tab="general"     onclick="showTab('general', this)">🌐 Resumen General</button>
+  <button class="tab-btn"    data-tab="aprobaciones" onclick="showTab('aprobaciones', this)">✅ Aprobaciones</button>
+  <button class="tab-btn"    data-tab="config"      onclick="showTab('config', this)">⚙️ Config</button>
+</div>
+
+<!-- ══════════ TAB: REGISTRAR ══════════ -->
+<div class="tab-content on" id="tab-registrar" data-tab="registrar">
+
+  <!-- Buscar trabajador -->
+  <div class="card">
+    <div class="card-title">🔎 Buscar trabajador</div>
+    <div id="alBuscar"></div>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div class="fg" style="flex:1;min-width:180px">
+        <label class="lbl">DNI *</label>
+        <input type="text" id="regDni" maxlength="8" inputmode="numeric" placeholder="8 dígitos">
+      </div>
+      <button class="btn btn-primary" id="btnBuscar" onclick="buscarTrabajador()">🔎 Buscar</button>
+    </div>
+  </div>
+
+  <!-- Saldo del trabajador -->
+  <div id="saldoWrap"></div>
+
+  <!-- Datos del trabajador y registro -->
+  <div class="card" id="cardDatos" style="display:none">
+    <div class="card-title">👤 Datos del trabajador</div>
+    <div class="grid2">
+      <div class="fg full"><label class="lbl">Nombre completo</label><input type="text" id="regNombre" readonly></div>
+      <div class="fg"><label class="lbl">Empresa</label><input type="text" id="regEmpresa" readonly></div>
+      <div class="fg"><label class="lbl">Cargo</label><input type="text" id="regCargo" readonly></div>
+      <div class="fg"><label class="lbl">Régimen</label><input type="text" id="regRegimen" readonly></div>
+      <div class="fg"><label class="lbl">Fecha inicio periodo</label><input type="text" id="regFechaInicio" readonly></div>
+    </div>
+  </div>
+
+  <!-- Registro -->
+  <div class="card" id="cardRegistro" style="display:none">
+    <div class="card-title">⏱️ Datos del registro</div>
+    <div id="alRegistro"></div>
+
+    <div class="grid2">
+      <div class="fg"><label class="lbl">Fecha entrada *</label><input type="date" id="regFechaEntrada" oninput="recalcularHoras()"></div>
+      <div class="fg"><label class="lbl">Hora entrada *</label><input type="time" id="regHoraEntrada" oninput="recalcularHoras()"></div>
+      <div class="fg"><label class="lbl">Fecha salida *</label><input type="date" id="regFechaSalida" oninput="recalcularHoras()"></div>
+      <div class="fg"><label class="lbl">Hora salida *</label><input type="time" id="regHoraSalida" oninput="recalcularHoras()"></div>
+      <div class="fg" id="grpPermInicio" style="display:none"><label class="lbl">Hora inicio permiso</label><input type="time" id="regHoraPermInicio" oninput="recalcularHoras()"></div>
+      <div class="fg" id="grpPermFin" style="display:none"><label class="lbl">Hora fin permiso</label><input type="time" id="regHoraPermFin" oninput="recalcularHoras()"></div>
+      <div class="fg">
+        <label class="lbl">Motivo *</label>
+        <select id="regMotivo" onchange="motivoCambia()">
+          <option value="">Seleccionar...</option>
+        </select>
+      </div>
+      <div class="fg"><label class="lbl">Detalle</label><input type="text" id="regDetalle" placeholder="Detalle libre"></div>
+      <div class="fg full"><label class="lbl">Observaciones</label><textarea id="regObservaciones" rows="2" placeholder="Opcional"></textarea></div>
+    </div>
+
+    <!-- Cálculo en vivo -->
+    <div class="grid4" style="margin-top:14px">
+      <div class="stat-card"><div class="stat-label">Horas trabajadas</div><div class="stat-val" id="calcTrab">0.00</div></div>
+      <div class="stat-card amber"><div class="stat-label">Jornada esperada</div><div class="stat-val" id="calcJornada">—</div></div>
+      <div class="stat-card green"><div class="stat-label">Horas acumuladas</div><div class="stat-val" id="calcAcum">0.00</div></div>
+      <div class="stat-card blue"><div class="stat-label">Horas permiso</div><div class="stat-val" id="calcPerm">0.00</div></div>
+    </div>
+
+    <div class="act-row">
+      <button class="btn btn-green" id="btnRegistrar" onclick="registrarHoras()">💾 Registrar</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════ TAB: RESUMEN INDIVIDUAL ══════════ -->
+<div class="tab-content" id="tab-individual" data-tab="individual">
+  <div class="card">
+    <div class="card-title">📊 Resumen individual</div>
+    <div id="alIndiv"></div>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+      <div class="fg" style="flex:1;min-width:180px">
+        <label class="lbl">DNI del trabajador *</label>
+        <input type="text" id="indDni" maxlength="8" inputmode="numeric" placeholder="8 dígitos">
+      </div>
+      <button class="btn btn-primary" id="btnIndCargar" onclick="cargarResumenIndividual()">📥 Cargar</button>
+      <button class="btn btn-gray btn-sm" onclick="cargarResumenIndividual()">🔄 Actualizar</button>
+    </div>
+  </div>
+
+  <div id="indHeader"></div>
+  <div id="indSaldos"></div>
+
+  <div class="card">
+    <div class="card-title">📋 Registros</div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Fecha</th><th>Motivo</th><th>H. trab.</th><th>Acum.</th>
+          <th>Permiso</th><th>Deuda</th><th>Estado</th><th>Observaciones</th><th></th>
+        </tr></thead>
+        <tbody id="tbIndiv"><tr><td colspan="9" class="empty">Carga un DNI para ver registros</td></tr></tbody>
+      </table>
+    </div>
+    <div class="act-row">
+      <button class="btn btn-amber" onclick="exportarIndividualPDF()">📄 PDF</button>
+      <button class="btn btn-green" onclick="exportarIndividualExcel()">📊 Excel</button>
+    </div>
+  </div>
+  <div id="indComentario"></div>
+</div>
+
+<!-- ══════════ TAB: RESUMEN GENERAL ══════════ -->
+<div class="tab-content" id="tab-general" data-tab="general">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+      <div class="card-title" style="margin:0">🌐 Resumen general</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-primary btn-sm" onclick="cargarResumenGeneral()">🔄 Actualizar</button>
+        <button class="btn btn-amber btn-sm" onclick="exportarGeneralPDF()">📄 PDF</button>
+        <button class="btn btn-green btn-sm" onclick="exportarGeneralExcel()">📊 Excel</button>
+      </div>
+    </div>
+    <div class="alert alert-info" style="font-size:12px;margin-bottom:12px">💡 Click en una fila para abrir el resumen individual de ese trabajador.</div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>DNI</th><th>Nombre</th><th>Empresa</th><th>Cargo</th>
+          <th>Acum.</th><th>Permiso</th><th>Deuda</th><th>Saldo</th>
+        </tr></thead>
+        <tbody id="tbGeneral"><tr><td colspan="8" class="empty">⏳ Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: APROBACIONES ══════════ -->
+<div class="tab-content" id="tab-aprobaciones" data-tab="aprobaciones">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+      <div class="card-title" style="margin:0">✅ Pendientes de aprobación</div>
+      <button class="btn btn-primary btn-sm" onclick="cargarAprobaciones()">🔄 Actualizar</button>
+    </div>
+    <div id="aprList"><div class="empty">⏳ Cargando...</div></div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: CONFIG ══════════ -->
+<div class="tab-content" id="tab-config" data-tab="config">
+  <div class="card">
+    <div class="card-title">📌 Motivos</div>
+    <div id="alMotivos"></div>
+    <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+      <div class="fg" style="flex:1;min-width:200px">
+        <label class="lbl">Nombre del motivo *</label>
+        <input type="text" id="cfgMotivoNombre" placeholder="Ej: Acumulación, Permiso...">
+      </div>
+      <button class="btn btn-green" onclick="agregarMotivo()">➕ Agregar</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Nombre</th><th></th></tr></thead>
+        <tbody id="tbMotivos"><tr><td colspan="2" class="empty">⏳ Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: AGREGAR MOTIVO RÁPIDO (desde Tab Registrar) ══════════ -->
+<div class="modal-overlay" id="modalMotivo" style="display:none" onclick="cerrarModalMotivo(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-title">➕ Nuevo motivo</div>
+    <div class="fg" style="margin-bottom:8px">
+      <label class="lbl">Nombre *</label>
+      <input type="text" id="modalMotivoNombre">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="confirmarNuevoMotivo()">💾 Guardar</button>
+      <button class="btn btn-gray" onclick="cerrarModalMotivo()">✕ Cancelar</button>
+    </div>
+    <div id="modalMotivoAlert" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL: EDITAR REGISTRO ══════════ -->
+<div class="modal-overlay" id="modalEditReg" style="display:none" onclick="cerrarModalEditReg(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-title">✏️ Editar observaciones</div>
+    <input type="hidden" id="modalEditRegId">
+    <div class="fg" style="margin-bottom:8px">
+      <label class="lbl">Observaciones</label>
+      <textarea id="modalEditRegObs" rows="4"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="confirmarEditarRegistro()">💾 Guardar</button>
+      <button class="btn btn-gray" onclick="cerrarModalEditReg()">✕ Cancelar</button>
+    </div>
+    <div id="modalEditRegAlert" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<script src="../js/horas.js"></script>
+</body>
+</html>
