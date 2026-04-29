@@ -107,7 +107,14 @@ function handle(e) {
       case 'invEditarEntrega':      result = invEditarEntrega(body);      break;
       case 'invEliminarEntrega':    result = invEliminarEntrega(body);    break;
       // ═════════════════════════════════════════════════════
-     
+     // ═══════════ MÓDULO INVENTARIO V3 — Sectores ═════════════
+      case 'invListarSectores':     result = invListarSectores();                                    break;
+      case 'invAgregarSector':      result = invAgregarSector(Object.assign({}, params, body));     break;
+      case 'invEditarSector':       result = invEditarSector(Object.assign({}, params, body));      break;
+      case 'invEliminarSector':     result = invEliminarSector(Object.assign({}, params, body));    break;
+      case 'invListarSupervisores': result = invListarSupervisores();                                break;
+      // ═════════════════════════════════════════════════════
+
       default: result = { error: 'Accion no reconocida: ' + action };
     }
   } catch(err) {
@@ -4126,4 +4133,146 @@ function getPreloadOptimizado(p) {
     console.log('[getPreloadOptimizado] error general, fallback a getPreload original: ' + e.toString());
     return getPreload(p);
   }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  MÓDULO INVENTARIO V3 — Sectores y Supervisores
+// ═══════════════════════════════════════════════════════════════════
+
+const INV_SH_SECTORES = 'INV_Sectores';
+
+const INV_SECTORES_INICIALES = [
+  'OLIVARES BAJO',
+  'ADMINISTRACION',
+  'PLANTA RAPEL',
+  'OPERACIONES CAMPO',
+  'DEPARTAMENTO TECNICO',
+  'EL PAPAYO',
+  'LIMONES',
+  'LOS OLIVARES',
+  'SANTA ROSA',
+  'ALGARROBOS',
+  'SAN VICENTE',
+  'PUNTA ARENAS',
+  'APROA',
+  'CAMPO A',
+  'FUNDO VARIOS'
+];
+
+function invSetupSectores() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let h = ss.getSheetByName(INV_SH_SECTORES);
+  if (!h) {
+    h = ss.insertSheet(INV_SH_SECTORES);
+    h.appendRow(['ID', 'NOMBRE', 'ACTIVO', 'CREADO', 'CREADO_POR']);
+    h.getRange('A1:E1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.setFrozenRows(1);
+    INV_SECTORES_INICIALES.forEach((nombre, idx) => {
+      const id = 'S' + (Date.now() + idx);
+      h.appendRow([id, nombre, true, new Date(), 'sistema']);
+    });
+    Logger.log('✓ ' + INV_SH_SECTORES + ' creado con ' + INV_SECTORES_INICIALES.length + ' sectores');
+  } else {
+    Logger.log('• ' + INV_SH_SECTORES + ' ya existe');
+  }
+  Logger.log('═══ Setup sectores completado ═══');
+}
+
+function invListarSectores() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(INV_SH_SECTORES);
+    if (!h || h.getLastRow() < 2) return { success: true, sectores: [] };
+    const datos = h.getRange(2, 1, h.getLastRow() - 1, 5).getValues();
+    const sectores = datos.filter(r => r[0] && r[2] === true)
+      .map(r => ({ id: r[0], nombre: r[1], activo: r[2] }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return { success: true, sectores };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function invAgregarSector(body) {
+  try {
+    const nombre = (body.nombre || '').trim().toUpperCase();
+    if (!nombre) return { success: false, error: 'Nombre vacío' };
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(INV_SH_SECTORES);
+    if (!h) return { success: false, error: 'Ejecutar invSetupSectores() primero' };
+
+    const datos = h.getDataRange().getValues();
+    for (let r = 1; r < datos.length; r++) {
+      if ((datos[r][1] || '').toString().toUpperCase() === nombre && datos[r][2] === true) {
+        return { success: false, error: 'Ya existe un sector con ese nombre' };
+      }
+    }
+
+    const id = 'S' + Date.now();
+    h.appendRow([id, nombre, true, new Date(), body.usuario || '']);
+    return { success: true, item: { id, nombre, activo: true } };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+function invEditarSector(body) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(INV_SH_SECTORES);
+    const datos = h.getDataRange().getValues();
+    for (let r = 1; r < datos.length; r++) {
+      if (datos[r][0] === body.id) {
+        if (body.nombre) h.getRange(r + 1, 2).setValue(body.nombre.trim().toUpperCase());
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Sector no encontrado' };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+function invEliminarSector(body) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(INV_SH_SECTORES);
+    const datos = h.getDataRange().getValues();
+    for (let r = 1; r < datos.length; r++) {
+      if (datos[r][0] === body.id) {
+        h.getRange(r + 1, 3).setValue(false);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Sector no encontrado' };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+function invListarSupervisores() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName('usuarios');
+    if (!h || h.getLastRow() < 2) {
+      return { success: false, error: 'Hoja "usuarios" vacía o no encontrada' };
+    }
+    const datos = h.getRange(2, 1, h.getLastRow() - 1, 11).getValues();
+    const supervisores = datos
+      .filter(r => {
+        const rol = String(r[4] || '').trim().toLowerCase();
+        const activo = r[6] === true || String(r[6]).toUpperCase() === 'TRUE';
+        return rol === 'supervisor' && activo && r[3];
+      })
+      .map(r => ({
+        usuario: String(r[1] || '').trim(),
+        nombre: String(r[3] || '').trim(),
+      }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+    return { success: true, supervisores };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+function testSupervisoresYSectores() {
+  Logger.log('=== SUPERVISORES ===');
+  Logger.log(JSON.stringify(invListarSupervisores(), null, 2));
+  Logger.log('=== SECTORES ===');
+  Logger.log(JSON.stringify(invListarSectores(), null, 2));
 }
