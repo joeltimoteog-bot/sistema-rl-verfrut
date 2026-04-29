@@ -17,6 +17,13 @@ const SECTORES = {
              'Riego', 'Departamento Técnico Verfrut', 'Punta Arenas']
 };
 
+// Lista plana usada en Ingreso/Armado (no hay selector de empresa en esos forms)
+const SECTORES_INV = [
+  'El Papayo', 'Limones', 'Olivares Bajo', 'Los Olivares',
+  'Santa Rosa', 'Algarrobos', 'San Vicente', 'Punta Arenas',
+  'Aproa', 'Planta Rapel'
+];
+
 const DIAS_ALERTA_VENC = 7;
 
 /* ─────────────── ESTADO GLOBAL ─────────────── */
@@ -24,6 +31,7 @@ let USER = null;
 let API  = '';
 let DATA = null; // { meta, productos, receta, responsables, ingresos, armadas, entregas }
 let CALC = null; // { stockPorProd, vencPorProd, ingPorProd, totalArmadas, maxCanastas, totalEntregadas, disponibles }
+let SUPERVISORES = []; // [{ nombre, sector, ... }] cargado desde getSupervisores
 let _modalCtx = null; // { tipo:'ingreso'|'armado'|'entrega', id, rowData }
 
 /* ─────────────── INIT ─────────────── */
@@ -52,8 +60,41 @@ document.addEventListener('DOMContentLoaded', () => {
   sv('repHasta', hoy);
   sv('repDesde', new Date(Date.now() - 30 * 864e5).toISOString().split('T')[0]);
 
+  cargarSupervisores();
   cargarDatos();
 });
+
+async function cargarSupervisores() {
+  try {
+    const d = await apiGet({ action: 'getSupervisores' });
+    SUPERVISORES = (d && d.success && Array.isArray(d.data)) ? d.data : [];
+    poblarSelectsSupervisorSector();
+  } catch (e) {
+    console.warn('[INV] No se pudo cargar supervisores:', e);
+    SUPERVISORES = [];
+  }
+}
+
+function poblarSelectsSupervisorSector() {
+  // Sectores planos para Ingreso y Armado
+  ['ingSector', 'armarSector'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Seleccionar sector...</option>' +
+      SECTORES_INV.map(s => `<option value="${s}">${s}</option>`).join('');
+    if (prev) sel.value = prev;
+  });
+  // Supervisores en Ingreso/Armado/Entrega
+  ['ingSupervisor', 'armarSupervisor', 'entSupervisor'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">Seleccionar supervisor...</option>' +
+      SUPERVISORES.map(s => `<option value="${esc(s.nombre)}">${s.nombre}</option>`).join('');
+    if (prev) sel.value = prev;
+  });
+}
 
 /* ─────────────── TABS ─────────────── */
 function showTab(tab, btn) {
@@ -294,6 +335,8 @@ function renderIngresosHistorial() {
       <td>${Number(i.cantidad).toLocaleString('es-PE')} ${i.unidad || ''}</td>
       <td>${vTag}</td>
       <td style="font-size:12px">${i.responsable || ''}</td>
+      <td style="font-size:12px">${i.sector || '-'}</td>
+      <td style="font-size:12px">${i.supervisor || '-'}</td>
       <td style="white-space:nowrap">
         <button class="btn-tbl btn-edit" onclick="abrirEditarIngreso('${esc(i.id)}')">✏️</button>
         <button class="btn-tbl btn-del"  onclick="eliminarIngreso('${esc(i.id)}')">🗑️</button>
@@ -310,6 +353,8 @@ async function registrarIngreso() {
   const unid  = v('ingUnidad').trim();
   const resp  = v('ingResponsable');
   const fecha = v('ingFecha');
+  const sector     = v('ingSector');
+  const supervisor = v('ingSupervisor');
 
   if (!prod)               { mostrarAlerta('alIngreso', 'err', 'Selecciona el producto'); return; }
   if (!cant || cant <= 0)  { mostrarAlerta('alIngreso', 'err', 'La cantidad debe ser mayor a 0'); return; }
@@ -331,11 +376,13 @@ async function registrarIngreso() {
       ingreso: { producto: prod, cantidad: cant, unidad: unid, responsable: resp,
                  fecha: fecha, fechaIngreso: fecha,
                  fecha_venc: fvenc, fechaVenc: fvenc,
+                 sector, supervisor,
                  usuario: USER.usuario }
     });
     if (!d.success) throw new Error(d.error || 'Error al guardar');
     mostrarAlerta('alIngreso', 'ok', `✅ Ingreso registrado: ${cant} ${unid} de ${prod}`);
     sv('ingCantidad', ''); sv('ingFechaVenc', ''); sv('ingUnidad', '');
+    sv('ingSector', ''); sv('ingSupervisor', '');
     await cargarDatos();
   } catch(e) {
     mostrarAlerta('alIngreso', 'err', '❌ ' + e.message);
@@ -364,6 +411,8 @@ function renderArmadosHistorial() {
     <td>${a.fecha || ''}</td>
     <td style="font-weight:700">${Number(a.cantidad).toLocaleString('es-PE')}</td>
     <td style="font-size:12px">${a.usuario || ''}</td>
+    <td style="font-size:12px">${a.sector || '-'}</td>
+    <td style="font-size:12px">${a.supervisor || '-'}</td>
     <td style="white-space:nowrap">
       <button class="btn-tbl btn-edit" onclick="abrirEditarArmado('${esc(a.id)}')">✏️</button>
       <button class="btn-tbl btn-del"  onclick="eliminarArmado('${esc(a.id)}')">🗑️</button>
@@ -409,6 +458,8 @@ async function confirmarArmado() {
   limpiarAlerta('alArmar');
   const cant  = parseInt(v('armarCantidad'));
   const fecha = v('armarFecha');
+  const sector     = v('armarSector');
+  const supervisor = v('armarSupervisor');
 
   if (!cant || cant <= 0) { mostrarAlerta('alArmar', 'err', 'Ingresa la cantidad de canastas a armar'); return; }
   if (cant > CALC.maxCanastas) { mostrarAlerta('alArmar', 'err', `Stock insuficiente. Máximo: ${CALC.maxCanastas}`); return; }
@@ -419,11 +470,12 @@ async function confirmarArmado() {
   try {
     const d = await apiPost({ action: 'invRegistrarArmado',
       fecha, cantidad: cant, usuario: USER.usuario, usuario_nombre: USER.nombre,
-      armado: { fecha, cantidad: cant, responsable: USER.nombre, usuario: USER.usuario }
+      armado: { fecha, cantidad: cant, responsable: USER.nombre, sector, supervisor, usuario: USER.usuario }
     });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
     mostrarAlerta('alArmar', 'ok', `✅ ${cant.toLocaleString('es-PE')} canastas armadas correctamente`);
     sv('armarCantidad', '');
+    sv('armarSector', ''); sv('armarSupervisor', '');
     document.getElementById('previewArmado').style.display = 'none';
     await cargarDatos();
   } catch(e) {
@@ -482,6 +534,7 @@ function renderEntregasHistorial() {
     <td>${e.sector || ''}</td>
     <td style="font-weight:700">${Number(e.cantidad).toLocaleString('es-PE')}</td>
     <td style="font-size:12px">${e.responsable || ''}</td>
+    <td style="font-size:12px">${e.supervisor || '-'}</td>
     <td style="white-space:nowrap">
       <button class="btn-tbl btn-edit" onclick="abrirEditarEntrega('${esc(e.id)}')">✏️</button>
       <button class="btn-tbl btn-del"  onclick="eliminarEntrega('${esc(e.id)}')">🗑️</button>
@@ -496,6 +549,7 @@ async function registrarEntrega() {
   const cant    = parseInt(v('entCantidad'));
   const resp    = v('entResponsable');
   const fecha   = v('entFecha');
+  const supervisor = v('entSupervisor');
 
   if (!empresa)            { mostrarAlerta('alEntregar', 'err', 'Selecciona la empresa'); return; }
   if (!sector)             { mostrarAlerta('alEntregar', 'err', 'Selecciona el sector'); return; }
@@ -511,11 +565,12 @@ async function registrarEntrega() {
     const d = await apiPost({ action: 'invRegistrarEntrega',
       fecha, empresa, sector, cantidad: cant, responsable: resp,
       usuario: USER.usuario, usuario_nombre: USER.nombre,
-      entrega: { fecha, empresa, sector, cantidad: cant, responsable: resp, usuario: USER.usuario }
+      entrega: { fecha, empresa, sector, cantidad: cant, responsable: resp, supervisor, usuario: USER.usuario }
     });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
     mostrarAlerta('alEntregar', 'ok', `✅ Entrega registrada: ${cant} canastas → ${sector} (${empresa})`);
     sv('entCantidad', '');
+    sv('entSupervisor', '');
     await cargarDatos();
   } catch(e) {
     mostrarAlerta('alEntregar', 'err', '❌ ' + e.message);
@@ -854,6 +909,8 @@ function abrirEditarIngreso(id) {
 
   const optsResp = _optsResponsables(item.responsable);
   const optsProd = _optsCatalogo(item.producto);
+  const optsSec  = _optsSectoresInv(item.sector);
+  const optsSup  = _optsSupervisores(item.supervisor);
 
   document.getElementById('modalTitle').textContent = '✏️ Editar ingreso';
   document.getElementById('modalForm').innerHTML = `
@@ -864,6 +921,8 @@ function abrirEditarIngreso(id) {
       <div class="fg"><label class="lbl">Fecha venc.</label><input type="date" id="mIngFechaVenc" value="${item.fecha_venc || ''}"></div>
       <div class="fg"><label class="lbl">Responsable</label><select id="mIngResponsable">${optsResp}</select></div>
       <div class="fg"><label class="lbl">Fecha ingreso</label><input type="date" id="mIngFecha" value="${item.fecha || ''}"></div>
+      <div class="fg"><label class="lbl">Sector</label><select id="mIngSector">${optsSec}</select></div>
+      <div class="fg"><label class="lbl">Supervisor</label><select id="mIngSupervisor">${optsSup}</select></div>
     </div>`;
   document.getElementById('modalAlert').innerHTML = '';
   document.getElementById('modalEdit').style.display = 'flex';
@@ -874,11 +933,16 @@ function abrirEditarArmado(id) {
   if (!item) return;
   _modalCtx = { tipo: 'armado', id };
 
+  const optsSec = _optsSectoresInv(item.sector);
+  const optsSup = _optsSupervisores(item.supervisor);
+
   document.getElementById('modalTitle').textContent = '✏️ Editar armado';
   document.getElementById('modalForm').innerHTML = `
     <div class="grid2" style="gap:12px">
       <div class="fg"><label class="lbl">Cantidad</label><input type="number" id="mArmCantidad" value="${item.cantidad}" min="1" step="1"></div>
       <div class="fg"><label class="lbl">Fecha</label><input type="date" id="mArmFecha" value="${item.fecha || ''}"></div>
+      <div class="fg"><label class="lbl">Sector</label><select id="mArmSector">${optsSec}</select></div>
+      <div class="fg"><label class="lbl">Supervisor</label><select id="mArmSupervisor">${optsSup}</select></div>
     </div>
     <div class="alert alert-info" style="margin-top:12px;font-size:12px">Disponibles actuales: <b>${CALC.disponibles.toLocaleString('es-PE')}</b> · Entregadas: <b>${CALC.totalEntregadas.toLocaleString('es-PE')}</b></div>`;
   document.getElementById('modalAlert').innerHTML = '';
@@ -893,6 +957,7 @@ function abrirEditarEntrega(id) {
   const optsEmp  = ['RAPEL','VERFRUT'].map(e => `<option value="${e}" ${e===item.empresa?'selected':''}>${e}</option>`).join('');
   const optsSec  = _optsSectores(item.empresa, item.sector);
   const optsResp = _optsResponsables(item.responsable);
+  const optsSup  = _optsSupervisores(item.supervisor);
 
   document.getElementById('modalTitle').textContent = '✏️ Editar entrega';
   document.getElementById('modalForm').innerHTML = `
@@ -902,6 +967,7 @@ function abrirEditarEntrega(id) {
       <div class="fg"><label class="lbl">Cantidad</label><input type="number" id="mEntCantidad" value="${item.cantidad}" min="1" step="1"></div>
       <div class="fg"><label class="lbl">Responsable</label><select id="mEntResponsable">${optsResp}</select></div>
       <div class="fg"><label class="lbl">Fecha</label><input type="date" id="mEntFecha" value="${item.fecha || ''}"></div>
+      <div class="fg"><label class="lbl">Supervisor</label><select id="mEntSupervisor">${optsSup}</select></div>
     </div>
     <div class="alert alert-info" style="margin-top:12px;font-size:12px">Disponibles actuales: <b>${CALC.disponibles.toLocaleString('es-PE')}</b></div>`;
   document.getElementById('modalAlert').innerHTML = '';
@@ -934,27 +1000,37 @@ async function confirmarEditar() {
     body.id = id;
 
     if (tipo === 'ingreso') {
-      body.action      = 'invEditarIngreso';
-      body.producto    = v('mIngProducto');
-      body.cantidad    = parseFloat(v('mIngCantidad'));
-      body.unidad      = v('mIngUnidad').trim();
-      body.fecha_venc  = v('mIngFechaVenc');
-      body.responsable = v('mIngResponsable');
-      body.fecha       = v('mIngFecha');
-      if (!body.producto || !body.cantidad || body.cantidad <= 0) throw new Error('Producto y cantidad son obligatorios');
+      body.action  = 'invEditarIngreso';
+      body.ingreso = {
+        cantidad:     parseFloat(v('mIngCantidad')),
+        unidad:       v('mIngUnidad').trim(),
+        fechaVenc:    v('mIngFechaVenc'),
+        responsable:  v('mIngResponsable'),
+        fechaIngreso: v('mIngFecha'),
+        sector:       v('mIngSector'),
+        supervisor:   v('mIngSupervisor')
+      };
+      if (!body.ingreso.cantidad || body.ingreso.cantidad <= 0) throw new Error('Cantidad obligatoria');
     } else if (tipo === 'armado') {
-      body.action   = 'invEditarArmado';
-      body.cantidad = parseInt(v('mArmCantidad'));
-      body.fecha    = v('mArmFecha');
-      if (!body.cantidad || body.cantidad <= 0) throw new Error('Cantidad inválida');
+      body.action = 'invEditarArmado';
+      body.armado = {
+        cantidad:   parseInt(v('mArmCantidad')),
+        fecha:      v('mArmFecha'),
+        sector:     v('mArmSector'),
+        supervisor: v('mArmSupervisor')
+      };
+      if (!body.armado.cantidad || body.armado.cantidad <= 0) throw new Error('Cantidad inválida');
     } else if (tipo === 'entrega') {
-      body.action      = 'invEditarEntrega';
-      body.empresa     = v('mEntEmpresa');
-      body.sector      = v('mEntSector');
-      body.cantidad    = parseInt(v('mEntCantidad'));
-      body.responsable = v('mEntResponsable');
-      body.fecha       = v('mEntFecha');
-      if (!body.empresa || !body.sector || !body.cantidad || body.cantidad <= 0) throw new Error('Empresa, sector y cantidad son obligatorios');
+      body.action  = 'invEditarEntrega';
+      body.entrega = {
+        empresa:     v('mEntEmpresa'),
+        sector:      v('mEntSector'),
+        cantidad:    parseInt(v('mEntCantidad')),
+        responsable: v('mEntResponsable'),
+        fecha:       v('mEntFecha'),
+        supervisor:  v('mEntSupervisor')
+      };
+      if (!body.entrega.empresa || !body.entrega.sector || !body.entrega.cantidad || body.entrega.cantidad <= 0) throw new Error('Empresa, sector y cantidad son obligatorios');
     }
 
     const d = await apiPost(body);
@@ -1015,6 +1091,18 @@ function _optsSectores(empresa, selected) {
   const sects = empresa && SECTORES[empresa] ? SECTORES[empresa] : [];
   return '<option value="">Seleccionar...</option>' + sects.map(s =>
     `<option value="${s}" ${s === selected ? 'selected' : ''}>${s}</option>`
+  ).join('');
+}
+
+function _optsSectoresInv(selected) {
+  return '<option value="">Seleccionar...</option>' + SECTORES_INV.map(s =>
+    `<option value="${s}" ${s === selected ? 'selected' : ''}>${s}</option>`
+  ).join('');
+}
+
+function _optsSupervisores(selected) {
+  return '<option value="">Seleccionar...</option>' + (SUPERVISORES || []).map(s =>
+    `<option value="${esc(s.nombre)}" ${s.nombre === selected ? 'selected' : ''}>${s.nombre}</option>`
   ).join('');
 }
 

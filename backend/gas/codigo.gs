@@ -2883,7 +2883,10 @@ const INV_RESPONSABLES_INICIALES = [
 // ═══════════════════════════════════════════════════════════════════
 function invSetup() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
- 
+
+  // Migrar hojas existentes (idempotente: solo agrega columnas faltantes)
+  invMigrarColumnasSectorSupervisor();
+
   // RECETA
   let h = ss.getSheetByName(INV_SH_RECETA);
   if (!h) {
@@ -2923,33 +2926,65 @@ function invSetup() {
   h = ss.getSheetByName(INV_SH_INGRESOS);
   if (!h) {
     h = ss.insertSheet(INV_SH_INGRESOS);
-    h.appendRow(['ID', 'FECHA_REGISTRO', 'PRODUCTO', 'CANTIDAD', 'UNIDAD', 'FECHA_INGRESO', 'FECHA_VENC', 'LOTE', 'RESPONSABLE', 'PROVEEDOR', 'OBSERVACIONES', 'USUARIO']);
-    h.getRange('A1:L1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.appendRow(['ID', 'FECHA_REGISTRO', 'PRODUCTO', 'CANTIDAD', 'UNIDAD', 'FECHA_INGRESO', 'FECHA_VENC', 'LOTE', 'RESPONSABLE', 'PROVEEDOR', 'OBSERVACIONES', 'USUARIO', 'SECTOR', 'SUPERVISOR']);
+    h.getRange('A1:N1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     h.setFrozenRows(1);
     Logger.log('✓ ' + INV_SH_INGRESOS);
   }
- 
+
   // ARMADOS
   h = ss.getSheetByName(INV_SH_ARMADOS);
   if (!h) {
     h = ss.insertSheet(INV_SH_ARMADOS);
-    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ARMADO', 'CANTIDAD', 'RESPONSABLE', 'OBSERVACIONES', 'USUARIO']);
-    h.getRange('A1:G1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ARMADO', 'CANTIDAD', 'RESPONSABLE', 'OBSERVACIONES', 'USUARIO', 'SECTOR', 'SUPERVISOR']);
+    h.getRange('A1:I1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     h.setFrozenRows(1);
     Logger.log('✓ ' + INV_SH_ARMADOS);
   }
- 
+
   // ENTREGAS
   h = ss.getSheetByName(INV_SH_ENTREGAS);
   if (!h) {
     h = ss.insertSheet(INV_SH_ENTREGAS);
-    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ENTREGA', 'EMPRESA', 'SECTOR', 'CANTIDAD', 'RESPONSABLE', 'DOCUMENTO', 'OBSERVACIONES', 'USUARIO']);
-    h.getRange('A1:J1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ENTREGA', 'EMPRESA', 'SECTOR', 'CANTIDAD', 'RESPONSABLE', 'DOCUMENTO', 'OBSERVACIONES', 'USUARIO', 'SUPERVISOR']);
+    h.getRange('A1:K1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     h.setFrozenRows(1);
     Logger.log('✓ ' + INV_SH_ENTREGAS);
   }
- 
+
   Logger.log('═══ Setup inventario completado ═══');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  MIGRACIÓN — agrega columnas SECTOR/SUPERVISOR a hojas existentes.
+//  Idempotente: solo agrega lo que falta. Seguro de re-ejecutar.
+// ═══════════════════════════════════════════════════════════════════
+function invMigrarColumnasSectorSupervisor() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  // Helper: agrega un header al final si no existe
+  function asegurarColumna(hoja, nombreCol) {
+    if (!hoja || hoja.getLastRow() < 1) return false;
+    const headers = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    if (headers.indexOf(nombreCol) !== -1) return false;
+    const nuevaCol = hoja.getLastColumn() + 1;
+    const cell = hoja.getRange(1, nuevaCol);
+    cell.setValue(nombreCol);
+    cell.setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    Logger.log('↪ ' + hoja.getName() + ' + ' + nombreCol + ' (col ' + nuevaCol + ')');
+    return true;
+  }
+
+  const hIng = ss.getSheetByName(INV_SH_INGRESOS);
+  if (hIng) { asegurarColumna(hIng, 'SECTOR'); asegurarColumna(hIng, 'SUPERVISOR'); }
+
+  const hArm = ss.getSheetByName(INV_SH_ARMADOS);
+  if (hArm) { asegurarColumna(hArm, 'SECTOR'); asegurarColumna(hArm, 'SUPERVISOR'); }
+
+  const hEnt = ss.getSheetByName(INV_SH_ENTREGAS);
+  if (hEnt) { asegurarColumna(hEnt, 'SUPERVISOR'); }
+
+  Logger.log('✓ Migración SECTOR/SUPERVISOR completada');
 }
  
  
@@ -3111,21 +3146,22 @@ function invRegistrarIngreso(body) {
     h.appendRow([
       id, new Date(), i.producto, Number(i.cantidad), i.unidad || '',
       i.fechaIngreso, i.fechaVenc, i.lote || '', i.responsable, i.proveedor || '',
-      i.observaciones || '', i.usuario || ''
+      i.observaciones || '', i.usuario || '', i.sector || '', i.supervisor || ''
     ]);
     return { success: true, id };
   } catch (e) { return { success: false, error: e.message }; }
 }
- 
+
 function invLeerIngresos() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const h = ss.getSheetByName(INV_SH_INGRESOS);
   if (!h || h.getLastRow() < 2) return [];
-  const datos = h.getRange(2, 1, h.getLastRow() - 1, 12).getValues();
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, 14).getValues();
   return datos.filter(r => r[0]).map(r => ({
     id: r[0], fechaRegistro: r[1], producto: r[2], cantidad: Number(r[3]) || 0,
     unidad: r[4], fechaIngreso: r[5], fechaVenc: r[6], lote: r[7],
-    responsable: r[8], proveedor: r[9], observaciones: r[10], usuario: r[11]
+    responsable: r[8], proveedor: r[9], observaciones: r[10], usuario: r[11],
+    sector: r[12] || '', supervisor: r[13] || ''
   }));
 }
  
@@ -3155,19 +3191,20 @@ function invRegistrarArmado(body) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_ARMADOS);
     const id = 'A' + Date.now();
-    h.appendRow([id, new Date(), a.fecha, Number(a.cantidad), a.responsable, a.observaciones || '', a.usuario || '']);
+    h.appendRow([id, new Date(), a.fecha, Number(a.cantidad), a.responsable, a.observaciones || '', a.usuario || '', a.sector || '', a.supervisor || '']);
     return { success: true, id };
   } catch (e) { return { success: false, error: e.message }; }
 }
- 
+
 function invLeerArmados() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const h = ss.getSheetByName(INV_SH_ARMADOS);
   if (!h || h.getLastRow() < 2) return [];
-  const datos = h.getRange(2, 1, h.getLastRow() - 1, 7).getValues();
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, 9).getValues();
   return datos.filter(r => r[0]).map(r => ({
     id: r[0], fechaRegistro: r[1], fecha: r[2], cantidad: Number(r[3]) || 0,
-    responsable: r[4], observaciones: r[5], usuario: r[6]
+    responsable: r[4], observaciones: r[5], usuario: r[6],
+    sector: r[7] || '', supervisor: r[8] || ''
   })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
  
@@ -3195,20 +3232,20 @@ function invRegistrarEntrega(body) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_ENTREGAS);
     const id = 'E' + Date.now();
-    h.appendRow([id, new Date(), e.fecha, e.empresa, e.sector, Number(e.cantidad), e.responsable, e.documento || '', e.observaciones || '', e.usuario || '']);
+    h.appendRow([id, new Date(), e.fecha, e.empresa, e.sector, Number(e.cantidad), e.responsable, e.documento || '', e.observaciones || '', e.usuario || '', e.supervisor || '']);
     return { success: true, id };
   } catch (err) { return { success: false, error: err.message }; }
 }
- 
+
 function invLeerEntregas() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const h = ss.getSheetByName(INV_SH_ENTREGAS);
   if (!h || h.getLastRow() < 2) return [];
-  const datos = h.getRange(2, 1, h.getLastRow() - 1, 10).getValues();
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, 11).getValues();
   return datos.filter(r => r[0]).map(r => ({
     id: r[0], fechaRegistro: r[1], fecha: r[2], empresa: r[3], sector: r[4],
     cantidad: Number(r[5]) || 0, responsable: r[6], documento: r[7],
-    observaciones: r[8], usuario: r[9]
+    observaciones: r[8], usuario: r[9], supervisor: r[10] || ''
   })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
  
@@ -3430,7 +3467,7 @@ function invEditarIngreso(body) {
     const datos = h.getDataRange().getValues();
     const i = body.ingreso || {};
     for (let r = 1; r < datos.length; r++) {
-      if (datos[r][0] === body.id) {
+      if (String(datos[r][0]) === String(body.id)) {
         if (i.cantidad !== undefined)      h.getRange(r + 1, 4).setValue(Number(i.cantidad));
         if (i.unidad !== undefined)        h.getRange(r + 1, 5).setValue(i.unidad);
         if (i.fechaIngreso !== undefined)  h.getRange(r + 1, 6).setValue(i.fechaIngreso);
@@ -3439,6 +3476,8 @@ function invEditarIngreso(body) {
         if (i.responsable !== undefined)   h.getRange(r + 1, 9).setValue(i.responsable);
         if (i.proveedor !== undefined)     h.getRange(r + 1, 10).setValue(i.proveedor);
         if (i.observaciones !== undefined) h.getRange(r + 1, 11).setValue(i.observaciones);
+        if (i.sector !== undefined)        h.getRange(r + 1, 13).setValue(i.sector);
+        if (i.supervisor !== undefined)    h.getRange(r + 1, 14).setValue(i.supervisor);
         return { success: true };
       }
     }
@@ -3469,10 +3508,10 @@ function invEditarArmado(body) {
     const h = ss.getSheetByName(INV_SH_ARMADOS);
     const datos = h.getDataRange().getValues();
     const a = body.armado || {};
- 
+
     for (let r = 1; r < datos.length; r++) {
-      if (datos[r][0] === body.id) {
- 
+      if (String(datos[r][0]) === String(body.id)) {
+
         if (a.cantidad !== undefined) {
           const cantOriginal = Number(datos[r][3]) || 0;
           const cantNueva = Number(a.cantidad);
@@ -3511,6 +3550,8 @@ function invEditarArmado(body) {
         if (a.fecha !== undefined)         h.getRange(r + 1, 3).setValue(a.fecha);
         if (a.responsable !== undefined)   h.getRange(r + 1, 5).setValue(a.responsable);
         if (a.observaciones !== undefined) h.getRange(r + 1, 6).setValue(a.observaciones);
+        if (a.sector !== undefined)        h.getRange(r + 1, 8).setValue(a.sector);
+        if (a.supervisor !== undefined)    h.getRange(r + 1, 9).setValue(a.supervisor);
         return { success: true };
       }
     }
@@ -3556,10 +3597,10 @@ function invEditarEntrega(body) {
     const h = ss.getSheetByName(INV_SH_ENTREGAS);
     const datos = h.getDataRange().getValues();
     const e = body.entrega || {};
- 
+
     for (let r = 1; r < datos.length; r++) {
-      if (datos[r][0] === body.id) {
- 
+      if (String(datos[r][0]) === String(body.id)) {
+
         if (e.cantidad !== undefined) {
           const cantOriginal = Number(datos[r][5]) || 0;
           const cantNueva = Number(e.cantidad);
@@ -3584,6 +3625,7 @@ function invEditarEntrega(body) {
         if (e.responsable !== undefined)   h.getRange(r + 1, 7).setValue(e.responsable);
         if (e.documento !== undefined)     h.getRange(r + 1, 8).setValue(e.documento);
         if (e.observaciones !== undefined) h.getRange(r + 1, 9).setValue(e.observaciones);
+        if (e.supervisor !== undefined)    h.getRange(r + 1, 11).setValue(e.supervisor);
         return { success: true };
       }
     }

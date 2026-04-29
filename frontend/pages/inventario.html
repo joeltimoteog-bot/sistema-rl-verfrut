@@ -259,6 +259,14 @@
         <label class="lbl">Fecha de ingreso</label>
         <input type="date" id="ingFecha">
       </div>
+      <div class="fg">
+        <label class="lbl">Sector</label>
+        <select id="ingSector"><option value="">Seleccionar sector...</option></select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Supervisor</label>
+        <select id="ingSupervisor"><option value="">Seleccionar supervisor...</option></select>
+      </div>
     </div>
     <div class="act-row">
       <button class="btn btn-green" id="btnIngreso" onclick="registrarIngreso()">✅ Registrar ingreso</button>
@@ -270,8 +278,8 @@
     <div class="card-title">📋 Historial de ingresos</div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Vence</th><th>Responsable</th><th></th></tr></thead>
-        <tbody id="tbIngresos"><tr><td colspan="6" class="empty">Sin ingresos</td></tr></tbody>
+        <thead><tr><th>Fecha</th><th>Producto</th><th>Cantidad</th><th>Vence</th><th>Responsable</th><th>Sector</th><th>Supervisor</th><th></th></tr></thead>
+        <tbody id="tbIngresos"><tr><td colspan="8" class="empty">Sin ingresos</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -298,6 +306,14 @@
         <label class="lbl">Fecha</label>
         <input type="date" id="armarFecha">
       </div>
+      <div class="fg">
+        <label class="lbl">Sector</label>
+        <select id="armarSector"><option value="">Seleccionar sector...</option></select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Supervisor</label>
+        <select id="armarSupervisor"><option value="">Seleccionar supervisor...</option></select>
+      </div>
     </div>
 
     <!-- Preview de descuento -->
@@ -320,8 +336,8 @@
     <div class="card-title">📋 Historial de armados</div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Fecha</th><th>Cantidad</th><th>Usuario</th><th></th></tr></thead>
-        <tbody id="tbArmados"><tr><td colspan="4" class="empty">Sin armados</td></tr></tbody>
+        <thead><tr><th>Fecha</th><th>Cantidad</th><th>Usuario</th><th>Sector</th><th>Supervisor</th><th></th></tr></thead>
+        <tbody id="tbArmados"><tr><td colspan="6" class="empty">Sin armados</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -366,6 +382,10 @@
         <label class="lbl">Fecha</label>
         <input type="date" id="entFecha">
       </div>
+      <div class="fg">
+        <label class="lbl">Supervisor</label>
+        <select id="entSupervisor"><option value="">Seleccionar supervisor...</option></select>
+      </div>
     </div>
     <div class="act-row">
       <button class="btn btn-red" id="btnEntrega" onclick="registrarEntrega()">🚚 Registrar entrega</button>
@@ -388,8 +408,8 @@
     <div class="card-title">📋 Historial de entregas</div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Fecha</th><th>Empresa</th><th>Sector</th><th>Cant.</th><th>Responsable</th><th></th></tr></thead>
-        <tbody id="tbEntregas"><tr><td colspan="6" class="empty">Sin entregas</td></tr></tbody>
+        <thead><tr><th>Fecha</th><th>Empresa</th><th>Sector</th><th>Cant.</th><th>Responsable</th><th>Supervisor</th><th></th></tr></thead>
+        <tbody id="tbEntregas"><tr><td colspan="7" class="empty">Sin entregas</td></tr></tbody>
       </table>
     </div>
   </div>
