@@ -2659,20 +2659,32 @@ window.onload = async () => {
   }
   console.log('[DEBUG] window.onload completo | _fbEstIniciado:', window._fbEstIniciado, '| _fbEstUnsubscribe:', typeof window._fbEstUnsubscribe, '| _fbEstDb:', !!window._fbEstDb);
   // Watchdog: si algo resetea los indicadores a 0, corregirlos en máximo 2 segundos
+  // SOLO si Firebase tiene datos del día actual (evita mostrar contadores stale del día anterior)
   setInterval(function() {
     if (!window._fbEstadisticas) return;
     var fb = window._fbEstadisticas.resumen_global;
     if (!fb || !fb.total) return;
+
+    // Validar que Firebase tenga datos del día actual
+    var hoyStr = hoy();
+    var fechaFirebase = fb.fecha_ultima_actualizacion || '';
+
+    // Si Firebase tiene datos de OTRO día, NO sobreescribir el "0" del DOM
+    if (fechaFirebase && fechaFirebase !== hoyStr) {
+      console.log('[watchdog] Firebase stale (fecha=' + fechaFirebase + ' vs hoy=' + hoyStr + '), no sobreescribir');
+      return;
+    }
+
     var sH = document.getElementById('sH');
     var sM = document.getElementById('sM');
     var sP = document.getElementById('sP');
     var sF = document.getElementById('sF');
     var sA = document.getElementById('sA');
-    if (sH && sH.textContent == '0') sH.textContent = fb.hoy         || 0;
-    if (sM && sM.textContent == '0') sM.textContent = fb.este_mes    || 0;
-    if (sP && sP.textContent == '0') sP.textContent = fb.en_proceso  || 0;
-    if (sF && sF.textContent == '0') sF.textContent = fb.finalizados || 0;
-    if (sA && sA.textContent == '0') sA.textContent = fb.total       || 0;
+    if (sH && sH.textContent == '0' && fb.hoy)         sH.textContent = fb.hoy         || 0;
+    if (sM && sM.textContent == '0' && fb.este_mes)    sM.textContent = fb.este_mes    || 0;
+    if (sP && sP.textContent == '0' && fb.en_proceso)  sP.textContent = fb.en_proceso  || 0;
+    if (sF && sF.textContent == '0' && fb.finalizados) sF.textContent = fb.finalizados || 0;
+    if (sA && sA.textContent == '0' && fb.total)       sA.textContent = fb.total       || 0;
   }, 2000);
   // Countdown acceso temporal (si aplica)
   iniciarCountdownAcceso();
@@ -4002,12 +4014,18 @@ async function cargarStats() {
   try {
     // Para supervisores: NUNCA usar el early-return de Firebase (tiene datos globales)
     const _esSupervisorStats = !ROLES_VER_TODO.includes(USER.rol) && (USER.rol || '').toLowerCase() === 'supervisor';
-    // FIREBASE PRIMERO: si hay datos frescos (< 15 min), skip sobreescritura DOM — solo para no-supervisores
+    // FIREBASE PRIMERO: si hay datos frescos (< 15 min) Y del día actual, skip sobreescritura DOM
+    // Si Firebase es del día anterior, dejar que el cálculo local refresque sH desde CACHE.atenciones.
     if (!_esSupervisorStats && _fbEstadisticas && _fbEstadisticas.resumen_global) {
       const edad = Date.now() - (_fbEstadisticas.resumen_global.ultima_actualizacion || 0);
-      if (edad < 15 * 60 * 1000) {
-        console.log('[cargarStats] Firebase fresco (' + Math.round(edad/1000) + 's) — skip sobreescritura DOM, Firebase ya tiene valores correctos');
+      const fechaFb = _fbEstadisticas.resumen_global.fecha_ultima_actualizacion || '';
+      const hoyStr = hoy();
+      if (edad < 15 * 60 * 1000 && fechaFb === hoyStr) {
+        console.log('[cargarStats] Firebase fresco (' + Math.round(edad/1000) + 's) y del día actual — skip sobreescritura DOM');
         return;
+      }
+      if (fechaFb && fechaFb !== hoyStr) {
+        console.log('[cargarStats] Firebase de día anterior (' + fechaFb + '), recalcular localmente');
       }
     }
     const h   = hoy();
@@ -6358,7 +6376,17 @@ function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
 function v(id){const el=document.getElementById(id);return el?el.value:'';}
 function sv(id,val){const el=document.getElementById(id);if(el)el.value=val;}
 function esc(s){return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');}
-function hoy(){return new Date().toISOString().split('T')[0];}
+function hoy() {
+  const ahora = new Date();
+  // Forzar zona Lima (UTC-5)
+  const limaOffset = -5 * 60;
+  const localOffset = ahora.getTimezoneOffset();
+  const limaDate = new Date(ahora.getTime() + (localOffset + limaOffset) * 60000);
+  const yyyy = limaDate.getFullYear();
+  const mm = String(limaDate.getMonth() + 1).padStart(2, '0');
+  const dd = String(limaDate.getDate()).padStart(2, '0');
+  return yyyy + '-' + mm + '-' + dd;
+}
 function fmtF(f){if(!f)return '';return String(f).split('T')[0];}
 function fmtFLargo(f){if(!f)return '';const [y,m,d]=f.split('-');const ms=['','enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];return `${parseInt(d)} de ${ms[parseInt(m)]} de ${y}`;}
 function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[String(e||'').toUpperCase()]||'bam';}

@@ -3686,7 +3686,16 @@ function actualizarFirebaseRapido(d) {
     const respGlobal = UrlFetchApp.fetch(urlGlobal, {muteHttpExceptions: true});
     let global = {};
     try { global = JSON.parse(respGlobal.getContentText()) || {}; } catch(e) { global = {}; }
- 
+
+    // Detectar cambio de día y resetear contador hoy
+    // (hoyStr ya está calculado al inicio de la función con timezone GMT-5/Lima)
+    const ultimaActStr = global.fecha_ultima_actualizacion || '';
+    if (ultimaActStr && ultimaActStr !== hoyStr) {
+      global.hoy = 0;
+      Logger.log('Reset hoy a 0 (cambio de día: ' + ultimaActStr + ' → ' + hoyStr + ')');
+    }
+    global.fecha_ultima_actualizacion = hoyStr;
+
     global.total = (global.total || 0) + 1;
     if (esHoy)                    global.hoy         = (global.hoy         || 0) + 1;
     if (esEsteMes)                global.este_mes    = (global.este_mes    || 0) + 1;
@@ -4275,4 +4284,38 @@ function testSupervisoresYSectores() {
   Logger.log(JSON.stringify(invListarSupervisores(), null, 2));
   Logger.log('=== SECTORES ===');
   Logger.log(JSON.stringify(invListarSectores(), null, 2));
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  TRIGGERS — Reset diario de estadísticas (00:01 Lima)
+// ═══════════════════════════════════════════════════════════════════
+function crearTriggerResetDiario() {
+  // Eliminar triggers viejos del mismo handler
+  const triggers = ScriptApp.getProjectTriggers();
+  triggers.forEach(t => {
+    if (t.getHandlerFunction() === 'recalcularEstadisticasCompletas') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+
+  // Crear nuevo trigger diario a las 00:01 hora Lima
+  ScriptApp.newTrigger('recalcularEstadisticasCompletas')
+    .timeBased()
+    .atHour(0)
+    .nearMinute(1)
+    .everyDays(1)
+    .inTimezone('America/Lima')
+    .create();
+  Logger.log('✓ Trigger creado: recalcularEstadisticasCompletas cada día a 00:01 Lima');
+  return { success: true, mensaje: 'Trigger creado' };
+}
+
+function listarTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  Logger.log('Total triggers: ' + triggers.length);
+  triggers.forEach(t => {
+    Logger.log('Handler: ' + t.getHandlerFunction() + ' | Tipo: ' + t.getEventType());
+  });
+  return triggers.map(t => ({ handler: t.getHandlerFunction(), tipo: String(t.getEventType()) }));
 }
