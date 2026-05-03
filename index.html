@@ -187,7 +187,7 @@ const API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1h
 let intentos=0,MAX=3;
 
 // Roles que ven la selección de módulo (admins y coordinadores)
-const ROLES_SELECCION = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl','jefe_rl','admin','admin01','admin02','rrhh'];
+const ROLES_SELECCION = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl','jefe_rl','admin','admin01','admin02','rrhh','supervisor'];
 // Roles SIN restricción de horario (nunca ven pantalla de bloqueo)
 const ROLES_SIN_HORARIO = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl','jefe_rl'];
 
@@ -389,23 +389,54 @@ async function doLogin(){
       setLoading(false);
       console.log('[login] 3-navegacion: '+Math.round(performance.now()-_tLogin0)+'ms desde inicio');
       if(ROLES_SELECCION.includes(rol)){
-        // Admin/coordinador → bienvenida 1.5s → pantalla de módulos
-        mostrarBienvenida(d.user, function(){
-          document.getElementById('pantallaBienvenida').style.display='none';
-          document.getElementById('pmNombre').textContent=d.user.nombre||d.user.usuario||'';
-          aplicarVisibilidadModulos(d.user);
-          document.querySelector('.card').style.display='none';
-          document.getElementById('pantallaModulo').style.display='flex';
-        });
+        // Helper: bienvenida → pantalla de módulos (con visibilidad por rol)
+        const irAPantallaModulo = () => {
+          mostrarBienvenida(d.user, function(){
+            document.getElementById('pantallaBienvenida').style.display='none';
+            document.getElementById('pmNombre').textContent=d.user.nombre||d.user.usuario||'';
+            aplicarVisibilidadModulos(d.user);
+            document.querySelector('.card').style.display='none';
+            document.getElementById('pantallaModulo').style.display='flex';
+          });
+        };
+        // Supervisor → verificar horario ANTES de mostrar la pantalla de módulos
+        if(rol === 'supervisor'){
+          const bloqueo = verificarHorarioLogin(d.user);
+          if(!bloqueo.permitido){
+            console.log('[LOGIN] Supervisor fuera de horario, verificando acceso temporal...');
+            const acceso = await verificarAccesoTemporal(d.user.usuario);
+            console.log('[LOGIN] Respuesta verificarAccesoTemporal:', acceso);
+            if(acceso.tieneAcceso){
+              sessionStorage.setItem('banner_acceso_temporal', acceso.hastaHora || acceso.hasta || '');
+              sessionStorage.setItem('accesoTemporal', JSON.stringify({
+                hastaHora:       acceso.hastaHora || acceso.hasta || '',
+                expiraEn:        acceso.expiraEn  || 0,
+                minutosRestantes: acceso.minutosRestantes || 0,
+                activo:          true
+              }));
+              const min = acceso.minutosRestantes || 0;
+              const hR  = Math.floor(min / 60);
+              const mR  = min % 60;
+              const tiempoTxt = hR > 0 ? hR + 'h ' + mR + 'min' : mR + ' min';
+              alert('✅ Acceso temporal vigente\n\nHasta: ' + (acceso.hastaHora || acceso.hasta) + '\nTiempo restante: ' + tiempoTxt);
+              irAPantallaModulo();
+            }else{
+              // Sin acceso temporal → pantalla de bloqueo, no entra a ningún sistema
+              mostrarPantallaBloqueo(d.user, bloqueo);
+            }
+            return;
+          }
+        }
+        // Admin/coord/jefa_rl/rrhh, o supervisor en horario → pantalla de módulos
+        irAPantallaModulo();
       }else{
-        // Supervisor/otros → verificar horario primero
+        // Roles fuera de ROLES_SELECCION (legacy/otros) → horario → dashboard
         const bloqueo = verificarHorarioLogin(d.user);
         if(!bloqueo.permitido){
           console.log('[LOGIN] Usuario fuera de horario, verificando acceso temporal...');
           const acceso = await verificarAccesoTemporal(d.user.usuario);
           console.log('[LOGIN] Respuesta verificarAccesoTemporal:', acceso);
           if(acceso.tieneAcceso){
-            // Persistir datos del acceso para countdown en dashboard
             sessionStorage.setItem('banner_acceso_temporal', acceso.hastaHora || acceso.hasta || '');
             sessionStorage.setItem('accesoTemporal', JSON.stringify({
               hastaHora:       acceso.hastaHora || acceso.hasta || '',
