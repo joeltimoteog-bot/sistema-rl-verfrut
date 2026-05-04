@@ -122,6 +122,21 @@
     .row-warn td { background: #fefce8 !important; }
     .row-err  td { background: #fef2f2 !important; }
 
+    /* ── Sectores checkboxes ── */
+    .sectores-box { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 14px 0; }
+    .sectores-box-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
+    .sectores-box-help { font-size: 12px; color: #64748b; margin-bottom: 10px; }
+    .sectores-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 12px; }
+    @media (max-width: 768px) { .sectores-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { .sectores-grid { grid-template-columns: 1fr; } }
+    .sector-check-lbl { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #0f172a; cursor: pointer; padding: 5px 8px; border-radius: 6px; transition: background .15s; user-select: none; }
+    .sector-check-lbl:hover { background: #eff6ff; }
+    .sector-check-lbl input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; accent-color: #0a2463; }
+    .sectores-counter { margin-top: 12px; font-size: 12px; color: #64748b; padding-top: 10px; border-top: 1px dashed #cbd5e1; }
+    .sectores-counter strong { color: #0a2463; font-weight: 800; }
+    .cant-hint { font-size: 12px; margin-top: 4px; font-weight: 600; }
+    .cant-hint.err { color: #dc2626; }
+
     /* ── Action buttons in tables ── */
     .btn-tbl { padding: 3px 8px; font-size: 11px; border: none; border-radius: 5px; cursor: pointer; font-weight: 700; transition: opacity .15s; }
     .btn-tbl:hover { opacity: .75; }
@@ -346,7 +361,7 @@
 <!-- ══════════ TAB: ENTREGAR ══════════ -->
 <div class="tab-content" id="tab-entregar">
   <div class="card">
-    <div class="card-title">🚚 Registrar entrega a sector</div>
+    <div class="card-title">📦 Registrar entrega del día</div>
 
     <div class="alert alert-info" style="margin-bottom:14px">
       Disponibles para entregar: <strong id="dispParaEntregar">0</strong> canastas
@@ -354,6 +369,10 @@
 
     <div id="alEntregar"></div>
     <div class="grid2">
+      <div class="fg">
+        <label class="lbl">Fecha *</label>
+        <input type="date" id="entFecha">
+      </div>
       <div class="fg">
         <label class="lbl">Empresa *</label>
         <select id="entEmpresa">
@@ -363,42 +382,51 @@
         </select>
       </div>
       <div class="fg">
-        <label class="lbl">Sector *</label>
-        <select id="entregaSector" name="sector">
-          <option value="">Seleccionar sector...</option>
-        </select>
-      </div>
-      <div class="fg">
-        <label class="lbl">Cantidad *</label>
-        <input type="number" id="entCantidad" min="1" step="1" placeholder="0">
-      </div>
-      <div class="fg">
         <label class="lbl">Responsable *</label>
         <select id="entResponsable">
           <option value="">Seleccionar...</option>
         </select>
       </div>
       <div class="fg">
-        <label class="lbl">Fecha</label>
-        <input type="date" id="entFecha">
-      </div>
-      <div class="fg">
         <label class="lbl">Supervisor</label>
         <select id="entregaSupervisor" name="supervisor"><option value="">Seleccionar supervisor...</option></select>
       </div>
     </div>
+
+    <!-- Sectores entregados (checkboxes) -->
+    <div class="sectores-box">
+      <div class="sectores-box-title">Sectores entregados ese día *</div>
+      <div class="sectores-box-help">Marca los sectores donde se entregó:</div>
+      <div class="sectores-grid" id="entSectoresChecks">
+        <div class="empty" style="grid-column:1/-1;padding:12px">⏳ Cargando sectores...</div>
+      </div>
+      <div class="sectores-counter">Sectores seleccionados: <strong id="entSectoresCount">0</strong></div>
+    </div>
+
+    <div class="grid2">
+      <div class="fg">
+        <label class="lbl">Cantidad total entregada *</label>
+        <input type="number" id="entCantidad" min="1" step="1" placeholder="0" oninput="validarCantidadEntrega()">
+        <div class="cant-hint err" id="entCantidadHint" style="display:none"></div>
+      </div>
+      <div class="fg">
+        <label class="lbl">Observaciones</label>
+        <textarea id="entObservaciones" rows="2" placeholder="Notas adicionales..."></textarea>
+      </div>
+    </div>
+
     <div class="act-row">
       <button class="btn btn-red" id="btnEntrega" onclick="registrarEntrega()">🚚 Registrar entrega</button>
     </div>
   </div>
 
-  <!-- Resumen por sector -->
+  <!-- Resumen por fecha -->
   <div class="card">
-    <div class="card-title">📍 Resumen de entregas por sector</div>
+    <div class="card-title">📅 Resumen de entregas por fecha</div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Empresa</th><th>Sector</th><th>Total entregado</th></tr></thead>
-        <tbody id="tbPorSector"><tr><td colspan="3" class="empty">Sin entregas</td></tr></tbody>
+        <thead><tr><th>Fecha</th><th>Empresa</th><th>Sectores</th><th>Total entregado</th></tr></thead>
+        <tbody id="tbPorSector"><tr><td colspan="4" class="empty">Sin entregas</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -408,7 +436,7 @@
     <div class="card-title">📋 Historial de entregas</div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Fecha</th><th>Empresa</th><th>Sector</th><th>Cant.</th><th>Responsable</th><th>Supervisor</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Empresa</th><th style="min-width:200px">Sector</th><th>Cant.</th><th>Responsable</th><th>Supervisor</th><th></th></tr></thead>
         <tbody id="tbEntregas"><tr><td colspan="7" class="empty">Sin entregas</td></tr></tbody>
       </table>
     </div>

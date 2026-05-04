@@ -62,7 +62,7 @@ async function cargarSectoresInv() {
     if (data && data.success && Array.isArray(data.sectores)) {
       window.invSectores = data.sectores;
       document.querySelectorAll(
-        'select[name="sector"], #ingresoSector, #armadoSector, #entregaSector'
+        'select[name="sector"], #ingresoSector, #armadoSector'
       ).forEach(sel => {
         const valActual = sel.value;
         sel.innerHTML = '<option value="">Seleccionar sector...</option>' +
@@ -70,6 +70,7 @@ async function cargarSectoresInv() {
         if (valActual) sel.value = valActual;
       });
       renderSectoresCfg();
+      renderCheckboxesSectoresEntrega();
     }
   } catch (e) {
     console.error('Error cargando sectores:', e);
@@ -492,7 +493,41 @@ async function confirmarArmado() {
 }
 
 /* ─────────────── TAB ENTREGAR ─────────────── */
+function renderCheckboxesSectoresEntrega() {
+  const wrap = document.getElementById('entSectoresChecks');
+  if (!wrap) return;
+  const sectores = window.invSectores || [];
+  if (!sectores.length) {
+    wrap.innerHTML = '<div class="empty" style="grid-column:1/-1;padding:12px">No hay sectores activos. Ve a ⚙️ Configuración.</div>';
+    setText('entSectoresCount', 0);
+    return;
+  }
+  wrap.innerHTML = sectores.map(s =>
+    `<label class="sector-check-lbl"><input type="checkbox" class="ent-sector-check" value="${esc(s.nombre)}" onchange="actualizarContadorSectoresEntrega()">${s.nombre}</label>`
+  ).join('');
+  actualizarContadorSectoresEntrega();
+}
+
+function actualizarContadorSectoresEntrega() {
+  const n = document.querySelectorAll('.ent-sector-check:checked').length;
+  setText('entSectoresCount', n);
+}
+
+function validarCantidadEntrega() {
+  const hint = document.getElementById('entCantidadHint');
+  if (!hint) return;
+  const cant = parseInt(v('entCantidad'));
+  const disp = (CALC && CALC.disponibles) || 0;
+  if (cant && cant > disp) {
+    hint.textContent = `❌ No puedes entregar más de ${disp.toLocaleString('es-PE')} canastas`;
+    hint.style.display = '';
+  } else {
+    hint.style.display = 'none';
+  }
+}
+
 function renderPorSector() {
+  // Resumen agrupado por fecha + empresa (puede haber múltiples sectores en una sola fila)
   const tb = document.getElementById('tbPorSector');
   if (!tb) return;
   const disp = document.getElementById('dispParaEntregar');
@@ -500,17 +535,20 @@ function renderPorSector() {
 
   const mapa = {};
   (DATA.entregas || []).forEach(e => {
-    const k = (e.empresa || '') + '|' + (e.sector || '');
-    mapa[k] = (mapa[k] || 0) + Number(e.cantidad || 0);
+    const k = (e.fecha || '') + '|' + (e.empresa || '');
+    if (!mapa[k]) mapa[k] = { fecha: e.fecha || '', empresa: e.empresa || '', sectores: new Set(), total: 0 };
+    String(e.sector || '').split(',').map(s => s.trim()).filter(Boolean).forEach(s => mapa[k].sectores.add(s));
+    mapa[k].total += Number(e.cantidad || 0);
   });
-  const keys = Object.keys(mapa).sort();
-  if (!keys.length) { tb.innerHTML = '<tr><td colspan="3" class="empty">Sin entregas</td></tr>'; return; }
-  tb.innerHTML = keys.map(k => {
-    const [emp, sec] = k.split('|');
+  const filas = Object.values(mapa).sort((a, b) => String(b.fecha).localeCompare(String(a.fecha)));
+  if (!filas.length) { tb.innerHTML = '<tr><td colspan="4" class="empty">Sin entregas</td></tr>'; return; }
+  tb.innerHTML = filas.map(f => {
+    const sectores = Array.from(f.sectores).join(', ');
     return `<tr>
-      <td><span class="badge ${emp === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${emp}</span></td>
-      <td>${sec}</td>
-      <td style="font-weight:700">${mapa[k].toLocaleString('es-PE')}</td>
+      <td>${f.fecha || ''}</td>
+      <td><span class="badge ${f.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${f.empresa || ''}</span></td>
+      <td style="font-size:12px;max-width:320px;word-wrap:break-word">${sectores}</td>
+      <td style="font-weight:700">${f.total.toLocaleString('es-PE')}</td>
     </tr>`;
   }).join('');
 }
@@ -519,50 +557,62 @@ function renderEntregasHistorial() {
   const tb = document.getElementById('tbEntregas');
   if (!tb) return;
   const items = [...(DATA.entregas || [])].reverse().slice(0, 30);
-  if (!items.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">Sin entregas</td></tr>'; return; }
-  tb.innerHTML = items.map(e => `<tr>
-    <td>${e.fecha || ''}</td>
-    <td><span class="badge ${e.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${e.empresa || ''}</span></td>
-    <td>${e.sector || ''}</td>
-    <td style="font-weight:700">${Number(e.cantidad).toLocaleString('es-PE')}</td>
-    <td style="font-size:12px">${e.responsable || ''}</td>
-    <td style="font-size:12px">${e.supervisor || '-'}</td>
-    <td style="white-space:nowrap">
-      <button class="btn-tbl btn-edit" onclick="abrirEditarEntrega('${esc(e.id)}')">✏️</button>
-      <button class="btn-tbl btn-del"  onclick="eliminarEntrega('${esc(e.id)}')">🗑️</button>
-    </td>
-  </tr>`).join('');
+  if (!items.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">Sin entregas</td></tr>'; return; }
+  tb.innerHTML = items.map(e => {
+    const sec = e.sector || '';
+    const secCorto = sec.length > 50 ? sec.substring(0, 47) + '…' : sec;
+    return `<tr>
+      <td>${e.fecha || ''}</td>
+      <td><span class="badge ${e.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${e.empresa || ''}</span></td>
+      <td style="font-size:12px;max-width:240px;word-wrap:break-word" title="${esc(sec)}">${secCorto}</td>
+      <td style="font-weight:700">${Number(e.cantidad).toLocaleString('es-PE')}</td>
+      <td style="font-size:12px">${e.responsable || ''}</td>
+      <td style="font-size:12px">${e.supervisor || '-'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-tbl btn-edit" onclick="abrirEditarEntrega('${esc(e.id)}')">✏️</button>
+        <button class="btn-tbl btn-del"  onclick="eliminarEntrega('${esc(e.id)}')">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
 }
 
 async function registrarEntrega() {
   limpiarAlerta('alEntregar');
-  const empresa = v('entEmpresa');
-  const sector  = v('entregaSector');
-  const cant    = parseInt(v('entCantidad'));
-  const resp    = v('entResponsable');
   const fecha   = v('entFecha');
+  const empresa = v('entEmpresa');
+  const resp    = v('entResponsable');
   const supervisor = v('entregaSupervisor');
+  const cant    = parseInt(v('entCantidad'));
+  const observaciones = v('entObservaciones').trim();
+  const sectoresSel = Array.from(document.querySelectorAll('.ent-sector-check:checked')).map(c => c.value);
 
-  if (!empresa)            { mostrarAlerta('alEntregar', 'err', 'Selecciona la empresa'); return; }
-  if (!sector)             { mostrarAlerta('alEntregar', 'err', 'Selecciona el sector'); return; }
-  if (!cant || cant <= 0)  { mostrarAlerta('alEntregar', 'err', 'La cantidad debe ser mayor a 0'); return; }
-  if (!resp)               { mostrarAlerta('alEntregar', 'err', 'Selecciona el responsable'); return; }
+  if (!fecha)                   { mostrarAlerta('alEntregar', 'err', 'La fecha es obligatoria'); return; }
+  if (!empresa)                 { mostrarAlerta('alEntregar', 'err', 'Selecciona la empresa'); return; }
+  if (!resp)                    { mostrarAlerta('alEntregar', 'err', 'Selecciona el responsable'); return; }
+  if (sectoresSel.length === 0) { mostrarAlerta('alEntregar', 'err', 'Marca al menos un sector'); return; }
+  if (!cant || cant <= 0)       { mostrarAlerta('alEntregar', 'err', 'La cantidad debe ser mayor a 0'); return; }
   if (cant > CALC.disponibles) {
-    mostrarAlerta('alEntregar', 'err', `Solo hay ${CALC.disponibles} canastas disponibles`); return;
+    mostrarAlerta('alEntregar', 'err', `No puedes entregar más de ${CALC.disponibles.toLocaleString('es-PE')} canastas`); return;
   }
+
+  const sectoresStr = sectoresSel.join(', ');
 
   const btn = document.getElementById('btnEntrega');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Registrando...';
   try {
     const d = await apiPost({ action: 'invRegistrarEntrega',
-      fecha, empresa, sector, cantidad: cant, responsable: resp,
+      fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp,
       usuario: USER.usuario, usuario_nombre: USER.nombre,
-      entrega: { fecha, empresa, sector, cantidad: cant, responsable: resp, supervisor, usuario: USER.usuario }
+      entrega: { fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp, supervisor, observaciones, usuario: USER.usuario }
     });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
-    mostrarAlerta('alEntregar', 'ok', `✅ Entrega registrada: ${cant} canastas → ${sector} (${empresa})`);
+    mostrarAlerta('alEntregar', 'ok', `✅ Entrega registrada: ${cant.toLocaleString('es-PE')} canastas → ${sectoresStr}`);
     sv('entCantidad', '');
+    sv('entObservaciones', '');
     sv('entregaSupervisor', '');
+    document.querySelectorAll('.ent-sector-check').forEach(c => c.checked = false);
+    actualizarContadorSectoresEntrega();
+    validarCantidadEntrega();
     await cargarDatos();
   } catch(e) {
     mostrarAlerta('alEntregar', 'err', '❌ ' + e.message);
@@ -947,7 +997,7 @@ function abrirEditarEntrega(id) {
   _modalCtx = { tipo: 'entrega', id };
 
   const optsEmp  = ['RAPEL','VERFRUT'].map(e => `<option value="${e}" ${e===item.empresa?'selected':''}>${e}</option>`).join('');
-  const optsSec  = _optsSectoresInv(item.sector);
+  const checksSec = _checksSectoresInv(item.sector);
   const optsResp = _optsResponsables(item.responsable);
   const optsSup  = _optsSupervisores(item.supervisor);
 
@@ -955,11 +1005,14 @@ function abrirEditarEntrega(id) {
   document.getElementById('modalForm').innerHTML = `
     <div class="grid2" style="gap:12px">
       <div class="fg"><label class="lbl">Empresa</label><select id="mEntEmpresa">${optsEmp}</select></div>
-      <div class="fg"><label class="lbl">Sector</label><select id="mEntSector">${optsSec}</select></div>
       <div class="fg"><label class="lbl">Cantidad</label><input type="number" id="mEntCantidad" value="${item.cantidad}" min="1" step="1"></div>
       <div class="fg"><label class="lbl">Responsable</label><select id="mEntResponsable">${optsResp}</select></div>
       <div class="fg"><label class="lbl">Fecha</label><input type="date" id="mEntFecha" value="${item.fecha || ''}"></div>
       <div class="fg"><label class="lbl">Supervisor</label><select id="mEntSupervisor">${optsSup}</select></div>
+    </div>
+    <div class="sectores-box" style="margin-top:12px">
+      <div class="sectores-box-title">Sectores entregados *</div>
+      <div class="sectores-grid">${checksSec}</div>
     </div>
     <div class="alert alert-info" style="margin-top:12px;font-size:12px">Disponibles actuales: <b>${CALC.disponibles.toLocaleString('es-PE')}</b></div>`;
   document.getElementById('modalAlert').innerHTML = '';
@@ -1007,15 +1060,16 @@ async function confirmarEditar() {
       if (!body.armado.cantidad || body.armado.cantidad <= 0) throw new Error('Cantidad inválida');
     } else if (tipo === 'entrega') {
       body.action  = 'invEditarEntrega';
+      const sectoresSel = Array.from(document.querySelectorAll('.m-ent-sector-check:checked')).map(c => c.value);
       body.entrega = {
         empresa:     v('mEntEmpresa'),
-        sector:      v('mEntSector'),
+        sector:      sectoresSel.join(', '),
         cantidad:    parseInt(v('mEntCantidad')),
         responsable: v('mEntResponsable'),
         fecha:       v('mEntFecha'),
         supervisor:  v('mEntSupervisor')
       };
-      if (!body.entrega.empresa || !body.entrega.sector || !body.entrega.cantidad || body.entrega.cantidad <= 0) throw new Error('Empresa, sector y cantidad son obligatorios');
+      if (!body.entrega.empresa || !body.entrega.sector || !body.entrega.cantidad || body.entrega.cantidad <= 0) throw new Error('Empresa, sector(es) y cantidad son obligatorios');
     }
 
     const d = await apiPost(body);
@@ -1142,6 +1196,15 @@ function _optsSectoresInv(selected) {
   const list = (window.invSectores || []).map(s => s.nombre || s);
   return '<option value="">Seleccionar...</option>' + list.map(s =>
     `<option value="${esc(s)}" ${s === selected ? 'selected' : ''}>${s}</option>`
+  ).join('');
+}
+
+function _checksSectoresInv(selected) {
+  const list = (window.invSectores || []).map(s => s.nombre || s);
+  const seleccionados = String(selected || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!list.length) return '<div class="empty" style="grid-column:1/-1;padding:8px">Sin sectores</div>';
+  return list.map(s =>
+    `<label class="sector-check-lbl"><input type="checkbox" class="m-ent-sector-check" value="${esc(s)}" ${seleccionados.includes(s) ? 'checked' : ''}>${s}</label>`
   ).join('');
 }
 
