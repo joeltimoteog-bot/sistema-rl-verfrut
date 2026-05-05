@@ -84,7 +84,7 @@ function handle(e) {
       case 'estadisticasCapacitaciones':   result = capEstadisticas(body);     break;
       // ═════════════════════════════════════════════════════
      // ═══════════════ MÓDULO INVENTARIO ═══════════════════
-      case 'invGetAll':                 result = invGetAll();                  break;
+      case 'invGetAll':                 result = invGetAll(Object.assign({}, params, body));    break;
       case 'invGuardarMeta':            result = invGuardarMeta(body);         break;
       case 'invAgregarReceta':          result = invAgregarReceta(body);       break;
       case 'invEliminarReceta':         result = invEliminarReceta(body);      break;
@@ -94,6 +94,11 @@ function handle(e) {
       case 'invRegistrarArmado':        result = invRegistrarArmado(body);     break;
       case 'invRegistrarEntrega':       result = invRegistrarEntrega(body);    break;
       case 'invDatosReporte':           result = invDatosReporte(body);        break;
+      // ═══════════════ EVENTOS ═════════════════════════════
+      case 'invListarEventos':          result = invListarEventos();                                  break;
+      case 'invCrearEvento':            result = invCrearEvento(Object.assign({}, params, body));    break;
+      case 'invEditarEvento':           result = invEditarEvento(Object.assign({}, params, body));   break;
+      case 'invCambiarEstadoEvento':    result = invCambiarEstadoEvento(Object.assign({}, params, body)); break;
       // ═════════════════════════════════════════════════════
      // ═══════════════ MÓDULO INVENTARIO V2 ═════════════════
       case 'invListarProductos':    result = invListarProductos();        break;
@@ -2873,7 +2878,8 @@ const INV_SH_META         = 'INV_Meta';
 const INV_SH_INGRESOS     = 'INV_Ingresos';
 const INV_SH_ARMADOS      = 'INV_Canastas_Armadas';
 const INV_SH_ENTREGAS     = 'INV_Entregas';
- 
+const INV_SH_EVENTOS      = 'INV_Eventos';
+
 const INV_RESPONSABLES_INICIALES = [
   'Jaime Siancas',
   'Deysi Quispe',
@@ -2882,6 +2888,18 @@ const INV_RESPONSABLES_INICIALES = [
   'Jorge Chávez Córdova',
   'Alex Tineo Ramos',
   'Yhanelly Luzon Venegas'
+];
+
+// Usuarios que pueden crear/editar/cambiar estado de eventos (gestión).
+// El selector y la lectura están abiertos a todos los que ven el módulo.
+const INV_EVENTO_ADMINS = ['jtimoteo', 'ovilela', 'jchavez'];
+
+const INV_EVENTOS_INICIALES = [
+  { id: 'E001', nombre: 'Día del Trabajo 2026',    descripcion: 'Canastas para Día del Trabajo', fechaInicio: '2026-04-15', fechaEntrega: '2026-05-01', meta: 3500, estado: 'cerrado',    color: 'naranja', icono: '🛠️', orden: 1 },
+  { id: 'E002', nombre: 'Día de la Madre 2026',    descripcion: 'Canastas para Día de la Madre', fechaInicio: '2026-04-15', fechaEntrega: '2026-05-10', meta: 3660, estado: 'activo',     color: 'rosa',    icono: '🌹', orden: 2 },
+  { id: 'E003', nombre: 'Día del Padre 2026',      descripcion: 'Canastas para Día del Padre',   fechaInicio: '2026-06-01', fechaEntrega: '2026-06-21', meta: 3800, estado: 'planeacion', color: 'azul',    icono: '🎁', orden: 3 },
+  { id: 'E004', nombre: 'Fiestas Patrias 2026',    descripcion: 'Canastas para Fiestas Patrias', fechaInicio: '2026-07-01', fechaEntrega: '2026-07-28', meta: 4000, estado: 'planeacion', color: 'rojo',    icono: '🎆', orden: 4 },
+  { id: 'E005', nombre: 'Canastas Navideñas 2026', descripcion: 'Canastas Navideñas',            fechaInicio: '2026-12-01', fechaEntrega: '2026-12-24', meta: 5000, estado: 'planeacion', color: 'verde',   icono: '🎄', orden: 5 }
 ];
  
  
@@ -2933,8 +2951,8 @@ function invSetup() {
   h = ss.getSheetByName(INV_SH_INGRESOS);
   if (!h) {
     h = ss.insertSheet(INV_SH_INGRESOS);
-    h.appendRow(['ID', 'FECHA_REGISTRO', 'PRODUCTO', 'CANTIDAD', 'UNIDAD', 'FECHA_INGRESO', 'FECHA_VENC', 'LOTE', 'RESPONSABLE', 'PROVEEDOR', 'OBSERVACIONES', 'USUARIO', 'SECTOR', 'SUPERVISOR']);
-    h.getRange('A1:N1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.appendRow(['ID', 'FECHA_REGISTRO', 'PRODUCTO', 'CANTIDAD', 'UNIDAD', 'FECHA_INGRESO', 'FECHA_VENC', 'LOTE', 'RESPONSABLE', 'PROVEEDOR', 'OBSERVACIONES', 'USUARIO', 'SECTOR', 'SUPERVISOR', 'EVENTO_ID']);
+    h.getRange('A1:O1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     h.setFrozenRows(1);
     Logger.log('✓ ' + INV_SH_INGRESOS);
   }
@@ -2943,8 +2961,8 @@ function invSetup() {
   h = ss.getSheetByName(INV_SH_ARMADOS);
   if (!h) {
     h = ss.insertSheet(INV_SH_ARMADOS);
-    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ARMADO', 'CANTIDAD', 'RESPONSABLE', 'OBSERVACIONES', 'USUARIO', 'SECTOR', 'SUPERVISOR']);
-    h.getRange('A1:I1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ARMADO', 'CANTIDAD', 'RESPONSABLE', 'OBSERVACIONES', 'USUARIO', 'SECTOR', 'SUPERVISOR', 'EVENTO_ID']);
+    h.getRange('A1:J1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     h.setFrozenRows(1);
     Logger.log('✓ ' + INV_SH_ARMADOS);
   }
@@ -2953,8 +2971,8 @@ function invSetup() {
   h = ss.getSheetByName(INV_SH_ENTREGAS);
   if (!h) {
     h = ss.insertSheet(INV_SH_ENTREGAS);
-    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ENTREGA', 'EMPRESA', 'SECTOR', 'CANTIDAD', 'RESPONSABLE', 'DOCUMENTO', 'OBSERVACIONES', 'USUARIO', 'SUPERVISOR', 'EXPORTADORA']);
-    h.getRange('A1:L1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ENTREGA', 'EMPRESA', 'SECTOR', 'CANTIDAD', 'RESPONSABLE', 'DOCUMENTO', 'OBSERVACIONES', 'USUARIO', 'SUPERVISOR', 'EXPORTADORA', 'EVENTO_ID']);
+    h.getRange('A1:M1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     h.setFrozenRows(1);
     Logger.log('✓ ' + INV_SH_ENTREGAS);
   }
@@ -2983,15 +3001,15 @@ function invMigrarColumnasSectorSupervisor() {
   }
 
   const hIng = ss.getSheetByName(INV_SH_INGRESOS);
-  if (hIng) { asegurarColumna(hIng, 'SECTOR'); asegurarColumna(hIng, 'SUPERVISOR'); }
+  if (hIng) { asegurarColumna(hIng, 'SECTOR'); asegurarColumna(hIng, 'SUPERVISOR'); asegurarColumna(hIng, 'EVENTO_ID'); }
 
   const hArm = ss.getSheetByName(INV_SH_ARMADOS);
-  if (hArm) { asegurarColumna(hArm, 'SECTOR'); asegurarColumna(hArm, 'SUPERVISOR'); }
+  if (hArm) { asegurarColumna(hArm, 'SECTOR'); asegurarColumna(hArm, 'SUPERVISOR'); asegurarColumna(hArm, 'EVENTO_ID'); }
 
   const hEnt = ss.getSheetByName(INV_SH_ENTREGAS);
-  if (hEnt) { asegurarColumna(hEnt, 'SUPERVISOR'); asegurarColumna(hEnt, 'EXPORTADORA'); }
+  if (hEnt) { asegurarColumna(hEnt, 'SUPERVISOR'); asegurarColumna(hEnt, 'EXPORTADORA'); asegurarColumna(hEnt, 'EVENTO_ID'); }
 
-  Logger.log('✓ Migración SECTOR/SUPERVISOR/EXPORTADORA completada');
+  Logger.log('✓ Migración SECTOR/SUPERVISOR/EXPORTADORA/EVENTO_ID completada');
 }
 
 
@@ -3078,24 +3096,257 @@ function invSetupReceta() {
 
 
 // ═══════════════════════════════════════════════════════════════════
+//  EVENTOS — Setup, migración, CRUD, helpers
+// ═══════════════════════════════════════════════════════════════════
+function invSetupEventos() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+  // 1. Crear hoja INV_Eventos
+  let h = ss.getSheetByName(INV_SH_EVENTOS);
+  let creadaAhora = false;
+  if (!h) {
+    h = ss.insertSheet(INV_SH_EVENTOS);
+    h.appendRow(['ID', 'NOMBRE', 'DESCRIPCION', 'FECHA_INICIO', 'FECHA_ENTREGA', 'META', 'ESTADO', 'COLOR', 'ICONO', 'ORDEN', 'CREADO', 'CERRADO_EN']);
+    h.getRange('A1:L1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.setFrozenRows(1);
+    creadaAhora = true;
+    Logger.log('✓ Hoja ' + INV_SH_EVENTOS + ' creada');
+  }
+
+  // Insertar eventos iniciales solo si la hoja está vacía
+  let agregados = 0;
+  if (h.getLastRow() < 2) {
+    INV_EVENTOS_INICIALES.forEach(ev => {
+      const cerradoEn = ev.estado === 'cerrado' ? new Date() : '';
+      h.appendRow([ev.id, ev.nombre, ev.descripcion, ev.fechaInicio, ev.fechaEntrega, ev.meta, ev.estado, ev.color, ev.icono, ev.orden, new Date(), cerradoEn]);
+      agregados++;
+    });
+    Logger.log('✓ ' + agregados + ' eventos iniciales insertados');
+  } else {
+    Logger.log('ℹ Hoja INV_Eventos ya tiene datos: ' + (h.getLastRow() - 1) + ' eventos. No se insertan iniciales.');
+  }
+
+  // 2. Asegurar columna EVENTO_ID en las 3 hojas operativas
+  function asegurarCol(hoja, nombreCol) {
+    if (!hoja || hoja.getLastRow() < 1) return false;
+    const headers = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+    if (headers.indexOf(nombreCol) !== -1) return false;
+    const c = hoja.getLastColumn() + 1;
+    hoja.getRange(1, c).setValue(nombreCol).setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    Logger.log('↪ ' + hoja.getName() + ' + ' + nombreCol + ' (col ' + c + ')');
+    return true;
+  }
+  asegurarCol(ss.getSheetByName(INV_SH_INGRESOS), 'EVENTO_ID');
+  asegurarCol(ss.getSheetByName(INV_SH_ARMADOS),  'EVENTO_ID');
+  asegurarCol(ss.getSheetByName(INV_SH_ENTREGAS), 'EVENTO_ID');
+
+  Logger.log('═══ invSetupEventos completado ═══');
+  return { success: true, hojaCreada: creadaAhora, eventosInsertados: agregados };
+}
+
+function invMigrarEventos() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const resultados = {};
+
+  function migrarHoja(nombreHoja) {
+    const h = ss.getSheetByName(nombreHoja);
+    if (!h || h.getLastRow() < 2) { resultados[nombreHoja] = 0; return; }
+    const headers = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0];
+    const idx = headers.indexOf('EVENTO_ID');
+    if (idx === -1) {
+      Logger.log('⚠ ' + nombreHoja + ': falta columna EVENTO_ID. Ejecuta invSetupEventos() primero.');
+      resultados[nombreHoja] = 0;
+      return;
+    }
+    const col = idx + 1;
+    const lastRow = h.getLastRow();
+    const valores = h.getRange(2, col, lastRow - 1, 1).getValues();
+    let actualizados = 0;
+    for (let i = 0; i < valores.length; i++) {
+      const v = String(valores[i][0] || '').trim();
+      if (!v) {
+        h.getRange(i + 2, col).setValue('E001');
+        actualizados++;
+      }
+    }
+    Logger.log('✓ ' + nombreHoja + ': ' + actualizados + ' registros migrados a E001');
+    resultados[nombreHoja] = actualizados;
+  }
+
+  migrarHoja(INV_SH_INGRESOS);
+  migrarHoja(INV_SH_ARMADOS);
+  migrarHoja(INV_SH_ENTREGAS);
+
+  Logger.log('═══ invMigrarEventos completado ═══');
+  return { success: true, resultados };
+}
+
+function _invIdxColumna(hoja, nombre) {
+  if (!hoja || hoja.getLastColumn() < 1) return -1;
+  const headers = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
+  return headers.indexOf(nombre);
+}
+
+function invResolverEventoActivo() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const h = ss.getSheetByName(INV_SH_EVENTOS);
+  if (!h || h.getLastRow() < 2) return 'E001';
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, 12).getValues();
+  let activo = null, ultimo = null;
+  datos.forEach(r => {
+    if (!r[0]) return;
+    if (String(r[6] || '').toLowerCase() === 'activo' && !activo) activo = String(r[0]);
+    ultimo = String(r[0]);
+  });
+  return activo || ultimo || 'E001';
+}
+
+function invListarEventos() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(INV_SH_EVENTOS);
+    if (!h || h.getLastRow() < 2) return { success: true, eventos: [], activoId: 'E001' };
+    const datos = h.getRange(2, 1, h.getLastRow() - 1, 12).getValues();
+    const eventos = datos.filter(r => r[0]).map(r => ({
+      id:           String(r[0]),
+      nombre:       r[1] || '',
+      descripcion:  r[2] || '',
+      fechaInicio:  r[3] instanceof Date ? Utilities.formatDate(r[3], 'America/Lima', 'yyyy-MM-dd') : (r[3] || ''),
+      fechaEntrega: r[4] instanceof Date ? Utilities.formatDate(r[4], 'America/Lima', 'yyyy-MM-dd') : (r[4] || ''),
+      meta:         Number(r[5]) || 0,
+      estado:       (r[6] || 'planeacion').toString().toLowerCase(),
+      color:        r[7] || 'azul',
+      icono:        r[8] || '🎉',
+      orden:        Number(r[9]) || 0,
+      creado:       r[10] || '',
+      cerradoEn:    r[11] || ''
+    })).sort((a, b) => a.orden - b.orden);
+    const activoId = invResolverEventoActivo();
+    return { success: true, eventos, activoId };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+function invCrearEvento(body) {
+  try {
+    if (body.usuario && INV_EVENTO_ADMINS.indexOf(String(body.usuario).toLowerCase()) === -1) {
+      return { success: false, error: 'Solo admins pueden crear eventos' };
+    }
+    const e = body.evento || {};
+    if (!e.nombre) return { success: false, error: 'Nombre obligatorio' };
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(INV_SH_EVENTOS);
+    if (!h) return { success: false, error: 'Ejecuta invSetupEventos() primero' };
+
+    // Calcular siguiente ID Exxx
+    const datos = h.getLastRow() >= 2 ? h.getRange(2, 1, h.getLastRow() - 1, 1).getValues() : [];
+    let maxNum = 0;
+    datos.forEach(r => {
+      const m = String(r[0] || '').match(/^E(\d+)$/);
+      if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+    });
+    const id = 'E' + String(maxNum + 1).padStart(3, '0');
+    const orden = Number(e.orden) || (maxNum + 1);
+    const estado = (e.estado || 'planeacion').toLowerCase();
+
+    h.appendRow([
+      id, e.nombre, e.descripcion || '', e.fechaInicio || '', e.fechaEntrega || '',
+      Number(e.meta) || 0, estado, e.color || 'azul', e.icono || '🎉',
+      orden, new Date(), estado === 'cerrado' ? new Date() : ''
+    ]);
+    return { success: true, id };
+  } catch (err) { return { success: false, error: err.message }; }
+}
+
+function invEditarEvento(body) {
+  try {
+    if (body.usuario && INV_EVENTO_ADMINS.indexOf(String(body.usuario).toLowerCase()) === -1) {
+      return { success: false, error: 'Solo admins pueden editar eventos' };
+    }
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(INV_SH_EVENTOS);
+    if (!h) return { success: false, error: 'No existe hoja INV_Eventos' };
+    const datos = h.getDataRange().getValues();
+    const e = body.evento || {};
+    for (let r = 1; r < datos.length; r++) {
+      if (String(datos[r][0]) === String(body.id)) {
+        if (e.nombre !== undefined)       h.getRange(r + 1, 2).setValue(e.nombre);
+        if (e.descripcion !== undefined)  h.getRange(r + 1, 3).setValue(e.descripcion);
+        if (e.fechaInicio !== undefined)  h.getRange(r + 1, 4).setValue(e.fechaInicio);
+        if (e.fechaEntrega !== undefined) h.getRange(r + 1, 5).setValue(e.fechaEntrega);
+        if (e.meta !== undefined)         h.getRange(r + 1, 6).setValue(Number(e.meta) || 0);
+        if (e.color !== undefined)        h.getRange(r + 1, 8).setValue(e.color);
+        if (e.icono !== undefined)        h.getRange(r + 1, 9).setValue(e.icono);
+        if (e.orden !== undefined)        h.getRange(r + 1, 10).setValue(Number(e.orden) || 0);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Evento no encontrado' };
+  } catch (err) { return { success: false, error: err.message }; }
+}
+
+function invCambiarEstadoEvento(body) {
+  try {
+    if (body.usuario && INV_EVENTO_ADMINS.indexOf(String(body.usuario).toLowerCase()) === -1) {
+      return { success: false, error: 'Solo admins pueden cambiar estado' };
+    }
+    const estadoNuevo = String(body.estado || '').toLowerCase();
+    if (['planeacion', 'activo', 'cerrado'].indexOf(estadoNuevo) === -1) {
+      return { success: false, error: 'Estado inválido' };
+    }
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(INV_SH_EVENTOS);
+    if (!h) return { success: false, error: 'No existe hoja INV_Eventos' };
+    const datos = h.getDataRange().getValues();
+
+    // Si se activa uno, desactivar los demás
+    if (estadoNuevo === 'activo') {
+      for (let r = 1; r < datos.length; r++) {
+        if (datos[r][0] && String(datos[r][6] || '').toLowerCase() === 'activo') {
+          h.getRange(r + 1, 7).setValue('planeacion');
+        }
+      }
+    }
+    for (let r = 1; r < datos.length; r++) {
+      if (String(datos[r][0]) === String(body.id)) {
+        h.getRange(r + 1, 7).setValue(estadoNuevo);
+        if (estadoNuevo === 'cerrado') h.getRange(r + 1, 12).setValue(new Date());
+        else h.getRange(r + 1, 12).setValue('');
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Evento no encontrado' };
+  } catch (err) { return { success: false, error: err.message }; }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
 //  GET ALL — Carga inicial (todo en una sola llamada)
 // ═══════════════════════════════════════════════════════════════════
-function invGetAll() {
+function invGetAll(body) {
   try {
+    body = body || {};
+    const eventoId = body.evento_id || invResolverEventoActivo();
     const productos = (invListarProductos().productos) || [];
     const receta = invLeerReceta();
     const responsables = invLeerResponsables();
-    const meta = invLeerMeta();
-    const stock = invCalcularStock(receta);
-    const armados = invLeerArmados();
-    const entregas = invLeerEntregas();
-    const ingresos = invLeerIngresos();
+    // La meta del evento sobreescribe la global (compat: si no hay evento, usar global)
+    const eventos = invListarEventos();
+    const eventoActual = (eventos.eventos || []).find(ev => ev.id === eventoId);
+    const metaGlobal = invLeerMeta();
+    const meta = eventoActual ? { total: eventoActual.meta, descripcion: eventoActual.descripcion } : metaGlobal;
+    const stock = invCalcularStock(receta, eventoId);
+    const armados = invLeerArmados(eventoId);
+    const entregas = invLeerEntregas(eventoId);
+    const ingresos = invLeerIngresos(eventoId);
 
     const canastasArmadas = armados.reduce((s, a) => s + Number(a.cantidad || 0), 0);
     const canastasEntregadas = entregas.reduce((s, e) => s + Number(e.cantidad || 0), 0);
 
     return {
       success: true,
+      eventoId,
+      eventoActual: eventoActual || null,
+      eventos: eventos.eventos || [],
       productos,
       receta, responsables, meta, stock,
       canastasArmadas, canastasEntregadas,
@@ -3231,26 +3482,42 @@ function invRegistrarIngreso(body) {
     }
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_INGRESOS);
+    // Asegurar columna EVENTO_ID
+    const headers = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0];
+    if (headers.indexOf('EVENTO_ID') === -1) {
+      const c = h.getLastColumn() + 1;
+      h.getRange(1, c).setValue('EVENTO_ID').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    }
+    const eventoId = i.evento_id || body.evento_id || invResolverEventoActivo();
     const id = 'I' + Date.now();
     h.appendRow([
       id, new Date(), i.producto, Number(i.cantidad), i.unidad || '',
       i.fechaIngreso, i.fechaVenc, i.lote || '', i.responsable, i.proveedor || '',
-      i.observaciones || '', i.usuario || '', i.sector || '', i.supervisor || ''
+      i.observaciones || '', i.usuario || '', i.sector || '', i.supervisor || '', eventoId
     ]);
-    return { success: true, id };
+    return { success: true, id, evento_id: eventoId };
   } catch (e) { return { success: false, error: e.message }; }
 }
 
-function invLeerIngresos() {
+function invLeerIngresos(eventoId) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const h = ss.getSheetByName(INV_SH_INGRESOS);
   if (!h || h.getLastRow() < 2) return [];
-  const datos = h.getRange(2, 1, h.getLastRow() - 1, 14).getValues();
-  return datos.filter(r => r[0]).map(r => ({
+  const numCols = Math.max(14, h.getLastColumn());
+  const idxEv = _invIdxColumna(h, 'EVENTO_ID');
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, numCols).getValues();
+  return datos.filter(r => {
+    if (!r[0]) return false;
+    if (eventoId && idxEv !== -1) {
+      return String(r[idxEv] || '').trim() === eventoId;
+    }
+    return true;
+  }).map(r => ({
     id: r[0], fechaRegistro: r[1], producto: r[2], cantidad: Number(r[3]) || 0,
     unidad: r[4], fechaIngreso: r[5], fechaVenc: r[6], lote: r[7],
     responsable: r[8], proveedor: r[9], observaciones: r[10], usuario: r[11],
-    sector: r[12] || '', supervisor: r[13] || ''
+    sector: r[12] || '', supervisor: r[13] || '',
+    evento_id: idxEv !== -1 ? (r[idxEv] || '') : ''
   }));
 }
  
@@ -3264,10 +3531,11 @@ function invRegistrarArmado(body) {
     if (!a || !a.cantidad || !a.fecha || !a.responsable) {
       return { success: false, error: 'Datos incompletos' };
     }
- 
-    // Validar stock antes de armar
+    const eventoId = a.evento_id || body.evento_id || invResolverEventoActivo();
+
+    // Validar stock filtrado por evento antes de armar
     const receta = invLeerReceta();
-    const stock = invCalcularStock(receta);
+    const stock = invCalcularStock(receta, eventoId);
     for (const r of receta) {
       const s = stock.find(x => x.producto === r.producto);
       const stockActual = s ? s.stock : 0;
@@ -3276,24 +3544,38 @@ function invRegistrarArmado(body) {
         return { success: false, error: `Stock insuficiente de ${r.producto}: tienes ${stockActual} ${r.unidad}, necesitas ${necesario}` };
       }
     }
- 
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_ARMADOS);
+    const headers = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0];
+    if (headers.indexOf('EVENTO_ID') === -1) {
+      const c = h.getLastColumn() + 1;
+      h.getRange(1, c).setValue('EVENTO_ID').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    }
     const id = 'A' + Date.now();
-    h.appendRow([id, new Date(), a.fecha, Number(a.cantidad), a.responsable, a.observaciones || '', a.usuario || '', a.sector || '', a.supervisor || '']);
-    return { success: true, id };
+    h.appendRow([id, new Date(), a.fecha, Number(a.cantidad), a.responsable, a.observaciones || '', a.usuario || '', a.sector || '', a.supervisor || '', eventoId]);
+    return { success: true, id, evento_id: eventoId };
   } catch (e) { return { success: false, error: e.message }; }
 }
 
-function invLeerArmados() {
+function invLeerArmados(eventoId) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const h = ss.getSheetByName(INV_SH_ARMADOS);
   if (!h || h.getLastRow() < 2) return [];
-  const datos = h.getRange(2, 1, h.getLastRow() - 1, 9).getValues();
-  return datos.filter(r => r[0]).map(r => ({
+  const numCols = Math.max(9, h.getLastColumn());
+  const idxEv = _invIdxColumna(h, 'EVENTO_ID');
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, numCols).getValues();
+  return datos.filter(r => {
+    if (!r[0]) return false;
+    if (eventoId && idxEv !== -1) {
+      return String(r[idxEv] || '').trim() === eventoId;
+    }
+    return true;
+  }).map(r => ({
     id: r[0], fechaRegistro: r[1], fecha: r[2], cantidad: Number(r[3]) || 0,
     responsable: r[4], observaciones: r[5], usuario: r[6],
-    sector: r[7] || '', supervisor: r[8] || ''
+    sector: r[7] || '', supervisor: r[8] || '',
+    evento_id: idxEv !== -1 ? (r[idxEv] || '') : ''
   })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
  
@@ -3307,42 +3589,56 @@ function invRegistrarEntrega(body) {
     if (!e || !e.empresa || !e.sector || !e.cantidad || !e.fecha || !e.responsable) {
       return { success: false, error: 'Datos incompletos' };
     }
- 
-    // Validar disponibles
-    const armados = invLeerArmados();
-    const entregas = invLeerEntregas();
+    const eventoId = e.evento_id || body.evento_id || invResolverEventoActivo();
+
+    // Validar disponibles dentro del evento
+    const armados = invLeerArmados(eventoId);
+    const entregas = invLeerEntregas(eventoId);
     const armadasTotal = armados.reduce((s, a) => s + Number(a.cantidad || 0), 0);
     const entregadasTotal = entregas.reduce((s, x) => s + Number(x.cantidad || 0), 0);
     const disponibles = armadasTotal - entregadasTotal;
     if (e.cantidad > disponibles) {
       return { success: false, error: `Solo hay ${disponibles} canastas disponibles` };
     }
- 
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_ENTREGAS);
-    // Asegurar columna EXPORTADORA antes de insertar (auto-migración suave)
-    const headers = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0];
+    // Asegurar columnas EXPORTADORA y EVENTO_ID
+    let headers = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0];
     if (headers.indexOf('EXPORTADORA') === -1) {
       const c = h.getLastColumn() + 1;
       h.getRange(1, c).setValue('EXPORTADORA').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     }
+    headers = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0];
+    if (headers.indexOf('EVENTO_ID') === -1) {
+      const c = h.getLastColumn() + 1;
+      h.getRange(1, c).setValue('EVENTO_ID').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    }
     const id = 'E' + Date.now();
-    h.appendRow([id, new Date(), e.fecha, e.empresa, e.sector, Number(e.cantidad), e.responsable, e.documento || '', e.observaciones || '', e.usuario || '', e.supervisor || '', e.exportadora || '']);
-    return { success: true, id };
+    h.appendRow([id, new Date(), e.fecha, e.empresa, e.sector, Number(e.cantidad), e.responsable, e.documento || '', e.observaciones || '', e.usuario || '', e.supervisor || '', e.exportadora || '', eventoId]);
+    return { success: true, id, evento_id: eventoId };
   } catch (err) { return { success: false, error: err.message }; }
 }
 
-function invLeerEntregas() {
+function invLeerEntregas(eventoId) {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const h = ss.getSheetByName(INV_SH_ENTREGAS);
   if (!h || h.getLastRow() < 2) return [];
   const numCols = Math.max(11, h.getLastColumn());
+  const idxEv = _invIdxColumna(h, 'EVENTO_ID');
   const datos = h.getRange(2, 1, h.getLastRow() - 1, numCols).getValues();
-  return datos.filter(r => r[0]).map(r => ({
+  return datos.filter(r => {
+    if (!r[0]) return false;
+    if (eventoId && idxEv !== -1) {
+      return String(r[idxEv] || '').trim() === eventoId;
+    }
+    return true;
+  }).map(r => ({
     id: r[0], fechaRegistro: r[1], fecha: r[2], empresa: r[3], sector: r[4],
     cantidad: Number(r[5]) || 0, responsable: r[6], documento: r[7],
     observaciones: r[8], usuario: r[9], supervisor: r[10] || '',
-    exportadora: r[11] || ''
+    exportadora: r[11] || '',
+    evento_id: idxEv !== -1 ? (r[idxEv] || '') : ''
   })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
  
@@ -3350,9 +3646,9 @@ function invLeerEntregas() {
 // ═══════════════════════════════════════════════════════════════════
 //  CÁLCULO DE STOCK (clave del sistema)
 // ═══════════════════════════════════════════════════════════════════
-function invCalcularStock(receta) {
-  const ingresos = invLeerIngresos();
-  const armados = invLeerArmados();
+function invCalcularStock(receta, eventoId) {
+  const ingresos = invLeerIngresos(eventoId);
+  const armados = invLeerArmados(eventoId);
   const totalCanastas = armados.reduce((s, a) => s + Number(a.cantidad || 0), 0);
  
   const stock = [];
@@ -3614,10 +3910,12 @@ function invEditarArmado(body) {
           const cantNueva = Number(a.cantidad);
           const diff = cantNueva - cantOriginal;
  
+          // Resolver evento del registro editado para validar dentro de su scope
+          const eventoIdEdit = String(datos[r][9] || '') || invResolverEventoActivo();
           if (diff > 0) {
             const receta = invLeerReceta();
-            const ingresos = invLeerIngresos();
-            const armados = invLeerArmados();
+            const ingresos = invLeerIngresos(eventoIdEdit);
+            const armados = invLeerArmados(eventoIdEdit);
             for (const rec of receta) {
               const ingProd = ingresos.filter(ii => (ii.producto || '').toLowerCase() === rec.producto.toLowerCase());
               const totalIng = ingProd.reduce((s, ii) => s + Number(ii.cantidad || 0), 0);
@@ -3630,10 +3928,10 @@ function invEditarArmado(body) {
               }
             }
           }
- 
+
           if (diff < 0) {
-            const armados = invLeerArmados();
-            const entregas = invLeerEntregas();
+            const armados = invLeerArmados(eventoIdEdit);
+            const entregas = invLeerEntregas(eventoIdEdit);
             const totalArmadasNuevo = armados.reduce((s, x) => s + Number(x.cantidad || 0), 0) + diff;
             const totalEntregadas = entregas.reduce((s, x) => s + Number(x.cantidad || 0), 0);
             if (totalArmadasNuevo < totalEntregadas) {
@@ -3664,23 +3962,27 @@ function invEliminarArmado(body) {
  
     let cantElim = 0;
     let filaElim = -1;
+    let evtoElim = '';
+    const idxEvA = _invIdxColumna(h, 'EVENTO_ID');
     for (let r = 1; r < datos.length; r++) {
       if (datos[r][0] === body.id) {
         cantElim = Number(datos[r][3]) || 0;
+        evtoElim = idxEvA !== -1 ? String(datos[r][idxEvA] || '') : '';
         filaElim = r + 1;
         break;
       }
     }
     if (filaElim === -1) return { success: false, error: 'Armado no encontrado' };
- 
-    const armados = invLeerArmados();
-    const entregas = invLeerEntregas();
+
+    const evScope = evtoElim || invResolverEventoActivo();
+    const armados = invLeerArmados(evScope);
+    const entregas = invLeerEntregas(evScope);
     const totalArmadas = armados.reduce((s, x) => s + Number(x.cantidad || 0), 0);
     const totalEntregadas = entregas.reduce((s, x) => s + Number(x.cantidad || 0), 0);
     if ((totalArmadas - cantElim) < totalEntregadas) {
       return { success: false, error: 'No puedes eliminar: ya hay ' + totalEntregadas + ' canastas entregadas y solo quedarían ' + (totalArmadas - cantElim) };
     }
- 
+
     h.deleteRow(filaElim);
     return { success: true };
   } catch (e) { return { success: false, error: e.message }; }
@@ -3702,10 +4004,14 @@ function invEditarEntrega(body) {
           const cantOriginal = Number(datos[r][5]) || 0;
           const cantNueva = Number(e.cantidad);
           const diff = cantNueva - cantOriginal;
- 
+          // Validar contra el mismo evento de la entrega editada
+          const idxEvFila = _invIdxColumna(h, 'EVENTO_ID');
+          const eventoIdEdit = idxEvFila !== -1 ? String(datos[r][idxEvFila] || '') : '';
+          const evScope = eventoIdEdit || invResolverEventoActivo();
+
           if (diff > 0) {
-            const armados = invLeerArmados();
-            const entregas = invLeerEntregas();
+            const armados = invLeerArmados(evScope);
+            const entregas = invLeerEntregas(evScope);
             const totalArmadas = armados.reduce((s, x) => s + Number(x.cantidad || 0), 0);
             const totalEntregadas = entregas.reduce((s, x) => s + Number(x.cantidad || 0), 0);
             const disponibles = totalArmadas - totalEntregadas;

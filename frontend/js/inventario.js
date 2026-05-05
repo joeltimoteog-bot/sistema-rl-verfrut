@@ -13,6 +13,7 @@ const ROLES_PERMITIDOS = [
 // Sectores y supervisores se cargan dinámicamente del backend (window.invSectores / window.invSupervisores)
 
 const DIAS_ALERTA_VENC = 7;
+const INV_EVENTO_ADMINS = ['jtimoteo', 'ovilela', 'jchavez'];
 
 /* ─────────────── ESTADO GLOBAL ─────────────── */
 let USER = null;
@@ -21,8 +22,16 @@ let DATA = null; // { meta, productos, receta, responsables, ingresos, armadas, 
 let CALC = null; // { stockPorProd, vencPorProd, ingPorProd, totalArmadas, maxCanastas, totalEntregadas, disponibles }
 let _modalCtx = null; // { tipo:'ingreso'|'armado'|'entrega', id, rowData }
 let _sectorEditCtx = null; // { id, nombre } para modal editar sector
+let _eventoEditCtx = null; // { id } para modal editar evento (null si crear)
 window.invSectores = window.invSectores || [];
 window.invSupervisores = window.invSupervisores || [];
+window.invEventos = window.invEventos || [];
+window.eventoActivoId = window.eventoActivoId || '';
+
+function esAdminEventos() {
+  if (!USER) return false;
+  return INV_EVENTO_ADMINS.indexOf(String(USER.usuario || '').toLowerCase()) !== -1;
+}
 
 /* ─────────────── INIT ─────────────── */
 document.addEventListener('DOMContentLoaded', () => {
@@ -52,8 +61,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
   cargarSectoresInv();
   cargarSupervisoresInv();
-  cargarDatos();
+  cargarEventos().then(() => cargarDatos());
 });
+
+async function cargarEventos() {
+  try {
+    const res = await fetch(`${API}?action=invListarEventos`);
+    const data = await res.json();
+    if (!data || !data.success) throw new Error(data.error || 'Error cargando eventos');
+    window.invEventos = data.eventos || [];
+    if (!window.eventoActivoId) window.eventoActivoId = data.activoId || (data.eventos[0] && data.eventos[0].id) || '';
+    renderSelectorEvento();
+    renderEventosCfg();
+  } catch (e) {
+    console.error('[INV] cargarEventos:', e);
+  }
+}
+
+function renderSelectorEvento() {
+  const sel = document.getElementById('selEvento');
+  if (!sel) return;
+  const eventos = window.invEventos || [];
+  if (!eventos.length) {
+    sel.innerHTML = '<option value="">Sin eventos</option>';
+    return;
+  }
+  sel.innerHTML = eventos.map(ev =>
+    `<option value="${esc(ev.id)}" ${ev.id === window.eventoActivoId ? 'selected' : ''}>${ev.icono || ''} ${ev.nombre}</option>`
+  ).join('');
+  const ev = eventos.find(x => x.id === window.eventoActivoId);
+  const badge = document.getElementById('evEstadoBadge');
+  if (badge && ev) {
+    badge.textContent = ev.estado;
+    badge.className = 'ev-badge ' + (ev.estado || 'planeacion');
+    badge.style.display = '';
+  }
+  const info = document.getElementById('evInfoMeta');
+  if (info && ev) {
+    info.innerHTML = ev.fechaEntrega ? `Entrega: <b>${ev.fechaEntrega}</b> · Meta: <b>${(ev.meta || 0).toLocaleString('es-PE')}</b>` : '';
+  }
+}
+
+async function cambiarEvento(eventoId) {
+  if (!eventoId || eventoId === window.eventoActivoId) return;
+  window.eventoActivoId = eventoId;
+  renderSelectorEvento();
+  await cargarDatos();
+}
 
 async function cargarSectoresInv() {
   try {
@@ -115,7 +169,7 @@ function showTab(tab, btn) {
 /* ─────────────── CARGAR DATOS ─────────────── */
 async function cargarDatos() {
   try {
-    const d = await apiGet({ action: 'invGetAll' });
+    const d = await apiGet({ action: 'invGetAll', evento_id: window.eventoActivoId || '' });
     if (!d.success) throw new Error(d.error || 'Error al cargar datos');
 
     // El backend devuelve { success, data: { ... } }
@@ -124,6 +178,15 @@ async function cargarDatos() {
 
     if (!DATA || typeof DATA !== 'object') {
       throw new Error('Backend no devolvió datos válidos. Pega codigo.gs en Apps Script, ejecuta invSetup() + invSetupCatalogo() y publica una nueva versión.');
+    }
+
+    // Sync evento activo si el backend resolvió uno distinto (p.ej. al primer load)
+    if (DATA.eventoId && !window.eventoActivoId) {
+      window.eventoActivoId = DATA.eventoId;
+    }
+    if (Array.isArray(DATA.eventos) && DATA.eventos.length) {
+      window.invEventos = DATA.eventos;
+      renderSelectorEvento();
     }
 
     // Normalizar arrays (compatibilidad con variaciones del backend)
@@ -379,6 +442,7 @@ async function registrarIngreso() {
   try {
     const d = await apiPost({
       action:     'invRegistrarIngreso',
+      evento_id:  window.eventoActivoId,
       // snake_case (backend repo) y camelCase (backend desplegado) simultáneos
       producto: prod, cantidad: cant, unidad: unid, responsable: resp,
       usuario: USER.usuario, usuario_nombre: USER.nombre,
@@ -388,6 +452,7 @@ async function registrarIngreso() {
                  fecha: fecha, fechaIngreso: fecha,
                  fecha_venc: fvenc, fechaVenc: fvenc,
                  sector, supervisor,
+                 evento_id: window.eventoActivoId,
                  usuario: USER.usuario }
     });
     if (!d.success) throw new Error(d.error || 'Error al guardar');
@@ -485,8 +550,9 @@ async function confirmarArmado() {
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Procesando...';
   try {
     const d = await apiPost({ action: 'invRegistrarArmado',
+      evento_id: window.eventoActivoId,
       fecha, cantidad: cant, usuario: USER.usuario, usuario_nombre: USER.nombre,
-      armado: { fecha, cantidad: cant, responsable: resp, sector, supervisor: '', usuario: USER.usuario }
+      armado: { fecha, cantidad: cant, responsable: resp, sector, supervisor: '', evento_id: window.eventoActivoId, usuario: USER.usuario }
     });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
     mostrarAlerta('alArmar', 'ok', `✅ ${cant.toLocaleString('es-PE')} canastas armadas correctamente`);
@@ -616,9 +682,10 @@ async function registrarEntrega() {
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Registrando...';
   try {
     const d = await apiPost({ action: 'invRegistrarEntrega',
+      evento_id: window.eventoActivoId,
       fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp,
       usuario: USER.usuario, usuario_nombre: USER.nombre,
-      entrega: { fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp, supervisor: '', exportadora, observaciones, usuario: USER.usuario }
+      entrega: { fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp, supervisor: '', exportadora, observaciones, evento_id: window.eventoActivoId, usuario: USER.usuario }
     });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
     mostrarAlerta('alEntregar', 'ok', `✅ Entrega registrada: ${cant.toLocaleString('es-PE')} canastas → ${sectoresStr}`);
@@ -1226,6 +1293,127 @@ function _optsSupervisores(selected) {
   return '<option value="">Seleccionar...</option>' + (window.invSupervisores || []).map(s =>
     `<option value="${esc(s.nombre)}" ${s.nombre === selected ? 'selected' : ''}>${s.nombre}</option>`
   ).join('');
+}
+
+/* ─────────────── EVENTOS (gestión en Tab Config) ─────────────── */
+function renderEventosCfg() {
+  const card = document.getElementById('cardEventosAdmin');
+  const tb = document.getElementById('tbEventos');
+  if (!card || !tb) return;
+  if (!esAdminEventos()) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+  const eventos = window.invEventos || [];
+  if (!eventos.length) {
+    tb.innerHTML = '<tr><td colspan="6" class="empty">Sin eventos. Pulsa "Crear evento" para agregar uno.</td></tr>';
+    return;
+  }
+  tb.innerHTML = eventos.map(ev => {
+    const fechas = `${ev.fechaInicio || '—'} → ${ev.fechaEntrega || '—'}`;
+    const badge = `<span class="ev-badge ${ev.estado}">${ev.estado}</span>`;
+    const accionesEstado = ['planeacion','activo','cerrado'].filter(s => s !== ev.estado).map(s =>
+      `<button class="btn-tbl" style="background:#dbeafe;color:#1e40af" onclick="cambiarEstadoEvento('${esc(ev.id)}','${s}')">→ ${s}</button>`
+    ).join(' ');
+    return `<tr>
+      <td style="font-size:24px">${ev.icono || '🎉'}</td>
+      <td><b>${ev.nombre}</b><div style="font-size:11px;color:#64748b">${ev.id}</div></td>
+      <td style="font-size:12px">${fechas}</td>
+      <td style="font-weight:700">${(ev.meta || 0).toLocaleString('es-PE')}</td>
+      <td>${badge}</td>
+      <td style="white-space:nowrap">
+        <button class="btn-tbl btn-edit" onclick="abrirEditarEvento('${esc(ev.id)}')">✏️</button>
+        ${accionesEstado}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirCrearEvento() {
+  _eventoEditCtx = null;
+  document.getElementById('modalEvtTitle').textContent = '🎯 Nuevo evento';
+  sv('modalEvtId', '');
+  sv('modalEvtNombre', '');
+  sv('modalEvtDesc', '');
+  sv('modalEvtIni', '');
+  sv('modalEvtEnt', '');
+  sv('modalEvtMeta', '');
+  sv('modalEvtOrden', String((window.invEventos || []).length + 1));
+  sv('modalEvtColor', 'azul');
+  sv('modalEvtIcono', '🎉');
+  document.getElementById('modalEvtAlert').innerHTML = '';
+  document.getElementById('modalEvento').style.display = 'flex';
+}
+
+function abrirEditarEvento(id) {
+  const ev = (window.invEventos || []).find(e => e.id === id);
+  if (!ev) return;
+  _eventoEditCtx = { id };
+  document.getElementById('modalEvtTitle').textContent = '✏️ Editar ' + ev.nombre;
+  sv('modalEvtId', id);
+  sv('modalEvtNombre', ev.nombre || '');
+  sv('modalEvtDesc', ev.descripcion || '');
+  sv('modalEvtIni', ev.fechaInicio || '');
+  sv('modalEvtEnt', ev.fechaEntrega || '');
+  sv('modalEvtMeta', ev.meta || '');
+  sv('modalEvtOrden', ev.orden || '');
+  sv('modalEvtColor', ev.color || 'azul');
+  sv('modalEvtIcono', ev.icono || '🎉');
+  document.getElementById('modalEvtAlert').innerHTML = '';
+  document.getElementById('modalEvento').style.display = 'flex';
+}
+
+function cerrarModalEvento(e) {
+  if (e && e.target !== document.getElementById('modalEvento')) return;
+  document.getElementById('modalEvento').style.display = 'none';
+  _eventoEditCtx = null;
+}
+
+async function confirmarGuardarEvento() {
+  const al = document.getElementById('modalEvtAlert');
+  const evento = {
+    nombre:       v('modalEvtNombre').trim(),
+    descripcion:  v('modalEvtDesc').trim(),
+    fechaInicio:  v('modalEvtIni'),
+    fechaEntrega: v('modalEvtEnt'),
+    meta:         parseInt(v('modalEvtMeta')) || 0,
+    orden:        parseInt(v('modalEvtOrden')) || 0,
+    color:        v('modalEvtColor'),
+    icono:        v('modalEvtIcono').trim() || '🎉'
+  };
+  if (!evento.nombre) {
+    al.innerHTML = '<div class="alert alert-err">El nombre es obligatorio</div>';
+    return;
+  }
+  try {
+    let d;
+    if (_eventoEditCtx && _eventoEditCtx.id) {
+      d = await apiPost({ action: 'invEditarEvento', id: _eventoEditCtx.id, evento, usuario: USER.usuario });
+    } else {
+      d = await apiPost({ action: 'invCrearEvento', evento, usuario: USER.usuario });
+    }
+    if (!d.success) throw new Error(d.error || 'Error al guardar');
+    document.getElementById('modalEvento').style.display = 'none';
+    _eventoEditCtx = null;
+    await cargarEventos();
+    await cargarDatos();
+  } catch (e) {
+    al.innerHTML = `<div class="alert alert-err">❌ ${e.message}</div>`;
+  }
+}
+
+async function cambiarEstadoEvento(id, estado) {
+  if (!confirm(`¿Cambiar estado del evento a "${estado}"?` + (estado === 'activo' ? '\n(Desactivará cualquier otro evento activo.)' : ''))) return;
+  try {
+    const d = await apiPost({ action: 'invCambiarEstadoEvento', id, estado, usuario: USER.usuario });
+    if (!d.success) throw new Error(d.error || 'Error');
+    await cargarEventos();
+    // Si cambié el activo, recargar datos
+    await cargarDatos();
+  } catch (e) {
+    alert('❌ ' + e.message);
+  }
 }
 
 /* ─────────────── HELPERS ─────────────── */

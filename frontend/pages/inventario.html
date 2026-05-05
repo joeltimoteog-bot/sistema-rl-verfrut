@@ -122,6 +122,22 @@
     .row-warn td { background: #fefce8 !important; }
     .row-err  td { background: #fef2f2 !important; }
 
+    /* ── Selector de evento ── */
+    .ev-bar { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 10px 16px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .ev-bar-lbl { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
+    .ev-select { font-family: 'Barlow', sans-serif; font-size: 14px; font-weight: 600; padding: 6px 32px 6px 12px; border: 2px solid #cbd5e1; border-radius: 8px; background: #f8fafc; color: #0f172a; min-width: 260px; cursor: pointer; max-width: 100%; }
+    .ev-select:focus { outline: none; border-color: #0a2463; }
+    .ev-badge { display: inline-block; padding: 2px 9px; border-radius: 12px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .3px; }
+    .ev-badge.activo     { background: #dcfce7; color: #166534; }
+    .ev-badge.planeacion { background: #fef9c3; color: #854d0e; }
+    .ev-badge.cerrado    { background: #e2e8f0; color: #475569; }
+    .ev-info { font-size: 12px; color: #64748b; }
+    .ev-info b { color: #0a2463; }
+    @media (max-width: 600px) {
+      .ev-select { min-width: 0; flex: 1; font-size: 13px; }
+      .ev-info { display: none; }
+    }
+
     /* ── Sectores checkboxes ── */
     .sectores-box { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 14px 0; }
     .sectores-box-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 4px; }
@@ -165,6 +181,16 @@
   <a href="dashboard.html" class="btn-back">← Volver</a>
   <div class="topbar-title">📦 Inventario Canastas</div>
   <div class="topbar-user" id="topNombre"></div>
+</div>
+
+<!-- ───────────── BARRA EVENTO ───────────── -->
+<div class="ev-bar">
+  <span class="ev-bar-lbl">Evento:</span>
+  <select class="ev-select" id="selEvento" onchange="cambiarEvento(this.value)">
+    <option value="">⏳ Cargando eventos...</option>
+  </select>
+  <span class="ev-badge" id="evEstadoBadge" style="display:none"></span>
+  <span class="ev-info" id="evInfoMeta"></span>
 </div>
 
 <!-- ───────────── TABS ───────────── -->
@@ -508,6 +534,22 @@
 <!-- ══════════ TAB: CONFIGURACIÓN ══════════ -->
 <div class="tab-content" id="tab-config">
 
+  <!-- Eventos (solo admins de eventos) -->
+  <div class="card" id="cardEventosAdmin" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="card-title" style="margin:0">🎯 Gestión de eventos</div>
+      <button class="btn btn-green btn-sm" onclick="abrirCrearEvento()">➕ Crear evento</button>
+    </div>
+    <div id="alEventos"></div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Icono</th><th>Nombre</th><th>Fechas</th><th>Meta</th><th>Estado</th><th></th></tr></thead>
+        <tbody id="tbEventos"><tr><td colspan="6" class="empty">⏳ Cargando...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+
   <!-- Meta -->
   <div class="card">
     <div class="card-title">🎯 Meta de canastas</div>
@@ -632,6 +674,37 @@
       <button class="btn btn-gray" onclick="cerrarModalProd()">✕ Cancelar</button>
     </div>
     <div id="modalProdAlert" style="margin-top:12px"></div>
+  </div>
+</div>
+
+<!-- ══════════ MODAL EVENTO ══════════ -->
+<div class="modal-overlay" id="modalEvento" style="display:none" onclick="cerrarModalEvento(event)">
+  <div class="modal-box" onclick="event.stopPropagation()" style="max-width:560px">
+    <div class="modal-title" id="modalEvtTitle">🎯 Nuevo evento</div>
+    <input type="hidden" id="modalEvtId">
+    <div class="grid2" style="gap:12px">
+      <div class="fg full"><label class="lbl">Nombre *</label><input type="text" id="modalEvtNombre" placeholder="Ej: Día del Trabajo 2027"></div>
+      <div class="fg full"><label class="lbl">Descripción</label><input type="text" id="modalEvtDesc" placeholder="Notas opcionales"></div>
+      <div class="fg"><label class="lbl">Fecha inicio</label><input type="date" id="modalEvtIni"></div>
+      <div class="fg"><label class="lbl">Fecha entrega</label><input type="date" id="modalEvtEnt"></div>
+      <div class="fg"><label class="lbl">Meta canastas</label><input type="number" id="modalEvtMeta" min="0" step="1" placeholder="0"></div>
+      <div class="fg"><label class="lbl">Orden</label><input type="number" id="modalEvtOrden" min="0" step="1" placeholder="0"></div>
+      <div class="fg"><label class="lbl">Color</label>
+        <select id="modalEvtColor">
+          <option value="rojo">Rojo</option>
+          <option value="azul">Azul</option>
+          <option value="rosa">Rosa</option>
+          <option value="verde">Verde</option>
+          <option value="naranja">Naranja</option>
+        </select>
+      </div>
+      <div class="fg"><label class="lbl">Icono (emoji)</label><input type="text" id="modalEvtIcono" placeholder="🎉" maxlength="4"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="confirmarGuardarEvento()">💾 Guardar</button>
+      <button class="btn btn-gray" onclick="cerrarModalEvento()">✕ Cancelar</button>
+    </div>
+    <div id="modalEvtAlert" style="margin-top:12px"></div>
   </div>
 </div>
 
