@@ -318,16 +318,18 @@
         <input type="number" id="armarCantidad" min="1" step="1" placeholder="0" oninput="actualizarPreview()">
       </div>
       <div class="fg">
-        <label class="lbl">Fecha</label>
+        <label class="lbl">Fecha *</label>
         <input type="date" id="armarFecha">
       </div>
       <div class="fg">
-        <label class="lbl">Sector</label>
+        <label class="lbl">Sector *</label>
         <select id="armadoSector" name="sector"><option value="">Seleccionar sector...</option></select>
       </div>
       <div class="fg">
-        <label class="lbl">Supervisor</label>
-        <select id="armadoSupervisor" name="supervisor"><option value="">Seleccionar supervisor...</option></select>
+        <label class="lbl">Responsable *</label>
+        <select id="armadoResponsable">
+          <option value="">Seleccionar...</option>
+        </select>
       </div>
     </div>
 
@@ -379,17 +381,18 @@
           <option value="">Seleccionar...</option>
           <option value="RAPEL">RAPEL</option>
           <option value="VERFRUT">VERFRUT</option>
+          <option value="AMBAS">AMBAS</option>
         </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Exportadora</label>
+        <input type="text" id="entExportadora" placeholder="Ej: Camposol, AgroKasma...">
       </div>
       <div class="fg">
         <label class="lbl">Responsable *</label>
         <select id="entResponsable">
           <option value="">Seleccionar...</option>
         </select>
-      </div>
-      <div class="fg">
-        <label class="lbl">Supervisor</label>
-        <select id="entregaSupervisor" name="supervisor"><option value="">Seleccionar supervisor...</option></select>
       </div>
     </div>
 
@@ -436,7 +439,7 @@
     <div class="card-title">📋 Historial de entregas</div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Fecha</th><th>Empresa</th><th style="min-width:200px">Sector</th><th>Cant.</th><th>Responsable</th><th>Supervisor</th><th></th></tr></thead>
+        <thead><tr><th>Fecha</th><th>Empresa</th><th style="min-width:200px">Sector</th><th>Cant.</th><th>Responsable</th><th>Exportadora</th><th></th></tr></thead>
         <tbody id="tbEntregas"><tr><td colspan="7" class="empty">Sin entregas</td></tr></tbody>
       </table>
     </div>

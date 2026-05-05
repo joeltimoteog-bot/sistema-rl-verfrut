@@ -308,13 +308,18 @@ function renderEntregasRecientes() {
   if (!tb) return;
   const ultimas = [...(DATA.entregas || [])].reverse().slice(0, 10);
   if (!ultimas.length) { tb.innerHTML = '<tr><td colspan="5" class="empty">Sin entregas</td></tr>'; return; }
-  tb.innerHTML = ultimas.map(e => `<tr>
-    <td>${e.fecha || ''}</td>
-    <td><span class="badge ${e.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${e.empresa || ''}</span></td>
-    <td>${e.sector || ''}</td>
-    <td style="font-weight:700">${Number(e.cantidad).toLocaleString('es-PE')}</td>
-    <td style="font-size:12px">${e.responsable || ''}</td>
-  </tr>`).join('');
+  tb.innerHTML = ultimas.map(e => {
+    const empBadge = e.empresa === 'RAPEL' ? 'badge-rap'
+                   : e.empresa === 'VERFRUT' ? 'badge-vrf'
+                   : 'badge-blue';
+    return `<tr>
+      <td>${e.fecha || ''}</td>
+      <td><span class="badge ${empBadge}">${e.empresa || ''}</span></td>
+      <td>${e.sector || ''}</td>
+      <td style="font-weight:700">${Number(e.cantidad).toLocaleString('es-PE')}</td>
+      <td style="font-size:12px">${e.responsable || ''}</td>
+    </tr>`;
+  }).join('');
 }
 
 /* ─────────────── TAB INGRESO ─────────────── */
@@ -463,13 +468,16 @@ function actualizarPreview(mostrar = false) {
 
 async function confirmarArmado() {
   limpiarAlerta('alArmar');
-  const cant  = parseInt(v('armarCantidad'));
-  const fecha = v('armarFecha');
-  const sector     = v('armadoSector');
-  const supervisor = v('armadoSupervisor');
+  const cant   = parseInt(v('armarCantidad'));
+  const fecha  = v('armarFecha');
+  const sector = v('armadoSector');
+  const resp   = v('armadoResponsable');
 
-  if (!cant || cant <= 0) { mostrarAlerta('alArmar', 'err', 'Ingresa la cantidad de canastas a armar'); return; }
+  if (!cant || cant <= 0)      { mostrarAlerta('alArmar', 'err', 'Ingresa la cantidad de canastas a armar'); return; }
   if (cant > CALC.maxCanastas) { mostrarAlerta('alArmar', 'err', `Stock insuficiente. Máximo: ${CALC.maxCanastas}`); return; }
+  if (!fecha)                  { mostrarAlerta('alArmar', 'err', 'La fecha es obligatoria'); return; }
+  if (!sector)                 { mostrarAlerta('alArmar', 'err', 'Selecciona el sector'); return; }
+  if (!resp)                   { mostrarAlerta('alArmar', 'err', 'Selecciona el responsable'); return; }
   if (!confirm(`¿Confirmar armado de ${cant.toLocaleString('es-PE')} canastas? Esta acción descontará el stock.`)) return;
 
   const btn = document.getElementById('btnConfirmarArmado');
@@ -477,12 +485,12 @@ async function confirmarArmado() {
   try {
     const d = await apiPost({ action: 'invRegistrarArmado',
       fecha, cantidad: cant, usuario: USER.usuario, usuario_nombre: USER.nombre,
-      armado: { fecha, cantidad: cant, responsable: USER.nombre, sector, supervisor, usuario: USER.usuario }
+      armado: { fecha, cantidad: cant, responsable: resp, sector, supervisor: '', usuario: USER.usuario }
     });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
     mostrarAlerta('alArmar', 'ok', `✅ ${cant.toLocaleString('es-PE')} canastas armadas correctamente`);
     sv('armarCantidad', '');
-    sv('armadoSector', ''); sv('armadoSupervisor', '');
+    sv('armadoSector', ''); sv('armadoResponsable', '');
     document.getElementById('previewArmado').style.display = 'none';
     await cargarDatos();
   } catch(e) {
@@ -544,9 +552,12 @@ function renderPorSector() {
   if (!filas.length) { tb.innerHTML = '<tr><td colspan="4" class="empty">Sin entregas</td></tr>'; return; }
   tb.innerHTML = filas.map(f => {
     const sectores = Array.from(f.sectores).join(', ');
+    const empBadge = f.empresa === 'RAPEL' ? 'badge-rap'
+                   : f.empresa === 'VERFRUT' ? 'badge-vrf'
+                   : 'badge-blue';
     return `<tr>
       <td>${f.fecha || ''}</td>
-      <td><span class="badge ${f.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${f.empresa || ''}</span></td>
+      <td><span class="badge ${empBadge}">${f.empresa || ''}</span></td>
       <td style="font-size:12px;max-width:320px;word-wrap:break-word">${sectores}</td>
       <td style="font-weight:700">${f.total.toLocaleString('es-PE')}</td>
     </tr>`;
@@ -561,13 +572,16 @@ function renderEntregasHistorial() {
   tb.innerHTML = items.map(e => {
     const sec = e.sector || '';
     const secCorto = sec.length > 50 ? sec.substring(0, 47) + '…' : sec;
+    const empBadge = e.empresa === 'RAPEL' ? 'badge-rap'
+                   : e.empresa === 'VERFRUT' ? 'badge-vrf'
+                   : 'badge-blue';
     return `<tr>
       <td>${e.fecha || ''}</td>
-      <td><span class="badge ${e.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${e.empresa || ''}</span></td>
+      <td><span class="badge ${empBadge}">${e.empresa || ''}</span></td>
       <td style="font-size:12px;max-width:240px;word-wrap:break-word" title="${esc(sec)}">${secCorto}</td>
       <td style="font-weight:700">${Number(e.cantidad).toLocaleString('es-PE')}</td>
       <td style="font-size:12px">${e.responsable || ''}</td>
-      <td style="font-size:12px">${e.supervisor || '-'}</td>
+      <td style="font-size:12px">${e.exportadora || '—'}</td>
       <td style="white-space:nowrap">
         <button class="btn-tbl btn-edit" onclick="abrirEditarEntrega('${esc(e.id)}')">✏️</button>
         <button class="btn-tbl btn-del"  onclick="eliminarEntrega('${esc(e.id)}')">🗑️</button>
@@ -578,11 +592,11 @@ function renderEntregasHistorial() {
 
 async function registrarEntrega() {
   limpiarAlerta('alEntregar');
-  const fecha   = v('entFecha');
-  const empresa = v('entEmpresa');
-  const resp    = v('entResponsable');
-  const supervisor = v('entregaSupervisor');
-  const cant    = parseInt(v('entCantidad'));
+  const fecha       = v('entFecha');
+  const empresa     = v('entEmpresa');
+  const exportadora = v('entExportadora').trim();
+  const resp        = v('entResponsable');
+  const cant        = parseInt(v('entCantidad'));
   const observaciones = v('entObservaciones').trim();
   const sectoresSel = Array.from(document.querySelectorAll('.ent-sector-check:checked')).map(c => c.value);
 
@@ -603,13 +617,13 @@ async function registrarEntrega() {
     const d = await apiPost({ action: 'invRegistrarEntrega',
       fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp,
       usuario: USER.usuario, usuario_nombre: USER.nombre,
-      entrega: { fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp, supervisor, observaciones, usuario: USER.usuario }
+      entrega: { fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp, supervisor: '', exportadora, observaciones, usuario: USER.usuario }
     });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
     mostrarAlerta('alEntregar', 'ok', `✅ Entrega registrada: ${cant.toLocaleString('es-PE')} canastas → ${sectoresStr}`);
     sv('entCantidad', '');
     sv('entObservaciones', '');
-    sv('entregaSupervisor', '');
+    sv('entExportadora', '');
     document.querySelectorAll('.ent-sector-check').forEach(c => c.checked = false);
     actualizarContadorSectoresEntrega();
     validarCantidadEntrega();
@@ -881,7 +895,7 @@ function renderSelectsProducto() {
 }
 
 function renderSelectsResponsable() {
-  ['ingResponsable', 'entResponsable'].forEach(id => {
+  ['ingResponsable', 'entResponsable', 'armadoResponsable'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
     const cur = sel.value;
@@ -975,8 +989,8 @@ function abrirEditarArmado(id) {
   if (!item) return;
   _modalCtx = { tipo: 'armado', id };
 
-  const optsSec = _optsSectoresInv(item.sector);
-  const optsSup = _optsSupervisores(item.supervisor);
+  const optsSec  = _optsSectoresInv(item.sector);
+  const optsResp = _optsResponsables(item.responsable || item.usuario);
 
   document.getElementById('modalTitle').textContent = '✏️ Editar armado';
   document.getElementById('modalForm').innerHTML = `
@@ -984,7 +998,7 @@ function abrirEditarArmado(id) {
       <div class="fg"><label class="lbl">Cantidad</label><input type="number" id="mArmCantidad" value="${item.cantidad}" min="1" step="1"></div>
       <div class="fg"><label class="lbl">Fecha</label><input type="date" id="mArmFecha" value="${item.fecha || ''}"></div>
       <div class="fg"><label class="lbl">Sector</label><select id="mArmSector">${optsSec}</select></div>
-      <div class="fg"><label class="lbl">Supervisor</label><select id="mArmSupervisor">${optsSup}</select></div>
+      <div class="fg"><label class="lbl">Responsable</label><select id="mArmResponsable"><option value="">Seleccionar...</option>${optsResp}</select></div>
     </div>
     <div class="alert alert-info" style="margin-top:12px;font-size:12px">Disponibles actuales: <b>${CALC.disponibles.toLocaleString('es-PE')}</b> · Entregadas: <b>${CALC.totalEntregadas.toLocaleString('es-PE')}</b></div>`;
   document.getElementById('modalAlert').innerHTML = '';
@@ -996,10 +1010,9 @@ function abrirEditarEntrega(id) {
   if (!item) return;
   _modalCtx = { tipo: 'entrega', id };
 
-  const optsEmp  = ['RAPEL','VERFRUT'].map(e => `<option value="${e}" ${e===item.empresa?'selected':''}>${e}</option>`).join('');
+  const optsEmp  = ['RAPEL','VERFRUT','AMBAS'].map(e => `<option value="${e}" ${e===item.empresa?'selected':''}>${e}</option>`).join('');
   const checksSec = _checksSectoresInv(item.sector);
   const optsResp = _optsResponsables(item.responsable);
-  const optsSup  = _optsSupervisores(item.supervisor);
 
   document.getElementById('modalTitle').textContent = '✏️ Editar entrega';
   document.getElementById('modalForm').innerHTML = `
@@ -1008,7 +1021,7 @@ function abrirEditarEntrega(id) {
       <div class="fg"><label class="lbl">Cantidad</label><input type="number" id="mEntCantidad" value="${item.cantidad}" min="1" step="1"></div>
       <div class="fg"><label class="lbl">Responsable</label><select id="mEntResponsable">${optsResp}</select></div>
       <div class="fg"><label class="lbl">Fecha</label><input type="date" id="mEntFecha" value="${item.fecha || ''}"></div>
-      <div class="fg"><label class="lbl">Supervisor</label><select id="mEntSupervisor">${optsSup}</select></div>
+      <div class="fg full"><label class="lbl">Exportadora</label><input type="text" id="mEntExportadora" value="${esc(item.exportadora || '')}" placeholder="Ej: Camposol, AgroKasma..."></div>
     </div>
     <div class="sectores-box" style="margin-top:12px">
       <div class="sectores-box-title">Sectores entregados *</div>
@@ -1052,10 +1065,10 @@ async function confirmarEditar() {
     } else if (tipo === 'armado') {
       body.action = 'invEditarArmado';
       body.armado = {
-        cantidad:   parseInt(v('mArmCantidad')),
-        fecha:      v('mArmFecha'),
-        sector:     v('mArmSector'),
-        supervisor: v('mArmSupervisor')
+        cantidad:    parseInt(v('mArmCantidad')),
+        fecha:       v('mArmFecha'),
+        sector:      v('mArmSector'),
+        responsable: v('mArmResponsable')
       };
       if (!body.armado.cantidad || body.armado.cantidad <= 0) throw new Error('Cantidad inválida');
     } else if (tipo === 'entrega') {
@@ -1067,7 +1080,7 @@ async function confirmarEditar() {
         cantidad:    parseInt(v('mEntCantidad')),
         responsable: v('mEntResponsable'),
         fecha:       v('mEntFecha'),
-        supervisor:  v('mEntSupervisor')
+        exportadora: v('mEntExportadora').trim()
       };
       if (!body.entrega.empresa || !body.entrega.sector || !body.entrega.cantidad || body.entrega.cantidad <= 0) throw new Error('Empresa, sector(es) y cantidad son obligatorios');
     }

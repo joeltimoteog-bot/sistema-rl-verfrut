@@ -2953,8 +2953,8 @@ function invSetup() {
   h = ss.getSheetByName(INV_SH_ENTREGAS);
   if (!h) {
     h = ss.insertSheet(INV_SH_ENTREGAS);
-    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ENTREGA', 'EMPRESA', 'SECTOR', 'CANTIDAD', 'RESPONSABLE', 'DOCUMENTO', 'OBSERVACIONES', 'USUARIO', 'SUPERVISOR']);
-    h.getRange('A1:K1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ENTREGA', 'EMPRESA', 'SECTOR', 'CANTIDAD', 'RESPONSABLE', 'DOCUMENTO', 'OBSERVACIONES', 'USUARIO', 'SUPERVISOR', 'EXPORTADORA']);
+    h.getRange('A1:L1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     h.setFrozenRows(1);
     Logger.log('✓ ' + INV_SH_ENTREGAS);
   }
@@ -2989,12 +2989,94 @@ function invMigrarColumnasSectorSupervisor() {
   if (hArm) { asegurarColumna(hArm, 'SECTOR'); asegurarColumna(hArm, 'SUPERVISOR'); }
 
   const hEnt = ss.getSheetByName(INV_SH_ENTREGAS);
-  if (hEnt) { asegurarColumna(hEnt, 'SUPERVISOR'); }
+  if (hEnt) { asegurarColumna(hEnt, 'SUPERVISOR'); asegurarColumna(hEnt, 'EXPORTADORA'); }
 
-  Logger.log('✓ Migración SECTOR/SUPERVISOR completada');
+  Logger.log('✓ Migración SECTOR/SUPERVISOR/EXPORTADORA completada');
 }
- 
- 
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  RECETA OBJETIVO (1 unidad por canasta) — idempotente
+//  Ejecutar UNA VEZ desde el editor para corregir cantidades
+// ═══════════════════════════════════════════════════════════════════
+const INV_RECETA_OBJETIVO = [
+  { producto: 'Arroz',            unidad: 'KG',  cantidad: 1 },
+  { producto: 'Avena',            unidad: 'UND', cantidad: 1 },
+  { producto: 'Azúcar',           unidad: 'KG',  cantidad: 1 },
+  { producto: 'Fideo',            unidad: 'PQT', cantidad: 1 },
+  { producto: 'Fideo canuto',     unidad: 'PQT', cantidad: 1 },
+  { producto: 'Galleta vainilla', unidad: 'PQT', cantidad: 1 },
+  { producto: 'Leche',            unidad: 'UND', cantidad: 1 }
+];
+
+function invSetupReceta() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  let h = ss.getSheetByName(INV_SH_RECETA);
+  if (!h) {
+    h = ss.insertSheet(INV_SH_RECETA);
+    h.appendRow(['ID', 'PRODUCTO', 'UNIDAD', 'CANTIDAD', 'CREADO', 'CREADO_POR']);
+    h.getRange('A1:F1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.setFrozenRows(1);
+  }
+
+  // Mapear filas existentes por producto (case-insensitive)
+  const lastRow = h.getLastRow();
+  const datos = lastRow >= 2 ? h.getRange(2, 1, lastRow - 1, 6).getValues() : [];
+  const existentes = {};
+  datos.forEach((r, idx) => {
+    const prod = String(r[1] || '').trim();
+    if (prod) {
+      existentes[prod.toLowerCase()] = {
+        row: idx + 2,
+        unidadActual:  String(r[2] || '').trim(),
+        cantidadActual: Number(r[3]) || 0
+      };
+    }
+  });
+
+  let agregados = 0, actualizados = 0, sinCambios = 0;
+  INV_RECETA_OBJETIVO.forEach(t => {
+    const key = t.producto.toLowerCase();
+    const ex = existentes[key];
+    if (ex) {
+      const cambioCant = Number(ex.cantidadActual) !== Number(t.cantidad);
+      const cambioUnid = ex.unidadActual.toUpperCase() !== t.unidad.toUpperCase();
+      if (cambioCant) h.getRange(ex.row, 4).setValue(t.cantidad);
+      if (cambioUnid) h.getRange(ex.row, 3).setValue(t.unidad);
+      if (cambioCant || cambioUnid) {
+        Logger.log('↻ ' + t.producto + ': ' + ex.cantidadActual + ' ' + ex.unidadActual + ' → ' + t.cantidad + ' ' + t.unidad);
+        actualizados++;
+      } else {
+        sinCambios++;
+      }
+    } else {
+      const id = 'R' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      h.appendRow([id, t.producto, t.unidad, t.cantidad, new Date(), 'invSetupReceta']);
+      Logger.log('+ ' + t.producto + ': ' + t.cantidad + ' ' + t.unidad);
+      agregados++;
+    }
+  });
+
+  // Bonus: garantizar columna EXPORTADORA en INV_Entregas
+  // (migración blanda — usuario solo necesita ejecutar invSetupReceta)
+  const hEnt = ss.getSheetByName(INV_SH_ENTREGAS);
+  if (hEnt && hEnt.getLastRow() >= 1) {
+    const headers = hEnt.getRange(1, 1, 1, hEnt.getLastColumn()).getValues()[0];
+    if (headers.indexOf('EXPORTADORA') === -1) {
+      const c = hEnt.getLastColumn() + 1;
+      hEnt.getRange(1, c).setValue('EXPORTADORA').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+      Logger.log('↪ INV_Entregas + EXPORTADORA (col ' + c + ')');
+    }
+  }
+
+  Logger.log('═══════════════════════════════════════════');
+  Logger.log('✓ Receta actualizada: ' + INV_RECETA_OBJETIVO.length + ' productos con cantidad=1');
+  Logger.log('  Agregados: ' + agregados + ' · Actualizados: ' + actualizados + ' · Sin cambios: ' + sinCambios);
+  Logger.log('═══════════════════════════════════════════');
+  return { success: true, total: INV_RECETA_OBJETIVO.length, agregados, actualizados, sinCambios };
+}
+
+
 // ═══════════════════════════════════════════════════════════════════
 //  GET ALL — Carga inicial (todo en una sola llamada)
 // ═══════════════════════════════════════════════════════════════════
@@ -3238,8 +3320,14 @@ function invRegistrarEntrega(body) {
  
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_ENTREGAS);
+    // Asegurar columna EXPORTADORA antes de insertar (auto-migración suave)
+    const headers = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0];
+    if (headers.indexOf('EXPORTADORA') === -1) {
+      const c = h.getLastColumn() + 1;
+      h.getRange(1, c).setValue('EXPORTADORA').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    }
     const id = 'E' + Date.now();
-    h.appendRow([id, new Date(), e.fecha, e.empresa, e.sector, Number(e.cantidad), e.responsable, e.documento || '', e.observaciones || '', e.usuario || '', e.supervisor || '']);
+    h.appendRow([id, new Date(), e.fecha, e.empresa, e.sector, Number(e.cantidad), e.responsable, e.documento || '', e.observaciones || '', e.usuario || '', e.supervisor || '', e.exportadora || '']);
     return { success: true, id };
   } catch (err) { return { success: false, error: err.message }; }
 }
@@ -3248,11 +3336,13 @@ function invLeerEntregas() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const h = ss.getSheetByName(INV_SH_ENTREGAS);
   if (!h || h.getLastRow() < 2) return [];
-  const datos = h.getRange(2, 1, h.getLastRow() - 1, 11).getValues();
+  const numCols = Math.max(11, h.getLastColumn());
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, numCols).getValues();
   return datos.filter(r => r[0]).map(r => ({
     id: r[0], fechaRegistro: r[1], fecha: r[2], empresa: r[3], sector: r[4],
     cantidad: Number(r[5]) || 0, responsable: r[6], documento: r[7],
-    observaciones: r[8], usuario: r[9], supervisor: r[10] || ''
+    observaciones: r[8], usuario: r[9], supervisor: r[10] || '',
+    exportadora: r[11] || ''
   })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
  
@@ -3633,6 +3723,13 @@ function invEditarEntrega(body) {
         if (e.documento !== undefined)     h.getRange(r + 1, 8).setValue(e.documento);
         if (e.observaciones !== undefined) h.getRange(r + 1, 9).setValue(e.observaciones);
         if (e.supervisor !== undefined)    h.getRange(r + 1, 11).setValue(e.supervisor);
+        if (e.exportadora !== undefined) {
+          // Asegurar columna 12 si la hoja aún no tiene EXPORTADORA
+          if (h.getLastColumn() < 12) {
+            h.getRange(1, 12).setValue('EXPORTADORA').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+          }
+          h.getRange(r + 1, 12).setValue(e.exportadora);
+        }
         return { success: true };
       }
     }
