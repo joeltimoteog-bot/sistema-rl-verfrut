@@ -405,7 +405,9 @@ async function registrarIngreso() {
 /* ─────────────── TAB ARMAR ─────────────── */
 function actualizarArmarPanel() {
   if (!CALC) return;
-  setText('maxCanastas', CALC.maxCanastas.toLocaleString('es-PE'));
+  // Tarjeta visual = canastas armadas listas (armadas − entregadas).
+  // La validación interna al armar sigue usando CALC.maxCanastas (materia prima).
+  setText('maxCanastas', CALC.disponibles.toLocaleString('es-PE'));
   const btn = document.getElementById('btnConfirmarArmado');
   if (btn) btn.disabled = true;
   const prev = document.getElementById('previewArmado');
