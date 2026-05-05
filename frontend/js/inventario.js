@@ -279,26 +279,25 @@ function renderStock() {
     tb.innerHTML = '<tr><td colspan="7" class="empty">Sin productos en la receta. Ve a ⚙️ Configuración.</td></tr>';
     return;
   }
+  // Stock actual y Cubre por producto = canastas disponibles para entregar
+  // (armadas − entregadas). Las unidades son etiquetas visuales.
+  const disp = CALC.disponibles;
+  let estadoBadge, rowCls = '';
+  if (disp === 0)        { estadoBadge = `<span class="badge badge-err">AGOTADO</span>`; rowCls = 'row-err'; }
+  else if (disp < 10)    { estadoBadge = `<span class="badge badge-warn">BAJO</span>`;   rowCls = 'row-warn'; }
+  else                   { estadoBadge = `<span class="badge badge-ok">OK</span>`; }
+
   tb.innerHTML = DATA.receta.map(r => {
-    const stock   = CALC.stockPorProd[r.producto] || 0;
-    const cant    = Number(r.cantidad);
-    const cubre   = cant > 0 ? Math.floor(stock / cant) : '—';
     const fv      = CALC.vencPorProd[r.producto] || '';
-    const dias    = diasParaVencer(fv);
     const vencTxt = fv || '—';
-    const estado  = dias === null ? `<span class="badge badge-blue">Sin lote</span>`
-                  : dias < 0     ? `<span class="badge badge-err">VENCIDO</span>`
-                  : dias <= 7    ? `<span class="badge badge-warn">Vence en ${dias}d</span>`
-                  :                `<span class="badge badge-ok">OK</span>`;
-    const rowCls  = dias !== null && dias < 0 ? 'row-err' : dias !== null && dias <= 7 ? 'row-warn' : '';
     return `<tr class="${rowCls}">
       <td><b>${r.producto}</b></td>
       <td>${r.cantidad} ${r.unidad}</td>
       <td>${(CALC.ingPorProd[r.producto] || 0).toLocaleString('es-PE')} ${r.unidad}</td>
-      <td style="font-weight:700">${stock.toLocaleString('es-PE')} ${r.unidad}</td>
-      <td style="font-weight:700;color:#0a2463">${typeof cubre === 'number' ? cubre.toLocaleString('es-PE') : cubre}</td>
+      <td style="font-weight:700">${disp.toLocaleString('es-PE')} ${r.unidad}</td>
+      <td style="font-weight:700;color:#0a2463">${disp.toLocaleString('es-PE')}</td>
       <td style="font-size:12px">${vencTxt}</td>
-      <td>${estado}</td>
+      <td>${estadoBadge}</td>
     </tr>`;
   }).join('');
 }
