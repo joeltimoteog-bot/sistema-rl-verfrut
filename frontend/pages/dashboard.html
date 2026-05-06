@@ -4927,9 +4927,13 @@ async function generarCorreo() {
         </div>`;
       await new Promise(r => setTimeout(r, 0));
       // Filtrar localmente — sin llamar a la API
-      const _esAdminCorreo = ROLES_VER_TODO.includes(USER.rol) || ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-      const _supNm  = (USER.nombre  || '').trim().toLowerCase();
-      const _supUsr = (USER.usuario || '').trim().toLowerCase();
+      const ROLES_ADMIN_CORREO = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl'];
+      const _rolNormCorreo = String(USER.rol || '').trim().toLowerCase();
+      const _esAdminCorreo = ROLES_ADMIN_CORREO.indexOf(_rolNormCorreo) >= 0;
+      // Normalizar acentos + lower + trim — coherente con getVisitas (codigo.gs:976)
+      const _normSupCorreo = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim();
+      const _supNm  = _normSupCorreo(USER.nombre);
+      const _supUsr = _normSupCorreo(USER.usuario);
       const candidatos = historial.filter(a => {
         const fNorm = (a.fecha_atencion instanceof Date)
           ? a.fecha_atencion.toISOString().substring(0, 10)
@@ -4941,12 +4945,21 @@ async function generarCorreo() {
           const r = resp.trim().toLowerCase();
           return aResp.includes(r.substring(0, 6)) || r.includes(aResp.substring(0, 6));
         });
-        // Filtro supervisor: admins ven todo; supervisores filtran por nombre/usuario con includes() para tolerancia a diferencias menores
-        const sv = String(a.supervisor || '').trim().toLowerCase();
-        const us = String(a.usuario_sistema || '').trim().toLowerCase();
-        const matchSup = _esAdminCorreo
-          || sv.includes(_supNm) || _supNm.includes(sv)
-          || sv.includes(_supUsr) || us === _supUsr;
+        // Filtro supervisor robusto: admins ven todo; supervisores matchean por usuario_sistema (exacto) o nombre normalizado (sin acentos)
+        let matchSup = _esAdminCorreo;
+        if (!matchSup) {
+          const sv = _normSupCorreo(a.supervisor);
+          const us = _normSupCorreo(a.usuario_sistema);
+          if (us && us === _supUsr) {
+            matchSup = true;
+          } else if (sv) {
+            matchSup = sv === _supNm
+                    || sv === _supUsr
+                    || (_supNm  && sv.indexOf(_supNm)  >= 0)
+                    || (_supNm  && _supNm.indexOf(sv)  >= 0)
+                    || (_supUsr && sv.indexOf(_supUsr) >= 0);
+          }
+        }
         return matchFecha && matchEmp && matchResp && matchSup;
       });
       console.log('[reporte] Registros en caché para el rango:', candidatos.length,
