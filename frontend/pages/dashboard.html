@@ -2891,6 +2891,8 @@ function abrirCasoInvestigacion() {
   limpiarFormCaso();
   document.getElementById('mCasoTitulo').textContent = '🔍 Caso en Investigación';
   document.getElementById('panelAdjuntosCaso').style.display = 'none';
+  const psanc = document.getElementById('panelSancionCaso');
+  if (psanc) psanc.style.display = 'none';
   document.getElementById('cEstadoGestion').value = 'EN PROCESO';
   abrir('mCaso');
 }
@@ -2902,6 +2904,8 @@ function abrirCasoConcluido() {
   limpiarFormCaso();
   document.getElementById('mCasoTitulo').textContent = '✅ Caso Concluido';
   document.getElementById('panelAdjuntosCaso').style.display = 'block';
+  const psanc = document.getElementById('panelSancionCaso');
+  if (psanc) psanc.style.display = 'block';
   document.getElementById('cEstadoGestion').value = 'CERRADO';
   abrir('mCaso');
 }
@@ -2949,6 +2953,20 @@ function editarCaso(idx) {
   document.getElementById('cEstadoGestion').value = c.estado_gestion || 'EN PROCESO';
   document.getElementById('cGravedad').value      = c.gravedad       || 'MEDIO';
   document.getElementById('cMotivoRetraso').value = c.motivo_retraso || '';
+  // Sanción: visible si modo concluido o estamos editando (el supervisor puede transicionar)
+  const psanc = document.getElementById('panelSancionCaso');
+  if (psanc) psanc.style.display = _modoCaso === 'concluido' ? 'block' : 'none';
+  // Prefill sanción
+  const ts = document.getElementById('cTipoSancion');
+  if (ts) ts.value = c.tipo_sancion || '';
+  const si = document.getElementById('cSancionInicio');
+  if (si) si.value = c.sancion_fecha_inicio || '';
+  const sf = document.getElementById('cSancionFin');
+  if (sf) sf.value = c.sancion_fecha_fin || '';
+  const sd = document.getElementById('cSancionDias');
+  if (sd) sd.value = c.sancion_dias || '';
+  // Mostrar sub-panel suspensión si aplica
+  if (typeof mostrarSuspensionCaso === 'function') mostrarSuspensionCaso();
   abrir('mCaso');
 }
 
@@ -2957,6 +2975,8 @@ function pasarACasoConcluido() {
   _modoCaso = 'concluido';
   _transicionoAConcluido = true;
   document.getElementById('panelAdjuntosCaso').style.display = 'block';
+  const psanc = document.getElementById('panelSancionCaso');
+  if (psanc) psanc.style.display = 'block';
   document.getElementById('cEstadoGestion').value = 'CERRADO';
   // Recalcular el estado de plazo como CONCLUIDO_* (lee fecha_limite del form)
   const fl = document.getElementById('cFechaLimite').value;
@@ -2975,7 +2995,8 @@ function pasarACasoConcluido() {
 function limpiarFormCaso() {
   ['mCasoDNI','cNombre','cEmpresa','cCargo','cSector','cIngreso','cTermino',
    'cFechaReporte','cFechaLimite','cTemporada','cEstadoCaso','cRedaccion',
-   'cMotivoExtra','cMotivoRetraso','cBuscarMsg'].forEach(id => {
+   'cMotivoExtra','cMotivoRetraso','cBuscarMsg',
+   'cSancionInicio','cSancionFin','cSancionDias'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value !== undefined ? el.value='' : null;
     if(el && (el.tagName==='DIV'||el.tagName==='SPAN')) el.textContent='';
@@ -3013,6 +3034,13 @@ function limpiarFormCaso() {
   if(padj) padj.style.display = 'block';
   const btnConc = document.getElementById('btnPasarConcluido');
   if(btnConc) btnConc.style.display = 'none';
+  // Reset sanción
+  const cTipoS = document.getElementById('cTipoSancion');
+  if(cTipoS) cTipoS.value = '';
+  const psanc = document.getElementById('panelSancionCaso');
+  if(psanc) psanc.style.display = 'none';
+  const psusp = document.getElementById('panelSuspension');
+  if(psusp) psusp.style.display = 'none';
 }
 
 async function buscarTrabajadorCaso() {
@@ -3146,6 +3174,39 @@ function calcularEstadoCaso(fechaLimiteStr) {
   flEl.dataset.estadoPlazo = estadoPlazo;
 }
 
+// ── Sanción: mostrar/ocultar panel de suspensión y calcular días ──
+function mostrarSuspensionCaso() {
+  const tipo = document.getElementById('cTipoSancion').value;
+  const panel = document.getElementById('panelSuspension');
+  if (!panel) return;
+  if (tipo === 'Suspensión') {
+    panel.style.display = 'block';
+  } else {
+    panel.style.display = 'none';
+    // Limpiar campos al cambiar a otra sanción
+    const ini = document.getElementById('cSancionInicio'); if (ini) ini.value = '';
+    const fin = document.getElementById('cSancionFin');    if (fin) fin.value = '';
+    const dia = document.getElementById('cSancionDias');   if (dia) dia.value = '';
+  }
+}
+
+function calcularDiasSuspension() {
+  const ini = document.getElementById('cSancionInicio').value;
+  const fin = document.getElementById('cSancionFin').value;
+  const out = document.getElementById('cSancionDias');
+  if (!ini || !fin) { if (out) out.value = ''; return; }
+  const dIni = new Date(ini + 'T00:00:00');
+  const dFin = new Date(fin + 'T00:00:00');
+  if (dFin < dIni) {
+    if (out) out.value = '';
+    mostrarToast('❌ La fecha fin no puede ser anterior a la fecha inicio', 'error');
+    return;
+  }
+  const ms = dFin - dIni;
+  const dias = Math.round(ms / 86400000) + 1; // calendario, inclusivo
+  if (out) out.value = dias;
+}
+
 // ── Subida de archivos a Drive ────────────────────────────────
 
 /** Genera nombre normalizado del archivo: {dni}_{tipo}_{yyyymmdd}.pdf */
@@ -3210,6 +3271,22 @@ async function guardarCaso() {
     if (!reporteFile.files[0]) { mostrarToast('❌ Adjunta el Reporte de Infracción (PDF)','error'); return; }
   }
 
+  // Sanción: obligatoria al concluir
+  const tipoSancion = (document.getElementById('cTipoSancion')?.value || '').trim();
+  const sancionInicio = (document.getElementById('cSancionInicio')?.value || '').trim();
+  const sancionFin    = (document.getElementById('cSancionFin')?.value || '').trim();
+  const sancionDias   = (document.getElementById('cSancionDias')?.value || '').trim();
+  if (esConcluido) {
+    if (!tipoSancion) { mostrarToast('❌ Selecciona el Tipo de Sanción','error'); return; }
+    if (tipoSancion === 'Suspensión') {
+      if (!sancionInicio) { mostrarToast('❌ Indica la fecha de inicio de la suspensión','error'); return; }
+      if (!sancionFin)    { mostrarToast('❌ Indica la fecha de fin de la suspensión','error'); return; }
+      if (new Date(sancionFin + 'T00:00:00') < new Date(sancionInicio + 'T00:00:00')) {
+        mostrarToast('❌ La fecha fin no puede ser anterior a la fecha inicio','error'); return;
+      }
+    }
+  }
+
   const btn = document.querySelector('#mCaso .btn-n:last-child');
   btn.textContent = '⏳ Guardando...'; btn.disabled = true;
 
@@ -3247,6 +3324,10 @@ async function guardarCaso() {
       estado_caso:                estadoPlazo,
       estado_gestion:             estadoGestion,
       gravedad,
+      tipo_sancion:               esConcluido ? tipoSancion : '',
+      sancion_fecha_inicio:       (esConcluido && tipoSancion === 'Suspensión') ? sancionInicio : '',
+      sancion_fecha_fin:          (esConcluido && tipoSancion === 'Suspensión') ? sancionFin : '',
+      sancion_dias:               (esConcluido && tipoSancion === 'Suspensión') ? Number(sancionDias) || 0 : 0,
       redaccion,
       motivo_retraso:             motivoRet,
       dias_habiles_transcurridos: diasRetraso,
@@ -7791,6 +7872,42 @@ window._fbSuscribirEstadisticas = function(callback) {
             <option value="ALTO">Alto</option>
             <option value="CRÍTICO">Crítico</option>
           </select>
+        </div>
+      </div>
+
+      <!-- Sanción (solo en modo concluido) -->
+      <div id="panelSancionCaso" style="display:none;border-top:2px solid #e2e8f0;padding-top:14px;margin-bottom:14px">
+        <div style="font-size:12px;font-weight:700;color:#0b1e45;margin-bottom:10px">⚖️ Tipo de Sanción</div>
+        <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Sanción aplicada *</label>
+            <select id="cTipoSancion" onchange="mostrarSuspensionCaso()" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
+              <option value="">-- Seleccionar --</option>
+              <option value="Llamada de atención verbal">Llamada de atención verbal</option>
+              <option value="Memorándum">Memorándum</option>
+              <option value="Carta de preaviso">Carta de preaviso</option>
+              <option value="Suspensión">Suspensión</option>
+              <option value="Desvinculación laboral">Desvinculación laboral</option>
+            </select>
+          </div>
+        </div>
+        <!-- Sub-panel: solo aparece si tipo_sancion === 'Suspensión' -->
+        <div id="panelSuspension" style="display:none;background:#fef9c3;border:1px solid #fde68a;border-radius:8px;padding:10px 12px;margin-top:6px">
+          <div style="font-size:11px;font-weight:700;color:#854d0e;margin-bottom:8px">📅 Detalles de la suspensión</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Fecha inicio *</label>
+              <input type="date" id="cSancionInicio" onchange="calcularDiasSuspension()" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Fecha fin *</label>
+              <input type="date" id="cSancionFin" onchange="calcularDiasSuspension()" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:#64748b;display:block;margin-bottom:3px">Días (auto)</label>
+              <input id="cSancionDias" readonly style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;background:#f1f5f9;font-weight:700">
+            </div>
+          </div>
         </div>
       </div>
 
