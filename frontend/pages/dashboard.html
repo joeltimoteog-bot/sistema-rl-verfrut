@@ -2781,6 +2781,7 @@ let casosData  = [];
 let casosFotos = [];
 let _modoCaso  = 'concluido'; // 'investigacion' | 'concluido'
 let _editandoCasoNro = null;  // nro del caso en edición, null si es nuevo
+let _transicionoAConcluido = false; // true cuando se hace click en "Concluir caso" durante edición
 
 // ── Mapeo usuario → nombre de carpeta en Drive ────────────────
 const CASOS_USER_MAP = {
@@ -2919,8 +2920,12 @@ function editarCaso(idx) {
   const estadoGuardado = c.estado_caso || c.estado || '';
   _modoCaso = estadoGuardado.startsWith('CONCLUIDO') ? 'concluido' : 'investigacion';
   limpiarFormCaso();
+  _editandoCasoNro = c.nro; // limpiarFormCaso lo resetea a null — re-asignar
   document.getElementById('mCasoTitulo').textContent = '✏️ Editar Caso N° ' + c.nro;
   document.getElementById('panelAdjuntosCaso').style.display = _modoCaso === 'concluido' ? 'block' : 'none';
+  // Mostrar botón "Concluir caso" solo si el caso está actualmente en Investigación
+  const btnConcluir = document.getElementById('btnPasarConcluido');
+  if (btnConcluir) btnConcluir.style.display = _modoCaso === 'investigacion' ? 'inline-block' : 'none';
 
   // Prefill trabajador
   document.getElementById('mCasoDNI').value  = c.dni     || '';
@@ -2945,6 +2950,26 @@ function editarCaso(idx) {
   document.getElementById('cGravedad').value      = c.gravedad       || 'MEDIO';
   document.getElementById('cMotivoRetraso').value = c.motivo_retraso || '';
   abrir('mCaso');
+}
+
+function pasarACasoConcluido() {
+  if (!_editandoCasoNro) return; // solo válido durante edición
+  _modoCaso = 'concluido';
+  _transicionoAConcluido = true;
+  document.getElementById('panelAdjuntosCaso').style.display = 'block';
+  document.getElementById('cEstadoGestion').value = 'CERRADO';
+  // Recalcular el estado de plazo como CONCLUIDO_* (lee fecha_limite del form)
+  const fl = document.getElementById('cFechaLimite').value;
+  if (fl) calcularEstadoCaso(fl);
+  // Ajustar título y ocultar el propio botón
+  const titulo = document.getElementById('mCasoTitulo');
+  if (titulo) titulo.textContent = '✏️ Editar Caso N° ' + _editandoCasoNro + ' — ✅ Concluyendo';
+  const btn = document.getElementById('btnPasarConcluido');
+  if (btn) btn.style.display = 'none';
+  // Foco en el primer input de archivo
+  const ci = document.getElementById('cInforme');
+  if (ci) ci.focus();
+  mostrarToast('Sube el Informe y el Reporte de Infracción para concluir el caso');
 }
 
 function limpiarFormCaso() {
@@ -2981,10 +3006,13 @@ function limpiarFormCaso() {
   if(cgm) { cgm.textContent=''; cgm.style.display='none'; }
   window._casoTrabajador = null;
   _editandoCasoNro = null;
+  _transicionoAConcluido = false;
   const titulo = document.getElementById('mCasoTitulo');
   if(titulo) titulo.textContent = '⚖️ Registro de Caso';
   const padj = document.getElementById('panelAdjuntosCaso');
   if(padj) padj.style.display = 'block';
+  const btnConc = document.getElementById('btnPasarConcluido');
+  if(btnConc) btnConc.style.display = 'none';
 }
 
 async function buscarTrabajadorCaso() {
@@ -3173,8 +3201,11 @@ async function guardarCaso() {
   const informeFile = document.getElementById('cInforme');
   const reporteFile = document.getElementById('cReporte');
 
-  // Adjuntos obligatorios solo en modo concluido y registro nuevo
-  if (esConcluido && !_editandoCasoNro) {
+  // Adjuntos obligatorios:
+  //  - al crear un caso concluido nuevo
+  //  - al pasar de Investigación → Concluido durante edición
+  const exigirAdjuntos = esConcluido && (!_editandoCasoNro || _transicionoAConcluido);
+  if (exigirAdjuntos) {
     if (!informeFile.files[0]) { mostrarToast('❌ Adjunta el Informe (PDF)','error'); return; }
     if (!reporteFile.files[0]) { mostrarToast('❌ Adjunta el Reporte de Infracción (PDF)','error'); return; }
   }
@@ -7603,9 +7634,12 @@ window._fbSuscribirEstadisticas = function(callback) {
 <!-- MODAL NUEVO CASO -->
 <div class="ov" id="mCaso">
 <div class="modal" style="max-width:900px;width:96vw;max-height:95vh;overflow-y:auto;padding:0">
-  <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+  <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center;gap:12px">
     <span id="mCasoTitulo" style="font-weight:700;font-size:15px">⚖️ Registro de Caso</span>
-    <span onclick="cerrar('mCaso')" style="cursor:pointer;font-size:22px;line-height:1">✕</span>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button id="btnPasarConcluido" onclick="pasarACasoConcluido()" style="display:none;padding:7px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Concluir caso</button>
+      <span onclick="cerrar('mCaso')" style="cursor:pointer;font-size:22px;line-height:1">✕</span>
+    </div>
   </div>
   <div style="padding:20px">
 
