@@ -2968,6 +2968,73 @@ function editarCaso(idx) {
   // Mostrar sub-panel suspensión si aplica
   if (typeof mostrarSuspensionCaso === 'function') mostrarSuspensionCaso();
   abrir('mCaso');
+  mostrarBotonEliminarCasoSiAplica();
+}
+
+// ════════════════════════════════════════════════════════
+// ELIMINAR CASO - Botón solo visible para admins autorizados
+const ADMINS_ELIMINAR_CASO_FRONT = ['jtimoteo', 'ovilela', 'jchavez'];
+function _esAdminEliminarCaso() {
+  try {const u = String((USER && USER.usuario) || '').trim().toLowerCase();
+    return ADMINS_ELIMINAR_CASO_FRONT.includes(u);} catch(e) { return false; }
+}
+
+function mostrarBotonEliminarCasoSiAplica() {
+  const btn = document.getElementById('btnEliminarCaso');
+  if (!btn) return;const enEdicion = !!_editandoCasoNro;
+  btn.style.display = (enEdicion && _esAdminEliminarCaso()) ? 'inline-block' : 'none';
+}
+
+function abrirModalEliminarCaso() {
+  if (!_editandoCasoNro) { mostrarToast('No hay caso en edición'); return; }
+  if (!_esAdminEliminarCaso()) { mostrarToast('No tienes permisos para eliminar casos'); return; }
+const dni = (document.getElementById('mCasoDNI') || {}).value || '';
+  const nombre = (document.getElementById('cNombre') || {}).value || '';const motivo = (document.getElementById('cMotivo') || {}).value || '';
+  const resumen = document.getElementById('elimCasoResumen');
+  if (resumen) {
+resumen.innerHTML = '<strong>N° ' + _editandoCasoNro + '</strong> — ' +
+                        (dni ? 'DNI ' + dni + ' · ' : '') +
+                        (nombre || '(sin nombre)') +(motivo ? '<br><small style="color:#6b7280">Motivo: ' + motivo + '</small>' : '');
+  }
+document.getElementById('elimCasoMotivo').value = '';
+  document.getElementById('elimCasoConfirmar').checked = false;
+  document.getElementById('elimCasoMotivoHint').textContent = '0 / mínimo 10 caracteres';
+  document.getElementById('elimCasoMotivoHint').style.color = '#6b7280';
+  validarMotivoEliminarCaso();
+abrir('mEliminarCaso');
+}
+
+function validarMotivoEliminarCaso() {
+  const motivo = (document.getElementById('elimCasoMotivo').value || '').trim();
+  const confirmado = document.getElementById('elimCasoConfirmar').checked;const hint = document.getElementById('elimCasoMotivoHint');
+  const btn = document.getElementById('btnConfirmarEliminarCaso');
+  hint.textContent = motivo.length + ' / mínimo 10 caracteres';hint.style.color = motivo.length >= 10 ? '#16a34a' : '#dc2626';
+  const valido = motivo.length >= 10 && confirmado;
+  btn.disabled = !valido;btn.style.cursor = valido ? 'pointer' : 'not-allowed';
+  btn.style.opacity = valido ? '1' : '0.5';
+}
+
+async function confirmarEliminarCaso() {
+  const motivo = (document.getElementById('elimCasoMotivo').value || '').trim();
+  const confirmado = document.getElementById('elimCasoConfirmar').checked;if (motivo.length < 10) { mostrarToast('Motivo debe tener al menos 10 caracteres'); return; }
+  if (!confirmado) { mostrarToast('Debes marcar la casilla de confirmación'); return; }
+if (!_editandoCasoNro) { mostrarToast('No hay caso en edición'); return; }
+  const btn = document.getElementById('btnConfirmarEliminarCaso');
+  btn.disabled = true;btn.textContent = '⏳ Eliminando...';
+  try {
+    const r = await apiPost({action: 'eliminarCaso',
+      nro: _editandoCasoNro,
+      usuario: (USER && USER.usuario) || '',motivo: motivo
+    });if (r && r.success) {
+      mostrarToast('✅ ' + (r.mensaje || 'Caso archivado'));
+      cerrar('mEliminarCaso');cerrar('mCaso');
+      if (typeof cargarCasos === 'function') cargarCasos();
+    } else { mostrarToast('❌ ' + ((r && r.error) || 'Error al eliminar'));
+      btn.disabled = false;btn.textContent = '🗑️ Eliminar caso';
+    }} catch(e) {
+    mostrarToast('❌ Error de red: ' + e.message);
+    btn.disabled = false;btn.textContent = '🗑️ Eliminar caso';
+  }
 }
 
 function pasarACasoConcluido() {
@@ -2986,6 +3053,7 @@ function pasarACasoConcluido() {
   if (titulo) titulo.textContent = '✏️ Editar Caso N° ' + _editandoCasoNro + ' — ✅ Concluyendo';
   const btn = document.getElementById('btnPasarConcluido');
   if (btn) btn.style.display = 'none';
+  mostrarBotonEliminarCasoSiAplica();
   // Foco en el primer input de archivo
   const ci = document.getElementById('cInforme');
   if (ci) ci.focus();
@@ -3041,6 +3109,8 @@ function limpiarFormCaso() {
   if(psanc) psanc.style.display = 'none';
   const psusp = document.getElementById('panelSuspension');
   if(psusp) psusp.style.display = 'none';
+  const btnElim = document.getElementById('btnEliminarCaso');
+  if (btnElim) btnElim.style.display = 'none';
 }
 
 async function buscarTrabajadorCaso() {
@@ -7732,6 +7802,7 @@ window._fbSuscribirEstadisticas = function(callback) {
     <span id="mCasoTitulo" style="font-weight:700;font-size:15px">⚖️ Registro de Caso</span>
     <div style="display:flex;align-items:center;gap:12px">
       <button id="btnPasarConcluido" onclick="pasarACasoConcluido()" style="display:none;padding:7px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ Concluir caso</button>
+      <button id="btnEliminarCaso" onclick="abrirModalEliminarCaso()" style="display:none;padding:7px 14px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🗑️ Eliminar caso</button>
       <span onclick="cerrar('mCaso')" style="cursor:pointer;font-size:22px;line-height:1">✕</span>
     </div>
   </div>
@@ -7944,6 +8015,45 @@ window._fbSuscribirEstadisticas = function(callback) {
   </div>
 </div>
 </div>
+
+<!-- MODAL ELIMINAR CASO -->
+<div class="ov" id="mEliminarCaso">
+<div class="modal" style="max-width:520px;width:94vw;padding:0;border-top:5px solid #dc2626">
+ <div style="background:#fef2f2;padding:16px 20px;border-radius:9px 9px 0 0;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-weight:700;font-size:15px;color:#991b1b">🗑️ Eliminar Caso</span>
+ <span onclick="cerrar('mEliminarCaso')" style="cursor:pointer;font-size:22px;line-height:1;color:#991b1b">✕</span>
+  </div>
+ <div style="padding:20px">
+    <div id="elimCasoInfo" style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px;color:#7c2d12">
+  Vas a archivar el caso. Esta acción mueve el registro a la hoja <strong>Casos_Eliminados</strong>. Se conserva para auditoría pero ya no aparece en el dashboard.
+    </div>
+<div style="margin-bottom:14px">
+      <label style="display:block;font-weight:600;font-size:13px;margin-bottom:6px;color:#374151">
+ Caso a eliminar
+      </label>
+      <div id="elimCasoResumen" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:10px;font-size:13px;color:#111827">—</div>
+    </div>
+    <div style="margin-bottom:14px">
+<label for="elimCasoMotivo" style="display:block;font-weight:600;font-size:13px;margin-bottom:6px;color:#374151">
+        Motivo de eliminación <span style="color:#dc2626">*</span>
+      </label>
+<textarea id="elimCasoMotivo" rows="3" maxlength="500" placeholder="Mínimo 10 caracteres. Ej: Caso registrado por error, duplicado del N° 47" style="width:100%;padding:10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:inherit;resize:vertical" oninput="validarMotivoEliminarCaso()"></textarea>
+      <div id="elimCasoMotivoHint" style="font-size:11px;color:#6b7280;margin-top:4px">0 / mínimo 10 caracteres</div>
+    </div>
+<div style="margin-bottom:18px;padding:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px">
+      <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;font-size:13px;color:#7f1d1d">
+        <input type="checkbox" id="elimCasoConfirmar" onchange="validarMotivoEliminarCaso()" style="margin-top:2px;cursor:pointer;width:16px;height:16px;flex-shrink:0">
+ <span>Entiendo que esta acción <strong>archivará el caso</strong>. La fila será movida a <em>Casos_Eliminados</em> y dejará de mostrarse en el dashboard.</span>
+ </label>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+ <button onclick="cerrar('mEliminarCaso')" style="padding:9px 16px;background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer">Cancelar</button>
+      <button id="btnConfirmarEliminarCaso" onclick="confirmarEliminarCaso()" disabled style="padding:9px 16px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:not-allowed;opacity:0.5">🗑️ Eliminar caso</button>
+</div>
+  </div>
+</div>
+</div>
+
 <div class="ov" id="mFusion">
 <div class="modal" style="max-width:900px;width:96vw;max-height:95vh;overflow-y:auto;padding:0">
   <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
