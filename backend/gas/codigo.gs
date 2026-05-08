@@ -4,7 +4,11 @@
 // ============================================================
 
 const SPREADSHEET_ID = '1q79u2S3ZI_Qc-YnDzgnQwyv4jL7pxTuARiXICPPXgZw';
-
+// ⭐ Whitelist de administradores autorizados a eliminar visitas
+// IMPORTANTE: Mantener sincronizado con dashboard.html
+const ADMINS_ELIMINAR_VISITA = ['jtimoteo', 'ovilela', 'jchavez'];
+// ⭐ Whitelist de administradores autorizados a eliminar casos (mover a hoja Casos_Eliminados)
+const ADMINS_ELIMINAR_CASO = ['jtimoteo', 'ovilela', 'jchavez'];
 // Fundos por supervisor
 const FUNDOS_SUPERVISOR = {
   'ptamayo':    ['El Papayo', 'Limones'],
@@ -33,9 +37,9 @@ function handle(e) {
     switch(action) {
       case 'login':             result = login(body);              break;
       case 'getPreload':        result = getPreload(params);        break;
-      case 'getPreloadOptimizado': result = getPreloadOptimizado(params); break;
+      case 'getPreloadOptimizado': result = getPreloadOptimizado(params); break;  
       case 'getAtenciones':     result = getAtenciones(params);    break;
-      case 'getAtencionesOptimizado': result = getAtencionesOptimizado(params); break;
+       case 'getAtencionesOptimizado': result = getAtencionesOptimizado(params); break;
       case 'saveAtencion':      result = saveAtencion(body);       break;
       case 'updateAtencion':    result = updateAtencion(body);     break;
       case 'deleteAtencion':    result = deleteAtencion(body);     break;
@@ -67,7 +71,8 @@ function handle(e) {
       case 'getSupervisoresEval': result = getSupervisoresEval();        break;
       case 'saveSupervisorEval':  result = saveSupervisorEval(body);     break;
       case 'updateVisita':        result = updateVisita(body);           break;
-      case 'eliminarVisita':      result = eliminarVisita(body);         break;
+      case 'eliminarVisita':    result = eliminarVisita(body);   break;
+      case 'eliminarCaso':      result = eliminarCaso(body);     break;
       case 'updateCaso':          result = updateCaso(body);             break;
       case 'recalcularEstadisticasCompletas': result = recalcularEstadisticasCompletas(); break;
       case 'saveSolicitudAcceso':     result = saveSolicitudAcceso(body);       break;
@@ -76,6 +81,12 @@ function handle(e) {
       case 'getSolicitudesAcceso':    result = getSolicitudesAcceso(params);    break;
       case 'resolverAccesoTemporal':  result = aprobarAccesoTemporal(body);     break;
       case 'subirArchivoAzure':       result = subirArchivoAzure(body);         break;
+      case 'invListarSectores':       result = invListarSectores(); break;
+      case 'invAgregarSector':        result = invAgregarSector(Object.assign({}, params, body)); break;
+      case 'invEditarSector':         result = invEditarSector(Object.assign({}, params, body)); break;
+      case 'invEliminarSector':       result = invEliminarSector(Object.assign({}, params, body)); break;
+      case 'invListarSupervisores':   result = invListarSupervisores(); break;
+
  
       // ═══════════════ MÓDULO CAPACITACIONES ═══════════════
       case 'guardarCapacitacion':          result = capGuardar(body);          break;
@@ -106,15 +117,21 @@ function handle(e) {
       case 'invEliminarArmado':     result = invEliminarArmado(body);     break;
       case 'invEditarEntrega':      result = invEditarEntrega(body);      break;
       case 'invEliminarEntrega':    result = invEliminarEntrega(body);    break;
+      case 'horasBuscarTrabajador':   result = horasBuscarTrabajador(Object.assign({}, params, body)); break;
+      case 'horasRegistrar':          result = horasRegistrar(Object.assign({}, params, body)); break;
+      case 'horasListar':             result = horasListar(Object.assign({}, params, body)); break;
+      case 'horasEditar':             result = horasEditar(Object.assign({}, params, body)); break;
+      case 'horasEliminar':           result = horasEliminar(Object.assign({}, params, body)); break;
+      case 'horasAprobar':            result = horasAprobar(Object.assign({}, params, body)); break;
+      case 'horasResumenIndividual':  result = horasResumenIndividual(Object.assign({}, params, body)); break;
+      case 'horasResumenGeneral':     result = horasResumenGeneral(); break;
+      case 'horasListarMotivos':      result = horasListarMotivos(); break;
+      case 'horasAgregarMotivo':      result = horasAgregarMotivo(Object.assign({}, params, body)); break;
+      case 'horasEliminarMotivo':     result = horasEliminarMotivo(Object.assign({}, params, body)); break;
       // ═════════════════════════════════════════════════════
-     // ═══════════ MÓDULO INVENTARIO V3 — Sectores ═════════════
-      case 'invListarSectores':     result = invListarSectores();                                    break;
-      case 'invAgregarSector':      result = invAgregarSector(Object.assign({}, params, body));     break;
-      case 'invEditarSector':       result = invEditarSector(Object.assign({}, params, body));      break;
-      case 'invEliminarSector':     result = invEliminarSector(Object.assign({}, params, body));    break;
-      case 'invListarSupervisores': result = invListarSupervisores();                                break;
-      // ═════════════════════════════════════════════════════
-
+     case 'resumenEjecutivo':
+  result = resumenEjecutivo(body);
+  break;
       default: result = { error: 'Accion no reconocida: ' + action };
     }
   } catch(err) {
@@ -165,6 +182,7 @@ function login(d) {
             rol:                String(r[4]).trim().toLowerCase(),
             empresa:            String(r[5]).trim().toUpperCase(),
             correo:             String(r[8] || '').trim(),
+            cargo:              String(r[9] || '').trim(),  // LINEA NUEVA 
             fundos:             fundos,
             necesitaElegirFundo: necesitaElegirFundo
           }
@@ -321,8 +339,30 @@ function saveAtencion(d) {
     d.usuario_sistema || ''
   ]);
   // Actualizar Firebase en tiempo real
-try { actualizarFirebaseRapido(d); } catch(e) { Logger.log('Firebase rapid error: ' + e); }
-  return { success: true, nro: nro, hoja: nombreHoja };
+// Actualizar Firebase en tiempo real
+  try { actualizarFirebaseRapido(d); } catch(e) { Logger.log('Firebase rapid error: ' + e); }
+  
+  // ⭐ NUEVO: Guardar también en Azure SQL (no bloquea si falla)
+  let azureResult = null;
+  try {
+    // Preparar datos con campos calculados (mes, anio, nro_semana)
+    const dataAzure = Object.assign({}, d, {
+      nro: nro,
+      mes: fechaAt.getMonth() + 1,
+      anio: fechaAt.getFullYear(),
+      nro_semana: getSemana(fechaAt)
+    });
+    azureResult = saveAtencionAzure(dataAzure);
+  } catch(e) { 
+    Logger.log('Azure SQL error: ' + e); 
+  }
+  
+  return { 
+    success: true, 
+    nro: nro, 
+    hoja: nombreHoja,
+    azure: azureResult ? { synced: azureResult.success, id: azureResult.azureId } : null
+  };
 }
 // ============================================================
 // ATENCIONES - UPDATE
@@ -422,19 +462,71 @@ function deleteAtencion(d) {
 function consultaDNI(p) {
   const dni = String(p.dni || '').trim();
   if (!dni || dni.length < 7) return { success: false, error: 'Ingresa un DNI valido.' };
-  const rows = getSheet('BB. DE REGISTROS').getDataRange().getValues();
-  if (rows.length < 2) return { success: true, data: [], trabajador: null };
-  let lista = [], trabajador = null;
-  for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][7]).trim() === dni) {
-      let o = {};
-      COLS.forEach((h, j) => o[h] = rows[i][j]);
-      lista.push(o);
-      if (!trabajador) trabajador = { dni: rows[i][7], nombre: rows[i][8], empresa: rows[i][11], cargo: rows[i][13], fundo: rows[i][12] };
+  
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const anio = new Date().getFullYear();
+  
+  // Leer de TODAS las hojas: 2024, 2025, 2026, base
+  const hojas = [
+    'BB. DE REGISTROS 2024',
+    'BB. DE REGISTROS 2025',
+    'BB. DE REGISTROS ' + anio,
+    'BB. DE REGISTROS'
+  ];
+  
+  let lista = [];
+  let trabajador = null;
+  const vistos = new Set();
+  
+  hojas.forEach(function(nombreHoja) {
+    const ws = ss.getSheetByName(nombreHoja);
+    if (!ws) return;
+    
+    const rows = ws.getDataRange().getValues();
+    if (rows.length < 2) return;
+    
+    for (let i = 1; i < rows.length; i++) {
+      // Comparar DNI exacto
+      if (String(rows[i][7]).trim() === dni) {
+        // Deduplicar por número de atención
+        const k = String(rows[i][0]) + '_' + nombreHoja;
+        if (vistos.has(k)) continue;
+        vistos.add(k);
+        
+        let o = {};
+        COLS.forEach(function(h, j) { o[h] = rows[i][j]; });
+        
+        // Normalizar fecha
+        if (o.fecha_atencion instanceof Date) {
+          o.fecha_atencion = Utilities.formatDate(o.fecha_atencion, 'GMT-5', 'yyyy-MM-dd');
+        } else if (o.fecha_atencion) {
+          o.fecha_atencion = String(o.fecha_atencion).substring(0, 10);
+        }
+        
+        lista.push(o);
+        
+        // Tomar el primer registro como info del trabajador
+        if (!trabajador) {
+          trabajador = {
+            dni: rows[i][7],
+            nombre: rows[i][8],
+            empresa: rows[i][11],
+            cargo: rows[i][13],
+            fundo: rows[i][12]
+          };
+        }
+      }
     }
-  }
-  lista.sort((a, b) => String(b.fecha_atencion).localeCompare(String(a.fecha_atencion)));
-  return { success: true, data: lista, trabajador };
+  });
+  
+  // Ordenar por fecha de atención DESCENDENTE (más recientes primero)
+  lista.sort(function(a, b) {
+    return String(b.fecha_atencion).localeCompare(String(a.fecha_atencion));
+  });
+  
+  console.log('consultaDNI ' + dni + ': ' + lista.length + ' atenciones encontradas');
+  
+  return { success: true, data: lista, trabajador: trabajador };
 }
 // ============================================================
 // BUSCAR TRABAJADOR - con cache para mejor rendimiento
@@ -494,7 +586,7 @@ function setDatosCached(hoja, datos) {
   const size   = 90000;
   const chunks = Math.ceil(json.length / size);
   for (let i = 0; i < chunks; i++) {
-    cache.put(key + '_' + i, json.substring(i * size, (i + 1) * size), 21600);
+   cache.put(key + '_' + i, json.substring(i * size, (i + 1) * size), 21600);
   }
   cache.put(key + '_meta', JSON.stringify({ chunks }), 21600);
 }
@@ -607,6 +699,14 @@ function getEstadisticas(p) {
   const mesN = new Date().getMonth() + 1;
   const aniN = new Date().getFullYear();
   const hoyStr = fmt(new Date(), 'yyyy-MM-dd');
+    // ─── RESET DIARIO AUTOMÁTICO ───
+  // Si cambió el día desde la última actualización, resetear contador "hoy"
+  const ultimaActStr = global.fecha_ultima_actualizacion || '';
+  if (ultimaActStr && ultimaActStr !== hoyStr) {
+    global.hoy = 0;
+    Logger.log('Reset hoy a 0 (cambio de día: ' + ultimaActStr + ' → ' + hoyStr + ')');
+  }
+  global.fecha_ultima_actualizacion = hoyStr;
   let lista = [];
 
   rows.forEach(r => {
@@ -955,29 +1055,61 @@ function getVisitas(p) {
     if (!rawRows.length) return { success: true, data: [], debug: 'sin datos, total filas: ' + allRows.length };
     var data = rawRows.map(function(r) {
       return {
+        // Identificación
         nro:            r[0],
-        fecha_reg:      r[1] instanceof Date ? Utilities.formatDate(r[1],'America/Lima','yyyy-MM-dd') : String(r[1]||'').substring(0,10),
+        fecha_reg:      r[1] instanceof Date ? Utilities.formatDate(r[1],'America/Lima','yyyy-MM-dd HH:mm') : String(r[1]||'').substring(0,16),
+        
+        // Datos del supervisor
         empresa:        String(r[2]||''),
         supervisor:     String(r[3]||'').trim(),
         dni:            r[4],
+        correo:         String(r[5]||''),
+        
+        // Ubicación
         fundo:          String(r[6]||''),
         sector:         String(r[6]||''),
+        punto:          String(r[7]||''),
+        
+        // Fechas
+        fecha_inicio:   r[8] instanceof Date ? Utilities.formatDate(r[8],'America/Lima','yyyy-MM-dd') : String(r[8]||'').substring(0,10),
+        fecha_fin:      r[9] instanceof Date ? Utilities.formatDate(r[9],'America/Lima','yyyy-MM-dd') : String(r[9]||'').substring(0,10),
         semana:         r[10],
         fecha_informe:  r[11] instanceof Date ? Utilities.formatDate(r[11],'America/Lima','yyyy-MM-dd') : String(r[11]||'').substring(0,10),
+        
+        // Contenido del informe
+        para:           String(r[12]||''),
+        asunto:         String(r[13]||''),
+        desarrollo:     String(r[14]||''),
+        rutas:          String(r[15]||''),
+        acciones:       String(r[16]||''),
+        compromisos:    String(r[17]||''),
+        observaciones:  String(r[18]||''),
+        motivo:         String(r[19]||''),
+        fotos:          parseInt(r[20]) || 0,
+        
+        // Estado y metadata
         estado:         String(r[21]||''),
+        registrado_por: String(r[22]||''),
         enlace_informe: String(r[23]||''),
-        registrado_por: String(r[22]||'')
+        
+        // Métricas (columnas 24-29 si existen)
+        temporada:           String(r[24]||''),
+        dias_transcurridos:  parseInt(r[25]) || 0,
+        dias_permitidos:     parseInt(r[26]) || 1,
+        dias_retraso:        parseInt(r[27]) || 0,
+        pct_avance:          String(r[28]||'0.00'),
+        pct_retraso:         String(r[29]||'0.00')
       };
     });
     if (p.empresa && p.empresa !== 'AMBAS') data = data.filter(function(v){ return v.empresa === p.empresa; });
     if (p.mes) data = data.filter(function(v){ return v.fecha_reg && new Date(v.fecha_reg).getMonth()+1 == p.mes; });
     if (p.supervisor) {
-  var normStr = function(s) {
-    return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
-  };
-  var supBuscar = normStr(p.supervisor);
-  data = data.filter(function(v){ return normStr(v.supervisor).indexOf(supBuscar) !== -1; });
-}
+      var normStr = function(s) {
+        return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+      };
+      var supBuscar = normStr(p.supervisor);
+      data = data.filter(function(v){ return normStr(v.supervisor).indexOf(supBuscar) !== -1; });
+    }
     return { success: true, data: data };
   } catch(e) {
     return { success: false, error: e.toString() };
@@ -1102,7 +1234,9 @@ function saveCaso(d) {
         'Ingreso','Término','Supervisor','Motivo','Motivo Extra',
         'Fecha Reporte','Fecha Límite','Temporada','Estado','% Avance',
         'Días Retraso','Motivo Retraso','Redacción',
-        'Informe','Enlace Informe','Reporte','Enlace Reporte','Registrado Por'
+        'Informe','Enlace Informe','Reporte','Enlace Reporte','Registrado Por',
+        'Gravedad','Estado Gestion',
+        'Tipo Sancion','Sancion Fecha Inicio','Sancion Fecha Fin','Sancion Dias'
       ]);
     }
     const nro = ws.getLastRow();
@@ -1131,7 +1265,13 @@ function saveCaso(d) {
       d.enlace_informe || '',
       d.nombre_reporte || '',
       d.enlace_reporte || '',
-      d.registrado_por || ''
+      d.registrado_por || '',
+      d.gravedad || 'BAJO',
+      d.estado_gestion || 'PENDIENTE',
+      d.tipo_sancion || '',
+      d.sancion_fecha_inicio || '',
+      d.sancion_fecha_fin || '',
+      d.sancion_dias || 0
     ]);
      try { actualizarFirebaseModulos(); } catch(em) { Logger.log('Firebase módulos: ' + em); }
     return { success: true, nro: nro };
@@ -1176,13 +1316,34 @@ function getCasos(p) {
   enlace_reporte: String(r[23]||''),
   registrado_por: String(r[24]||''),
   gravedad:       String(r[25]||'BAJO'),
-  estado_gestion: String(r[26]||'PENDIENTE')
+  estado_gestion: String(r[26]||'PENDIENTE'),
+  tipo_sancion:         String(r[27]||''),
+  sancion_fecha_inicio: r[28] instanceof Date ? Utilities.formatDate(r[28],'America/Lima','yyyy-MM-dd') : String(r[28]||''),
+  sancion_fecha_fin:    r[29] instanceof Date ? Utilities.formatDate(r[29],'America/Lima','yyyy-MM-dd') : String(r[29]||''),
+  sancion_dias:         Number(r[30])||0
 }));
     // Filtrar por rol: supervisor solo ve sus registros
-    if (p.rol !== 'administrador') {
-      data = data.filter(c => c.registrado_por === p.usuario ||
-                              c.supervisor.toLowerCase().includes(p.usuario.toLowerCase()));
-    }
+    var ROLES_ADMIN_CASOS = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl'];
+var rolNorm = String(p.rol||'').trim().toLowerCase();
+var esAdmin = ROLES_ADMIN_CASOS.indexOf(rolNorm) >= 0;
+
+if (!esAdmin) {
+  var usuarioNorm = String(p.usuario||'').trim().toLowerCase();
+  var nombreNorm  = String(p.nombre ||'').trim().toLowerCase();
+
+  data = data.filter(function(c){
+    var sup = String(c.supervisor    ||'').trim().toLowerCase();
+    var reg = String(c.registrado_por||'').trim().toLowerCase();
+    if (!sup && !reg) return false;
+
+    return reg === usuarioNorm
+        || reg === nombreNorm
+        || sup === usuarioNorm
+        || sup === nombreNorm
+        || (sup && usuarioNorm && sup.indexOf(usuarioNorm) >= 0)
+        || (sup && nombreNorm  && sup.indexOf(nombreNorm)  >= 0);
+  });
+}
     if (p.empresa)    data = data.filter(c => c.empresa === p.empresa);
     if (p.motivo)     data = data.filter(c => c.motivo === p.motivo);
     if (p.supervisor) data = data.filter(c => c.supervisor.toLowerCase().includes(p.supervisor.toLowerCase()));
@@ -1681,65 +1842,6 @@ function getEvaluaciones360(p) {
   } catch(e) { return { success: false, error: e.toString() }; }
 }
 
-// Lista blanca de usuarios autorizados a eliminar visitas (debe coincidir
-// con la validación del frontend en dashboard.html → renderVisitas)
-var ADMINS_ELIMINAR_VISITA = ['jtimoteo', 'ovilela', 'jchavez'];
-
-function eliminarVisita(d) {
-  try {
-    var usuario = String(d.usuario || '').toLowerCase().trim();
-    if (ADMINS_ELIMINAR_VISITA.indexOf(usuario) === -1) {
-      return { success: false, error: 'Sin permisos para eliminar visitas.' };
-    }
-    if (d.nro === undefined || d.nro === null || d.nro === '') {
-      return { success: false, error: 'N° de visita requerido.' };
-    }
-
-    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    var wsOrigen = ss.getSheetByName('Visitas_Campo');
-    if (!wsOrigen) return { success: false, error: 'Hoja Visitas_Campo no encontrada.' };
-
-    // Encabezados originales (incluyendo cualquier columna extra que se haya añadido)
-    var totalCols = wsOrigen.getLastColumn();
-    var encabezados = wsOrigen.getRange(1, 1, 1, totalCols).getValues()[0];
-
-    // Buscar fila por N°
-    var rows = wsOrigen.getDataRange().getValues();
-    var filaIdx = -1;
-    for (var i = 1; i < rows.length; i++) {
-      if (String(rows[i][0]) === String(d.nro)) { filaIdx = i; break; }
-    }
-    if (filaIdx === -1) return { success: false, error: 'Visita N° ' + d.nro + ' no encontrada.' };
-
-    var datosFila = rows[filaIdx];
-
-    // Asegurar hoja de archivo "Visitas_Eliminadas" con encabezados + 3 columnas extra
-    var wsArchivo = ss.getSheetByName('Visitas_Eliminadas');
-    if (!wsArchivo) {
-      wsArchivo = ss.insertSheet('Visitas_Eliminadas');
-      var encabezadosArchivo = encabezados.concat(['Eliminado_por', 'Fecha_eliminacion', 'Motivo_eliminacion']);
-      wsArchivo.appendRow(encabezadosArchivo);
-      wsArchivo.getRange(1, 1, 1, encabezadosArchivo.length).setFontWeight('bold');
-    }
-
-    // Mover fila (datos originales + metadata de eliminación)
-    var nuevaFila = datosFila.concat([
-      d.usuario || '',
-      new Date(),
-      d.motivo || 'Sin motivo'
-    ]);
-    wsArchivo.appendRow(nuevaFila);
-
-    // Borrar fila original (filaIdx es 0-based en el array; +1 para 1-based de Sheets)
-    wsOrigen.deleteRow(filaIdx + 1);
-
-    try { actualizarFirebaseModulos(); } catch(em) { Logger.log('Firebase módulos: ' + em); }
-    return { success: true, mensaje: 'Visita N° ' + d.nro + ' movida a Visitas_Eliminadas.' };
-  } catch(e) {
-    return { success: false, error: e.toString() };
-  }
-}
-
 function updateCaso(d) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -1765,6 +1867,10 @@ function updateCaso(d) {
         if (d.enlace_reporte !== undefined) ws.getRange(r, 24).setValue(d.enlace_reporte);
         if (d.gravedad       !== undefined) ws.getRange(r, 26).setValue(d.gravedad);
         if (d.estado_gestion !== undefined) ws.getRange(r, 27).setValue(d.estado_gestion);
+        if (d.tipo_sancion         !== undefined) ws.getRange(r, 28).setValue(d.tipo_sancion);
+        if (d.sancion_fecha_inicio !== undefined) ws.getRange(r, 29).setValue(d.sancion_fecha_inicio);
+        if (d.sancion_fecha_fin    !== undefined) ws.getRange(r, 30).setValue(d.sancion_fecha_fin);
+        if (d.sancion_dias         !== undefined) ws.getRange(r, 31).setValue(d.sancion_dias);
         try { actualizarFirebaseModulos(); } catch(em) { Logger.log('Firebase módulos: ' + em); }
         return { success: true };
       }
@@ -1990,10 +2096,14 @@ function actualizarEstadisticasFirebase() {
 function recalcularEstadisticasCompletas() {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const anio = new Date().getFullYear();
-    const hoy = new Date();
-    const mesActual = hoy.getMonth() + 1;
-    const hoyStr = Utilities.formatDate(hoy, 'GMT-5', 'yyyy-MM-dd');
+    
+    // ⬇️ FIX: usar 'America/Lima' para todo (consistente con la fecha local)
+    const hoyStr = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
+    const mesActualStr = hoyStr.substring(0, 7);
+    const anio = parseInt(hoyStr.substring(0, 4));
+    const mesActual = parseInt(hoyStr.substring(5, 7));
+    
+    Logger.log('═══ Calculando: HOY=' + hoyStr + ' | MES=' + mesActualStr + ' | AÑO=' + anio + ' ═══');
 
     const hojas = [
       'BB. DE REGISTROS 2024',
@@ -2024,9 +2134,11 @@ function recalcularEstadisticasCompletas() {
 
     rows.forEach(r => {
       total++;
+      
+      // ⬇️ FIX: usar 'America/Lima' (no 'GMT-5') para consistencia con hoyStr
       let fecha = '';
       if (r[1] instanceof Date) {
-        fecha = Utilities.formatDate(r[1], 'GMT-5', 'yyyy-MM-dd');
+        fecha = Utilities.formatDate(r[1], 'America/Lima', 'yyyy-MM-dd');
       } else {
         fecha = String(r[1]||'').substring(0, 10);
       }
@@ -2036,6 +2148,16 @@ function recalcularEstadisticasCompletas() {
       if (!mesNum && fecha.length >= 7) {
         mesNum  = parseInt(fecha.substring(5, 7)) || 0;
         anioNum = parseInt(fecha.substring(0, 4)) || 0;
+      }
+      
+      // ⬇️ FIX: si fecha existe, derivar mes/anio desde fecha (más confiable que cols 5/6)
+      if (fecha.length >= 10) {
+        const mesDeFecha = parseInt(fecha.substring(5, 7));
+        const anioDeFecha = parseInt(fecha.substring(0, 4));
+        if (mesDeFecha > 0 && anioDeFecha > 0) {
+          mesNum = mesDeFecha;
+          anioNum = anioDeFecha;
+        }
       }
 
       const emp    = String(r[11]||'').toUpperCase();
@@ -2097,7 +2219,8 @@ function recalcularEstadisticasCompletas() {
       resumen_global: {
         total, hoy: hoyN, este_mes: esteMes,
         en_proceso: enProceso, finalizados,
-        ultima_actualizacion: Date.now()
+        ultima_actualizacion: Date.now(),
+        fecha_ultima_actualizacion: hoyStr
       },
       por_supervisor: porSupervisor,
       por_mes: porMes,
@@ -2107,7 +2230,7 @@ function recalcularEstadisticasCompletas() {
 
     Logger.log('✅ Total: ' + total);
     Logger.log('HOY: ' + hoyN + ' | MES: ' + esteMes + ' | EN PROCESO: ' + enProceso + ' | FINALIZADOS: ' + finalizados);
-    Logger.log('RAPEL: ' + porEmpresa.RAPEL.total + ' | VERFRUT: ' + porEmpresa.VERFRUT.total);
+    Logger.log('RAPEL: ' + porEmpresa.RAPEL.total + ' (este mes: ' + porEmpresa.RAPEL.este_mes + ') | VERFRUT: ' + porEmpresa.VERFRUT.total + ' (este mes: ' + porEmpresa.VERFRUT.este_mes + ')');
     return { success: true, total: total };
   } catch(e) {
     Logger.log('Error: ' + e.toString());
@@ -2173,63 +2296,61 @@ function aprobarAccesoTemporal(d) {
     // Admin: desde d.aprobado_por o d.admin
     var aprobadoPor = String(d.aprobado_por || d.admin || '').trim();
 
-    // 1) Localización por d.fila (1-based del sheet, lo que envía getSolicitudesAcceso).
-    //    Esto evita aprobar la solicitud equivocada cuando hay varias PENDIENTE del mismo usuario.
+    // Priorizar d.fila si fue enviado (1-based del sheet)
     var filaObjetivo = -1;
-    var filaInputNum = parseInt(d.fila);
-    if (filaInputNum && filaInputNum > startIndex && filaInputNum <= rows.length) {
-      var idxArr = filaInputNum - 1; // a 0-based
-      var rUsr = String(rows[idxArr][2] || '').trim();
-      var rEst = String(rows[idxArr][6] || '').toUpperCase().trim();
-      if (rEst === 'PENDIENTE' && (!d.usuario || rUsr === String(d.usuario).trim())) {
-        filaObjetivo = idxArr;
-      }
-    }
-
-    // 2) Fallback compatibilidad: primer PENDIENTE del usuario
-    if (filaObjetivo === -1 && d.usuario) {
-      for (var i = startIndex; i < rows.length; i++) {
-        if (String(rows[i][2]).trim() === String(d.usuario).trim() &&
-            String(rows[i][6]).toUpperCase().trim() === 'PENDIENTE') {
-          filaObjetivo = i; break;
+    if (d.fila) {
+      var idxArray = parseInt(d.fila) - 1;
+      if (idxArray >= 0 && idxArray < rows.length) {
+        var rT = rows[idxArray];
+        if (String(rT[2]).trim() === String(d.usuario).trim() &&
+            String(rT[6]).toUpperCase().trim() === 'PENDIENTE') {
+          filaObjetivo = idxArray;
         }
       }
     }
-
     if (filaObjetivo === -1) {
-      return { success: false, error: 'Solicitud pendiente no encontrada para: ' + (d.usuario || 'fila ' + d.fila) };
+      for (var j = startIndex; j < rows.length; j++) {
+        if (String(rows[j][2]).trim() === String(d.usuario).trim() &&
+            String(rows[j][6]).toUpperCase().trim() === 'PENDIENTE') {
+          filaObjetivo = j;
+          break;
+        }
+      }
     }
+    if (filaObjetivo !== -1) {
+      var i = filaObjetivo;
 
-    // Si admin no especificó horas, usar las solicitadas en la fila
-    if (!horasAprobadas) horasAprobadas = parseInt(rows[filaObjetivo][5]) || 1;
+      // Si admin no especificó horas, usar las solicitadas
+      if (!horasAprobadas) horasAprobadas = parseInt(rows[i][5]) || 1;
 
-    var ahora = new Date();
-    var hastaMillis = ahora.getTime() + (horasAprobadas * 60 * 60 * 1000);
-    var horaFin = new Date(hastaMillis);
+      var ahora = new Date();
+      var hastaMillis = ahora.getTime() + (horasAprobadas * 60 * 60 * 1000);
+      var horaFin = new Date(hastaMillis);
 
-    var filaSheet = filaObjetivo + 1;
-    ws.getRange(filaSheet, 7).setValue(d.decision || 'APROBADO');
-    ws.getRange(filaSheet, 8).setValue(aprobadoPor);
-    ws.getRange(filaSheet, 9).setValue(Utilities.formatDate(ahora, 'America/Lima', 'HH:mm'));
-    ws.getRange(filaSheet, 10).setValue(Utilities.formatDate(horaFin, 'America/Lima', 'HH:mm'));
-    ws.getRange(filaSheet, 11).setValue(ahora);
-    ws.getRange(filaSheet, 12).setValue(hastaMillis);
-    ws.getRange(filaSheet, 6).setValue(horasAprobadas);
+      var filaSheet = i + 1;
+      ws.getRange(filaSheet, 7).setValue(d.decision || 'APROBADO');
+      ws.getRange(filaSheet, 8).setValue(aprobadoPor);
+      ws.getRange(filaSheet, 9).setValue(Utilities.formatDate(ahora, 'America/Lima', 'HH:mm'));
+      ws.getRange(filaSheet, 10).setValue(Utilities.formatDate(horaFin, 'America/Lima', 'HH:mm'));
+      ws.getRange(filaSheet, 11).setValue(ahora);
+      ws.getRange(filaSheet, 12).setValue(hastaMillis);
+      ws.getRange(filaSheet, 6).setValue(horasAprobadas);
 
-    return {
-      success: true,
-      hastaHora:  Utilities.formatDate(horaFin, 'America/Lima', 'HH:mm'),
-      hastaFecha: Utilities.formatDate(horaFin, 'America/Lima', 'dd/MM/yyyy HH:mm'),
-      hora_fin:   Utilities.formatDate(horaFin, 'America/Lima', 'HH:mm'),
-      horasAprobadas: horasAprobadas,
-      expiraEn: hastaMillis,
-      decision: d.decision || 'APROBADO'
-    };
+      return {
+        success: true,
+        hastaHora: Utilities.formatDate(horaFin, 'America/Lima', 'HH:mm'),
+        hastaFecha: Utilities.formatDate(horaFin, 'America/Lima', 'dd/MM/yyyy HH:mm'),
+        horasAprobadas: horasAprobadas,
+        expiraEn: hastaMillis,
+        decision: d.decision || 'APROBADO'
+      };
+    }
+    return { success: false, error: 'Solicitud pendiente no encontrada para: ' + d.usuario };
   } catch(e) {
     return { success: false, error: e.toString() };
   }
 }
-
+ 
 function verificarAccesoTemporal(p) {
   try {
     var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -2890,10 +3011,7 @@ const INV_RESPONSABLES_INICIALES = [
 // ═══════════════════════════════════════════════════════════════════
 function invSetup() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
-  // Migrar hojas existentes (idempotente: solo agrega columnas faltantes)
-  invMigrarColumnasSectorSupervisor();
-
+ 
   // RECETA
   let h = ss.getSheetByName(INV_SH_RECETA);
   if (!h) {
@@ -2933,150 +3051,36 @@ function invSetup() {
   h = ss.getSheetByName(INV_SH_INGRESOS);
   if (!h) {
     h = ss.insertSheet(INV_SH_INGRESOS);
-    h.appendRow(['ID', 'FECHA_REGISTRO', 'PRODUCTO', 'CANTIDAD', 'UNIDAD', 'FECHA_INGRESO', 'FECHA_VENC', 'LOTE', 'RESPONSABLE', 'PROVEEDOR', 'OBSERVACIONES', 'USUARIO', 'SECTOR', 'SUPERVISOR']);
-    h.getRange('A1:N1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.appendRow(['ID', 'FECHA_REGISTRO', 'PRODUCTO', 'CANTIDAD', 'UNIDAD', 'FECHA_INGRESO', 'FECHA_VENC', 'LOTE', 'RESPONSABLE', 'PROVEEDOR', 'OBSERVACIONES', 'USUARIO']);
+    h.getRange('A1:L1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     h.setFrozenRows(1);
     Logger.log('✓ ' + INV_SH_INGRESOS);
   }
-
+ 
   // ARMADOS
   h = ss.getSheetByName(INV_SH_ARMADOS);
   if (!h) {
     h = ss.insertSheet(INV_SH_ARMADOS);
-    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ARMADO', 'CANTIDAD', 'RESPONSABLE', 'OBSERVACIONES', 'USUARIO', 'SECTOR', 'SUPERVISOR']);
-    h.getRange('A1:I1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ARMADO', 'CANTIDAD', 'RESPONSABLE', 'OBSERVACIONES', 'USUARIO']);
+    h.getRange('A1:G1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     h.setFrozenRows(1);
     Logger.log('✓ ' + INV_SH_ARMADOS);
   }
-
+ 
   // ENTREGAS
   h = ss.getSheetByName(INV_SH_ENTREGAS);
   if (!h) {
     h = ss.insertSheet(INV_SH_ENTREGAS);
-    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ENTREGA', 'EMPRESA', 'SECTOR', 'CANTIDAD', 'RESPONSABLE', 'DOCUMENTO', 'OBSERVACIONES', 'USUARIO', 'SUPERVISOR', 'EXPORTADORA']);
-    h.getRange('A1:L1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.appendRow(['ID', 'FECHA_REGISTRO', 'FECHA_ENTREGA', 'EMPRESA', 'SECTOR', 'CANTIDAD', 'RESPONSABLE', 'DOCUMENTO', 'OBSERVACIONES', 'USUARIO']);
+    h.getRange('A1:J1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
     h.setFrozenRows(1);
     Logger.log('✓ ' + INV_SH_ENTREGAS);
   }
-
+ 
   Logger.log('═══ Setup inventario completado ═══');
 }
-
-// ═══════════════════════════════════════════════════════════════════
-//  MIGRACIÓN — agrega columnas SECTOR/SUPERVISOR a hojas existentes.
-//  Idempotente: solo agrega lo que falta. Seguro de re-ejecutar.
-// ═══════════════════════════════════════════════════════════════════
-function invMigrarColumnasSectorSupervisor() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-
-  // Helper: agrega un header al final si no existe
-  function asegurarColumna(hoja, nombreCol) {
-    if (!hoja || hoja.getLastRow() < 1) return false;
-    const headers = hoja.getRange(1, 1, 1, hoja.getLastColumn()).getValues()[0];
-    if (headers.indexOf(nombreCol) !== -1) return false;
-    const nuevaCol = hoja.getLastColumn() + 1;
-    const cell = hoja.getRange(1, nuevaCol);
-    cell.setValue(nombreCol);
-    cell.setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
-    Logger.log('↪ ' + hoja.getName() + ' + ' + nombreCol + ' (col ' + nuevaCol + ')');
-    return true;
-  }
-
-  const hIng = ss.getSheetByName(INV_SH_INGRESOS);
-  if (hIng) { asegurarColumna(hIng, 'SECTOR'); asegurarColumna(hIng, 'SUPERVISOR'); }
-
-  const hArm = ss.getSheetByName(INV_SH_ARMADOS);
-  if (hArm) { asegurarColumna(hArm, 'SECTOR'); asegurarColumna(hArm, 'SUPERVISOR'); }
-
-  const hEnt = ss.getSheetByName(INV_SH_ENTREGAS);
-  if (hEnt) { asegurarColumna(hEnt, 'SUPERVISOR'); asegurarColumna(hEnt, 'EXPORTADORA'); }
-
-  Logger.log('✓ Migración SECTOR/SUPERVISOR/EXPORTADORA completada');
-}
-
-
-// ═══════════════════════════════════════════════════════════════════
-//  RECETA OBJETIVO (1 unidad por canasta) — idempotente
-//  Ejecutar UNA VEZ desde el editor para corregir cantidades
-// ═══════════════════════════════════════════════════════════════════
-const INV_RECETA_OBJETIVO = [
-  { producto: 'Arroz',            unidad: 'KG',  cantidad: 1 },
-  { producto: 'Avena',            unidad: 'UND', cantidad: 1 },
-  { producto: 'Azúcar',           unidad: 'KG',  cantidad: 1 },
-  { producto: 'Fideo',            unidad: 'PQT', cantidad: 1 },
-  { producto: 'Fideo canuto',     unidad: 'PQT', cantidad: 1 },
-  { producto: 'Galleta vainilla', unidad: 'PQT', cantidad: 1 },
-  { producto: 'Leche',            unidad: 'UND', cantidad: 1 }
-];
-
-function invSetupReceta() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  let h = ss.getSheetByName(INV_SH_RECETA);
-  if (!h) {
-    h = ss.insertSheet(INV_SH_RECETA);
-    h.appendRow(['ID', 'PRODUCTO', 'UNIDAD', 'CANTIDAD', 'CREADO', 'CREADO_POR']);
-    h.getRange('A1:F1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
-    h.setFrozenRows(1);
-  }
-
-  // Mapear filas existentes por producto (case-insensitive)
-  const lastRow = h.getLastRow();
-  const datos = lastRow >= 2 ? h.getRange(2, 1, lastRow - 1, 6).getValues() : [];
-  const existentes = {};
-  datos.forEach((r, idx) => {
-    const prod = String(r[1] || '').trim();
-    if (prod) {
-      existentes[prod.toLowerCase()] = {
-        row: idx + 2,
-        unidadActual:  String(r[2] || '').trim(),
-        cantidadActual: Number(r[3]) || 0
-      };
-    }
-  });
-
-  let agregados = 0, actualizados = 0, sinCambios = 0;
-  INV_RECETA_OBJETIVO.forEach(t => {
-    const key = t.producto.toLowerCase();
-    const ex = existentes[key];
-    if (ex) {
-      const cambioCant = Number(ex.cantidadActual) !== Number(t.cantidad);
-      const cambioUnid = ex.unidadActual.toUpperCase() !== t.unidad.toUpperCase();
-      if (cambioCant) h.getRange(ex.row, 4).setValue(t.cantidad);
-      if (cambioUnid) h.getRange(ex.row, 3).setValue(t.unidad);
-      if (cambioCant || cambioUnid) {
-        Logger.log('↻ ' + t.producto + ': ' + ex.cantidadActual + ' ' + ex.unidadActual + ' → ' + t.cantidad + ' ' + t.unidad);
-        actualizados++;
-      } else {
-        sinCambios++;
-      }
-    } else {
-      const id = 'R' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
-      h.appendRow([id, t.producto, t.unidad, t.cantidad, new Date(), 'invSetupReceta']);
-      Logger.log('+ ' + t.producto + ': ' + t.cantidad + ' ' + t.unidad);
-      agregados++;
-    }
-  });
-
-  // Bonus: garantizar columna EXPORTADORA en INV_Entregas
-  // (migración blanda — usuario solo necesita ejecutar invSetupReceta)
-  const hEnt = ss.getSheetByName(INV_SH_ENTREGAS);
-  if (hEnt && hEnt.getLastRow() >= 1) {
-    const headers = hEnt.getRange(1, 1, 1, hEnt.getLastColumn()).getValues()[0];
-    if (headers.indexOf('EXPORTADORA') === -1) {
-      const c = hEnt.getLastColumn() + 1;
-      hEnt.getRange(1, c).setValue('EXPORTADORA').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
-      Logger.log('↪ INV_Entregas + EXPORTADORA (col ' + c + ')');
-    }
-  }
-
-  Logger.log('═══════════════════════════════════════════');
-  Logger.log('✓ Receta actualizada: ' + INV_RECETA_OBJETIVO.length + ' productos con cantidad=1');
-  Logger.log('  Agregados: ' + agregados + ' · Actualizados: ' + actualizados + ' · Sin cambios: ' + sinCambios);
-  Logger.log('═══════════════════════════════════════════');
-  return { success: true, total: INV_RECETA_OBJETIVO.length, agregados, actualizados, sinCambios };
-}
-
-
+ 
+ 
 // ═══════════════════════════════════════════════════════════════════
 //  GET ALL — Carga inicial (todo en una sola llamada)
 // ═══════════════════════════════════════════════════════════════════
@@ -3123,28 +3127,81 @@ function invLeerReceta() {
  
 function invAgregarReceta(body) {
   try {
-    const item = body.item;
-    if (!item || !item.producto || !item.unidad || !item.cantidad) {
-      return { success: false, error: 'Datos incompletos' };
-    }
+    // Acepta formato anidado (body.item.*) o plano (body.*)
+    const producto = String(body.item?.producto ?? body.producto ?? '').trim();
+    const unidad   = String(body.item?.unidad   ?? body.unidad   ?? '').trim();
+    const cantidad = Number(body.item?.cantidad ?? body.cantidad ?? 0);
+
+    if (!producto) return { success: false, error: 'Falta el producto' };
+    if (!unidad)   return { success: false, error: 'Falta la unidad' };
+    if (!cantidad || cantidad <= 0) {
+  return { success: false, error: 'Cantidad inválida' };
+}
+// NUEVO: advertir si cantidad es muy pequeña (posible error)
+if (cantidad < 0.1 && cantidad !== 0.05) {
+  return { 
+    success: false, 
+    error: 'Cantidad muy pequeña (' + cantidad + '). ¿Seguro que es correcto? Ejemplo: 1 kg por canasta, no 0.01 kg.' 
+  };
+}
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const h = ss.getSheetByName(INV_SH_RECETA);
+    const h  = ss.getSheetByName(INV_SH_RECETA);
+    if (!h) return { success: false, error: 'Hoja INV_Receta no encontrada. Ejecutar invSetup()' };
+
     const id = 'R' + Date.now();
-    h.appendRow([id, item.producto, item.unidad, Number(item.cantidad), new Date(), body.usuario || '']);
-    return { success: true, item: { id, producto: item.producto, unidad: item.unidad, cantidad: Number(item.cantidad) } };
-  } catch (e) { return { success: false, error: e.message }; }
+    h.appendRow([id, producto, unidad, cantidad, new Date(), body.usuario || '']);
+
+    return {
+      success: true,
+      item: { id: id, producto: producto, unidad: unidad, cantidad: cantidad }
+    };
+  } catch (e) {
+    return { success: false, error: e.message || e.toString() };
+  }
 }
  
 function invEliminarReceta(body) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_RECETA);
+    if (!h) return { success: false, error: 'Hoja INV_Receta no encontrada' };
+    
     const datos = h.getDataRange().getValues();
-    for (let r = datos.length - 1; r >= 1; r--) {
-      if (datos[r][0] === body.id) { h.deleteRow(r + 1); break; }
+    
+    // Aceptar búsqueda por ID o por nombre de producto
+    const buscarId       = body.id ? String(body.id) : '';
+    const buscarProducto = body.producto ? String(body.producto).trim().toLowerCase() : '';
+    
+    if (!buscarId && !buscarProducto) {
+      return { success: false, error: 'Falta id o producto' };
     }
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
+    
+    Logger.log('[ELIMINAR RECETA] Buscando id=' + buscarId + ' | producto=' + buscarProducto);
+    
+    for (let r = datos.length - 1; r >= 1; r--) {
+      const filaId       = String(datos[r][0] || '');
+      const filaProducto = String(datos[r][1] || '').trim().toLowerCase();
+      
+      // Coincide por ID exacto
+      if (buscarId && filaId === buscarId) {
+        h.deleteRow(r + 1);
+        Logger.log('[ELIMINAR RECETA] ✓ Eliminado por ID: ' + filaId);
+        return { success: true, eliminado: datos[r][1], por: 'id' };
+      }
+      
+      // Coincide por nombre de producto
+      if (buscarProducto && filaProducto === buscarProducto) {
+        h.deleteRow(r + 1);
+        Logger.log('[ELIMINAR RECETA] ✓ Eliminado por producto: ' + datos[r][1]);
+        return { success: true, eliminado: datos[r][1], por: 'producto' };
+      }
+    }
+    
+    return { success: false, error: 'No se encontró el producto en la receta' };
+  } catch (e) {
+    return { success: false, error: e.message || e.toString() };
+  }
 }
  
  
@@ -3176,12 +3233,34 @@ function invEliminarResponsable(body) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_RESPONSABLES);
+    if (!h) return { success: false, error: 'Hoja no encontrada' };
+    
     const datos = h.getDataRange().getValues();
-    for (let r = datos.length - 1; r >= 1; r--) {
-      if (datos[r][0] === body.id) { h.deleteRow(r + 1); break; }
+    const buscarId     = body.id ? String(body.id) : '';
+    const buscarNombre = body.nombre ? String(body.nombre).trim().toLowerCase() : '';
+    
+    if (!buscarId && !buscarNombre) {
+      return { success: false, error: 'Falta id o nombre' };
     }
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
+    
+    for (let r = datos.length - 1; r >= 1; r--) {
+      const filaId     = String(datos[r][0] || '');
+      const filaNombre = String(datos[r][1] || '').trim().toLowerCase();
+      
+      if (buscarId && filaId === buscarId) {
+        h.deleteRow(r + 1);
+        return { success: true, eliminado: datos[r][1] };
+      }
+      if (buscarNombre && filaNombre === buscarNombre) {
+        h.deleteRow(r + 1);
+        return { success: true, eliminado: datos[r][1] };
+      }
+    }
+    
+    return { success: false, error: 'No encontrado' };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
 }
  
  
@@ -3203,20 +3282,47 @@ function invLeerMeta() {
  
 function invGuardarMeta(body) {
   try {
+    // Acepta formato anidado (body.meta.total) o plano (body.meta_total)
+    const total       = parseInt(body.meta?.total ?? body.meta_total ?? body.total) || 0;
+    const descripcion = String(body.meta?.descripcion ?? body.descripcion ?? '');
+
+    if (total < 0) {
+      return { success: false, error: 'La meta debe ser mayor o igual a 0' };
+    }
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const h = ss.getSheetByName(INV_SH_META);
+    const h  = ss.getSheetByName(INV_SH_META);
+    if (!h) return { success: false, error: 'Hoja INV_Meta no encontrada. Ejecutar invSetup()' };
+
     const datos = h.getDataRange().getValues();
     let rowTotal = -1, rowDesc = -1;
     for (let r = 1; r < datos.length; r++) {
-      if (datos[r][0] === 'total') rowTotal = r + 1;
-      if (datos[r][0] === 'descripcion') rowDesc = r + 1;
+      if (datos[r][0] === 'total')       rowTotal = r + 1;
+      if (datos[r][0] === 'descripcion') rowDesc  = r + 1;
     }
-    if (rowTotal === -1) { h.appendRow(['total', body.meta.total, new Date()]); }
-    else { h.getRange(rowTotal, 2).setValue(body.meta.total); h.getRange(rowTotal, 3).setValue(new Date()); }
-    if (rowDesc === -1) { h.appendRow(['descripcion', body.meta.descripcion, new Date()]); }
-    else { h.getRange(rowDesc, 2).setValue(body.meta.descripcion); h.getRange(rowDesc, 3).setValue(new Date()); }
-    return { success: true };
-  } catch (e) { return { success: false, error: e.message }; }
+
+    if (rowTotal === -1) {
+      h.appendRow(['total', total, new Date()]);
+    } else {
+      h.getRange(rowTotal, 2).setValue(total);
+      h.getRange(rowTotal, 3).setValue(new Date());
+    }
+
+    if (rowDesc === -1) {
+      h.appendRow(['descripcion', descripcion, new Date()]);
+    } else {
+      h.getRange(rowDesc, 2).setValue(descripcion);
+      h.getRange(rowDesc, 3).setValue(new Date());
+    }
+
+    return {
+      success: true,
+      meta: { total: total, descripcion: descripcion },
+      mensaje: 'Meta guardada correctamente'
+    };
+  } catch (e) {
+    return { success: false, error: e.message || e.toString() };
+  }
 }
  
  
@@ -3235,25 +3341,76 @@ function invRegistrarIngreso(body) {
     h.appendRow([
       id, new Date(), i.producto, Number(i.cantidad), i.unidad || '',
       i.fechaIngreso, i.fechaVenc, i.lote || '', i.responsable, i.proveedor || '',
-      i.observaciones || '', i.usuario || '', i.sector || '', i.supervisor || ''
+      i.observaciones || '', i.usuario || '',
+      i.sector || '', i.supervisor || ''
     ]);
     return { success: true, id };
   } catch (e) { return { success: false, error: e.message }; }
 }
 
-function invLeerIngresos() {
-  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  const h = ss.getSheetByName(INV_SH_INGRESOS);
-  if (!h || h.getLastRow() < 2) return [];
-  const datos = h.getRange(2, 1, h.getLastRow() - 1, 14).getValues();
-  return datos.filter(r => r[0]).map(r => ({
-    id: r[0], fechaRegistro: r[1], producto: r[2], cantidad: Number(r[3]) || 0,
-    unidad: r[4], fechaIngreso: r[5], fechaVenc: r[6], lote: r[7],
-    responsable: r[8], proveedor: r[9], observaciones: r[10], usuario: r[11],
-    sector: r[12] || '', supervisor: r[13] || ''
-  }));
+function invRegistrarArmado(body) {
+  try {
+    const a = body.armado;
+    if (!a || !a.cantidad || !a.fecha || !a.responsable) {
+      return { success: false, error: 'Datos incompletos' };
+    }
+    const receta = invLeerReceta();
+    const stock = invCalcularStock(receta);
+    for (const r of receta) {
+      const s = stock.find(x => x.producto === r.producto);
+      const stockActual = s ? s.stock : 0;
+      const necesario = a.cantidad * r.cantidad;
+      if (stockActual < necesario) {
+        return { success: false, error: 'Stock insuficiente de ' + r.producto + ': tienes ' + stockActual + ' ' + r.unidad + ', necesitas ' + necesario };
+      }
+    }
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(INV_SH_ARMADOS);
+    const id = 'A' + Date.now();
+    h.appendRow([
+      id, new Date(), a.fecha, Number(a.cantidad), a.responsable,
+      a.observaciones || '', a.usuario || '',
+      a.sector || '', a.supervisor || ''
+    ]);
+    return { success: true, id };
+  } catch (e) { return { success: false, error: e.message }; }
 }
- 
+
+function invRegistrarEntrega(body) {
+  try {
+    const e = body.entrega;
+    if (!e || !e.empresa || !e.sector || !e.cantidad || !e.fecha || !e.responsable) {
+      return { success: false, error: 'Datos incompletos' };
+    }
+    const armados = invLeerArmados();
+    const entregas = invLeerEntregas();
+    const armadasTotal = armados.reduce((s, a) => s + Number(a.cantidad || 0), 0);
+    const entregadasTotal = entregas.reduce((s, x) => s + Number(x.cantidad || 0), 0);
+    const disponibles = armadasTotal - entregadasTotal;
+    if (e.cantidad > disponibles) {
+      return { success: false, error: 'Solo hay ' + disponibles + ' canastas disponibles' };
+    }
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(INV_SH_ENTREGAS);
+    
+    // Auto-asegurar columna EXPORTADORA
+    const lastCol = h.getLastColumn();
+    const headRow = h.getRange(1, 1, 1, lastCol).getValues()[0];
+    const tieneExp = headRow.some(c => String(c).toUpperCase() === 'EXPORTADORA');
+    if (!tieneExp) {
+      h.getRange(1, lastCol + 1).setValue('EXPORTADORA');
+      h.getRange(1, lastCol + 1).setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    }
+    
+    const id = 'E' + Date.now();
+    h.appendRow([
+      id, new Date(), e.fecha, e.empresa, e.sector, Number(e.cantidad),
+      e.responsable, e.documento || '', e.observaciones || '', e.usuario || '',
+      e.supervisor || '', e.exportadora || ''
+    ]);
+    return { success: true, id };
+  } catch (err) { return { success: false, error: err.message }; }
+}
  
 // ═══════════════════════════════════════════════════════════════════
 //  ARMADOS
@@ -3280,11 +3437,11 @@ function invRegistrarArmado(body) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_ARMADOS);
     const id = 'A' + Date.now();
-    h.appendRow([id, new Date(), a.fecha, Number(a.cantidad), a.responsable, a.observaciones || '', a.usuario || '', a.sector || '', a.supervisor || '']);
+    h.appendRow([id, new Date(), a.fecha, Number(a.cantidad), a.responsable, a.observaciones || '', a.usuario || '']);
     return { success: true, id };
   } catch (e) { return { success: false, error: e.message }; }
 }
-
+ 
 function invLeerArmados() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const h = ss.getSheetByName(INV_SH_ARMADOS);
@@ -3320,29 +3477,21 @@ function invRegistrarEntrega(body) {
  
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_ENTREGAS);
-    // Asegurar columna EXPORTADORA antes de insertar (auto-migración suave)
-    const headers = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0];
-    if (headers.indexOf('EXPORTADORA') === -1) {
-      const c = h.getLastColumn() + 1;
-      h.getRange(1, c).setValue('EXPORTADORA').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
-    }
     const id = 'E' + Date.now();
-    h.appendRow([id, new Date(), e.fecha, e.empresa, e.sector, Number(e.cantidad), e.responsable, e.documento || '', e.observaciones || '', e.usuario || '', e.supervisor || '', e.exportadora || '']);
+    h.appendRow([id, new Date(), e.fecha, e.empresa, e.sector, Number(e.cantidad), e.responsable, e.documento || '', e.observaciones || '', e.usuario || '']);
     return { success: true, id };
   } catch (err) { return { success: false, error: err.message }; }
 }
-
+ 
 function invLeerEntregas() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   const h = ss.getSheetByName(INV_SH_ENTREGAS);
   if (!h || h.getLastRow() < 2) return [];
-  const numCols = Math.max(11, h.getLastColumn());
-  const datos = h.getRange(2, 1, h.getLastRow() - 1, numCols).getValues();
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, 11).getValues();
   return datos.filter(r => r[0]).map(r => ({
     id: r[0], fechaRegistro: r[1], fecha: r[2], empresa: r[3], sector: r[4],
     cantidad: Number(r[5]) || 0, responsable: r[6], documento: r[7],
-    observaciones: r[8], usuario: r[9], supervisor: r[10] || '',
-    exportadora: r[11] || ''
+    observaciones: r[8], usuario: r[9], supervisor: r[10] || ''
   })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 }
  
@@ -3564,7 +3713,7 @@ function invEditarIngreso(body) {
     const datos = h.getDataRange().getValues();
     const i = body.ingreso || {};
     for (let r = 1; r < datos.length; r++) {
-      if (String(datos[r][0]) === String(body.id)) {
+      if (datos[r][0] === body.id) {
         if (i.cantidad !== undefined)      h.getRange(r + 1, 4).setValue(Number(i.cantidad));
         if (i.unidad !== undefined)        h.getRange(r + 1, 5).setValue(i.unidad);
         if (i.fechaIngreso !== undefined)  h.getRange(r + 1, 6).setValue(i.fechaIngreso);
@@ -3573,7 +3722,7 @@ function invEditarIngreso(body) {
         if (i.responsable !== undefined)   h.getRange(r + 1, 9).setValue(i.responsable);
         if (i.proveedor !== undefined)     h.getRange(r + 1, 10).setValue(i.proveedor);
         if (i.observaciones !== undefined) h.getRange(r + 1, 11).setValue(i.observaciones);
-        if (i.sector !== undefined)        h.getRange(r + 1, 13).setValue(i.sector);
+         if (i.sector !== undefined)        h.getRange(r + 1, 13).setValue(i.sector);
         if (i.supervisor !== undefined)    h.getRange(r + 1, 14).setValue(i.supervisor);
         return { success: true };
       }
@@ -3605,10 +3754,10 @@ function invEditarArmado(body) {
     const h = ss.getSheetByName(INV_SH_ARMADOS);
     const datos = h.getDataRange().getValues();
     const a = body.armado || {};
-
+ 
     for (let r = 1; r < datos.length; r++) {
-      if (String(datos[r][0]) === String(body.id)) {
-
+      if (datos[r][0] === body.id) {
+ 
         if (a.cantidad !== undefined) {
           const cantOriginal = Number(datos[r][3]) || 0;
           const cantNueva = Number(a.cantidad);
@@ -3694,10 +3843,10 @@ function invEditarEntrega(body) {
     const h = ss.getSheetByName(INV_SH_ENTREGAS);
     const datos = h.getDataRange().getValues();
     const e = body.entrega || {};
-
+ 
     for (let r = 1; r < datos.length; r++) {
-      if (String(datos[r][0]) === String(body.id)) {
-
+      if (datos[r][0] === body.id) {
+ 
         if (e.cantidad !== undefined) {
           const cantOriginal = Number(datos[r][5]) || 0;
           const cantNueva = Number(e.cantidad);
@@ -3722,14 +3871,7 @@ function invEditarEntrega(body) {
         if (e.responsable !== undefined)   h.getRange(r + 1, 7).setValue(e.responsable);
         if (e.documento !== undefined)     h.getRange(r + 1, 8).setValue(e.documento);
         if (e.observaciones !== undefined) h.getRange(r + 1, 9).setValue(e.observaciones);
-        if (e.supervisor !== undefined)    h.getRange(r + 1, 11).setValue(e.supervisor);
-        if (e.exportadora !== undefined) {
-          // Asegurar columna 12 si la hoja aún no tiene EXPORTADORA
-          if (h.getLastColumn() < 12) {
-            h.getRange(1, 12).setValue('EXPORTADORA').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
-          }
-          h.getRange(r + 1, 12).setValue(e.exportadora);
-        }
+         if (e.supervisor !== undefined)    h.getRange(r + 1, 11).setValue(e.supervisor);
         return { success: true };
       }
     }
@@ -3783,16 +3925,7 @@ function actualizarFirebaseRapido(d) {
     const respGlobal = UrlFetchApp.fetch(urlGlobal, {muteHttpExceptions: true});
     let global = {};
     try { global = JSON.parse(respGlobal.getContentText()) || {}; } catch(e) { global = {}; }
-
-    // Detectar cambio de día y resetear contador hoy
-    // (hoyStr ya está calculado al inicio de la función con timezone GMT-5/Lima)
-    const ultimaActStr = global.fecha_ultima_actualizacion || '';
-    if (ultimaActStr && ultimaActStr !== hoyStr) {
-      global.hoy = 0;
-      Logger.log('Reset hoy a 0 (cambio de día: ' + ultimaActStr + ' → ' + hoyStr + ')');
-    }
-    global.fecha_ultima_actualizacion = hoyStr;
-
+ 
     global.total = (global.total || 0) + 1;
     if (esHoy)                    global.hoy         = (global.hoy         || 0) + 1;
     if (esEsteMes)                global.este_mes    = (global.este_mes    || 0) + 1;
@@ -3969,6 +4102,7 @@ function actualizarFirebaseModulos() {
       });
     }
 
+    // Escribir estadísticas_modulos a Firebase
     const url = urlBase + '/estadisticas_modulos.json?auth=' + secret;
     const payload = {
       visitas: vis,
@@ -3985,265 +4119,1683 @@ function actualizarFirebaseModulos() {
       muteHttpExceptions: true
     });
     Logger.log('✓ Firebase módulos OK');
+
+    // ═══ ALERTAS EN TIEMPO REAL ═══
+    const alertas = [];
+    
+    if (cas.retrasados > 0) {
+      alertas.push({ 
+        tipo: 'critico', 
+        icon: '🔴', 
+        msg: cas.retrasados + ' casos retrasados requieren atención',
+        modulo: 'casos'
+      });
+    }
+    
+    if (vis.retrasadas > 0) {
+      alertas.push({ 
+        tipo: 'advertencia', 
+        icon: '🟡', 
+        msg: vis.retrasadas + ' visitas retrasadas',
+        modulo: 'visitas'
+      });
+    }
+    
+    if (fus.pendientes > 0) {
+      alertas.push({ 
+        tipo: 'info', 
+        icon: '🟠', 
+        msg: fus.pendientes + ' fusiones pendientes de validación',
+        modulo: 'fusiones'
+      });
+    }
+    
+    if (cap.este_mes === 0) {
+      alertas.push({ 
+        tipo: 'critico', 
+        icon: '🔴', 
+        msg: 'Sin capacitaciones registradas este mes',
+        modulo: 'capacitaciones'
+      });
+    } else if (cap.este_mes < 5) {
+      alertas.push({ 
+        tipo: 'advertencia', 
+        icon: '🟡', 
+        msg: 'Solo ' + cap.este_mes + ' capacitaciones este mes',
+        modulo: 'capacitaciones'
+      });
+    }
+    
+    // Escribir alertas a Firebase
+    const urlAlertas = urlBase + '/alertas.json?auth=' + secret;
+    UrlFetchApp.fetch(urlAlertas, {
+      method: 'PUT',
+      contentType: 'application/json',
+      payload: JSON.stringify({
+        items: alertas,
+        total: alertas.length,
+        criticas: alertas.filter(function(a){ return a.tipo === 'critico'; }).length,
+        advertencias: alertas.filter(function(a){ return a.tipo === 'advertencia'; }).length,
+        info: alertas.filter(function(a){ return a.tipo === 'info'; }).length,
+        ultima_actualizacion: hoy.getTime()
+      }),
+      muteHttpExceptions: true
+    });
+    Logger.log('✓ Alertas Firebase: ' + alertas.length + ' alertas activas');
+
   } catch(e) {
     Logger.log('actualizarFirebaseModulos error: ' + e.toString());
   }
 }
-
-// ============================================================
-// FASE A: ATENCIONES VIA AZURE SQL (con fallback a Sheets)
-// ============================================================
-function _azureBaseUrl_() {
-  var url = PropertiesService.getScriptProperties().getProperty('AZURE_API_URL');
-  if (!url) throw new Error('AZURE_API_URL no configurada en Script Properties');
-  return url.replace(/\/+$/, '');
-}
-
-function _azureAuthHeaders_() {
-  var key = PropertiesService.getScriptProperties().getProperty('AZURE_API_KEY');
-  if (!key) throw new Error('AZURE_API_KEY no configurada en Script Properties');
-  return { 'x-functions-key': key };
-}
-
-function listAtencionesAzure(filtros) {
-  filtros = filtros || {};
-  var qs = [];
-  ['supervisor','empresa','desde','hasta','dni','estado','limite','pagina'].forEach(function(k){
-    var v = filtros[k];
-    if (v !== undefined && v !== null && v !== '') {
-      qs.push(encodeURIComponent(k) + '=' + encodeURIComponent(v));
-    }
-  });
-  var url = _azureBaseUrl_() + '/atenciones' + (qs.length ? '?' + qs.join('&') : '');
-  var resp = UrlFetchApp.fetch(url, {
-    method: 'get',
-    headers: _azureAuthHeaders_(),
-    muteHttpExceptions: true,
-    followRedirects: true
-  });
-  var code = resp.getResponseCode();
-  if (code !== 200) {
-    throw new Error('Azure HTTP ' + code + ': ' + resp.getContentText().substring(0, 300));
-  }
-  return JSON.parse(resp.getContentText());
-}
-
-function consultarAtencionesOptimizado(filtros) {
-  filtros = filtros || {};
+// ═══════════════════════════════════════════════════════════════════
+//  RESUMEN EJECUTIVO GENERAL
+// ═══════════════════════════════════════════════════════════════════
+function resumenEjecutivo(body) {
   try {
-    var t0 = Date.now();
-    var result = listAtencionesAzure(filtros);
-    var elapsed = Date.now() - t0;
-    if (result && result.success) {
-      console.log('[consultarAtencionesOptimizado] Azure OK ' + (result.total || 0) + ' regs en ' + elapsed + 'ms');
-      return {
-        success: true,
-        data: result.data || [],
-        total: result.total,
-        pagina: result.pagina,
-        limite: result.limite,
-        fuente: 'AZURE',
-        tiempo: elapsed
-      };
+    const filtros = body || {};
+    const empresa = String(filtros.empresa || 'AMBAS').toUpperCase();
+
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const hoy = new Date();
+    const mesActStr = Utilities.formatDate(hoy, 'GMT-5', 'yyyy-MM');
+    const hoyStr = Utilities.formatDate(hoy, 'GMT-5', 'yyyy-MM-dd');
+
+    // Helper para filtrar por empresa
+    const filtrarEmpresa = function(rows, colEmp) {
+      if (empresa === 'AMBAS') return rows;
+      return rows.filter(r => String(r[colEmp] || '').toUpperCase() === empresa);
+    };
+
+    // ═══ MÓDULO VISITAS ═══
+    const wsV = ss.getSheetByName('Visitas_Campo');
+    let vis = { total: 0, en_plazo: 0, retrasadas: 0, este_mes: 0, hoy: 0, sin_cerrar: 0 };
+    if (wsV && wsV.getLastRow() > 1) {
+      let rowsV = wsV.getDataRange().getValues().slice(1).filter(r => r[0]);
+      rowsV = filtrarEmpresa(rowsV, 2); // columna empresa ajustar si es otra
+      rowsV.forEach(function(r) {
+        vis.total++;
+        const est = String(r[21] || '').toUpperCase();
+        if (est === 'EN PLAZO') vis.en_plazo++;
+        else if (est === 'RETRASADO') vis.retrasadas++;
+        const fecha = String(r[1] || '').substring(0, 10);
+        if (fecha.substring(0, 7) === mesActStr) vis.este_mes++;
+        if (fecha === hoyStr) vis.hoy++;
+        if (est !== 'CERRADO' && est !== 'FINALIZADO') vis.sin_cerrar++;
+      });
     }
-  } catch(e) {
-    console.log('[consultarAtencionesOptimizado] Azure error: ' + e.toString());
-  }
-  return { success: false, error: 'Azure no disponible', fuente: 'NONE' };
-}
 
-// Wrapper compatible con getAtenciones(p): mismo shape de salida.
-// Mapea filtros del frontend al schema de Azure y, si Azure falla, hace fallback a getAtenciones.
-function getAtencionesOptimizado(p) {
-  p = p || {};
-  var azFiltros = { limite: 50000, pagina: 1 };
-  var rol = String(p.rol || '').toLowerCase();
-  if (rol === 'supervisor') {
-    azFiltros.supervisor = String(p.nombre || p.usuario || '').trim();
-  }
-  if (p.empresa && p.empresa !== 'AMBAS') {
-    azFiltros.empresa = p.empresa;
-  }
-  // Sin historial: replica getRowsCurrentYear restringiendo al año en curso
-  if (!p.historial) {
-    var anio = new Date().getFullYear();
-    azFiltros.desde = anio + '-01-01';
-    azFiltros.hasta = anio + '-12-31';
-  }
-
-  var r = consultarAtencionesOptimizado(azFiltros);
-  if (r.success) {
-    var lista = r.data || [];
-    // Filtros adicionales por compat futura (mes/anio/estado/q): hoy ningún callsite los pasa.
-    if (p.mes)    lista = lista.filter(function(a){ return String(a.mes) === String(p.mes); });
-    if (p.anio)   lista = lista.filter(function(a){ return String(a.anio) === String(p.anio); });
-    if (p.estado) lista = lista.filter(function(a){ return String(a.estado||'').toUpperCase() === String(p.estado).toUpperCase(); });
-    if (p.q) {
-      var q = String(p.q).toLowerCase();
-      lista = lista.filter(function(a){ return String(a.dni||'').indexOf(q) >= 0 || String(a.nombre||'').toLowerCase().indexOf(q) >= 0; });
+    // ═══ MÓDULO CASOS ═══
+    const wsC = ss.getSheetByName('BD_Casos');
+    let cas = { total: 0, en_plazo: 0, retrasados: 0, este_mes: 0, en_proceso: 0 };
+    if (wsC && wsC.getLastRow() > 1) {
+      let rowsC = wsC.getDataRange().getValues().slice(1).filter(r => r[0]);
+      rowsC = filtrarEmpresa(rowsC, 2);
+      rowsC.forEach(function(r) {
+        cas.total++;
+        const est = String(r[15] || '').toUpperCase();
+        if (est === 'EN PLAZO' || est === 'EN PROCESO') cas.en_plazo++;
+        else if (est === 'RETRASADO') cas.retrasados++;
+        if (est === 'EN PROCESO') cas.en_proceso++;
+        const fecha = String(r[1] || '').substring(0, 10);
+        if (fecha.substring(0, 7) === mesActStr) cas.este_mes++;
+      });
     }
-    console.log('[getAtencionesOptimizado] Azure ' + r.tiempo + 'ms, total=' + (r.total||lista.length) + ', filtrado=' + lista.length);
-    return { success: true, data: lista, fuente: 'AZURE', tiempo: r.tiempo };
-  }
-  console.log('[getAtencionesOptimizado] Fallback → Sheets (getAtenciones)');
-  var fb = getAtenciones(p);
-  if (fb && fb.success) fb.fuente = 'SHEETS';
-  return fb;
-}
 
-// ============================================================
-// FASE 7.5: STATS VIA AZURE SQL + getPreload optimizado
-// ============================================================
-function getEstadisticasAzure(filtros) {
-  filtros = filtros || {};
-  try {
-    var qs = [];
-    if (filtros.anio)    qs.push('anio=' + encodeURIComponent(filtros.anio));
-    if (filtros.empresa) qs.push('empresa=' + encodeURIComponent(filtros.empresa));
-    var url = _azureBaseUrl_() + '/atenciones/stats' + (qs.length ? '?' + qs.join('&') : '');
-    var t0 = Date.now();
-    var resp = UrlFetchApp.fetch(url, {
-      method: 'get',
-      headers: _azureAuthHeaders_(),
-      muteHttpExceptions: true,
-      followRedirects: true
+    // ═══ MÓDULO FUSIONES ═══
+    const wsF = ss.getSheetByName('Fusiones_Buses');
+    let fus = { total: 0, pendientes: 0, validados: 0, este_mes: 0, trabajadores: 0 };
+    if (wsF && wsF.getLastRow() > 1) {
+      let rowsF = wsF.getDataRange().getValues().slice(1).filter(r => r[0]);
+      rowsF = filtrarEmpresa(rowsF, 2);
+      rowsF.forEach(function(r) {
+        fus.total++;
+        const est = String(r[27] || '').toLowerCase();
+        if (est === 'pendiente') fus.pendientes++;
+        else if (est === 'validado') fus.validados++;
+        const fecha = String(r[1] || '').substring(0, 10);
+        if (fecha.substring(0, 7) === mesActStr) fus.este_mes++;
+        fus.trabajadores += parseInt(r[12]) || 0;
+      });
+    }
+
+    // ═══ MÓDULO CAPACITACIONES ═══
+    const wsK = ss.getSheetByName('CAPACITACIONES_HDR');
+    const wsKD = ss.getSheetByName('BD_Capacitaciones');
+    let cap = { total: 0, asistentes: 0, este_mes: 0, asistentes_mes: 0, top_supervisor: '-', top_sup_count: 0 };
+    if (wsK && wsK.getLastRow() > 1) {
+      let rowsK = wsK.getDataRange().getValues().slice(1).filter(r => r[0]);
+      rowsK = filtrarEmpresa(rowsK, 2);
+      const porSup = {};
+      rowsK.forEach(function(r) {
+        cap.total++;
+        cap.asistentes += parseInt(r[16]) || 0;
+        const fecha = String(r[8] || '').substring(0, 10);
+        if (fecha.substring(0, 7) === mesActStr) {
+          cap.este_mes++;
+          cap.asistentes_mes += parseInt(r[16]) || 0;
+          const sup = r[19] || '';
+          const nombre = r[20] || sup;
+          if (sup) porSup[sup] = { count: (porSup[sup]?.count || 0) + (parseInt(r[16]) || 0), nombre: nombre };
+        }
+      });
+      const top = Object.keys(porSup).sort((a, b) => porSup[b].count - porSup[a].count)[0];
+      if (top) {
+        cap.top_supervisor = porSup[top].nombre;
+        cap.top_sup_count = porSup[top].count;
+      }
+    }
+
+    // ═══ COMPARATIVA RAPEL vs VERFRUT ═══
+    const comparativa = {
+      visitas: { RAPEL: 0, VERFRUT: 0 },
+      casos: { RAPEL: 0, VERFRUT: 0 },
+      fusiones: { RAPEL: 0, VERFRUT: 0 },
+      capacitaciones: { RAPEL: 0, VERFRUT: 0 }
+    };
+    ['Visitas_Campo', 'BD_Casos', 'Fusiones_Buses', 'CAPACITACIONES_HDR'].forEach(function(h, idx) {
+      const ws = ss.getSheetByName(h);
+      const keys = ['visitas', 'casos', 'fusiones', 'capacitaciones'];
+      if (ws && ws.getLastRow() > 1) {
+        ws.getDataRange().getValues().slice(1).forEach(function(r) {
+          if (!r[0]) return;
+          const emp = String(r[2] || '').toUpperCase();
+          if (emp.indexOf('RAPEL') !== -1) comparativa[keys[idx]].RAPEL++;
+          else if (emp.indexOf('VERFRUT') !== -1) comparativa[keys[idx]].VERFRUT++;
+        });
+      }
     });
-    var elapsed = Date.now() - t0;
-    var code = resp.getResponseCode();
-    if (code !== 200) {
-      console.log('[getEstadisticasAzure] HTTP ' + code + ': ' + resp.getContentText().substring(0, 200));
-      return { success: false, error: 'HTTP ' + code };
+
+    // ═══ ALERTAS ═══
+    const alertas = [];
+    if (cas.retrasados > 0) {
+      alertas.push({ tipo: 'critico', icon: '🔴', msg: cas.retrasados + ' casos retrasados requieren atención' });
     }
-    var data = JSON.parse(resp.getContentText());
-    data.tiempo_apps_script = elapsed;
-    return data;
+    if (vis.sin_cerrar > 10) {
+      alertas.push({ tipo: 'advertencia', icon: '🟡', msg: vis.sin_cerrar + ' visitas sin cerrar' });
+    }
+    if (fus.pendientes > 0) {
+      alertas.push({ tipo: 'info', icon: '🟠', msg: fus.pendientes + ' fusiones pendientes de validación' });
+    }
+    if (cap.este_mes === 0) {
+      alertas.push({ tipo: 'critico', icon: '🔴', msg: 'Sin capacitaciones registradas este mes' });
+    } else if (cap.este_mes < 5) {
+      alertas.push({ tipo: 'advertencia', icon: '🟡', msg: 'Solo ' + cap.este_mes + ' capacitaciones este mes (meta: 10)' });
+    }
+
+    // ═══ TENDENCIA 6 MESES ═══
+    const tendencia = {};
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      const key = Utilities.formatDate(d, 'GMT-5', 'yyyy-MM');
+      tendencia[key] = { visitas: 0, casos: 0, fusiones: 0, capacitaciones: 0 };
+    }
+
+    const procesarTendencia = function(ws, tipo, colFecha, colEmp) {
+      if (!ws || ws.getLastRow() < 2) return;
+      ws.getDataRange().getValues().slice(1).forEach(function(r) {
+        if (!r[0]) return;
+        if (empresa !== 'AMBAS' && String(r[colEmp] || '').toUpperCase() !== empresa) return;
+        const f = String(r[colFecha] || '').substring(0, 7);
+        if (tendencia[f]) tendencia[f][tipo]++;
+      });
+    };
+    procesarTendencia(wsV, 'visitas', 1, 2);
+    procesarTendencia(wsC, 'casos', 1, 2);
+    procesarTendencia(wsF, 'fusiones', 1, 2);
+    procesarTendencia(wsK, 'capacitaciones', 8, 2);
+
+    const tendenciaArr = Object.keys(tendencia).map(k => ({
+      mes: k,
+      visitas: tendencia[k].visitas,
+      casos: tendencia[k].casos,
+      fusiones: tendencia[k].fusiones,
+      capacitaciones: tendencia[k].capacitaciones
+    }));
+
+    return {
+      success: true,
+      empresa: empresa,
+      fecha: hoyStr,
+      visitas: vis,
+      casos: cas,
+      fusiones: fus,
+      capacitaciones: cap,
+      comparativa: comparativa,
+      alertas: alertas,
+      tendencia: tendenciaArr
+    };
   } catch(e) {
-    console.log('[getEstadisticasAzure] error: ' + e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+function testStockReal() {
+  const receta = invLeerReceta();
+  const ingresos = invLeerIngresos();
+  const armados = invLeerArmados();
+  const stock = invCalcularStock(receta);
+  
+  Logger.log('════════ RECETA ════════');
+  receta.forEach(r => {
+    Logger.log('  ' + r.producto + ' → ' + r.cantidad + ' ' + r.unidad + ' por canasta');
+  });
+  
+  Logger.log('\n════════ INGRESOS ════════');
+  if (ingresos.length === 0) Logger.log('  (vacío)');
+  ingresos.forEach(i => {
+    Logger.log('  ' + i.producto + ' → ingresado: ' + i.cantidad + ' ' + i.unidad);
+  });
+  
+  Logger.log('\n════════ ARMADOS ════════');
+  Logger.log('  Total canastas armadas: ' + armados.reduce((s,a) => s + Number(a.cantidad||0), 0));
+  
+  Logger.log('\n════════ STOCK CALCULADO ════════');
+  stock.forEach(s => {
+    Logger.log('  ' + s.producto + 
+               ' | stock: ' + s.stock + 
+               ' | receta necesita: ' + (receta.find(r => r.producto === s.producto)?.cantidad || '?') + 
+               ' por canasta | canastas posibles: ' + Math.floor(s.stock / (receta.find(r => r.producto === s.producto)?.cantidad || 1)));
+  });
+  
+  // Calcular el máximo real
+  const maxArmables = stock.map(s => {
+    const r = receta.find(x => x.producto === s.producto);
+    const porCanasta = r ? Number(r.cantidad) : 1;
+    return Math.floor(s.stock / porCanasta);
+  });
+  
+  Logger.log('\n════════ RESULTADO FINAL ════════');
+  Logger.log('  Canastas máximas armables: ' + Math.min(...maxArmables));
+}
+// ═══════════════════════════════════════════════════════════════
+// 🚀 INTEGRACIÓN AZURE SQL - Sistema RL v3.0
+// Funciones para sincronizar atenciones con Azure SQL Database
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Envía una atención a Azure SQL Database vía Azure Functions
+ * Esta función es NO BLOQUEANTE: si falla, no afecta el flujo principal
+ * El sistema sigue funcionando con Sheets como antes
+ * 
+ * @param {Object} atencionData - Datos de la atención
+ * @returns {Object} - { success: bool, azureId: int, error: string }
+ */
+function saveAtencionAzure(atencionData) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiUrl = props.getProperty('AZURE_API_URL');
+    const apiKey = props.getProperty('AZURE_API_KEY');
+    
+    // Validación: si no hay configuración, saltar silenciosamente
+    if (!apiUrl || !apiKey) {
+      console.log('⚠️ Azure API no configurada en propiedades, saltando...');
+      return { success: false, skipped: true };
+    }
+    
+    // Preparar payload con valores por defecto
+    const payload = {
+      nro: atencionData.nro || null,
+      fecha_atencion: atencionData.fecha_atencion || null,
+      hora_inicio: atencionData.hora_inicio || '',
+      hora_termino: atencionData.hora_termino || '',
+      nro_semana: atencionData.nro_semana || null,
+      mes: atencionData.mes || null,
+      anio: atencionData.anio || null,
+      dni: atencionData.dni || '',
+      nombre: atencionData.nombre || '',
+      sexo: atencionData.sexo || '',
+      fecha_inicio_periodo: atencionData.fecha_inicio_periodo || null,
+      empresa: atencionData.empresa || '',
+      fundo: atencionData.fundo || '',
+      cargo: atencionData.cargo || '',
+      ruta: atencionData.ruta || '',
+      codigo: atencionData.codigo || '',
+      fundo_actual: atencionData.fundo_actual || '',
+      celular: atencionData.celular || '',
+      supervisor: atencionData.supervisor || '',
+      detalle_documento: atencionData.detalle_documento || '',
+      fecha_inicio_doc: atencionData.fecha_inicio_doc || null,
+      fecha_termino_doc: atencionData.fecha_termino_doc || null,
+      dias_transcurridos: atencionData.dias_transcurridos || 0,
+      responsable_recepcion: atencionData.responsable_recepcion || '',
+      observaciones: atencionData.observaciones || '',
+      estado: atencionData.estado || 'EN PROCESO',
+      usuario_sistema: atencionData.usuario_sistema || ''
+    };
+    
+    // Validación mínima
+    if (!payload.dni || !payload.nombre) {
+      console.error('⚠️ Faltan campos requeridos: dni o nombre');
+      return { success: false, error: 'Faltan campos requeridos' };
+    }
+    
+    // Llamar a la API de Azure
+    const url = apiUrl + '/atenciones';
+    const options = {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { 'x-functions-key': apiKey },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+    
+    console.log('🚀 Enviando atención a Azure SQL para DNI:', payload.dni);
+    const startTime = new Date().getTime();
+    const response = UrlFetchApp.fetch(url, options);
+    const elapsed = new Date().getTime() - startTime;
+    
+    const code = response.getResponseCode();
+    const text = response.getContentText();
+    
+    if (code === 201 || code === 200) {
+      const body = JSON.parse(text);
+      console.log('✅ Azure SQL OK - ID:', body.id, '- Tiempo:', elapsed + 'ms');
+      return { success: true, azureId: body.id, elapsed: elapsed };
+    } else {
+      console.error('⚠️ Azure respondió con código:', code, '- Respuesta:', text);
+      return { success: false, error: 'HTTP ' + code, body: text };
+    }
+  } catch (e) {
+    console.error('❌ Excepción al llamar Azure:', e.toString());
     return { success: false, error: e.toString() };
   }
 }
 
-// Mapea respuesta Azure stats → shape de stats que usa el frontend (CACHE.stats)
-// Frontend espera: { hoy, mes, anio, total, enProceso, finalizados, porMes, porTipo, porEstado }
-function _statsAzureToFrontend_(az) {
-  var r = (az && az.resumen_global) || {};
+
+/**
+ * Lista atenciones desde Azure SQL (más rápido que Sheets)
+ * @param {Object} filtros - { supervisor, empresa, desde, hasta, dni, estado, limite, pagina }
+ * @returns {Object} - { success, data, total }
+ */
+function listAtencionesAzure(filtros) {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const apiUrl = props.getProperty('AZURE_API_URL');
+    const apiKey = props.getProperty('AZURE_API_KEY');
+    
+    if (!apiUrl || !apiKey) {
+      return { success: false, error: 'Azure no configurado' };
+    }
+    
+    // Construir query string
+    const params = [];
+    if (filtros) {
+      if (filtros.supervisor) params.push('supervisor=' + encodeURIComponent(filtros.supervisor));
+      if (filtros.empresa)    params.push('empresa=' + encodeURIComponent(filtros.empresa));
+      if (filtros.desde)      params.push('desde=' + encodeURIComponent(filtros.desde));
+      if (filtros.hasta)      params.push('hasta=' + encodeURIComponent(filtros.hasta));
+      if (filtros.dni)        params.push('dni=' + encodeURIComponent(filtros.dni));
+      if (filtros.estado)     params.push('estado=' + encodeURIComponent(filtros.estado));
+      if (filtros.limite)     params.push('limite=' + filtros.limite);
+      if (filtros.pagina)     params.push('pagina=' + filtros.pagina);
+    }
+    
+    const queryString = params.length > 0 ? '?' + params.join('&') : '';
+    const url = apiUrl + '/atenciones' + queryString;
+    
+    const options = {
+      method: 'get',
+      headers: { 'x-functions-key': apiKey },
+      muteHttpExceptions: true
+    };
+    
+    const response = UrlFetchApp.fetch(url, options);
+    const code = response.getResponseCode();
+    
+    if (code === 200) {
+      return JSON.parse(response.getContentText());
+    } else {
+      console.error('⚠️ Azure GET falló con código:', code);
+      return { success: false, error: 'HTTP ' + code };
+    }
+  } catch (e) {
+    console.error('❌ Excepción al consultar Azure:', e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+
+/**
+ * 🧪 FUNCIÓN DE PRUEBA - Verifica que la integración con Azure funcione
+ * Ejecutar manualmente desde el editor de Apps Script
+ */
+function testAzureIntegration() {
+  console.log('═══════════════════════════════════════');
+  console.log('🧪 TEST DE INTEGRACIÓN AZURE SQL');
+  console.log('═══════════════════════════════════════');
+  
+  // Test 1: Verificar propiedades
+  console.log('\n📋 Test 1: Verificar configuración');
+  const props = PropertiesService.getScriptProperties();
+  const apiUrl = props.getProperty('AZURE_API_URL');
+  const apiKey = props.getProperty('AZURE_API_KEY');
+  console.log('AZURE_API_URL:', apiUrl ? '✅ OK' : '❌ MISSING');
+  console.log('AZURE_API_KEY:', apiKey ? '✅ OK (length=' + apiKey.length + ')' : '❌ MISSING');
+  
+  if (!apiUrl || !apiKey) {
+    console.error('❌ FAIL: Configurar propiedades primero');
+    return;
+  }
+  
+  // Test 2: GET (listar atenciones existentes)
+  console.log('\n📋 Test 2: GET /api/atenciones (listar)');
+  const listResult = listAtencionesAzure({ limite: 5 });
+  console.log('Resultado:', JSON.stringify(listResult, null, 2));
+  
+  if (!listResult.success) {
+    console.error('❌ FAIL: GET no funcionó');
+    return;
+  }
+  console.log('✅ GET OK - Total atenciones en Azure:', listResult.total);
+  
+  // Test 3: POST (crear atención de prueba)
+  console.log('\n📋 Test 3: POST /api/atenciones (crear)');
+  const testAtencion = {
+    dni: '88888888',
+    nombre: 'TEST APPS SCRIPT - ' + new Date().toISOString(),
+    empresa: 'VERFRUT',
+    supervisor: 'jtimoteo',
+    estado: 'EN PROCESO',
+    fecha_atencion: Utilities.formatDate(new Date(), 'GMT-5', 'yyyy-MM-dd'),
+    detalle_documento: 'Test desde Apps Script',
+    observaciones: 'Verificación de integración Azure'
+  };
+  
+  const createResult = saveAtencionAzure(testAtencion);
+  console.log('Resultado:', JSON.stringify(createResult, null, 2));
+  
+  if (!createResult.success) {
+    console.error('❌ FAIL: POST no funcionó');
+    return;
+  }
+  console.log('✅ POST OK - Azure ID:', createResult.azureId);
+  
+  // Resumen
+  console.log('\n═══════════════════════════════════════');
+  console.log('🎉 INTEGRACIÓN AZURE SQL: FUNCIONANDO');
+  console.log('═══════════════════════════════════════');
+  console.log('✅ Configuración OK');
+  console.log('✅ GET funciona');
+  console.log('✅ POST funciona');
+  console.log('\nListo para integrar con saveAtencion() principal');
+}
+/**
+ * 🧪 TEST: Probar saveAtencion completo (Sheets + Firebase + Azure)
+ */
+function testSaveAtencionCompleto() {
+  console.log('═══════════════════════════════════════');
+  console.log('🧪 TEST: saveAtencion COMPLETO');
+  console.log('═══════════════════════════════════════');
+  
+  const testData = {
+    dni: '77777777',
+    nombre: 'TEST INTEGRACION COMPLETA - ' + Utilities.formatDate(new Date(), 'GMT-5', 'HH:mm:ss'),
+    sexo: 'M',
+    empresa: 'VERFRUT',
+    fundo: 'TEST',
+    cargo: 'TEST',
+    supervisor: 'jtimoteo',
+    detalle_documento: 'Test integracion Sheets + Firebase + Azure',
+    observaciones: 'Si todo funciona, este registro debe estar en los 3 lugares',
+    estado: 'EN PROCESO',
+    usuario_sistema: 'jtimoteo'
+  };
+  
+  console.log('📤 Enviando atención de prueba...');
+  const result = saveAtencion(testData);
+  
+  console.log('\n📥 Resultado:');
+  console.log(JSON.stringify(result, null, 2));
+  
+  console.log('\n📊 Verificación:');
+  console.log('✅ Sheets - Fila #' + result.nro + ' en hoja "' + result.hoja + '"');
+  console.log('✅ Firebase - actualizado (ver consola Firebase)');
+  
+  if (result.azure && result.azure.synced) {
+    console.log('✅ Azure SQL - ID: ' + result.azure.id);
+    console.log('\n🎉 INTEGRACIÓN 100% FUNCIONAL');
+  } else {
+    console.log('⚠️ Azure SQL - NO se sincronizó');
+    console.log('   Verificar logs anteriores para ver el error');
+  }
+}
+// ═══════════════════════════════════════════════════════════════
+// 🚀 MIGRACIÓN MASIVA DE HISTÓRICOS A AZURE SQL
+// Migra atenciones desde Google Sheets a Azure SQL en lotes
+// ═══════════════════════════════════════════════════════════════
+
+const MESES_TEXTO_A_NUMERO = {
+  'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+  'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+  'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+};
+
+/**
+ * Convierte texto del mes a número
+ */
+function convertirMes(mesTexto) {
+  if (!mesTexto) return null;
+  if (typeof mesTexto === 'number') return mesTexto;
+  const texto = String(mesTexto).toLowerCase().trim();
+  return MESES_TEXTO_A_NUMERO[texto] || null;
+}
+
+/**
+ * Convierte una fecha a formato YYYY-MM-DD
+ */
+function fechaParaAzure(valor) {
+  if (!valor) return null;
+  if (valor instanceof Date) {
+    if (isNaN(valor.getTime())) return null;
+    return Utilities.formatDate(valor, 'GMT-5', 'yyyy-MM-dd');
+  }
+  if (typeof valor === 'string') {
+    const trimmed = valor.trim();
+    if (!trimmed) return null;
+    const m = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) {
+      return m[3] + '-' + m[2].padStart(2,'0') + '-' + m[1].padStart(2,'0');
+    }
+    if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+      return trimmed.substring(0, 10);
+    }
+  }
+  return null;
+}
+
+/**
+ * Convierte una hora a string HH:mm
+ */
+function horaParaAzure(valor) {
+  if (!valor) return '';
+  if (valor instanceof Date) {
+    return Utilities.formatDate(valor, 'GMT-5', 'HH:mm');
+  }
+  if (typeof valor === 'string') {
+    return valor.trim().substring(0, 8);
+  }
+  return String(valor);
+}
+
+/**
+ * Convierte una fila del Sheet a objeto Azure
+ */
+function filaAObjetoAzure(fila) {
   return {
-    hoy:        Number(r.hoy)         || 0,
-    mes:        Number(r.este_mes)    || 0,
-    anio:       Number(r.este_anio)   || 0,
-    total:      Number(r.total)       || 0,
-    enProceso:  Number(r.en_proceso)  || 0,
-    finalizados:Number(r.finalizados) || 0,
-    porMes:     az.por_mes    || {},
-    porTipo:    az.por_tipo   || {},
-    porEstado:  az.por_estado || {}
+    nro: parseInt(fila[0]) || null,
+    fecha_atencion: fechaParaAzure(fila[1]),
+    hora_inicio: horaParaAzure(fila[2]),
+    hora_termino: horaParaAzure(fila[3]),
+    nro_semana: parseInt(fila[4]) || null,
+    mes: convertirMes(fila[5]),
+    anio: parseInt(fila[6]) || null,
+    dni: String(fila[7] || '').trim(),
+    nombre: String(fila[8] || '').trim(),
+    sexo: String(fila[9] || '').trim(),
+    fecha_inicio_periodo: fechaParaAzure(fila[10]),
+    empresa: String(fila[11] || '').trim(),
+    fundo: String(fila[12] || '').trim(),
+    cargo: String(fila[13] || '').trim(),
+    ruta: String(fila[14] || '').trim(),
+    codigo: String(fila[15] || '').trim(),
+    fundo_actual: String(fila[16] || '').trim(),
+    celular: String(fila[17] || '').trim(),
+    supervisor: String(fila[18] || '').trim(),
+    detalle_documento: String(fila[19] || '').trim(),
+    fecha_inicio_doc: fechaParaAzure(fila[20]),
+    fecha_termino_doc: fechaParaAzure(fila[21]),
+    dias_transcurridos: parseInt(fila[22]) || 0,
+    responsable_recepcion: String(fila[23] || '').trim(),
+    observaciones: String(fila[24] || '').trim(),
+    estado: String(fila[25] || 'EN PROCESO').trim(),
+    usuario_sistema: String(fila[27] || '').trim()
   };
 }
 
-// Versión optimizada de getPreload. Mismo shape de respuesta:
-//   { success, data: { atenciones, stats, visitas, casos, fusiones, solicitudes,
-//                      estadisticasAdmin, usuarios, supervisores, timestamp, _ts } }
-// Diferencia: stats se obtiene desde Azure SQL (~500ms) en vez de getEstadisticas
-// (que itera 47k filas en Apps Script, ~30s). Si Azure falla, fallback a getEstadisticas.
-function getPreloadOptimizado(p) {
-  p = p || {};
-  var startTime = Date.now();
+/**
+ * Envía un lote a Azure
+ */
+function enviarLoteAzure(atenciones) {
+  const props = PropertiesService.getScriptProperties();
+  const apiUrl = props.getProperty('AZURE_API_URL');
+  const apiKey = props.getProperty('AZURE_API_KEY');
+  
+  const url = apiUrl + '/atenciones/batch';
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'x-functions-key': apiKey },
+    payload: JSON.stringify({ atenciones: atenciones }),
+    muteHttpExceptions: true
+  };
+  
   try {
-    var cache = CacheService.getUserCache();
-    var cacheKey = 'preload_opt_' + (p.usuario||'') + '_' + (p.rol||'');
-    var cached = cache.get(cacheKey);
+    const response = UrlFetchApp.fetch(url, options);
+    const code = response.getResponseCode();
+    if (code === 200) {
+      return JSON.parse(response.getContentText());
+    } else {
+      return { success: false, error: 'HTTP ' + code, body: response.getContentText() };
+    }
+  } catch (e) {
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * 🚀 MIGRA UN AÑO COMPLETO desde Sheets a Azure SQL
+ * Maneja timeouts de Apps Script (6 min) con reanudación automática
+ */
+function migrarAnio(anio, fechaTope) {
+  console.log('═══════════════════════════════════════');
+  console.log('🚀 MIGRACIÓN AÑO ' + anio);
+  if (fechaTope) console.log('   Hasta antes de: ' + fechaTope);
+  console.log('═══════════════════════════════════════');
+  
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const sheet = ss.getSheetByName('BB. DE REGISTROS ' + anio);
+  
+  if (!sheet) {
+    console.error('❌ No existe hoja "BB. DE REGISTROS ' + anio + '"');
+    return;
+  }
+  
+  const lastRow = sheet.getLastRow();
+  const lastCol = Math.max(28, sheet.getLastColumn());
+  const totalDataRows = lastRow - 1;
+  
+  console.log('📊 Hoja: BB. DE REGISTROS ' + anio);
+  console.log('   Total filas datos: ' + totalDataRows);
+  
+  if (totalDataRows === 0) {
+    console.log('⚠️ Hoja vacía, nada que migrar');
+    return;
+  }
+  
+  const props = PropertiesService.getScriptProperties();
+  const progresoKey = 'MIGRACION_' + anio;
+  const progresoStr = props.getProperty(progresoKey);
+  let progreso = progresoStr ? JSON.parse(progresoStr) : {
+    total: totalDataRows,
+    procesadas: 0,
+    insertadas: 0,
+    fallidas: 0,
+    omitidas: 0,
+    ultimaFila: 1,
+    completado: false,
+    fechaTope: fechaTope || null,
+    iniciado: new Date().toISOString()
+  };
+  
+  if (progreso.completado) {
+    console.log('✅ Año ' + anio + ' YA está migrado');
+    console.log('   Insertadas: ' + progreso.insertadas);
+    console.log('   Si quieres re-migrar: resetearProgresoMigracion(' + anio + ')');
+    return;
+  }
+  
+  console.log('   Progreso previo:');
+  console.log('   - Procesadas: ' + progreso.procesadas + '/' + progreso.total);
+  console.log('   - Insertadas: ' + progreso.insertadas);
+  console.log('   - Última fila: ' + progreso.ultimaFila);
+  
+  const startTime = new Date().getTime();
+  const TIMEOUT_MARGIN = 4.5 * 60 * 1000;
+  const LOTE_SIZE = 50;
+  
+  let filaActual = progreso.ultimaFila + 1;
+  
+  while (filaActual <= lastRow) {
+    const elapsed = new Date().getTime() - startTime;
+    if (elapsed > TIMEOUT_MARGIN) {
+      console.log('\n⏱️ TIMEOUT cercano, guardando progreso...');
+      progreso.ultimaFila = filaActual - 1;
+      props.setProperty(progresoKey, JSON.stringify(progreso));
+      console.log('💾 Progreso guardado en fila: ' + progreso.ultimaFila);
+      console.log('🔄 EJECUTAR DE NUEVO migrar' + anio + '() para continuar');
+      return;
+    }
+    
+    const numFilas = Math.min(LOTE_SIZE, lastRow - filaActual + 1);
+    const datos = sheet.getRange(filaActual, 1, numFilas, lastCol).getValues();
+    
+    const atenciones = [];
+    let omitidasLote = 0;
+    for (const fila of datos) {
+      const obj = filaAObjetoAzure(fila);
+      
+      if (fechaTope && obj.fecha_atencion && obj.fecha_atencion >= fechaTope) {
+        omitidasLote++;
+        continue;
+      }
+      
+      if (!obj.dni || !obj.nombre) {
+        omitidasLote++;
+        continue;
+      }
+      atenciones.push(obj);
+    }
+    
+    if (atenciones.length > 0) {
+      const result = enviarLoteAzure(atenciones);
+      
+      if (result.success) {
+        progreso.insertadas += result.inserted || 0;
+        progreso.fallidas += result.failed || 0;
+        if (result.errors && result.errors.length > 0) {
+          console.log('⚠️ Errores en lote (filas ' + filaActual + '-' + (filaActual + numFilas - 1) + '):');
+          result.errors.slice(0, 3).forEach(e => console.log('   ' + JSON.stringify(e)));
+        }
+      } else {
+        console.error('❌ FALLO en lote (filas ' + filaActual + '-' + (filaActual + numFilas - 1) + '):');
+        console.error(JSON.stringify(result));
+        progreso.fallidas += atenciones.length;
+      }
+    }
+    
+    progreso.omitidas += omitidasLote;
+    progreso.procesadas += numFilas;
+    filaActual += numFilas;
+    
+    if (progreso.procesadas % 250 === 0 || filaActual > lastRow) {
+      const pct = Math.round(progreso.procesadas / progreso.total * 100);
+      console.log('📊 ' + pct + '% - Procesadas: ' + progreso.procesadas + '/' + progreso.total + ' | Insertadas: ' + progreso.insertadas + ' | Tiempo: ' + Math.round((new Date().getTime() - startTime) / 1000) + 's');
+    }
+    
+    if (progreso.procesadas % 500 === 0) {
+      progreso.ultimaFila = filaActual - 1;
+      props.setProperty(progresoKey, JSON.stringify(progreso));
+    }
+  }
+  
+  progreso.completado = true;
+  progreso.ultimaFila = lastRow;
+  progreso.terminado = new Date().toISOString();
+  props.setProperty(progresoKey, JSON.stringify(progreso));
+  
+  const totalElapsed = (new Date().getTime() - startTime) / 1000;
+  
+  console.log('\n═══════════════════════════════════════');
+  console.log('✅ MIGRACIÓN AÑO ' + anio + ' COMPLETADA');
+  console.log('═══════════════════════════════════════');
+  console.log('Total filas:   ' + progreso.total);
+  console.log('Procesadas:    ' + progreso.procesadas);
+  console.log('Insertadas:    ' + progreso.insertadas);
+  console.log('Omitidas:      ' + progreso.omitidas);
+  console.log('Fallidas:      ' + progreso.fallidas);
+  console.log('Tiempo total:  ' + Math.round(totalElapsed) + ' segundos');
+  console.log('Velocidad:     ' + Math.round(progreso.insertadas / totalElapsed) + ' inserts/seg');
+}
+
+/**
+ * 🚀 Migrar año 2024 completo
+ */
+function migrar2024() {
+  migrarAnio(2024);
+}
+
+/**
+ * 🚀 Migrar año 2025 completo
+ */
+function migrar2025() {
+  migrarAnio(2025);
+}
+
+/**
+ * 🚀 Migrar 2026 hasta ayer (excluye atenciones de hoy)
+ */
+function migrar2026() {
+  const hoy = Utilities.formatDate(new Date(), 'GMT-5', 'yyyy-MM-dd');
+  console.log('🗓️ Migrando 2026 con fecha < ' + hoy);
+  migrarAnio(2026, hoy);
+}
+
+/**
+ * 📋 Ver progreso de todas las migraciones
+ */
+function verProgresoMigracion() {
+  const props = PropertiesService.getScriptProperties();
+  const anios = [2024, 2025, 2026];
+  
+  console.log('═══════════════════════════════════════');
+  console.log('📊 PROGRESO DE MIGRACIÓN');
+  console.log('═══════════════════════════════════════');
+  
+  for (const anio of anios) {
+    const progreso = props.getProperty('MIGRACION_' + anio);
+    if (progreso) {
+      const p = JSON.parse(progreso);
+      const pct = Math.round(p.procesadas / p.total * 100);
+      console.log('\n📅 Año ' + anio + ':');
+      console.log('   Estado:      ' + (p.completado ? '✅ COMPLETADO' : '⏳ EN PROGRESO ' + pct + '%'));
+      console.log('   Total:       ' + p.total);
+      console.log('   Procesadas:  ' + p.procesadas);
+      console.log('   Insertadas:  ' + p.insertadas);
+      console.log('   Omitidas:    ' + p.omitidas);
+      console.log('   Fallidas:    ' + p.fallidas);
+      console.log('   Última fila: ' + p.ultimaFila);
+    } else {
+      console.log('\n📅 Año ' + anio + ': Sin iniciar');
+    }
+  }
+}
+
+/**
+ * 🔄 Resetea progreso de un año (para re-migrar)
+ */
+function resetearProgresoMigracion(anio) {
+  const props = PropertiesService.getScriptProperties();
+  props.deleteProperty('MIGRACION_' + anio);
+  console.log('✅ Progreso del año ' + anio + ' reseteado');
+}
+
+/**
+ * 🔄 Resetear progreso de TODOS los años
+ */
+function resetearTodoElProgreso() {
+  const props = PropertiesService.getScriptProperties();
+  const anios = [2024, 2025, 2026];
+  
+  console.log('═══════════════════════════════════════');
+  console.log('🔄 RESETEANDO PROGRESO');
+  console.log('═══════════════════════════════════════');
+  
+  for (const anio of anios) {
+    const key = 'MIGRACION_' + anio;
+    const tenia = props.getProperty(key);
+    if (tenia) {
+      props.deleteProperty(key);
+      console.log('✅ Borrado: MIGRACION_' + anio);
+    } else {
+      console.log('ℹ️ Sin progreso previo: MIGRACION_' + anio);
+    }
+  }
+  
+  console.log('\n✅ TODO LIMPIO - Listo para migrar desde cero');
+  console.log('\n👉 SIGUIENTE PASO: Ejecutar migrar2024');
+}
+/**
+ * 🧪 TEST: Verificar que el endpoint stats de Azure funciona
+ */
+function testStatsAzure() {
+  console.log('═══════════════════════════════════════');
+  console.log('🧪 TEST endpoint atenciones/stats');
+  console.log('═══════════════════════════════════════');
+  
+  try {
+    const startTime = new Date().getTime();
+    const result = getEstadisticasAzure({});
+    const elapsed = new Date().getTime() - startTime;
+    
+    console.log('\n📊 RESULTADO:');
+    console.log('Success:', result.success);
+    console.log('Tiempo Apps Script→Azure:', elapsed, 'ms');
+    console.log('Tiempo SQL Azure:', result.elapsed, 'ms');
+    console.log('Fuente:', result.fuente);
+    
+    if (result.success && result.resumen_global) {
+      console.log('\n📋 RESUMEN GLOBAL:');
+      console.log('Total:', result.resumen_global.total);
+      console.log('Hoy:', result.resumen_global.hoy);
+      console.log('Este mes:', result.resumen_global.este_mes);
+      console.log('En proceso:', result.resumen_global.en_proceso);
+      console.log('Finalizados:', result.resumen_global.finalizados);
+      
+      console.log('\n📅 POR AÑO:');
+      console.log(JSON.stringify(result.por_anio, null, 2));
+      
+      console.log('\n🏢 POR EMPRESA:');
+      console.log(JSON.stringify(result.por_empresa, null, 2));
+    } else {
+      console.log('❌ Error:', result.error);
+    }
+    
+    console.log('\n═══════════════════════════════════════');
+    console.log('✅ TEST COMPLETADO');
+    console.log('═══════════════════════════════════════');
+  } catch (e) {
+    console.error('❌ Excepción:', e.toString());
+  }
+}
+// ═══════════════════════════════════════════════════════════════
+// 🚀 ENDPOINTS AZURE SQL - getEstadisticasAzure + getPreloadOptimizado
+// FASE 7.5 - Optimización del preload con stats SQL agregadas
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Helper: URL base de Azure
+ */
+function _azureBaseUrl_() {
+  const props = PropertiesService.getScriptProperties();
+  const apiUrl = props.getProperty('AZURE_API_URL');
+  if (!apiUrl) throw new Error('AZURE_API_URL no configurada');
+  return apiUrl;
+}
+
+/**
+ * Helper: Headers de autenticación Azure
+ */
+function _azureAuthHeaders_() {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('AZURE_API_KEY');
+  if (!apiKey) throw new Error('AZURE_API_KEY no configurada');
+  return { 'x-functions-key': apiKey };
+}
+
+/**
+ * 🚀 Obtiene estadísticas agregadas desde Azure SQL
+ * Llama al endpoint /api/atenciones/stats que ejecuta SQL agregado
+ * 
+ * @param {Object} filtros - { anio, empresa }
+ * @returns {Object} - { success, resumen_global, por_mes, por_anio, por_empresa, por_estado, por_supervisor, por_tipo, elapsed, fuente }
+ */
+function getEstadisticasAzure(filtros) {
+  filtros = filtros || {};
+  
+  try {
+    const baseUrl = _azureBaseUrl_();
+    const headers = _azureAuthHeaders_();
+    
+    // Construir query string
+    const params = [];
+    if (filtros.anio)    params.push('anio=' + encodeURIComponent(filtros.anio));
+    if (filtros.empresa) params.push('empresa=' + encodeURIComponent(filtros.empresa));
+    const queryString = params.length > 0 ? '?' + params.join('&') : '';
+    
+    const url = baseUrl + '/atenciones/stats' + queryString;
+    const options = {
+      method: 'get',
+      headers: headers,
+      muteHttpExceptions: true
+    };
+    
+    const startTime = new Date().getTime();
+    const response = UrlFetchApp.fetch(url, options);
+    const elapsed = new Date().getTime() - startTime;
+    const code = response.getResponseCode();
+    
+    if (code === 200) {
+      const data = JSON.parse(response.getContentText());
+      data.tiempo_apps_script = elapsed;
+      return data;
+    } else {
+      console.error('Stats Azure error:', code, response.getContentText());
+      return { success: false, error: 'HTTP ' + code };
+    }
+  } catch (e) {
+    console.error('Stats Azure exception:', e.toString());
+    return { success: false, error: e.toString() };
+  }
+}
+
+/**
+ * Mapea respuesta de stats Azure al formato que espera el frontend
+ */
+function _statsAzureToFrontend_(az) {
+  if (!az || !az.success || !az.resumen_global) return null;
+  
+  const r = az.resumen_global;
+  return {
+    hoy:         r.hoy || 0,
+    mes:         r.este_mes || 0,
+    anio:        r.este_anio || r.total || 0,
+    total:       r.total || 0,
+    enProceso:   r.en_proceso || 0,
+    finalizados: r.finalizados || 0,
+    porMes:      az.por_mes || {},
+    porTipo:     az.por_tipo || {},
+    porEstado:   az.por_estado || {}
+  };
+}
+
+/**
+ * 🚀 Versión optimizada de getPreload usando Azure SQL para stats
+ * - Stats vienen de Azure (rápido)
+ * - Visitas, casos, etc. siguen viniendo de Sheets (sin cambios)
+ * - Si Azure falla, fallback a getPreload original
+ */
+function getPreloadOptimizado(p) {
+  const startTime = new Date().getTime();
+  p = p || {};
+  
+  try {
+    const cache = CacheService.getUserCache();
+    const cacheKey = 'preload_opt_' + (p.usuario || '') + '_' + (p.rol || '');
+    const cached = cache.get(cacheKey);
     if (cached) {
       try {
-        var parsed = JSON.parse(cached);
-        if (parsed._ts && (Date.now() - parsed._ts) < 10 * 60 * 1000) {
+        const parsed = JSON.parse(cached);
+        if (parsed._ts && (Date.now() - parsed._ts) < 5 * 60 * 1000) {
           return { success: true, data: parsed, fromCache: true };
         }
-      } catch(eCached) {}
+      } catch(e) {}
     }
-
-    var rol     = p.rol || '';
-    var empresa = p.empresa || '';
-    var esAdmin = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl'].indexOf(rol) >= 0;
-
-    // Atenciones: solo para supervisores (admins lazy)
-    var atenciones = [];
-    if (!esAdmin) {
-      try { var dA = getAtencionesOptimizado(p); if (dA && dA.success) atenciones = dA.data; } catch(e){}
+    
+    const rol = p.rol || '';
+    const usuario = p.usuario || '';
+    const empresa = p.empresa || '';
+    const esAdmin = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl'].includes(rol);
+    
+    // ── Stats desde Azure (rápido) ──
+    let stats = null;
+    let fuenteStats = 'AZURE';
+    let tiempoStats = 0;
+    
+    const filtrosStats = {};
+    if (empresa && empresa !== 'TODAS' && empresa !== 'AMBAS') {
+      filtrosStats.empresa = empresa;
     }
-
-    // ── STATS via AZURE (la pieza que reemplaza el bottleneck) ──
-    var stats = { hoy:0, mes:0, anio:0, total:0, enProceso:0, finalizados:0, porMes:{}, porTipo:{}, porEstado:{} };
-    var fuenteStats = 'NONE';
-    var tiempoStatsMs = 0;
-    var t0 = Date.now();
-
-    var filtrosAz = {};
-    if (empresa && empresa !== 'TODAS' && empresa !== 'AMBAS') filtrosAz.empresa = empresa;
-    var az = getEstadisticasAzure(filtrosAz);
-    tiempoStatsMs = Date.now() - t0;
-
-    if (az && az.success) {
-      stats = _statsAzureToFrontend_(az);
-      fuenteStats = 'AZURE';
-    } else {
-      // Fallback: Sheets (lento, pero seguro)
+    
+    const statsAzure = getEstadisticasAzure(filtrosStats);
+    
+    if (statsAzure && statsAzure.success) {
+      stats = _statsAzureToFrontend_(statsAzure);
+      tiempoStats = statsAzure.tiempo_apps_script || 0;
+    }
+    
+    // Fallback: si Azure falló, usar getEstadisticas de Sheets
+    if (!stats) {
+      console.log('⚠️ Azure stats falló, fallback a Sheets');
       try {
-        var dS = getEstadisticas(p);
-        if (dS && dS.success) { stats = dS.data; fuenteStats = 'SHEETS'; }
-      } catch(eS){}
+        const r = getEstadisticas(p);
+        if (r.success) {
+          stats = r.data;
+          fuenteStats = 'SHEETS';
+        }
+      } catch(e) {
+        console.error('getEstadisticas error:', e);
+      }
     }
-
-    var visitas = [];
-    try { var dV = getVisitas(p); if (dV.success) visitas = dV.data; } catch(e){}
-
-    var casos = [];
-    try { var dC = getCasos(p); if (dC.success) casos = dC.data; } catch(e){}
-
-    var fusiones = [];
-    try { var dF = getFusiones(p); if (dF.success) fusiones = dF.data; } catch(e){}
-
-    var solicitudes = [];
-    try { if (esAdmin) { var dSo = getSolicitudes(p); if (dSo.success) solicitudes = dSo.data; } } catch(e){}
-
-    var estadisticasAdmin = null;
-
-    var supervisores = [];
-    try { var dSup = getSupervisores(); if (dSup.success) supervisores = dSup.data; } catch(e){}
-
-    var usuarios = [];
-    try { if (rol === 'administrador') { var dU = getUsuarios(p); if (dU.success) usuarios = dU.data; } } catch(e){}
-
-    var elapsed = Date.now() - startTime;
-    var result = {
+    
+    // Si todo falló, fallback a getPreload original
+    if (!stats) {
+      console.log('⚠️ Stats falló completo, usando getPreload original');
+      return getPreload(p);
+    }
+    
+    // ── Atenciones: solo para supervisores en preload ──
+    let atenciones = [];
+    if (!esAdmin) {
+      try { const d = getAtenciones(p); if (d.success) atenciones = d.data; } catch(e){}
+    }
+    
+    // ── Visitas ──
+    let visitas = [];
+    try { const d = getVisitas(p); if (d.success) visitas = d.data; } catch(e){}
+    
+    // ── Casos ──
+    let casos = [];
+    try { const d = getCasos(p); if (d.success) casos = d.data; } catch(e){}
+    
+    // ── Fusiones ──
+    let fusiones = [];
+    try { const d = getFusiones(p); if (d.success) fusiones = d.data; } catch(e){}
+    
+    // ── Solicitudes (solo admins) ──
+    let solicitudes = [];
+    try { if (esAdmin) { const d = getSolicitudes(p); if (d.success) solicitudes = d.data; } } catch(e){}
+    
+    // ── Supervisores ──
+    let supervisores = [];
+    try { const d = getSupervisores(); if (d.success) supervisores = d.data; } catch(e){}
+    
+    // ── Usuarios (solo admin puro) ──
+    let usuarios = [];
+    try { if (rol === 'administrador') { const d = getUsuarios(); if (d.success) usuarios = d.data; } } catch(e){}
+    
+    const tiempoTotal = new Date().getTime() - startTime;
+    
+    const result = {
       atenciones: atenciones,
       stats: stats,
       visitas: visitas,
       casos: casos,
       fusiones: fusiones,
       solicitudes: solicitudes,
-      estadisticasAdmin: estadisticasAdmin,
+      estadisticasAdmin: null,
       usuarios: usuarios,
       supervisores: supervisores,
       timestamp: new Date().getTime(),
       _ts: Date.now(),
+      // Metadata FASE 7.5
       fuente_atenciones: fuenteStats,
-      tiempo_atenciones_ms: tiempoStatsMs,
-      tiempo_total_ms: elapsed
+      tiempo_atenciones_ms: tiempoStats,
+      tiempo_total_ms: tiempoTotal
     };
-
-    try { cache.put(cacheKey, JSON.stringify(result), 600); } catch(ePut){}
-    console.log('[getPreloadOptimizado] total=' + elapsed + 'ms | stats=' + tiempoStatsMs + 'ms | fuente=' + fuenteStats);
+    
+    // Guardar en cache
+    try { cache.put(cacheKey, JSON.stringify(result), 300); } catch(e){}
+    
     return { success: true, data: result };
-
+    
   } catch(e) {
-    console.log('[getPreloadOptimizado] error general, fallback a getPreload original: ' + e.toString());
+    console.error('getPreloadOptimizado error:', e.toString());
+    // Fallback completo
     return getPreload(p);
   }
 }
+/**
+ * 🚀 Versión optimizada de getAtenciones usando Azure SQL
+ * Si Azure responde, usa Azure (rápido)
+ * Si Azure falla, fallback a getAtenciones original (Sheets)
+ */
+function getAtencionesOptimizado(p) {
+  p = p || {};
+  
+  try {
+    // Intentar Azure primero
+    const filtros = {};
+    if (p.dni)        filtros.dni = p.dni;
+    if (p.empresa && p.empresa !== 'AMBAS') filtros.empresa = p.empresa;
+    if (p.supervisor) filtros.supervisor = p.supervisor;
+    if (p.limite)     filtros.limite = p.limite;
+    if (p.pagina)     filtros.pagina = p.pagina;
+    
+    const startTime = new Date().getTime();
+    const result = listAtencionesAzure(filtros);
+    const elapsed = new Date().getTime() - startTime;
+    
+    if (result && result.success && result.data) {
+      // Mapear datos de Azure al formato esperado por el frontend
+      const dataMapeada = result.data.map(function(a) {
+        return {
+          nro: a.nro || a.id,
+          fecha_atencion: a.fecha_atencion ? String(a.fecha_atencion).substring(0, 10) : '',
+          hora_inicio: a.hora_inicio || '',
+          hora_termino: a.hora_termino || '',
+          nro_semana: a.nro_semana || '',
+          mes: a.mes || '',
+          anio: a.anio || '',
+          dni: a.dni || '',
+          nombre: a.nombre || '',
+          sexo: a.sexo || '',
+          fecha_inicio_periodo: a.fecha_inicio_periodo ? String(a.fecha_inicio_periodo).substring(0, 10) : '',
+          empresa: a.empresa || '',
+          fundo: a.fundo || '',
+          cargo: a.cargo || '',
+          ruta: a.ruta || '',
+          codigo: a.codigo || '',
+          fundo_actual: a.fundo_actual || '',
+          celular: a.celular || '',
+          supervisor: a.supervisor || '',
+          detalle_documento: a.detalle_documento || '',
+          fecha_inicio_doc: a.fecha_inicio_doc ? String(a.fecha_inicio_doc).substring(0, 10) : '',
+          fecha_termino_doc: a.fecha_termino_doc ? String(a.fecha_termino_doc).substring(0, 10) : '',
+          dias_transcurridos: a.dias_transcurridos || 0,
+          responsable_recepcion: a.responsable_recepcion || '',
+          observaciones: a.observaciones || '',
+          estado: a.estado || 'EN PROCESO',
+          fecha_registro: a.fecha_creacion || a.fecha_registro || '',
+          usuario_sistema: a.usuario_sistema || ''
+        };
+      });
+      
+      console.log('✅ getAtencionesOptimizado: Azure OK - ' + dataMapeada.length + ' resultados en ' + elapsed + 'ms');
+      return {
+        success: true,
+        data: dataMapeada,
+        total: result.total,
+        fuente: 'AZURE',
+        tiempo: elapsed
+      };
+    }
+  } catch (e) {
+    console.error('getAtencionesOptimizado Azure error:', e.toString());
+  }
+  
+  // Fallback: usar getAtenciones original (Sheets)
+  console.log('⚠️ Fallback a Sheets para getAtenciones');
+  return getAtenciones(p);
+}
+/**
+ * 🧪 DIAGNÓSTICO: Comparar lo que tiene Sheets vs lo que devuelve getVisitas
+ */
+function testVisitaCompletaDiagnostico() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ws = ss.getSheetByName('Visitas_Campo');
+  
+  if (!ws) {
+    console.log('❌ Hoja Visitas_Campo no existe');
+    return;
+  }
+  
+  const lastRow = ws.getLastRow();
+  console.log('📊 Total filas en hoja: ' + lastRow);
+  
+  if (lastRow < 2) return;
+  
+  // ÚLTIMA visita
+  const ultimaFila = ws.getRange(lastRow, 1, 1, ws.getLastColumn()).getValues()[0];
+  
+  console.log('\n═══════════════════════════════════════');
+  console.log('📋 LO QUE HAY EN GOOGLE SHEETS:');
+  console.log('═══════════════════════════════════════');
+  console.log('Nro: ' + ultimaFila[0]);
+  console.log('Fecha registro: ' + ultimaFila[1]);
+  console.log('Empresa: ' + ultimaFila[2]);
+  console.log('Supervisor: ' + ultimaFila[3]);
+  console.log('DNI: ' + ultimaFila[4]);
+  console.log('Correo: ' + ultimaFila[5]);
+  console.log('Fundo: ' + ultimaFila[6]);
+  console.log('Punto: ' + ultimaFila[7]);
+  console.log('Fecha inicio: ' + ultimaFila[8]);
+  console.log('Fecha fin: ' + ultimaFila[9]);
+  console.log('Semana: ' + ultimaFila[10]);
+  console.log('Fecha informe: ' + ultimaFila[11]);
+  console.log('Para: ' + ultimaFila[12]);
+  console.log('Asunto: ' + ultimaFila[13]);
+  console.log('Desarrollo: ' + (ultimaFila[14] ? 'TIENE (' + ultimaFila[14].length + ' chars)' : 'VACÍO'));
+  console.log('Rutas: ' + (ultimaFila[15] ? 'TIENE' : 'VACÍO'));
+  console.log('Acciones: ' + (ultimaFila[16] ? 'TIENE' : 'VACÍO'));
+  console.log('Compromisos: ' + (ultimaFila[17] ? 'TIENE' : 'VACÍO'));
+  console.log('Observaciones: ' + (ultimaFila[18] ? 'TIENE' : 'VACÍO'));
+  console.log('Motivo: ' + (ultimaFila[19] || 'VACÍO'));
+  console.log('Fotos: ' + (ultimaFila[20] || '0'));
+  console.log('Estado: ' + ultimaFila[21]);
+  console.log('Registrado por: ' + ultimaFila[22]);
+  console.log('Enlace informe: ' + (ultimaFila[23] || 'VACÍO'));
+  
+  // Probar getVisitas
+  console.log('\n═══════════════════════════════════════');
+  console.log('📤 LO QUE DEVUELVE getVisitas AL FRONTEND:');
+  console.log('═══════════════════════════════════════');
+  const result = getVisitas({});
+  if (result.success && result.data.length > 0) {
+    const ultima = result.data[result.data.length - 1];
+    console.log('Campos devueltos:', Object.keys(ultima).length);
+    console.log(JSON.stringify(ultima, null, 2));
+    
+    console.log('\n⚠️ CAMPOS QUE FALTAN (formulario los necesita):');
+    const camposEsperados = ['correo', 'punto', 'fecha_inicio', 'fecha_fin',
+                              'para', 'asunto', 'desarrollo', 'rutas', 
+                              'acciones', 'compromisos', 'observaciones',
+                              'motivo', 'fotos'];
+    let faltan = [];
+    camposEsperados.forEach(function(c) {
+      if (ultima[c] === undefined || ultima[c] === null) {
+        faltan.push(c);
+      }
+    });
+    console.log('   Faltan: ' + faltan.join(', '));
+    console.log('   Total que faltan: ' + faltan.length);
+  }
+  
+  console.log('\n═══════════════════════════════════════');
+  console.log('✅ DIAGNÓSTICO COMPLETADO');
+  console.log('═══════════════════════════════════════');
+}
+/**
+ * 🧪 TEST: Verificar que login devuelve cargo
+ */
+function testLoginCargo() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const ws = ss.getSheetByName('Usuarios');
+  const rows = ws.getDataRange().getValues();
+  
+  console.log('═══════════════════════════════════════');
+  console.log('🧪 VERIFICACIÓN COLUMNA CARGO');
+  console.log('═══════════════════════════════════════');
+  console.log('Total usuarios: ' + (rows.length - 1));
+  console.log('Total columnas: ' + rows[0].length);
+  console.log('');
+  console.log('📋 ENCABEZADOS:');
+  for (let i = 0; i < rows[0].length; i++) {
+    console.log('  Columna ' + String.fromCharCode(65 + i) + ' (índice ' + i + '): ' + rows[0][i]);
+  }
+  
+  console.log('');
+  console.log('═══════════════════════════════════════');
+  console.log('👥 USUARIOS Y CARGOS:');
+  console.log('═══════════════════════════════════════');
+  
+  let conCargo = 0;
+  let sinCargo = 0;
+  
+  for (let i = 1; i < rows.length; i++) {
+    const usuario = String(rows[i][1] || '').trim();
+    const nombre = String(rows[i][3] || '').trim();
+    const cargo = String(rows[i][9] || '').trim();
+    
+    if (cargo) {
+      conCargo++;
+      console.log('✅ ' + usuario + ' (' + nombre + ') → ' + cargo);
+    } else {
+      sinCargo++;
+      console.log('❌ ' + usuario + ' (' + nombre + ') → SIN CARGO');
+    }
+  }
+  
+  console.log('');
+  console.log('═══════════════════════════════════════');
+  console.log('📊 RESUMEN:');
+  console.log('   Con cargo:  ' + conCargo);
+  console.log('   Sin cargo:  ' + sinCargo);
+  console.log('   Total:      ' + (conCargo + sinCargo));
+  console.log('═══════════════════════════════════════');
+  
+  if (sinCargo === 0) {
+    console.log('🎉 ¡TODOS los usuarios tienen su cargo asignado!');
+    console.log('🎯 Listo para PASO 3: modificar saveVisita');
+  } else {
+    console.log('⚠️ Faltan ' + sinCargo + ' usuarios por asignar cargo');
+    console.log('🔧 Ve a la hoja Usuarios y completa la columna J');
+  }
+}
+// ════════════════════════════════════════════════════════
+// ELIMINAR VISITA - Mover a hoja Visitas_Eliminadas
+// ════════════════════════════════════════════════════════
+/**
+ * Elimina una visita moviéndola a la hoja "Visitas_Eliminadas"
+ * Solo admins autorizados pueden ejecutar esta función
+ * 
+ * @param {Object} d - {nro, usuario, motivo}
+ * @returns {Object} - {success, mensaje} o {success:false, error}
+ */
+function eliminarVisita(d) {
+  try {
+    // ── Validar permisos ──
+    if (!d.usuario || !ADMINS_ELIMINAR_VISITA.includes(d.usuario)) {
+      return { 
+        success: false, 
+        error: 'Sin permisos: solo administradores pueden eliminar visitas' 
+      };
+    }
+    
+    if (!d.nro) {
+      return { success: false, error: 'Numero de visita requerido' };
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const wsOrigen = ss.getSheetByName('Visitas_Campo');
+    if (!wsOrigen) {
+      return { success: false, error: 'Hoja Visitas_Campo no encontrada' };
+    }
+    
+    // ── Buscar la fila por nro ──
+    const data = wsOrigen.getDataRange().getValues();
+    const headers = data[0];
+    let filaIdx = -1;
+    
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(d.nro)) {
+        filaIdx = i;
+        break;
+      }
+    }
+    
+    if (filaIdx === -1) {
+      return { success: false, error: 'Visita N° ' + d.nro + ' no encontrada' };
+    }
+    
+    const filaDatos = data[filaIdx];
+    
+    // ── Verificar/crear hoja Visitas_Eliminadas ──
+    let wsDestino = ss.getSheetByName('Visitas_Eliminadas');
+    if (!wsDestino) {
+      wsDestino = ss.insertSheet('Visitas_Eliminadas');
+      // Copiar encabezados de origen + agregar 3 columnas
+      const headersDestino = headers.concat(['Eliminado_por', 'Fecha_eliminacion', 'Motivo_eliminacion']);
+      wsDestino.appendRow(headersDestino);
+      // Formato: negrita en encabezados
+      wsDestino.getRange(1, 1, 1, headersDestino.length).setFontWeight('bold');
+    }
+    
+    // ── Mover fila a hoja eliminadas ──
+    const filaCompleta = filaDatos.concat([
+      d.usuario,                                  // Eliminado_por
+      new Date(),                                 // Fecha_eliminacion
+      d.motivo || 'Sin motivo especificado'       // Motivo_eliminacion
+    ]);
+    wsDestino.appendRow(filaCompleta);
+    
+    // ── Eliminar fila original ──
+    // filaIdx es 0-based en array, pero deleteRow es 1-based
+    // Además sumamos 1 porque incluye encabezado
+    wsOrigen.deleteRow(filaIdx + 1);
+    
+    // ── Actualizar Firebase (refrescar contadores) ──
+    try {
+      if (typeof actualizarFirebaseModulos === 'function') {
+        actualizarFirebaseModulos();
+      }
+    } catch(e) {
+      Logger.log('Firebase update error (no crítico): ' + e);
+    }
+    
+    Logger.log('✅ Visita ' + d.nro + ' eliminada por ' + d.usuario);
+    
+    return { 
+      success: true, 
+      mensaje: 'Visita N° ' + d.nro + ' archivada correctamente',
+      eliminado_por: d.usuario,
+      fecha: new Date().toISOString()
+    };
+    
+  } catch(e) {
+    Logger.log('❌ Error eliminando visita: ' + e);
+    return { 
+      success: false, 
+      error: 'Error: ' + e.toString() 
+    };
+  }
+}
+// ════════════════════════════════════════════════════════
+// ELIMINAR CASO - Mover a hoja Casos_Eliminados
+// ════════════════════════════════════════════════════════
+/**
+ * Elimina un caso moviéndolo a la hoja "Casos_Eliminados"
+ * Solo admins autorizados (jtimoteo, ovilela, jchavez) pueden ejecutar
+ * 
+ * @param {Object} d - {nro, usuario, motivo}
+ * @returns {Object} - {success, mensaje} o {success:false, error}
+ */
+function eliminarCaso(d) {
+  try {
+    // ── Validar permisos ──
+    if (!d.usuario || !ADMINS_ELIMINAR_CASO.includes(String(d.usuario).trim().toLowerCase())) {
+      return { 
+        success: false, 
+        error: 'Sin permisos: solo administradores autorizados pueden eliminar casos' 
+      };
+    }
+    
+    if (!d.nro) {
+      return { success: false, error: 'Numero de caso requerido' };
+    }
+    
+    // ── Validar motivo (mínimo 10 caracteres) ──
+    const motivo = String(d.motivo || '').trim();
+    if (motivo.length < 10) {
+      return { 
+        success: false, 
+        error: 'El motivo es obligatorio y debe tener al menos 10 caracteres' 
+      };
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const wsOrigen = ss.getSheetByName('BD_Casos');
+    if (!wsOrigen) {
+      return { success: false, error: 'Hoja BD_Casos no encontrada' };
+    }
+    
+    // ── Buscar la fila por nro ──
+    const data = wsOrigen.getDataRange().getValues();
+    const headers = data[0];
+    let filaIdx = -1;
+    
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]) === String(d.nro)) {
+        filaIdx = i;
+        break;
+      }
+    }
+    
+    if (filaIdx === -1) {
+      return { success: false, error: 'Caso N° ' + d.nro + ' no encontrado' };
+    }
+    
+    const filaDatos = data[filaIdx];
+    
+    // ── Verificar/crear hoja Casos_Eliminados ──
+    let wsDestino = ss.getSheetByName('Casos_Eliminados');
+    if (!wsDestino) {
+      wsDestino = ss.insertSheet('Casos_Eliminados');
+      // Copiar encabezados de origen + agregar 3 columnas de auditoría
+      const headersDestino = headers.concat(['Eliminado_por', 'Fecha_eliminacion', 'Motivo_eliminacion']);
+      wsDestino.appendRow(headersDestino);
+      wsDestino.getRange(1, 1, 1, headersDestino.length).setFontWeight('bold');
+    }
+    
+    // ── Mover fila a hoja eliminados ──
+    const filaCompleta = filaDatos.concat([
+      d.usuario,                                  // Eliminado_por
+      new Date(),                                 // Fecha_eliminacion
+      motivo                                      // Motivo_eliminacion (ya validado)
+    ]);
+    wsDestino.appendRow(filaCompleta);
+    
+    // ── Eliminar fila original ──
+    // filaIdx es 0-based en array, deleteRow es 1-based, +1 por header
+    wsOrigen.deleteRow(filaIdx + 1);
+    
+    // ── Actualizar Firebase (refrescar contadores) ──
+    try {
+      if (typeof actualizarFirebaseModulos === 'function') {
+        actualizarFirebaseModulos();
+      }
+    } catch(e) {
+      Logger.log('Firebase update error (no crítico): ' + e);
+    }
+    
+    Logger.log('✅ Caso ' + d.nro + ' eliminado por ' + d.usuario + ' - Motivo: ' + motivo);
+    
+    return { 
+      success: true, 
+      mensaje: 'Caso N° ' + d.nro + ' archivado correctamente',
+      eliminado_por: d.usuario,
+      fecha: new Date().toISOString()
+    };
+    
+  } catch(e) {
+    Logger.log('❌ Error eliminando caso: ' + e);
+    return { 
+      success: false, 
+      error: 'Error: ' + e.toString() 
+    };
+  }
+}
+/**
+ * 🧪 TEST: Verificar permisos de eliminación
+ */
+function testEliminarVisitaPermisos() {
+  console.log('═══════════════════════════════════════');
+  console.log('🧪 TEST PERMISOS ELIMINAR VISITA');
+  console.log('═══════════════════════════════════════');
+  console.log('Admins autorizados: ' + ADMINS_ELIMINAR_VISITA.join(', '));
+  
+  // Test 1: Usuario no autorizado
+  const test1 = eliminarVisita({ nro: 999, usuario: 'azapata' });
+  console.log('\nTest 1 (azapata): ' + JSON.stringify(test1));
+  if (!test1.success && test1.error.includes('permisos')) {
+    console.log('✅ Correcto: rechaza no-admin');
+  } else {
+    console.log('❌ Error: deberia rechazar');
+  }
+  
+  // Test 2: Sin nro
+  const test2 = eliminarVisita({ usuario: 'jtimoteo' });
+  console.log('\nTest 2 (sin nro): ' + JSON.stringify(test2));
+  if (!test2.success && test2.error.includes('Numero')) {
+    console.log('✅ Correcto: pide numero');
+  } else {
+    console.log('❌ Error: debería pedir nro');
+  }
+  
+  console.log('\n═══════════════════════════════════════');
+  console.log('✅ TESTS COMPLETADOS');
+  console.log('Para probar eliminación real, usar el dashboard');
+  console.log('═══════════════════════════════════════');
+}
+// ═══════════════════════════════════════════════════════════════════
+//  MIGRACIÓN: Agregar columnas SECTOR y SUPERVISOR a Inventario
+//  Ejecutar UNA VEZ desde el editor de Apps Script
+// ═══════════════════════════════════════════════════════════════════
+function invMigrarColumnasSectorSupervisor() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  const hI = ss.getSheetByName(INV_SH_INGRESOS);
+  if (hI) {
+    const headers = hI.getRange(1, 1, 1, Math.max(14, hI.getLastColumn())).getValues()[0];
+    if (!headers[12]) hI.getRange(1, 13).setValue('SECTOR');
+    if (!headers[13]) hI.getRange(1, 14).setValue('SUPERVISOR');
+    hI.getRange('M1:N1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    Logger.log('↪ INV_Ingresos + SECTOR (col 13) + SUPERVISOR (col 14)');
+  }
+  
+  const hA = ss.getSheetByName(INV_SH_ARMADOS);
+  if (hA) {
+    const headers = hA.getRange(1, 1, 1, Math.max(9, hA.getLastColumn())).getValues()[0];
+    if (!headers[7]) hA.getRange(1, 8).setValue('SECTOR');
+    if (!headers[8]) hA.getRange(1, 9).setValue('SUPERVISOR');
+    hA.getRange('H1:I1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    Logger.log('↪ INV_Canastas_Armadas + SECTOR (col 8) + SUPERVISOR (col 9)');
+  }
+  
+  const hE = ss.getSheetByName(INV_SH_ENTREGAS);
+  if (hE) {
+    const headers = hE.getRange(1, 1, 1, Math.max(11, hE.getLastColumn())).getValues()[0];
+    if (!headers[10]) hE.getRange(1, 11).setValue('SUPERVISOR');
+    hE.getRange('K1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    Logger.log('↪ INV_Entregas + SUPERVISOR (col 11)');
+  }
+  
+  Logger.log('═══ Migración completada ═══');
+  return { success: true };
+}
+// ═══════════════════════════════════════════════════════════════════
+//  FUNCIONES LECTURA INVENTARIO (con SECTOR y SUPERVISOR)
+//  Sobrescriben cualquier versión anterior
+// ═══════════════════════════════════════════════════════════════════
 
+function invLeerIngresos() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const h = ss.getSheetByName(INV_SH_INGRESOS);
+  if (!h || h.getLastRow() < 2) return [];
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, 14).getValues();
+  return datos.filter(r => r[0]).map(r => ({
+    id: r[0], fechaRegistro: r[1], producto: r[2], cantidad: Number(r[3]) || 0,
+    unidad: r[4], fechaIngreso: r[5], fechaVenc: r[6], lote: r[7],
+    responsable: r[8], proveedor: r[9], observaciones: r[10], usuario: r[11],
+    sector: r[12] || '', supervisor: r[13] || ''
+  }));
+}
 
+function invLeerArmados() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const h = ss.getSheetByName(INV_SH_ARMADOS);
+  if (!h || h.getLastRow() < 2) return [];
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, 9).getValues();
+  return datos.filter(r => r[0]).map(r => ({
+    id: r[0], fechaRegistro: r[1], fecha: r[2], cantidad: Number(r[3]) || 0,
+    responsable: r[4], observaciones: r[5], usuario: r[6],
+    sector: r[7] || '', supervisor: r[8] || ''
+  })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+}
+
+function invLeerEntregas() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const h = ss.getSheetByName(INV_SH_ENTREGAS);
+  if (!h || h.getLastRow() < 2) return [];
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, 11).getValues();
+  return datos.filter(r => r[0]).map(r => ({
+    id: r[0], fechaRegistro: r[1], fecha: r[2], empresa: r[3], sector: r[4],
+    cantidad: Number(r[5]) || 0, responsable: r[6], documento: r[7],
+    observaciones: r[8], usuario: r[9], supervisor: r[10] || ''
+  })).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+}
 // ═══════════════════════════════════════════════════════════════════
 //  MÓDULO INVENTARIO V3 — Sectores y Supervisores
+//  Sectores: hoja propia INV_Sectores con CRUD
+//  Supervisores: leídos desde hoja "usuarios" (rol=supervisor, activo=TRUE)
 // ═══════════════════════════════════════════════════════════════════
 
 const INV_SH_SECTORES = 'INV_Sectores';
@@ -4266,6 +5818,7 @@ const INV_SECTORES_INICIALES = [
   'FUNDO VARIOS'
 ];
 
+// SETUP — Ejecutar UNA VEZ desde el editor
 function invSetupSectores() {
   const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let h = ss.getSheetByName(INV_SH_SECTORES);
@@ -4285,13 +5838,15 @@ function invSetupSectores() {
   Logger.log('═══ Setup sectores completado ═══');
 }
 
+// CRUD SECTORES
 function invListarSectores() {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_SECTORES);
     if (!h || h.getLastRow() < 2) return { success: true, sectores: [] };
     const datos = h.getRange(2, 1, h.getLastRow() - 1, 5).getValues();
-    const sectores = datos.filter(r => r[0] && r[2] === true)
+    const sectores = datos
+      .filter(r => r[0] && r[2] === true)
       .map(r => ({ id: r[0], nombre: r[1], activo: r[2] }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
     return { success: true, sectores };
@@ -4304,6 +5859,7 @@ function invAgregarSector(body) {
   try {
     const nombre = (body.nombre || '').trim().toUpperCase();
     if (!nombre) return { success: false, error: 'Nombre vacío' };
+
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const h = ss.getSheetByName(INV_SH_SECTORES);
     if (!h) return { success: false, error: 'Ejecutar invSetupSectores() primero' };
@@ -4351,6 +5907,7 @@ function invEliminarSector(body) {
   } catch (e) { return { success: false, error: e.message }; }
 }
 
+// SUPERVISORES desde hoja "usuarios"
 function invListarSupervisores() {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
@@ -4358,7 +5915,9 @@ function invListarSupervisores() {
     if (!h || h.getLastRow() < 2) {
       return { success: false, error: 'Hoja "usuarios" vacía o no encontrada' };
     }
+
     const datos = h.getRange(2, 1, h.getLastRow() - 1, 11).getValues();
+
     const supervisores = datos
       .filter(r => {
         const rol = String(r[4] || '').trim().toLowerCase();
@@ -4368,34 +5927,884 @@ function invListarSupervisores() {
       .map(r => ({
         usuario: String(r[1] || '').trim(),
         nombre: String(r[3] || '').trim(),
+        sector: String(r[10] || '').trim().toUpperCase(),
+        cargo: String(r[9] || '').trim()
       }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
+
     return { success: true, supervisores };
   } catch (e) {
     return { success: false, error: e.message };
   }
 }
 
+// DEBUG opcional
 function testSupervisoresYSectores() {
   Logger.log('=== SUPERVISORES ===');
   Logger.log(JSON.stringify(invListarSupervisores(), null, 2));
   Logger.log('=== SECTORES ===');
   Logger.log(JSON.stringify(invListarSectores(), null, 2));
 }
-
-
 // ═══════════════════════════════════════════════════════════════════
-//  TRIGGERS — Reset diario de estadísticas (00:01 Lima)
+//  MÓDULO HORAS — Sistema de Acumulación y Permisos
+//  Solo accesible por: jtimoteo, ovilela, jchavez
+// ═══════════════════════════════════════════════════════════════════
+
+const HORAS_SH_REGISTROS = 'registros';
+const HORAS_SH_MOTIVOS = 'MOTIVOS';
+const HORAS_SH_AUDITORIA = 'HORAS_AUDITORIA';
+const HORAS_TRAB_RAPEL = 'Trabajadores_RAPEL';
+const HORAS_TRAB_VERFRUT = 'Trabajadores_VERFRUT';
+
+const HORAS_ADMINS = ['jtimoteo', 'ovilela', 'jchavez'];
+
+const HORAS_MOTIVOS_DEFAULT = [
+  'Acumulación',
+  'Permiso',
+  'Compensación',
+  'Tardanza',
+  'Falta justificada',
+  'Trabajo en día libre'
+];
+
+// ─────────────────────────────────────────────────────────────────
+// SETUP — Ejecutar UNA VEZ desde el editor
+// ─────────────────────────────────────────────────────────────────
+function horasSetup() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  // Hoja registros
+  let h = ss.getSheetByName(HORAS_SH_REGISTROS);
+  if (!h) {
+    h = ss.insertSheet(HORAS_SH_REGISTROS);
+    h.appendRow([
+      'ID', 'FECHA_REGISTRO', 'REGISTRADO_POR',
+      'DNI', 'NOMBRE', 'EMPRESA', 'CARGO',
+      'FECHA_ENTRADA', 'HORA_ENTRADA', 'FECHA_SALIDA', 'HORA_SALIDA',
+      'HORAS_TRABAJADAS', 'JORNADA_ESPERADA',
+      'HORAS_ACUMULADAS', 'HORAS_PERMISO', 'HORAS_DEUDA',
+      'MOTIVO', 'DETALLE', 'OBSERVACIONES', 'ALERTA',
+      'ESTADO', 'APROBADO_POR', 'APROBADO_EN'
+    ]);
+    h.getRange('A1:W1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.setFrozenRows(1);
+    h.setColumnWidths(1, 23, 130);
+    Logger.log('✓ Hoja registros creada con 23 columnas');
+  } else {
+    Logger.log('• Hoja registros ya existe');
+  }
+  
+  // Hoja MOTIVOS
+  h = ss.getSheetByName(HORAS_SH_MOTIVOS);
+  if (!h) {
+    h = ss.insertSheet(HORAS_SH_MOTIVOS);
+    h.getRange(1, 1).setValue('MOTIVO').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.setFrozenRows(1);
+    HORAS_MOTIVOS_DEFAULT.forEach(m => h.appendRow([m]));
+    Logger.log('✓ Hoja MOTIVOS creada con ' + HORAS_MOTIVOS_DEFAULT.length + ' motivos');
+  } else {
+    Logger.log('• Hoja MOTIVOS ya existe');
+  }
+  
+  // Hoja auditoria
+  h = ss.getSheetByName(HORAS_SH_AUDITORIA);
+  if (!h) {
+    h = ss.insertSheet(HORAS_SH_AUDITORIA);
+    h.appendRow(['FECHA', 'USUARIO', 'ACCION', 'REGISTRO_ID', 'DETALLES']);
+    h.getRange('A1:E1').setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+    h.setFrozenRows(1);
+    Logger.log('✓ Hoja HORAS_AUDITORIA creada');
+  }
+  
+  Logger.log('═══ Setup horas completado ═══');
+  return { success: true };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// VALIDAR ADMIN
+// ─────────────────────────────────────────────────────────────────
+function horasEsAdmin(usuario) {
+  return HORAS_ADMINS.indexOf(String(usuario || '').toLowerCase().trim()) >= 0;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// AUDITORIA
+// ─────────────────────────────────────────────────────────────────
+function horasLog(usuario, accion, registroId, detalles) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(HORAS_SH_AUDITORIA);
+    if (h) h.appendRow([new Date(), usuario || '', accion, registroId || '', detalles || '']);
+  } catch (e) { /* silencioso */ }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// BUSCAR TRABAJADOR POR DNI
+// ─────────────────────────────────────────────────────────────────
+function horasBuscarTrabajador(body) {
+  try {
+    const dni = String(body.dni || '').trim();
+    if (!dni) return { success: false, error: 'DNI requerido' };
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const hojas = [
+      { nombre: HORAS_TRAB_RAPEL, empresa: 'RAPEL' },
+      { nombre: HORAS_TRAB_VERFRUT, empresa: 'VERFRUT' }
+    ];
+    
+    for (const conf of hojas) {
+      const h = ss.getSheetByName(conf.nombre);
+      if (!h || h.getLastRow() < 2) continue;
+      
+      const datos = h.getRange(1, 1, h.getLastRow(), 15).getValues();
+      for (let r = 1; r < datos.length; r++) {
+        if (String(datos[r][0] || '').trim() === dni) {
+          return {
+            success: true,
+            trabajador: {
+              dni: dni,
+              nombre: String(datos[r][14] || '').trim(),  // col O = índice 14
+              cargo: String(datos[r][7] || '').trim(),    // col H = índice 7
+              regimen: String(datos[r][8] || '').trim(),  // col I = índice 8
+              fechaInicio: datos[r][5] || '',             // col F = índice 5
+              empresa: conf.empresa
+            }
+          };
+        }
+      }
+    }
+    
+    return { success: false, error: 'DNI ' + dni + ' no encontrado en RAPEL ni VERFRUT' };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CALCULAR JORNADA ESPERADA (puede iterar varios días)
+// ─────────────────────────────────────────────────────────────────
+function horasCalcularJornadaUnDia(fecha) {
+  let f;
+  
+  // Si viene como string "YYYY-MM-DD", parsearlo manualmente para evitar UTC bug
+  if (typeof fecha === 'string' && fecha.length >= 10) {
+    const partes = fecha.substring(0, 10).split('-');
+    if (partes.length === 3) {
+      f = new Date(parseInt(partes[0]), parseInt(partes[1]) - 1, parseInt(partes[2]));
+    } else {
+      f = new Date(fecha);
+    }
+  } else {
+    f = new Date(fecha);
+  }
+  
+  if (isNaN(f.getTime())) return 0;
+  
+  const mes = f.getMonth() + 1;
+  const dia = f.getDay();  // 0=dom, 1=lun, ..., 6=sab
+  
+  Logger.log('Calculando jornada para ' + f.toDateString() + ' (mes=' + mes + ', dia=' + dia + ')');
+  
+  if (mes <= 5) {
+    // Temporada alta: enero-mayo
+    return (dia >= 1 && dia <= 5) ? 9.6 : 0;
+  } else {
+    // Temporada baja: junio-diciembre
+    if (dia >= 1 && dia <= 5) return 8.75;
+    if (dia === 6) return 5.75;
+    return 0;
+  }
+}
+
+function horasCalcularJornadaTotal(fechaIni, fechaFin) {
+  // Parsear fechas manualmente para evitar bug UTC
+  function parsearFecha(f) {
+    if (typeof f === 'string' && f.length >= 10) {
+      const p = f.substring(0, 10).split('-');
+      if (p.length === 3) {
+        return new Date(parseInt(p[0]), parseInt(p[1]) - 1, parseInt(p[2]));
+      }
+    }
+    return new Date(f);
+  }
+  
+  const f1 = parsearFecha(fechaIni);
+  const f2 = parsearFecha(fechaFin);
+  
+  if (isNaN(f1.getTime()) || isNaN(f2.getTime())) return 0;
+  
+  let total = 0;
+  const cur = new Date(f1);
+  while (cur <= f2) {
+    // Pasar la fecha como Date directamente
+    const mes = cur.getMonth() + 1;
+    const dia = cur.getDay();
+    if (mes <= 5) {
+      total += (dia >= 1 && dia <= 5) ? 9.6 : 0;
+    } else {
+      if (dia >= 1 && dia <= 5) total += 8.75;
+      else if (dia === 6) total += 5.75;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return Math.round(total * 100) / 100;
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CALCULAR SALDO PREVIO DE UN TRABAJADOR
+// ─────────────────────────────────────────────────────────────────
+function horasCalcularSaldo(dni) {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const h = ss.getSheetByName(HORAS_SH_REGISTROS);
+  if (!h || h.getLastRow() < 2) return { acum: 0, perm: 0, deuda: 0, saldo: 0 };
+  
+  const datos = h.getRange(2, 1, h.getLastRow() - 1, 23).getValues();
+  let acum = 0, perm = 0, deuda = 0;
+  
+  datos.forEach(r => {
+    if (String(r[3] || '').trim() === String(dni).trim()) {
+      const estado = String(r[20] || '').toLowerCase();
+      if (estado !== 'rechazado') {
+        acum += Number(r[13]) || 0;
+        perm += Number(r[14]) || 0;
+        deuda += Number(r[15]) || 0;
+      }
+    }
+  });
+  
+  return {
+    acum: Math.round(acum * 100) / 100,
+    perm: Math.round(perm * 100) / 100,
+    deuda: Math.round(deuda * 100) / 100,
+    saldo: Math.round((acum - perm - deuda) * 100) / 100
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────
+// REGISTRAR HORAS — con compensación corregida matemáticamente
+// ─────────────────────────────────────────────────────────────────
+function horasRegistrar(body) {
+  try {
+    const r = body.registro || {};
+    
+    if (!horasEsAdmin(body.usuario)) {
+      return { success: false, error: 'Solo administradores pueden registrar' };
+    }
+    
+    if (!r.dni || !r.motivo) {
+      return { success: false, error: 'DNI y motivo son obligatorios' };
+    }
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(HORAS_SH_REGISTROS);
+    if (!h) return { success: false, error: 'Ejecutar horasSetup() primero' };
+    
+const motivo = String(r.motivo || '').toLowerCase().trim();
+let horasTrabajadas = Number(r.horasTrabajadas) || 0;
+let horasAcum = 0, horasPermiso = 0, horasDeuda = 0;
+let alerta = '', estado = 'aprobado';
+
+const jornadaEsp = (r.fechaEntrada && r.fechaSalida)
+  ? horasCalcularJornadaTotal(r.fechaEntrada, r.fechaSalida)
+  : (r.fechaEntrada ? horasCalcularJornadaUnDia(r.fechaEntrada) : 0);
+
+// ⬇️ NUEVO: Si frontend no envió horasTrabajadas, calcular desde fechas/horas
+if (horasTrabajadas === 0 && r.fechaEntrada && r.horaEntrada && r.fechaSalida && r.horaSalida) {
+  try {
+    const ent = new Date(r.fechaEntrada + 'T' + r.horaEntrada + ':00');
+    const sal = new Date(r.fechaSalida + 'T' + r.horaSalida + ':00');
+    if (sal > ent) {
+      horasTrabajadas = (sal - ent) / 3600000;  // ms a horas
+      // Descontar 45 min refrigerio si jornada >= 5h
+      if (horasTrabajadas >= 5) {
+        horasTrabajadas -= 0.75;
+      }
+      horasTrabajadas = Math.round(horasTrabajadas * 100) / 100;
+    }
+  } catch(e) { /* ignorar errores de parse */ }
+}
+    
+    // Lógica por motivo
+    if (motivo === 'acumulación' || motivo === 'acumulacion') {
+      // Horas extra que sobran sobre la jornada
+      if (horasTrabajadas > jornadaEsp) {
+        horasAcum = Math.round((horasTrabajadas - jornadaEsp) * 100) / 100;
+      }
+      alerta = 'Acumulación registrada';
+      
+    } else if (motivo === 'permiso') {
+      // Calcular horas de permiso (1 día o varios)
+      let horasPermisoSolicitadas = Number(r.horasPermiso) || 0;
+      
+      if (horasPermisoSolicitadas === 0 && r.fechaEntrada && r.fechaSalida) {
+        // Permiso día(s) completo(s)
+        horasPermisoSolicitadas = horasCalcularJornadaTotal(r.fechaEntrada, r.fechaSalida);
+      }
+      
+      // Validaciones
+      const dias = (r.fechaEntrada && r.fechaSalida)
+        ? Math.floor((new Date(r.fechaSalida) - new Date(r.fechaEntrada)) / (24*60*60*1000)) + 1
+        : 1;
+      
+      if (dias >= 2) {
+        alerta = 'OBSERVADO: Permiso por ' + dias + ' día(s). Requiere validación.';
+        estado = 'pendiente';
+      } else if (horasPermisoSolicitadas > 12) {
+        alerta = 'OBSERVADO: Permiso excede 12 horas. Revisar autorización.';
+        estado = 'pendiente';
+      } else {
+        alerta = 'Permiso registrado';
+      }
+      
+      // Compensación CORREGIDA con saldo previo
+      const saldo = horasCalcularSaldo(r.dni);
+      
+      if (saldo.saldo >= horasPermisoSolicitadas) {
+        // Saldo cubre todo el permiso
+        horasPermiso = horasPermisoSolicitadas;
+        horasDeuda = 0;
+        alerta += ' - Cubierto con saldo (' + saldo.saldo.toFixed(2) + 'h disponibles)';
+      } else if (saldo.saldo > 0) {
+        // Saldo parcial: cubre lo que puede, resto va a deuda
+        horasPermiso = saldo.saldo;
+        horasDeuda = Math.round((horasPermisoSolicitadas - saldo.saldo) * 100) / 100;
+        alerta += ' - ' + saldo.saldo.toFixed(2) + 'h del saldo + ' + horasDeuda.toFixed(2) + 'h de deuda';
+      } else {
+        // Sin saldo: todo es deuda
+        horasPermiso = 0;
+        horasDeuda = horasPermisoSolicitadas;
+        alerta += ' - Sin saldo: ' + horasDeuda.toFixed(2) + 'h registradas como deuda';
+      }
+      
+      horasTrabajadas = 0;
+      
+    } else if (motivo === 'compensación' || motivo === 'compensacion') {
+      // Recupera horas de deuda explícitamente
+      horasAcum = horasTrabajadas;
+      alerta = 'Compensación registrada (recupera deuda)';
+    } else {
+      // Tardanza, falta justificada, trabajo día libre, etc.
+      alerta = 'Registro de tipo: ' + r.motivo;
+    }
+    
+   // ─── COMPENSACIÓN AUTOMÁTICA con registro de auditoría ───
+let acumOriginal = horasAcum;  // guardar para usar en el registro principal
+let necesitaCompensacion = false;
+let montoCompensacion = 0;
+
+if (horasAcum > 0) {
+  const saldo = horasCalcularSaldo(r.dni);
+  if (saldo.deuda > 0) {
+    if (horasAcum >= saldo.deuda) {
+      // La acumulación cubre toda la deuda
+      montoCompensacion = saldo.deuda;
+      necesitaCompensacion = true;
+      alerta += ' - Deuda previa de ' + saldo.deuda.toFixed(2) + 'h SALDADA con compensación automática';
+    } else {
+      // La acumulación cubre parte de la deuda
+      montoCompensacion = horasAcum;
+      necesitaCompensacion = true;
+      alerta += ' - Compensación de ' + horasAcum.toFixed(2) + 'h aplicada a deuda';
+    }
+  }
+}
+    function eliminarRegistroPrueba() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const h = ss.getSheetByName('registros');
+  const datos = h.getDataRange().getValues();
+  
+  for (let i = datos.length - 1; i >= 1; i--) {
+    if (datos[i][0] === 'H1777523036280') {  // ID del registro malo
+      h.deleteRow(i + 1);
+      Logger.log('✓ Eliminado registro de prueba');
+      return;
+    }
+  }
+  Logger.log('No se encontró el registro');
+}
+    
+    // Generar ID
+    const id = 'H' + Date.now();
+    
+    // Insertar fila
+    h.appendRow([
+      id,
+      new Date(),
+      body.usuario || '',
+      String(r.dni).trim(),
+      r.nombre || '',
+      r.empresa || '',
+      r.cargo || '',
+      r.fechaEntrada || '',
+      r.horaEntrada || '',
+      r.fechaSalida || '',
+      r.horaSalida || '',
+      Math.round(horasTrabajadas * 100) / 100,
+      Math.round(jornadaEsp * 100) / 100,
+      Math.round(horasAcum * 100) / 100,
+      Math.round(horasPermiso * 100) / 100,
+      Math.round(horasDeuda * 100) / 100,
+      r.motivo || '',
+      r.detalle || '',
+      r.observaciones || '',
+      alerta,
+      estado,
+      '',
+      ''
+    ]);
+    
+    horasLog(body.usuario, 'REGISTRAR', id, r.motivo + ' / ' + r.dni);
+    // ─── REGISTRO DE COMPENSACIÓN AUTOMÁTICA ───
+if (necesitaCompensacion && montoCompensacion > 0) {
+  const idComp = 'HC' + Date.now();
+  h.appendRow([
+    idComp,
+    new Date(),
+    body.usuario || '',
+    String(r.dni).trim(),
+    r.nombre || '',
+    r.empresa || '',
+    r.cargo || '',
+    '',  // sin fecha entrada
+    '',
+    '',
+    '',
+    0,   // sin horas trabajadas
+    0,   // sin jornada
+    -montoCompensacion,  // ← ACUMULADAS NEGATIVAS (resta saldo a favor)
+    0,
+    -montoCompensacion,  // ← DEUDA NEGATIVA (cancela la deuda)
+    'Compensación automática',
+    'Auto: vinculado a registro ' + id,
+    'Compensación de ' + montoCompensacion.toFixed(2) + 'h: acumulación cubre deuda previa',
+    'Compensación automática',
+    'aprobado',
+    body.usuario || '',
+    new Date()
+  ]);
+  
+  horasLog(body.usuario, 'COMPENSACION_AUTO', idComp, 
+    'Compensa ' + montoCompensacion + 'h de deuda con acumulación de ' + id);
+}
+function limpiarMisRegistros() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const h = ss.getSheetByName('registros');
+  const datos = h.getDataRange().getValues();
+  
+  let eliminados = 0;
+  for (let i = datos.length - 1; i >= 1; i--) {
+    if (String(datos[i][3]).trim() === '46073509') {  // tu DNI
+      h.deleteRow(i + 1);
+      eliminados++;
+    }
+  }
+  Logger.log('Eliminados: ' + eliminados + ' registros');
+}
+    
+    return {
+      success: true,
+      id: id,
+      registro: {
+        id: id,
+        horasTrabajadas: horasTrabajadas,
+        jornadaEsperada: jornadaEsp,
+        horasAcum: horasAcum,
+        horasPermiso: horasPermiso,
+        horasDeuda: horasDeuda,
+        alerta: alerta,
+        estado: estado
+      }
+    };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// LISTAR REGISTROS (con filtros opcionales)
+// ─────────────────────────────────────────────────────────────────
+function horasListar(body) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(HORAS_SH_REGISTROS);
+    if (!h || h.getLastRow() < 2) return { success: true, registros: [] };
+    
+    const datos = h.getRange(2, 1, h.getLastRow() - 1, 23).getValues();
+    let regs = datos.filter(r => r[0]).map(r => ({
+      id: r[0],
+      fechaRegistro: r[1],
+      registradoPor: r[2],
+      dni: String(r[3] || '').trim(),
+      nombre: r[4],
+      empresa: r[5],
+      cargo: r[6],
+      fechaEntrada: r[7],
+      horaEntrada: r[8],
+      fechaSalida: r[9],
+      horaSalida: r[10],
+      horasTrabajadas: Number(r[11]) || 0,
+      jornadaEsperada: Number(r[12]) || 0,
+      horasAcumuladas: Number(r[13]) || 0,
+      horasPermiso: Number(r[14]) || 0,
+      horasDeuda: Number(r[15]) || 0,
+      motivo: r[16],
+      detalle: r[17],
+      observaciones: r[18],
+      alerta: r[19],
+      estado: r[20] || 'aprobado',
+      aprobadoPor: r[21],
+      aprobadoEn: r[22]
+    }));
+    
+    if (body && body.dni) {
+      regs = regs.filter(r => r.dni === String(body.dni).trim());
+    }
+    if (body && body.estado) {
+      regs = regs.filter(r => r.estado === body.estado);
+    }
+    
+    regs.sort((a, b) => new Date(b.fechaRegistro) - new Date(a.fechaRegistro));
+    return { success: true, registros: regs };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// EDITAR REGISTRO
+// ─────────────────────────────────────────────────────────────────
+function horasEditar(body) {
+  try {
+    if (!horasEsAdmin(body.usuario)) {
+      return { success: false, error: 'Solo administradores pueden editar' };
+    }
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(HORAS_SH_REGISTROS);
+    const datos = h.getDataRange().getValues();
+    const r = body.registro || {};
+    
+    for (let i = 1; i < datos.length; i++) {
+      if (datos[i][0] === body.id) {
+        if (r.observaciones !== undefined) h.getRange(i + 1, 19).setValue(r.observaciones);
+        // Aquí podrías agregar más campos editables
+        horasLog(body.usuario, 'EDITAR', body.id, JSON.stringify(r));
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Registro no encontrado' };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// ELIMINAR REGISTRO (soft delete - marca como rechazado)
+// ─────────────────────────────────────────────────────────────────
+function horasEliminar(body) {
+  try {
+    if (!horasEsAdmin(body.usuario)) {
+      return { success: false, error: 'Solo administradores pueden eliminar' };
+    }
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(HORAS_SH_REGISTROS);
+    const datos = h.getDataRange().getValues();
+    
+    for (let i = 1; i < datos.length; i++) {
+      if (datos[i][0] === body.id) {
+        h.getRange(i + 1, 21).setValue('rechazado');
+        h.getRange(i + 1, 22).setValue(body.usuario || '');
+        h.getRange(i + 1, 23).setValue(new Date());
+        horasLog(body.usuario, 'ELIMINAR', body.id, '');
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Registro no encontrado' };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// APROBAR REGISTRO PENDIENTE
+// ─────────────────────────────────────────────────────────────────
+function horasAprobar(body) {
+  try {
+    if (!horasEsAdmin(body.usuario)) {
+      return { success: false, error: 'Solo administradores pueden aprobar' };
+    }
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(HORAS_SH_REGISTROS);
+    const datos = h.getDataRange().getValues();
+    
+    for (let i = 1; i < datos.length; i++) {
+      if (datos[i][0] === body.id) {
+        h.getRange(i + 1, 21).setValue('aprobado');
+        h.getRange(i + 1, 22).setValue(body.usuario || '');
+        h.getRange(i + 1, 23).setValue(new Date());
+        horasLog(body.usuario, 'APROBAR', body.id, '');
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Registro no encontrado' };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RESUMEN INDIVIDUAL
+// ─────────────────────────────────────────────────────────────────
+function horasResumenIndividual(body) {
+  try {
+    const dni = String(body.dni || '').trim();
+    if (!dni) return { success: false, error: 'DNI requerido' };
+    
+    const lista = horasListar({ dni: dni });
+    if (!lista.success) return lista;
+    
+    const saldo = horasCalcularSaldo(dni);
+    
+    return {
+      success: true,
+      dni: dni,
+      registros: lista.registros,
+      totales: saldo,
+      comentario: saldo.saldo > 0
+        ? 'Saldo a favor: ' + saldo.saldo.toFixed(2) + ' horas'
+        : (saldo.saldo < 0
+            ? 'Deuda pendiente: ' + Math.abs(saldo.saldo).toFixed(2) + ' horas'
+            : 'Sin saldo pendiente')
+    };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// RESUMEN GENERAL (todos los trabajadores)
+// ─────────────────────────────────────────────────────────────────
+function horasResumenGeneral() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(HORAS_SH_REGISTROS);
+    if (!h || h.getLastRow() < 2) return { success: true, resumen: [] };
+    
+    const datos = h.getRange(2, 1, h.getLastRow() - 1, 23).getValues();
+    const map = {};
+    
+    datos.forEach(r => {
+      const dni = String(r[3] || '').trim();
+      if (!dni) return;
+      const estado = String(r[20] || '').toLowerCase();
+      if (estado === 'rechazado') return;
+      
+      if (!map[dni]) {
+        map[dni] = {
+          dni: dni,
+          nombre: r[4],
+          empresa: r[5],
+          cargo: r[6],
+          acum: 0, perm: 0, deuda: 0
+        };
+      }
+      map[dni].acum += Number(r[13]) || 0;
+      map[dni].perm += Number(r[14]) || 0;
+      map[dni].deuda += Number(r[15]) || 0;
+    });
+    
+    const resumen = Object.values(map).map(t => ({
+      ...t,
+      acum: Math.round(t.acum * 100) / 100,
+      perm: Math.round(t.perm * 100) / 100,
+      deuda: Math.round(t.deuda * 100) / 100,
+      saldo: Math.round((t.acum - t.perm - t.deuda) * 100) / 100
+    })).sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''));
+    
+    return { success: true, resumen };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// MOTIVOS — CRUD
+// ─────────────────────────────────────────────────────────────────
+function horasListarMotivos() {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(HORAS_SH_MOTIVOS);
+    if (!h || h.getLastRow() < 2) return { success: true, motivos: [] };
+    
+    const datos = h.getRange(2, 1, h.getLastRow() - 1, 1).getValues();
+    const motivos = datos
+      .map(r => String(r[0] || '').trim())
+      .filter(m => m)
+      .sort((a, b) => a.localeCompare(b));
+    return { success: true, motivos };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+function horasAgregarMotivo(body) {
+  try {
+    if (!horasEsAdmin(body.usuario)) {
+      return { success: false, error: 'Solo administradores' };
+    }
+    const nombre = String(body.nombre || '').trim();
+    if (!nombre) return { success: false, error: 'Nombre vacío' };
+    
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(HORAS_SH_MOTIVOS);
+    if (!h) return { success: false, error: 'Hoja MOTIVOS no encontrada' };
+    
+    const datos = h.getDataRange().getValues();
+    for (let i = 1; i < datos.length; i++) {
+      if (String(datos[i][0] || '').toLowerCase().trim() === nombre.toLowerCase()) {
+        return { success: false, error: 'Ya existe ese motivo' };
+      }
+    }
+    
+    h.appendRow([nombre]);
+    horasLog(body.usuario, 'AGREGAR_MOTIVO', '', nombre);
+    return { success: true, motivo: nombre };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+function horasEliminarMotivo(body) {
+  try {
+    if (!horasEsAdmin(body.usuario)) {
+      return { success: false, error: 'Solo administradores' };
+    }
+    const nombre = String(body.nombre || '').trim();
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const h = ss.getSheetByName(HORAS_SH_MOTIVOS);
+    const datos = h.getDataRange().getValues();
+    
+    for (let i = datos.length - 1; i >= 1; i--) {
+      if (String(datos[i][0] || '').trim() === nombre) {
+        h.deleteRow(i + 1);
+        horasLog(body.usuario, 'ELIMINAR_MOTIVO', '', nombre);
+        return { success: true };
+      }
+    }
+    return { success: false, error: 'Motivo no encontrado' };
+  } catch (e) { return { success: false, error: e.message }; }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// TEST
+// ─────────────────────────────────────────────────────────────────
+function horasTest() {
+  Logger.log('=== Setup ===');
+  Logger.log(JSON.stringify(horasSetup()));
+  Logger.log('=== Motivos ===');
+  Logger.log(JSON.stringify(horasListarMotivos()));
+  Logger.log('=== Buscar DNI 46073509 ===');
+  Logger.log(JSON.stringify(horasBuscarTrabajador({ dni: '46073509' })));
+}
+function testBuscarReal() {
+  // ⚠️ CAMBIA AQUÍ por un DNI REAL que sepas que existe en
+  // Trabajadores_RAPEL o Trabajadores_VERFRUT
+  const dniReal = 46073509;
+  
+  Logger.log('Buscando DNI: ' + dniReal);
+  const resultado = horasBuscarTrabajador({ dni: dniReal });
+  Logger.log(JSON.stringify(resultado, null, 2));
+}
+// Test 1: ¿Está horasSetup ejecutado?
+function testHojas() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const r = ss.getSheetByName('registros');
+  const m = ss.getSheetByName('MOTIVOS');
+  Logger.log('registros: ' + (r ? '✓ existe con ' + r.getLastRow() + ' filas' : '❌ NO existe'));
+  Logger.log('MOTIVOS: ' + (m ? '✓ existe con ' + (m.getLastRow()-1) + ' motivos' : '❌ NO existe'));
+}
+
+// Test 2: ¿Funciona la búsqueda?
+function testBuscarReal() {
+  const dniReal = 'TU_DNI_AQUI'; // pon un DNI real
+  Logger.log(JSON.stringify(horasBuscarTrabajador({dni: dniReal}), null, 2));
+}
+function testDiagnostico() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  Logger.log('═══ VERIFICANDO HOJAS ═══');
+  
+  const hojas = ['Trabajadores_RAPEL', 'Trabajadores_VERFRUT'];
+  hojas.forEach(nombre => {
+    const h = ss.getSheetByName(nombre);
+    if (!h) {
+      Logger.log('❌ Hoja "' + nombre + '" NO EXISTE');
+      return;
+    }
+    
+    const ultimaFila = h.getLastRow();
+    const ultimaCol = h.getLastColumn();
+    Logger.log('✓ Hoja "' + nombre + '" → ' + ultimaFila + ' filas × ' + ultimaCol + ' cols');
+    
+    // Mostrar primeros 3 DNIs (col A, filas 2, 3, 4)
+    if (ultimaFila >= 4) {
+      const muestra = h.getRange(2, 1, 3, 1).getValues();
+      Logger.log('  Primeros 3 DNIs: ' + JSON.stringify(muestra.map(r => r[0])));
+    }
+    
+    // Mostrar fila 2 completa (primer trabajador)
+    if (ultimaFila >= 2) {
+      const fila2 = h.getRange(2, 1, 1, Math.min(20, ultimaCol)).getValues()[0];
+      Logger.log('  Fila 2 (cols A-T): ' + JSON.stringify(fila2));
+    }
+  });
+  
+  Logger.log('═══ HEADERS DE COLUMNAS ═══');
+  hojas.forEach(nombre => {
+    const h = ss.getSheetByName(nombre);
+    if (!h) return;
+    const headers = h.getRange(1, 1, 1, Math.min(20, h.getLastColumn())).getValues()[0];
+    Logger.log(nombre + ' headers: ' + JSON.stringify(headers));
+  });
+}
+function testBuscarConDNIDelArchivo() {
+  // Vamos a usar el PRIMER DNI de RAPEL que existe seguro
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const h = ss.getSheetByName('Trabajadores_RAPEL');
+  const dniReal = String(h.getRange(2, 1).getValue()).trim();
+  
+  Logger.log('DNI tomado directamente de la hoja: "' + dniReal + '"');
+  Logger.log('Tipo: ' + typeof dniReal);
+  Logger.log('Largo: ' + dniReal.length);
+  
+  Logger.log('═══ Ejecutando horasBuscarTrabajador ═══');
+  const resultado = horasBuscarTrabajador({ dni: dniReal });
+  Logger.log(JSON.stringify(resultado, null, 2));
+}
+function verificarMigracion() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const h = ss.getSheetByName('registros');
+  
+  Logger.log('Total registros: ' + (h.getLastRow() - 1));
+  Logger.log('Total columnas: ' + h.getLastColumn());
+  
+  // Verificar primeros 3 registros
+  const muestra = h.getRange(2, 1, 3, 23).getValues();
+  muestra.forEach((r, i) => {
+    Logger.log('Fila ' + (i + 2) + ': DNI=' + r[3] + ' | Nombre=' + r[4] + ' | Empresa=' + r[5] + ' | Motivo=' + r[16] + ' | Estado=' + r[20]);
+  });
+  
+  // Verificar empresas vacías
+  const datos = h.getRange(2, 6, h.getLastRow() - 1, 1).getValues();
+  const sinEmpresa = datos.filter(r => !r[0]).length;
+  Logger.log('⚠️ Registros sin empresa: ' + sinEmpresa);
+  
+  // Verificar IDs duplicadas
+  const ids = h.getRange(2, 1, h.getLastRow() - 1, 1).getValues().map(r => r[0]);
+  const idsUnicos = new Set(ids);
+  Logger.log(ids.length === idsUnicos.size ? '✓ IDs únicas OK' : '⚠️ IDs DUPLICADAS detectadas');
+}
+function testJornada() {
+  Logger.log('═══ TEST JORNADAS ═══');
+  Logger.log('Lunes 27/04/2026: ' + horasCalcularJornadaUnDia('2026-04-27') + ' (esperado: 9.6)');
+  Logger.log('Domingo 26/04/2026: ' + horasCalcularJornadaUnDia('2026-04-26') + ' (esperado: 0)');
+  Logger.log('Sábado 25/04/2026: ' + horasCalcularJornadaUnDia('2026-04-25') + ' (esperado: 0)');
+  Logger.log('Lunes 06/07/2026: ' + horasCalcularJornadaUnDia('2026-07-06') + ' (esperado: 8.75)');
+  Logger.log('Sábado 11/07/2026: ' + horasCalcularJornadaUnDia('2026-07-11') + ' (esperado: 5.75)');
+  Logger.log('Total semana abril (27-30): ' + horasCalcularJornadaTotal('2026-04-27', '2026-04-30') + ' (esperado: 38.4)');
+}
+// ═══════════════════════════════════════════════════════════════════
+//  TRIGGER DE RESET DIARIO PARA DASHBOARD
+//  Resetea contador "atenciones de hoy" cada día a las 00:01 Lima
 // ═══════════════════════════════════════════════════════════════════
 function crearTriggerResetDiario() {
-  // Eliminar triggers viejos del mismo handler
+  // Eliminar triggers viejos del mismo handler para evitar duplicados
   const triggers = ScriptApp.getProjectTriggers();
   triggers.forEach(t => {
     if (t.getHandlerFunction() === 'recalcularEstadisticasCompletas') {
       ScriptApp.deleteTrigger(t);
     }
   });
-
+  
   // Crear nuevo trigger diario a las 00:01 hora Lima
   ScriptApp.newTrigger('recalcularEstadisticasCompletas')
     .timeBased()
@@ -4404,6 +6813,7 @@ function crearTriggerResetDiario() {
     .everyDays(1)
     .inTimezone('America/Lima')
     .create();
+  
   Logger.log('✓ Trigger creado: recalcularEstadisticasCompletas cada día a 00:01 Lima');
   return { success: true, mensaje: 'Trigger creado' };
 }
@@ -4414,5 +6824,597 @@ function listarTriggers() {
   triggers.forEach(t => {
     Logger.log('Handler: ' + t.getHandlerFunction() + ' | Tipo: ' + t.getEventType());
   });
-  return triggers.map(t => ({ handler: t.getHandlerFunction(), tipo: String(t.getEventType()) }));
+  return triggers.map(t => ({ 
+    handler: t.getHandlerFunction(), 
+    tipo: String(t.getEventType()) 
+  }));
+}
+function diagnosticarFirebaseEstadisticas() {
+  Logger.log('═══ DIAGNÓSTICO ═══');
+  
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const NOMBRE_HOJA = 'BB. DE REGISTROS 2026';
+  const h = ss.getSheetByName(NOMBRE_HOJA);
+  
+  if (!h) {
+    Logger.log('❌ NO existe hoja "' + NOMBRE_HOJA + '"');
+    return;
+  }
+  
+  Logger.log('✓ Hoja "' + NOMBRE_HOJA + '": ' + h.getLastRow() + ' filas, ' + h.getLastColumn() + ' columnas');
+  
+  // Headers
+  const headers = h.getRange(1, 1, 1, h.getLastColumn()).getValues()[0];
+  Logger.log('═══ HEADERS ═══');
+  headers.forEach((header, idx) => {
+    Logger.log('Col ' + (idx + 1) + ' (' + String.fromCharCode(65 + idx) + '): ' + header);
+  });
+  
+  // Mostrar fila 2 (primer registro real)
+  if (h.getLastRow() >= 2) {
+    Logger.log('═══ FILA 2 (primer registro) ═══');
+    const fila2 = h.getRange(2, 1, 1, Math.min(15, h.getLastColumn())).getValues()[0];
+    fila2.forEach((valor, idx) => {
+      Logger.log('Col ' + (idx + 1) + ' (' + String.fromCharCode(65 + idx) + ') ' + headers[idx] + ': ' + JSON.stringify(valor));
+    });
+  }
+  
+  // Última fila (registro más reciente)
+  if (h.getLastRow() >= 3) {
+    Logger.log('═══ ÚLTIMA FILA (registro más reciente) ═══');
+    const ultima = h.getRange(h.getLastRow(), 1, 1, Math.min(15, h.getLastColumn())).getValues()[0];
+    ultima.forEach((valor, idx) => {
+      Logger.log('Col ' + (idx + 1) + ' (' + String.fromCharCode(65 + idx) + ') ' + headers[idx] + ': ' + JSON.stringify(valor));
+    });
+  }
+  
+  const hoyStr = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd');
+  const mesActual = hoyStr.substring(0, 7);
+  Logger.log('═══ FECHAS ═══');
+  Logger.log('Hoy: ' + hoyStr);
+  Logger.log('Mes actual: ' + mesActual);
+  
+  Logger.log('═══ EJECUTANDO recalcularEstadisticasCompletas ═══');
+  try {
+    const resultado = recalcularEstadisticasCompletas();
+    Logger.log('Resultado: ' + JSON.stringify(resultado, null, 2));
+  } catch(e) {
+    Logger.log('Error en recalcular: ' + e.message);
+  }
+}
+function eliminarTriggerResetDiario() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let eliminados = 0;
+  triggers.forEach(t => {
+    if (t.getHandlerFunction() === 'recalcularEstadisticasCompletas') {
+      ScriptApp.deleteTrigger(t);
+      eliminados++;
+    }
+  });
+  Logger.log('✓ Eliminados ' + eliminados + ' triggers');
+  return { eliminados };
+}
+function verificarSistemaCompleto() {
+  Logger.log('═══════════════════════════════════════════');
+  Logger.log('  VERIFICACIÓN DEL SISTEMA - 30/04/2026');
+  Logger.log('═══════════════════════════════════════════');
+  
+  let problemas = 0;
+  let okCount = 0;
+  
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  // ───────────────────────────────────────
+  // 1. VERIFICAR HOJAS CRÍTICAS
+  // ───────────────────────────────────────
+  Logger.log('\n📋 1. HOJAS CRÍTICAS:');
+  const hojasCriticas = [
+    'BB. DE REGISTROS 2024',
+    'BB. DE REGISTROS 2025',
+    'BB. DE REGISTROS 2026',
+    'Visitas_Campo',
+    'Casos',
+    'Fusiones_Buses',
+    'usuarios',
+    'Trabajadores_RAPEL',
+    'Trabajadores_VERFRUT',
+    'registros',
+    'MOTIVOS',
+    'INV_Sectores'
+  ];
+  
+  hojasCriticas.forEach(nombre => {
+    const h = ss.getSheetByName(nombre);
+    if (h) {
+      Logger.log('  ✓ ' + nombre + ': ' + h.getLastRow() + ' filas');
+      okCount++;
+    } else {
+      Logger.log('  ❌ ' + nombre + ': NO EXISTE');
+      problemas++;
+    }
+  });
+  
+  // ───────────────────────────────────────
+  // 2. VERIFICAR FUNCIONES BACKEND CRÍTICAS
+  // ───────────────────────────────────────
+  Logger.log('\n🔧 2. FUNCIONES BACKEND:');
+  const funcionesCriticas = [
+    'recalcularEstadisticasCompletas',
+    'actualizarFirebaseRapido',
+    'getPreloadOptimizado',
+    'login',
+    'guardarAtencion',
+    'guardarVisitaCampo',
+    'guardarCaso',
+    'invGetAll',
+    'invRegistrarIngreso',
+    'horasRegistrar',
+    'horasBuscarTrabajador',
+    'invListarSectores',
+    'invListarSupervisores'
+  ];
+  
+  funcionesCriticas.forEach(nombre => {
+    try {
+      if (typeof eval(nombre) === 'function') {
+        Logger.log('  ✓ ' + nombre);
+        okCount++;
+      } else {
+        Logger.log('  ❌ ' + nombre + ': NO EXISTE');
+        problemas++;
+      }
+    } catch(e) {
+      Logger.log('  ❌ ' + nombre + ': ERROR - ' + e.message);
+      problemas++;
+    }
+  });
+  
+  // ───────────────────────────────────────
+  // 3. PROBAR LOGIN (sin afectar nada)
+  // ───────────────────────────────────────
+  Logger.log('\n🔐 3. SISTEMA DE LOGIN:');
+  try {
+    const hUsers = ss.getSheetByName('usuarios');
+    if (hUsers && hUsers.getLastRow() >= 2) {
+      const datos = hUsers.getRange(2, 1, hUsers.getLastRow() - 1, 11).getValues();
+      const activos = datos.filter(r => r[6] === true).length;
+      const supervisores = datos.filter(r => 
+        String(r[4]).toLowerCase().trim() === 'supervisor' && r[6] === true
+      ).length;
+      const admins = datos.filter(r => 
+        String(r[4]).toLowerCase().trim() === 'administrador' && r[6] === true
+      ).length;
+      Logger.log('  ✓ Usuarios activos: ' + activos);
+      Logger.log('  ✓ Supervisores: ' + supervisores);
+      Logger.log('  ✓ Administradores: ' + admins);
+      okCount++;
+    } else {
+      Logger.log('  ❌ Hoja usuarios vacía o no existe');
+      problemas++;
+    }
+  } catch(e) {
+    Logger.log('  ❌ Error verificando usuarios: ' + e.message);
+    problemas++;
+  }
+  
+  // ───────────────────────────────────────
+  // 4. VERIFICAR INVENTARIO
+  // ───────────────────────────────────────
+  Logger.log('\n📦 4. MÓDULO INVENTARIO:');
+  try {
+    const sect = invListarSectores();
+    Logger.log('  ✓ Sectores: ' + (sect.sectores ? sect.sectores.length : 0));
+    
+    const sup = invListarSupervisores();
+    Logger.log('  ✓ Supervisores en inventario: ' + (sup.supervisores ? sup.supervisores.length : 0));
+    
+    const all = invGetAll();
+    if (all.success) {
+      Logger.log('  ✓ Stock canastas armadas: ' + (all.canastasArmadas || 0));
+      Logger.log('  ✓ Stock canastas entregadas: ' + (all.canastasEntregadas || 0));
+      okCount++;
+    } else {
+      Logger.log('  ⚠️ invGetAll devolvió error: ' + all.error);
+    }
+  } catch(e) {
+    Logger.log('  ❌ Error en inventario: ' + e.message);
+    problemas++;
+  }
+  
+  // ───────────────────────────────────────
+  // 5. VERIFICAR HORAS
+  // ───────────────────────────────────────
+  Logger.log('\n⏰ 5. MÓDULO HORAS:');
+  try {
+    const motivos = horasListarMotivos();
+    Logger.log('  ✓ Motivos: ' + (motivos.motivos ? motivos.motivos.length : 0));
+    
+    const hReg = ss.getSheetByName('registros');
+    if (hReg) {
+      Logger.log('  ✓ Registros de horas: ' + (hReg.getLastRow() - 1));
+      okCount++;
+    }
+  } catch(e) {
+    Logger.log('  ❌ Error en horas: ' + e.message);
+    problemas++;
+  }
+  
+  // ───────────────────────────────────────
+  // 6. VERIFICAR TRIGGERS
+  // ───────────────────────────────────────
+  Logger.log('\n⏱️ 6. TRIGGERS:');
+  try {
+    const triggers = ScriptApp.getProjectTriggers();
+    Logger.log('  Total triggers: ' + triggers.length);
+    triggers.forEach(t => {
+      Logger.log('  - ' + t.getHandlerFunction() + ' (' + t.getEventType() + ')');
+    });
+  } catch(e) {
+    Logger.log('  ⚠️ ' + e.message);
+  }
+  
+  // ───────────────────────────────────────
+  // 7. PROBAR CÁLCULO DE FECHA (zona horaria)
+  // ───────────────────────────────────────
+  Logger.log('\n🌍 7. ZONA HORARIA:');
+  const hoyLima = Utilities.formatDate(new Date(), 'America/Lima', 'yyyy-MM-dd HH:mm:ss');
+  const hoyGmt5 = Utilities.formatDate(new Date(), 'GMT-5', 'yyyy-MM-dd HH:mm:ss');
+  Logger.log('  Lima: ' + hoyLima);
+  Logger.log('  GMT-5: ' + hoyGmt5);
+  
+  // ───────────────────────────────────────
+  // RESUMEN
+  // ───────────────────────────────────────
+  Logger.log('\n═══════════════════════════════════════════');
+  Logger.log('  RESUMEN DEL DIAGNÓSTICO');
+  Logger.log('═══════════════════════════════════════════');
+  Logger.log('  ✅ OK: ' + okCount);
+  Logger.log('  ❌ Problemas: ' + problemas);
+  Logger.log('═══════════════════════════════════════════');
+  
+  if (problemas === 0) {
+    Logger.log('  🎉 SISTEMA OPERATIVO - Sin problemas detectados');
+  } else {
+    Logger.log('  ⚠️ Se detectaron problemas, revisar arriba');
+  }
+  
+  return { ok: okCount, problemas: problemas };
+}
+function verificarFuncionesReales() {
+  Logger.log('═══ FUNCIONES REALES DEL SISTEMA ═══');
+  
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  // Buscar funciones con palabras clave
+  const palabras = ['Atencion', 'Visita', 'Caso', 'Fusion', 'Login'];
+  
+  // Test directo del flujo principal: handle()
+  if (typeof handle === 'function') {
+    Logger.log('✓ handle() existe (router principal)');
+  } else {
+    Logger.log('❌ handle() NO existe - PROBLEMA GRAVE');
+  }
+  
+  // Probar respuesta del backend (sin afectar nada)
+  try {
+    Logger.log('\n--- Probando getPreloadOptimizado ---');
+    const params = { usuario: 'jtimoteo', empresa: 'ambas' };
+    const result = getPreloadOptimizado(params);
+    if (result && (result.atenciones || result.success)) {
+      Logger.log('✓ getPreloadOptimizado responde correctamente');
+      Logger.log('  - Total atenciones: ' + (result.atenciones ? result.atenciones.length : 'N/A'));
+      Logger.log('  - Stats hoy: ' + JSON.stringify(result.stats || {}));
+    } else {
+      Logger.log('⚠️ getPreloadOptimizado devolvió: ' + JSON.stringify(result).substring(0, 200));
+    }
+  } catch(e) {
+    Logger.log('❌ Error en getPreloadOptimizado: ' + e.message);
+  }
+  
+  // Verificar Firebase
+  Logger.log('\n--- Estado de Firebase ---');
+  try {
+    if (typeof _fbPatchEstadisticas === 'function') {
+      Logger.log('✓ _fbPatchEstadisticas existe (sincronización Firebase)');
+    }
+  } catch(e) {
+    Logger.log('Error: ' + e.message);
+  }
+  
+  Logger.log('\n═══ FIN ═══');
+}
+function auditoriaSeguridad() {
+  Logger.log('═══════════════════════════════════════════');
+  Logger.log('  AUDITORÍA DE SEGURIDAD');
+  Logger.log('═══════════════════════════════════════════');
+  
+  let alertas = [];
+  
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  
+  // ───────────────────────────────────────
+  // 1. CONTRASEÑAS EN TEXTO PLANO
+  // ───────────────────────────────────────
+  Logger.log('\n🔐 1. ALMACENAMIENTO DE CONTRASEÑAS:');
+  const hUsers = ss.getSheetByName('usuarios');
+  if (hUsers && hUsers.getLastRow() >= 2) {
+    const datos = hUsers.getRange(2, 1, hUsers.getLastRow() - 1, 5).getValues();
+    let textoPlano = 0;
+    let conHash = 0;
+    
+    datos.forEach(r => {
+      const pass = String(r[2] || '');
+      if (pass.length === 64 && /^[a-f0-9]+$/i.test(pass)) {
+        conHash++;
+      } else if (pass.length > 0) {
+        textoPlano++;
+      }
+    });
+    
+    if (textoPlano > 0) {
+      Logger.log('  🔴 CRÍTICO: ' + textoPlano + ' contraseñas en TEXTO PLANO');
+      alertas.push('PASSWORDS_PLAINTEXT');
+    } else {
+      Logger.log('  ✓ Contraseñas hasheadas');
+    }
+  }
+  
+  // ───────────────────────────────────────
+  // 2. CONFIGURACIÓN DE WEB APP
+  // ───────────────────────────────────────
+  Logger.log('\n🌐 2. EXPOSICIÓN DEL APPS SCRIPT:');
+  Logger.log('  ⚠️ Verificar manualmente:');
+  Logger.log('     Deploy → Manage deployments → ✏️');
+  Logger.log('     "Who has access" debe ser:');
+  Logger.log('     - "Anyone with Google Account" (mejor)');
+  Logger.log('     - NO "Anyone, even anonymous"');
+  
+  // ───────────────────────────────────────
+  // 3. DETECTAR TOKENS HARDCODED
+  // ───────────────────────────────────────
+  Logger.log('\n🔑 3. DETECTAR SECRETOS EN CÓDIGO:');
+  Logger.log('  ⚠️ Verificar manualmente que NO haya:');
+  Logger.log('     - FIREBASE_TOKEN = "..." en código');
+  Logger.log('     - AZURE_KEY = "..." en código');
+  Logger.log('     - apiKey: "AIza..." en código');
+  Logger.log('     - "Bearer xyz..." en código');
+  
+  // ───────────────────────────────────────
+  // 4. INTENTOS DE LOGIN FALLIDOS
+  // ───────────────────────────────────────
+  Logger.log('\n🚫 4. PROTECCIÓN CONTRA FUERZA BRUTA:');
+  const cache = CacheService.getScriptCache();
+  Logger.log('  ⚠️ Verificar si login() implementa:');
+  Logger.log('     - Contador de intentos por IP');
+  Logger.log('     - Bloqueo temporal después de N fallos');
+  Logger.log('     - Captcha en login');
+  
+  // ───────────────────────────────────────
+  // 5. LOGS DE AUDITORÍA
+  // ───────────────────────────────────────
+  Logger.log('\n📝 5. AUDITORÍA DE ACCIONES:');
+  const hAud = ss.getSheetByName('HORAS_AUDITORIA');
+  if (hAud) {
+    Logger.log('  ✓ HORAS_AUDITORIA existe (' + hAud.getLastRow() + ' eventos)');
+  } else {
+    Logger.log('  ⚠️ Falta auditoría general (no solo horas)');
+  }
+  
+  // ───────────────────────────────────────
+  // 6. ROLES Y PERMISOS
+  // ───────────────────────────────────────
+  Logger.log('\n👥 6. ROLES:');
+  if (hUsers) {
+    const datos = hUsers.getRange(2, 5, hUsers.getLastRow() - 1, 1).getValues();
+    const roles = {};
+    datos.forEach(r => {
+      const rol = String(r[0] || '').toLowerCase().trim();
+      roles[rol] = (roles[rol] || 0) + 1;
+    });
+    Logger.log('  Distribución de roles: ' + JSON.stringify(roles));
+  }
+  
+  // ───────────────────────────────────────
+  // RESUMEN
+  // ───────────────────────────────────────
+  Logger.log('\n═══════════════════════════════════════════');
+  Logger.log('  ALERTAS DETECTADAS: ' + alertas.length);
+  Logger.log('═══════════════════════════════════════════');
+  alertas.forEach(a => Logger.log('  🔴 ' + a));
+  
+  return { alertas: alertas };
+}
+function verLogin() {
+  // Ver función login() para saber cómo está estructurada
+  Logger.log('═══ VER ESTRUCTURA DE login() ═══');
+  
+  if (typeof login !== 'function') {
+    Logger.log('❌ login() no existe');
+    return;
+  }
+  
+  // Buscar referencia a la función
+  Logger.log('✓ login() existe');
+  
+  // Test no-destructivo
+  Logger.log('\n--- Test con credenciales falsas ---');
+  try {
+    const r1 = login({ usuario: 'usuario_falso', password: 'wrongpass' });
+    Logger.log('Resultado: ' + JSON.stringify(r1).substring(0, 300));
+  } catch(e) {
+    Logger.log('Error: ' + e.message);
+  }
+  
+  Logger.log('\n--- Información del flujo ---');
+  Logger.log('1. Función recibe: { usuario, password }');
+  Logger.log('2. Lee hoja "usuarios"');
+  Logger.log('3. Compara password con la guardada');
+  Logger.log('4. Si coincide, devuelve token o info del usuario');
+}
+// ═══════════════════════════════════════════════════════════════════
+//  invSetupReceta — Corrige receta a 1 unidad/canasta + columna EXPORTADORA
+//  Ejecutar UNA VEZ desde el editor de Apps Script
+// ═══════════════════════════════════════════════════════════════════
+
+const INV_RECETA_OBJETIVO = [
+  { producto: 'Arroz',            cantidad: 1, unidad: 'KG' },
+  { producto: 'Avena',            cantidad: 1, unidad: 'UND' },
+  { producto: 'Azúcar',           cantidad: 1, unidad: 'KG' },
+  { producto: 'Fideo',            cantidad: 1, unidad: 'PQT' },
+  { producto: 'Fideo canuto',     cantidad: 1, unidad: 'PQT' },
+  { producto: 'Galleta vainilla', cantidad: 1, unidad: 'PQT' },
+  { producto: 'Leche',            cantidad: 1, unidad: 'UND' }
+];
+
+function invSetupReceta() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  const hRec = ss.getSheetByName(INV_SH_RECETA);
+  
+  if (!hRec) {
+    Logger.log('❌ Hoja ' + INV_SH_RECETA + ' no existe. Ejecuta invSetup() primero.');
+    return { success: false, error: 'Hoja no existe' };
+  }
+  
+  const datos = hRec.getDataRange().getValues();
+  const headers = datos[0].map(h => String(h).toLowerCase());
+  
+  const idxProducto = headers.findIndex(h => h.includes('producto'));
+  const idxCantidad = headers.findIndex(h => h.includes('cantidad'));
+  const idxUnidad = headers.findIndex(h => h.includes('unidad'));
+  
+  if (idxProducto < 0 || idxCantidad < 0) {
+    Logger.log('❌ Columnas no encontradas en INV_Receta');
+    return { success: false, error: 'Columnas no encontradas' };
+  }
+  
+  let actualizados = 0;
+  let agregados = 0;
+  
+  INV_RECETA_OBJETIVO.forEach(obj => {
+    let encontrado = false;
+    
+    for (let i = 1; i < datos.length; i++) {
+      const prodActual = String(datos[i][idxProducto] || '').toLowerCase().trim();
+      const prodObjetivo = obj.producto.toLowerCase().trim();
+      
+      if (prodActual === prodObjetivo) {
+        if (datos[i][idxCantidad] !== obj.cantidad) {
+          hRec.getRange(i + 1, idxCantidad + 1).setValue(obj.cantidad);
+          actualizados++;
+        }
+        if (idxUnidad >= 0) {
+          const unidadActual = String(datos[i][idxUnidad] || '').toLowerCase();
+          if (unidadActual !== obj.unidad.toLowerCase()) {
+            hRec.getRange(i + 1, idxUnidad + 1).setValue(obj.unidad);
+          }
+        }
+        encontrado = true;
+        break;
+      }
+    }
+    
+    if (!encontrado) {
+      const id = 'R' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+      const nuevaFila = new Array(headers.length).fill('');
+      nuevaFila[0] = id;
+      nuevaFila[idxProducto] = obj.producto;
+      nuevaFila[idxCantidad] = obj.cantidad;
+      if (idxUnidad >= 0) nuevaFila[idxUnidad] = obj.unidad;
+      hRec.appendRow(nuevaFila);
+      agregados++;
+    }
+  });
+  
+  Logger.log('✓ Receta actualizada: ' + INV_RECETA_OBJETIVO.length + ' productos con cantidad=1');
+  INV_RECETA_OBJETIVO.forEach(obj => {
+    Logger.log('   - ' + obj.producto + ': ' + obj.cantidad + ' ' + obj.unidad);
+  });
+  Logger.log('  Actualizados: ' + actualizados + ' | Agregados: ' + agregados);
+  
+  // Asegurar columna EXPORTADORA en INV_Entregas
+  const hEnt = ss.getSheetByName(INV_SH_ENTREGAS);
+  if (hEnt) {
+    const lastCol = hEnt.getLastColumn();
+    const headEnt = hEnt.getRange(1, 1, 1, lastCol).getValues()[0];
+    const tieneExp = headEnt.some(h => String(h).toUpperCase() === 'EXPORTADORA');
+    
+    if (!tieneExp) {
+      hEnt.getRange(1, lastCol + 1).setValue('EXPORTADORA');
+      hEnt.getRange(1, lastCol + 1).setFontWeight('bold').setBackground('#0a2463').setFontColor('white');
+      Logger.log('↪ ' + INV_SH_ENTREGAS + ' + EXPORTADORA (col ' + (lastCol + 1) + ')');
+    } else {
+      Logger.log('  ' + INV_SH_ENTREGAS + ' ya tiene EXPORTADORA');
+    }
+  }
+  
+  Logger.log('═══ invSetupReceta completado ═══');
+  return { success: true, actualizados, agregados };
+}
+// ════════════════════════════════════════════════════════
+// TEST TEMPORAL - Validar eliminarCaso (borrar después)
+// ════════════════════════════════════════════════════════
+function testEliminarCasoValidaciones() {
+  console.log('═══════════════════════════════════════');
+  console.log('🧪 TEST VALIDACIONES eliminarCaso');
+  console.log('═══════════════════════════════════════');
+  console.log('Admins autorizados: ' + ADMINS_ELIMINAR_CASO.join(', '));
+  
+  // Test 1: Usuario no autorizado
+  const test1 = eliminarCaso({ 
+    nro: 999999, 
+    usuario: 'azapata', 
+    motivo: 'motivo de prueba largo' 
+  });
+  console.log('\n📋 Test 1 - Usuario NO autorizado (azapata):');
+  console.log('   ' + JSON.stringify(test1));
+  if (!test1.success && test1.error.includes('permisos')) {
+    console.log('   ✅ CORRECTO: rechaza no-admin');
+  } else {
+    console.log('   ❌ ERROR: deberia rechazar');
+  }
+  
+  // Test 2: Sin nro
+  const test2 = eliminarCaso({ 
+    usuario: 'jtimoteo', 
+    motivo: 'motivo de prueba largo' 
+  });
+  console.log('\n📋 Test 2 - Sin numero de caso:');
+  console.log('   ' + JSON.stringify(test2));
+  if (!test2.success && test2.error.includes('Numero')) {
+    console.log('   ✅ CORRECTO: pide numero');
+  } else {
+    console.log('   ❌ ERROR: deberia pedir nro');
+  }
+  
+  // Test 3: Motivo muy corto
+  const test3 = eliminarCaso({ 
+    nro: 999999, 
+    usuario: 'jtimoteo', 
+    motivo: 'corto' 
+  });
+  console.log('\n📋 Test 3 - Motivo de 5 caracteres (insuficiente):');
+  console.log('   ' + JSON.stringify(test3));
+  if (!test3.success && test3.error.includes('10 caracteres')) {
+    console.log('   ✅ CORRECTO: rechaza motivo corto');
+  } else {
+    console.log('   ❌ ERROR: deberia rechazar motivo corto');
+  }
+  
+  // Test 4: Caso inexistente (con datos válidos pero nro que no existe)
+  const test4 = eliminarCaso({ 
+    nro: 999999, 
+    usuario: 'jtimoteo', 
+    motivo: 'motivo de prueba con suficiente longitud' 
+  });
+  console.log('\n📋 Test 4 - Caso inexistente N° 999999:');
+  console.log('   ' + JSON.stringify(test4));
+  if (!test4.success && test4.error.includes('no encontrado')) {
+    console.log('   ✅ CORRECTO: avisa caso no existe');
+  } else {
+    console.log('   ❌ ERROR: deberia avisar no encontrado');
+  }
+  
+  console.log('\n═══════════════════════════════════════');
+  console.log('✅ VALIDACIONES PROBADAS');
+  console.log('═══════════════════════════════════════');
 }
