@@ -2530,6 +2530,67 @@ async function guardarInformeEnAzure() {
 
 const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 
+// Azure Functions: búsqueda rápida de trabajador por DNI (reemplaza GAS para DNI exacto)
+const AZURE_FN_BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api';
+
+/**
+ * Busca un trabajador por DNI en Azure SQL.
+ * @param {string} dni
+ * @param {string} [empresa] - 'RAPEL', 'VERFRUT', o vacío para buscar en ambas
+ * @returns {Promise<Object|null>}
+ */
+async function buscarTrabajadorPorDniAzure(dni, empresa = '') {
+  try {
+    const url = new URL(AZURE_FN_BASE + '/trabajadores/buscar');
+    url.searchParams.set('dni', String(dni).trim());
+    if (empresa) url.searchParams.set('empresa', empresa);
+    const t0 = performance.now();
+    const resp = await fetch(url.toString(), { method: 'GET' });
+    const t1 = performance.now();
+    if (resp.status === 404) {
+      console.log('[Trabajador] DNI ' + dni + ' no encontrado (' + Math.round(t1-t0) + 'ms)');
+      return null;
+    }
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+    const data = await resp.json();
+    if (data.success && data.trabajadores.length > 0) {
+      console.log('[Trabajador] DNI ' + dni + ' encontrado en ' + Math.round(t1-t0) + 'ms');
+      return data.trabajadores[0];
+    }
+    return null;
+  } catch (e) {
+    console.error('[Trabajador] Error:', e);
+    throw e;
+  }
+}
+
+/**
+ * Mapea un registro Azure (campos crudos del SQL) al formato legado
+ * que esperan los callers actuales (campos como `nombre`, `cargo`, `fundo`, etc.).
+ * Mantener este mapper para no romper consumidores existentes.
+ */
+function _mapTrabajadorAzureALegado(a) {
+  if (!a) return null;
+  const nombre = a.nombre_completo
+    || [a.ap_paterno, a.ap_materno, a.nombres].filter(Boolean).join(' ').trim();
+  return {
+    dni:                    a.dni || '',
+    nombre:                 nombre,
+    empresa:                a.empresa || '',
+    sexo:                   a.sexo || '',
+    cargo:                  a.oficio || '',
+    fundo:                  a.zona_labor || '',
+    fundo_actual:           a.zona_labor || '',
+    ruta:                   a.ruta || '',
+    codigo:                 a.codigo_trab || a.cod || '',
+    celular:                '',
+    fecha_inicio_periodo:   a.fecha_inicio || '',
+    fecha_termino_periodo:  a.fecha_termino || '',
+    _azure_raw:             a
+  };
+}
+
 // Precargar logo como base64 para usar en documentos generados
 const _LOGO_URL = 'https://raw.githubusercontent.com/joeltimoteog-bot/sistema-rl-verfrut/main/frontend/images/logo-unifrutti.jpg';
 fetch(_LOGO_URL)
@@ -3133,14 +3194,13 @@ async function buscarTrabajadorCaso() {
     window._casoTrabajador = tc;
     return;
   }
-  console.log('[buscarTrabajadorCaso] DNI enviado:', dni, '| empresa: AMBAS');
+  console.log('[buscarTrabajadorCaso] DNI enviado:', dni, '| empresa: AMBAS (Azure)');
   msg.textContent='🔍 Buscando...';
   msg.style.color='#64748b';
   try {
-    const d = await apiGet({action:'buscarTrabajador', q:String(dni).trim(), empresa:'AMBAS'});
-    console.log('[buscarTrabajadorCaso] Respuesta API:', JSON.stringify(d));
-    if(d.success && d.data && d.data.length) {
-      const t = d.data[0];
+    const _azRec = await buscarTrabajadorPorDniAzure(dni, '');
+    const t = _mapTrabajadorAzureALegado(_azRec);
+    if(t) {
       document.getElementById('cNombre').value  = t.nombre  || '';
       document.getElementById('cEmpresa').value = t.empresa || '';
       document.getElementById('cCargo').value   = t.cargo   || '';
@@ -4851,14 +4911,14 @@ async function buscarDniBtn() {
   inp.style.boxShadow='0 0 0 2px #bfdbfe';
   r.style.display='none';
   const _tApi0=performance.now();
-  console.log('[buscarDniBtn] DNI enviado:', dni, '| empresa: AMBAS | cache size:', Object.keys(window._trabajadoresCache||{}).length);
+  console.log('[buscarDniBtn] DNI enviado:', dni, '| empresa: AMBAS (Azure) | cache size:', Object.keys(window._trabajadoresCache||{}).length);
   console.time('[buscarDniBtn] API');
   try{
-    const d=await apiGet({action:'buscarTrabajador',q:String(dni).trim(),empresa:'AMBAS'});
+    const _azRec=await buscarTrabajadorPorDniAzure(dni, '');
+    const t=_mapTrabajadorAzureALegado(_azRec);
     console.timeEnd('[buscarDniBtn] API');
-    console.log('[buscarDniBtn] API: '+Math.round(performance.now()-_tApi0)+'ms | encontrado:'+(d.success&&d.data&&d.data.length>0)+' | respuesta:', JSON.stringify(d));
-    if(d.success&&d.data&&d.data.length){
-      const t=d.data[0];
+    console.log('[buscarDniBtn] API: '+Math.round(performance.now()-_tApi0)+'ms | encontrado:'+(!!t));
+    if(t){
       sv('at_nom',t.nombre||''); sv('at_sex',t.sexo||'');
       sv('at_emp',t.empresa||USER.empresa||'RAPEL'); sv('at_fundo',t.fundo||'');
       sv('at_cargo',t.cargo||''); sv('at_ruta',t.ruta||'');
