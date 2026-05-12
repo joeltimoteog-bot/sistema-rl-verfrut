@@ -5272,7 +5272,17 @@ function getPreloadOptimizado(p) {
  */
 function getAtencionesOptimizado(p) {
   p = p || {};
-  
+
+  // ⭐ SEGURIDAD: supervisores solo ven sus propias atenciones (defense in depth)
+  const ROLES_ADMIN = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl'];
+  const rolNorm = String(p.rol || '').trim().toLowerCase();
+  const esAdmin = ROLES_ADMIN.indexOf(rolNorm) >= 0;
+  if (!esAdmin) {
+    const nombreSup = String(p.nombre || p.usuario || '').trim();
+    if (!nombreSup) return { success: false, error: 'No autorizado: falta identificación de usuario' };
+    p.supervisor = nombreSup; // forzar filtro independientemente de lo que mande el frontend
+  }
+
   try {
     // Intentar Azure primero
     const filtros = {};
