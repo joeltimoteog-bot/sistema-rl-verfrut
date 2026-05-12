@@ -699,14 +699,6 @@ function getEstadisticas(p) {
   const mesN = new Date().getMonth() + 1;
   const aniN = new Date().getFullYear();
   const hoyStr = fmt(new Date(), 'yyyy-MM-dd');
-    // ─── RESET DIARIO AUTOMÁTICO ───
-  // Si cambió el día desde la última actualización, resetear contador "hoy"
-  const ultimaActStr = global.fecha_ultima_actualizacion || '';
-  if (ultimaActStr && ultimaActStr !== hoyStr) {
-    global.hoy = 0;
-    Logger.log('Reset hoy a 0 (cambio de día: ' + ultimaActStr + ' → ' + hoyStr + ')');
-  }
-  global.fecha_ultima_actualizacion = hoyStr;
   let lista = [];
 
   rows.forEach(r => {
