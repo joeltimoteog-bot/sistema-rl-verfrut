@@ -3924,6 +3924,7 @@ function actualizarFirebaseRapido(d) {
     if (estado === 'EN PROCESO')  global.en_proceso  = (global.en_proceso  || 0) + 1;
     if (estado === 'FINALIZADO')  global.finalizados = (global.finalizados || 0) + 1;
     global.ultima_actualizacion = Date.now();
+    global.fecha_ultima_actualizacion = hoyStr; // NUEVO: para watchdog Firebase
  
     UrlFetchApp.fetch(urlGlobal, {
       method: 'PUT',
