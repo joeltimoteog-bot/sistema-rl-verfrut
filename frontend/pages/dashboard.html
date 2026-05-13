@@ -4362,10 +4362,8 @@ function dibujar(s) {
       porMesNorm[nk] = (v && typeof v.total === 'number') ? v.total : (typeof v === 'number' ? v : 0);
     });
     ultimos6.forEach(k => { porMesObj[k] = porMesNorm[k] || 0; });
-    console.log('[dibujar] BUG2: usando Firebase por_mes →', JSON.stringify(porMesObj));
   } else {
     porMesObj = s.porMes || {};
-    console.log('[dibujar] BUG2: Firebase no disponible, usando CACHE.stats.porMes →', JSON.stringify(porMesObj));
   }
 
   const mks = Object.keys(porMesObj);
@@ -4392,7 +4390,6 @@ function dibujar(s) {
   if (fbEst && fbEst.resumen_global) {
     enProceso  = fbEst.resumen_global.en_proceso  ?? enProceso;
     finalizados = fbEst.resumen_global.finalizados ?? finalizados;
-    console.log('[dibujar] BUG3: usando Firebase en_proceso=' + enProceso + ' finalizados=' + finalizados);
   }
 
   charts.e = new Chart(elE, {
