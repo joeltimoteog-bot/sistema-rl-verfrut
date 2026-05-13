@@ -6273,7 +6273,7 @@ function _fbDibujarIndicadoresPrincipales(fbData) {
     const porAnioCalc = {};
     Object.entries(porMesNorm).forEach(([k, v]) => {
       const anio = k.substring(0, 4);
-      if (anio && anio.length === 4) porAnioCalc[anio] = (porAnioCalc[anio] || 0) + v;
+      if (/^\d{4}$/.test(anio)) porAnioCalc[anio] = (porAnioCalc[anio] || 0) + v;
     });
     const anios = Object.keys(porAnioCalc).sort();
     charts.tendAnual = new Chart(elT, {
@@ -7442,7 +7442,7 @@ function dibujarEstadisticasDash(datos) {
   const elE=document.getElementById('cE');
   if(elE) charts.e=new Chart(elE,{type:'doughnut',data:{labels:['En Proceso','Finalizado'],datasets:[{data:[pend,res],backgroundColor:['#f97316','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
   const porAnio={};
-  datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
+  datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(/^\d{4}$/.test(y)) porAnio[y]=(porAnio[y]||0)+1;});
   _destroyChart('tendAnual');
   const elT=document.getElementById('cTendAnual');
   if(elT){const anios=Object.keys(porAnio).sort();charts.tendAnual=new Chart(elT,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#0b1e45',backgroundColor:'rgba(11,30,69,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
@@ -7477,7 +7477,7 @@ function dibujarGraficosResumen(datos) {
   const elRE=document.getElementById('rChartEst');
   if(elRE) charts.rEst=new Chart(elRE,{type:'doughnut',data:{labels:['En Proceso','Finalizado'],datasets:[{data:[pend,res],backgroundColor:['#f97316','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
   const porAnio={};
-  datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
+  datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(/^\d{4}$/.test(y)) porAnio[y]=(porAnio[y]||0)+1;});
   _destroyChart('rAnual');
   const elRA=document.getElementById('rChartAnual');
   if(elRA){const anios=Object.keys(porAnio).sort();charts.rAnual=new Chart(elRA,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#d9292b',backgroundColor:'rgba(217,41,43,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
