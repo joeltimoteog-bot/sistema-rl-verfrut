@@ -264,7 +264,7 @@ function getAtenciones(p) {
       const ws = ss.getSheetByName(n);
       if (!ws) return;
       ws.getDataRange().getValues().slice(1).forEach(r => {
-        const k = String(r[0]);
+        const k = n + '_' + String(r[0]);
         if (!k || vistos.has(k)) return;
         vistos.add(k); rows.push(r);
       });
@@ -687,7 +687,7 @@ function getEstadisticas(p) {
       const ws = ss.getSheetByName(n);
       if (!ws) return;
       ws.getDataRange().getValues().slice(1).forEach(r => {
-        const k = String(r[0]);
+        const k = n + '_' + String(r[0]);
         if (!k || vistos.has(k)) return;
         vistos.add(k); rows.push(r);
       });
@@ -1531,7 +1531,7 @@ function getEstadisticasAdmin(p) {
       var ws = ss.getSheetByName(n);
       if (!ws) return;
       ws.getDataRange().getValues().slice(1).forEach(function(r) {
-        var k = String(r[0]);
+        var k = n + '_' + String(r[0]);
         if (!k || vistosAt.has(k)) return;
         vistosAt.add(k); rawAt.push(r);
       });
@@ -2015,7 +2015,7 @@ function actualizarEstadisticasFirebase() {
       const ws = ss.getSheetByName(n);
       if (!ws) return;
       ws.getDataRange().getValues().slice(1).forEach(r => {
-        const k = String(r[0]);
+        const k = n + '_' + String(r[0]);
         if (!k || vistos.has(k)) return;
         vistos.add(k); rows.push(r);
       });
