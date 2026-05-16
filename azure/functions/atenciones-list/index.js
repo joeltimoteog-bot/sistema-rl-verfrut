@@ -3,25 +3,19 @@ const { sql, getPool } = require('../shared/db');
 module.exports = async function (context, req) {
   context.log('atenciones-list triggered');
 
-  // Diagnostico: verificar variables de entorno
   const envCheck = {
     sqlServer: process.env.SQL_SERVER ? 'OK' : 'MISSING',
     sqlDatabase: process.env.SQL_DATABASE ? 'OK' : 'MISSING',
     sqlUser: process.env.SQL_USER ? 'OK' : 'MISSING',
     sqlPassword: process.env.SQL_PASSWORD ? 'OK (length=' + process.env.SQL_PASSWORD.length + ')' : 'MISSING'
   };
-
   context.log('ENV CHECK:', JSON.stringify(envCheck));
 
   try {
     if (!process.env.SQL_SERVER || !process.env.SQL_USER || !process.env.SQL_PASSWORD) {
       context.res = {
         status: 500,
-        body: {
-          success: false,
-          error: 'Variables de entorno faltantes',
-          envCheck: envCheck
-        }
+        body: { success: false, error: 'Variables de entorno faltantes', envCheck: envCheck }
       };
       return;
     }
@@ -30,9 +24,19 @@ module.exports = async function (context, req) {
     const pool = await getPool();
     context.log('Pool conectado OK');
 
-    const { supervisor, empresa, desde, hasta, dni, estado, limite, pagina } = req.query || {};
-    const request = pool.request();
+    const q = req.query || {};
+    const { supervisor, empresa, desde, hasta, dni, estado } = q;
 
+    // Aceptar tanto limit/limite y page/pagina (ingles + espanol)
+    const limiteParam = q.limit || q.limite;
+    const paginaParam = q.page || q.pagina;
+
+    // Cap maximo 1000, minimo 1 (previene abuso y queries negativos)
+    const lim = Math.max(1, Math.min(parseInt(limiteParam) || 100, 1000));
+    const pag = Math.max(1, parseInt(paginaParam) || 1);
+    const off = (pag - 1) * lim;
+
+    const request = pool.request();
     const where = ['1=1'];
     if (supervisor) { where.push('supervisor LIKE @supervisor'); request.input('supervisor', sql.NVarChar, '%' + supervisor + '%'); }
     if (empresa)    { where.push('empresa = @empresa');          request.input('empresa', sql.NVarChar, empresa); }
@@ -41,13 +45,17 @@ module.exports = async function (context, req) {
     if (dni)        { where.push('dni = @dni');                  request.input('dni', sql.NVarChar, dni); }
     if (estado)     { where.push('estado = @estado');            request.input('estado', sql.NVarChar, estado); }
 
-    const lim = parseInt(limite) || 100;
-    const off = ((parseInt(pagina) || 1) - 1) * lim;
+    context.log('Ejecutando query: limite=' + lim + ', pagina=' + pag + ', offset=' + off);
 
-    context.log('Ejecutando query...');
-    const result = await request.query('SELECT * FROM Atenciones WHERE ' + where.join(' AND ') + ' ORDER BY fecha_atencion DESC, id DESC OFFSET ' + off + ' ROWS FETCH NEXT ' + lim + ' ROWS ONLY');
+    const result = await request.query(
+      'SELECT * FROM Atenciones WHERE ' + where.join(' AND ') +
+      ' ORDER BY fecha_atencion DESC, id DESC' +
+      ' OFFSET ' + off + ' ROWS FETCH NEXT ' + lim + ' ROWS ONLY'
+    );
 
-    const countResult = await pool.request().query('SELECT COUNT(*) AS total FROM Atenciones WHERE ' + where.join(' AND '));
+    const countResult = await pool.request().query(
+      'SELECT COUNT(*) AS total FROM Atenciones WHERE ' + where.join(' AND ')
+    );
 
     context.res = {
       status: 200,
@@ -55,7 +63,7 @@ module.exports = async function (context, req) {
         success: true,
         data: result.recordset,
         total: countResult.recordset[0].total,
-        pagina: parseInt(pagina) || 1,
+        pagina: pag,
         limite: lim
       }
     };
