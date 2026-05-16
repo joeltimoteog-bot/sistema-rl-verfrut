@@ -2645,7 +2645,7 @@ window.onload = async () => {
 
   document.getElementById('av').textContent  = USER.nombre.charAt(0).toUpperCase();
   document.getElementById('avN').textContent = USER.nombre;
-  document.getElementById('avR').textContent = cap(rol);
+  document.getElementById('avR').textContent = USER.cargo || cap(rol);
   document.getElementById('wN').textContent  = 'BIENVENIDO, ' + USER.nombre.split(' ')[0].toUpperCase();
   document.getElementById('wR').textContent  = cap(rol) + ' · Sistema RL v3.0';
   document.getElementById('tbE').textContent = USER.empresa;
