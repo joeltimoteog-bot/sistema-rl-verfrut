@@ -386,9 +386,17 @@ function updateAtencion(d) {
     const rows = sheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][0]) === String(d.nro)) {
-        // Verificar permisos: comparar usuario_sistema (col 27, índice 27)
-        if (d.rol === 'supervisor' && String(rows[i][27]).trim() !== String(d.usuario).trim()) {
+        // Verificar permisos: cross-supervisor permitido SOLO si unicamente cambia estado
+        const _camposEdit = Object.keys(d).filter(function(k){
+          return ['action','nro','rol','usuario','estado'].indexOf(k) === -1;
+        });
+        const _esSoloEstado = _camposEdit.length === 0;
+        const _esCrossSupervisor = d.rol === 'supervisor' && String(rows[i][27]).trim() !== String(d.usuario).trim();
+        if (_esCrossSupervisor && !_esSoloEstado) {
           return { success: false, error: 'No tienes permiso para editar este registro.' };
+        }
+        if (_esCrossSupervisor && _esSoloEstado) {
+          Logger.log('[updateAtencion] Cross-supervisor estado change: nro=' + d.nro + ' por=' + d.usuario + ' (original=' + rows[i][27] + ') estado=' + d.estado);
         }
         const r = i + 1;
         if (d.fecha_atencion      !== undefined) sheet.getRange(r, 2).setValue(d.fecha_atencion);
