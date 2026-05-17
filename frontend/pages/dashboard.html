@@ -4531,8 +4531,12 @@ function _renderBannerEnProceso(enProceso, finalizadas) {
           </div>
           ${obs ? '<div style="font-size:11px;color:#888;margin-top:3px;font-style:italic">"' + obs + truncated + '"</div>' : ''}
         </div>
-        <div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
           <span style="background:${colorBg};color:white;padding:3px 9px;border-radius:10px;font-weight:700;font-size:11px;white-space:nowrap">${dias} días</span>
+          <button type="button" onclick="_marcarFinalizado(${a.id||0},${a.nro||0},'${(a.detalle_documento||'').replace(/'/g,'').replace(/"/g,'')}','${a.dni||''}','${supervisor.replace(/'/g,'')}')"
+                  style="padding:4px 9px;background:#16a34a;color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">
+            ✅ Finalizar
+          </button>
         </div>
       </div>
     `;
@@ -4551,6 +4555,74 @@ function _renderBannerEnProceso(enProceso, finalizadas) {
       ${finalizadasMsg}
     </div>
   `;
+}
+
+
+// ─── MARCAR ATENCIÓN COMO FINALIZADA (cross-supervisor permitido) ─
+async function _marcarFinalizado(id, nro, doc, dni, supervisorOriginal) {
+  const msg = `¿Confirmar que el siguiente documento fue regularizado?\n\n` +
+              `📄 ${doc}\n` +
+              `👤 Atendido originalmente por: ${supervisorOriginal}\n\n` +
+              `Se marcará como FINALIZADO en Google Sheets y Azure SQL.`;
+  if (!confirm(msg)) return;
+
+  console.log('[marcarFinalizado] id=' + id + ' nro=' + nro + ' dni=' + dni);
+
+  try {
+    // Actualizar EN PARALELO: Sheets (via GAS) + Azure SQL
+    const promesas = [];
+
+    // 1. GAS → Sheets
+    promesas.push(
+      apiPost({
+        action: 'updateAtencion',
+        nro: nro,
+        estado: 'FINALIZADO',
+        rol: USER.rol,
+        usuario: USER.usuario
+      }).then(r => ({ source: 'GAS', ok: !!(r && r.success), error: r?.error })).catch(e => ({ source: 'GAS', ok: false, error: e.message }))
+    );
+
+    // 2. Azure Function → Azure SQL
+    if (id && id > 0) {
+      promesas.push(
+        fetch(AZURE_FN_BASE + '/atenciones/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: id, estado: 'FINALIZADO', usuario_actualiza: USER.usuario })
+        }).then(r => r.json()).then(r => ({ source: 'Azure', ok: !!r.success, error: r.error })).catch(e => ({ source: 'Azure', ok: false, error: e.message }))
+      );
+    }
+
+    const results = await Promise.all(promesas);
+    console.log('[marcarFinalizado] resultados:', results);
+
+    const gasResult = results.find(r => r.source === 'GAS');
+    const azureResult = results.find(r => r.source === 'Azure');
+
+    if (gasResult?.ok && azureResult?.ok) {
+      mostrarToast('✅ Documento marcado como FINALIZADO (Sheets + Azure)');
+    } else if (gasResult?.ok) {
+      mostrarToast('✅ FINALIZADO en Sheets (Azure: ' + (azureResult?.error || 'falló') + ')');
+    } else if (azureResult?.ok) {
+      mostrarToast('⚠️ FINALIZADO en Azure pero Sheets falló: ' + (gasResult?.error || ''), 'error');
+    } else {
+      mostrarToast('❌ Error: ' + (gasResult?.error || azureResult?.error || 'No se pudo actualizar'), 'error');
+      return;
+    }
+
+    // Refresh banner
+    _chequearHistorialDNI(dni);
+
+    // Invalidar cache local de atenciones (por si se mira en Mis Atenciones después)
+    if (window.CACHE && window.CACHE.atenciones) {
+      const idx = CACHE.atenciones.findIndex(a => String(a.nro) === String(nro));
+      if (idx >= 0) CACHE.atenciones[idx].estado = 'FINALIZADO';
+    }
+  } catch (e) {
+    console.error('[marcarFinalizado] error:', e);
+    mostrarToast('❌ Error de conexión: ' + e.message, 'error');
+  }
 }
 
 function _renderBannerFinalizadas(finalizadas) {
