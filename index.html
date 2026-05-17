@@ -184,6 +184,7 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
 
 <script>
 const API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+const AZURE_LOGIN_URL='https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/auth/login';
 let intentos=0,MAX=3;
 
 // Roles que ven la selección de módulo (admins y coordinadores)
@@ -368,7 +369,7 @@ async function doLogin(){
   const _tLogin0=performance.now();
   console.time('[login] 1-credenciales');
   try{
-    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'login',usuario:u,password:p}),headers:{'Content-Type':'text/plain'}});
+    const r=await fetch(AZURE_LOGIN_URL,{method:'POST',body:JSON.stringify({usuario:u,password:p}),headers:{'Content-Type':'application/json'}});
     const d=await r.json();
     console.timeEnd('[login] 1-credenciales');
     console.log('[login] credenciales: '+Math.round(performance.now()-_tLogin0)+'ms');
