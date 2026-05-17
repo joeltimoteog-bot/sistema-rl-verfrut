@@ -392,10 +392,11 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
             <label>Filtrar por Responsable de Recepción <span style="font-weight:400;color:#94a3b8">(opcional — sin selección incluye todos)</span></label>
             <select id="cRespMulti" multiple style="width:100%;padding:6px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;min-height:130px">
               <option value="">Todos los responsables</option>
-              <option>ALBERT PACHERRE</option>
-              <option>ROSA MORENO</option>
+              <option>MURIEL MECHATO</option>
+              <option>TANIA VERA</option>
               <option>DANIELA REYNA</option>
               <option>JAIME SIANCAS</option>
+        <option>LEANDRO BILL</option>
               <option>ROSS MERY NAVARRO</option>
               <option>ALISSON MARRUFO</option>
               <option>LUCIA PONGO</option>
@@ -416,12 +417,12 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
         <div class="fg" style="margin-top:10px">
           <div class="fc" style="grid-column:1/-1">
             <label>Para (correos separados por coma): <span style="font-weight:400;color:#94a3b8">obligatorio</span></label>
-            <input type="text" id="cPara" value="ovilela@verfrut.pe, jchavez@verfrut.pe"
+            <input type="text" id="cPara" value="olga.vilela@unifrutti.com, joel.timoteo@unifrutti.com, jorge.chavez@unifrutti.com"
                    style="width:100%;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
           </div>
           <div class="fc" style="grid-column:1/-1">
             <label>Con copia (CC): <span style="font-weight:400;color:#94a3b8">opcional</span></label>
-            <input type="text" id="cCC" value="jtimoteo@verfrut.pe"
+            <input type="text" id="cCC" value=""
                    style="width:100%;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
           </div>
         </div>
@@ -1092,11 +1093,12 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
       <label>Responsable Recepción</label>
       <select id="at_resp" style="padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc">
         <option value="">-- Seleccionar --</option>
-        <option>ALBERT PACHERRE</option>
+        <option>MURIEL MECHATO</option>
         <option>ATENCION</option>
         <option>DANIELA REYNA</option>
         <option>ELIZBETH DIOSES</option>
         <option>JAIME SIANCAS</option>
+        <option>LEANDRO BILL</option>
         <option>JAIRO FERNANDEZ</option>
         <option>JOEL TIMOTEO</option>
         <option>JOISSY MORALES</option>
@@ -5255,6 +5257,8 @@ async function generarCorreo() {
     // Guardar HTML completo del correo (cuerpo listo para pegar en Outlook)
     window._vistaPreviewHTML = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:Tahoma,sans-serif;font-size:10pt;background:#ffffff;margin:20px 24px">${_htmlBody}</body></html>`;
     _correoData.htmlPreview = window._vistaPreviewHTML;
+    // AUTO: enviar reporte sin esperar otro click
+    setTimeout(() => _enviarReporteAuto(), 400);
   }catch(e){
     document.getElementById('correoPreview').innerHTML=`<div class="empty">❌ Error de conexión: ${e.message}<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>`;
   }finally{
@@ -5280,6 +5284,78 @@ function copiarHTMLCorreo(btn) {
 }
 
 // ── Construye el cuerpo HTML del correo (Tahoma 10pt, tablas azul/EEF2FF) ─
+
+// ─── ARMAR HTML DEL RESUMEN AGRUPADO (formato igual al Excel) ──────
+function _armarHTMLResumenAgrupado(datos) {
+  const HDR = '#1B3A6B', SUBTOT = '#E5E7EB', TOT_EMP = '#CBD5E1', TOT_GEN = '#94A3B8';
+  const grupos = {};
+  (datos || []).forEach(d => {
+    const empresa     = String(d.empresa || '').trim().toUpperCase() || 'SIN EMPRESA';
+    const responsable = String(d.responsable_recepcion || '').trim().toUpperCase() || '(SIN RESPONSABLE)';
+    const detalle     = String(d.detalle_documento || '').trim().toUpperCase() || '(SIN DETALLE)';
+    const key = empresa + '||' + responsable;
+    if (!grupos[key]) grupos[key] = { empresa: empresa, responsable: responsable, detalles: {} };
+    grupos[key].detalles[detalle] = (grupos[key].detalles[detalle] || 0) + 1;
+  });
+  const claves = Object.keys(grupos).sort();
+  const TH = 'padding:7px 10px;text-align:left;border:1px solid #9ab;background:' + HDR + ';color:#fff;font-family:Tahoma,sans-serif;font-size:10pt;font-weight:700';
+  const THC = 'padding:7px 10px;text-align:center;border:1px solid #9ab;background:' + HDR + ';color:#fff;font-family:Tahoma,sans-serif;font-size:10pt;font-weight:700';
+  const TD = 'padding:6px 10px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:10pt';
+  const TDC = 'padding:6px 10px;border:1px solid #cdd;text-align:center;font-family:Tahoma,sans-serif;font-size:10pt';
+
+  let h = '<p style="font-weight:700;margin:0 0 6px;font-family:Tahoma,sans-serif;font-size:10pt">RESUMEN POR EMPRESA / RESPONSABLE / DETALLE DE DOCUMENTO:</p>';
+  h += '<table style="border-collapse:collapse;font-family:Tahoma,sans-serif;font-size:10pt;width:100%">';
+  h += '<thead><tr>';
+  h += '<th style="' + TH + '">EMPRESA</th>';
+  h += '<th style="' + TH + '">RESPONSABLE DE RECEPCIONAR DOCUMENTO</th>';
+  h += '<th style="' + TH + '">DETALLE DEL DOCUMENTO</th>';
+  h += '<th style="' + THC + '">Total</th>';
+  h += '</tr></thead><tbody>';
+
+  let totalGeneral = 0, empresaActual = null, totalEmpresa = 0;
+  claves.forEach(k => {
+    const g = grupos[k];
+    if (empresaActual !== null && empresaActual !== g.empresa) {
+      h += '<tr style="background:' + TOT_EMP + ';font-weight:700">';
+      h += '<td style="' + TD + '" colspan="3"><strong>Total ' + empresaActual + '</strong></td>';
+      h += '<td style="' + TDC + '"><strong>' + totalEmpresa + '</strong></td>';
+      h += '</tr>';
+      totalEmpresa = 0;
+    }
+    empresaActual = g.empresa;
+    const detalles = Object.keys(g.detalles).sort();
+    let totalResp = 0;
+    detalles.forEach(det => {
+      const cant = g.detalles[det];
+      h += '<tr>';
+      h += '<td style="' + TD + '">' + g.empresa + '</td>';
+      h += '<td style="' + TD + '">' + g.responsable + '</td>';
+      h += '<td style="' + TD + '">' + det + '</td>';
+      h += '<td style="' + TDC + '">' + cant + '</td>';
+      h += '</tr>';
+      totalResp += cant;
+    });
+    h += '<tr style="background:' + SUBTOT + ';font-weight:700">';
+    h += '<td style="' + TD + '">' + g.empresa + '</td>';
+    h += '<td style="' + TD + '" colspan="2"><strong>Total ' + g.responsable + '</strong></td>';
+    h += '<td style="' + TDC + '"><strong>' + totalResp + '</strong></td>';
+    h += '</tr>';
+    totalEmpresa += totalResp;
+    totalGeneral += totalResp;
+  });
+  if (empresaActual) {
+    h += '<tr style="background:' + TOT_EMP + ';font-weight:700">';
+    h += '<td style="' + TD + '" colspan="3"><strong>Total ' + empresaActual + '</strong></td>';
+    h += '<td style="' + TDC + '"><strong>' + totalEmpresa + '</strong></td>';
+    h += '</tr>';
+  }
+  h += '<tr style="background:' + TOT_GEN + ';font-weight:700;color:#fff">';
+  h += '<td style="' + TD + ';color:#fff" colspan="3"><strong>Total general</strong></td>';
+  h += '<td style="' + TDC + ';color:#fff"><strong>' + totalGeneral + '</strong></td>';
+  h += '</tr></tbody></table>';
+  return h;
+}
+
 function _construirHTMLEmailBody(datos, resumen, fi, ff, total, saludo, usuario) {
   const HDR     = '#1B3A6B';
   const ALT     = '#EEF2FF';
@@ -5296,52 +5372,8 @@ function _construirHTMLEmailBody(datos, resumen, fi, ff, total, saludo, usuario)
   h += `<p style="margin:0 0 6px">Se adjunta el archivo Excel con el registro de atenciones registradas entre el <strong>${fiF}</strong> y el <strong>${ffF}</strong>.</p>`;
   h += `<p style="margin:0 0 16px">Total de atenciones: <strong>${total}</strong></p>`;
 
-  // ── Tabla resumen ────────────────────────────────────────────────────────
-  h += `<p style="font-weight:700;margin:0 0 6px;font-family:Tahoma,sans-serif;font-size:10pt">RESUMEN POR EMPRESA / TIPO DE DOCUMENTO / RESPONSABLE:</p>`;
-  h += `<table style="border-collapse:collapse;font-family:Tahoma,sans-serif;font-size:10pt;width:100%">`;
-  h += `<thead><tr><th ${TH_STY}>EMPRESA</th><th ${TH_STY}>TIPO DE DOCUMENTO</th><th ${TH_STY}>RESPONSABLE RECEPCIÓN</th><th ${TH_C}>CANTIDAD</th></tr></thead><tbody>`;
-  (resumen || []).forEach((r, i) => {
-    const bg = i % 2 === 0 ? '#ffffff' : ALT;
-    h += `<tr style="background:${bg}">`;
-    h += `<td style="padding:6px 10px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:10pt">${r.empresa||''}</td>`;
-    h += `<td style="padding:6px 10px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:10pt">${r.tipo||''}</td>`;
-    h += `<td style="padding:6px 10px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:10pt">${r.responsable||''}</td>`;
-    h += `<td style="padding:6px 10px;border:1px solid #cdd;text-align:center;font-family:Tahoma,sans-serif;font-size:10pt"><strong>${r.cantidad||''}</strong></td>`;
-    h += `</tr>`;
-  });
-  h += `</tbody></table>`;
-
-  // ── Tabla detalle ────────────────────────────────────────────────────────
-  h += `<p style="font-weight:700;margin:20px 0 6px;font-family:Tahoma,sans-serif;font-size:10pt">DETALLE DE ATENCIONES (${total} registros):</p>`;
-  h += `<table style="border-collapse:collapse;font-family:Tahoma,sans-serif;font-size:9pt;width:100%">`;
-  h += `<thead><tr>`;
-  ['N°','FECHA','DNI','NOMBRE','EMPRESA','DOCUMENTO','F. INICIO DOC.','F. FIN DOC.','DÍAS','OBSERVACIONES','SUPERVISOR','ESTADO'].forEach(c => {
-    h += `<th ${TH_S}>${c}</th>`;
-  });
-  h += `</tr></thead><tbody>`;
-  (datos || []).forEach((a, i) => {
-    const bg   = i % 2 === 0 ? '#ffffff' : ALT;
-    const est  = (a.estado || '').toUpperCase();
-    const eClr = est.includes('FINALIZ') ? '#15803d' : est.includes('PROCESO') ? '#ea580c' : '#333';
-    const TD   = `style="padding:5px 8px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:9pt"`;
-    const TDnw = `style="padding:5px 8px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:9pt;white-space:nowrap"`;
-    const TDc  = `style="padding:5px 8px;border:1px solid #cdd;text-align:center;font-family:Tahoma,sans-serif;font-size:9pt"`;
-    h += `<tr style="background:${bg}">`;
-    h += `<td ${TDc}>${a.nro||i+1}</td>`;
-    h += `<td ${TDnw}>${fmtF(a.fecha_atencion)||''}</td>`;
-    h += `<td ${TD}>${a.dni||''}</td>`;
-    h += `<td ${TD}>${a.nombre||''}</td>`;
-    h += `<td ${TD}>${a.empresa||''}</td>`;
-    h += `<td ${TD}>${a.detalle_documento||''}</td>`;
-    h += `<td ${TDnw}>${fmtF(a.fecha_inicio_doc)||''}</td>`;
-    h += `<td ${TDnw}>${fmtF(a.fecha_termino_doc)||''}</td>`;
-    h += `<td ${TDc}>${a.dias_transcurridos||''}</td>`;
-    h += `<td ${TD}>${a.observaciones||''}</td>`;
-    h += `<td ${TD}>${a.supervisor||''}</td>`;
-    h += `<td style="padding:5px 8px;border:1px solid #cdd;font-family:Tahoma,sans-serif;font-size:9pt;color:${eClr};font-weight:700">${a.estado||''}</td>`;
-    h += `</tr>`;
-  });
-  h += `</tbody></table>`;
+  // ── Tabla resumen agrupado (igual al Excel) ──
+  h += _armarHTMLResumenAgrupado(datos);
 
   // ── Firma ────────────────────────────────────────────────────────────────
   h += `<div style="margin-top:20px;padding-top:14px;border-top:2px solid #d1d5db;font-family:Tahoma,sans-serif;font-size:10pt">`;
@@ -5486,6 +5518,149 @@ function abrirOutlook(asunto, cuerpo, para, cc) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+
+// ─── AUTO-ENVIO DE REPORTE (sin confirm) ──────────────────────────
+function _enviarReporteAuto() {
+  const para = getParaFinal();
+  if (!para) { mostrarToast('❌ Agrega al menos un destinatario en el campo Para', 'error'); return; }
+  if (!_correoData.fi) { mostrarToast('❌ No hay datos para enviar', 'error'); return; }
+
+  const cc        = getCCFinal();
+  const fiRaw     = _correoData.fi || '';
+  const ffRaw     = _correoData.ff || '';
+  const emp       = _correoData.emp || 'AMBAS';
+  const fiF       = fmtFLargo(fiRaw);
+  const ffF       = fmtFLargo(ffRaw);
+  const empLabel  = (!emp || emp === 'AMBAS') ? 'Todas las empresas' : emp;
+  const nombreArchivo = 'Reporte_RL_' + emp + '_' + fiRaw + '_' + ffRaw;
+  const asunto    = 'Reporte RR.LL. - ' + empLabel + ' | ' + fiF + ' al ' + ffF;
+
+  // PASO 1: Descargar Excel con 2 hojas (Resumen + Detalle)
+  _exportarCorreoExcelConResumen();
+
+  // PASO 2: Copiar HTML al portapapeles
+  const _htmlCorreo = _correoData.htmlPreview || '';
+  if (_htmlCorreo && navigator.clipboard) {
+    const blob = new Blob([_htmlCorreo], { type: 'text/html' });
+    const item = new ClipboardItem({ 'text/html': blob });
+    navigator.clipboard.write([item]).catch(() => {});
+  }
+
+  // PASO 3: Abrir Outlook + instrucciones
+  setTimeout(() => {
+    abrirOutlook(asunto, '', para, cc);
+    _mostrarInstruccionesEnvio(nombreArchivo + '.xlsx');
+  }, 600);
+}
+
+// ─── EXCEL CON 2 HOJAS: Resumen agrupado + Detalle ────────────────
+function _exportarCorreoExcelConResumen() {
+  const datos = _correoData.data || [];
+  if (!datos.length) { mostrarToast('❌ No hay datos para exportar', 'error'); return; }
+
+  const emp = _correoData.emp || 'AMBAS';
+  const fi  = _correoData.fi  || '';
+  const ff  = _correoData.ff  || '';
+  const nombreArchivo = 'Reporte_RL_' + emp + '_' + fi + '_' + ff;
+
+  // Hoja Detalle (todas las atenciones individuales)
+  const columnasDetalle = [
+    {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha'},
+    {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},
+    {key:'empresa',label:'Empresa'},{key:'fundo',label:'Fundo'},
+    {key:'cargo',label:'Cargo'},{key:'detalle_documento',label:'Documento'},
+    {key:'fecha_inicio_doc',label:'F. Inicio Doc.'},
+    {key:'fecha_termino_doc',label:'F. Fin Doc.'},
+    {key:'dias_transcurridos',label:'Días'},
+    {key:'responsable_recepcion',label:'Responsable'},
+    {key:'supervisor',label:'Supervisor'},
+    {key:'estado',label:'Estado'},{key:'observaciones',label:'Observaciones'}
+  ];
+  const filasDetalle = datos.map(row => {
+    const obj = {};
+    columnasDetalle.forEach(col => { obj[col.label] = row[col.key] !== undefined ? row[col.key] : ''; });
+    return obj;
+  });
+  const wsDetalle = XLSX.utils.json_to_sheet(filasDetalle);
+
+  // Hoja Resumen agrupado (como la imagen)
+  const wsResumen = _armarHojaResumen(datos);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+  XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle');
+
+  const fechaHoy = new Date().toLocaleDateString('es-PE').replace(/\//g, '-');
+  XLSX.writeFile(wb, nombreArchivo + '_' + fechaHoy + '.xlsx');
+}
+
+// ─── ARMAR HOJA "RESUMEN" CON GROUPING ────────────────────────────
+function _armarHojaResumen(datos) {
+  // 1. Agrupar por EMPRESA + RESPONSABLE + DETALLE
+  const grupos = {};
+  datos.forEach(d => {
+    const empresa     = String(d.empresa || '').trim().toUpperCase() || 'SIN EMPRESA';
+    const responsable = String(d.responsable_recepcion || '').trim().toUpperCase() || '(SIN RESPONSABLE)';
+    const detalle     = String(d.detalle_documento || '').trim().toUpperCase() || '(SIN DETALLE)';
+    const key = empresa + '||' + responsable;
+    if (!grupos[key]) {
+      grupos[key] = { empresa: empresa, responsable: responsable, detalles: {} };
+    }
+    grupos[key].detalles[detalle] = (grupos[key].detalles[detalle] || 0) + 1;
+  });
+
+  // 2. Ordenar claves
+  const claves = Object.keys(grupos).sort();
+
+  // 3. Construir filas (AoA)
+  const filas = [
+    ['EMPRESA', 'RESPONSABLE DE RECEPCIONAR DOCUMENTO', 'DETALLE DEL DOCUMENTO', 'Total']
+  ];
+
+  let totalGeneral = 0;
+  let empresaActual = null;
+  let totalEmpresa = 0;
+
+  claves.forEach(k => {
+    const g = grupos[k];
+
+    // Cambio de empresa: insertar total empresa anterior
+    if (empresaActual !== null && empresaActual !== g.empresa) {
+      filas.push(['Total ' + empresaActual, '', '', totalEmpresa]);
+      totalEmpresa = 0;
+    }
+    empresaActual = g.empresa;
+
+    // Filas de detalle
+    const detalles = Object.keys(g.detalles).sort();
+    let totalResp = 0;
+    detalles.forEach(det => {
+      const cant = g.detalles[det];
+      filas.push([g.empresa, g.responsable, det, cant]);
+      totalResp += cant;
+    });
+
+    // Subtotal por responsable
+    filas.push([g.empresa, 'Total ' + g.responsable, '', totalResp]);
+
+    totalEmpresa += totalResp;
+    totalGeneral += totalResp;
+  });
+
+  // Total última empresa
+  if (empresaActual) {
+    filas.push(['Total ' + empresaActual, '', '', totalEmpresa]);
+  }
+
+  // Total general
+  filas.push(['', '', '', '']);
+  filas.push(['Total general', '', '', totalGeneral]);
+
+  const ws = XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols'] = [{ wch: 14 }, { wch: 42 }, { wch: 48 }, { wch: 10 }];
+  return ws;
 }
 
 function enviarConConfirmacion() {
@@ -5655,40 +5830,40 @@ function cerrarSidebar(){
 }
 // MAPA DOCUMENTO -> RESPONSABLE
 const DOC_RESP = {
-  '01 CITT - EMPRESA VERFRUT': 'ALBERT PACHERRE',
-  '02 CITT - EMPRESA RAPEL': 'ALBERT PACHERRE',
-  '03 REGULARIZAR CITT - GENERAR FORMULARIO': 'ALBERT PACHERRE',
-  '04 CMP - EMPRESA VERFRUT / RAPEL': 'ALBERT PACHERRE',
-  '05 REGULARIZAR CMP - GENERAR FORMULARIO': 'ALBERT PACHERRE',
-  '06 CERTIFICADO ODONTOLOGICO': 'ALBERT PACHERRE',
-  '07 REGULARIZAR CERTIFICADO ODONTOLOGICO - GENERAR FORMULARIO': 'ALBERT PACHERRE',
-  '08 INGRESO AL PROGRAMA DE GESTANTES VERFRUT / RAPEL': 'ALBERT PACHERRE',
-  '09 INGRESO A HORAS DE LACTANCIA VERFRUT / RAPEL': 'ALBERT PACHERRE',
+  '01 CITT - EMPRESA VERFRUT': 'MURIEL MECHATO',
+  '02 CITT - EMPRESA RAPEL': 'MURIEL MECHATO',
+  '03 REGULARIZAR CITT - GENERAR FORMULARIO': 'MURIEL MECHATO',
+  '04 CMP - EMPRESA VERFRUT / RAPEL': 'MURIEL MECHATO',
+  '05 REGULARIZAR CMP - GENERAR FORMULARIO': 'MURIEL MECHATO',
+  '06 CERTIFICADO ODONTOLOGICO': 'MURIEL MECHATO',
+  '07 REGULARIZAR CERTIFICADO ODONTOLOGICO - GENERAR FORMULARIO': 'MURIEL MECHATO',
+  '08 INGRESO AL PROGRAMA DE GESTANTES VERFRUT / RAPEL': 'MURIEL MECHATO',
+  '09 INGRESO A HORAS DE LACTANCIA VERFRUT / RAPEL': 'MURIEL MECHATO',
   '10 COPIAS PARA ASIGNACION FAMILIAR': 'JAIME SIANCAS',
-  '11 CONSTANCIA DE ESTUDIOS - JUSTIFICACION': 'ALBERT PACHERRE',
-  '12 CONTROL GESTANTE - JUSTIFICACION': 'ALBERT PACHERRE',
+  '11 CONSTANCIA DE ESTUDIOS - JUSTIFICACION': 'MURIEL MECHATO',
+  '12 CONTROL GESTANTE - JUSTIFICACION': 'MURIEL MECHATO',
   '13 DECLARACION SEGUROS DE VIDA LEY': 'JAIRO FERNANDEZ',
   '14 FORMULARIO DE INTERCONSULTA': 'DANIELA REYNA',
   '15 HORAS DE LACTANCIA VERFRUT / RAPEL': 'DANIELA REYNA',
-  '16 CONSTANCIA DE HOSPITALIZACION - GENERAR FORMULARIO / JUSTIFICAR': 'ALBERT PACHERRE',
-  '17 ESSALUD CITA (JUSTIFICACION)': 'ALBERT PACHERRE',
-  '18 COMPRA DE MEDICINA (JUSTIFICACION)': 'ALBERT PACHERRE',
+  '16 CONSTANCIA DE HOSPITALIZACION - GENERAR FORMULARIO / JUSTIFICAR': 'MURIEL MECHATO',
+  '17 ESSALUD CITA (JUSTIFICACION)': 'MURIEL MECHATO',
+  '18 COMPRA DE MEDICINA (JUSTIFICACION)': 'MURIEL MECHATO',
   '19 LICENCIA POR PATERNIDAD VERFRUT / RAPEL': 'DANIELA REYNA',
   '20 LICENCIA POR FALLECIMIENTO VERFRUT / RAPEL': 'DANIELA REYNA',
   '21 LICENCIA POR ENFERMEDAD GRAVE VERFRUT / RAPEL': 'DANIELA REYNA',
-  '22 RECETA MEDICA (JUSTIFICACION)': 'ALBERT PACHERRE',
-  '23 REGULARIZAR LICENCIA POR MATERNIDAD - GENERAR FORMULARIO': 'ALBERT PACHERRE',
-  '24 REGULARIZAR LICENCIA POR PATERNIDAD - GENERAR FORMULARIO': 'ALBERT PACHERRE',
-  '25 REGULARIZAR LICENCIA POR DEFUNCION - GENERAR FORMULARIO': 'ALBERT PACHERRE',
-  '26 REGULARIZAR LICENCIA POR ENFERMEDAD GRAVE - GENERAR FORMULARIO': 'ALBERT PACHERRE',
-  '27 JUSTIFICACION DEL JUEZ DE PAZ': 'ALBERT PACHERRE',
-  '28 OTROS TRAMITES': 'ALBERT PACHERRE',
-  '29 CMP - VALIDADO POR SIS': 'ALBERT PACHERRE',
-  '30 FORMULARIO INTERCONSULTA': 'ALBERT PACHERRE',
-  '31 FORMULARIO DE TRAMITE GESTANTE': 'ALBERT PACHERRE',
+  '22 RECETA MEDICA (JUSTIFICACION)': 'MURIEL MECHATO',
+  '23 REGULARIZAR LICENCIA POR MATERNIDAD - GENERAR FORMULARIO': 'MURIEL MECHATO',
+  '24 REGULARIZAR LICENCIA POR PATERNIDAD - GENERAR FORMULARIO': 'MURIEL MECHATO',
+  '25 REGULARIZAR LICENCIA POR DEFUNCION - GENERAR FORMULARIO': 'MURIEL MECHATO',
+  '26 REGULARIZAR LICENCIA POR ENFERMEDAD GRAVE - GENERAR FORMULARIO': 'MURIEL MECHATO',
+  '27 JUSTIFICACION DEL JUEZ DE PAZ': 'MURIEL MECHATO',
+  '28 OTROS TRAMITES': 'MURIEL MECHATO',
+  '29 CMP - VALIDADO POR SIS': 'MURIEL MECHATO',
+  '30 FORMULARIO INTERCONSULTA': 'MURIEL MECHATO',
+  '31 FORMULARIO DE TRAMITE GESTANTE': 'MURIEL MECHATO',
   '32 NUMERO DE CUENTA': 'ROSS MERY',
   '33 ELECCION DE SISTEMA PENSIONARIO': 'ELIZBETH DIOSES',
-  '34 LICENCIA POR MATERNIDAD': 'ALBERT PACHERRE',
+  '34 LICENCIA POR MATERNIDAD': 'MURIEL MECHATO',
   'CONSULTAS GENERALES': 'ATENCION',
   'CONSULTAS GENERALES - EN OFICINA': 'ATENCION',
   'CONSULTAS GENERALES - VÍA TELEFÓNICA': 'ATENCION'
@@ -5998,11 +6173,11 @@ function getRespSeleccionados() {
 
 function getParaFinal() {
   const el = document.getElementById('cPara');
-  return el ? (el.value || '').trim() : 'ovilela@verfrut.pe, jchavez@verfrut.pe';
+  return el ? (el.value || '').trim() : 'olga.vilela@unifrutti.com, joel.timoteo@unifrutti.com, jorge.chavez@unifrutti.com';
 }
 function getCCFinal() {
   const el = document.getElementById('cCC');
-  return el ? (el.value || '').trim() : 'jtimoteo@verfrut.pe';
+  return el ? (el.value || '').trim() : '';
 }
 
 // ══════════════════ FIREBASE ESTADÍSTICAS ══════════════════
