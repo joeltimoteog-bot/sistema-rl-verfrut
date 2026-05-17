@@ -1025,6 +1025,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
         <span id="at_dni_spin" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none">⏳</span>
       </div>
       <div class="trab-res" id="trabRes"></div>
+      <div id="historialDniAlerta" style="display:none;margin-top:10px"></div>
     </div>
     <div class="fc"><label>Nombre Completo *</label><input type="text" id="at_nom" placeholder="Nombre del trabajador"></div>
     <div class="fc"><label>Empresa *</label><select id="at_emp"><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select></div>
@@ -4468,12 +4469,114 @@ function filtrarAt() {
   renderAt(filtradas);
 }
 
+
+// ─── ALERTA DE HISTORIAL POR DNI (Azure SQL) ──────────────────
+async function _chequearHistorialDNI(dni) {
+  const div = document.getElementById('historialDniAlerta');
+  if (!div) return;
+
+  if (!dni || !/^\d{8}$/.test(dni)) {
+    div.style.display = 'none';
+    div.innerHTML = '';
+    return;
+  }
+
+  try {
+    const url = AZURE_FN_BASE + '/atenciones/by-dni?dni=' + dni + '&dias=60';
+    const t0 = performance.now();
+    const r = await fetch(url);
+    if (!r.ok) {
+      console.warn('[historialDNI] HTTP', r.status);
+      div.style.display = 'none';
+      return;
+    }
+    const d = await r.json();
+    const enProc = d.en_proceso || [];
+    const finRec = d.finalizadas_recientes || [];
+    console.log('[historialDNI]', dni, 'total=' + d.total, 'en_proceso=' + enProc.length, 'finalizadas=' + finRec.length, '(' + Math.round(performance.now() - t0) + 'ms)');
+
+    if (!d.success) { div.style.display = 'none'; return; }
+
+    if (enProc.length > 0) {
+      div.innerHTML = _renderBannerEnProceso(enProc, finRec);
+      div.style.display = 'block';
+    } else if (finRec.length > 0) {
+      div.innerHTML = _renderBannerFinalizadas(finRec);
+      div.style.display = 'block';
+    } else {
+      div.style.display = 'none';
+      div.innerHTML = '';
+    }
+  } catch (e) {
+    console.error('[historialDNI] error:', e);
+    div.style.display = 'none';
+  }
+}
+
+function _renderBannerEnProceso(enProceso, finalizadas) {
+  const filas = enProceso.map(a => {
+    const dias = a.dias_transcurridos || 0;
+    const colorBg = dias > 15 ? '#dc2626' : dias > 7 ? '#ea580c' : '#16a34a';
+    const fecha = (a.fecha_atencion || '').substring(0, 10);
+    const supervisor = a.supervisor || '(sin supervisor)';
+    const obsFull = a.observaciones || '';
+    const obs = obsFull.substring(0, 100);
+    const truncated = obsFull.length > 100 ? '...' : '';
+    return `
+      <div style="display:grid;grid-template-columns:1fr auto;gap:10px;padding:8px 0;border-top:1px solid rgba(0,0,0,0.08);font-size:12px;align-items:start">
+        <div>
+          <div><strong>${a.detalle_documento || '(sin documento)'}</strong></div>
+          <div style="font-size:11px;color:#666;margin-top:3px">
+            👤 Atendido por: <strong>${supervisor}</strong> · 📅 ${fecha}
+          </div>
+          ${obs ? '<div style="font-size:11px;color:#888;margin-top:3px;font-style:italic">"' + obs + truncated + '"</div>' : ''}
+        </div>
+        <div>
+          <span style="background:${colorBg};color:white;padding:3px 9px;border-radius:10px;font-weight:700;font-size:11px;white-space:nowrap">${dias} días</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  const finalizadasMsg = finalizadas.length > 0
+    ? '<div style="font-size:11px;color:#666;margin-top:10px;padding-top:8px;border-top:1px solid rgba(0,0,0,0.1)">ℹ️ Además, ' + finalizadas.length + ' atención(es) finalizada(s) en los últimos 60 días</div>'
+    : '';
+
+  return `
+    <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 18px;border-radius:8px">
+      <div style="color:#92400e;font-weight:700;font-size:13px;margin-bottom:8px">
+        ⚠️ Este trabajador tiene ${enProceso.length} documento(s) EN PROCESO
+      </div>
+      ${filas}
+      ${finalizadasMsg}
+    </div>
+  `;
+}
+
+function _renderBannerFinalizadas(finalizadas) {
+  const ultima = finalizadas[0];
+  const fecha = (ultima.fecha_atencion || '').substring(0, 10);
+  const supervisor = ultima.supervisor || '(sin supervisor)';
+  return `
+    <div style="background:#e0f2fe;border-left:4px solid #0ea5e9;padding:10px 14px;border-radius:8px">
+      <div style="color:#075985;font-size:13px;font-weight:700;margin-bottom:3px">
+        ℹ️ Última atención: <strong>${ultima.detalle_documento || ''}</strong> — FINALIZADO
+      </div>
+      <div style="font-size:11px;color:#555">
+        👤 Atendido por <strong>${supervisor}</strong> · 📅 ${fecha}
+        ${finalizadas.length > 1 ? ' · (' + finalizadas.length + ' atenciones finalizadas en los últimos 60 días)' : ''}
+      </div>
+    </div>
+  `;
+}
+
 function abrirAt() {
   modoEdicion=false;
   document.getElementById('mAtTitulo').textContent='Nueva Atención';
   document.getElementById('at_nro_edit').value='';
   const msg=document.getElementById('atSuccessMsg'); if(msg) msg.style.display='none';
   document.getElementById('trabRes').style.display='none';
+  const _hda=document.getElementById('historialDniAlerta'); if(_hda){_hda.style.display='none';_hda.innerHTML='';}
   // Reset campos
   ['at_dni','at_nom','at_fip','at_ftp','at_fundo','at_cargo','at_ruta','at_cod','at_fac','at_cel','at_fid','at_ftd','at_dias','at_resp','at_obs'].forEach(id=>sv(id,''));
   sv('at_sex',''); sv('at_emp','RAPEL'); sv('at_doc',''); sv('at_est','FINALIZADO');
@@ -4881,6 +4984,7 @@ async function buscarDni(dni) {
     r.style.display='block'; r.style.background='#f0fdf4'; r.style.borderColor='#bbf7d0';
     r.textContent='✅ '+(t.nombre||'')+' · '+(t.empresa||'')+' · '+(t.fundo||'')+' (caché)';
     setTimeout(()=>document.getElementById('at_cel').focus(), 50);
+    _chequearHistorialDNI(dni);
     return;
   }
 
@@ -4889,6 +4993,7 @@ async function buscarDni(dni) {
     if(spin) spin.style.display = 'block';
     await buscarDniBtn();
     if(spin) spin.style.display = 'none';
+    _chequearHistorialDNI(dni);
     return;
   }
   // 7 dígitos → debounce (evita llamadas innecesarias mientras se sigue escribiendo)
