@@ -6633,7 +6633,7 @@ function ir(id,btn){
       }
       if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
       if(id==='casos'        && !casosData.length)          cargarCasos();
-      if(id==='usuarios'     && !CACHE.usuarios)            cargarUs();
+      if(id==='usuarios')                                   cargarUs();
     }, 0);
     // Redibujar gráficos al volver al dashboard
     if(id==='dashboard') {
