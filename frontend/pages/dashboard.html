@@ -194,6 +194,7 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
     <button class="ni" id="navSolicitudes" style="display:none" onclick="ir('solicitudes',this)"><span class="ic">🔔</span>Solicitudes <span id="badgeSol" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none">0</span></button>
     <button class="ni" id="navFbAlertas" style="display:none" onclick="togglePanelFbAlertas()"><span class="ic">⚡</span>Alertas Sistema<span id="badgeFbAlertas" style="display:none;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;min-width:17px;height:17px;line-height:17px;text-align:center;padding:0 4px;margin-left:auto;flex-shrink:0"></span></button>
     <button class="ni" id="navUsr" style="display:none" onclick="ir('usuarios',this)"><span class="ic">👥</span>Gestión Usuarios</button>
+        <button class="ni" id="navBienestar" style="display:none" onclick="_irBienestar()"><span class="ic">💚</span>Bienestar Social</button>
   </div>
   <div class="sb-ft">
     <button class="ni" id="navInicio" style="display:none;margin-bottom:6px;background:rgba(255,255,255,.08);border-radius:8px" onclick="window.location.href='../../index.html'"><span class="ic">🏠</span>Inicio</button>
@@ -6746,6 +6747,35 @@ function _fbIniciarEscuchaEstadisticasConRetry(intentos) {
     setTimeout(() => _fbIniciarEscuchaEstadisticasConRetry(intentos - 1), 700);
   } else {
     console.warn('[Firebase] _fbSuscribirEstadisticas no disponible tras reintentos');
+  }
+}
+
+
+// ─── SSO al Portal Bienestar Social ──────────────────────────────
+function _irBienestar() {
+  try {
+    const userBienestar = {
+      usuario: USER.usuario,
+      nombre: USER.nombre || USER.usuario,
+      correo: USER.correo || '',
+      rol: USER.rol,
+      sector: USER.sector || '',
+      empresa: USER.empresa || '',
+      cargo: USER.cargo || '',
+      permisos: {
+        quejas: true,
+        accidentes: true,
+        hostigamiento: true,
+        subsidios: true
+      },
+      timestamp: Date.now(),
+      source: 'sistema-rl-verfrut'
+    };
+    localStorage.setItem('bienestarSocialAuth', JSON.stringify(userBienestar));
+    window.location.href = 'https://joeltimoteog-bot.github.io/bienestar-social-verfrut/portal.html';
+  } catch (e) {
+    console.error('[_irBienestar] error:', e);
+    alert('Error al acceder al sistema Bienestar: ' + e.message);
   }
 }
 
