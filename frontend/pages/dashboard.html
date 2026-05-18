@@ -2711,6 +2711,29 @@ window.onload = async () => {
     _fbIniciarConRetry(_fbUserId, 8);
   }
   // Firebase: escucha de estadísticas en tiempo real (todos los usuarios)
+  // ─── BIENESTAR SOCIAL: visibilidad del boton y restriccion del sidebar ───
+  try {
+    const _esBienestar = String(USER.sector || '').toUpperCase().trim() === 'BIENESTAR SOCIAL';
+    if (esAdmin || _esBienestar) {
+      const _btnBs = document.getElementById('navBienestar');
+      if (_btnBs) _btnBs.style.display = '';
+    }
+    if (_esBienestar && !esAdmin) {
+      ['navRes','navCorreo','navVisitas','navCasos','navFusiones','navInventario','navHoras','navEstadisticas','navEval360','navSolicitudes','navFbAlertas','navUsr'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+      document.querySelectorAll('button.ni').forEach(function(btn) {
+        const oc = btn.getAttribute('onclick') || '';
+        if (oc.indexOf("'trabajadores'") >= 0 || oc.indexOf("'consulta'") >= 0 || oc.indexOf('capacitaciones.html') >= 0) {
+          btn.style.display = 'none';
+        }
+      });
+      console.log('[bienestar] Sidebar limitado para sector BIENESTAR SOCIAL');
+    }
+  } catch (_eBs) {
+    console.error('[bienestar] Error en logica de visibilidad:', _eBs);
+  }
   _fbIniciarEscuchaEstadisticasConRetry(10);
   // Filtro año en Consulta por DNI: visible para todos los roles
   const cAnioWrap = document.getElementById('cAnioWrap');
