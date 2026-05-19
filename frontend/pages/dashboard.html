@@ -29,7 +29,7 @@ body{font-family:Barlow,sans-serif;background:var(--bg);color:var(--tx)}
 .av-n{font-size:12px;font-weight:600;color:#fff} .av-r{font-size:10px;color:rgba(255,255,255,.4)}
 .nav{flex:1;padding:12px 8px;overflow-y:auto}
 .ns{font-size:9px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.3);text-transform:uppercase;padding:0 8px;margin:12px 0 5px}
-.ni{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;color:rgba(255,255,255,.6);cursor:pointer;transition:all .2s;font-size:12px;font-weight:500;margin-bottom:1px;border:none;background:none;width:100%;text-align:left}
+.ni{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;color:rgba(255,255,255,.6);cursor:pointer;transition:all .2s;font-size:14px;font-weight:500;margin-bottom:1px;border:none;background:none;width:100%;text-align:left}
 .ni:hover{background:rgba(255,255,255,.1);color:#fff} .ni.on{background:var(--rojo);color:#fff}
 .ni .ic{font-size:14px;width:18px;text-align:center}
 .sb-ft{padding:12px 8px;border-top:1px solid rgba(255,255,255,.1)}
@@ -157,6 +157,18 @@ html.dark #globalResults{background:#1e293b;border-color:#334155}
 html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
 @keyframes live-pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .live-dot{display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;animation:live-pulse 1.5s infinite;margin-right:4px;vertical-align:middle}
+
+/* === AUMENTO LEGIBILIDAD 18-may-2026 === */
+.ni{font-size:14px !important}
+body{font-size:15px}
+table th{font-size:12.5px !important;letter-spacing:.5px}
+table td{font-size:13px !important}
+.lbl,label{font-size:12.5px !important}
+input,select,textarea{font-size:14px !important}
+button{font-size:13.5px !important}
+h1{font-size:22px !important}
+h2{font-size:18px !important}
+h3{font-size:16px !important}
 </style>
 <script>if(localStorage.getItem('rl_dark')==='1')document.documentElement.classList.add('dark');</script>
 <!-- azure-blob-upload.js eliminado: subida ahora va por backend Apps Script (action subirArchivoAzure) -->
@@ -7738,7 +7750,19 @@ function imprimirInforme() {
       body { font-family: Arial, sans-serif; font-size: 11pt; margin: 20px; }
       img { max-width: 100%; }
       @media print { body { margin: 10px; } }
-    </style>
+    
+/* === AUMENTO LEGIBILIDAD 18-may-2026 === */
+.ni{font-size:14px !important}
+body{font-size:15px}
+table th{font-size:12.5px !important;letter-spacing:.5px}
+table td{font-size:13px !important}
+.lbl,label{font-size:12.5px !important}
+input,select,textarea{font-size:14px !important}
+button{font-size:13.5px !important}
+h1{font-size:22px !important}
+h2{font-size:18px !important}
+h3{font-size:16px !important}
+</style>
   </head><body>${contenido}</div></div>
 </body></html>`);
   ventana.document.close();
@@ -8794,7 +8818,19 @@ function mostrarToastActualizacion(newWorker) {
       <button id="btnReloadUpdate" style="background:#fff;color:#0a2463;border:none;padding:8px 14px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px">Recargar</button>
       <button id="btnCloseUpdate" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.3);padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px">✕</button>
     </div>
-    <style>@keyframes slideUp{from{transform:translateY(100px);opacity:0}to{transform:translateY(0);opacity:1}}</style>
+    <style>@keyframes slideUp{from{transform:translateY(100px);opacity:0}to{transform:translateY(0);opacity:1}}
+/* === AUMENTO LEGIBILIDAD 18-may-2026 === */
+.ni{font-size:14px !important}
+body{font-size:15px}
+table th{font-size:12.5px !important;letter-spacing:.5px}
+table td{font-size:13px !important}
+.lbl,label{font-size:12.5px !important}
+input,select,textarea{font-size:14px !important}
+button{font-size:13.5px !important}
+h1{font-size:22px !important}
+h2{font-size:18px !important}
+h3{font-size:16px !important}
+</style>
   `;
   document.body.appendChild(toast);
   document.getElementById('btnReloadUpdate').onclick = () => {
