@@ -338,8 +338,10 @@ html.dark .trab-res{background:#1e293b;border-color:#334155;color:#7dd3fc}
         <div class="tw">
           <table><thead><tr>
             <th>N°</th><th>Fecha</th><th>H.Inicio</th><th>H.Fin</th><th>DNI</th><th>Trabajador</th>
-            <th>Empresa</th><th>Fundo</th><th>Documento</th><th>Estado</th><th>Acciones</th>
-          </tr></thead><tbody id="tbAt"><tr><td colspan="11" class="empty">⏳ Cargando...</td></tr></tbody></table>
+            <th>Celular</th><th>Empresa</th><th>Fundo</th><th>Documento</th>
+            <th>F.Inicio Doc</th><th>F.Fin Doc</th><th>Días</th><th>Estado</th>
+            <th>Observación</th><th>Acciones</th>
+          </tr></thead><tbody id="tbAt"><tr><td colspan="16" class="empty">⏳ Cargando...</td></tr></tbody></table>
         </div>
       </div>
     </div>
@@ -3660,13 +3662,13 @@ async function cargarCasos() {
     return;
   }
   const tb = document.getElementById('tbCasos');
-  if(tb) tb.innerHTML = '<tr><td colspan="11" class="empty">⏳ Cargando...</td></tr>';
+  if(tb) tb.innerHTML = '<tr><td colspan="16" class="empty">⏳ Cargando...</td></tr>';
   try {
     const params = {action:'getCasos', empresa, motivo, nombre:USER.nombre||USER.usuario, usuario:USER.usuario, rol:USER.rol};
     if(sup) params.supervisor = sup;
     const d = await apiGet(params);
     if (!d.success) {
-      if(tb) tb.innerHTML = '<tr><td colspan="11" class="empty">❌ '+( d.error||'Error al cargar casos')+'</td></tr>';
+      if(tb) tb.innerHTML = '<tr><td colspan="16" class="empty">❌ '+( d.error||'Error al cargar casos')+'</td></tr>';
       return;
     }
     if(d.data && d.data.length > 0) console.log('[getCasos] campos:', Object.keys(d.data[0]));
@@ -3679,7 +3681,7 @@ async function cargarCasos() {
     }
   } catch(e) {
     const tb2 = document.getElementById('tbCasos');
-    if(tb2) tb2.innerHTML='<tr><td colspan="11" class="empty">❌ Error de conexión</td></tr>';
+    if(tb2) tb2.innerHTML='<tr><td colspan="16" class="empty">❌ Error de conexión</td></tr>';
     console.error('cargarCasos error:', e);
   }
 }
@@ -4491,23 +4493,23 @@ async function cargarAtenciones(historial=false) {
     return;
   }
   const tb = document.getElementById('tbAt');
-  if(tb) tb.innerHTML = '<tr><td colspan="11" class="empty">⏳ Cargando atenciones...</td></tr>';
+  if(tb) tb.innerHTML = '<tr><td colspan="16" class="empty">⏳ Cargando atenciones...</td></tr>';
   try {
     const _emp = ROLES_VER_TODO.includes(USER.rol) ? '' : (USER.empresa || '');
     const d=await apiGet({action:'getAtencionesOptimizado',usuario:USER.usuario,nombre:USER.nombre||USER.usuario,rol:USER.rol,empresa:_emp});
     if(d.success){CACHE.atenciones=d.data;atTodas=d.data.filter(a=>a.fecha_atencion===hoy());renderAt(atTodas);}
-    else { if(tb) tb.innerHTML='<tr><td colspan="11" class="empty">❌ '+(d.error||'Error al cargar atenciones')+'</td></tr>'; }
+    else { if(tb) tb.innerHTML='<tr><td colspan="16" class="empty">❌ '+(d.error||'Error al cargar atenciones')+'</td></tr>'; }
   } catch(e){
-    if(tb) tb.innerHTML='<tr><td colspan="11" class="empty">❌ Error de conexión</td></tr>';
+    if(tb) tb.innerHTML='<tr><td colspan="16" class="empty">❌ Error de conexión</td></tr>';
     console.error('cargarAtenciones:', e);
   }
 }
 
 function renderAt(lista) {
   const tb=document.getElementById('tbAt');
-  if(!lista.length){tb.innerHTML='<tr><td colspan="11" class="empty">No hay atenciones registradas</td></tr>';return;}
+  if(!lista.length){tb.innerHTML='<tr><td colspan="16" class="empty">No hay atenciones registradas</td></tr>';return;}
   const esSup = ROLES_SUP.includes(USER.rol);
-  tb.innerHTML = '<tr><td colspan="11" class="empty">⏳ Cargando tabla...</td></tr>';
+  tb.innerHTML = '<tr><td colspan="16" class="empty">⏳ Cargando tabla...</td></tr>';
   setTimeout(() => {
     tb.innerHTML=lista.map(a=>{
       const esDueno = a.supervisor===(USER.nombre||USER.usuario) || a.supervisor===USER.usuario;
@@ -4519,10 +4521,15 @@ function renderAt(lista) {
         <td>${a.hora_termino||''}</td>
         <td><strong>${a.dni||''}</strong></td>
         <td>${a.nombre||''}</td>
+        <td>${a.celular||''}</td>
         <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
         <td>${a.fundo||''}</td>
         <td>${a.detalle_documento||''}</td>
+        <td>${a.fecha_inicio_doc||''}</td>
+        <td>${a.fecha_termino_doc||''}</td>
+        <td style="text-align:center;font-weight:700">${a.dias_transcurridos||''}</td>
         <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
+        <td style="max-width:200px;font-size:11px;white-space:normal">${a.observaciones||''}</td>
         <td>
           <button class="btn-a bv" onclick="verDet('${a.nro}','at')">Ver</button>
           ${puedeMod?`<button class="btn-a be" onclick="editarAt('${a.nro}')">✏️</button>`:''}
@@ -7963,12 +7970,30 @@ function exportarExcelGen(datos, columnas, nombreArchivo) {
 function exportarAtenciones() {
   const datos = window._atFiltradas || CACHE.atenciones || [];
   exportarExcelGen(datos, [
-    {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha'},
-    {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},
-    {key:'empresa',label:'Empresa'},{key:'fundo',label:'Fundo'},
-    {key:'cargo',label:'Cargo'},{key:'supervisor',label:'Supervisor'},
-    {key:'detalle_documento',label:'Documento'},{key:'estado',label:'Estado'},
-    {key:'observaciones',label:'Observaciones'}
+    {key:'nro',label:'N°'},
+    {key:'fecha_atencion',label:'Fecha'},
+    {key:'hora_inicio',label:'H. Inicio'},
+    {key:'hora_termino',label:'H. Fin'},
+    {key:'dni',label:'DNI'},
+    {key:'nombre',label:'Nombre'},
+    {key:'sexo',label:'Sexo'},
+    {key:'celular',label:'Celular'},
+    {key:'empresa',label:'Empresa'},
+    {key:'fundo',label:'Fundo'},
+    {key:'fundo_actual',label:'Fundo Actual'},
+    {key:'cargo',label:'Cargo'},
+    {key:'ruta',label:'Ruta'},
+    {key:'codigo',label:'Código'},
+    {key:'fecha_inicio_periodo',label:'F. Inicio Periodo'},
+    {key:'supervisor',label:'Supervisor'},
+    {key:'detalle_documento',label:'Documento'},
+    {key:'fecha_inicio_doc',label:'F. Inicio Doc.'},
+    {key:'fecha_termino_doc',label:'F. Fin Doc.'},
+    {key:'dias_transcurridos',label:'Días'},
+    {key:'responsable_recepcion',label:'Responsable Recepción'},
+    {key:'estado',label:'Estado'},
+    {key:'observaciones',label:'Observaciones'},
+    {key:'usuario_sistema',label:'Usuario Sistema'}
   ], 'Atenciones');
 }
 
