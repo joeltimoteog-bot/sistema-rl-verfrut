@@ -5,7 +5,7 @@ module.exports = async function (context, req) {
   const startTime = Date.now();
 
   try {
-    const { anio, empresa } = req.query;
+    const { anio, empresa, supervisor } = req.query;
     const pool = await getPool();
 
     const filtros = ['1=1'];
@@ -17,6 +17,10 @@ module.exports = async function (context, req) {
     if (empresa) {
       filtros.push('empresa = @empresa');
       inputs.empresa = { type: sql.NVarChar, value: empresa };
+    }
+    if (supervisor) {
+      filtros.push('supervisor LIKE @supervisor');
+      inputs.supervisor = { type: sql.NVarChar, value: '%' + supervisor + '%' };
     }
     const whereClause = filtros.join(' AND ');
 
