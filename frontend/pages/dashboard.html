@@ -2702,7 +2702,7 @@ window.onload = async () => {
     // ─── BIENESTAR SOCIAL: visibilidad del boton y restriccion del sidebar ───
     try {
       const _esBienestar = String(USER.sector || '').toUpperCase().trim() === 'BIENESTAR SOCIAL';
-      if (esAdmin || _esBienestar) {
+      if (esAdmin || ['tvera','lmorales','dreyna','rfigueroa','cbecerra'].indexOf(String(USER.usuario||'').toLowerCase().trim()) >= 0) {
         const _btnBs = document.getElementById('navBienestar');
         if (_btnBs) _btnBs.style.display = '';
       }
@@ -2731,7 +2731,7 @@ window.onload = async () => {
   // ─── BIENESTAR SOCIAL: visibilidad del boton y restriccion del sidebar ───
   try {
     const _esBienestar = String(USER.sector || '').toUpperCase().trim() === 'BIENESTAR SOCIAL';
-    if (esAdmin || _esBienestar) {
+    if (esAdmin || ['tvera','lmorales','dreyna','rfigueroa','cbecerra'].indexOf(String(USER.usuario||'').toLowerCase().trim()) >= 0) {
       const _btnBs = document.getElementById('navBienestar');
       if (_btnBs) _btnBs.style.display = '';
     }
@@ -6857,12 +6857,19 @@ function _irBienestar() {
       sector: USER.sector || '',
       empresa: USER.empresa || '',
       cargo: USER.cargo || '',
-      permisos: {
-        quejas: true,
-        accidentes: true,
-        hostigamiento: true,
-        subsidios: true
-      },
+      permisos: (function(){
+        var u = String(USER.usuario || '').toLowerCase().trim();
+        var esAdminLocal = (typeof ROLES_VER_TODO !== 'undefined') && ROLES_VER_TODO.includes(USER.rol);
+        if (esAdminLocal) {
+          return {quejas: true, accidentes: true, hostigamiento: true, subsidios: true};
+        }
+        return {
+          quejas:        ['tvera','lmorales','dreyna'].indexOf(u) >= 0,
+          accidentes:    ['rfigueroa','lmorales','dreyna','cbecerra'].indexOf(u) >= 0,
+          hostigamiento: ['tvera','dreyna'].indexOf(u) >= 0,
+          subsidios:     ['tvera','dreyna','lmorales'].indexOf(u) >= 0
+        };
+      })(),
       timestamp: Date.now(),
       source: 'sistema-rl-verfrut'
     };
