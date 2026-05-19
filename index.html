@@ -198,9 +198,15 @@ function togglePass(){const p=document.getElementById('password');p.type=p.type=
 // Solo administrador ve la tarjeta de Sistema ETI; el resto la oculta.
 function aplicarVisibilidadModulos(user){
   const rol = String((user && user.rol) || '').toLowerCase().trim();
+  const sector = String((user && user.sector) || '').toUpperCase().trim();
   const esAdmin = rol === 'administrador';
+  const esBienestar = sector === 'BIENESTAR SOCIAL';
+  // Sistema ETI Capacitaciones: solo administrador
   const eti = document.getElementById('modETI');
   if (eti) eti.style.display = esAdmin ? '' : 'none';
+  // Sistema de Evaluaciones: oculto para usuarios de sector BIENESTAR SOCIAL (no admin)
+  const evalCard = document.getElementById('modEval');
+  if (evalCard) evalCard.style.display = (esBienestar && !esAdmin) ? 'none' : '';
 }
 
 function mostrarBienvenida(user, callback) {
