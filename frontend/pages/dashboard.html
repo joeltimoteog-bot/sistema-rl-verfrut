@@ -4016,6 +4016,31 @@ async function preloadData() {
       if (data.usuarios)    CACHE.usuarios     = data.usuarios;
       if (data.supervisores) CACHE.supervisores = data.supervisores;
 
+      // FIX BIENESTAR/SUPERVISOR: sobrescribir CACHE.stats con datos filtrados de Azure
+      if (!esAdmin && (USER.nombre || USER.usuario)) {
+        try {
+          const _sup = encodeURIComponent(USER.nombre || USER.usuario);
+          const _r = await fetch(AZURE_FN_BASE + '/atenciones/stats?supervisor=' + _sup);
+          if (_r.ok) {
+            const _j = await _r.json();
+            if (_j.success && _j.resumen_global) {
+              const _rg = _j.resumen_global;
+              CACHE.stats = {
+                hoy: _rg.hoy || 0,
+                mes: _rg.este_mes || 0,
+                anio: _rg.este_anio || 0,
+                enProceso: _rg.en_proceso || 0,
+                finalizados: _rg.finalizados || 0,
+                total: _rg.total || 0
+              };
+              console.log('[preload-fix] stats filtradas por supervisor:', CACHE.stats);
+            }
+          }
+        } catch(_eFix) {
+          console.warn('[preload-fix] No se pudo filtrar stats por supervisor:', _eFix);
+        }
+      }
+
       // Inicializar variables locales usadas por otros módulos
       atTodas       = CACHE.atenciones.filter(a => a.fecha_atencion === hoy());
       casosData     = CACHE.casos;
