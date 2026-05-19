@@ -2772,6 +2772,8 @@ window.onload = async () => {
   // SOLO si Firebase tiene datos del día actual (evita mostrar contadores stale del día anterior)
   setInterval(function() {
     if (!window._fbEstadisticas) return;
+    // FIX BIENESTAR/SUPERVISOR: NO sobreescribir DOM con Firebase global
+    if (USER.rol && (USER.rol || '').toLowerCase() === 'supervisor' && !ROLES_VER_TODO.includes(USER.rol)) return;
     var fb = window._fbEstadisticas.resumen_global;
     if (!fb || !fb.total) return;
 
