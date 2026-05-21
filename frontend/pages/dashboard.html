@@ -2708,7 +2708,7 @@ window.onload = async () => {
         if (_btnBs) _btnBs.style.display = '';
       }
       if (_esBienestar && !esAdmin) {
-        ['navRes','navCorreo','navVisitas','navCasos','navFusiones','navInventario','navHoras','navEstadisticas','navEval360','navSolicitudes','navFbAlertas','navUsr'].forEach(function(id) {
+        ['navRes','navCorreo','navVisitas','navCasos','navFusiones','navInventario','navHoras','navEstadisticas','navEval360','navSolicitudes','navFbAlertas','navUsr','navMantenimiento'].forEach(function(id) {
           const el = document.getElementById(id);
           if (el) el.style.display = 'none';
         });
@@ -2737,7 +2737,7 @@ window.onload = async () => {
       if (_btnBs) _btnBs.style.display = '';
     }
     if (_esBienestar && !esAdmin) {
-      ['navRes','navCorreo','navVisitas','navCasos','navFusiones','navInventario','navHoras','navEstadisticas','navEval360','navSolicitudes','navFbAlertas','navUsr'].forEach(function(id) {
+      ['navRes','navCorreo','navVisitas','navCasos','navFusiones','navInventario','navHoras','navEstadisticas','navEval360','navSolicitudes','navFbAlertas','navUsr','navMantenimiento'].forEach(function(id) {
         const el = document.getElementById(id);
         if (el) el.style.display = 'none';
       });
