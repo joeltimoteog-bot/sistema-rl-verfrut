@@ -2713,7 +2713,7 @@ window.onload = async () => {
         });
         document.querySelectorAll('button.ni').forEach(function(btn) {
           const oc = btn.getAttribute('onclick') || '';
-          if (oc.indexOf("'trabajadores'") >= 0 || oc.indexOf("'consulta'") >= 0 || oc.indexOf('capacitaciones.html') >= 0) {
+          if (oc.indexOf("'trabajadores'") >= 0 || oc.indexOf('capacitaciones.html') >= 0) {
             btn.style.display = 'none';
           }
         });
@@ -2742,7 +2742,7 @@ window.onload = async () => {
       });
       document.querySelectorAll('button.ni').forEach(function(btn) {
         const oc = btn.getAttribute('onclick') || '';
-        if (oc.indexOf("'trabajadores'") >= 0 || oc.indexOf("'consulta'") >= 0 || oc.indexOf('capacitaciones.html') >= 0) {
+        if (oc.indexOf("'trabajadores'") >= 0 || oc.indexOf('capacitaciones.html') >= 0) {
           btn.style.display = 'none';
         }
       });
