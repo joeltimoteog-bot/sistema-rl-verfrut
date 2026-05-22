@@ -100,7 +100,10 @@ tr:hover td{background:#fafbfc}
 .mbox-b{padding:22px}
 .mbox-f{padding:16px 22px;border-top:1px solid var(--bd);display:flex;gap:10px;justify-content:flex-end}
 .btn-gh{background:#fff;border:1.5px solid var(--bd);color:var(--gr)} .btn-gh:hover{background:var(--bg)}
-@media(max-width:860px){.sb{transform:translateX(-100%)}.main{margin-left:0}.grid2,.grid3{grid-template-columns:1fr}}
+.hamb{display:none;background:none;border:none;font-size:24px;color:var(--azul);cursor:pointer;padding:0 4px;line-height:1}
+.sb-ov{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:99}
+.sb-ov.show{display:block}
+@media(max-width:860px){.sb{transform:translateX(-100%)}.sb.open{transform:translateX(0)}.main{margin-left:0}.grid2,.grid3{grid-template-columns:1fr}.hamb{display:block}}
 </style>
 </head>
 <body>
@@ -116,10 +119,14 @@ tr:hover td{background:#fafbfc}
   </nav>
   <div class="sb-ft"><button class="logout" onclick="logout()"><span class="ic">🚪</span>Cerrar Sesión</button></div>
 </aside>
+<div class="sb-ov" id="sbOverlay" onclick="toggleSidebar()"></div>
 
 <div class="main">
   <div class="topbar">
-    <div class="tb-t">SOLICITUD DE MANTENIMIENTO</div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="hamb" onclick="toggleSidebar()" aria-label="Menú">&#9776;</button>
+      <div class="tb-t">SOLICITUD DE MANTENIMIENTO</div>
+    </div>
     <div class="tb-r"><span class="tb-f" id="fecha"></span><span class="emp-b" id="empBadge">SISTEMA RL</span></div>
   </div>
   <div class="content">
@@ -132,7 +139,7 @@ tr:hover td{background:#fafbfc}
     <div id="mainWrap" style="display:none">
       <div class="tabs" id="tabs">
         <button class="tab on" data-pane="paneNueva" onclick="irTab(this)">📝 Nueva Solicitud</button>
-        <button class="tab" data-pane="paneMis" onclick="irTab(this)">📋 Mis Solicitudes</button>
+        <button class="tab" data-pane="paneMis" onclick="irTab(this);cargarMis()">📋 Mis Solicitudes</button>
         <button class="tab" data-pane="paneAdmin" id="tabAdmin" onclick="irTab(this);cargarAdmin()" style="display:none">⚙️ Panel Admin</button>
       </div>
 
@@ -202,14 +209,11 @@ tr:hover td{background:#fafbfc}
         <div class="card">
           <div class="card-h">
             <div class="card-t">📋 Mis Solicitudes</div>
-            <div class="dni-row" style="margin:0">
-              <input type="text" id="dniMis" placeholder="Tu DNI" maxlength="8" inputmode="numeric" style="width:160px">
-              <button class="btn btn-az btn-sm" onclick="cargarMis()">Buscar</button>
-            </div>
+            <button class="btn btn-az btn-sm" onclick="cargarMis()">🔄 Actualizar</button>
           </div>
           <div class="tw"><table>
             <thead><tr><th>N°</th><th>Fecha solicitud</th><th>Unidad</th><th>Km</th><th>Tipo</th><th>Estado</th><th>Fecha programada</th><th>Comentario</th></tr></thead>
-            <tbody id="misBody"><tr><td colspan="8" class="empty">Ingresá tu DNI y presioná Buscar.</td></tr></tbody>
+            <tbody id="misBody"><tr><td colspan="8" class="empty">Cargando tus solicitudes...</td></tr></tbody>
           </table></div>
         </div>
       </div>
@@ -276,6 +280,11 @@ document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-P
 if(esAdmin||esSuper){document.getElementById('mainWrap').style.display='block';if(esAdmin)document.getElementById('tabAdmin').style.display='block';}
 else{document.getElementById('denyBox').style.display='block';}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
+
+function toggleSidebar(){
+  document.querySelector('.sb').classList.toggle('open');
+  document.getElementById('sbOverlay').classList.toggle('show');
+}
 
 function irTab(btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
@@ -358,13 +367,12 @@ function badgeEstado(est){
   return '<span class="badge b-pend">PENDIENTE</span>';
 }
 async function cargarMis(){
-  const dni=document.getElementById('dniMis').value.trim(),body=document.getElementById('misBody');
-  if(!/^\d{8}$/.test(dni)){body.innerHTML='<tr><td colspan="8" class="empty">Ingresá un DNI válido (8 dígitos).</td></tr>';return;}
-  body.innerHTML='<tr><td colspan="8" class="empty">Cargando...</td></tr>';
+  const body=document.getElementById('misBody');
+  body.innerHTML='<tr><td colspan="8" class="empty">Cargando tus solicitudes...</td></tr>';
   try{
-    const r=await fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento',dni:dni}));
+    const r=await fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento',solicitante:USER.usuario}));
     const res=await r.json();
-    if(!res||!res.ok||!res.data||!res.data.length){body.innerHTML='<tr><td colspan="8" class="empty">No tenés solicitudes registradas.</td></tr>';return;}
+    if(!res||!res.ok||!res.data||!res.data.length){body.innerHTML='<tr><td colspan="8" class="empty">Todavía no tenés solicitudes registradas.</td></tr>';return;}
     body.innerHTML=res.data.map(s=>'<tr>'+
       '<td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'')+'</td><td>'+(s.unidad||'')+'</td>'+
       '<td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td><td>'+badgeEstado(s.estado)+'</td>'+
