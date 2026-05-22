@@ -13,9 +13,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--verde:#16a34a;--ambar:#d97706;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
 body{font-family:Barlow,sans-serif;background:var(--bg);color:var(--tx)}
-
-/* Sidebar */
-.sb{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--azul);display:flex;flex-direction:column;z-index:100;transition:transform .3s ease}
+.sb{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--azul);display:flex;flex-direction:column;z-index:100}
 .sb-hdr{padding:20px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
 .sb-logo{display:flex;align-items:center;gap:10px}
 .sb-ic{width:36px;height:36px;background:var(--rojo);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px}
@@ -32,8 +30,6 @@ body{font-family:Barlow,sans-serif;background:var(--bg);color:var(--tx)}
 .sb-ft{padding:12px 8px;border-top:1px solid rgba(255,255,255,.1)}
 .logout{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;color:rgba(255,255,255,.45);cursor:pointer;font-size:12px;font-weight:500;border:none;background:none;width:100%;transition:all .2s}
 .logout:hover{color:#fff;background:rgba(220,38,38,.3)}
-
-/* Main */
 .main{margin-left:var(--sw);min-height:100vh;display:flex;flex-direction:column}
 .topbar{background:#fff;border-bottom:1px solid var(--bd);padding:13px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
 .tb-t{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:800;color:var(--azul);letter-spacing:1px}
@@ -41,18 +37,19 @@ body{font-family:Barlow,sans-serif;background:var(--bg);color:var(--tx)}
 .tb-f{font-size:11px;color:var(--gr)}
 .emp-b{padding:4px 12px;border-radius:20px;background:var(--rojo);color:#fff;font-size:10px;font-weight:700;letter-spacing:1px}
 .content{padding:22px;flex:1}
-
-/* Formulario */
+.tabs{display:flex;gap:6px;margin:0 auto 20px;max-width:900px;background:#fff;padding:6px;border-radius:12px;border:1px solid var(--bd)}
+.tab{flex:1;padding:11px;border:none;background:none;border-radius:8px;font-family:Barlow,sans-serif;font-size:13px;font-weight:700;color:var(--gr);cursor:pointer;transition:all .15s}
+.tab:hover{background:var(--bg)} .tab.on{background:var(--azul);color:#fff}
+.pane{display:none} .pane.on{display:block;animation:fade .3s}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .fcard{background:#fff;border-radius:14px;border:1px solid var(--bd);max-width:760px;margin:0 auto;overflow:hidden}
 .fcard-h{background:linear-gradient(135deg,var(--azul),var(--azul-med));padding:22px 26px;color:#fff}
 .fcard-h h2{font-family:'Barlow Condensed',sans-serif;font-size:22px;font-weight:800;letter-spacing:.5px}
 .fcard-h p{font-size:12px;opacity:.85;margin-top:3px}
 .fcard-b{padding:26px}
-
 .sectit{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:var(--azul);margin:22px 0 12px;display:flex;align-items:center;gap:8px}
 .sectit:first-child{margin-top:0}
 .sectit::after{content:"";flex:1;height:1px;background:var(--bd)}
-
 .dni-row{display:flex;gap:10px;align-items:flex-end}
 .field{flex:1}
 label{display:block;font-size:11px;font-weight:700;color:var(--gr);margin-bottom:5px}
@@ -60,344 +57,368 @@ input,select,textarea{width:100%;padding:10px 12px;border:1.5px solid var(--bd);
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--azul-c)}
 textarea{resize:vertical;min-height:68px}
 .ro{background:#f8fafc;color:var(--tx);cursor:default}
-
 .btn{padding:10px 20px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;font-family:Barlow,sans-serif}
 .btn-az{background:var(--azul);color:#fff} .btn-az:hover{background:var(--azul-med)}
 .btn-send{background:var(--verde);color:#fff;width:100%;padding:13px;font-size:14px;margin-top:8px}
 .btn-send:hover{background:#15803d} .btn-send:disabled{background:#cbd5e1;cursor:not-allowed}
-
+.btn-sm{padding:6px 13px;font-size:11px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
-
 .box{display:none}.box.show{display:block;animation:fade .3s}
-@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-
 .badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:800}
 .b-vig{background:#d1fae5;color:#065f46} .b-ven{background:#fee2e2;color:#991b1b} .b-pv{background:#ffedd5;color:#9a3412}
+.b-pend{background:#fef3c7;color:#92400e} .b-prog{background:#dbeafe;color:#1e40af} .b-comp{background:#d1fae5;color:#065f46}
 .dot{width:7px;height:7px;border-radius:50%} .dg{background:#16a34a} .dr{background:#dc2626} .da{background:#d97706}
-
 .km-res{background:var(--azul);color:#fff;border-radius:10px;padding:13px 15px;margin-top:10px;font-size:12px;display:none}
 .km-res.show{display:block} .km-res strong{font-size:17px} .km-res.alert{background:var(--rojo)}
-
-.hint{font-size:11px;color:var(--gr);margin-top:4px}
 .err{font-size:11px;color:var(--rojo);margin-top:4px;display:none}
 .loading{font-size:11px;color:var(--azul-c);margin-top:4px;display:none}
-
 .confirm{display:none;text-align:center;padding:36px 20px}
 .confirm.show{display:block;animation:fade .4s}
 .cf-ic{width:64px;height:64px;border-radius:50%;background:#d1fae5;color:var(--verde);display:flex;align-items:center;justify-content:center;font-size:32px;margin:0 auto 16px}
 .confirm h2{color:var(--azul);font-size:20px;margin-bottom:10px}
 .confirm p{color:var(--gr);font-size:13px;max-width:440px;margin:0 auto;line-height:1.6}
 .cf-id{background:var(--bg);border-radius:8px;padding:11px;margin-top:16px;font-weight:700;color:var(--azul)}
-
 .deny{max-width:480px;margin:60px auto;text-align:center;background:#fff;border-radius:14px;border:1px solid var(--bd);padding:40px 30px}
-.deny h2{color:var(--rojo);font-size:20px;margin-bottom:10px}
-.deny p{color:var(--gr);font-size:13px}
-
-@media(max-width:860px){
-  .sb{transform:translateX(-100%)} .main{margin-left:0}
-  .grid2,.grid3{grid-template-columns:1fr}
-}
+.deny h2{color:var(--rojo);font-size:20px;margin-bottom:10px} .deny p{color:var(--gr);font-size:13px}
+.card{background:#fff;border-radius:12px;border:1px solid var(--bd);max-width:1100px;margin:0 auto;overflow:hidden}
+.card-h{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.card-t{font-size:15px;font-weight:800;color:var(--azul)}
+.filtros{display:flex;gap:8px;align-items:center}
+.fsel{padding:7px 11px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow;background:#f8fafc}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:760px}
+th{padding:10px 13px;text-align:left;font-size:9px;font-weight:700;letter-spacing:1px;color:var(--gr);text-transform:uppercase;background:#f8fafc;border-bottom:1px solid var(--bd);white-space:nowrap}
+td{padding:11px 13px;font-size:12px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+tr:hover td{background:#fafbfc}
+.empty{text-align:center;padding:40px;color:var(--gr);font-size:13px}
+.muted{color:var(--gr);font-size:11px}
+.modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:200;align-items:center;justify-content:center;padding:20px}
+.modal.show{display:flex;animation:fade .2s}
+.mbox{background:#fff;border-radius:14px;max-width:480px;width:100%;overflow:hidden}
+.mbox-h{background:var(--azul);color:#fff;padding:18px 22px;font-weight:800;font-size:16px}
+.mbox-b{padding:22px}
+.mbox-f{padding:16px 22px;border-top:1px solid var(--bd);display:flex;gap:10px;justify-content:flex-end}
+.btn-gh{background:#fff;border:1.5px solid var(--bd);color:var(--gr)} .btn-gh:hover{background:var(--bg)}
+@media(max-width:860px){.sb{transform:translateX(-100%)}.main{margin-left:0}.grid2,.grid3{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-
-<!-- SIDEBAR -->
 <aside class="sb">
-  <div class="sb-hdr">
-    <div class="sb-logo">
-      <div class="sb-ic">🍎</div>
-      <div>
-        <div class="sb-t">Sistema RR.LL.</div>
-        <div class="sb-s">Relaciones Laborales v3.0</div>
-      </div>
-    </div>
-  </div>
-  <div class="sb-usr">
-    <div class="av" id="av">U</div>
-    <div><div class="av-n" id="avN">...</div><div class="av-r" id="avR">...</div></div>
-  </div>
+  <div class="sb-hdr"><div class="sb-logo"><div class="sb-ic">🍎</div>
+    <div><div class="sb-t">Sistema RR.LL.</div><div class="sb-s">Relaciones Laborales v3.0</div></div></div></div>
+  <div class="sb-usr"><div class="av" id="av">U</div>
+    <div><div class="av-n" id="avN">...</div><div class="av-r" id="avR">...</div></div></div>
   <nav class="nav">
     <div class="ns">Navegación</div>
     <a class="ni" href="/sistema-rl-verfrut/frontend/pages/dashboard.html"><span class="ic">📊</span>Volver al Dashboard</a>
     <button class="ni on"><span class="ic">🔧</span>Solicitud de Mantenimiento</button>
   </nav>
-  <div class="sb-ft">
-    <button class="logout" onclick="logout()"><span class="ic">🚪</span>Cerrar Sesión</button>
-  </div>
+  <div class="sb-ft"><button class="logout" onclick="logout()"><span class="ic">🚪</span>Cerrar Sesión</button></div>
 </aside>
 
-<!-- MAIN -->
 <div class="main">
   <div class="topbar">
     <div class="tb-t">SOLICITUD DE MANTENIMIENTO</div>
-    <div class="tb-r">
-      <span class="tb-f" id="fecha"></span>
-      <span class="emp-b" id="empBadge">SISTEMA RL</span>
-    </div>
+    <div class="tb-r"><span class="tb-f" id="fecha"></span><span class="emp-b" id="empBadge">SISTEMA RL</span></div>
   </div>
-
   <div class="content">
 
-    <!-- ACCESO DENEGADO (no supervisores/admin) -->
     <div class="deny" id="denyBox" style="display:none">
       <h2>🔒 Acceso restringido</h2>
       <p>Este módulo está disponible solo para supervisores y administradores.</p>
     </div>
 
-    <!-- FORMULARIO -->
-    <div class="fcard" id="mainCard" style="display:none">
-      <div class="fcard-h">
-        <h2>🔧 Solicitud de Mantenimiento de Unidad</h2>
-        <p>Registra tu solicitud de mantenimiento preventivo o general</p>
+    <div id="mainWrap" style="display:none">
+      <div class="tabs" id="tabs">
+        <button class="tab on" data-pane="paneNueva" onclick="irTab(this)">📝 Nueva Solicitud</button>
+        <button class="tab" data-pane="paneMis" onclick="irTab(this)">📋 Mis Solicitudes</button>
+        <button class="tab" data-pane="paneAdmin" id="tabAdmin" onclick="irTab(this);cargarAdmin()" style="display:none">⚙️ Panel Admin</button>
       </div>
-      <div class="fcard-b">
 
-        <div id="formMant">
-          <div class="sectit">1. Identificación</div>
-          <div class="dni-row">
-            <div class="field">
-              <label>DNI del solicitante</label>
-              <input type="text" id="dni" placeholder="Ingresa tu DNI (8 dígitos)" maxlength="8" inputmode="numeric">
-            </div>
-            <button class="btn btn-az" id="btnBuscar" onclick="buscarDNI()">🔍 Buscar</button>
-          </div>
-          <div class="loading" id="dniLoading">Buscando datos...</div>
-          <div class="err" id="dniError">DNI no encontrado en la base de datos de responsables.</div>
-
-          <div class="box" id="datosBox">
-            <div class="sectit">2. Datos del solicitante</div>
-            <div class="grid2">
-              <div class="field"><label>Nombre completo</label><input type="text" class="ro" id="nombre" readonly></div>
-              <div class="field"><label>Empresa</label><input type="text" class="ro" id="empresa" readonly></div>
-            </div>
-
-            <div class="sectit">3. Datos de la unidad</div>
-            <div class="grid3">
-              <div class="field"><label>Modelo</label><input type="text" class="ro" id="modelo" readonly></div>
-              <div class="field"><label>Marca</label><input type="text" class="ro" id="marca" readonly></div>
-              <div class="field"><label>Cód. Interno</label><input type="text" class="ro" id="codInterno" readonly></div>
-            </div>
-
-            <div class="sectit">4. Licencia de conducir</div>
-            <div class="grid3">
-              <div class="field"><label>N° de Licencia</label><input type="text" class="ro" id="numLicencia" readonly></div>
-              <div class="field"><label>F. Expedición</label><input type="text" class="ro" id="fExpedicion" readonly></div>
-              <div class="field"><label>F. Revalidación (caducidad)</label><input type="text" class="ro" id="fRevalidacion" readonly></div>
-            </div>
-            <div style="margin-top:12px">
-              <label>Estado de la licencia</label><br>
-              <span id="estadoLicencia"></span>
-            </div>
-            <div class="field" style="margin-top:14px">
-              <label>Tipo de licencia</label>
-              <select id="tipoLicencia">
-                <option value="">Seleccionar...</option>
-                <option>A-I</option><option>A-IIa</option><option>A-IIb</option>
-                <option>A-IIIa</option><option>A-IIIb</option><option>A-IIIc</option>
-                <option>B-I</option><option>B-IIa</option><option>B-IIb</option><option>B-IIc</option>
-              </select>
-            </div>
-
-            <div class="sectit">5. Datos del mantenimiento</div>
-            <div class="grid2">
-              <div class="field"><label>Kilometraje actual</label><input type="number" id="kilometraje" placeholder="Ej: 3450" oninput="calcularKm()"></div>
-              <div class="field"><label>Tipo de mantenimiento</label>
-                <select id="tipoMant"><option value="">Seleccionar...</option><option>Preventivo</option><option>General</option></select>
+      <!-- NUEVA SOLICITUD -->
+      <div class="pane on" id="paneNueva">
+        <div class="fcard">
+          <div class="fcard-h"><h2>🔧 Solicitud de Mantenimiento de Unidad</h2>
+            <p>Registra tu solicitud de mantenimiento preventivo o general</p></div>
+          <div class="fcard-b">
+            <div id="formMant">
+              <div class="sectit">1. Identificación</div>
+              <div class="dni-row">
+                <div class="field"><label>DNI del solicitante</label>
+                  <input type="text" id="dni" placeholder="Ingresa tu DNI (8 dígitos)" maxlength="8" inputmode="numeric"></div>
+                <button class="btn btn-az" id="btnBuscar" onclick="buscarDNI()">🔍 Buscar</button>
+              </div>
+              <div class="loading" id="dniLoading">Buscando datos...</div>
+              <div class="err" id="dniError">DNI no encontrado.</div>
+              <div class="box" id="datosBox">
+                <div class="sectit">2. Datos del solicitante</div>
+                <div class="grid2">
+                  <div class="field"><label>Nombre completo</label><input type="text" class="ro" id="nombre" readonly></div>
+                  <div class="field"><label>Empresa</label><input type="text" class="ro" id="empresa" readonly></div>
+                </div>
+                <div class="sectit">3. Datos de la unidad</div>
+                <div class="grid3">
+                  <div class="field"><label>Modelo</label><input type="text" class="ro" id="modelo" readonly></div>
+                  <div class="field"><label>Marca</label><input type="text" class="ro" id="marca" readonly></div>
+                  <div class="field"><label>Cód. Interno</label><input type="text" class="ro" id="codInterno" readonly></div>
+                </div>
+                <div class="sectit">4. Licencia de conducir</div>
+                <div class="grid3">
+                  <div class="field"><label>N° de Licencia</label><input type="text" class="ro" id="numLicencia" readonly></div>
+                  <div class="field"><label>F. Expedición</label><input type="text" class="ro" id="fExpedicion" readonly></div>
+                  <div class="field"><label>F. Revalidación</label><input type="text" class="ro" id="fRevalidacion" readonly></div>
+                </div>
+                <div style="margin-top:12px"><label>Estado de la licencia</label><br><span id="estadoLicencia"></span></div>
+                <div class="field" style="margin-top:14px"><label>Tipo de licencia</label>
+                  <select id="tipoLicencia"><option value="">Seleccionar...</option>
+                    <option>A-I</option><option>A-IIa</option><option>A-IIb</option><option>A-IIIa</option>
+                    <option>A-IIIb</option><option>A-IIIc</option><option>B-I</option><option>B-IIa</option>
+                    <option>B-IIb</option><option>B-IIc</option></select></div>
+                <div class="sectit">5. Datos del mantenimiento</div>
+                <div class="grid2">
+                  <div class="field"><label>Kilometraje actual</label><input type="number" id="kilometraje" placeholder="Ej: 3450" oninput="calcularKm()"></div>
+                  <div class="field"><label>Tipo de mantenimiento</label>
+                    <select id="tipoMant"><option value="">Seleccionar...</option><option>Preventivo</option><option>General</option></select></div>
+                </div>
+                <div class="km-res" id="kmResult"></div>
+                <div class="field" style="margin-top:14px"><label>Observaciones de la unidad</label>
+                  <textarea id="observaciones" placeholder="Describe cualquier problema o detalle (frenos, luces, ruidos, etc.)"></textarea></div>
+                <button class="btn btn-send" id="btnEnviar" onclick="enviarSolicitud()">ENVIAR SOLICITUD</button>
               </div>
             </div>
-            <div class="km-res" id="kmResult"></div>
-
-            <div class="field" style="margin-top:14px">
-              <label>Observaciones de la unidad</label>
-              <textarea id="observaciones" placeholder="Describe cualquier problema o detalle de tu unidad (frenos, luces, ruidos, etc.)"></textarea>
+            <div class="confirm" id="confirmMsg">
+              <div class="cf-ic">✓</div><h2>¡Solicitud enviada!</h2>
+              <p>Tu solicitud fue enviada a la Coordinación de RR.LL. Podés ver su estado y la fecha programada en la pestaña <b>"Mis Solicitudes"</b>.</p>
+              <div class="cf-id" id="solicitudId"></div>
+              <button class="btn btn-az" style="margin-top:20px" onclick="nuevaSolicitud()">Nueva solicitud</button>
             </div>
-
-            <button class="btn btn-send" id="btnEnviar" onclick="enviarSolicitud()">ENVIAR SOLICITUD</button>
           </div>
         </div>
-
-        <div class="confirm" id="confirmMsg">
-          <div class="cf-ic">✓</div>
-          <h2>¡Solicitud enviada!</h2>
-          <p>Tu solicitud ha sido enviada al administrador, quien coordinará el mantenimiento.
-             Mantente atento a la <b>fecha de mantenimiento programada</b>, que se mostrará en tu sistema.</p>
-          <div class="cf-id" id="solicitudId"></div>
-          <button class="btn btn-az" style="margin-top:20px" onclick="nuevaSolicitud()">Nueva solicitud</button>
-        </div>
-
       </div>
+
+      <!-- MIS SOLICITUDES -->
+      <div class="pane" id="paneMis">
+        <div class="card">
+          <div class="card-h">
+            <div class="card-t">📋 Mis Solicitudes</div>
+            <div class="dni-row" style="margin:0">
+              <input type="text" id="dniMis" placeholder="Tu DNI" maxlength="8" inputmode="numeric" style="width:160px">
+              <button class="btn btn-az btn-sm" onclick="cargarMis()">Buscar</button>
+            </div>
+          </div>
+          <div class="tw"><table>
+            <thead><tr><th>N°</th><th>Fecha solicitud</th><th>Unidad</th><th>Km</th><th>Tipo</th><th>Estado</th><th>Fecha programada</th><th>Comentario</th></tr></thead>
+            <tbody id="misBody"><tr><td colspan="8" class="empty">Ingresá tu DNI y presioná Buscar.</td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
+
+      <!-- PANEL ADMIN -->
+      <div class="pane" id="paneAdmin">
+        <div class="card">
+          <div class="card-h">
+            <div class="card-t">⚙️ Panel de Administración — Solicitudes</div>
+            <div class="filtros">
+              <select class="fsel" id="filtroEstado" onchange="renderAdmin()">
+                <option value="">Todos los estados</option>
+                <option value="PENDIENTE">Pendientes</option>
+                <option value="PROGRAMADO">Programados</option>
+                <option value="COMPLETADO">Completados</option>
+              </select>
+              <button class="btn btn-az btn-sm" onclick="cargarAdmin()">🔄 Actualizar</button>
+            </div>
+          </div>
+          <div class="tw"><table>
+            <thead><tr><th>N°</th><th>Fecha</th><th>Solicitante</th><th>Unidad</th><th>Km</th><th>Tipo</th><th>Estado</th><th>F. Programada</th><th>Acción</th></tr></thead>
+            <tbody id="adminBody"><tr><td colspan="9" class="empty">Cargando...</td></tr></tbody>
+          </table></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="modalProg">
+  <div class="mbox">
+    <div class="mbox-h">📅 Programar mantenimiento</div>
+    <div class="mbox-b">
+      <p class="muted" id="progInfo" style="margin-bottom:14px"></p>
+      <div class="field"><label>Fecha de mantenimiento</label><input type="date" id="progFecha"></div>
+      <div class="field" style="margin-top:12px"><label>Comentario para el solicitante (opcional)</label>
+        <textarea id="progComentario" placeholder="Ej: Presentarse en el taller a las 8:00 am"></textarea></div>
+      <div class="field" style="margin-top:12px"><label>Estado</label>
+        <select id="progEstado"><option value="PROGRAMADO">PROGRAMADO</option><option value="COMPLETADO">COMPLETADO</option></select></div>
+    </div>
+    <div class="mbox-f">
+      <button class="btn btn-gh" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-az" id="btnGuardarProg" onclick="guardarProgramacion()">Guardar</button>
     </div>
   </div>
 </div>
 
 <script>
-// ====== CONFIG / AUTH (igual que resumen.html) ======
-const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
-let API = sessionStorage.getItem('api') || API_URL_DEFAULT;
+const API_URL_DEFAULT='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+let API=sessionStorage.getItem('api')||API_URL_DEFAULT;
+const ROLES_ADMIN=['administrador','admin','Administrador'],ROLES_ADMIN2=['ADMINISTRADOR'],ROLES_SUPER=['supervisor','Supervisor','SUPERVISOR'];
+const ud=sessionStorage.getItem('user');
+if(!ud){location.href='/sistema-rl-verfrut/index.html';}
+const USER=JSON.parse(ud);
+const esAdmin=ROLES_ADMIN.includes(USER.rol)||ROLES_ADMIN2.includes(USER.rol);
+const esSuper=ROLES_SUPER.includes(USER.rol);
+document.getElementById('avN').textContent=USER.nombre||USER.usuario;
+document.getElementById('avR').textContent=USER.cargo||USER.rol||'';
+document.getElementById('av').textContent=(USER.nombre||USER.usuario||'U').charAt(0).toUpperCase();
+document.getElementById('empBadge').textContent=(USER.empresa||'SISTEMA RL').toUpperCase();
+document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-PE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+if(esAdmin||esSuper){document.getElementById('mainWrap').style.display='block';if(esAdmin)document.getElementById('tabAdmin').style.display='block';}
+else{document.getElementById('denyBox').style.display='block';}
+function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
 
-const ROLES_ADMIN  = ['administrador','admin','Administrador'];
-const ROLES_ADMIN2 = ['ADMINISTRADOR'];
-const ROLES_SUPER  = ['supervisor','Supervisor','SUPERVISOR'];
-
-// Validar sesión
-const ud = sessionStorage.getItem('user');
-if (!ud) { location.href = '/sistema-rl-verfrut/index.html'; }
-const USER = JSON.parse(ud);
-
-const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-const esSuper = ROLES_SUPER.includes(USER.rol);
-
-// Pintar datos del usuario en sidebar
-document.getElementById('avN').textContent = USER.nombre || USER.usuario;
-document.getElementById('avR').textContent = USER.cargo || USER.rol || '';
-document.getElementById('av').textContent  = (USER.nombre || USER.usuario || 'U').charAt(0).toUpperCase();
-document.getElementById('empBadge').textContent = (USER.empresa || 'SISTEMA RL').toUpperCase();
-document.getElementById('fecha').textContent = new Date().toLocaleDateString('es-PE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-
-// Restricción: solo supervisores + admin
-if (esAdmin || esSuper) {
-  document.getElementById('mainCard').style.display = 'block';
-} else {
-  document.getElementById('denyBox').style.display = 'block';
+function irTab(btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('on'));
+  btn.classList.add('on');document.getElementById(btn.dataset.pane).classList.add('on');
 }
 
-function logout(){ sessionStorage.clear(); location.href='/sistema-rl-verfrut/index.html'; }
-
-// ====== LÓGICA DEL MÓDULO ======
-const KM_INTERVALO = 1000;
-
+const KM_INTERVALO=1000;
 function parseFecha(str){
-  if (!str) return null;
-  // soporta dd/mm/yyyy o yyyy-mm-dd
-  if (str.indexOf('/') >= 0){ const p=str.split('/'); return new Date(+p[2],+p[1]-1,+p[0]); }
-  if (str.indexOf('-') >= 0){ const p=str.split('-'); return new Date(+p[0],+p[1]-1,+p[2]); }
-  const d = new Date(str); return isNaN(d)?null:d;
+  if(!str)return null;
+  if(str.indexOf('/')>=0){const p=str.split('/');return new Date(+p[2],+p[1]-1,+p[0]);}
+  if(str.indexOf('-')>=0){const p=str.split('-');return new Date(+p[0],+p[1]-1,+p[2]);}
+  const d=new Date(str);return isNaN(d)?null:d;
 }
-
 function calcEstadoLicencia(fRev){
-  const venc = parseFecha(fRev);
-  if (!venc) return '<span class="badge b-pv">Sin fecha</span>';
-  const hoy = new Date(); hoy.setHours(0,0,0,0);
-  const dias = Math.floor((venc - hoy)/(1000*60*60*24));
-  if (dias < 0)  return '<span class="badge b-ven"><span class="dot dr"></span>VENCIDA</span> <span style="color:var(--gr);font-size:11px">(venció hace '+Math.abs(dias)+' días)</span>';
-  if (dias <= 30) return '<span class="badge b-pv"><span class="dot da"></span>POR VENCER</span> <span style="color:var(--gr);font-size:11px">(vence en '+dias+' días)</span>';
-  return '<span class="badge b-vig"><span class="dot dg"></span>VIGENTE</span> <span style="color:var(--gr);font-size:11px">(vence en '+dias+' días)</span>';
+  const venc=parseFecha(fRev);if(!venc)return '<span class="badge b-pv">Sin fecha</span>';
+  const hoy=new Date();hoy.setHours(0,0,0,0);const dias=Math.floor((venc-hoy)/(1000*60*60*24));
+  if(dias<0)return '<span class="badge b-ven"><span class="dot dr"></span>VENCIDA</span> <span class="muted">(venció hace '+Math.abs(dias)+' días)</span>';
+  if(dias<=30)return '<span class="badge b-pv"><span class="dot da"></span>POR VENCER</span> <span class="muted">(vence en '+dias+' días)</span>';
+  return '<span class="badge b-vig"><span class="dot dg"></span>VIGENTE</span> <span class="muted">(vence en '+dias+' días)</span>';
 }
-
-let _ultimoEstadoLic = '';
-
 async function buscarDNI(){
-  const dni = document.getElementById('dni').value.trim();
-  const err = document.getElementById('dniError');
-  const load = document.getElementById('dniLoading');
-  const box = document.getElementById('datosBox');
-  err.style.display='none'; box.classList.remove('show');
-
-  if (!/^\d{8}$/.test(dni)){ err.textContent='El DNI debe tener 8 dígitos.'; err.style.display='block'; return; }
-
-  load.style.display='block';
-  document.getElementById('btnBuscar').disabled = true;
-
-  try {
-    const r = await fetch(API+'?'+new URLSearchParams({ action:'buscarResponsableMantenimiento', dni:dni }));
-    const res = await r.json();
-    load.style.display='none';
-    document.getElementById('btnBuscar').disabled = false;
-
-    if (!res || !res.ok || !res.data){
-      err.textContent = (res && res.msg) ? res.msg : 'DNI no encontrado en la base de datos de responsables.';
-      err.style.display='block';
-      return;
-    }
-    const d = res.data;
-    document.getElementById('nombre').value       = d.nombre || '';
-    document.getElementById('empresa').value      = d.empresa || '';
-    document.getElementById('modelo').value       = d.modelo || '';
-    document.getElementById('marca').value        = d.marca || '';
-    document.getElementById('codInterno').value   = d.codInterno || '';
-    document.getElementById('numLicencia').value  = d.numLicencia || '';
-    document.getElementById('fExpedicion').value  = d.fExpedicion || '';
-    document.getElementById('fRevalidacion').value= d.fRevalidacion || '';
-    _ultimoEstadoLic = calcEstadoLicencia(d.fRevalidacion).replace(/<[^>]+>/g,'').trim().split(' ')[0]; // VIGENTE/VENCIDA/POR
-    document.getElementById('estadoLicencia').innerHTML = calcEstadoLicencia(d.fRevalidacion);
-    box.classList.add('show');
-  } catch(e){
-    load.style.display='none';
-    document.getElementById('btnBuscar').disabled = false;
-    err.textContent = 'Error de conexión. Intenta de nuevo.';
-    err.style.display='block';
-    console.error('[mantenimiento] buscarDNI error:', e);
-  }
+  const dni=document.getElementById('dni').value.trim();
+  const err=document.getElementById('dniError'),load=document.getElementById('dniLoading'),box=document.getElementById('datosBox');
+  err.style.display='none';box.classList.remove('show');
+  if(!/^\d{8}$/.test(dni)){err.textContent='El DNI debe tener 8 dígitos.';err.style.display='block';return;}
+  load.style.display='block';document.getElementById('btnBuscar').disabled=true;
+  try{
+    const r=await fetch(API+'?'+new URLSearchParams({action:'buscarResponsableMantenimiento',dni:dni}));
+    const res=await r.json();load.style.display='none';document.getElementById('btnBuscar').disabled=false;
+    if(!res||!res.ok||!res.data){err.textContent=(res&&res.msg)?res.msg:'DNI no encontrado.';err.style.display='block';return;}
+    const d=res.data;
+    document.getElementById('nombre').value=d.nombre||'';document.getElementById('empresa').value=d.empresa||'';
+    document.getElementById('modelo').value=d.modelo||'';document.getElementById('marca').value=d.marca||'';
+    document.getElementById('codInterno').value=d.codInterno||'';document.getElementById('numLicencia').value=d.numLicencia||'';
+    document.getElementById('fExpedicion').value=d.fExpedicion||'';document.getElementById('fRevalidacion').value=d.fRevalidacion||'';
+    document.getElementById('estadoLicencia').innerHTML=calcEstadoLicencia(d.fRevalidacion);box.classList.add('show');
+  }catch(e){load.style.display='none';document.getElementById('btnBuscar').disabled=false;
+    err.textContent='Error de conexión. Intenta de nuevo.';err.style.display='block';console.error('[mant] buscarDNI',e);}
 }
-
 function calcularKm(){
-  const km = parseInt(document.getElementById('kilometraje').value);
-  const res = document.getElementById('kmResult');
-  if (isNaN(km)||km<0){ res.classList.remove('show'); return; }
-  const proximo = Math.ceil((km+1)/KM_INTERVALO)*KM_INTERVALO;
-  const restantes = proximo - km;
-  if (restantes <= 100){
-    res.classList.add('alert');
-    res.innerHTML = '⚠️ <strong>REQUIERE MANTENIMIENTO PRONTO</strong><br>Próximo a los '+proximo.toLocaleString()+' km (faltan solo '+restantes+' km)';
-  } else {
-    res.classList.remove('alert');
-    res.innerHTML = '🔧 Mantenimiento cada '+KM_INTERVALO.toLocaleString()+' km<br><strong>Próximo: '+proximo.toLocaleString()+' km</strong> · faltan '+restantes.toLocaleString()+' km';
-  }
+  const km=parseInt(document.getElementById('kilometraje').value),res=document.getElementById('kmResult');
+  if(isNaN(km)||km<0){res.classList.remove('show');return;}
+  const proximo=Math.ceil((km+1)/KM_INTERVALO)*KM_INTERVALO,restantes=proximo-km;
+  if(restantes<=100){res.classList.add('alert');res.innerHTML='⚠️ <strong>REQUIERE MANTENIMIENTO PRONTO</strong><br>Próximo a los '+proximo.toLocaleString()+' km (faltan '+restantes+' km)';}
+  else{res.classList.remove('alert');res.innerHTML='🔧 Mantenimiento cada '+KM_INTERVALO.toLocaleString()+' km<br><strong>Próximo: '+proximo.toLocaleString()+' km</strong> · faltan '+restantes.toLocaleString()+' km';}
   res.classList.add('show');
 }
-
 async function enviarSolicitud(){
-  const km = document.getElementById('kilometraje').value;
-  const tipoMant = document.getElementById('tipoMant').value;
-  const tipoLic = document.getElementById('tipoLicencia').value;
-  if (!km || !tipoMant || !tipoLic){ alert('Completá: tipo de licencia, kilometraje y tipo de mantenimiento.'); return; }
-
-  const btn = document.getElementById('btnEnviar');
-  btn.disabled = true; btn.textContent = 'Enviando...';
-
-  const datos = {
-    action:'guardarSolicitudMantenimiento',
-    dni: document.getElementById('dni').value.trim(),
-    nombre: document.getElementById('nombre').value,
-    empresa: document.getElementById('empresa').value,
-    modelo: document.getElementById('modelo').value,
-    marca: document.getElementById('marca').value,
-    codInterno: document.getElementById('codInterno').value,
-    numLicencia: document.getElementById('numLicencia').value,
-    tipoLicencia: tipoLic,
-    fExpedicion: document.getElementById('fExpedicion').value,
-    fRevalidacion: document.getElementById('fRevalidacion').value,
-    estadoLicencia: document.getElementById('estadoLicencia').textContent.trim().split(' ')[0],
-    kilometraje: km,
-    tipoMantenimiento: tipoMant,
-    observaciones: document.getElementById('observaciones').value,
-    solicitante: USER.usuario
-  };
-
-  try {
-    const r = await fetch(API,{method:'POST',body:JSON.stringify(datos),headers:{'Content-Type':'text/plain'}});
-    const res = await r.json();
-    btn.disabled = false; btn.textContent = 'ENVIAR SOLICITUD';
-    if (!res || !res.ok){ alert((res&&res.msg)?res.msg:'Error al guardar la solicitud.'); return; }
-    document.getElementById('solicitudId').textContent = 'N° de solicitud: ' + (res.id || '—');
-    document.getElementById('formMant').style.display = 'none';
-    document.getElementById('confirmMsg').classList.add('show');
-  } catch(e){
-    btn.disabled = false; btn.textContent = 'ENVIAR SOLICITUD';
-    alert('Error de conexión al enviar. Intenta de nuevo.');
-    console.error('[mantenimiento] enviar error:', e);
-  }
+  const km=document.getElementById('kilometraje').value,tipoMant=document.getElementById('tipoMant').value,tipoLic=document.getElementById('tipoLicencia').value;
+  if(!km||!tipoMant||!tipoLic){alert('Completá: tipo de licencia, kilometraje y tipo de mantenimiento.');return;}
+  const btn=document.getElementById('btnEnviar');btn.disabled=true;btn.textContent='Enviando...';
+  const datos={action:'guardarSolicitudMantenimiento',
+    dni:document.getElementById('dni').value.trim(),nombre:document.getElementById('nombre').value,
+    empresa:document.getElementById('empresa').value,modelo:document.getElementById('modelo').value,
+    marca:document.getElementById('marca').value,codInterno:document.getElementById('codInterno').value,
+    numLicencia:document.getElementById('numLicencia').value,tipoLicencia:tipoLic,
+    fExpedicion:document.getElementById('fExpedicion').value,fRevalidacion:document.getElementById('fRevalidacion').value,
+    estadoLicencia:document.getElementById('estadoLicencia').textContent.trim().split(' ')[0],
+    kilometraje:km,tipoMantenimiento:tipoMant,observaciones:document.getElementById('observaciones').value,solicitante:USER.usuario};
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify(datos),headers:{'Content-Type':'text/plain'}});
+    const res=await r.json();btn.disabled=false;btn.textContent='ENVIAR SOLICITUD';
+    if(!res||!res.ok){alert((res&&res.msg)?res.msg:'Error al guardar.');return;}
+    document.getElementById('solicitudId').textContent='N° de solicitud: '+(res.id||'—');
+    document.getElementById('formMant').style.display='none';document.getElementById('confirmMsg').classList.add('show');
+  }catch(e){btn.disabled=false;btn.textContent='ENVIAR SOLICITUD';alert('Error de conexión al enviar.');console.error('[mant] enviar',e);}
 }
-
 function nuevaSolicitud(){
-  document.getElementById('formMant').style.display='block';
-  document.getElementById('confirmMsg').classList.remove('show');
+  document.getElementById('formMant').style.display='block';document.getElementById('confirmMsg').classList.remove('show');
   document.getElementById('datosBox').classList.remove('show');
   ['dni','kilometraje','observaciones'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('tipoMant').value='';
-  document.getElementById('tipoLicencia').value='';
-  document.getElementById('kmResult').classList.remove('show');
+  document.getElementById('tipoMant').value='';document.getElementById('tipoLicencia').value='';document.getElementById('kmResult').classList.remove('show');
+}
+
+function badgeEstado(est){
+  est=(est||'PENDIENTE').toUpperCase();
+  if(est==='PROGRAMADO')return '<span class="badge b-prog">PROGRAMADO</span>';
+  if(est==='COMPLETADO')return '<span class="badge b-comp">COMPLETADO</span>';
+  return '<span class="badge b-pend">PENDIENTE</span>';
+}
+async function cargarMis(){
+  const dni=document.getElementById('dniMis').value.trim(),body=document.getElementById('misBody');
+  if(!/^\d{8}$/.test(dni)){body.innerHTML='<tr><td colspan="8" class="empty">Ingresá un DNI válido (8 dígitos).</td></tr>';return;}
+  body.innerHTML='<tr><td colspan="8" class="empty">Cargando...</td></tr>';
+  try{
+    const r=await fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento',dni:dni}));
+    const res=await r.json();
+    if(!res||!res.ok||!res.data||!res.data.length){body.innerHTML='<tr><td colspan="8" class="empty">No tenés solicitudes registradas.</td></tr>';return;}
+    body.innerHTML=res.data.map(s=>'<tr>'+
+      '<td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'')+'</td><td>'+(s.unidad||'')+'</td>'+
+      '<td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td><td>'+badgeEstado(s.estado)+'</td>'+
+      '<td>'+(s.fechaProgramada?'<b style="color:var(--azul)">'+s.fechaProgramada+'</b>':'<span class="muted">— por definir</span>')+'</td>'+
+      '<td class="muted">'+(s.comentarioAdmin||'—')+'</td></tr>').join('');
+  }catch(e){body.innerHTML='<tr><td colspan="8" class="empty">Error de conexión.</td></tr>';console.error('[mant] mis',e);}
+}
+
+let _solicitudes=[];
+async function cargarAdmin(){
+  const body=document.getElementById('adminBody');body.innerHTML='<tr><td colspan="9" class="empty">Cargando...</td></tr>';
+  try{
+    const r=await fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento'}));
+    const res=await r.json();_solicitudes=(res&&res.ok&&res.data)?res.data:[];renderAdmin();
+  }catch(e){body.innerHTML='<tr><td colspan="9" class="empty">Error de conexión.</td></tr>';console.error('[mant] admin',e);}
+}
+function renderAdmin(){
+  const body=document.getElementById('adminBody'),filtro=document.getElementById('filtroEstado').value;
+  let datos=_solicitudes;if(filtro)datos=datos.filter(s=>(s.estado||'PENDIENTE').toUpperCase()===filtro);
+  if(!datos.length){body.innerHTML='<tr><td colspan="9" class="empty">No hay solicitudes'+(filtro?' '+filtro.toLowerCase():'')+'.</td></tr>';return;}
+  body.innerHTML=datos.map(s=>{
+    const est=(s.estado||'PENDIENTE').toUpperCase();
+    const accion=(est==='PENDIENTE')?'<button class="btn btn-az btn-sm" onclick="abrirModal(\''+s.id+'\')">📅 Programar</button>'
+      :'<button class="btn btn-gh btn-sm" onclick="abrirModal(\''+s.id+'\')">✏️ Editar</button>';
+    return '<tr><td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'')+'</td>'+
+      '<td>'+(s.nombre||'')+'<br><span class="muted">DNI '+(s.dni||'')+'</span></td>'+
+      '<td>'+(s.unidad||'')+'</td><td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td>'+
+      '<td>'+badgeEstado(s.estado)+'</td><td>'+(s.fechaProgramada||'<span class="muted">—</span>')+'</td>'+
+      '<td>'+accion+'</td></tr>';
+  }).join('');
+}
+
+let _idActual=null;
+function abrirModal(id){
+  _idActual=id;const s=_solicitudes.find(x=>x.id===id);
+  document.getElementById('progInfo').textContent=s?(s.nombre+' · '+s.unidad+' · '+s.tipo):'';
+  document.getElementById('progFecha').value=(s&&s.fechaProgramada)?_toISO(s.fechaProgramada):'';
+  document.getElementById('progComentario').value=(s&&s.comentarioAdmin)||'';
+  document.getElementById('progEstado').value=(s&&s.estado&&s.estado.toUpperCase()==='COMPLETADO')?'COMPLETADO':'PROGRAMADO';
+  document.getElementById('modalProg').classList.add('show');
+}
+function cerrarModal(){document.getElementById('modalProg').classList.remove('show');_idActual=null;}
+function _toISO(f){if(!f)return'';const p=f.split('/');return p.length===3?p[2]+'-'+('0'+p[1]).slice(-2)+'-'+('0'+p[0]).slice(-2):'';}
+function _toDMY(iso){const p=iso.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:iso;}
+async function guardarProgramacion(){
+  const fecha=document.getElementById('progFecha').value;if(!fecha){alert('Seleccioná una fecha.');return;}
+  const btn=document.getElementById('btnGuardarProg');btn.disabled=true;btn.textContent='Guardando...';
+  const datos={action:'programarMantenimiento',id:_idActual,fechaProgramada:_toDMY(fecha),
+    comentario:document.getElementById('progComentario').value,estado:document.getElementById('progEstado').value,admin:USER.usuario};
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify(datos),headers:{'Content-Type':'text/plain'}});
+    const res=await r.json();btn.disabled=false;btn.textContent='Guardar';
+    if(!res||!res.ok){alert((res&&res.msg)?res.msg:'Error al guardar.');return;}
+    cerrarModal();cargarAdmin();
+  }catch(e){btn.disabled=false;btn.textContent='Guardar';alert('Error de conexión.');console.error('[mant] prog',e);}
 }
 </script>
 </body>
