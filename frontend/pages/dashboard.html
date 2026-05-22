@@ -210,7 +210,7 @@ h3{font-size:16px !important}
     <button class="ni" id="navFbAlertas" style="display:none" onclick="togglePanelFbAlertas()"><span class="ic">⚡</span>Alertas Sistema<span id="badgeFbAlertas" style="display:none;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;min-width:17px;height:17px;line-height:17px;text-align:center;padding:0 4px;margin-left:auto;flex-shrink:0"></span></button>
     <button class="ni" id="navUsr" style="display:none" onclick="ir('usuarios',this)"><span class="ic">👥</span>Gestión Usuarios</button>
         <button class="ni" id="navBienestar" style="display:none" onclick="_irBienestar()"><span class="ic">💚</span>Bienestar Social</button>
-<button class="ni" id="navMantenimiento" onclick="location.href='mantenimiento.html'"><span class="ic">&#128295;</span>Solicitud de Mantenimiento</button>
+<button class="ni" id="navMantenimiento" onclick="location.href='mantenimiento.html'" style="position:relative"><span class="ic">&#128295;</span>Solicitud de Mantenimiento<span id="badgeMant" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none;margin-left:6px">0</span></button>
   </div>
   <div class="sb-ft">
     <button class="ni" id="navInicio" style="display:none;margin-bottom:6px;background:rgba(255,255,255,.08);border-radius:8px" onclick="window.location.href='../../index.html'"><span class="ic">🏠</span>Inicio</button>
@@ -2120,13 +2120,28 @@ async function cargarBadgeSolicitudes() {
     if (bEdit) { bEdit.textContent = nEdit; bEdit.style.display = nEdit > 0 ? '' : 'none'; }
     const bAcc = document.getElementById('badgeSolAcceso');
     if (bAcc) { bAcc.textContent = nAcc; bAcc.style.display = nAcc > 0 ? '' : 'none'; }
+    cargarBadgeMantenimiento();
   } catch(e) {}
+}
+
+async function cargarBadgeMantenimiento(){
+  try{
+    var _u = JSON.parse(sessionStorage.getItem('user')||'{}');
+    var _esAdm = ['administrador','admin','Administrador','ADMINISTRADOR'].indexOf(_u.rol) >= 0;
+    if(!_esAdm) return;
+    var d = await apiGet({ action: 'listarSolicitudesMantenimiento' });
+    var arr = (d && d.data) ? d.data : [];
+    var pend = arr.filter(function(s){ return String(s.estado||'PENDIENTE').toUpperCase()==='PENDIENTE'; }).length;
+    var badge = document.getElementById('badgeMant');
+    if(badge){ badge.textContent = pend; badge.style.display = pend > 0 ? '' : 'none'; }
+  }catch(e){}
 }
 
 function actualizarBadgeSolicitudes() {
   const nAcc = _accesosTempData.filter(s => s.estado === 'PENDIENTE').length;
   const bAcc = document.getElementById('badgeSolAcceso');
   if (bAcc) { bAcc.textContent = nAcc; bAcc.style.display = nAcc > 0 ? '' : 'none'; }
+    cargarBadgeMantenimiento();
 }
 
 // Exponer en scope global para onclick inline en HTML dinámico
