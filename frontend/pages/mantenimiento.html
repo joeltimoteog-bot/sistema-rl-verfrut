@@ -230,8 +230,8 @@ tr:hover td{background:#fafbfc}
             </div>
           </div>
           <div class="tw"><table>
-            <thead><tr><th>N°</th><th>Fecha</th><th>Solicitante</th><th>Unidad</th><th>Km</th><th>Tipo</th><th>Estado</th><th>F. Programada</th><th>Acción</th></tr></thead>
-            <tbody id="adminBody"><tr><td colspan="9" class="empty">Cargando...</td></tr></tbody>
+            <thead><tr><th>N°</th><th>Fecha</th><th>Solicitante</th><th>Unidad</th><th>Licencia</th><th>Km</th><th>Tipo</th><th>Estado</th><th>F. Programada</th><th>Acción</th></tr></thead>
+            <tbody id="adminBody"><tr><td colspan="10" class="empty">Cargando...</td></tr></tbody>
           </table></div>
         </div>
       </div>
@@ -244,7 +244,8 @@ tr:hover td{background:#fafbfc}
   <div class="mbox">
     <div class="mbox-h">📅 Programar mantenimiento</div>
     <div class="mbox-b">
-      <p class="muted" id="progInfo" style="margin-bottom:14px"></p>
+      <p class="muted" id="progInfo" style="margin-bottom:8px"></p>
+      <div id="progVerif" style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;line-height:1.6"></div>
       <div class="field"><label>Fecha de mantenimiento</label><input type="date" id="progFecha"></div>
       <div class="field" style="margin-top:12px"><label>Comentario para el solicitante (opcional)</label>
         <textarea id="progComentario" placeholder="Ej: Presentarse en el taller a las 8:00 am"></textarea></div>
@@ -383,14 +384,16 @@ async function cargarAdmin(){
 function renderAdmin(){
   const body=document.getElementById('adminBody'),filtro=document.getElementById('filtroEstado').value;
   let datos=_solicitudes;if(filtro)datos=datos.filter(s=>(s.estado||'PENDIENTE').toUpperCase()===filtro);
-  if(!datos.length){body.innerHTML='<tr><td colspan="9" class="empty">No hay solicitudes'+(filtro?' '+filtro.toLowerCase():'')+'.</td></tr>';return;}
+  if(!datos.length){body.innerHTML='<tr><td colspan="10" class="empty">No hay solicitudes'+(filtro?' '+filtro.toLowerCase():'')+'.</td></tr>';return;}
   body.innerHTML=datos.map(s=>{
     const est=(s.estado||'PENDIENTE').toUpperCase();
     const accion=(est==='PENDIENTE')?'<button class="btn btn-az btn-sm" onclick="abrirModal(\''+s.id+'\')">📅 Programar</button>'
       :'<button class="btn btn-gh btn-sm" onclick="abrirModal(\''+s.id+'\')">✏️ Editar</button>';
+    const lic=(s.numLicencia||'—')+'<br><span class="muted">'+(s.tipoLicencia||'')+(s.estadoLic?' · '+s.estadoLic:'')+'</span>';
     return '<tr><td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'')+'</td>'+
-      '<td>'+(s.nombre||'')+'<br><span class="muted">DNI '+(s.dni||'')+'</span></td>'+
-      '<td>'+(s.unidad||'')+'</td><td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td>'+
+      '<td>'+(s.nombre||'')+'<br><span class="muted">DNI '+(s.dni||'')+' · '+(s.empresa||'')+'</span></td>'+
+      '<td>'+(s.unidad||'')+'<br><span class="muted">'+(s.codInterno||'')+'</span></td>'+
+      '<td>'+lic+'</td><td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td>'+
       '<td>'+badgeEstado(s.estado)+'</td><td>'+(s.fechaProgramada||'<span class="muted">—</span>')+'</td>'+
       '<td>'+accion+'</td></tr>';
   }).join('');
@@ -399,7 +402,15 @@ function renderAdmin(){
 let _idActual=null;
 function abrirModal(id){
   _idActual=id;const s=_solicitudes.find(x=>x.id===id);
-  document.getElementById('progInfo').textContent=s?(s.nombre+' · '+s.unidad+' · '+s.tipo):'';
+  document.getElementById('progInfo').textContent=s?(s.id+' · '+(s.nombre||'')):'';
+  // Bloque de verificación para el admin
+  if(s){
+    document.getElementById('progVerif').innerHTML=
+      '<b>Unidad:</b> '+(s.unidad||'—')+' ('+(s.codInterno||'')+')<br>'+
+      '<b>Licencia:</b> '+(s.numLicencia||'—')+' · '+(s.tipoLicencia||'')+' · '+(s.estadoLic||'')+'<br>'+
+      '<b>Kilometraje:</b> '+(s.km||'—')+' km · <b>Tipo:</b> '+(s.tipo||'—')+'<br>'+
+      '<b>Observaciones:</b> '+(s.observaciones||'(sin observaciones)');
+  }
   document.getElementById('progFecha').value=(s&&s.fechaProgramada)?_toISO(s.fechaProgramada):'';
   document.getElementById('progComentario').value=(s&&s.comentarioAdmin)||'';
   document.getElementById('progEstado').value=(s&&s.estado&&s.estado.toUpperCase()==='COMPLETADO')?'COMPLETADO':'PROGRAMADO';
