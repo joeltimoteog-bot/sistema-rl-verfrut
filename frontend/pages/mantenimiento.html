@@ -100,6 +100,7 @@ tr:hover td{background:#fafbfc}
 .mbox-b{padding:22px}
 .mbox-f{padding:16px 22px;border-top:1px solid var(--bd);display:flex;gap:10px;justify-content:flex-end}
 .btn-gh{background:#fff;border:1.5px solid var(--bd);color:var(--gr)} .btn-gh:hover{background:var(--bg)}
+.btn-vd{background:var(--verde);color:#fff} .btn-vd:hover{background:#15803d}
 .hamb{display:none;background:none;border:none;font-size:24px;color:var(--azul);cursor:pointer;padding:0 4px;line-height:1}
 .sb-ov{display:none;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:99}
 .sb-ov.show{display:block}
@@ -397,17 +398,33 @@ function renderAdmin(){
     const est=(s.estado||'PENDIENTE').toUpperCase();
     const accion=(est==='PENDIENTE')?'<button class="btn btn-az btn-sm" onclick="abrirModal(\''+s.id+'\')">📅 Programar</button>'
       :'<button class="btn btn-gh btn-sm" onclick="abrirModal(\''+s.id+'\')">✏️ Editar</button>';
+    // Botón notificar (solo si ya está programado y tiene correo)
+    const notif=(est!=='PENDIENTE'&&s.correo)
+      ? ' <button class="btn btn-vd btn-sm" onclick="notificarCorreo(\''+s.id+'\')">📧 Notificar</button>' : '';
     const lic=(s.numLicencia||'—')+'<br><span class="muted">'+(s.tipoLicencia||'')+(s.estadoLic?' · '+s.estadoLic:'')+'</span>';
     return '<tr><td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'')+'</td>'+
       '<td>'+(s.nombre||'')+'<br><span class="muted">DNI '+(s.dni||'')+' · '+(s.empresa||'')+'</span></td>'+
       '<td>'+(s.unidad||'')+'<br><span class="muted">'+(s.codInterno||'')+'</span></td>'+
       '<td>'+lic+'</td><td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td>'+
       '<td>'+badgeEstado(s.estado)+'</td><td>'+(s.fechaProgramada||'<span class="muted">—</span>')+'</td>'+
-      '<td>'+accion+'</td></tr>';
+      '<td style="white-space:nowrap">'+accion+notif+'</td></tr>';
   }).join('');
 }
 
 let _idActual=null;
+function notificarCorreo(id){
+  const s=_solicitudes.find(x=>x.id===id);
+  if(!s){return;}
+  if(!s.correo){alert('Este solicitante no tiene correo cargado en BB.DD. RESPONSABLES (columna C).');return;}
+  const asunto='Mantenimiento '+(String(s.estado).toUpperCase()==='COMPLETADO'?'completado':'programado')+' - '+s.id;
+  let cuerpo='Estimado/a '+(s.nombre||'')+',\n\n';
+  cuerpo+='Le informamos que su solicitud de mantenimiento '+s.id+' para la unidad '+(s.unidad||'')+' ';
+  if(String(s.estado).toUpperCase()==='COMPLETADO'){cuerpo+='fue COMPLETADA.\n\n';}
+  else{cuerpo+='fue PROGRAMADA para el dia '+(s.fechaProgramada||'')+'.\n\n';}
+  if(s.comentarioAdmin){cuerpo+='Indicaciones: '+s.comentarioAdmin+'\n\n';}
+  cuerpo+='Atentamente,\nCoordinacion de Relaciones Laborales\nVerfrut S.A.C / RAPEL S.A.C';
+  window.location.href='mailto:'+encodeURIComponent(s.correo)+'?subject='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo);
+}
 function abrirModal(id){
   _idActual=id;const s=_solicitudes.find(x=>x.id===id);
   document.getElementById('progInfo').textContent=s?(s.id+' · '+(s.nombre||'')):'';
