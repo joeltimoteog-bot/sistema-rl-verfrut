@@ -4814,7 +4814,7 @@ function editarAt(nro) {
   abrir('mAt');
 }
 
-async function guardarAt() {
+async function guardarAt() { if(window._savingAt) return;
   const nroEdit=v('at_nro_edit');
   const d={
     dni:v('at_dni'), nombre:v('at_nom'), sexo:v('at_sex'),
@@ -4833,7 +4833,7 @@ async function guardarAt() {
     ? Object.assign({}, (CACHE.atenciones||[]).find(a => String(a.nro) === String(nroEdit)) || {})
     : null;
   const btnAt = document.getElementById('btnGuardarAt');
-  if(btnAt){btnAt.disabled=true; btnAt.textContent='⏳ Guardando...';}
+  if(btnAt){btnAt.disabled=true; btnAt.textContent='⏳ Guardando...';} window._savingAt=true;
   try{
     let r;
     if(modoEdicion&&nroEdit){
@@ -4942,7 +4942,7 @@ async function guardarAt() {
       }
     }else mostrarToast('❌ Error: '+(r.error||'Desconocido'),'error');
   }catch(e){mostrarToast('❌ Error de conexión','error');}
-  finally{if(btnAt){btnAt.disabled=false; btnAt.textContent='💾 Guardar';}}
+  finally{window._savingAt=false;if(btnAt){btnAt.disabled=false; btnAt.textContent='💾 Guardar';}}
 }
 
 async function eliminarAt(nro) {
