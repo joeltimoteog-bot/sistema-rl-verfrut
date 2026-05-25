@@ -931,7 +931,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 0.7, textColor: C.negro },
-      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 7 },
+      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 7, overflow: 'ellipsize' },
       columnStyles: {
         0: { cellWidth: 10 }, 1: { cellWidth: 22 },
         2: { cellWidth: 65, halign: 'left' }, 3: { cellWidth: 35, halign: 'left' },
