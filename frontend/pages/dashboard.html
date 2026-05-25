@@ -4155,8 +4155,8 @@ async function refrescarEnBackground() {
       if (_prevAts.length > 0) {
         if (Array.isArray(CACHE.atenciones)) {
           // Supervisor: re-insertar los que no devolvió el API (race condition con Sheets)
-          const _nrosApi = new Set(CACHE.atenciones.map(a => a.nro));
-          const _pendientes = _prevAts.filter(a => a.nro && !_nrosApi.has(a.nro));
+          const _nrosApi = new Set(CACHE.atenciones.map(a => String(a.nro)));
+          const _pendientes = _prevAts.filter(a => a.nro && !_nrosApi.has(String(a.nro)));
           if (_pendientes.length) {
             console.log('[refrescar] Re-insertando', _pendientes.length, 'registro(s) nuevo(s) aún no confirmados por servidor');
             CACHE.atenciones = [...CACHE.atenciones, ..._pendientes];
