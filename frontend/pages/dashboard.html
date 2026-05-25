@@ -4827,7 +4827,7 @@ async function guardarAt() {
     responsable_recepcion:v('at_resp'), observaciones:v('at_obs'),
     estado:v('at_est'), supervisor:USER.nombre||USER.usuario, usuario_sistema:USER.usuario
   };
-  if(!d.dni||!d.nombre){mostrarToast('❌ DNI y Nombre son obligatorios.','error');return;}
+  const _miss=[];if(!/^\d{8}$/.test(String(d.dni||'').trim()))_miss.push(['at_dni','DNI (8 digitos)']);if(!String(d.nombre||'').trim())_miss.push(['at_nom','Nombre']);if(!String(d.detalle_documento||'').trim())_miss.push(['at_doc_txt','Documento']);if(_miss.length){const el=document.getElementById(_miss[0][0]);if(el){el.focus();el.style.borderColor='#ef4444';setTimeout(function(){el.style.borderColor='';},2500);}mostrarToast('Falta completar: '+_miss.map(function(m){return m[1];}).join(', '),'error');return;}
   // Snapshot del registro original para historial de cambios
   const _snapAt = (modoEdicion && nroEdit)
     ? Object.assign({}, (CACHE.atenciones||[]).find(a => String(a.nro) === String(nroEdit)) || {})
