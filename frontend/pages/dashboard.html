@@ -4868,7 +4868,7 @@ async function guardarAt() { if(window._savingAt) return;
         setTimeout(() => refrescarEnBackground(), 500);
       } else {
         // Nuevo registro: agregar al cache local SIN llamar a la API
-        console.log('[guardarAt] Guardado en hoja:', r.hoja, '— N°', r.nro);
+        console.log('[guardarAt] Guardado en hoja:', r.hoja, '— N°', r.nro); apiPost({action:'syncFirebaseAtencion', ...d}).catch(function(){});
         const hoyStr = hoy();
         const newRec = {
           nro:                  r.nro,
