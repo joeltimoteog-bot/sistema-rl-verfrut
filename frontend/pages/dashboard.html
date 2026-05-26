@@ -3996,7 +3996,7 @@ function guardarCacheLS() {
   try {
     // Excluir atenciones e historial del localStorage: son grandes y se cargan lazy
     const {atenciones: _a, historialAtenciones: _h, ...datosReducidos} = CACHE;
-    const payload = JSON.stringify({data: datosReducidos, ts: CACHE_TS});
+    const _hoyLS = (typeof hoy === 'function') ? hoy() : ''; const _atHoy = Array.isArray(_a) ? _a.filter(a => a.fecha_atencion === _hoyLS).slice(0, 2000) : []; const payload = JSON.stringify({data: datosReducidos, atHoy: _atHoy, ts: CACHE_TS});
     localStorage.setItem(_lsCacheKey(), payload);
   } catch(e) {
     // Cuota excedida: liberar la clave propia y reintentar
@@ -4016,8 +4016,8 @@ function cargarCacheLS() {
     const raw = localStorage.getItem(_lsCacheKey());
     if(!raw) return false;
     const stored = JSON.parse(raw);
-    if(!stored || !stored.data || (Date.now() - stored.ts) > CACHE_TTL) return false;
-    CACHE    = stored.data;
+    if(!stored || !stored.data) return false;
+    CACHE    = stored.data; if (Array.isArray(stored.atHoy) && stored.atHoy.length) CACHE.atenciones = stored.atHoy;
     CACHE_TS = stored.ts;
     return true;
   } catch(e) { return false; }
