@@ -3751,7 +3751,7 @@ function renderTablaCasos(data) {
       const porVencer = !vencido && !concluido && !!c.fecha_limite && diasRestantes <= 1;
       const estColor = vencido ? '#dc2626' : (porVencer ? '#d97706' : '#16a34a');
       const estBg    = vencido ? '#fee2e2' : (porVencer ? '#fef3c7' : '#dcfce7');
-      const porcentaje = Math.min(100, Math.max(0, Number(c.porcentaje_avance ?? c.porcentaje) || 0));
+      const porcentaje = c.fecha_limite ? calcularAvance(calcularRetraso(c.fecha_limite, hoy)) : Math.min(100, Math.max(0, Number(c.porcentaje_avance ?? c.porcentaje) || 0));
       const estadoLabel = concluido ? 'CONCLUIDO' : (vencido ? 'VENCIDO' : (porVencer ? 'POR VENCER' : (c.fecha_limite ? 'EN PLAZO' : '-')));
       const urlInforme  = c.archivo_informe_url  || c.enlace_informe  || '';
       const urlDescargo = c.archivo_descargo_url || c.enlace_reporte  || '';
