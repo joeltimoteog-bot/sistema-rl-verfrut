@@ -6532,7 +6532,18 @@ function _fbAplicarEstadisticasFirebase(fbData) {
   _fbSet('sM', rg.este_mes);
   _fbSet('sP', rg.en_proceso);
   _fbSet('sF', rg.finalizados);
-  _fbSet('sA', rg.total);
+  (function(){
+    var _aYr = String(new Date().getFullYear());
+    var _pm = (fbData && fbData.por_mes) ? fbData.por_mes : {};
+    var _totAnioFB = 0;
+    Object.keys(_pm).forEach(function(k){
+      if (k.indexOf(_aYr + '_') === 0) {
+        var v = _pm[k];
+        _totAnioFB += (v && typeof v.total === 'number') ? v.total : (typeof v === 'number' ? v : 0);
+      }
+    });
+    _fbSet('sA', _totAnioFB);
+  })();
   // Flechas ↑↓, barras de progreso y comparativa mes anterior
   _fbIndicadoresYComparativa(rg, fbData.por_mes);
   // Mostrar panel en vivo
