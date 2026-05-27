@@ -3616,8 +3616,15 @@ async function guardarCaso() {
 
 // ── Notificaciones: casos vencidos o por vencer en ≤2 días ──
 function verificarCasosPorVencer() {
-  const casos = CACHE.casos || [];
+  let casos = CACHE.casos || [];
   if (!casos.length) return;
+  // Alcance: admins ven todos; supervisores solo los casos que registraron
+  const _esAdminVC = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  if (!_esAdminVC) {
+    const _pnVC = (USER.nombre || USER.usuario || '').toLowerCase().trim().split(' ')[0];
+    const _usVC = (USER.usuario || '').toLowerCase().trim();
+    casos = casos.filter(c => String(c.supervisor||'').toLowerCase().includes(_pnVC) || String(c.registrado_por||'').toLowerCase().includes(_pnVC) || String(c.usuario_registro||'').toLowerCase().trim() === _usVC);
+  }
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   const en2dias = new Date(hoy); en2dias.setDate(en2dias.getDate() + 2);
 
