@@ -3095,7 +3095,7 @@ function editarCaso(idx) {
   document.getElementById('cFechaReporte').value = c.fecha_reporte ? String(c.fecha_reporte).split('T')[0] : '';
   if (c.fecha_reporte) calcularFechaLimiteCaso();
   document.getElementById('cRedaccion').value     = c.redaccion      || '';
-  document.getElementById('cEstadoGestion').value = c.estado_gestion || 'EN PROCESO';
+  document.getElementById('cEstadoGestion').value = (c.estado_gestion && c.estado_gestion !== 'PENDIENTE') ? c.estado_gestion : 'EN PROCESO';
   document.getElementById('cGravedad').value      = c.gravedad       || 'MEDIO';
   document.getElementById('cMotivoRetraso').value = c.motivo_retraso || '';
   // Sanción: visible si modo concluido o estamos editando (el supervisor puede transicionar)
@@ -3747,12 +3747,12 @@ function renderTablaCasos(data) {
            : 0)
         : 0;
       // Semáforo: verde / amarillo / rojo
-      const vencido = estadoCaso.includes('VENCIDO') || estadoCaso.includes('CON_RETRASO');
-      const porVencer = !vencido && !estadoCaso.startsWith('CONCLUIDO') && diasRestantes <= 1;
+      const concluido = estadoCaso.startsWith('CONCLUIDO') || ['CERRADO','CONCLUIDO','RESUELTO','FINALIZADO'].some(s => String(c.estado_gestion||'').toUpperCase().includes(s)); const _venc = c.fecha_limite ? (new Date(c.fecha_limite+'T00:00:00') < hoy) : (estadoCaso.includes('VENCIDO') || estadoCaso.includes('CON_RETRASO')); const vencido = _venc && !concluido;
+      const porVencer = !vencido && !concluido && !!c.fecha_limite && diasRestantes <= 1;
       const estColor = vencido ? '#dc2626' : (porVencer ? '#d97706' : '#16a34a');
       const estBg    = vencido ? '#fee2e2' : (porVencer ? '#fef3c7' : '#dcfce7');
       const porcentaje = Math.min(100, Math.max(0, Number(c.porcentaje_avance ?? c.porcentaje) || 0));
-      const estadoLabel = estadoCaso.replace(/_/g,' ') || '—';
+      const estadoLabel = concluido ? 'CONCLUIDO' : (vencido ? 'VENCIDO' : (porVencer ? 'POR VENCER' : (c.fecha_limite ? 'EN PLAZO' : '-')));
       const urlInforme  = c.archivo_informe_url  || c.enlace_informe  || '';
       const urlDescargo = c.archivo_descargo_url || c.enlace_reporte  || '';
       if (urlInforme || urlDescargo) console.log('[renderTablaCasos] caso[' + i + ']', c.nombre, '| informe:', urlInforme || '(vacío)', '| descargo:', urlDescargo || '(vacío)');
@@ -3766,7 +3766,7 @@ function renderTablaCasos(data) {
         <td style="font-size:11px">${c.supervisor}</td>
         <td><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:${estBg};color:${estColor};white-space:nowrap">${estadoLabel}</span></td>
         <td style="font-weight:700;color:${estColor}">${porcentaje}%</td>
-        <td style="font-size:11px;font-weight:600">${c.estado_gestion||'—'}</td>
+        <td style="font-size:11px;font-weight:600">${(String(c.estado_gestion||'').toUpperCase()==='PENDIENTE'?'EN PROCESO':(c.estado_gestion||'-'))}</td>
         <td><span style="font-size:10px;font-weight:700;color:#fff;background:${_gravColor(c.gravedad)};padding:2px 7px;border-radius:10px">${c.gravedad||'—'}</span></td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn-a" style="font-size:10px" onclick="verDetalleCaso(${i})">👁️ Ver</button>
@@ -8526,8 +8526,7 @@ window._fbSuscribirEstadisticas = function(callback) {
         <div>
           <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">📋 Estado del Caso *</label>
           <select id="cEstadoGestion" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
-            <option value="PENDIENTE" selected>Pendiente</option>
-            <option value="EN PROCESO">En Proceso</option>
+            <option value="EN PROCESO" selected>En Proceso</option>
             <option value="CERRADO">Cerrado</option>
           </select>
         </div>
