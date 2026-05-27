@@ -3742,16 +3742,16 @@ function renderTablaCasos(data) {
       // Estado: compatible con registros nuevos (estado_caso) y antiguos (estado)
       const estadoCaso = String(c.estado_caso || c.estado || '');
       const diasRestantes = c.fecha_limite
-        ? (new Date(c.fecha_limite+'T00:00:00') >= hoy
-           ? calcularDiasHabilesTranscurridos(hoy, new Date(c.fecha_limite+'T00:00:00'))
+        ? (new Date(String(c.fecha_limite).split('T')[0]+'T00:00:00') >= hoy
+           ? calcularDiasHabilesTranscurridos(hoy, new Date(String(c.fecha_limite).split('T')[0]+'T00:00:00'))
            : 0)
         : 0;
       // Semáforo: verde / amarillo / rojo
-      const concluido = estadoCaso.startsWith('CONCLUIDO') || ['CERRADO','CONCLUIDO','RESUELTO','FINALIZADO'].some(s => String(c.estado_gestion||'').toUpperCase().includes(s)); const _venc = c.fecha_limite ? (new Date(c.fecha_limite+'T00:00:00') < hoy) : (estadoCaso.includes('VENCIDO') || estadoCaso.includes('CON_RETRASO')); const vencido = _venc && !concluido;
+      const concluido = estadoCaso.startsWith('CONCLUIDO') || ['CERRADO','CONCLUIDO','RESUELTO','FINALIZADO'].some(s => String(c.estado_gestion||'').toUpperCase().includes(s)); const _venc = c.fecha_limite ? (new Date(String(c.fecha_limite).split('T')[0]+'T00:00:00') < hoy) : (estadoCaso.includes('VENCIDO') || estadoCaso.includes('CON_RETRASO')); const vencido = _venc && !concluido;
       const porVencer = !vencido && !concluido && !!c.fecha_limite && diasRestantes <= 1;
       const estColor = vencido ? '#dc2626' : (porVencer ? '#d97706' : '#16a34a');
       const estBg    = vencido ? '#fee2e2' : (porVencer ? '#fef3c7' : '#dcfce7');
-      const porcentaje = c.fecha_limite ? calcularAvance(calcularRetraso(c.fecha_limite, hoy)) : Math.min(100, Math.max(0, Number(c.porcentaje_avance ?? c.porcentaje) || 0));
+      const porcentaje = c.fecha_limite ? calcularAvance(calcularRetraso(String(c.fecha_limite).split('T')[0], hoy)) : Math.min(100, Math.max(0, Number(c.porcentaje_avance ?? c.porcentaje) || 0));
       const estadoLabel = concluido ? 'CONCLUIDO' : (vencido ? 'VENCIDO' : (porVencer ? 'POR VENCER' : (c.fecha_limite ? 'EN PLAZO' : '-')));
       const urlInforme  = c.archivo_informe_url  || c.enlace_informe  || '';
       const urlDescargo = c.archivo_descargo_url || c.enlace_reporte  || '';
@@ -3884,8 +3884,8 @@ function verDetalleCaso(idx) {
   const estadoCaso = String(c.estado_caso || c.estado || '');
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   const diasRestantes = c.fecha_limite
-    ? (new Date(c.fecha_limite+'T00:00:00') >= hoy
-       ? calcularDiasHabilesTranscurridos(hoy, new Date(c.fecha_limite+'T00:00:00'))
+    ? (new Date(String(c.fecha_limite).split('T')[0]+'T00:00:00') >= hoy
+       ? calcularDiasHabilesTranscurridos(hoy, new Date(String(c.fecha_limite).split('T')[0]+'T00:00:00'))
        : 0)
     : 0;
   const estColor   = _estadoPlazoColor(estadoCaso, diasRestantes);
