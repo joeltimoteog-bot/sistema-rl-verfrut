@@ -3082,8 +3082,8 @@ function editarCaso(idx) {
   document.getElementById('cEmpresa').value  = c.empresa || '';
   document.getElementById('cCargo').value    = c.cargo   || '';
   document.getElementById('cSector').value   = c.sector  || '';
-  document.getElementById('cIngreso').value  = c.ingreso || '';
-  document.getElementById('cTermino').value  = c.termino || '';
+  document.getElementById('cIngreso').value = c.ingreso ? String(c.ingreso).split('T')[0] : '';
+  document.getElementById('cTermino').value = c.termino ? String(c.termino).split('T')[0] : '';
   document.getElementById('panelDatosCaso').style.display = 'block';
   window._casoTrabajador = { nombre:c.nombre, empresa:c.empresa, cargo:c.cargo };
 
@@ -3092,7 +3092,7 @@ function editarCaso(idx) {
   document.getElementById('cMotivo').value        = c.motivo         || '';
   mostrarMotivoExtraCaso();
   document.getElementById('cMotivoExtra').value   = c.motivo_extra   || '';
-  document.getElementById('cFechaReporte').value  = c.fecha_reporte  || '';
+  document.getElementById('cFechaReporte').value = c.fecha_reporte ? String(c.fecha_reporte).split('T')[0] : '';
   if (c.fecha_reporte) calcularFechaLimiteCaso();
   document.getElementById('cRedaccion').value     = c.redaccion      || '';
   document.getElementById('cEstadoGestion').value = c.estado_gestion || 'EN PROCESO';
@@ -3501,7 +3501,7 @@ async function guardarCaso() {
     }
   }
 
-  const btn = document.querySelector('#mCaso .btn-n:last-child');
+  if (window._savingCaso) return; window._savingCaso = true; const btn = document.querySelector('#mCaso .btn-n:last-child');
   btn.textContent = '⏳ Guardando...'; btn.disabled = true;
 
   let informe = null, reporte = null;
@@ -3515,7 +3515,7 @@ async function guardarCaso() {
     informe = uploads[0]; reporte = uploads[1];
     if ((informeFile.files[0] && !informe) || (reporteFile.files[0] && !reporte)) {
       mostrarToast('❌ Error al subir archivos. Intenta nuevamente.','error');
-      btn.textContent = '💾 Guardar Caso'; btn.disabled = false;
+      btn.textContent = '💾 Guardar Caso'; btn.disabled = false; window._savingCaso = false;
       return;
     }
     btn.textContent = '⏳ Guardando...';
@@ -3610,7 +3610,7 @@ async function guardarCaso() {
   } catch(e) {
     mostrarToast('❌ Error al guardar: ' + e.message, 'error');
   } finally {
-    btn.textContent = '💾 Guardar Caso'; btn.disabled = false;
+    btn.textContent = '💾 Guardar Caso'; btn.disabled = false; window._savingCaso = false;
   }
 }
 
