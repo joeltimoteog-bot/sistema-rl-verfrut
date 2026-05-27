@@ -496,7 +496,7 @@ h3{font-size:16px !important}
           <thead>
             <tr>
               <th>N°</th><th>Fecha</th><th>Empresa</th><th>Supervisor</th>
-              <th>Fundo</th><th>Semana</th><th>Estado</th><th>Acciones</th>
+              <th>Fundo</th><th>Semana</th><th>Estado</th><th>% Avance</th><th>Acciones</th>
             </tr>
           </thead>
           <tbody id="tbVisitas">
@@ -1831,17 +1831,17 @@ function renderVisitas(data) {
   const tb = document.getElementById('tbVisitas');
   if(!tb) return;
   if(!data || data.length === 0) {
-    tb.innerHTML = '<tr><td colspan="8" class="empty">Sin registros de visitas</td></tr>';
+    tb.innerHTML = '<tr><td colspan="9" class="empty">Sin registros de visitas</td></tr>';
     return;
   }
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
   const thead = document.querySelector('#sec-visitas .tbl thead tr');
   if(thead) {
-    if(esAdmin && thead.children.length === 7) {
+    if(esAdmin && thead.children.length === 8) {
       const th = document.createElement('th');
       th.textContent = 'Supervisor';
       thead.insertBefore(th, thead.children[3]);
-    } else if(!esAdmin && thead.children.length === 8) {
+    } else if(!esAdmin && thead.children.length === 9) {
       thead.children[3].remove();
     }
   }
@@ -1855,6 +1855,17 @@ function renderVisitas(data) {
       const puedeEditar = esAdmin ||
         String(v.supervisor||'').toLowerCase().includes(miNombreR.split(' ')[0]) ||
         String(v.registrado_por||'').toLowerCase().includes(miNombreR.split(' ')[0]);
+      let _pctAv = 100;
+      if (v.fecha_fin) {
+        const _ff = new Date(String(v.fecha_fin).split('T')[0] + 'T00:00:00');
+        if (!isNaN(_ff)) {
+          const _lim = fechaLimiteInforme(_ff);
+          const _limStr = _lim.getFullYear() + '-' + String(_lim.getMonth()+1).padStart(2,'0') + '-' + String(_lim.getDate()).padStart(2,'0');
+          const _hoyV = new Date(); _hoyV.setHours(0,0,0,0);
+          _pctAv = calcularAvance(calcularRetraso(_limStr, _hoyV));
+        }
+      }
+      const _pctColor = _pctAv >= 100 ? '#16a34a' : (_pctAv >= 50 ? '#d97706' : '#dc2626');
       const btnVer    = `<button onclick="verInformeGuardado(${i})" style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📄 Ver</button>`;
       const btnEditar = puedeEditar ? `<button onclick="editarVisita(${i})" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button>` : '';
       const puedeEliminar = ADMINS_ELIMINAR_VISITA.includes(String(USER.usuario||'').toLowerCase());
@@ -1869,6 +1880,7 @@ function renderVisitas(data) {
         <td>${escT(v.sector||v.fundo||'—')}</td>
         <td>${escT(v.semana||'—')}</td>
         <td><span style="font-size:10px;font-weight:700;color:${colorEstado}">${estado}</span></td>
+        <td style="font-weight:700;color:${_pctColor}">${_pctAv}%</td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">${btnVer}${btnEditar}${btnEliminar}</td>
       </tr>`;
     }).join('');
@@ -7325,10 +7337,10 @@ function diasHabilesEntre(desde, hasta) {
 }
 
 function fechaLimiteInforme(fechaFin) {
-  // Plazo: 1 día hábil a partir del día siguiente a fechaFin
+  // Plazo: 2 dias habiles a partir del dia siguiente a fechaFin
   let cur   = new Date(fechaFin);
   let plazo = 0;
-  while (plazo < 1) {
+  while (plazo < 2) {
     cur.setDate(cur.getDate() + 1);
     if (esDiaHabil(cur)) plazo++;
   }
@@ -7353,7 +7365,7 @@ function calcSemanaVisita() {
   limite.setHours(0,0,0,0);
 
   const diasTrans  = diasHabilesEntre(ffD, hoy);
-  const diasPerm   = 1;
+  const diasPerm   = 2;
   const diasRetr   = Math.max(0, diasTrans - diasPerm);
   const pctAvance  = Math.min(1, diasTrans / diasPerm);
   const pctRetraso = diasRetr / diasPerm;
