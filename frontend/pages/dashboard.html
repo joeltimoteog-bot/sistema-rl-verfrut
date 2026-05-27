@@ -3326,8 +3326,8 @@ function calcularFechaLimiteCaso() {
   const fechaRep = new Date(fechaStr + 'T00:00:00');
   const temporada = detectarTemporada(fechaRep);
   document.getElementById('cTemporada').value = temporada === 'baja' ? 'Temporada Baja' : 'Temporada Alta';
-  // Plazo: 4 días hábiles desde el día siguiente al reporte
-  const fechaLimite = sumarDiasHabiles(fechaRep, 4);
+  // Plazo: 5 días hábiles desde el día siguiente al reporte
+  const fechaLimite = sumarDiasHabiles(fechaRep, 5);
   const fl = fechaLimite.toISOString().split('T')[0];
   document.getElementById('cFechaLimite').value = fl;
   calcularEstadoCaso(fl);
