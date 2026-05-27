@@ -6494,6 +6494,19 @@ function _fbAplicarEstadisticasFirebase(fbData) {
   if (!fbData) return;
   _fbEstadisticas = fbData;
   window._fbEstadisticas = fbData;
+  // FB-refresh-at: en cada evento Firebase real-time refrescar la lista "Mis Atenciones" (debounced 1.5s).
+  // Cuando un supervisor registra una atencion, Firebase dispara onValue -> aqui re-fetch sin polling.
+  try {
+    if (typeof cargarAtenciones === 'function') {
+      if (window._fbRefreshAtTimer) clearTimeout(window._fbRefreshAtTimer);
+      window._fbRefreshAtTimer = setTimeout(function () {
+        try {
+          console.log('[FB-refresh-at] disparando cargarAtenciones() por evento Firebase');
+          cargarAtenciones();
+        } catch (e) { console.warn('[FB-refresh-at] cargarAtenciones fallo:', e); }
+      }, 1500);
+    }
+  } catch (e) { /* no romper el flujo si falla */ }
   const rg = fbData.resumen_global;
   if (!rg) return;
 
