@@ -7966,6 +7966,19 @@ async function cargarHistorialCompleto() {
   } catch(e) { console.warn('historial error:', e); }
 }
 function dibujarEstadisticasDash(datos) {
+  // GUARD anti-machaque: si es ADMIN y Firebase ya pinto indicadores frescos (por_mes),
+  // NO recrear cM/cTendAnual/tabla desde CACHE.atenciones (parcial) -> deja el render bueno de Firebase.
+  // Supervisores SI siguen normal (Firebase no tiene su desglose por mes).
+  try {
+    var _esAdminDash = (typeof ROLES_VER_TODO !== 'undefined' && ROLES_VER_TODO.includes(USER.rol)) ||
+                       (typeof ROLES_ADMIN   !== 'undefined' && ROLES_ADMIN.includes(USER.rol)) ||
+                       (typeof ROLES_ADMIN2  !== 'undefined' && ROLES_ADMIN2.includes(USER.rol));
+    var _fbFresco = _fbEstadisticas && _fbEstadisticas.por_mes && Object.keys(_fbEstadisticas.por_mes).length > 0;
+    if (_esAdminDash && _fbFresco) {
+      console.log('[GUARD] dibujarEstadisticasDash: admin + Firebase fresco -> no recreo (deja FB)');
+      return;
+    }
+  } catch (e) { /* si falla, seguir normal para no romper supervisores */ }
   const labels=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const anioSel = document.getElementById('dFiltroAnio')?.value || '';
   const porMes={};
