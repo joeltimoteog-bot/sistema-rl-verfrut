@@ -6501,8 +6501,8 @@ function _fbAplicarEstadisticasFirebase(fbData) {
       if (window._fbRefreshAtTimer) clearTimeout(window._fbRefreshAtTimer);
       window._fbRefreshAtTimer = setTimeout(function () {
         try {
-          console.log('[FB-refresh-at] disparando cargarAtenciones() por evento Firebase');
-          cargarAtenciones();
+          console.log('[FB-refresh-at] disparando cargarAtenciones(true) por evento Firebase');
+          cargarAtenciones(true);
         } catch (e) { console.warn('[FB-refresh-at] cargarAtenciones fallo:', e); }
       }, 1500);
     }
