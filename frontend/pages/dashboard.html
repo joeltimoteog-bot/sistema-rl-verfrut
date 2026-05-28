@@ -2580,6 +2580,7 @@ const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7
 
 // Azure Functions: búsqueda rápida de trabajador por DNI (reemplaza GAS para DNI exacto)
 const AZURE_FN_BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api';
+        const AZURE_FN_KEY_ATLIST = 'C:\Users\Joel\Downloads\fix-cargar-atenciones-azure-v2.ps1'; // function-specific key de atenciones-list (solo lectura GET /atenciones)
 
 /**
  * Busca un trabajador por DNI en Azure SQL.
@@ -4543,18 +4544,52 @@ async function cargarAtenciones(historial=false) {
     return;
   }
   const tb = document.getElementById('tbAt');
-  if(tb) tb.innerHTML = '<tr><td colspan="18" class="empty">⏳ Cargando atenciones...</td></tr>';
+  if (tb) tb.innerHTML = '<tr><td colspan="18" class="empty">Cargando atenciones...</td></tr>';
+
+  const _esAdminAt = ROLES_VER_TODO.includes(USER.rol);
+
+  // 1) Admin -> Azure (rapido). Supervisor -> salta a GAS (filtra por rol server-side).
+  if (_esAdminAt) {
+    try {
+      const dias = historial ? 365 : 2;
+      const _t0 = Date.now();
+      const resp = await fetch(AZURE_FN_BASE + '/atenciones?dias=' + dias, {
+        headers: { 'x-functions-key': AZURE_FN_KEY_ATLIST }
+      });
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json && json.success && Array.isArray(json.data)) {
+          const _fld = ['fecha_atencion','fecha_inicio_periodo','fecha_termino_periodo','fecha_inicio_doc','fecha_termino_doc','fecha_registro','fecha_creacion'];
+          json.data.forEach(a => _fld.forEach(c => { if (a[c]) a[c] = String(a[c]).slice(0,10); }));
+          CACHE.atenciones = json.data;
+          atTodas = json.data.filter(a => a.fecha_atencion === hoy());
+          renderAt(atTodas);
+          console.log('[cargarAtenciones] Azure (admin):', json.data.length, '| hoy:', atTodas.length, '|', (Date.now() - _t0) + 'ms');
+          return;
+        }
+      }
+      console.warn('[cargarAtenciones] Azure status', resp.status, '- fallback a GAS');
+    } catch (e) {
+      console.warn('[cargarAtenciones] Azure error:', e.message, '- fallback a GAS');
+    }
+  }
+
+  // 2) GAS (fallback de admin o ruta default de supervisor)
   try {
-    const _emp = ROLES_VER_TODO.includes(USER.rol) ? '' : (USER.empresa || '');
-    const d=await apiGet({action:'getAtencionesOptimizado',usuario:USER.usuario,nombre:USER.nombre||USER.usuario,rol:USER.rol,empresa:_emp});
-    if(d.success){CACHE.atenciones=d.data;atTodas=d.data.filter(a=>a.fecha_atencion===hoy());renderAt(atTodas);}
-    else { if(tb) tb.innerHTML='<tr><td colspan="18" class="empty">❌ '+(d.error||'Error al cargar atenciones')+'</td></tr>'; }
-  } catch(e){
-    if(tb) tb.innerHTML='<tr><td colspan="18" class="empty">❌ Error de conexión</td></tr>';
-    console.error('cargarAtenciones:', e);
+    const _emp = _esAdminAt ? '' : (USER.empresa || '');
+    const d = await apiGet({action:'getAtencionesOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa:_emp});
+    if (d.success) {
+      CACHE.atenciones = d.data;
+      atTodas = d.data.filter(a => a.fecha_atencion === hoy());
+      renderAt(atTodas);
+    } else {
+      if (tb) tb.innerHTML = '<tr><td colspan="18" class="empty">' + (d.error||'Error al cargar atenciones') + '</td></tr>';
+    }
+  } catch (e) {
+    if (tb) tb.innerHTML = '<tr><td colspan="18" class="empty">Error de conexion</td></tr>';
+    console.error('cargarAtenciones (GAS):', e);
   }
 }
-
 function renderAt(lista) {
   const tb=document.getElementById('tbAt');
   if(!lista.length){tb.innerHTML='<tr><td colspan="18" class="empty">No hay atenciones registradas</td></tr>';return;}
