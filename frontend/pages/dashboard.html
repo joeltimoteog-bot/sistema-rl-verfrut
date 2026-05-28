@@ -4553,9 +4553,7 @@ async function cargarAtenciones(historial=false) {
     try {
       const dias = historial ? 365 : 2;
       const _t0 = Date.now();
-      const resp = await fetch(AZURE_FN_BASE + '/atenciones?dias=' + dias, {
-        headers: { 'x-functions-key': AZURE_FN_KEY_ATLIST }
-      });
+      const resp = await fetch(AZURE_FN_BASE + '/atenciones?dias=' + dias + '&code=' + encodeURIComponent(AZURE_FN_KEY_ATLIST));
       if (resp.ok) {
         const json = await resp.json();
         if (json && json.success && Array.isArray(json.data)) {
