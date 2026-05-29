@@ -1256,7 +1256,7 @@ function saveCaso(d) {
       d.fecha_reporte || '',
       d.fecha_limite || '',
       d.temporada || '',
-      d.estado || '',
+      d.estado_caso || d.estado_plazo || d.estado || '',
       d.porcentaje || 0,
       d.dias_retraso || 0,
       d.motivo_retraso || '',
@@ -1856,7 +1856,9 @@ function updateCaso(d) {
         if (d.fecha_reporte  !== undefined) ws.getRange(r, 13).setValue(d.fecha_reporte);
         if (d.fecha_limite   !== undefined) ws.getRange(r, 14).setValue(d.fecha_limite);
         if (d.temporada      !== undefined) ws.getRange(r, 15).setValue(d.temporada);
-        if (d.estado         !== undefined) ws.getRange(r, 16).setValue(d.estado);
+        if (d.estado_caso !== undefined) ws.getRange(r, 16).setValue(d.estado_caso);
+          else if (d.estado_plazo !== undefined) ws.getRange(r, 16).setValue(d.estado_plazo);
+          else if (d.estado !== undefined) ws.getRange(r, 16).setValue(d.estado);
         if (d.porcentaje     !== undefined) ws.getRange(r, 17).setValue(d.porcentaje);
         if (d.dias_retraso   !== undefined) ws.getRange(r, 18).setValue(d.dias_retraso);
         if (d.motivo_retraso !== undefined) ws.getRange(r, 19).setValue(d.motivo_retraso);
