@@ -693,13 +693,25 @@ async function cargarResumenEjecutivo() {
     const resp = await apiPost({ action: 'resumenEjecutivo', empresa });
     if (!resp.success) { console.warn('[RejEjec] Error:', resp.error); return; }
 
-    // KPIs
+    // KPIs - FIX: incluye atenciones en las 4 cards grandes
+    const atHoy  = resp.atenciones?.hoy || 0;
     const visHoy = resp.visitas?.hoy || 0;
     const casHoy = resp.casos?.hoy || 0;
-    _set('kpiHoy',     visHoy + casHoy);
-    _set('kpiMes',     (resp.visitas?.este_mes || 0) + (resp.casos?.este_mes || 0));
-    _set('kpiProceso', resp.casos?.en_proceso || 0);
-    const totalHist = (resp.visitas?.total || 0) + (resp.casos?.total || 0);
+    _set('kpiHoy', atHoy + visHoy + casHoy);
+
+    const atMes  = resp.atenciones?.este_mes || 0;
+    const visMes = resp.visitas?.este_mes || 0;
+    const casMes = resp.casos?.este_mes || 0;
+    _set('kpiMes', atMes + visMes + casMes);
+
+    _set('kpiProceso',
+      (resp.atenciones?.en_proceso || 0) + (resp.casos?.en_proceso || 0)
+    );
+
+    const totalHist =
+      (resp.atenciones?.total || 0) +
+      (resp.visitas?.total    || 0) +
+      (resp.casos?.total      || 0);
     _set('kpiTotal', totalHist.toLocaleString('es-PE'));
 
     // Módulo Visitas
