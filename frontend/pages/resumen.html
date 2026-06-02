@@ -693,6 +693,23 @@ async function cargarResumenEjecutivo() {
     const resp = await apiPost({ action: 'resumenEjecutivo', empresa });
     if (!resp.success) { console.warn('[RejEjec] Error:', resp.error); return; }
 
+    // --- Firebase-first: si hay Firebase fresco, NO sobreescribir cards ---
+    const _hayFb = _rFbEstaFresco();
+    if (_hayFb) {
+      console.log('[RejEjec] Firebase fresco -- solo actualizo comparativa/tendencia/alertas');
+      _rejRenderMiniVisitas(resp.visitas || {});
+      _rejRenderMiniCasos(resp.casos || {});
+      _rejRenderMiniFusiones(resp.comparativa && resp.comparativa.fusiones || {});
+      _rejRenderMiniCapacitaciones(resp.comparativa && resp.comparativa.capacitaciones || {});
+      renderizarComparativa(resp.comparativa || {});
+      renderizarTendenciaGeneral(resp.tendencia || []);
+      renderizarAlertas(resp.alertas || []);
+      _set('fusRapel',   resp.comparativa && resp.comparativa.fusiones ? resp.comparativa.fusiones.RAPEL : 0);
+      _set('fusVerfrut', resp.comparativa && resp.comparativa.fusiones ? resp.comparativa.fusiones.VERFRUT : 0);
+      _set('capRapel',   resp.comparativa && resp.comparativa.capacitaciones ? resp.comparativa.capacitaciones.RAPEL : 0);
+      return;
+    }
+
     // KPIs - FIX: incluye atenciones en las 4 cards grandes
     const atHoy  = resp.atenciones?.hoy || 0;
     const visHoy = resp.visitas?.hoy || 0;
@@ -841,6 +858,65 @@ function renderizarAlertas(alertas) {
     </div>`).join('');
 }
 
+// ===================================================================
+// FIREBASE FIRST -- pintar cards desde Firebase (igual que Mi Dashboard)
+// ===================================================================
+function _rFbAplicarKPIs() {
+  const stats = window._fbDatosEstadisticasR;
+  const mods  = window._fbDatosModulosR;
+  if (!stats || !stats.resumen_global) return;
+
+  const rg = stats.resumen_global;
+  const v  = (mods && mods.visitas) || {};
+  const c  = (mods && mods.casos)   || {};
+
+  _set('kpiHoy', rg.hoy || 0);
+  _set('kpiMes', (rg.este_mes || 0) + (v.este_mes || 0) + (c.este_mes || 0));
+  _set('kpiProceso', rg.en_proceso || 0);
+  const total = (rg.total || 0) + (v.total || 0) + (c.total || 0);
+  _set('kpiTotal', total.toLocaleString('es-PE'));
+
+  const ts = document.getElementById('rejTimestamp');
+  if (ts && rg.ultima_actualizacion) {
+    const fecha = new Date(rg.ultima_actualizacion);
+    ts.textContent = 'Act. ' + fecha.toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'}) + ' (FB)';
+  }
+}
+
+function _rFbAplicarModulosCards() {
+  const mods = window._fbDatosModulosR;
+  if (!mods) return;
+
+  if (mods.visitas) {
+    _set('visTotal',      mods.visitas.total);
+    _set('visMes',        mods.visitas.este_mes);
+    _set('visEnPlazo',    mods.visitas.en_plazo);
+    _set('visRetrasadas', mods.visitas.retrasadas);
+  }
+  if (mods.casos) {
+    _set('casTotal',   mods.casos.total);
+    _set('casMes',     mods.casos.este_mes);
+    _set('casProceso', mods.casos.en_plazo);
+    _set('casFin',     (mods.casos.total || 0) - (mods.casos.en_plazo || 0));
+  }
+  if (mods.fusiones) {
+    _set('fusTotal',   mods.fusiones.total);
+    _set('fusMes',     mods.fusiones.este_mes);
+  }
+  if (mods.capacitaciones) {
+    _set('capTotal',      mods.capacitaciones.total);
+    _set('capMes',        mods.capacitaciones.este_mes);
+    _set('capAsistentes', mods.capacitaciones.total_asistentes);
+  }
+}
+
+function _rFbEstaFresco() {
+  const stats = window._fbDatosEstadisticasR;
+  if (!stats || !stats.resumen_global) return false;
+  if (!stats.resumen_global.total || stats.resumen_global.total === 0) return false;
+  const edad = Date.now() - (stats.resumen_global.ultima_actualizacion || 0);
+  return edad < 15 * 60 * 1000;
+}
 window.cargarResumenEjecutivo = cargarResumenEjecutivo;
 
 // ── Init ──
@@ -882,7 +958,14 @@ function _rFbCargarModulos(data) {
 
 function _rFbIniciarModulos(intentos) {
   if (typeof window._fbSuscribirModulosR === 'function') {
-    window._fbSuscribirModulosR(function(data) { if (data) _rFbCargarModulos(data); });
+    window._fbSuscribirModulosR(function(data) {
+      if (data) {
+        window._fbDatosModulosR = data;
+        _rFbAplicarKPIs();
+        _rFbAplicarModulosCards();
+        _rFbCargarModulos(data);
+      }
+    });
   } else if (intentos > 0) {
     setTimeout(() => _rFbIniciarModulos(intentos - 1), 700);
   }
@@ -892,11 +975,14 @@ let _rFbEstadisticas = null;
 function _rFbIniciarConRetry(intentos) {
   if (typeof window._fbSuscribirEstadisticasR === 'function') {
     window._fbSuscribirEstadisticasR(function(data) {
-      if (data && data.por_supervisor) {
-        _rFbEstadisticas = data;
-        const emp = v('rEmp'), mes = v('rMes'), anio = v('rAnio');
-        // Actualizar panel solo si no hay filtros activos (no sobreescribir resultados filtrados)
-        if (emp === 'AMBAS' && !mes && !anio) _rFbCargarSuper(data.por_supervisor);
+      if (data) {
+        window._fbDatosEstadisticasR = data;
+        _rFbAplicarKPIs();
+        if (data.por_supervisor) {
+          _rFbEstadisticas = data;
+          const emp = v('rEmp'), mes = v('rMes'), anio = v('rAnio');
+          if (emp === 'AMBAS' && !mes && !anio) _rFbCargarSuper(data.por_supervisor);
+        }
       }
     });
   } else if (intentos > 0) {
