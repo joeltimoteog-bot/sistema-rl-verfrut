@@ -348,8 +348,8 @@ async function _ejecutarBusquedaCapacitaciones() {
       }
       grupos[id].asistentes.push({
         dni:     row.DNI || row.dni || '',
-        nombre:  row.NOMBRE || row.nombre || '',
-        cargo:   row.CARGO || row.cargo || '',
+        nombre:  row.APELLIDOS_Y_NOMBRES || row.NOMBRE || row.nombre || row.nombres || '',
+        cargo:   row.CARGO_AREA || row.CARGO || row.cargo || '',
         sexo:    row.SEXO || row.sexo || '',
         empresa: row.EMPRESA || row.empresa || ''
       });
@@ -427,42 +427,48 @@ function _mostrarListaCapacitacionesAntiguas(capacitaciones, fechaTxt) {
   });
 }
 
+// RESPONSABLE DEL REGISTRO — siempre fijo (Lucia Castillo Celi)
+const _RESP_REGISTRO = {
+  dni:    '71732176',
+  nombre: 'CASTILLO CELI LUCIA GABRIELA',
+  cargo:  'ANALISTA DE GESTION HUMANA'
+};
+
 async function regenerarFormatoCapacitacion(cap) {
   if (!cap || !cap.asistentes || !cap.asistentes.length) {
     alert('❌ Esta capacitación no tiene asistentes para regenerar');
     return;
   }
 
-  // Determinar responsable del registro
-  let respDni    = cap.capacitadorDni    || '';
-  let respNombre = cap.capacitadorNombre || '';
-  let respCargo  = cap.capacitadorCargo  || '';
+  // Determinar CAPACITADOR (quien dio la capacitación)
+  let capDni    = cap.capacitadorDni    || '';
+  let capNombre = cap.capacitadorNombre || '';
+  let capCargo  = cap.capacitadorCargo  || '';
 
-  // Si el capacitador original no tiene DNI, pedírselo al usuario que regenera
-  if (!respDni || !respNombre) {
-    const dniInput = (prompt('🔍 Ingresa el DNI del responsable del registro:') || '').trim();
+  // Si la capacitación original no tiene datos del capacitador, pedirlos
+  if (!capDni || !capNombre) {
+    const dniInput = (prompt('🔍 Ingresa el DNI del CAPACITADOR (quien dictó la capacitación):') || '').trim();
     if (!dniInput) return;
     if (!/^\d{7,8}$/.test(dniInput)) {
       alert('❌ DNI inválido. Debe tener 7 u 8 dígitos.');
       return;
     }
-    respDni = dniInput;
+    capDni = dniInput;
 
-    // Intentar autocompletar desde BD_Supervisores (tolerante)
+    // Intentar autocompletar desde BD_Supervisores (tolerante a ceros iniciales)
     let encontrado = false;
     try {
       const r = await apiGet({ action: 'getSupervisores' });
       if (r.success && Array.isArray(r.data)) {
-        // Búsqueda tolerante: trim + comparar quitando ceros iniciales
         const dniNorm = dniInput.replace(/^0+/, '');
         const sup = r.data.find(function(s){
           const sDni = String(s.dni || '').trim().replace(/^0+/, '');
           return sDni === dniNorm;
         });
         if (sup) {
-          respDni    = String(sup.dni).trim();
-          respNombre = String(sup.nombre || '').trim();
-          respCargo  = String(sup.cargo || '').trim();
+          capDni    = String(sup.dni).trim();
+          capNombre = String(sup.nombre || '').trim();
+          capCargo  = String(sup.cargo || '').trim();
           encontrado = true;
         }
       }
@@ -472,18 +478,10 @@ async function regenerarFormatoCapacitacion(cap) {
 
     // Si NO está en BD_Supervisores → pedir nombre y cargo manualmente
     if (!encontrado) {
-      const nombreDefault = (typeof USER !== 'undefined' && USER.nombre) ? USER.nombre : '';
-      respNombre = (prompt('⚠️ DNI ' + dniInput + ' no está en BD_Supervisores.\n\nIngresa el nombre completo del responsable:', nombreDefault) || '').trim();
-      if (!respNombre) {
-        alert('❌ El nombre es obligatorio');
-        return;
-      }
-      const cargoDefault = (typeof USER !== 'undefined' && USER.cargo) ? USER.cargo : '';
-      respCargo = (prompt('📋 Ingresa el cargo del responsable:', cargoDefault) || '').trim();
-      if (!respCargo) {
-        alert('❌ El cargo es obligatorio');
-        return;
-      }
+      capNombre = (prompt('⚠️ DNI ' + dniInput + ' no está en BD_Supervisores.\n\nIngresa el nombre completo del capacitador:') || '').trim();
+      if (!capNombre) { alert('❌ El nombre es obligatorio'); return; }
+      capCargo = (prompt('📋 Ingresa el cargo del capacitador:') || '').trim();
+      if (!capCargo) { alert('❌ El cargo es obligatorio'); return; }
     }
   }
 
@@ -496,6 +494,9 @@ async function regenerarFormatoCapacitacion(cap) {
     horaInicio:  v('capHoraInicio'),
     horaTermino: v('capHoraTermino'),
     horas:       v('capHoras'),
+    capDni:      v('capCapDni'),
+    capNombre:   v('capCapNombre'),
+    capCargo:    v('capCapCargo'),
     respDni:     v('capRespDni'),
     respNombre:  v('capRespNombre'),
     respCargo:   v('capRespCargo'),
@@ -503,7 +504,7 @@ async function regenerarFormatoCapacitacion(cap) {
   };
 
   try {
-    // Setear campos con datos antiguos
+    // Datos generales de la actividad
     sv('capEmpresa',     cap.empresa);
     sv('capFecha',       cap.fecha);
     sv('capTema',        cap.tema);
@@ -511,9 +512,16 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capHoraInicio',  cap.horaInicio);
     sv('capHoraTermino', cap.horaFin);
     sv('capHoras',       cap.horas);
-    sv('capRespDni',     respDni);
-    sv('capRespNombre',  respNombre);
-    sv('capRespCargo',   respCargo);
+
+    // CAPACITADOR (lo que el usuario ingresó o lo que vino de la BD)
+    sv('capCapDni',     capDni);
+    sv('capCapNombre',  capNombre);
+    sv('capCapCargo',   capCargo);
+
+    // RESPONSABLE DEL REGISTRO — SIEMPRE FIJO (Lucia Castillo Celi)
+    sv('capRespDni',     _RESP_REGISTRO.dni);
+    sv('capRespNombre',  _RESP_REGISTRO.nombre);
+    sv('capRespCargo',   _RESP_REGISTRO.cargo);
 
     asistentes = cap.asistentes.slice();
 
@@ -527,6 +535,9 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capHoraInicio',  backup.horaInicio);
     sv('capHoraTermino', backup.horaTermino);
     sv('capHoras',       backup.horas);
+    sv('capCapDni',      backup.capDni);
+    sv('capCapNombre',   backup.capNombre);
+    sv('capCapCargo',    backup.capCargo);
     sv('capRespDni',     backup.respDni);
     sv('capRespNombre',  backup.respNombre);
     sv('capRespCargo',   backup.respCargo);
