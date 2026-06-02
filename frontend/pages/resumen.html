@@ -470,9 +470,11 @@ function _aplicarDatosResumen(data) {
     while (supSel.options.length > 1) supSel.remove(1);
     sups.forEach(s => { const o = document.createElement('option'); o.value=s; o.textContent=s; supSel.appendChild(o); });
   }
-  document.getElementById('rT').textContent = resData.length;
-  document.getElementById('rP').textContent = resData.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
-  document.getElementById('rR').textContent = resData.filter(a=>String(a.estado||'').toUpperCase()==='FINALIZADO').length;
+  // FIX: conteos globales reales (Firebase si disponible, fallback al slice si no)
+  const _fbGl = (window._fbDatosEstadisticasR && window._fbDatosEstadisticasR.resumen_global) || null;
+  document.getElementById('rT').textContent = (data.total != null ? data.total : resData.length).toLocaleString('es-PE');
+  document.getElementById('rP').textContent = _fbGl ? (_fbGl.en_proceso || 0) : resData.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
+  document.getElementById('rR').textContent = _fbGl ? (_fbGl.finalizados || 0) : resData.filter(a=>String(a.estado||'').toUpperCase()==='FINALIZADO').length;
   const ps = data.porSupervisor || {};
   document.getElementById('supR').innerHTML = Object.entries(ps).length ?
     Object.entries(ps).sort((a,b)=>b[1].total-a[1].total).map(([k,val])=>`
