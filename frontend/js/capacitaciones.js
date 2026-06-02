@@ -440,31 +440,50 @@ async function regenerarFormatoCapacitacion(cap) {
 
   // Si el capacitador original no tiene DNI, pedírselo al usuario que regenera
   if (!respDni || !respNombre) {
-    const dniInput = (prompt('🔍 Ingresa el DNI del responsable del registro (debe existir en BD_Supervisores):') || '').trim();
+    const dniInput = (prompt('🔍 Ingresa el DNI del responsable del registro:') || '').trim();
     if (!dniInput) return;
     if (!/^\d{7,8}$/.test(dniInput)) {
       alert('❌ DNI inválido. Debe tener 7 u 8 dígitos.');
       return;
     }
-    // Buscar supervisor por DNI
+    respDni = dniInput;
+
+    // Intentar autocompletar desde BD_Supervisores (tolerante)
+    let encontrado = false;
     try {
       const r = await apiGet({ action: 'getSupervisores' });
       if (r.success && Array.isArray(r.data)) {
-        const sup = r.data.find(function(s){ return String(s.dni) === dniInput; });
-        if (!sup) {
-          alert('❌ DNI ' + dniInput + ' no encontrado en BD_Supervisores');
-          return;
+        // Búsqueda tolerante: trim + comparar quitando ceros iniciales
+        const dniNorm = dniInput.replace(/^0+/, '');
+        const sup = r.data.find(function(s){
+          const sDni = String(s.dni || '').trim().replace(/^0+/, '');
+          return sDni === dniNorm;
+        });
+        if (sup) {
+          respDni    = String(sup.dni).trim();
+          respNombre = String(sup.nombre || '').trim();
+          respCargo  = String(sup.cargo || '').trim();
+          encontrado = true;
         }
-        respDni    = String(sup.dni);
-        respNombre = sup.nombre || '';
-        respCargo  = sup.cargo || '';
-      } else {
-        alert('❌ No se pudo cargar la base de supervisores');
-        return;
       }
     } catch(e) {
-      alert('❌ Error buscando supervisor: ' + e.message);
-      return;
+      console.warn('Error buscando supervisor:', e);
+    }
+
+    // Si NO está en BD_Supervisores → pedir nombre y cargo manualmente
+    if (!encontrado) {
+      const nombreDefault = (typeof USER !== 'undefined' && USER.nombre) ? USER.nombre : '';
+      respNombre = (prompt('⚠️ DNI ' + dniInput + ' no está en BD_Supervisores.\n\nIngresa el nombre completo del responsable:', nombreDefault) || '').trim();
+      if (!respNombre) {
+        alert('❌ El nombre es obligatorio');
+        return;
+      }
+      const cargoDefault = (typeof USER !== 'undefined' && USER.cargo) ? USER.cargo : '';
+      respCargo = (prompt('📋 Ingresa el cargo del responsable:', cargoDefault) || '').trim();
+      if (!respCargo) {
+        alert('❌ El cargo es obligatorio');
+        return;
+      }
     }
   }
 
