@@ -232,30 +232,158 @@ function abrirNuevaCapacitacion() {
   if (br) br.style.display = 'none';
 }
 
-function abrirCapacitacionRetroactiva() {
-  const rawFecha = (prompt('📅 Ingresa la fecha de la capacitación (DD/MM/AAAA):') || '').trim();
+async function abrirCapacitacionRetroactiva() {
+  // NUEVO: busca capacitaciones ya registradas en la fecha y permite regenerar formato R-SC-01
+  const rawFecha = (prompt('📅 Ingresa la fecha a buscar (DD/MM/AAAA):') || '').trim();
   if (!rawFecha) return;
   const mF = rawFecha.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (!mF) { alert('❌ Formato incorrecto. Usa DD/MM/AAAA'); return; }
   const dia = parseInt(mF[1]), mes = parseInt(mF[2]) - 1, anio = parseInt(mF[3]);
-  const fechaParsed = new Date(anio, mes, dia);
-  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-  if (fechaParsed >= hoy) { alert('❌ La fecha retroactiva no puede ser hoy ni futura. Usa una fecha anterior.'); return; }
+  const fechaISO = `${anio}-${String(mes + 1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
 
-  const motivo = (prompt('📝 Motivo del registro retroactivo (mín. 5 caracteres):') || '').trim();
-  if (motivo.length < 5) { alert('❌ El motivo debe tener al menos 5 caracteres'); return; }
+  try {
+    const r = await apiPost({
+      action: 'exportarCapacitaciones',
+      desde: fechaISO,
+      hasta: fechaISO,
+      empresa: '',
+      usuario: USER.usuario,
+      rol: USER.rol
+    });
+    if (!r.success) { alert('❌ ' + (r.error || 'Error al buscar')); return; }
+    if (!r.data || !r.data.length) {
+      alert('⚠️ No se encontraron capacitaciones registradas el ' + rawFecha);
+      return;
+    }
 
-  _esRetroactivo     = true;
-  _fechaRetroactiva  = `${anio}-${String(mes + 1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
-  _motivoRetroactivo = motivo;
+    // Agrupar filas por idCapacitacion (acepta claves variadas del backend)
+    const grupos = {};
+    r.data.forEach(row => {
+      const id = row.ID_CAPACITACION || row.idCapacitacion || row.id_capacitacion || row.ID || row.id || ('CAP-' + Object.keys(grupos).length);
+      if (!grupos[id]) {
+        grupos[id] = {
+          id,
+          empresa:           row.EMPRESA || row.empresa || '',
+          fecha:             row.FECHA || row.fecha || fechaISO,
+          tema:              row.TEMA || row.tema || '',
+          lugar:             row.LUGAR || row.lugar || '',
+          horaInicio:        row.HORA_INICIO || row.horaInicio || '',
+          horaFin:           row.HORA_FIN || row.horaFin || '',
+          horas:             row.HORAS || row.horas || row.totalHoras || '',
+          capacitadorDni:    row.CAPACITADOR_DNI || row.capacitadorDni || '',
+          capacitadorNombre: row.CAPACITADOR_NOMBRE || row.capacitadorNombre || '',
+          capacitadorCargo:  row.CAPACITADOR_CARGO || row.capacitadorCargo || '',
+          asistentes: []
+        };
+      }
+      grupos[id].asistentes.push({
+        dni:     row.DNI || row.dni || '',
+        nombre:  row.NOMBRE || row.nombre || '',
+        cargo:   row.CARGO || row.cargo || '',
+        sexo:    row.SEXO || row.sexo || '',
+        empresa: row.EMPRESA || row.empresa || ''
+      });
+    });
 
-  asistentes = []; _dniCooldown = {};
-  _activarTabNueva('tabBtnRetroactivo');
-  _mostrarPaso(0);
-  sv('cantTrabajadores', '20');
-  const sl = document.getElementById('sliderTrabajadores');
-  if (sl) sl.value = 20;
-  _actualizarPreviewFormatos(20);
+    _mostrarListaCapacitacionesAntiguas(Object.values(grupos), rawFecha);
+  } catch(e) {
+    alert('❌ Error: ' + e.message);
+  }
+}
+
+function _mostrarListaCapacitacionesAntiguas(capacitaciones, fechaTxt) {
+  let overlay = document.getElementById('modalRegenOverlay');
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement('div');
+  overlay.id = 'modalRegenOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999';
+
+  let html = '<div style="background:white;padding:20px;border-radius:12px;max-width:720px;max-height:80vh;overflow:auto;width:90%">';
+  html += '<h3 style="margin-top:0;margin-bottom:8px">📅 Capacitaciones del ' + fechaTxt + '</h3>';
+  html += '<p style="color:#475569;margin-bottom:12px;font-size:14px">Se encontraron <b>' + capacitaciones.length + '</b> capacitación(es). Selecciona para regenerar el formato R-SC-01.</p>';
+  html += '<div>';
+
+  capacitaciones.forEach((c, i) => {
+    html += '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:10px;background:#f8fafc">';
+    html += '<div style="font-weight:600;font-size:14px;margin-bottom:4px">' + (c.tema || '(sin tema)') + '</div>';
+    html += '<div style="font-size:12px;color:#64748b;margin-bottom:8px">';
+    html += (c.empresa || '—') + ' · ' + (c.lugar || '—') + ' · ' + (c.horaInicio || '—') + '-' + (c.horaFin || '—') + ' · <b>' + c.asistentes.length + '</b> asistentes';
+    html += '</div>';
+    html += '<button class="btn btn-primary" data-idx="' + i + '" style="font-size:12px;padding:6px 12px">📄 Regenerar formato R-SC-01</button>';
+    html += '</div>';
+  });
+
+  html += '</div>';
+  html += '<div style="margin-top:12px;text-align:right"><button class="btn btn-gray" id="btnCerrarModalRegen">✖ Cerrar</button></div>';
+  html += '</div>';
+
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+
+  // Referencia global para acceso desde botones
+  window._capacitacionesEncontradas = capacitaciones;
+
+  document.getElementById('btnCerrarModalRegen').onclick = () => overlay.remove();
+  overlay.querySelectorAll('button[data-idx]').forEach(btn => {
+    btn.onclick = () => {
+      const idx = parseInt(btn.dataset.idx);
+      regenerarFormatoCapacitacion(window._capacitacionesEncontradas[idx]);
+    };
+  });
+}
+
+async function regenerarFormatoCapacitacion(cap) {
+  if (!cap || !cap.asistentes || !cap.asistentes.length) {
+    alert('❌ Esta capacitación no tiene asistentes para regenerar');
+    return;
+  }
+
+  // Backup de campos DOM y asistentes globales
+  const backup = {
+    empresa:     v('capEmpresa'),
+    fecha:       v('capFecha'),
+    tema:        v('capTema'),
+    lugar:       v('capLugar'),
+    horaInicio:  v('capHoraInicio'),
+    horaTermino: v('capHoraTermino'),
+    horas:       v('capHoras'),
+    respDni:     v('capRespDni'),
+    respNombre:  v('capRespNombre'),
+    respCargo:   v('capRespCargo'),
+    asistentes:  asistentes.slice()
+  };
+
+  try {
+    // Setear campos con datos antiguos (responsable = capacitador como fallback)
+    sv('capEmpresa',     cap.empresa);
+    sv('capFecha',       cap.fecha);
+    sv('capTema',        cap.tema);
+    sv('capLugar',       cap.lugar);
+    sv('capHoraInicio',  cap.horaInicio);
+    sv('capHoraTermino', cap.horaFin);
+    sv('capHoras',       cap.horas);
+    sv('capRespDni',     cap.capacitadorDni);
+    sv('capRespNombre',  cap.capacitadorNombre);
+    sv('capRespCargo',   cap.capacitadorCargo);
+
+    asistentes = cap.asistentes.slice();
+
+    await generarPDFsFormatos();
+  } finally {
+    // Restaurar TODO al estado original
+    sv('capEmpresa',     backup.empresa);
+    sv('capFecha',       backup.fecha);
+    sv('capTema',        backup.tema);
+    sv('capLugar',       backup.lugar);
+    sv('capHoraInicio',  backup.horaInicio);
+    sv('capHoraTermino', backup.horaTermino);
+    sv('capHoras',       backup.horas);
+    sv('capRespDni',     backup.respDni);
+    sv('capRespNombre',  backup.respNombre);
+    sv('capRespCargo',   backup.respCargo);
+    asistentes = backup.asistentes;
+  }
 }
 
 function sincronizarCantidad(origen) {
@@ -598,12 +726,14 @@ async function guardarCapacitacion() {
   const btn = document.getElementById('btnGuardar');
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Guardando...';
+  let guardadoOk = false;
   try {
     const { actividad, asistentesEnvio } = _buildBody();
     console.log('[GUARDAR CAP] Actividad a enviar:', actividad);
     console.log('[GUARDAR CAP] Asistentes:', asistentesEnvio);
     const d = await apiPost({ action: 'guardarCapacitacion', actividad, asistentes: asistentesEnvio });
     if (d.success) {
+      guardadoOk = true;
       mostrarFeedback('ok', `✅ Capacitación guardada. ID: ${d.idCapacitacion || d.id || '—'} | ${d.registrosGuardados || asistentesEnvio.length} asistente(s)`);
     } else {
       mostrarFeedback('err', '❌ ' + (d.error || 'Error al guardar en el servidor'));
@@ -611,8 +741,13 @@ async function guardarCapacitacion() {
   } catch(e) {
     mostrarFeedback('err', '❌ Error de conexión: ' + e.message);
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = '💾 Guardar';
+    // FIX: si guardado OK, mantener boton disabled para evitar duplicados
+    if (guardadoOk) {
+      btn.innerHTML = '✅ Guardado — usa "Nueva" para registrar otra';
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = '💾 Guardar';
+    }
   }
 }
 
@@ -1229,7 +1364,7 @@ async function exportarCSV() {
   const fb = document.getElementById('expFeedback');
   if (fb) fb.textContent = '⏳ Exportando...';
   try {
-    const d = await apiGet({
+    const d = await apiPost({
       action:  'exportarCapacitaciones',
       empresa: v('expEmpresa'),
       desde:   v('expDesde'),
@@ -1333,3 +1468,4 @@ window.cancelarCapacitacion         = cancelarCapacitacion;
 window.continuarAPaso1              = continuarAPaso1;
 window.actualizarProgresoAsistentes = actualizarProgresoAsistentes;
 window.generarPDFsFormatos          = generarPDFsFormatos;
+window.regenerarFormatoCapacitacion = regenerarFormatoCapacitacion;
