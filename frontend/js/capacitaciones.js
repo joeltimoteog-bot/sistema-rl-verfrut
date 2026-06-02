@@ -237,6 +237,21 @@ function abrirCapacitacionRetroactiva() {
   _mostrarModalBusquedaCapacitaciones();
 }
 
+// Helper: normaliza una hora a formato HH:MM
+// Sheets devuelve horas como "1899-12-30T11:38:36.000Z" (epoch de Sheets)
+function _fmtHoraCap(h) {
+  if (!h) return '';
+  const s = String(h);
+  // Caso epoch Sheets: 1899-12-30TXX:XX:XX
+  if (s.indexOf('1899-12-30T') === 0) return s.substring(11, 16);
+  // Caso ISO normal: YYYY-MM-DDTXX:XX:XX
+  const m = s.match(/T(\d{2}:\d{2})/);
+  if (m) return m[1];
+  // Caso ya en HH:MM
+  if (/^\d{1,2}:\d{2}/.test(s)) return s.substring(0, 5);
+  return s;
+}
+
 function _mostrarModalBusquedaCapacitaciones() {
   let overlay = document.getElementById('modalRegenOverlay');
   if (overlay) overlay.remove();
@@ -322,8 +337,8 @@ async function _ejecutarBusquedaCapacitaciones() {
           fecha:             row.FECHA || row.fecha || desde,
           tema:              row.TEMA || row.tema || '',
           lugar:             row.LUGAR || row.lugar || '',
-          horaInicio:        row.HORA_INICIO || row.horaInicio || '',
-          horaFin:           row.HORA_FIN || row.horaFin || '',
+          horaInicio:        _fmtHoraCap(row.HORA_INICIO || row.horaInicio || ''),
+          horaFin:           _fmtHoraCap(row.HORA_FIN || row.horaFin || ''),
           horas:             row.HORAS || row.horas || row.totalHoras || '',
           capacitadorDni:    row.CAPACITADOR_DNI || row.capacitadorDni || '',
           capacitadorNombre: row.CAPACITADOR_NOMBRE || row.capacitadorNombre || '',
@@ -418,6 +433,41 @@ async function regenerarFormatoCapacitacion(cap) {
     return;
   }
 
+  // Determinar responsable del registro
+  let respDni    = cap.capacitadorDni    || '';
+  let respNombre = cap.capacitadorNombre || '';
+  let respCargo  = cap.capacitadorCargo  || '';
+
+  // Si el capacitador original no tiene DNI, pedírselo al usuario que regenera
+  if (!respDni || !respNombre) {
+    const dniInput = (prompt('🔍 Ingresa el DNI del responsable del registro (debe existir en BD_Supervisores):') || '').trim();
+    if (!dniInput) return;
+    if (!/^\d{7,8}$/.test(dniInput)) {
+      alert('❌ DNI inválido. Debe tener 7 u 8 dígitos.');
+      return;
+    }
+    // Buscar supervisor por DNI
+    try {
+      const r = await apiGet({ action: 'getSupervisores' });
+      if (r.success && Array.isArray(r.data)) {
+        const sup = r.data.find(function(s){ return String(s.dni) === dniInput; });
+        if (!sup) {
+          alert('❌ DNI ' + dniInput + ' no encontrado en BD_Supervisores');
+          return;
+        }
+        respDni    = String(sup.dni);
+        respNombre = sup.nombre || '';
+        respCargo  = sup.cargo || '';
+      } else {
+        alert('❌ No se pudo cargar la base de supervisores');
+        return;
+      }
+    } catch(e) {
+      alert('❌ Error buscando supervisor: ' + e.message);
+      return;
+    }
+  }
+
   // Backup de campos DOM y asistentes globales
   const backup = {
     empresa:     v('capEmpresa'),
@@ -434,7 +484,7 @@ async function regenerarFormatoCapacitacion(cap) {
   };
 
   try {
-    // Setear campos con datos antiguos (responsable = capacitador como fallback)
+    // Setear campos con datos antiguos
     sv('capEmpresa',     cap.empresa);
     sv('capFecha',       cap.fecha);
     sv('capTema',        cap.tema);
@@ -442,9 +492,9 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capHoraInicio',  cap.horaInicio);
     sv('capHoraTermino', cap.horaFin);
     sv('capHoras',       cap.horas);
-    sv('capRespDni',     cap.capacitadorDni);
-    sv('capRespNombre',  cap.capacitadorNombre);
-    sv('capRespCargo',   cap.capacitadorCargo);
+    sv('capRespDni',     respDni);
+    sv('capRespNombre',  respNombre);
+    sv('capRespCargo',   respCargo);
 
     asistentes = cap.asistentes.slice();
 
