@@ -732,15 +732,20 @@ async function procesarQR(texto) {
   await procesarDni(match[1]);
 }
 
+// _DEDUPE_ASISTENTES_V1 — 3 capas de defensa contra duplicados
 async function procesarDni(dni) {
+  // Normalización defensiva: siempre string limpio
+  dni = String(dni || '').trim();
+  if (!dni || !/^\d{7,8}$/.test(dni)) return;
+
   const now = Date.now();
 
-  // Anti-duplicado: cooldown de 3 segundos por DNI
+  // CAPA 1: Cooldown de 3 segundos por DNI (anti-rebote del lector QR)
   if (_dniCooldown[dni] && (now - _dniCooldown[dni]) < COOLDOWN_MS) return;
   _dniCooldown[dni] = now;
 
-  // Ya está en la lista
-  if (asistentes.find(a => a.dni === dni)) {
+  // CAPA 2a: ¿Ya está en la lista? (chequeo previo al await)
+  if (asistentes.some(a => String(a.dni) === dni)) {
     mostrarFeedback('dup', `⚠️ DNI ${dni} ya está en la lista`);
     beep(false); vibrar([100, 50, 100]);
     return;
@@ -749,6 +754,15 @@ async function procesarDni(dni) {
   mostrarFeedback('ok', `🔍 Buscando DNI ${dni}...`);
   try {
     const d = await apiGet({ action: 'buscarTrabajador', q: dni, empresa: 'AMBAS' });
+
+    // CAPA 2b: Re-chequeo POST-await (race condition safe)
+    // Otro escaneo del mismo DNI pudo agregarlo mientras esperábamos la API.
+    if (asistentes.some(a => String(a.dni) === dni)) {
+      mostrarFeedback('dup', `⚠️ DNI ${dni} ya está en la lista (race)`);
+      beep(false); vibrar([100, 50, 100]);
+      return;
+    }
+
     if (d.success && d.data && d.data.length) {
       const t = d.data[0];
       agregarAsistente({ dni, nombre: t.nombre || '', empresa: t.empresa || '', cargo: t.cargo || '', sexo: t.sexo || '' });
@@ -775,7 +789,17 @@ async function buscarDniManual() {
 
 /* ─────────────────────── LISTA DE ASISTENTES ─────────────────────── */
 function agregarAsistente(t) {
-  asistentes.push({ n: asistentes.length + 1, ...t });
+  // CAPA 3: Última red de defensa contra duplicados
+  const dni = String(t && t.dni || '').trim();
+  if (!dni) {
+    console.warn('[agregarAsistente] DNI vacío, ignorando:', t);
+    return;
+  }
+  if (asistentes.some(a => String(a.dni) === dni)) {
+    console.warn('[agregarAsistente] Duplicado bloqueado:', dni);
+    return;
+  }
+  asistentes.push({ n: asistentes.length + 1, ...t, dni: dni });
   renderLista();
 }
 
@@ -935,7 +959,18 @@ function _buildBody() {
     trabajadoresProgramados: _trabajadoresProgramados,
     totalFormatos:          _totalFormatos
   };
-  const asistentesEnvio = asistentes;
+  // CAPA 4: Dedupe final antes de enviar al backend
+  const _vistos = new Set();
+  const asistentesEnvio = asistentes.filter(a => {
+    const k = String(a.dni || '').trim();
+    if (!k || _vistos.has(k)) return false;
+    _vistos.add(k);
+    return true;
+  });
+  if (asistentesEnvio.length !== asistentes.length) {
+    console.warn('[_buildBody] Duplicados removidos antes de enviar:',
+      asistentes.length - asistentesEnvio.length);
+  }
   return { actividad, asistentesEnvio };
 }
 
