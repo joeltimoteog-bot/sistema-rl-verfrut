@@ -232,27 +232,82 @@ function abrirNuevaCapacitacion() {
   if (br) br.style.display = 'none';
 }
 
-async function abrirCapacitacionRetroactiva() {
-  // NUEVO: busca capacitaciones ya registradas en la fecha y permite regenerar formato R-SC-01
-  const rawFecha = (prompt('📅 Ingresa la fecha a buscar (DD/MM/AAAA):') || '').trim();
-  if (!rawFecha) return;
-  const mF = rawFecha.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!mF) { alert('❌ Formato incorrecto. Usa DD/MM/AAAA'); return; }
-  const dia = parseInt(mF[1]), mes = parseInt(mF[2]) - 1, anio = parseInt(mF[3]);
-  const fechaISO = `${anio}-${String(mes + 1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
+function abrirCapacitacionRetroactiva() {
+  // NUEVO UI: abre modal con formulario Desde/Hasta + boton Buscar
+  _mostrarModalBusquedaCapacitaciones();
+}
+
+function _mostrarModalBusquedaCapacitaciones() {
+  let overlay = document.getElementById('modalRegenOverlay');
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement('div');
+  overlay.id = 'modalRegenOverlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+
+  // Fecha por defecto: hoy
+  const hoy = new Date().toISOString().split('T')[0];
+
+  let html = '<div style="background:white;padding:24px;border-radius:12px;max-width:760px;max-height:85vh;overflow:auto;width:100%">';
+  html += '<h3 style="margin-top:0;margin-bottom:6px">📅 Regenerar formato R-SC-01</h3>';
+  html += '<p style="color:#475569;margin-bottom:16px;font-size:13px">Selecciona el rango de fechas para buscar capacitaciones registradas. Por cada una podrás regenerar el formato R-SC-01.</p>';
+
+  // Form de filtros
+  html += '<div style="display:flex;gap:12px;align-items:end;margin-bottom:16px;flex-wrap:wrap;padding:12px;background:#f8fafc;border-radius:8px">';
+  html += '<div><label style="display:block;font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">Fecha desde</label>';
+  html += '<input type="date" id="regenDesde" value="' + hoy + '" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px"></div>';
+  html += '<div><label style="display:block;font-size:12px;color:#64748b;margin-bottom:4px;font-weight:600">Fecha hasta</label>';
+  html += '<input type="date" id="regenHasta" value="' + hoy + '" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px"></div>';
+  html += '<button class="btn btn-primary" id="btnBuscarRegen" style="padding:8px 16px">🔍 Buscar</button>';
+  html += '</div>';
+
+  // Area de resultados
+  html += '<div id="resultadosRegen" style="border-top:1px solid #e2e8f0;padding-top:14px;min-height:80px">';
+  html += '<div style="color:#94a3b8;text-align:center;padding:20px;font-size:14px">Selecciona un rango de fechas y haz clic en Buscar</div>';
+  html += '</div>';
+
+  // Footer
+  html += '<div style="margin-top:14px;text-align:right"><button class="btn btn-gray" id="btnCerrarModalRegen">✖ Cerrar</button></div>';
+  html += '</div>';
+
+  overlay.innerHTML = html;
+  document.body.appendChild(overlay);
+
+  document.getElementById('btnCerrarModalRegen').onclick = () => overlay.remove();
+  document.getElementById('btnBuscarRegen').onclick = () => _ejecutarBusquedaCapacitaciones();
+}
+
+async function _ejecutarBusquedaCapacitaciones() {
+  const desde = document.getElementById('regenDesde').value;
+  const hasta = document.getElementById('regenHasta').value;
+  const cont  = document.getElementById('resultadosRegen');
+
+  if (!desde || !hasta) {
+    cont.innerHTML = '<div style="color:#dc2626;padding:14px;background:#fef2f2;border-radius:6px">❌ Selecciona ambas fechas</div>';
+    return;
+  }
+  if (desde > hasta) {
+    cont.innerHTML = '<div style="color:#dc2626;padding:14px;background:#fef2f2;border-radius:6px">❌ La fecha desde no puede ser mayor que hasta</div>';
+    return;
+  }
+
+  cont.innerHTML = '<div style="color:#64748b;padding:14px;text-align:center"><span class="spin"></span> Buscando capacitaciones...</div>';
 
   try {
     const r = await apiPost({
       action: 'exportarCapacitaciones',
-      desde: fechaISO,
-      hasta: fechaISO,
+      desde: desde,
+      hasta: hasta,
       empresa: '',
       usuario: USER.usuario,
       rol: USER.rol
     });
-    if (!r.success) { alert('❌ ' + (r.error || 'Error al buscar')); return; }
+    if (!r.success) {
+      cont.innerHTML = '<div style="color:#dc2626;padding:14px;background:#fef2f2;border-radius:6px">❌ ' + (r.error || 'Error al buscar') + '</div>';
+      return;
+    }
     if (!r.data || !r.data.length) {
-      alert('⚠️ No se encontraron capacitaciones registradas el ' + rawFecha);
+      cont.innerHTML = '<div style="color:#92400e;padding:14px;background:#fffbeb;border-radius:6px">⚠️ No se encontraron capacitaciones en ese rango</div>';
       return;
     }
 
@@ -264,7 +319,7 @@ async function abrirCapacitacionRetroactiva() {
         grupos[id] = {
           id,
           empresa:           row.EMPRESA || row.empresa || '',
-          fecha:             row.FECHA || row.fecha || fechaISO,
+          fecha:             row.FECHA || row.fecha || desde,
           tema:              row.TEMA || row.tema || '',
           lugar:             row.LUGAR || row.lugar || '',
           horaInicio:        row.HORA_INICIO || row.horaInicio || '',
@@ -285,9 +340,33 @@ async function abrirCapacitacionRetroactiva() {
       });
     });
 
-    _mostrarListaCapacitacionesAntiguas(Object.values(grupos), rawFecha);
+    const lista = Object.values(grupos);
+
+    // Render resultados
+    let html = '<p style="color:#475569;margin-bottom:12px;font-size:14px">Se encontraron <b>' + lista.length + '</b> capacitación(es). Haz clic en una para regenerar el formato R-SC-01.</p>';
+
+    lista.forEach((c, i) => {
+      html += '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:10px;background:#f8fafc">';
+      html += '<div style="font-weight:600;font-size:14px;margin-bottom:6px;color:#0f172a">' + (c.tema || '(sin tema)') + '</div>';
+      html += '<div style="font-size:12px;color:#64748b;margin-bottom:10px;line-height:1.6">';
+      html += '📅 <b>' + (c.fecha || '—') + '</b> · 🏢 ' + (c.empresa || '—') + ' · 📍 ' + (c.lugar || '—');
+      html += '<br>⏰ ' + (c.horaInicio || '—') + ' a ' + (c.horaFin || '—') + ' · 👥 <b>' + c.asistentes.length + '</b> asistentes';
+      html += '</div>';
+      html += '<button class="btn btn-primary" data-idx="' + i + '" style="font-size:13px;padding:8px 14px">📄 Regenerar formato R-SC-01</button>';
+      html += '</div>';
+    });
+
+    cont.innerHTML = html;
+    window._capacitacionesEncontradas = lista;
+
+    cont.querySelectorAll('button[data-idx]').forEach(btn => {
+      btn.onclick = () => {
+        const idx = parseInt(btn.dataset.idx);
+        regenerarFormatoCapacitacion(window._capacitacionesEncontradas[idx]);
+      };
+    });
   } catch(e) {
-    alert('❌ Error: ' + e.message);
+    cont.innerHTML = '<div style="color:#dc2626;padding:14px;background:#fef2f2;border-radius:6px">❌ Error: ' + e.message + '</div>';
   }
 }
 
@@ -1469,3 +1548,5 @@ window.continuarAPaso1              = continuarAPaso1;
 window.actualizarProgresoAsistentes = actualizarProgresoAsistentes;
 window.generarPDFsFormatos          = generarPDFsFormatos;
 window.regenerarFormatoCapacitacion = regenerarFormatoCapacitacion;
+window._mostrarModalBusquedaCapacitaciones = _mostrarModalBusquedaCapacitaciones;
+window._ejecutarBusquedaCapacitaciones = _ejecutarBusquedaCapacitaciones;
