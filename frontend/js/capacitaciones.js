@@ -1234,7 +1234,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
-      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 10 },
+      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 8 },
       columnStyles: { 0:{cellWidth:12}, 1:{cellWidth:25}, 2:{cellWidth:75}, 3:{cellWidth:55}, 4:{cellWidth:23} }
     });
     y = doc.lastAutoTable.finalY;
@@ -1259,8 +1259,8 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       body: filasPart,
       theme: 'grid',
       headStyles: { ...sCabHead },
-      styles: { ...sBorder, cellPadding: 0.7, textColor: C.negro },
-      bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 7 },
+      styles: { ...sBorder, cellPadding: 0.5, textColor: C.negro }, /* _FIX_RESPONSABLE_PAG1_V1 */
+      bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 6 },
       columnStyles: {
         0: { cellWidth: 8 }, 1: { cellWidth: 20 },
         2: { cellWidth: 80, halign: 'left' }, 3: { cellWidth: 35, halign: 'left' },
@@ -1291,12 +1291,15 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
-      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 10 },
+      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 8 },
       columnStyles: { 0:{cellWidth:12}, 1:{cellWidth:25}, 2:{cellWidth:75}, 3:{cellWidth:55}, 4:{cellWidth:23} }
     });
 
-    // ── Forzar 1 sola página ──
-    while (doc.internal.getNumberOfPages() > 1) doc.deletePage(doc.internal.getNumberOfPages());
+    // ── _FIX_RESPONSABLE_PAG1_V1: NO borrar páginas extra ──
+    // El antiguo while(deletePage) borraba la fila del responsable cuando se
+    // desbordaba. Con los tamaños reducidos arriba debería caber siempre en 1
+    // página, pero si por algún caso edge se desborda, mejor 2 páginas que
+    // un PDF roto sin responsable.
 
     // ── Footer ──
     doc.setPage(1);
