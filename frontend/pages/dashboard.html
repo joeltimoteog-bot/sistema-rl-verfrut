@@ -14,6 +14,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&amp;family=Barlow+Condensed:wght@700;800;900&amp;display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
@@ -1871,8 +1872,10 @@ function renderVisitas(data) {
         }
       }
       const _pctColor = _pctAv >= 100 ? '#16a34a' : (_pctAv >= 50 ? '#d97706' : '#dc2626');
-      const btnVer    = `<button onclick="verInformeGuardado(${i})" style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📄 Ver</button>`;
-      const btnEditar = puedeEditar ? `<button onclick="editarVisita(${i})" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button>` : '';
+      const btnVer      = `<button onclick="verInformeGuardado(${i})" style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">📄 Ver</button>`;
+      const btnPDF      = `<button onclick="descargarPDFVisita(${i})" style="background:#1a7f4b;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer" title="Descargar PDF">📥 PDF</button>`;
+      const btnReenviar = `<button onclick="reenviarInformeVisita(${i})" style="background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer" title="Reenviar por correo">📧 Reenviar</button>`;
+      const btnEditar   = puedeEditar ? `<button onclick="editarVisita(${i})" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button>` : '';
       const puedeEliminar = ADMINS_ELIMINAR_VISITA.includes(String(USER.usuario||'').toLowerCase());
       const btnEliminar = puedeEliminar ? `<button onclick="eliminarVisitaConfirmada(${i})" style="background:#dc2626;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">🗑️ Eliminar</button>` : '';
       const escT = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -1886,7 +1889,7 @@ function renderVisitas(data) {
         <td>${escT(v.semana||'—')}</td>
         <td><span style="font-size:10px;font-weight:700;color:${colorEstado}">${estado}</span></td>
         <td style="font-weight:700;color:${_pctColor}">${_pctAv}%</td>
-        <td style="display:flex;gap:4px;flex-wrap:wrap">${btnVer}${btnEditar}${btnEliminar}</td>
+        <td style="display:flex;gap:4px;flex-wrap:wrap">${btnVer}${btnPDF}${btnReenviar}${btnEditar}${btnEliminar}</td>
       </tr>`;
     }).join('');
   }, 0);
@@ -2521,7 +2524,39 @@ async function guardarInformeEnAzure() {
     const htmlDoc = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">` +
       `<title>Informe Visita Campo</title></head>` +
       `<body style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:20px">` +
-      contenido + `</body></html>`;
+      contenido + `
+<!-- _VISITAS_FIXES_V1 — Modal Reenviar Visita -->
+<div id="mReenvioVisita" class="md" style="display:none">
+  <div class="md-c" style="max-width:520px">
+    <div class="md-h" style="background:#7c3aed;color:#fff">
+      <span>📧 Reenviar Informe de Visita</span>
+      <button class="md-x" onclick="cerrar('mReenvioVisita')" style="color:#fff">×</button>
+    </div>
+    <div class="md-b">
+      <div style="background:#f1f5f9;padding:10px;border-radius:6px;margin-bottom:14px;font-size:12px">
+        <b>Informe:</b> <span id="reenvioVisitaInfo">—</span>
+      </div>
+      <div class="fc"><label>Para *</label>
+        <input type="text" id="reenvioVisitaPara" placeholder="email1@correo.com;email2@correo.com" style="width:100%">
+      </div>
+      <div class="fc" style="margin-top:10px"><label>CC (opcional)</label>
+        <input type="text" id="reenvioVisitaCC" placeholder="cc@correo.com" style="width:100%">
+      </div>
+      <div class="fc" style="margin-top:10px"><label>Asunto *</label>
+        <input type="text" id="reenvioVisitaAsunto" style="width:100%">
+      </div>
+      <div style="background:#f0fdf4;padding:10px;border-radius:6px;margin-top:12px;font-size:11px;color:#166534">
+        💡 Al enviar, se abrirá Outlook con los destinatarios precargados. Recordá adjuntar el PDF del informe (descargalo con el botón 📥 PDF).
+      </div>
+    </div>
+    <div class="md-f" style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="cerrar('mReenvioVisita')" style="padding:9px 18px;background:#94a3b8;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>
+      <button onclick="ejecutarReenvioVisita()" style="padding:9px 18px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">📧 Abrir en Outlook</button>
+    </div>
+  </div>
+</div>
+
+</body></html>`;
 
     // Nombre estandarizado por N° de visita: garantiza que al re-subir un
     // informe editado el blob se sobreescriba (PUT con mismo path) en vez
@@ -7330,14 +7365,21 @@ let visitasFotos = [];
 let visitasData  = [];
 
 function calcularSemanaVisita() {
+  // _VISITAS_FIXES_V1 — Algoritmo ISO 8601 (lunes-domingo, semana 1 = la que contiene el primer jueves)
   const fi = document.getElementById('vFI').value;
   if (!fi) return;
-  const d = new Date(fi + 'T00:00:00');
-  // Semana del año
-  const start = new Date(d.getFullYear(), 0, 1);
-  const diff = d - start + ((start.getDay() + 6) % 7) * 86400000;
-  const sem = Math.ceil(diff / (7 * 86400000));
-  document.getElementById('vSemana').value = sem;
+  document.getElementById('vSemana').value = _calcSemanaISO(fi);
+}
+
+function _calcSemanaISO(fechaStr) {
+  // Acepta 'YYYY-MM-DD' o Date
+  const parts = String(fechaStr).split('-');
+  if (parts.length < 3) return '';
+  const d = new Date(Date.UTC(+parts[0], +parts[1]-1, +parts[2]));
+  const dayNum = d.getUTCDay() || 7;          // Lun=1, Dom=7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);  // ajustar al jueves de esa semana
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
 }
 
 function autoFillFundoReemplazo() {
@@ -7581,6 +7623,29 @@ function quitarFotoVisita(el) {
 }
 
 async function guardarVisitaSheets(datos) {
+  // _VISITAS_PDF_AZURE_V1 — Subir fotos + generar y subir PDF EN PARALELO
+  const t0 = performance.now();
+  let fotosUrls = [];
+  let enlacePDF = '';
+
+  const tsLote = Date.now();
+
+  // Iniciar AMBAS operaciones en paralelo: fotos y PDF
+  const promFotos = (visitasFotos && visitasFotos.length)
+    ? (mostrarToast('⏳ Subiendo ' + visitasFotos.length + ' foto(s) y generando PDF...', 'info'),
+       subirFotosVisitaAzure(tsLote).catch(e => { console.error('[fotos]', e); return []; }))
+    : Promise.resolve([]);
+
+  const promPDF = _generarYSubirPDFInforme(datos, tsLote)
+    .catch(e => { console.error('[pdf]', e); return ''; });
+
+  const [resFotos, resPDF] = await Promise.all([promFotos, promPDF]);
+  fotosUrls = resFotos || [];
+  enlacePDF = resPDF || '';
+
+  const elapsed = Math.round(performance.now() - t0);
+  console.log('[guardarVisitaSheets] paralelo OK: fotos=' + fotosUrls.length + ' pdf=' + (enlacePDF?'sí':'no') + ' en ' + elapsed + 'ms');
+
   const payload = {
     action:          'saveVisita',
     empresa:         datos.empresa,
@@ -7601,7 +7666,9 @@ async function guardarVisitaSheets(datos) {
     compromisos:     datos.compromisos,
     observaciones:   datos.observaciones,
     motivo:          datos.motivo,
-    fotos:           datos.fotos,
+    fotos:           fotosUrls.join('|'),
+    fotos_urls:      fotosUrls,
+    enlace_informe:  enlacePDF,
     registrado_por:  USER.nombre || USER.usuario
   };
   const d = await apiPost(payload);
@@ -7849,7 +7916,271 @@ function editarVisita(idx) {
         }
       }
     }
+    // _VISITAS_FIXES_V1 — Cargar fotos previas (si las hay) desde URLs en Azure Blob
+    _cargarFotosEnEdicion(v);
   }, 150);
+}
+
+// ════════════════════════════════════════════════════════════════
+// _VISITAS_FIXES_V1 — Helpers nuevos
+// ════════════════════════════════════════════════════════════════
+
+/**
+ * _VISITAS_PDF_AZURE_V1
+ * Genera el PDF del informe de visita y lo sube a Azure Blob.
+ * Devuelve la URL pública del PDF, o '' si falla.
+ */
+async function _generarYSubirPDFInforme(datos, ts) {
+  try {
+    if (typeof html2pdf === 'undefined') {
+      console.warn('[PDF] html2pdf no cargado, saltando');
+      return '';
+    }
+    await _cargarLogoBase64();
+
+    // Las fotos vienen en visitasFotos con .data (base64) o .url (previas)
+    const fotosParaHTML = (visitasFotos || []).map(f => ({
+      data: f.data || f.url || '',
+      url:  f.url  || ''
+    }));
+
+    const logo = datos.empresa === 'RAPEL' ? (typeof LOGO_RAPEL !== 'undefined' ? LOGO_RAPEL : '')
+                                            : (typeof LOGO_VERFRUT !== 'undefined' ? LOGO_VERFRUT : '');
+
+    const html = generarHTMLInforme({
+      logo: logo,
+      empresa: datos.empresa || '',
+      sup: datos.sup || '',
+      dni: datos.dni || '',
+      correo: datos.correo || '',
+      fundo: datos.fundo || '',
+      punto: datos.punto || '',
+      fi: datos.fi || '',
+      ff: datos.ff || '',
+      semana: datos.semana || '',
+      fechaInf: datos.fechaInf || '',
+      paraNombre: datos.paraNombre || '',
+      paraCargo: datos.paraCargo || '',
+      asunto: datos.asunto || '',
+      desarrollo: datos.desarrollo || '',
+      rutas: datos.rutas || '',
+      acciones: datos.acciones || '',
+      compromisos: datos.compromisos || '',
+      observaciones: datos.observaciones || '',
+      motivo: datos.motivo || '',
+      fotos: fotosParaHTML
+    });
+
+    // Crear contenedor temporal off-screen para html2pdf
+    const cont = document.createElement('div');
+    cont.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;background:#fff';
+    cont.innerHTML = html;
+    document.body.appendChild(cont);
+
+    const opt = {
+      margin:       10,
+      filename:     'informe.pdf',
+      image:        { type: 'jpeg', quality: 0.92 },
+      html2canvas:  { scale: 1.5, useCORS: true, allowTaint: true, logging: false },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    const pdfBlob = await html2pdf().set(opt).from(cont).outputPdf('blob');
+    document.body.removeChild(cont);
+
+    // Convertir blob a base64
+    const base64 = await new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload  = () => res(reader.result.split(',')[1]);
+      reader.onerror = rej;
+      reader.readAsDataURL(pdfBlob);
+    });
+
+    // Subir a Azure
+    const nombre = 'informe_visita_' + (datos.empresa||'').replace(/[^a-zA-Z0-9]/g,'') + '_'
+                 + (datos.fundo||'').replace(/[^a-zA-Z0-9]/g,'') + '_sem' + (datos.semana||'')
+                 + '_' + (ts||Date.now()) + '.pdf';
+    const resp = await apiPost({
+      action:   'subirArchivoAzure',
+      base64:   base64,
+      nombre:   nombre,
+      mimeType: 'application/pdf',
+      carpeta:  'visitas-campo'
+    });
+    if (resp && resp.success && resp.url) {
+      console.log('[PDF] subido OK:', resp.url);
+      return resp.url;
+    }
+    console.warn('[PDF] sin url en respuesta:', resp);
+    return '';
+  } catch(e) {
+    console.error('[PDF] error:', e);
+    return '';
+  }
+}
+
+/**
+ * Sube las fotos del array visitasFotos a Azure Blob via GAS.
+ * Devuelve array de URLs públicas. PARALELO (mucho más rápido).
+ */
+async function subirFotosVisitaAzure(nroVisita) {
+  if (!visitasFotos || !visitasFotos.length) return [];
+  const ts = nroVisita || Date.now();
+  // PARALELO: subir todas las fotos al mismo tiempo
+  const proms = visitasFotos.map(async (foto, i) => {
+    // Foto previa con URL ya en Azure → reutilizar
+    if (foto && foto.url) return { idx: i, url: foto.url };
+    if (!foto || !foto.data) return { idx: i, url: null };
+    try {
+      const nombre = 'visita_' + ts + '_' + (i+1) + '.jpg';
+      const resp = await apiPost({
+        action:   'subirArchivoAzure',
+        base64:   foto.data,
+        nombre:   nombre,
+        mimeType: 'image/jpeg',
+        carpeta:  'visitas-campo'
+      });
+      if (resp && resp.success && resp.url) return { idx: i, url: resp.url };
+      console.warn('[subirFotosVisita] foto', i+1, 'sin url:', resp);
+      return { idx: i, url: null };
+    } catch(e) {
+      console.error('[subirFotosVisita] excepcion foto', i+1, e);
+      return { idx: i, url: null };
+    }
+  });
+  const results = await Promise.all(proms);
+  // Conservar orden y filtrar nulls
+  return results.sort((a,b)=>a.idx-b.idx).map(r=>r.url).filter(Boolean);
+}
+
+/**
+ * Carga las fotos previas de una visita (URLs en Azure Blob) en el preview
+ * del formulario para que el usuario las vea al editar.
+ */
+function _cargarFotosEnEdicion(v) {
+  visitasFotos = [];
+  const prev = document.getElementById('vFotosPreview');
+  const count = document.getElementById('vFotosCount');
+  if (!prev) return;
+  prev.innerHTML = '';
+
+  // Las URLs vienen en v.fotos_urls (array) o en v.fotos como string separado por |
+  let urls = [];
+  if (Array.isArray(v.fotos_urls)) urls = v.fotos_urls.filter(Boolean);
+  else if (typeof v.fotos === 'string' && v.fotos.indexOf('http') !== -1) {
+    urls = v.fotos.split('|').filter(Boolean);
+  }
+
+  if (!urls.length) {
+    if (count) count.textContent = '0 imagen(es) seleccionada(s)';
+    return;
+  }
+
+  urls.forEach((url, idx) => {
+    // Guardar como objeto con url para reutilizar al re-guardar
+    visitasFotos.push({ name: 'foto_previa_' + (idx+1), url: url });
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;display:inline-block';
+    wrap.innerHTML = `<img src="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:2px solid #1a7f4b" title="Foto previa">
+      <button onclick="quitarFotoVisita(this.parentElement)" style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:10px;cursor:pointer;line-height:18px;padding:0">✕</button>
+      <span style="position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);background:#1a7f4b;color:#fff;font-size:9px;padding:1px 6px;border-radius:8px;font-weight:700">PREVIA</span>`;
+    prev.appendChild(wrap);
+  });
+  if (count) count.textContent = visitasFotos.length + ' imagen(es) seleccionada(s) — incluyendo previas';
+}
+
+/**
+ * Descarga el informe de una visita como PDF.
+ * Reutiliza el HTML de verInformeGuardado y window.print().
+ */
+async function descargarPDFVisita(idx) {
+  const v = (window._visitasData || [])[idx];
+  if (!v) { mostrarToast('❌ No se encontraron datos del informe', 'error'); return; }
+
+  // _VISITAS_PDF_AZURE_V1 — Si ya tiene PDF en Azure, abrirlo directo (instantáneo)
+  const urlAzure = v.enlace_informe || '';
+  if (urlAzure && urlAzure.indexOf('http') === 0) {
+    console.log('[descargarPDF] abriendo PDF guardado en Azure:', urlAzure);
+    window.open(urlAzure, '_blank');
+    return;
+  }
+
+  // Fallback: regenerar al vuelo (para visitas viejas sin PDF guardado)
+  mostrarToast('⏳ Generando PDF (visita antigua sin PDF guardado)...', 'info');
+  await _cargarLogoBase64();
+
+  // Parsear fotos previas si las hay
+  let fotosUrls = [];
+  if (Array.isArray(v.fotos_urls)) fotosUrls = v.fotos_urls;
+  else if (typeof v.fotos === 'string' && v.fotos.indexOf('http') !== -1) {
+    fotosUrls = v.fotos.split('|').filter(Boolean);
+  }
+  const fotos = fotosUrls.map(url => ({ url: url, data: url }));
+
+  const logo = v.empresa === 'RAPEL' ? LOGO_RAPEL : LOGO_VERFRUT;
+  const html = generarHTMLInforme({
+    logo,
+    empresa: v.empresa||'', sup: v.supervisor||'', dni: v.dni||'',
+    correo: v.correo||'', fundo: v.fundo||v.sector||'', punto: v.punto||'',
+    fi: v.fecha_inicio||'', ff: v.fecha_fin||'', semana: v.semana||'',
+    fechaInf: v.fecha_informe||'', paraNombre: v.para||'', paraCargo: '',
+    asunto: v.asunto||'', desarrollo: v.desarrollo||'', rutas: v.rutas||'',
+    acciones: v.acciones||'', compromisos: v.compromisos||'',
+    observaciones: v.observaciones||'', motivo: v.motivo_retraso||'',
+    fotos: fotos
+  });
+
+  // Abrir ventana nueva con el HTML y disparar print
+  const titulo = 'Informe_Visita_Sem' + (v.semana||'') + '_' + (v.empresa||'') + '_' + (v.fundo||v.sector||'').replace(/[^a-zA-Z0-9]/g, '_');
+  const w = window.open('', '_blank');
+  if (!w) { mostrarToast('❌ Permití pop-ups para descargar el PDF', 'error'); return; }
+  const _scriptPrint = '\x3cscript\x3ewindow.onload=function(){setTimeout(function(){window.print();},400);};\x3c/script\x3e';
+  w.document.write('<!DOCTYPE html><html><head><title>' + titulo + '</title><meta charset="utf-8"><style>@media print { @page { margin: 15mm; } body { margin: 0; } }</style></head><body>' + html + _scriptPrint + '</body></html>');
+  w.document.close();
+}
+
+/**
+ * Reenvía el informe abriendo Outlook con destinatario editable.
+ */
+function reenviarInformeVisita(idx) {
+  const v = (window._visitasData || [])[idx];
+  if (!v) { mostrarToast('❌ No se encontraron datos', 'error'); return; }
+  window._reenvioVisitaIdx = idx;
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  const setT = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setT('reenvioVisitaInfo', 'Sem ' + (v.semana||'?') + ' — ' + (v.empresa||'') + ' — ' + (v.fundo||v.sector||''));
+  // Destinatarios por defecto
+  const ccFundo = (typeof CC_FUNDO !== 'undefined' && CC_FUNDO[v.fundo||v.sector]) ? CC_FUNDO[v.fundo||v.sector] : '';
+  set('reenvioVisitaPara', 'ovilela@verfrut.pe;jchavez@verfrut.pe;jtimoteo@verfrut.pe');
+  set('reenvioVisitaCC',   ccFundo);
+  set('reenvioVisitaAsunto', 'Informe Visita Campo Semana ' + (v.semana||'') + ' - ' + (v.empresa||'') + ' - ' + (v.fundo||v.sector||''));
+  abrir('mReenvioVisita');
+}
+
+function ejecutarReenvioVisita() {
+  const idx = window._reenvioVisitaIdx;
+  const v = (window._visitasData || [])[idx];
+  if (!v) return;
+  const para = (document.getElementById('reenvioVisitaPara').value || '').trim();
+  const cc   = (document.getElementById('reenvioVisitaCC').value   || '').trim();
+  const asun = (document.getElementById('reenvioVisitaAsunto').value || '').trim();
+  if (!para) { mostrarToast('❌ Ingresá al menos un destinatario', 'error'); return; }
+  // _VISITAS_PDF_AZURE_V1 — Incluir link al PDF si existe
+  const linkPDF = v.enlace_informe || '';
+  const linkLine = linkPDF
+    ? '\n\nEnlace al informe (PDF): ' + linkPDF + '\n'
+    : '';
+  const cuerpo = (typeof saludoHora === 'function' ? saludoHora() : 'Buenas tardes') + '.\n\n' +
+    'Se adjunta el informe de las visitas realizadas a las áreas/rutas de campo ' +
+    'correspondientes al período indicado, para su conocimiento y fines pertinentes.' +
+    linkLine + '\n' +
+    'Adj.: Informe de Visitas de Campo';
+  const url = 'mailto:' + encodeURIComponent(para) +
+    '?subject=' + encodeURIComponent(asun) +
+    '&body=' + encodeURIComponent(cuerpo) +
+    (cc ? '&cc=' + encodeURIComponent(cc) : '');
+  cerrar('mReenvioVisita');
+  setTimeout(() => { window.location.href = url; }, 100);
 }
 
 // ══════════════════ ELIMINAR VISITA (solo admins) ══════════════════
