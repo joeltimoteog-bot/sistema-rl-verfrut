@@ -339,7 +339,7 @@ async function _ejecutarBusquedaCapacitaciones() {
           lugar:             row.LUGAR || row.lugar || '',
           horaInicio:        _fmtHoraCap(row.HORA_INICIO || row.horaInicio || ''),
           horaFin:           _fmtHoraCap(row.HORA_FIN || row.horaFin || ''),
-          horas:             row.HORAS || row.horas || row.totalHoras || _calcHorasDesde(_fmtHoraCap(row.HORA_INICIO||row.horaInicio||''), _fmtHoraCap(row.HORA_FIN||row.horaFin||'')),
+          horas:             row.HORAS || row.horas || row.totalHoras || '',
           capacitadorDni:    row.CAPACITADOR_DNI || row.capacitadorDni || '',
           capacitadorNombre: row.CAPACITADOR_NOMBRE || row.capacitadorNombre || '',
           capacitadorCargo:  row.CAPACITADOR_CARGO || row.capacitadorCargo || '',
@@ -348,8 +348,8 @@ async function _ejecutarBusquedaCapacitaciones() {
       }
       grupos[id].asistentes.push({
         dni:     row.DNI || row.dni || '',
-        nombre:  row.APELLIDOS_Y_NOMBRES || row.NOMBRE || row.nombre || row.nombres || '',
-        cargo:   row.CARGO_AREA || row.CARGO || row.cargo || '',
+        nombre:  row.NOMBRE || row.nombre || '',
+        cargo:   row.CARGO || row.cargo || '',
         sexo:    row.SEXO || row.sexo || '',
         empresa: row.EMPRESA || row.empresa || ''
       });
@@ -427,48 +427,42 @@ function _mostrarListaCapacitacionesAntiguas(capacitaciones, fechaTxt) {
   });
 }
 
-// RESPONSABLE DEL REGISTRO — siempre fijo (Lucia Castillo Celi)
-const _RESP_REGISTRO = {
-  dni:    '71732176',
-  nombre: 'CASTILLO CELI LUCIA GABRIELA',
-  cargo:  'ANALISTA DE GESTION HUMANA'
-};
-
 async function regenerarFormatoCapacitacion(cap) {
   if (!cap || !cap.asistentes || !cap.asistentes.length) {
     alert('❌ Esta capacitación no tiene asistentes para regenerar');
     return;
   }
 
-  // Determinar CAPACITADOR (quien dio la capacitación)
-  let capDni    = cap.capacitadorDni    || '';
-  let capNombre = cap.capacitadorNombre || '';
-  let capCargo  = cap.capacitadorCargo  || '';
+  // Determinar responsable del registro
+  let respDni    = cap.capacitadorDni    || '';
+  let respNombre = cap.capacitadorNombre || '';
+  let respCargo  = cap.capacitadorCargo  || '';
 
-  // Si la capacitación original no tiene datos del capacitador, pedirlos
-  if (!capDni || !capNombre) {
-    const dniInput = (prompt('🔍 Ingresa el DNI del CAPACITADOR (quien dictó la capacitación):') || '').trim();
+  // Si el capacitador original no tiene DNI, pedírselo al usuario que regenera
+  if (!respDni || !respNombre) {
+    const dniInput = (prompt('🔍 Ingresa el DNI del responsable del registro:') || '').trim();
     if (!dniInput) return;
     if (!/^\d{7,8}$/.test(dniInput)) {
       alert('❌ DNI inválido. Debe tener 7 u 8 dígitos.');
       return;
     }
-    capDni = dniInput;
+    respDni = dniInput;
 
-    // Intentar autocompletar desde BD_Supervisores (tolerante a ceros iniciales)
+    // Intentar autocompletar desde BD_Supervisores (tolerante)
     let encontrado = false;
     try {
       const r = await apiGet({ action: 'getSupervisores' });
       if (r.success && Array.isArray(r.data)) {
+        // Búsqueda tolerante: trim + comparar quitando ceros iniciales
         const dniNorm = dniInput.replace(/^0+/, '');
         const sup = r.data.find(function(s){
           const sDni = String(s.dni || '').trim().replace(/^0+/, '');
           return sDni === dniNorm;
         });
         if (sup) {
-          capDni    = String(sup.dni).trim();
-          capNombre = String(sup.nombre || '').trim();
-          capCargo  = String(sup.cargo || '').trim();
+          respDni    = String(sup.dni).trim();
+          respNombre = String(sup.nombre || '').trim();
+          respCargo  = String(sup.cargo || '').trim();
           encontrado = true;
         }
       }
@@ -478,10 +472,18 @@ async function regenerarFormatoCapacitacion(cap) {
 
     // Si NO está en BD_Supervisores → pedir nombre y cargo manualmente
     if (!encontrado) {
-      capNombre = (prompt('⚠️ DNI ' + dniInput + ' no está en BD_Supervisores.\n\nIngresa el nombre completo del capacitador:') || '').trim();
-      if (!capNombre) { alert('❌ El nombre es obligatorio'); return; }
-      capCargo = (prompt('📋 Ingresa el cargo del capacitador:') || '').trim();
-      if (!capCargo) { alert('❌ El cargo es obligatorio'); return; }
+      const nombreDefault = (typeof USER !== 'undefined' && USER.nombre) ? USER.nombre : '';
+      respNombre = (prompt('⚠️ DNI ' + dniInput + ' no está en BD_Supervisores.\n\nIngresa el nombre completo del responsable:', nombreDefault) || '').trim();
+      if (!respNombre) {
+        alert('❌ El nombre es obligatorio');
+        return;
+      }
+      const cargoDefault = (typeof USER !== 'undefined' && USER.cargo) ? USER.cargo : '';
+      respCargo = (prompt('📋 Ingresa el cargo del responsable:', cargoDefault) || '').trim();
+      if (!respCargo) {
+        alert('❌ El cargo es obligatorio');
+        return;
+      }
     }
   }
 
@@ -494,9 +496,6 @@ async function regenerarFormatoCapacitacion(cap) {
     horaInicio:  v('capHoraInicio'),
     horaTermino: v('capHoraTermino'),
     horas:       v('capHoras'),
-    capDni:      v('capCapDni'),
-    capNombre:   v('capCapNombre'),
-    capCargo:    v('capCapCargo'),
     respDni:     v('capRespDni'),
     respNombre:  v('capRespNombre'),
     respCargo:   v('capRespCargo'),
@@ -504,7 +503,7 @@ async function regenerarFormatoCapacitacion(cap) {
   };
 
   try {
-    // Datos generales de la actividad
+    // Setear campos con datos antiguos
     sv('capEmpresa',     cap.empresa);
     sv('capFecha',       cap.fecha);
     sv('capTema',        cap.tema);
@@ -512,16 +511,9 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capHoraInicio',  cap.horaInicio);
     sv('capHoraTermino', cap.horaFin);
     sv('capHoras',       cap.horas);
-
-    // CAPACITADOR (lo que el usuario ingresó o lo que vino de la BD)
-    sv('capCapDni',     capDni);
-    sv('capCapNombre',  capNombre);
-    sv('capCapCargo',   capCargo);
-
-    // RESPONSABLE DEL REGISTRO — SIEMPRE FIJO (Lucia Castillo Celi)
-    sv('capRespDni',     _RESP_REGISTRO.dni);
-    sv('capRespNombre',  _RESP_REGISTRO.nombre);
-    sv('capRespCargo',   _RESP_REGISTRO.cargo);
+    sv('capRespDni',     respDni);
+    sv('capRespNombre',  respNombre);
+    sv('capRespCargo',   respCargo);
 
     asistentes = cap.asistentes.slice();
 
@@ -535,9 +527,6 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capHoraInicio',  backup.horaInicio);
     sv('capHoraTermino', backup.horaTermino);
     sv('capHoras',       backup.horas);
-    sv('capCapDni',      backup.capDni);
-    sv('capCapNombre',   backup.capNombre);
-    sv('capCapCargo',    backup.capCargo);
     sv('capRespDni',     backup.respDni);
     sv('capRespNombre',  backup.respNombre);
     sv('capRespCargo',   backup.respCargo);
@@ -732,20 +721,15 @@ async function procesarQR(texto) {
   await procesarDni(match[1]);
 }
 
-// _DEDUPE_ASISTENTES_V1 — 3 capas de defensa contra duplicados
 async function procesarDni(dni) {
-  // Normalización defensiva: siempre string limpio
-  dni = String(dni || '').trim();
-  if (!dni || !/^\d{7,8}$/.test(dni)) return;
-
   const now = Date.now();
 
-  // CAPA 1: Cooldown de 3 segundos por DNI (anti-rebote del lector QR)
+  // Anti-duplicado: cooldown de 3 segundos por DNI
   if (_dniCooldown[dni] && (now - _dniCooldown[dni]) < COOLDOWN_MS) return;
   _dniCooldown[dni] = now;
 
-  // CAPA 2a: ¿Ya está en la lista? (chequeo previo al await)
-  if (asistentes.some(a => String(a.dni) === dni)) {
+  // Ya está en la lista
+  if (asistentes.find(a => a.dni === dni)) {
     mostrarFeedback('dup', `⚠️ DNI ${dni} ya está en la lista`);
     beep(false); vibrar([100, 50, 100]);
     return;
@@ -754,15 +738,6 @@ async function procesarDni(dni) {
   mostrarFeedback('ok', `🔍 Buscando DNI ${dni}...`);
   try {
     const d = await apiGet({ action: 'buscarTrabajador', q: dni, empresa: 'AMBAS' });
-
-    // CAPA 2b: Re-chequeo POST-await (race condition safe)
-    // Otro escaneo del mismo DNI pudo agregarlo mientras esperábamos la API.
-    if (asistentes.some(a => String(a.dni) === dni)) {
-      mostrarFeedback('dup', `⚠️ DNI ${dni} ya está en la lista (race)`);
-      beep(false); vibrar([100, 50, 100]);
-      return;
-    }
-
     if (d.success && d.data && d.data.length) {
       const t = d.data[0];
       agregarAsistente({ dni, nombre: t.nombre || '', empresa: t.empresa || '', cargo: t.cargo || '', sexo: t.sexo || '' });
@@ -789,17 +764,7 @@ async function buscarDniManual() {
 
 /* ─────────────────────── LISTA DE ASISTENTES ─────────────────────── */
 function agregarAsistente(t) {
-  // CAPA 3: Última red de defensa contra duplicados
-  const dni = String(t && t.dni || '').trim();
-  if (!dni) {
-    console.warn('[agregarAsistente] DNI vacío, ignorando:', t);
-    return;
-  }
-  if (asistentes.some(a => String(a.dni) === dni)) {
-    console.warn('[agregarAsistente] Duplicado bloqueado:', dni);
-    return;
-  }
-  asistentes.push({ n: asistentes.length + 1, ...t, dni: dni });
+  asistentes.push({ n: asistentes.length + 1, ...t });
   renderLista();
 }
 
@@ -883,15 +848,6 @@ function agregarAsistenteManual() {
 }
 
 /* ─────────────────────── CALCULAR HORAS ─────────────────────── */
-function _calcHorasDesde(hi, ht) {
-  if (!hi || !ht) return '';
-  const a = String(hi).split(':').map(Number);
-  const b = String(ht).split(':').map(Number);
-  if (a.length < 2 || b.length < 2 || isNaN(a[0]) || isNaN(b[0])) return '';
-  const diff = (b[0] * 60 + b[1] - (a[0] * 60 + a[1])) / 60;
-  return diff > 0 ? diff.toFixed(1) : '';
-}
-
 function calcHoras() {
   const hi = v('capHoraInicio'), ht = v('capHoraTermino');
   if (!hi || !ht) return;
@@ -968,18 +924,7 @@ function _buildBody() {
     trabajadoresProgramados: _trabajadoresProgramados,
     totalFormatos:          _totalFormatos
   };
-  // CAPA 4: Dedupe final antes de enviar al backend
-  const _vistos = new Set();
-  const asistentesEnvio = asistentes.filter(a => {
-    const k = String(a.dni || '').trim();
-    if (!k || _vistos.has(k)) return false;
-    _vistos.add(k);
-    return true;
-  });
-  if (asistentesEnvio.length !== asistentes.length) {
-    console.warn('[_buildBody] Duplicados removidos antes de enviar:',
-      asistentes.length - asistentesEnvio.length);
-  }
+  const asistentesEnvio = asistentes;
   return { actividad, asistentesEnvio };
 }
 
@@ -1243,7 +1188,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
-      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 8 },
+      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 10 },
       columnStyles: { 0:{cellWidth:12}, 1:{cellWidth:25}, 2:{cellWidth:75}, 3:{cellWidth:55}, 4:{cellWidth:23} }
     });
     y = doc.lastAutoTable.finalY;
@@ -1268,8 +1213,8 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       body: filasPart,
       theme: 'grid',
       headStyles: { ...sCabHead },
-      styles: { ...sBorder, cellPadding: 0.5, textColor: C.negro }, /* _FIX_RESPONSABLE_PAG1_V1 */
-      bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 6 },
+      styles: { ...sBorder, cellPadding: 0.7, textColor: C.negro },
+      bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 7 },
       columnStyles: {
         0: { cellWidth: 8 }, 1: { cellWidth: 20 },
         2: { cellWidth: 80, halign: 'left' }, 3: { cellWidth: 35, halign: 'left' },
@@ -1300,15 +1245,12 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
-      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 8 },
+      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 10 },
       columnStyles: { 0:{cellWidth:12}, 1:{cellWidth:25}, 2:{cellWidth:75}, 3:{cellWidth:55}, 4:{cellWidth:23} }
     });
 
-    // ── _FIX_RESPONSABLE_PAG1_V1: NO borrar páginas extra ──
-    // El antiguo while(deletePage) borraba la fila del responsable cuando se
-    // desbordaba. Con los tamaños reducidos arriba debería caber siempre en 1
-    // página, pero si por algún caso edge se desborda, mejor 2 páginas que
-    // un PDF roto sin responsable.
+    // ── Forzar 1 sola página ──
+    while (doc.internal.getNumberOfPages() > 1) doc.deletePage(doc.internal.getNumberOfPages());
 
     // ── Footer ──
     doc.setPage(1);

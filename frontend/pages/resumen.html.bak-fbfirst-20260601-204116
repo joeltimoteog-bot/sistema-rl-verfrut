@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Resumen General | Sistema RL v3.1</title>
+<link rel="manifest" href="/sistema-rl-verfrut/manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="/sistema-rl-verfrut/frontend/images/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/sistema-rl-verfrut/frontend/images/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/sistema-rl-verfrut/frontend/images/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
+body{font-family:Barlow,sans-serif;background:var(--bg);color:var(--tx)}
+.sb{position:fixed;left:0;top:0;bottom:0;width:var(--sw);background:var(--azul);display:flex;flex-direction:column;z-index:100;transition:transform .3s ease}
+.sb-hdr{padding:20px 16px;border-bottom:1px solid rgba(255,255,255,.1)}
+.sb-logo{display:flex;align-items:center;gap:10px}
+.sb-ic{width:36px;height:36px;background:var(--rojo);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px}
+.sb-t{font-family:'Barlow Condensed',sans-serif;font-size:16px;font-weight:800;color:#fff;letter-spacing:1px}
+.sb-s{font-size:12px;color:rgba(255,255,255,.4)}
+.sb-usr{padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:9px}
+.av{width:32px;height:32px;border-radius:50%;background:var(--rojo);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;flex-shrink:0}
+.av-n{font-size:12px;font-weight:600;color:#fff} .av-r{font-size:10px;color:rgba(255,255,255,.4)}
+.nav{flex:1;padding:12px 8px;overflow-y:auto}
+.ns{font-size:11px;font-weight:700;letter-spacing:2px;color:rgba(255,255,255,.3);text-transform:uppercase;padding:0 8px;margin:12px 0 5px}
+.ni{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;color:rgba(255,255,255,.6);cursor:pointer;transition:all .2s;font-size:12px;font-weight:500;margin-bottom:1px;border:none;background:none;width:100%;text-align:left;text-decoration:none}
+.ni:hover{background:rgba(255,255,255,.1);color:#fff} .ni.on{background:var(--rojo);color:#fff}
+.ni .ic{font-size:14px;width:18px;text-align:center}
+.sb-ft{padding:12px 8px;border-top:1px solid rgba(255,255,255,.1)}
+.logout{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;color:rgba(255,255,255,.45);cursor:pointer;font-size:12px;font-weight:500;border:none;background:none;width:100%;transition:all .2s}
+.logout:hover{color:#fff;background:rgba(220,38,38,.3)}
+.main{margin-left:var(--sw);min-height:100vh;display:flex;flex-direction:column}
+.topbar{background:#fff;border-bottom:1px solid var(--bd);padding:13px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.tb-t{font-family:'Barlow Condensed',sans-serif;font-size:19px;font-weight:800;color:var(--azul);letter-spacing:1px}
+.tb-r{display:flex;align-items:center;gap:9px}
+.tb-f{font-size:11px;color:var(--gr)}
+.emp-b{padding:4px 12px;border-radius:20px;background:var(--rojo);color:#fff;font-size:10px;font-weight:700;letter-spacing:1px}
+.content{padding:22px;flex:1}
+.sg{display:grid;grid-template-columns:repeat(3,1fr);gap:13px;margin-bottom:22px}
+.sc{background:#fff;border-radius:11px;padding:16px;border:1px solid var(--bd);display:flex;align-items:center;gap:12px;transition:all .2s}
+.sc:hover{transform:translateY(-2px);box-shadow:0 5px 18px rgba(0,0,0,.07)}
+.sc-ic{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:19px;flex-shrink:0}
+.ia{background:#dbeafe} .ir{background:#fee2e2} .iv{background:#d1fae5} .in{background:#ffedd5}
+.sc-n{font-family:'Barlow Condensed',sans-serif;font-size:28px;font-weight:800;color:var(--azul);line-height:1}
+.sc-l{font-size:10px;color:var(--gr);font-weight:500;margin-top:3px}
+.card{background:#fff;border-radius:11px;border:1px solid var(--bd);overflow:hidden;margin-top:16px}
+.card-h{padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--bd);flex-wrap:wrap;gap:8px}
+.card-t{font-size:13px;font-weight:700;color:var(--azul)}
+.btn-n{padding:7px 16px;background:var(--rojo);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
+.btn-n:hover{background:#b91c1c}
+.filtros{padding:11px 20px;border-bottom:1px solid var(--bd);display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.fi{padding:7px 12px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc}
+.fi:focus{outline:none;border-color:var(--azul-c);background:#fff}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:600px}
+th{padding:9px 12px;text-align:left;font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--gr);text-transform:uppercase;background:#f8fafc;border-bottom:1px solid var(--bd);white-space:nowrap}
+td{padding:10px 12px;font-size:11px;border-bottom:1px solid #f1f5f9;white-space:nowrap}
+tr:hover td{background:#f8fafc} tr:last-child td{border-bottom:none}
+.bg{padding:3px 8px;border-radius:20px;font-size:10px;font-weight:700}
+.bp{background:#ffedd5;color:#c2410c} .bpr{background:#dbeafe;color:#1e40af} .brs{background:#d1fae5;color:#065f46}
+.brap{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}
+.bver{background:#eff6ff;color:#1e40af;border:1px solid #bfdbfe}
+.bam{background:#f5f3ff;color:#5b21b6;border:1px solid #ddd6fe}
+.btn-a{padding:4px 9px;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer;border:none;transition:all .2s;margin-right:2px}
+.bv{background:#dbeafe;color:#1e40af} .be{background:#fef9c3;color:#854d0e} .bd{background:#fee2e2;color:#991b1b}
+.bv:hover{background:#bfdbfe} .be:hover{background:#fef08a} .bd:hover{background:#fecaca}
+.empty{text-align:center;padding:32px;color:var(--gr);font-size:12px}
+.gg{display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-top:16px}
+.gc{background:#fff;border-radius:11px;border:1px solid var(--bd);padding:16px}
+.gc-t{font-size:12px;font-weight:700;color:var(--azul);margin-bottom:12px}
+.sup-card{background:#fff;border-radius:11px;border:1px solid var(--bd);padding:16px;margin-top:16px}
+.sup-t{font-size:13px;font-weight:700;color:var(--azul);margin-bottom:12px}
+.sup-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f1f5f9}
+.sup-row:last-child{border-bottom:none}
+.sup-n{font-size:12px;font-weight:600;color:var(--azul)}
+.sup-sts{display:flex;gap:14px}
+.sup-st .n{font-family:'Barlow Condensed',sans-serif;font-size:18px;font-weight:800;color:var(--azul);text-align:center}
+.sup-st .l{font-size:9px;color:var(--gr);text-transform:uppercase;letter-spacing:1px;text-align:center}
+/* MODAL */
+.ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:center;justify-content:center}
+.ov.on{display:flex}
+.modal{background:#fff;border-radius:14px;padding:28px;width:900px;max-width:96vw;max-height:92vh;overflow-y:auto;animation:pop .3s ease}
+@keyframes pop{from{opacity:0;transform:scale(.95)}to{opacity:1;transform:scale(1)}}
+.modal-t{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:var(--azul);margin-bottom:20px}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.fc{display:flex;flex-direction:column;gap:5px}
+.fc label{font-size:9px;font-weight:700;color:var(--azul);letter-spacing:1px;text-transform:uppercase}
+.fc input,.fc select,.fc textarea{padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc;transition:border-color .2s}
+.fc input:focus,.fc select:focus,.fc textarea:focus{outline:none;border-color:var(--azul-c);background:#fff}
+.fc textarea{resize:vertical;min-height:65px}
+.sep{font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;color:var(--azul);border-bottom:2px solid var(--bd);padding-bottom:5px;margin:15px 0 11px;letter-spacing:1px;text-transform:uppercase}
+.modal-ft{display:flex;gap:9px;justify-content:flex-end;margin-top:20px}
+.btn-cancel{padding:8px 20px;border:2px solid var(--bd);background:#fff;color:var(--gr);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer}
+.btn-save{padding:8px 20px;background:var(--azul);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer}
+.btn-save:hover{background:var(--azul-med)}
+.det-row{display:flex;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:12px}
+.det-l{width:170px;font-weight:600;color:var(--gr);flex-shrink:0}
+.det-v{color:var(--tx)}
+.hamburger{background:none;border:none;font-size:22px;cursor:pointer;color:var(--azul);padding:4px 8px;border-radius:6px;margin-right:8px}
+@media(max-width:768px){
+  .sb{transform:translateX(-100%);transition:transform .3s ease}
+  .sb.open{transform:translateX(0)}
+  .main{margin-left:0}
+  .sg{grid-template-columns:repeat(2,1fr)}
+  .gg{grid-template-columns:1fr}
+  .hamburger{display:flex}
+}
+@media(min-width:769px){.hamburger{display:none}}
+
+/* ══ RESUMEN EJECUTIVO ══ */
+.rej-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px}
+.rej-header h2{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:800;color:var(--azul);margin:0}
+.rej-header-r{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.kpis-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:20px}
+.kpi-card{background:#fff;border-radius:12px;padding:20px 16px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,.08);border-top:4px solid}
+.kpi-card.verde{border-top-color:#16a34a}
+.kpi-card.azul{border-top-color:#0a2463}
+.kpi-card.naranja{border-top-color:#f59e0b}
+.kpi-card.rojo{border-top-color:#D91F26}
+.kpi-icon{font-size:30px;margin-bottom:6px}
+.kpi-value{font-size:34px;font-weight:800;color:#0a2463;line-height:1}
+.kpi-label{font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-top:4px}
+.modulos-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;margin-bottom:20px}
+.modulo-card{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.modulo-card h3{margin:0 0 14px 0;font-family:'Barlow Condensed',sans-serif;font-size:15px;color:var(--azul);font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.modulo-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.modulo-stats>div{font-size:12px;color:#475569}
+.modulo-stats>div.verde{color:#16a34a}
+.modulo-stats>div.rojo{color:#D91F26}
+.modulo-stats span{font-size:22px;font-weight:800;display:block;line-height:1.1}
+.alertas-box{background:#fff;border-radius:12px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:20px}
+.alertas-box h3{font-family:'Barlow Condensed',sans-serif;font-size:14px;color:var(--azul);font-weight:800;text-transform:uppercase;margin:0 0 12px 0}
+.alerta{padding:10px 14px;border-radius:8px;margin-bottom:8px;display:flex;gap:10px;align-items:center;font-size:13px}
+.alerta:last-child{margin-bottom:0}
+.alerta.critico{background:#fee2e2;border-left:4px solid #D91F26;color:#7f1d1d}
+.alerta.advertencia{background:#fef3c7;border-left:4px solid #f59e0b;color:#78350f}
+.alerta.info{background:#dbeafe;border-left:4px solid #0a2463;color:#1e3a8a}
+.alerta-icon{font-size:20px;flex-shrink:0}
+.rej-divider{border:none;border-top:2px solid var(--bd);margin:24px 0}
+.fi-rej{padding:7px 12px;border:1.5px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;color:var(--tx);background:#f8fafc}
+.btn-rej{padding:7px 16px;background:var(--rojo);color:#fff;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer}
+
+/* === AUMENTO LEGIBILIDAD 18-may-2026 === */
+.av-n{font-size:14px !important;font-weight:700}
+.av-r{font-size:11.5px !important}
+#wN{font-size:26px !important}
+.ni{font-size:14px !important}
+body{font-size:15px}
+table th{font-size:12.5px !important;letter-spacing:.5px}
+table td{font-size:13px !important}
+.lbl,label{font-size:12.5px !important}
+input,select,textarea{font-size:14px !important}
+button{font-size:13.5px !important}
+h1{font-size:22px !important}
+h2{font-size:18px !important}
+h3{font-size:16px !important}
+</style>
+</head>
+<body>
+
+<!-- MODAL DETALLE -->
+<div class="ov" id="mDet">
+<div class="modal">
+  <div class="modal-t">Detalle de Atención</div>
+  <div id="detC"></div>
+  <div class="sep" style="margin-top:16px">Estado</div>
+  <div class="fg">
+    <div class="fc"><label>Estado</label><select id="dEst"><option value="EN PROCESO">EN PROCESO</option><option value="FINALIZADO">FINALIZADO</option></select></div>
+  </div>
+  <div class="modal-ft">
+    <button class="btn-cancel" onclick="cerrar('mDet')">Cerrar</button>
+  </div>
+</div>
+</div>
+
+<nav class="sb" id="sb">
+  <div class="sb-hdr">
+    <div class="sb-logo">
+      <img src="../images/logo-unifrutti.jpg" alt="Unifrutti" style="height:40px;object-fit:contain;" onerror="this.style.display='none'">
+      <div><div class="sb-t">Sistema RR.LL.</div><div class="sb-s">Relaciones Laborales v3.0</div></div>
+    </div>
+  </div>
+  <div class="sb-usr">
+    <div class="av" id="av">J</div>
+    <div><div class="av-n" id="avN">...</div><div class="av-r" id="avR">...</div></div>
+  </div>
+  <div class="nav">
+    <div class="ns">Principal</div>
+    <a class="ni" href="dashboard.html"><span class="ic">📊</span>Mi Dashboard</a>
+    <div class="ns">Administración</div>
+    <a class="ni on" href="resumen.html"><span class="ic">📈</span>Resumen General</a>
+    <a class="ni" href="estadisticas.html"><span class="ic">📊</span>Estadísticas Admin</a>
+    <a class="ni" id="navUsr" style="display:none" href="usuarios.html"><span class="ic">👥</span>Gestión Usuarios</a>
+    <a class="ni" href="evaluacion360.html"><span class="ic">⭐</span>Evaluación 360°</a>
+  </div>
+  <div class="sb-ft">
+    <button class="logout" onclick="logout()"><span>🚪</span>Cerrar Sesión</button>
+  </div>
+</nav>
+
+<div class="main">
+  <div class="topbar">
+    <div style="display:flex;align-items:center">
+      <button class="hamburger" onclick="document.getElementById('sb').classList.toggle('open')">☰</button>
+      <span class="tb-t">RESUMEN GENERAL</span>
+    </div>
+    <div class="tb-r">
+      <span class="tb-f" id="tbF"></span>
+      <span class="emp-b" id="tbE"></span>
+    </div>
+  </div>
+  <div class="content">
+
+    <!-- ══════════════ RESUMEN EJECUTIVO ══════════════ -->
+    <div id="secEjecutivo">
+      <div class="rej-header">
+        <h2>📊 Resumen Ejecutivo General</h2>
+        <div class="rej-header-r">
+          <select class="fi-rej" id="filtroEmpresaResumen" onchange="cargarResumenEjecutivo()">
+            <option value="AMBAS">Ambas Empresas</option>
+            <option value="RAPEL">Solo RAPEL</option>
+            <option value="VERFRUT">Solo VERFRUT</option>
+          </select>
+          <button class="btn-rej" onclick="cargarResumenEjecutivo()">🔄 Actualizar</button>
+          <span id="rejTimestamp" style="font-size:10px;color:#94a3b8"></span>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpis-grid">
+        <div class="kpi-card verde"><div class="kpi-icon">📅</div><div class="kpi-value" id="kpiHoy">—</div><div class="kpi-label">Atenciones HOY</div></div>
+        <div class="kpi-card azul"><div class="kpi-icon">📆</div><div class="kpi-value" id="kpiMes">—</div><div class="kpi-label">Este Mes</div></div>
+        <div class="kpi-card naranja"><div class="kpi-icon">⏳</div><div class="kpi-value" id="kpiProceso">—</div><div class="kpi-label">En Proceso</div></div>
+        <div class="kpi-card rojo"><div class="kpi-icon">📊</div><div class="kpi-value" id="kpiTotal">—</div><div class="kpi-label">Total Histórico</div></div>
+      </div>
+
+      <!-- Cards de módulos -->
+      <div class="modulos-grid">
+        <div class="modulo-card">
+          <h3>🎯 Visitas de Campo</h3>
+          <div class="modulo-stats">
+            <div><span id="visTotal">—</span>Total</div>
+            <div><span id="visMes">—</span>Este Mes</div>
+            <div class="verde"><span id="visEnPlazo">—</span>En Plazo</div>
+            <div class="rojo"><span id="visRetrasadas">—</span>Retrasadas</div>
+          </div>
+          <canvas id="chartVisitas" style="max-height:120px"></canvas>
+        </div>
+        <div class="modulo-card">
+          <h3>⚖️ Casos RL</h3>
+          <div class="modulo-stats">
+            <div><span id="casTotal">—</span>Total</div>
+            <div><span id="casMes">—</span>Este Mes</div>
+            <div class="naranja"><span id="casProceso">—</span>En Proceso</div>
+            <div class="verde"><span id="casFin">—</span>Finalizados</div>
+          </div>
+          <canvas id="chartCasos" style="max-height:120px"></canvas>
+        </div>
+        <div class="modulo-card">
+          <h3>🚌 Fusiones</h3>
+          <div class="modulo-stats">
+            <div><span id="fusTotal">—</span>Total</div>
+            <div><span id="fusMes">—</span>Este Mes</div>
+            <div><span id="fusRapel">—</span>RAPEL</div>
+            <div><span id="fusVerfrut">—</span>VERFRUT</div>
+          </div>
+          <canvas id="chartFusiones" style="max-height:120px"></canvas>
+        </div>
+        <div class="modulo-card">
+          <h3>🎓 Capacitaciones</h3>
+          <div class="modulo-stats">
+            <div><span id="capTotal">—</span>Total</div>
+            <div><span id="capMes">—</span>Este Mes</div>
+            <div><span id="capAsistentes">—</span>Capacitados</div>
+            <div><span id="capRapel">—</span>RAPEL</div>
+          </div>
+          <canvas id="chartCapacitaciones" style="max-height:120px"></canvas>
+        </div>
+      </div>
+
+      <!-- Gráficos comparativa + tendencia -->
+      <div class="gg" style="margin-bottom:20px">
+        <div class="gc">
+          <div class="gc-t">📊 Comparativa RAPEL vs VERFRUT</div>
+          <canvas id="chartComparativa" style="max-height:220px"></canvas>
+        </div>
+        <div class="gc">
+          <div class="gc-t">📈 Tendencia últimos 6 meses</div>
+          <canvas id="chartTendenciaGral" style="max-height:220px"></canvas>
+        </div>
+      </div>
+
+      <!-- Alertas -->
+      <div class="alertas-box">
+        <h3>🔔 Alertas del Sistema</h3>
+        <div id="listaAlertas"><p style="text-align:center;color:#94a3b8;font-size:12px">⏳ Cargando alertas...</p></div>
+      </div>
+    </div>
+
+    <hr class="rej-divider">
+
+    <div class="filtros" style="background:#fff;border-radius:11px;border:1px solid var(--bd);margin-bottom:16px">
+      <select class="fi" id="rEmp" onchange="cargarResumen()"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
+      <select class="fi" id="rMes" onchange="cargarResumen()">
+        <option value="">Todos los meses</option>
+        <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+        <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+      </select>
+      <select class="fi" id="rAnio" onchange="filtrarRes()"><option value="">Todos los años</option><option value="2025">2025</option><option value="2026">2026</option></select>
+      <select class="fi" id="rFiltroEst" onchange="filtrarRes()" style="min-width:130px">
+        <option value="">Todos los estados</option>
+        <option value="EN PROCESO">En Proceso</option>
+        <option value="FINALIZADO">Finalizado</option>
+      </select>
+      <select class="fi" id="rFiltroSup" onchange="filtrarRes()" style="min-width:160px">
+        <option value="">Todos los supervisores</option>
+      </select>
+      <button class="btn-n" onclick="exportarResumen()" style="background:#1a7f4b">📥 Excel</button>
+      <button class="btn-n" id="btnActualizarR" onclick="forzarActualizacionR()" style="background:#475569">🔄 Actualizar</button>
+    </div>
+    <div style="font-size:10px;color:#94a3b8;text-align:right;margin-bottom:6px" id="_cacheTsR"></div>
+
+    <div class="sg">
+      <div class="sc"><div class="sc-ic ia">📊</div><div><div class="sc-n" id="rT">0</div><div class="sc-l">TOTAL</div></div></div>
+      <div class="sc"><div class="sc-ic in">⏳</div><div><div class="sc-n" id="rP">0</div><div class="sc-l">EN PROCESO</div></div></div>
+      <div class="sc"><div class="sc-ic iv">✅</div><div><div class="sc-n" id="rR">0</div><div class="sc-l">FINALIZADO</div></div></div>
+    </div>
+
+    <div class="sg" style="grid-template-columns:repeat(4,1fr);margin-top:-8px" id="rModCards">
+      <div class="sc"><div class="sc-ic" style="background:#ede9fe;color:#7c3aed">🏕️</div><div><div class="sc-n" id="rMVisTotal" style="color:#7c3aed">—</div><div class="sc-l">VISITAS</div></div></div>
+      <div class="sc"><div class="sc-ic ir">⚖️</div><div><div class="sc-n" id="rMCasTotal" style="color:#d9292b">—</div><div class="sc-l">CASOS RL</div></div></div>
+      <div class="sc"><div class="sc-ic in">🚌</div><div><div class="sc-n" id="rMFusTotal" style="color:#d97706">—</div><div class="sc-l">FUSIONES</div></div></div>
+      <div class="sc"><div class="sc-ic" style="background:#cffafe;color:#0891b2">🎓</div><div><div class="sc-n" id="rMCapTotal" style="color:#0891b2">—</div><div class="sc-l">CAPACITACIONES</div></div></div>
+    </div>
+
+    <div class="sup-card">
+      <div class="sup-t" style="display:flex;align-items:center;gap:8px">
+        <span>📋 Resumen por Supervisor</span>
+        <span id="fbBadgeResumen" style="display:none;align-items:center;gap:4px;background:#dcfce7;color:#166534;border-radius:20px;padding:2px 10px;font-size:10px;font-weight:700">🟢 En tiempo real</span>
+      </div>
+      <div id="supR"><div class="empty">⏳ Cargando...</div></div>
+    </div>
+
+    <div class="gg" style="margin-top:14px">
+      <div class="gc"><div class="gc-t">📊 Atenciones por mes</div><canvas id="rChartMes" style="height:200px;max-height:200px"></canvas></div>
+      <div class="gc"><div class="gc-t">🍩 Por Estado</div><canvas id="rChartEst" style="height:200px;max-height:200px"></canvas></div>
+    </div>
+    <div class="gg" style="margin-top:14px">
+      <div class="gc"><div class="gc-t">📈 Tendencia anual</div><canvas id="rChartAnual" style="height:200px;max-height:200px"></canvas></div>
+      <div class="gc">
+        <div class="gc-t">📋 Resumen por año</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:#0b1e45;color:#fff">
+              <th style="padding:7px 10px;text-align:left">Año</th>
+              <th style="padding:7px 10px;text-align:center">Total</th>
+              <th style="padding:7px 10px;text-align:center">En Proceso</th>
+              <th style="padding:7px 10px;text-align:center">Finalizado</th>
+            </tr></thead>
+            <tbody id="tbResAnualBodyAdmin"><tr><td colspan="4" style="text-align:center;padding:10px;color:#64748b">⏳ Cargando...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-h">
+        <span class="card-t">Todas las Atenciones</span>
+        <div style="display:flex;gap:8px">
+          <select class="fi" id="rFE" onchange="filtrarRes()" style="width:120px"><option value="">Todas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
+          <select class="fi" id="rFEst" onchange="filtrarRes()" style="width:140px"><option value="">Todos estados</option><option>EN PROCESO</option><option>FINALIZADO</option></select>
+        </div>
+      </div>
+      <div class="tw">
+        <table><thead><tr>
+          <th>N°</th><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Empresa</th>
+          <th>Documento</th><th>Supervisor</th><th>Estado</th><th>Ver</th>
+        </tr></thead><tbody id="tbRes"><tr><td colspan="9" class="empty">⏳ Cargando...</td></tr></tbody></table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+let API = sessionStorage.getItem('api') || API_URL_DEFAULT;
+const ud = sessionStorage.getItem('user');
+if (!ud) { location.href = '../../index.html'; throw 'no session'; }
+const USER = JSON.parse(ud);
+const ROLES_ADMIN  = ['administrador','Administrador'];
+const ROLES_ADMIN2 = ['administrador 01','administrador 02','Administrador 01','Administrador 02'];
+const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+if (!esAdmin) { location.href = 'dashboard.html'; throw 'no access'; }
+console.log('[resumen] SESSION OK — usuario:', USER.usuario, '| rol:', USER.rol, '| empresa:', USER.empresa);
+console.log('[resumen] API URL:', API);
+
+const CACHE_KEY = 'rl_resumen_cache';
+const CACHE_TTL = 15 * 60 * 1000;
+let CACHE = {};
+let resData = [];
+let charts = {};
+
+function cargarCacheLS() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return false;
+    const obj = JSON.parse(raw);
+    if (Date.now() - obj.ts > CACHE_TTL) { localStorage.removeItem(CACHE_KEY); return false; }
+    CACHE.resumen = obj.data;
+    return true;
+  } catch(e) { return false; }
+}
+
+function guardarCacheLS(data) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); } catch(e) {}
+}
+
+// ── Helpers ──
+function mostrarToast(msg, tipo='ok') {
+  let t = document.getElementById('_toast');
+  if(!t) {
+    t = document.createElement('div');
+    t.id = '_toast';
+    t.style.cssText = 'position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;transition:opacity .4s;box-shadow:0 4px 16px rgba(0,0,0,.15)';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.background = tipo === 'error' ? '#fee2e2' : '#dcfce7';
+  t.style.color = tipo === 'error' ? '#991b1b' : '#166534';
+  t.style.opacity = '1';
+  clearTimeout(t._to);
+  t._to = setTimeout(() => t.style.opacity = '0', 3000);
+}
+function v(id){const el=document.getElementById(id);return el?el.value:'';}
+function sv(id,val){const el=document.getElementById(id);if(el)el.value=val;}
+function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
+function hoy(){return new Date().toISOString().split('T')[0];}
+function fmtF(f){if(!f)return '';return String(f).split('T')[0];}
+function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[String(e||'').toUpperCase()]||'bam';}
+function estC(e){const s=String(e||'').toUpperCase();return s==='EN PROCESO'?'bpr':s==='FINALIZADO'?'brs':'bp';}
+function abrir(id){document.getElementById(id).classList.add('on');}
+function cerrar(id){document.getElementById(id).classList.remove('on');}
+function _destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
+function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
+
+async function apiGet(p) {
+  if (!API || API.trim() === '') API = API_URL_DEFAULT;
+  const r = await fetch(API+'?'+new URLSearchParams(p));
+  return r.json();
+}
+async function apiPost(b) {
+  if (!API || API.trim() === '') API = API_URL_DEFAULT;
+  const r = await fetch(API,{method:'POST',body:JSON.stringify(b),headers:{'Content-Type':'text/plain'}});
+  return r.json();
+}
+
+document.addEventListener('click', e=>{ if(e.target.classList.contains('ov')) e.target.classList.remove('on'); });
+
+// ── Funciones resumen ──
+function _aplicarDatosResumen(data) {
+  CACHE.resumen = data;
+  resData = data.lista || [];
+  const supSel = document.getElementById('rFiltroSup');
+  if (supSel) {
+    const sups = [...new Set(resData.map(a=>a.supervisor).filter(Boolean))].sort();
+    while (supSel.options.length > 1) supSel.remove(1);
+    sups.forEach(s => { const o = document.createElement('option'); o.value=s; o.textContent=s; supSel.appendChild(o); });
+  }
+  document.getElementById('rT').textContent = resData.length;
+  document.getElementById('rP').textContent = resData.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
+  document.getElementById('rR').textContent = resData.filter(a=>String(a.estado||'').toUpperCase()==='FINALIZADO').length;
+  const ps = data.porSupervisor || {};
+  document.getElementById('supR').innerHTML = Object.entries(ps).length ?
+    Object.entries(ps).sort((a,b)=>b[1].total-a[1].total).map(([k,val])=>`
+      <div class="sup-row">
+        <div><div class="sup-n">${val.nombre}</div></div>
+        <div class="sup-sts">
+          <div class="sup-st"><div class="n">${val.total}</div><div class="l">Total</div></div>
+          <div class="sup-st"><div class="n" style="color:#f97316">${val.pendientes}</div><div class="l">Pend.</div></div>
+          <div class="sup-st"><div class="n" style="color:#3b82f6">${val.enProceso}</div><div class="l">Proc.</div></div>
+          <div class="sup-st"><div class="n" style="color:#22c55e">${val.resueltos}</div><div class="l">Resuelto</div></div>
+        </div>
+      </div>`).join('') :
+    '<div class="empty">No hay datos para los filtros seleccionados</div>';
+  filtrarRes();
+  _actualizarIndicadorCacheR();
+}
+
+// Cargar resumen por supervisor desde Firebase (cuando no hay filtros activos)
+function _rFbCargarSuper(porSupervisor) {
+  if (!porSupervisor) return false;
+  const el = document.getElementById('supR');
+  if (!el) return false;
+  const entries = Object.entries(porSupervisor).sort((a,b) => (b[1].total||0) - (a[1].total||0));
+  if (!entries.length) return false;
+  el.innerHTML = entries.map(([, v]) => `
+    <div class="sup-row">
+      <div><div class="sup-n">${v.nombre||'—'}</div></div>
+      <div class="sup-sts">
+        <div class="sup-st"><div class="n">${v.total||0}</div><div class="l">Total</div></div>
+        <div class="sup-st"><div class="n" style="color:#3b82f6">${v.en_proceso||0}</div><div class="l">Proc.</div></div>
+        <div class="sup-st"><div class="n" style="color:#22c55e">${v.finalizados||0}</div><div class="l">Finalizado</div></div>
+        <div class="sup-st"><div class="n" style="color:#f97316">${v.este_mes||0}</div><div class="l">Este mes</div></div>
+      </div>
+    </div>`).join('');
+  const badge = document.getElementById('fbBadgeResumen');
+  if (badge) badge.style.display = 'inline-flex';
+  return true;
+}
+
+async function cargarResumen(forzar = false) {
+  const emp=v('rEmp'), mes=v('rMes'), anio=v('rAnio');
+
+  // Con filtros o forzado: invalidar cache
+  if (forzar || emp !== 'AMBAS' || mes || anio) {
+    delete CACHE.resumen;
+    if (forzar) localStorage.removeItem(CACHE_KEY);
+  }
+
+  // Servir desde cache si está disponible y no hay filtros activos
+  if (!forzar && CACHE.resumen && !mes && !anio && emp === 'AMBAS') {
+    _aplicarDatosResumen(CACHE.resumen);
+    // Intentar refrescar panel supervisor desde Firebase mientras hay datos cacheados
+    if (_rFbEstadisticas && _rFbEstadisticas.por_supervisor) {
+      _rFbCargarSuper(_rFbEstadisticas.por_supervisor);
+    }
+    return;
+  }
+  // Firebase primero cuando no hay filtros: mostrar instantáneamente mientras llega la API
+  if (!forzar && !mes && !anio && emp === 'AMBAS') {
+    if (_rFbEstadisticas && _rFbEstadisticas.por_supervisor) {
+      _rFbCargarSuper(_rFbEstadisticas.por_supervisor);
+    }
+  }
+
+  document.getElementById('supR').innerHTML='<div class="empty">⏳ Cargando datos...</div>';
+  document.getElementById('tbRes').innerHTML='<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
+
+  const params = {action:'getResumenGeneral', empresa:emp, mes, anio};
+  console.log('[resumen] cargarResumen → params:', params);
+  try {
+    const d = await apiGet(params);
+    console.log('[resumen] respuesta API — lista:', (d.data?.lista||[]).length, 'registros');
+    if (!d.success) {
+      const err = d.error || 'Error al cargar los datos';
+      document.getElementById('supR').innerHTML='<div class="empty">❌ '+err+'</div>';
+      document.getElementById('tbRes').innerHTML='<tr><td colspan="9" class="empty">❌ '+err+'</td></tr>';
+      mostrarToast('❌ '+err,'error');
+      return;
+    }
+    guardarCacheLS(d.data);
+    _aplicarDatosResumen(d.data);
+  } catch(e) {
+    const msg = 'Error de conexión: ' + e.message;
+    document.getElementById('supR').innerHTML='<div class="empty">❌ '+msg+'</div>';
+    document.getElementById('tbRes').innerHTML='<tr><td colspan="9" class="empty">❌ '+msg+'</td></tr>';
+    mostrarToast('❌ '+msg,'error');
+  }
+}
+
+async function _actualizarEnBackgroundR() {
+  try {
+    const d = await apiGet({action:'getResumenGeneral', empresa:'AMBAS', mes:'', anio:''});
+    if (d.success) {
+      guardarCacheLS(d.data);
+      _aplicarDatosResumen(d.data);
+      console.log('[resumen] Background refresh completado');
+    }
+  } catch(e) { console.warn('[resumen] Background refresh error:', e.message); }
+}
+
+function forzarActualizacionR() {
+  const btn = document.getElementById('btnActualizarR');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Actualizando...'; }
+  cargarResumen(true).finally(() => {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 Actualizar'; }
+  });
+}
+
+function _actualizarIndicadorCacheR() {
+  const el = document.getElementById('_cacheTsR');
+  if (el) el.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-PE', {hour:'2-digit',minute:'2-digit'});
+}
+
+function filtrarRes() {
+  const emp=v('rFE'), est=v('rFEst');
+  const filtEst = v('rFiltroEst') || '';
+  const filtSup = v('rFiltroSup') || '';
+  const filtAnio = v('rAnio') || '';
+  const lista=resData.filter(a=>
+    (!emp  || a.empresa===emp) &&
+    (!est  || String(a.estado||'').toUpperCase()===est) &&
+    (!filtEst || String(a.estado||'').toUpperCase()===filtEst) &&
+    (!filtSup || String(a.supervisor||'').toLowerCase().includes(filtSup.toLowerCase())) &&
+    (!filtAnio|| String(a.anio||a.fecha_atencion||'').substring(0,4)===filtAnio)
+  );
+  window._resFiltradas = lista;
+  setTimeout(()=>dibujarGraficosResumen(lista),100);
+  document.getElementById('tbRes').innerHTML=lista.length?
+    lista.map(a=>`<tr>
+      <td>${a.nro||''}</td><td>${fmtF(a.fecha_atencion)}</td>
+      <td><strong>${a.dni||''}</strong></td><td>${a.nombre||''}</td>
+      <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
+      <td>${a.detalle_documento||''}</td><td>${a.supervisor||''}</td>
+      <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
+      <td><button class="btn-a bv" onclick="verDet('${a.nro}')">Ver</button></td>
+    </tr>`).join('') :
+    '<tr><td colspan="9" class="empty">No hay registros</td></tr>';
+}
+
+function verDet(nro) {
+  const a=resData.find(x=>String(x.nro)===String(nro));
+  if(!a)return;
+  const campos=[
+    ['N° Registro',a.nro],['Fecha Atención',fmtF(a.fecha_atencion)],
+    ['Hora Inicio',a.hora_inicio],['Hora Término',a.hora_termino],
+    ['N° Semana',a.nro_semana],['Mes/Año',a.mes+'/'+a.anio],
+    ['DNI',a.dni],['Nombre',a.nombre],['Sexo',a.sexo],
+    ['F. Inicio Periodo',fmtF(a.fecha_inicio_periodo)],['F. Término Periodo',fmtF(a.fecha_termino_periodo)],
+    ['Empresa',a.empresa],['Fundo',a.fundo],['Cargo',a.cargo],
+    ['Supervisor',a.supervisor],
+    ['Detalle/Documento',a.detalle_documento],
+    ['F. Inicio Doc.',fmtF(a.fecha_inicio_doc)],['F. Término Doc.',fmtF(a.fecha_termino_doc)],
+    ['Días Transcurridos',a.dias_transcurridos],
+    ['Responsable',a.responsable_recepcion],
+    ['Observaciones',a.observaciones],['Estado',a.estado],
+  ];
+  document.getElementById('detC').innerHTML=campos.map(([l,val])=>`<div class="det-row"><span class="det-l">${l}</span><span class="det-v">${val||'-'}</span></div>`).join('');
+  sv('dEst',a.estado||'EN PROCESO');
+  abrir('mDet');
+}
+
+function dibujarGraficosResumen(datos) {
+  const labels=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const anioSel = v('rAnio') || '';
+  const porMes={};
+  if(anioSel) {
+    for(let i=1;i<=12;i++) porMes[anioSel+'-'+String(i).padStart(2,'0')]=0;
+  } else {
+    for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
+  }
+  datos.forEach(a=>{const f=String(a.fecha_atencion||'').substring(0,7);if(porMes.hasOwnProperty(f)) porMes[f]++;});
+  const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]||k);
+  _destroyChart('rMes');
+  const elRM=document.getElementById('rChartMes');
+  if(elRM) charts.rMes=new Chart(elRM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#0b1e45',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
+  const proc=0;
+  const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='FINALIZADO').length;
+  _destroyChart('rEst');
+  const elRE=document.getElementById('rChartEst');
+  if(elRE) charts.rEst=new Chart(elRE,{type:'doughnut',data:{labels:['En Proceso','Finalizado'],datasets:[{data:[pend,res],backgroundColor:['#f97316','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+  const porAnio={};
+  datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
+  _destroyChart('rAnual');
+  const elRA=document.getElementById('rChartAnual');
+  if(elRA){const anios=Object.keys(porAnio).sort();charts.rAnual=new Chart(elRA,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#d9292b',backgroundColor:'rgba(217,41,43,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
+  const tbody=document.getElementById('tbResAnualBodyAdmin');
+  if(tbody){
+    const resAnio={};
+    datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(!y||y.length!==4) return;if(!resAnio[y]) resAnio[y]={total:0,proc:0,res:0};resAnio[y].total++;const e=String(a.estado||'').toUpperCase();if(e==='EN PROCESO') resAnio[y].proc++;else if(e==='FINALIZADO') resAnio[y].res++;});
+    const aniosOrden=Object.keys(resAnio).sort().reverse();
+    tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total}</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
+  }
+}
+
+function exportarResumen() {
+  const datos = window._resFiltradas || CACHE.resumen?.lista || [];
+  if(!datos.length){ mostrarToast('❌ No hay datos para exportar.','error'); return; }
+  const filas = datos.map(a => ({
+    'N°': a.nro, 'Fecha': a.fecha_atencion, 'DNI': a.dni, 'Nombre': a.nombre,
+    'Empresa': a.empresa, 'Supervisor': a.supervisor,
+    'Documento': a.detalle_documento, 'Estado': a.estado, 'Observaciones': a.observaciones
+  }));
+  const ws = XLSX.utils.json_to_sheet(filas);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Resumen');
+  XLSX.writeFile(wb, 'ResumenGeneral_' + new Date().toLocaleDateString('es-PE').replace(/\//g,'-') + '.xlsx');
+}
+
+// ══════════════ RESUMEN EJECUTIVO ══════════════
+let _rejCharts = {};
+function _rejDestroy(key) { if (_rejCharts[key]) { _rejCharts[key].destroy(); delete _rejCharts[key]; } }
+function _set(id, val) { const el = document.getElementById(id); if (el) el.textContent = val ?? '—'; }
+
+async function cargarResumenEjecutivo() {
+  const empresa = document.getElementById('filtroEmpresaResumen')?.value || 'AMBAS';
+  try {
+    const resp = await apiPost({ action: 'resumenEjecutivo', empresa });
+    if (!resp.success) { console.warn('[RejEjec] Error:', resp.error); return; }
+
+    // KPIs - FIX: incluye atenciones en las 4 cards grandes
+    const atHoy  = resp.atenciones?.hoy || 0;
+    const visHoy = resp.visitas?.hoy || 0;
+    const casHoy = resp.casos?.hoy || 0;
+    _set('kpiHoy', atHoy + visHoy + casHoy);
+
+    const atMes  = resp.atenciones?.este_mes || 0;
+    const visMes = resp.visitas?.este_mes || 0;
+    const casMes = resp.casos?.este_mes || 0;
+    _set('kpiMes', atMes + visMes + casMes);
+
+    _set('kpiProceso',
+      (resp.atenciones?.en_proceso || 0) + (resp.casos?.en_proceso || 0)
+    );
+
+    const totalHist =
+      (resp.atenciones?.total || 0) +
+      (resp.visitas?.total    || 0) +
+      (resp.casos?.total      || 0);
+    _set('kpiTotal', totalHist.toLocaleString('es-PE'));
+
+    // Módulo Visitas
+    _set('visTotal',      resp.visitas?.total);
+    _set('visMes',        resp.visitas?.este_mes);
+    _set('visEnPlazo',    resp.visitas?.en_plazo);
+    _set('visRetrasadas', resp.visitas?.retrasadas);
+
+    // Módulo Casos
+    _set('casTotal',   resp.casos?.total);
+    _set('casMes',     resp.casos?.este_mes);
+    _set('casProceso', resp.casos?.en_proceso);
+    _set('casFin',     resp.casos?.finalizados);
+
+    // Módulo Fusiones
+    _set('fusTotal',   resp.fusiones?.total);
+    _set('fusMes',     resp.fusiones?.este_mes);
+    _set('fusRapel',   resp.comparativa?.fusiones?.RAPEL);
+    _set('fusVerfrut', resp.comparativa?.fusiones?.VERFRUT);
+
+    // Módulo Capacitaciones
+    _set('capTotal',      resp.capacitaciones?.total);
+    _set('capMes',        resp.capacitaciones?.este_mes);
+    _set('capAsistentes', resp.capacitaciones?.total_asistentes);
+    _set('capRapel',      resp.comparativa?.capacitaciones?.RAPEL);
+
+    // Mini-charts módulos
+    _rejRenderMiniVisitas(resp.visitas || {});
+    _rejRenderMiniCasos(resp.casos || {});
+    _rejRenderMiniFusiones(resp.comparativa?.fusiones || {});
+    _rejRenderMiniCapacitaciones(resp.comparativa?.capacitaciones || {});
+
+    // Gráficos grandes
+    renderizarComparativa(resp.comparativa || {});
+    renderizarTendenciaGeneral(resp.tendencia || []);
+    renderizarAlertas(resp.alertas || []);
+
+    const ts = document.getElementById('rejTimestamp');
+    if (ts) ts.textContent = 'Act. ' + new Date().toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'});
+
+  } catch(e) {
+    console.error('[RejEjec] Error:', e);
+  }
+}
+
+function _rejMiniDoughnut(id, labels, data, colors) {
+  _rejDestroy(id);
+  const el = document.getElementById(id);
+  if (!el || !window.Chart) return;
+  _rejCharts[id] = new Chart(el, {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors, borderWidth: 0 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } } }
+  });
+}
+
+function _rejRenderMiniVisitas(v) {
+  _rejMiniDoughnut('chartVisitas', ['En Plazo', 'Retrasadas'],
+    [v.en_plazo || 0, v.retrasadas || 0], ['#16a34a', '#D91F26']);
+}
+function _rejRenderMiniCasos(c) {
+  _rejMiniDoughnut('chartCasos', ['En Proceso', 'Finalizados'],
+    [c.en_proceso || 0, c.finalizados || 0], ['#f59e0b', '#16a34a']);
+}
+function _rejRenderMiniFusiones(f) {
+  _rejMiniDoughnut('chartFusiones', ['RAPEL', 'VERFRUT'],
+    [f.RAPEL || 0, f.VERFRUT || 0], ['#D91F26', '#0a2463']);
+}
+function _rejRenderMiniCapacitaciones(c) {
+  _rejMiniDoughnut('chartCapacitaciones', ['RAPEL', 'VERFRUT'],
+    [c.RAPEL || 0, c.VERFRUT || 0], ['#D91F26', '#0a2463']);
+}
+
+function renderizarComparativa(comp) {
+  _rejDestroy('chartComparativa');
+  const el = document.getElementById('chartComparativa');
+  if (!el || !window.Chart) return;
+  _rejCharts.chartComparativa = new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: ['Visitas', 'Casos', 'Fusiones', 'Capacitaciones'],
+      datasets: [
+        { label: 'RAPEL',   data: [comp.visitas?.RAPEL||0, comp.casos?.RAPEL||0, comp.fusiones?.RAPEL||0, comp.capacitaciones?.RAPEL||0],   backgroundColor: '#D91F26' },
+        { label: 'VERFRUT', data: [comp.visitas?.VERFRUT||0, comp.casos?.VERFRUT||0, comp.fusiones?.VERFRUT||0, comp.capacitaciones?.VERFRUT||0], backgroundColor: '#0a2463' }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } },
+      scales: { x: { beginAtZero: true } }
+    }
+  });
+}
+
+function renderizarTendenciaGeneral(tend) {
+  _rejDestroy('chartTendenciaGral');
+  const el = document.getElementById('chartTendenciaGral');
+  if (!el || !window.Chart) return;
+  _rejCharts.chartTendenciaGral = new Chart(el, {
+    type: 'line',
+    data: {
+      labels: tend.map(t => t.mes),
+      datasets: [
+        { label: 'Visitas',         data: tend.map(t => t.visitas         || 0), borderColor: '#0a2463', tension: 0.4, pointRadius: 3 },
+        { label: 'Casos',           data: tend.map(t => t.casos           || 0), borderColor: '#D91F26', tension: 0.4, pointRadius: 3 },
+        { label: 'Fusiones',        data: tend.map(t => t.fusiones        || 0), borderColor: '#16a34a', tension: 0.4, pointRadius: 3 },
+        { label: 'Capacitaciones',  data: tend.map(t => t.capacitaciones  || 0), borderColor: '#f59e0b', tension: 0.4, pointRadius: 3 }
+      ]
+    },
+    options: { responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+}
+
+function renderizarAlertas(alertas) {
+  const cont = document.getElementById('listaAlertas');
+  if (!cont) return;
+  if (!alertas || !alertas.length) {
+    cont.innerHTML = '<p style="text-align:center;color:#16a34a;font-size:13px">✅ Sin alertas activas</p>';
+    return;
+  }
+  cont.innerHTML = alertas.map(a => `
+    <div class="alerta ${a.tipo || 'info'}">
+      <span class="alerta-icon">${a.icon || 'ℹ️'}</span>
+      <span>${a.msg || ''}</span>
+    </div>`).join('');
+}
+
+window.cargarResumenEjecutivo = cargarResumenEjecutivo;
+
+// ── Init ──
+window.onload = function() {
+  const ini = USER.nombre || '?';
+  document.getElementById('av').textContent = ini.charAt(0).toUpperCase();
+  document.getElementById('avN').textContent = USER.nombre || '';
+  document.getElementById('avR').textContent = cap(USER.rol || '');
+  document.getElementById('tbE').textContent = USER.empresa || '';
+  document.getElementById('tbF').textContent = new Date().toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'short',year:'numeric'});
+  if (ROLES_ADMIN.includes(USER.rol)) {
+    const navUsr = document.getElementById('navUsr');
+    if (navUsr) navUsr.style.display = '';
+  }
+  if (cargarCacheLS()) {
+    // Cache válido: mostrar inmediatamente y refrescar en background
+    _aplicarDatosResumen(CACHE.resumen);
+    setTimeout(() => _actualizarEnBackgroundR(), 800);
+  } else {
+    // Sin cache: cargar desde API
+    cargarResumen();
+  }
+  // Firebase: iniciar escucha de estadísticas para ranking en tiempo real
+  _rFbIniciarConRetry(10);
+  _rFbIniciarModulos(10);
+  // Resumen ejecutivo (todos los módulos)
+  cargarResumenEjecutivo();
+  setInterval(cargarResumenEjecutivo, 60000);
+};
+
+function _rFbCargarModulos(data) {
+  if (!data) return;
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.textContent = val; };
+  if (data.visitas)        set('rMVisTotal', data.visitas.total);
+  if (data.casos)          set('rMCasTotal', data.casos.total);
+  if (data.fusiones)       set('rMFusTotal', data.fusiones.total);
+  if (data.capacitaciones) set('rMCapTotal', data.capacitaciones.total);
+}
+
+function _rFbIniciarModulos(intentos) {
+  if (typeof window._fbSuscribirModulosR === 'function') {
+    window._fbSuscribirModulosR(function(data) { if (data) _rFbCargarModulos(data); });
+  } else if (intentos > 0) {
+    setTimeout(() => _rFbIniciarModulos(intentos - 1), 700);
+  }
+}
+
+let _rFbEstadisticas = null;
+function _rFbIniciarConRetry(intentos) {
+  if (typeof window._fbSuscribirEstadisticasR === 'function') {
+    window._fbSuscribirEstadisticasR(function(data) {
+      if (data && data.por_supervisor) {
+        _rFbEstadisticas = data;
+        const emp = v('rEmp'), mes = v('rMes'), anio = v('rAnio');
+        // Actualizar panel solo si no hay filtros activos (no sobreescribir resultados filtrados)
+        if (emp === 'AMBAS' && !mes && !anio) _rFbCargarSuper(data.por_supervisor);
+      }
+    });
+  } else if (intentos > 0) {
+    setTimeout(() => _rFbIniciarConRetry(intentos - 1), 700);
+  }
+}
+</script>
+
+<!-- Firebase SDK — estadísticas en tiempo real -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBTp4WHO5bGEoYDhTbyWZVfdQxbAQHwp4I",
+  authDomain: "sistema-rl-verfrut.firebaseapp.com",
+  projectId: "sistema-rl-verfrut",
+  storageBucket: "sistema-rl-verfrut.firebasestorage.app",
+  messagingSenderId: "769176418481",
+  appId: "1:769176418481:web:53a487fcaf736b11e24a90",
+  databaseURL: "https://sistema-rl-verfrut-default-rtdb.firebaseio.com"
+};
+
+let _dbR;
+try {
+  const app = initializeApp(firebaseConfig, 'resumen-app');
+  _dbR = getDatabase(app);
+  console.log('[Firebase Resumen] Inicializado OK');
+} catch(e) {
+  console.error('[Firebase Resumen] Error al inicializar:', e);
+}
+
+window._fbSuscribirEstadisticasR = function(callback) {
+  if (!_dbR) { callback(null); return; }
+  onValue(ref(_dbR, 'estadisticas'), snap => {
+    callback(snap.val());
+  }, e => { console.error('[Firebase Resumen] Error onValue:', e); callback(null); });
+};
+
+window._fbSuscribirModulosR = function(callback) {
+  if (!_dbR) { callback(null); return; }
+  onValue(ref(_dbR, 'estadisticas_modulos'), snap => { callback(snap.val()); },
+    e => { console.error('[Firebase Resumen] Error onValue estadisticas_modulos:', e); callback(null); });
+};
+
+// Acceso directo a los datos en caché del listener
+window._fbDatosEstadisticas = function() { return null; }; // sobrescrito por listener
+</script>
+</body>
+</html>

@@ -339,7 +339,7 @@ async function _ejecutarBusquedaCapacitaciones() {
           lugar:             row.LUGAR || row.lugar || '',
           horaInicio:        _fmtHoraCap(row.HORA_INICIO || row.horaInicio || ''),
           horaFin:           _fmtHoraCap(row.HORA_FIN || row.horaFin || ''),
-          horas:             row.HORAS || row.horas || row.totalHoras || _calcHorasDesde(_fmtHoraCap(row.HORA_INICIO||row.horaInicio||''), _fmtHoraCap(row.HORA_FIN||row.horaFin||'')),
+          horas:             row.HORAS || row.horas || row.totalHoras || '',
           capacitadorDni:    row.CAPACITADOR_DNI || row.capacitadorDni || '',
           capacitadorNombre: row.CAPACITADOR_NOMBRE || row.capacitadorNombre || '',
           capacitadorCargo:  row.CAPACITADOR_CARGO || row.capacitadorCargo || '',
@@ -883,15 +883,6 @@ function agregarAsistenteManual() {
 }
 
 /* ─────────────────────── CALCULAR HORAS ─────────────────────── */
-function _calcHorasDesde(hi, ht) {
-  if (!hi || !ht) return '';
-  const a = String(hi).split(':').map(Number);
-  const b = String(ht).split(':').map(Number);
-  if (a.length < 2 || b.length < 2 || isNaN(a[0]) || isNaN(b[0])) return '';
-  const diff = (b[0] * 60 + b[1] - (a[0] * 60 + a[1])) / 60;
-  return diff > 0 ? diff.toFixed(1) : '';
-}
-
 function calcHoras() {
   const hi = v('capHoraInicio'), ht = v('capHoraTermino');
   if (!hi || !ht) return;
@@ -1243,7 +1234,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
-      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 8 },
+      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 10 },
       columnStyles: { 0:{cellWidth:12}, 1:{cellWidth:25}, 2:{cellWidth:75}, 3:{cellWidth:55}, 4:{cellWidth:23} }
     });
     y = doc.lastAutoTable.finalY;
@@ -1268,8 +1259,8 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       body: filasPart,
       theme: 'grid',
       headStyles: { ...sCabHead },
-      styles: { ...sBorder, cellPadding: 0.5, textColor: C.negro }, /* _FIX_RESPONSABLE_PAG1_V1 */
-      bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 6 },
+      styles: { ...sBorder, cellPadding: 0.7, textColor: C.negro },
+      bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 7 },
       columnStyles: {
         0: { cellWidth: 8 }, 1: { cellWidth: 20 },
         2: { cellWidth: 80, halign: 'left' }, 3: { cellWidth: 35, halign: 'left' },
@@ -1300,15 +1291,12 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
-      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 8 },
+      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 10 },
       columnStyles: { 0:{cellWidth:12}, 1:{cellWidth:25}, 2:{cellWidth:75}, 3:{cellWidth:55}, 4:{cellWidth:23} }
     });
 
-    // ── _FIX_RESPONSABLE_PAG1_V1: NO borrar páginas extra ──
-    // El antiguo while(deletePage) borraba la fila del responsable cuando se
-    // desbordaba. Con los tamaños reducidos arriba debería caber siempre en 1
-    // página, pero si por algún caso edge se desborda, mejor 2 páginas que
-    // un PDF roto sin responsable.
+    // ── Forzar 1 sola página ──
+    while (doc.internal.getNumberOfPages() > 1) doc.deletePage(doc.internal.getNumberOfPages());
 
     // ── Footer ──
     doc.setPage(1);
