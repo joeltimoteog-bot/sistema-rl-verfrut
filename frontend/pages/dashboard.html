@@ -5332,8 +5332,17 @@ async function consultarDNI() {
   const anio = esAdminUser ? (v('cAnio') || new Date().getFullYear().toString()) : new Date().getFullYear().toString();
 
   if (!dni && !fDesde && !fHasta && !responsable) {
-    mostrarToast('❌ Ingresa un DNI o un rango de fechas para buscar', 'error');
+    mostrarToast('❌ Ingresá un DNI (para historial) o un rango de fechas (para atenciones del responsable)', 'error');
     return;
+  }
+  // _DUAL_MODO_V1 — Mostrar en qué modo se está consultando
+  if (dni) {
+    console.log('[consultarDNI] MODO HISTORIAL — buscando todas las atenciones del DNI', dni);
+    if (fDesde || fHasta || responsable) {
+      console.log('[consultarDNI] NOTA: en modo DNI se ignoran fechas/responsable (es historial completo)');
+    }
+  } else {
+    console.log('[consultarDNI] MODO RANGO — atenciones del responsable', responsable || '(todos)', 'entre', fDesde, 'y', fHasta);
   }
   if (dni && dni.length < 7) {
     mostrarToast('❌ DNI debe tener 7 u 8 dígitos', 'error');
