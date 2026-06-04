@@ -2524,39 +2524,7 @@ async function guardarInformeEnAzure() {
     const htmlDoc = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">` +
       `<title>Informe Visita Campo</title></head>` +
       `<body style="font-family:Arial,sans-serif;max-width:820px;margin:0 auto;padding:20px">` +
-      contenido + `
-<!-- _VISITAS_FIXES_V1 — Modal Reenviar Visita -->
-<div id="mReenvioVisita" class="md" style="display:none">
-  <div class="md-c" style="max-width:520px">
-    <div class="md-h" style="background:#7c3aed;color:#fff">
-      <span>📧 Reenviar Informe de Visita</span>
-      <button class="md-x" onclick="cerrar('mReenvioVisita')" style="color:#fff">×</button>
-    </div>
-    <div class="md-b">
-      <div style="background:#f1f5f9;padding:10px;border-radius:6px;margin-bottom:14px;font-size:12px">
-        <b>Informe:</b> <span id="reenvioVisitaInfo">—</span>
-      </div>
-      <div class="fc"><label>Para *</label>
-        <input type="text" id="reenvioVisitaPara" placeholder="email1@correo.com;email2@correo.com" style="width:100%">
-      </div>
-      <div class="fc" style="margin-top:10px"><label>CC (opcional)</label>
-        <input type="text" id="reenvioVisitaCC" placeholder="cc@correo.com" style="width:100%">
-      </div>
-      <div class="fc" style="margin-top:10px"><label>Asunto *</label>
-        <input type="text" id="reenvioVisitaAsunto" style="width:100%">
-      </div>
-      <div style="background:#f0fdf4;padding:10px;border-radius:6px;margin-top:12px;font-size:11px;color:#166534">
-        💡 Al enviar, se abrirá Outlook con los destinatarios precargados. Recordá adjuntar el PDF del informe (descargalo con el botón 📥 PDF).
-      </div>
-    </div>
-    <div class="md-f" style="display:flex;gap:8px;justify-content:flex-end">
-      <button onclick="cerrar('mReenvioVisita')" style="padding:9px 18px;background:#94a3b8;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>
-      <button onclick="ejecutarReenvioVisita()" style="padding:9px 18px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">📧 Abrir en Outlook</button>
-    </div>
-  </div>
-</div>
-
-</body></html>`;
+      contenido + `</body></html>`;
 
     // Nombre estandarizado por N° de visita: garantiza que al re-subir un
     // informe editado el blob se sobreescriba (PUT con mismo path) en vez
@@ -7971,21 +7939,49 @@ async function _generarYSubirPDFInforme(datos, ts) {
       fotos: fotosParaHTML
     });
 
-    // Crear contenedor temporal off-screen para html2pdf
+    // _PDF_BLANCO_FIX_V1 — Contenedor visible (opacity:0) para que html2canvas pueda capturarlo
     const cont = document.createElement('div');
-    cont.style.cssText = 'position:absolute;left:-9999px;top:0;width:794px;background:#fff';
+    cont.id = '_pdf_temp_' + Date.now();
+    cont.style.cssText = 'position:fixed;left:0;top:0;width:794px;background:#fff;z-index:-9999;opacity:0;pointer-events:none;overflow:visible';
     cont.innerHTML = html;
     document.body.appendChild(cont);
+    console.log('[PDF] contenedor creado, HTML length:', html.length, 'cont.children:', cont.children.length);
+
+    // Esperar al render del DOM (1 frame + extra)
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    await new Promise(r => setTimeout(r, 250));
+
+    // Esperar a que TODAS las imagenes carguen (logos + fotos)
+    const imgs = Array.from(cont.querySelectorAll('img'));
+    console.log('[PDF] imagenes a esperar:', imgs.length);
+    if (imgs.length) {
+      await Promise.all(imgs.map(img => {
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+        return new Promise(res => {
+          img.onload  = () => res();
+          img.onerror = () => { console.warn('[PDF] img falló:', img.src.substring(0,80)); res(); };
+          setTimeout(res, 4000); // timeout safety
+        });
+      }));
+      console.log('[PDF] todas las imagenes listas');
+    }
 
     const opt = {
       margin:       10,
       filename:     'informe.pdf',
       image:        { type: 'jpeg', quality: 0.92 },
-      html2canvas:  { scale: 1.5, useCORS: true, allowTaint: true, logging: false },
-      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      html2canvas:  { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#ffffff' },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }
     };
 
-    const pdfBlob = await html2pdf().set(opt).from(cont).outputPdf('blob');
+    // Usar API fluent explicita para evitar problemas con outputPdf
+    const worker = html2pdf().set(opt).from(cont);
+    await worker.toContainer();
+    await worker.toCanvas();
+    const canvas = worker.canvas || (worker.prop && worker.prop.canvas);
+    console.log('[PDF] canvas generado:', canvas ? (canvas.width + 'x' + canvas.height) : 'NULL');
+    const pdfBlob = await worker.toPdf().output('blob');
+    console.log('[PDF] blob generado:', pdfBlob ? (pdfBlob.size + ' bytes') : 'NULL');
     document.body.removeChild(cont);
 
     // Convertir blob a base64
@@ -9381,5 +9377,36 @@ h3{font-size:16px !important}
   };
 }
 </script>
+<!-- _MODAL_REENVIO_FIX_V1 — Modal Reenviar Visita (ahora en posicion correcta) -->
+<div id="mReenvioVisita" class="md" style="display:none">
+  <div class="md-c" style="max-width:520px">
+    <div class="md-h" style="background:#7c3aed;color:#fff">
+      <span>📧 Reenviar Informe de Visita</span>
+      <button class="md-x" onclick="cerrar('mReenvioVisita')" style="color:#fff">×</button>
+    </div>
+    <div class="md-b">
+      <div style="background:#f1f5f9;padding:10px;border-radius:6px;margin-bottom:14px;font-size:12px">
+        <b>Informe:</b> <span id="reenvioVisitaInfo">—</span>
+      </div>
+      <div class="fc"><label>Para *</label>
+        <input type="text" id="reenvioVisitaPara" placeholder="email1@correo.com;email2@correo.com" style="width:100%">
+      </div>
+      <div class="fc" style="margin-top:10px"><label>CC (opcional)</label>
+        <input type="text" id="reenvioVisitaCC" placeholder="cc@correo.com" style="width:100%">
+      </div>
+      <div class="fc" style="margin-top:10px"><label>Asunto *</label>
+        <input type="text" id="reenvioVisitaAsunto" style="width:100%">
+      </div>
+      <div style="background:#f0fdf4;padding:10px;border-radius:6px;margin-top:12px;font-size:11px;color:#166534">
+        💡 Al enviar, se abrirá Outlook con los destinatarios precargados. Recordá adjuntar el PDF del informe (descargalo con el botón 📥 PDF).
+      </div>
+    </div>
+    <div class="md-f" style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="cerrar('mReenvioVisita')" style="padding:9px 18px;background:#94a3b8;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">Cancelar</button>
+      <button onclick="ejecutarReenvioVisita()" style="padding:9px 18px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">📧 Abrir en Outlook</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
