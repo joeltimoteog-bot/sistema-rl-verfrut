@@ -8120,49 +8120,112 @@ function _cargarFotosEnEdicion(v) {
  * Reutiliza el HTML de verInformeGuardado y window.print().
  */
 async function descargarPDFVisita(idx) {
+  // _PDF_REGENERAR_V2 — SIEMPRE regenera al vuelo con html2pdf, ignora el PDF guardado
   const v = (window._visitasData || [])[idx];
   if (!v) { mostrarToast('❌ No se encontraron datos del informe', 'error'); return; }
+  console.log('[descargarPDF] regenerando al vuelo para visita', v.nro || idx);
+  mostrarToast('⏳ Generando PDF...', 'info');
 
-  // _VISITAS_PDF_AZURE_V1 — Si ya tiene PDF en Azure, abrirlo directo (instantáneo)
-  const urlAzure = v.enlace_informe || '';
-  if (urlAzure && urlAzure.indexOf('http') === 0) {
-    console.log('[descargarPDF] abriendo PDF guardado en Azure:', urlAzure);
-    window.open(urlAzure, '_blank');
-    return;
+  try {
+    await _cargarLogoBase64();
+
+    let fotosUrls = [];
+    if (Array.isArray(v.fotos_urls)) fotosUrls = v.fotos_urls.filter(Boolean);
+    else if (typeof v.fotos === 'string' && v.fotos.indexOf('http') !== -1) {
+      fotosUrls = v.fotos.split('|').filter(Boolean);
+    }
+    console.log('[descargarPDF] fotos a incluir:', fotosUrls.length);
+
+    const fotos = [];
+    for (let i = 0; i < fotosUrls.length; i++) {
+      const url = fotosUrls[i];
+      try {
+        const resp = await fetch(url, { mode: 'cors' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const blob = await resp.blob();
+        const b64 = await new Promise((res, rej) => {
+          const r = new FileReader();
+          r.onload  = () => res(r.result);
+          r.onerror = rej;
+          r.readAsDataURL(blob);
+        });
+        fotos.push({ data: b64 });
+        console.log('[descargarPDF] foto', i+1, 'OK base64');
+      } catch(ef) {
+        console.warn('[descargarPDF] foto', i+1, 'fetch fallo, usando URL:', ef.message);
+        fotos.push({ data: url });
+      }
+    }
+
+    const logo = v.empresa === 'RAPEL' ? LOGO_RAPEL : LOGO_VERFRUT;
+    const html = generarHTMLInforme({
+      logo,
+      empresa: v.empresa || '',
+      sup: v.supervisor || '',
+      dni: v.dni || '',
+      correo: v.correo || '',
+      fundo: v.fundo || v.sector || '',
+      punto: v.punto || '',
+      fi: v.fecha_inicio || '',
+      ff: v.fecha_fin || '',
+      semana: v.semana || '',
+      fechaInf: v.fecha_informe || '',
+      paraNombre: v.para || '',
+      paraCargo: '',
+      asunto: v.asunto || '',
+      desarrollo: v.desarrollo || '',
+      rutas: v.rutas || '',
+      acciones: v.acciones || '',
+      compromisos: v.compromisos || '',
+      observaciones: v.observaciones || '',
+      motivo: v.motivo || v.motivo_retraso || '',
+      fotos: fotos
+    });
+
+    const titulo = 'Informe_Visita_Sem' + (v.semana||'') + '_' + (v.empresa||'') + '_' + (v.fundo||v.sector||'').replace(/[^a-zA-Z0-9]/g, '_');
+
+    if (typeof html2pdf !== 'undefined') {
+      const cont = document.createElement('div');
+      cont.style.cssText = 'position:fixed;left:0;top:0;width:794px;background:#fff;z-index:-9999;opacity:0;pointer-events:none;overflow:visible';
+      cont.innerHTML = html;
+      document.body.appendChild(cont);
+
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await new Promise(r => setTimeout(r, 250));
+      const imgs = Array.from(cont.querySelectorAll('img'));
+      if (imgs.length) {
+        await Promise.all(imgs.map(img => {
+          if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+          return new Promise(res => {
+            img.onload  = () => res();
+            img.onerror = () => res();
+            setTimeout(res, 4000);
+          });
+        }));
+      }
+
+      const opt = {
+        margin:      10,
+        filename:    titulo + '.pdf',
+        image:       { type: 'jpeg', quality: 0.92 },
+        html2canvas: { scale: 2, useCORS: true, allowTaint: true, logging: false, backgroundColor: '#ffffff' },
+        jsPDF:       { unit: 'mm', format: 'a4', orientation: 'portrait', compress: true }
+      };
+      await html2pdf().set(opt).from(cont).save();
+      document.body.removeChild(cont);
+      mostrarToast('✅ PDF descargado', 'info');
+      console.log('[descargarPDF] PDF generado y descargado:', titulo + '.pdf');
+    } else {
+      const w = window.open('', '_blank');
+      if (!w) { mostrarToast('❌ Permití pop-ups para ver el PDF', 'error'); return; }
+      const _scriptPrint = '\x3cscript\x3ewindow.onload=function(){setTimeout(function(){window.print();},500);};\x3c/script\x3e';
+      w.document.write('<!DOCTYPE html><html><head><title>' + titulo + '</title><meta charset="utf-8"><style>@media print { @page { margin: 15mm; } body { margin: 0; } }</style></head><body>' + html + _scriptPrint + '</body></html>');
+      w.document.close();
+    }
+  } catch(e) {
+    console.error('[descargarPDF] error:', e);
+    mostrarToast('❌ Error generando PDF: ' + e.message, 'error');
   }
-
-  // Fallback: regenerar al vuelo (para visitas viejas sin PDF guardado)
-  mostrarToast('⏳ Generando PDF (visita antigua sin PDF guardado)...', 'info');
-  await _cargarLogoBase64();
-
-  // Parsear fotos previas si las hay
-  let fotosUrls = [];
-  if (Array.isArray(v.fotos_urls)) fotosUrls = v.fotos_urls;
-  else if (typeof v.fotos === 'string' && v.fotos.indexOf('http') !== -1) {
-    fotosUrls = v.fotos.split('|').filter(Boolean);
-  }
-  const fotos = fotosUrls.map(url => ({ url: url, data: url }));
-
-  const logo = v.empresa === 'RAPEL' ? LOGO_RAPEL : LOGO_VERFRUT;
-  const html = generarHTMLInforme({
-    logo,
-    empresa: v.empresa||'', sup: v.supervisor||'', dni: v.dni||'',
-    correo: v.correo||'', fundo: v.fundo||v.sector||'', punto: v.punto||'',
-    fi: v.fecha_inicio||'', ff: v.fecha_fin||'', semana: v.semana||'',
-    fechaInf: v.fecha_informe||'', paraNombre: v.para||'', paraCargo: '',
-    asunto: v.asunto||'', desarrollo: v.desarrollo||'', rutas: v.rutas||'',
-    acciones: v.acciones||'', compromisos: v.compromisos||'',
-    observaciones: v.observaciones||'', motivo: v.motivo_retraso||'',
-    fotos: fotos
-  });
-
-  // Abrir ventana nueva con el HTML y disparar print
-  const titulo = 'Informe_Visita_Sem' + (v.semana||'') + '_' + (v.empresa||'') + '_' + (v.fundo||v.sector||'').replace(/[^a-zA-Z0-9]/g, '_');
-  const w = window.open('', '_blank');
-  if (!w) { mostrarToast('❌ Permití pop-ups para descargar el PDF', 'error'); return; }
-  const _scriptPrint = '\x3cscript\x3ewindow.onload=function(){setTimeout(function(){window.print();},400);};\x3c/script\x3e';
-  w.document.write('<!DOCTYPE html><html><head><title>' + titulo + '</title><meta charset="utf-8"><style>@media print { @page { margin: 15mm; } body { margin: 0; } }</style></head><body>' + html + _scriptPrint + '</body></html>');
-  w.document.close();
 }
 
 /**
