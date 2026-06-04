@@ -7906,11 +7906,41 @@ async function _generarYSubirPDFInforme(datos, ts) {
     }
     await _cargarLogoBase64();
 
-    // Las fotos vienen en visitasFotos con .data (base64) o .url (previas)
-    const fotosParaHTML = (visitasFotos || []).map(f => ({
-      data: f.data || f.url || '',
-      url:  f.url  || ''
-    }));
+    // _PDF_FOTOS_FIX_V1 — Asegurar que las fotos tengan base64 para html2canvas
+    let fotosParaHTML = [];
+    if (visitasFotos && visitasFotos.length) {
+      console.log('[PDF] preparando ' + visitasFotos.length + ' foto(s) para el informe');
+      for (let i = 0; i < visitasFotos.length; i++) {
+        const f = visitasFotos[i];
+        if (!f) continue;
+        // Si ya tiene base64, usar directamente
+        if (f.data && f.data.indexOf('data:') === 0) {
+          fotosParaHTML.push({ data: f.data });
+          console.log('[PDF] foto', i+1, 'usa base64 (nueva)');
+        }
+        // Si solo tiene URL Azure, hacer fetch para convertir a base64
+        else if (f.url) {
+          try {
+            const resp = await fetch(f.url, { mode: 'cors' });
+            const blob = await resp.blob();
+            const b64 = await new Promise((res, rej) => {
+              const r = new FileReader();
+              r.onload  = () => res(r.result);
+              r.onerror = rej;
+              r.readAsDataURL(blob);
+            });
+            fotosParaHTML.push({ data: b64 });
+            console.log('[PDF] foto', i+1, 'convertida desde URL a base64 OK');
+          } catch(eu) {
+            console.warn('[PDF] foto', i+1, 'no se pudo fetch desde URL, se intentara con URL directa:', eu.message);
+            fotosParaHTML.push({ data: f.url });
+          }
+        }
+      }
+    } else {
+      console.log('[PDF] visita SIN fotos (visitasFotos vacio o nulo)');
+    }
+    console.log('[PDF] fotosParaHTML final:', fotosParaHTML.length, 'fotos');
 
     const logo = datos.empresa === 'RAPEL' ? (typeof LOGO_RAPEL !== 'undefined' ? LOGO_RAPEL : '')
                                             : (typeof LOGO_VERFRUT !== 'undefined' ? LOGO_VERFRUT : '');
