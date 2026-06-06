@@ -1670,7 +1670,24 @@ function getTipos() {
   return [...document.querySelectorAll('#capTipoGroup input[type=checkbox]:checked')].map(cb => cb.value);
 }
 function v(id)       { const el = document.getElementById(id); return el ? el.value : ''; }
-function sv(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
+function sv(id, val) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  val = (val == null) ? '' : val;
+  // FIX area: si es <select> y el valor no existe como opcion, agregarla antes de seleccionar
+  if (el.tagName === 'SELECT' && val !== '') {
+    var existe = false;
+    for (var i = 0; i < el.options.length; i++) {
+      if (el.options[i].value === val) { existe = true; break; }
+    }
+    if (!existe) {
+      var opt = document.createElement('option');
+      opt.value = val; opt.textContent = val;
+      el.appendChild(opt);
+    }
+  }
+  el.value = val;
+}
 
 async function apiGet(p) {
   const r = await fetch(API + '?' + new URLSearchParams(p));
