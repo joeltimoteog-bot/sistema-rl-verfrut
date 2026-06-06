@@ -334,9 +334,11 @@ async function _ejecutarBusquedaCapacitaciones() {
         grupos[id] = {
           id,
           empresa:           row.EMPRESA || row.empresa || '',
-          fecha:             row.FECHA || row.fecha || desde,
+          fecha:             row.FECHA_CAPACITACION || row.FECHA || row.fecha || desde,
           tema:              row.TEMA || row.tema || '',
           lugar:             row.LUGAR || row.lugar || '',
+          area:              row.AREA || row.area || '',
+          tipo:              row.TIPO || row.tipo || '',
           horaInicio:        _fmtHoraCap(row.HORA_INICIO || row.horaInicio || ''),
           horaFin:           _fmtHoraCap(row.HORA_FIN || row.horaFin || ''),
           horas:             row.HORAS || row.horas || row.totalHoras || _calcHorasDesde(_fmtHoraCap(row.HORA_INICIO||row.horaInicio||''), _fmtHoraCap(row.HORA_FIN||row.horaFin||'')),
@@ -500,6 +502,8 @@ async function regenerarFormatoCapacitacion(cap) {
     respDni:     v('capRespDni'),
     respNombre:  v('capRespNombre'),
     respCargo:   v('capRespCargo'),
+    area:        v('capArea'),
+    tipos:       getTipos(),
     asistentes:  asistentes.slice()
   };
 
@@ -509,6 +513,8 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capFecha',       cap.fecha);
     sv('capTema',        cap.tema);
     sv('capLugar',       cap.lugar);
+    sv('capArea', cap.area);
+    setTipos(cap.tipo);
     sv('capHoraInicio',  cap.horaInicio);
     sv('capHoraTermino', cap.horaFin);
     sv('capHoras',       cap.horas);
@@ -532,6 +538,8 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capFecha',       backup.fecha);
     sv('capTema',        backup.tema);
     sv('capLugar',       backup.lugar);
+    sv('capArea', backup.area);
+    setTipos((backup.tipos || []).join(','));
     sv('capHoraInicio',  backup.horaInicio);
     sv('capHoraTermino', backup.horaTermino);
     sv('capHoras',       backup.horas);
@@ -1650,6 +1658,14 @@ function vibrar(pattern) {
 }
 
 /* ─────────────────────── HELPERS ─────────────────────── */
+function setTipos(str) {
+  const wanted = (str == null ? '' : String(str))
+    .split(',').map(x => x.trim().toUpperCase()).filter(Boolean);
+  document.querySelectorAll('#capTipoGroup input[type=checkbox]').forEach(cb => {
+    cb.checked = wanted.indexOf(String(cb.value).trim().toUpperCase()) >= 0;
+  });
+}
+
 function getTipos() {
   return [...document.querySelectorAll('#capTipoGroup input[type=checkbox]:checked')].map(cb => cb.value);
 }
