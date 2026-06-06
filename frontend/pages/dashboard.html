@@ -2648,6 +2648,32 @@ function _mapTrabajadorAzureALegado(a) {
   };
 }
 
+// _CONSULTA_DNI_AZURE_V1 - Historial por DNI via Azure SQL (rapido) con fallback a GAS
+async function _consultaDNIAzure(dni, anio) {
+  const t0 = performance.now();
+  const url = AZURE_FN_BASE + '/atenciones/by-dni?dni=' + encodeURIComponent(String(dni).trim()) + '&dias=365';
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const j = await resp.json();
+  if (!j || !j.success) throw new Error((j && j.error) ? j.error : 'respuesta invalida');
+  let lista = [].concat(j.en_proceso || [], j.finalizadas_recientes || []);
+  const _fld = ['fecha_atencion', 'fecha_inicio_doc', 'fecha_termino_doc'];
+  lista.forEach(function(a) { _fld.forEach(function(c) { if (a[c]) a[c] = String(a[c]).slice(0, 10); }); });
+  const anioStr = String(anio);
+  lista = lista.filter(function(a) { return String(a.fecha_atencion || '').slice(0, 4) === anioStr; });
+  if (!lista.length) return null;
+  lista.sort(function(a, b) { return String(b.fecha_atencion || '').localeCompare(String(a.fecha_atencion || '')); });
+  let trabajador = null;
+  try {
+    const tr = await buscarTrabajadorPorDniAzure(String(dni).trim(), '');
+    if (tr) trabajador = _mapTrabajadorAzureALegado(tr);
+  } catch (e) {}
+  if (!trabajador) {
+    trabajador = { dni: String(dni), nombre: lista[0].nombre || '', empresa: lista[0].empresa || '', cargo: '', fundo: lista[0].fundo || '' };
+  }
+  console.log('[consultarDNI] Azure by-dni:', lista.length, 'atenciones (' + Math.round(performance.now() - t0) + 'ms)');
+  return { success: true, data: lista, trabajador: trabajador };
+}
 // Precargar logo como base64 para usar en documentos generados
 const _LOGO_URL = 'https://raw.githubusercontent.com/joeltimoteog-bot/sistema-rl-verfrut/main/frontend/images/logo-unifrutti.jpg';
 fetch(_LOGO_URL)
@@ -5363,7 +5389,17 @@ async function consultarDNI() {
     if (fHasta)      params.fechaHasta = fHasta;
     if (responsable) params.supervisor = responsable;
 
-    const d = await apiGet(params);
+    // _CONSULTA_DNI_AZURE_V1 - historial por DNI via Azure (rapido) con fallback a GAS
+    let d = null;
+    const _anioActual = String(new Date().getFullYear());
+    const _puedeAzureDNI = dni && String(dni).length === 8 && !/\D/.test(dni) && String(anio) === _anioActual;
+    if (_puedeAzureDNI) {
+      try { d = await _consultaDNIAzure(dni, anio); }
+      catch (eAz) { console.warn('[consultarDNI] Azure fallo -> GAS:', eAz.message); d = null; }
+    }
+    if (!d) {
+      d = await apiGet(params);
+    }
     if (!d.success) {
       document.getElementById('consultaResult').innerHTML = '<div class="empty">❌ ' + d.error + '</div>';
       return;
