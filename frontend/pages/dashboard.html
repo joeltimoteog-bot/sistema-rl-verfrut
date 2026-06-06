@@ -5480,9 +5480,8 @@ async function _cargarResponsables() {
   const valorActual = sel.value;
   console.log('[_cargarResponsables] cargando... desde=' + (fDesde||'-') + ' hasta=' + (fHasta||'-'));
   try {
-    const params = { action: 'getResponsablesEnRango' };
-    if (fDesde) params.fechaDesde = fDesde;
-    if (fHasta) params.fechaHasta = fHasta;
+    // _CONSULTA_DROPDOWN_FIX_V2 - cargar SIEMPRE todos los responsables (rango amplio 2000-2100), sin depender del filtro de fecha del usuario
+    const params = { action: 'getResponsablesEnRango', fechaDesde: '2000-01-01', fechaHasta: '2100-12-31' };
     const d = await apiGet(params);
     console.log('[_cargarResponsables] respuesta GAS:', d);
     if (d.success && Array.isArray(d.data) && d.data.length) {
