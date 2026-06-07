@@ -4679,21 +4679,95 @@ async function _chequearHistorialDNI(dni) {
     return;
   }
 
-  try {
-    const url = AZURE_FN_BASE + '/atenciones/by-dni?dni=' + dni + '&dias=60';
-    const t0 = performance.now();
-    const r = await fetch(url);
-    if (!r.ok) {
-      console.warn('[historialDNI] HTTP', r.status);
-      div.style.display = 'none';
-      return;
-    }
-    const d = await r.json();
-    const enProc = d.en_proceso || [];
-    const finRec = d.finalizadas_recientes || [];
-    console.log('[historialDNI]', dni, 'total=' + d.total, 'en_proceso=' + enProc.length, 'finalizadas=' + finRec.length, '(' + Math.round(performance.now() - t0) + 'ms)');
+  // _HISTORIAL_DNI_DUAL_V1 (07/jun/2026): consulta Azure + GAS en paralelo
+  // Motivo: Azure puede no tener atenciones registradas HOY (sync no es 100%).
+  //         GAS lee directo de Sheets → siempre actualizado.
+  //         Combinamos ambas listas con dedup por nro.
 
-    if (!d.success) { div.style.display = 'none'; return; }
+  const t0 = performance.now();
+
+  // Promesa 1 — Azure SQL (rápido, ~200ms)
+  const promAzure = (async () => {
+    try {
+      const r = await fetch(AZURE_FN_BASE + '/atenciones/by-dni?dni=' + dni + '&dias=60');
+      if (!r.ok) return null;
+      const d = await r.json();
+      if (!d.success) return null;
+      return { enProc: d.en_proceso || [], finRec: d.finalizadas_recientes || [] };
+    } catch (e) {
+      console.warn('[historialDNI] Azure error:', e);
+      return null;
+    }
+  })();
+
+  // Promesa 2 — GAS / Google Sheets (lento ~3s, pero siempre fresco)
+  const promGas = (async () => {
+    try {
+      const anio = new Date().getFullYear().toString();
+      const r = await apiGet({ action: 'consultaDNI', dni: dni, rol: (USER && USER.rol) || 'administrador', anio: anio });
+      if (!r || !r.success || !Array.isArray(r.data)) return null;
+      const hace60 = new Date(); hace60.setDate(hace60.getDate() - 60);
+      const enProc = [];
+      const finRec = [];
+      r.data.forEach(a => {
+        const est = String(a.estado || '').toUpperCase();
+        const f = new Date(String(a.fecha_atencion || '').substring(0, 10));
+        if (isNaN(f.getTime()) || f < hace60) return;
+        if (est === 'EN PROCESO') enProc.push(a);
+        else if (est === 'FINALIZADO') finRec.push(a);
+      });
+      return { enProc: enProc, finRec: finRec };
+    } catch (e) {
+      console.warn('[historialDNI] GAS error:', e);
+      return null;
+    }
+  })();
+
+  // Helper — calcular días desde fecha_atencion hasta hoy
+  const _calcDiasDesdeAtencion = (fecha) => {
+    if (!fecha) return 0;
+    const f = new Date(String(fecha).substring(0, 10));
+    if (isNaN(f.getTime())) return 0;
+    const hoy = new Date();
+    return Math.max(0, Math.floor((hoy - f) / (1000 * 60 * 60 * 24)));
+  };
+
+  // Helper — combinar listas y renderizar el banner
+  const _renderConDatos = (azureData, gasData) => {
+    const mapEnProc = new Map();
+    const mapFinRec = new Map();
+    const keyOf = (a) => String(a.nro || a.id || (String(a.fecha_atencion||'').substring(0,10) + '|' + (a.detalle_documento || '')));
+
+    // Combinar EN PROCESO
+    if (azureData) {
+      azureData.enProc.forEach(a => {
+        const aFix = Object.assign({}, a);
+        if (!aFix.dias_transcurridos) aFix.dias_transcurridos = _calcDiasDesdeAtencion(aFix.fecha_atencion);
+        mapEnProc.set(keyOf(aFix), aFix);
+      });
+    }
+    if (gasData) {
+      gasData.enProc.forEach(a => {
+        const k = keyOf(a);
+        if (mapEnProc.has(k)) return; // ya está desde Azure
+        const aFix = Object.assign({}, a);
+        // GAS: dias_transcurridos del Sheet es del DOC, calculamos desde fecha_atencion
+        aFix.dias_transcurridos = _calcDiasDesdeAtencion(aFix.fecha_atencion);
+        mapEnProc.set(k, aFix);
+      });
+    }
+
+    // Combinar FINALIZADAS
+    if (azureData) azureData.finRec.forEach(a => mapFinRec.set(keyOf(a), a));
+    if (gasData) gasData.finRec.forEach(a => {
+      const k = keyOf(a);
+      if (!mapFinRec.has(k)) mapFinRec.set(k, a);
+    });
+
+    const enProc = Array.from(mapEnProc.values()).sort((a, b) =>
+      String(b.fecha_atencion || '').localeCompare(String(a.fecha_atencion || ''))
+    );
+    const finRec = Array.from(mapFinRec.values()).slice(0, 5);
 
     if (enProc.length > 0) {
       div.innerHTML = _renderBannerEnProceso(enProc, finRec);
@@ -4705,10 +4779,17 @@ async function _chequearHistorialDNI(dni) {
       div.style.display = 'none';
       div.innerHTML = '';
     }
-  } catch (e) {
-    console.error('[historialDNI] error:', e);
-    div.style.display = 'none';
-  }
+  };
+
+  // 1. Esperar Azure (rápido) y mostrar lo que tenga
+  const azureData = await promAzure;
+  console.log('[historialDNI] Azure:', azureData ? azureData.enProc.length + ' en_proceso' : 'falló', '(' + Math.round(performance.now() - t0) + 'ms)');
+  _renderConDatos(azureData, null);
+
+  // 2. Esperar GAS (más lento) y completar si agrega cosas
+  const gasData = await promGas;
+  console.log('[historialDNI] GAS:', gasData ? gasData.enProc.length + ' en_proceso' : 'falló', '(' + Math.round(performance.now() - t0) + 'ms total)');
+  _renderConDatos(azureData, gasData);
 }
 
 function _renderBannerEnProceso(enProceso, finalizadas) {
