@@ -7368,7 +7368,8 @@ function fmtF(f){if(!f)return '';return String(f).split('T')[0];}
 function fmtFLargo(f){if(!f)return '';const [y,m,d]=f.split('-');const ms=['','enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];return `${parseInt(d)} de ${ms[parseInt(m)]} de ${y}`;}
 function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[String(e||'').toUpperCase()]||'bam';}
 function estC(e){const s=String(e||'').toUpperCase();return s==='EN PROCESO'?'bpr':s==='FINALIZADO'?'brs':'bp';}
-document.addEventListener('click', e=>{ if(e.target.classList.contains('ov')) e.target.classList.remove('on'); });
+// _MODAL_KEEP_OPEN_V1 (04/jun/2026): Modales NO se cierran al click fuera (evita pérdida de datos). Cierre solo con ❌, Cancelar o ESC.
+// document.addEventListener('click', e=>{ if(e.target.classList.contains('ov')) e.target.classList.remove('on'); });
 
 // ============================================================
 // MÓDULO VISITAS DE CAMPO
