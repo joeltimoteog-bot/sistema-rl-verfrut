@@ -1,3 +1,4 @@
+// _MODALES_CUSTOM_V1 (07-jun-2026): migración a appAlert/appConfirm/appPrompt
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════
    capacitaciones.js  ·  Sistema RL v3.0
@@ -118,10 +119,10 @@ function agregarItem() {
   if (inp) inp.value = '';
 }
 
-function editarItem(idx) {
+async function editarItem(idx) {
   if (!_listaActiva) return;
   const items = cargarLista(_listaActiva);
-  const nuevo = prompt('Editar ítem:', items[idx]);
+  const nuevo = await appPrompt('Editar ítem:', items[idx]);
   if (nuevo === null || !nuevo.trim()) return;
   items[idx] = nuevo.trim();
   guardarLista(_listaActiva, items);
@@ -129,10 +130,10 @@ function editarItem(idx) {
   renderizarItemsLista(_listaActiva);
 }
 
-function eliminarItem(idx) {
+async function eliminarItem(idx) {
   if (!_listaActiva) return;
   const items = cargarLista(_listaActiva);
-  if (!confirm(`¿Eliminar "${items[idx]}"?`)) return;
+  if (!await appConfirm(`¿Eliminar "${items[idx]}"?`)) return;
   items.splice(idx, 1);
   guardarLista(_listaActiva, items);
   poblarSelect(_listaActiva);
@@ -438,7 +439,7 @@ const _RESP_REGISTRO = {
 
 async function regenerarFormatoCapacitacion(cap) {
   if (!cap || !cap.asistentes || !cap.asistentes.length) {
-    alert('❌ Esta capacitación no tiene asistentes para regenerar');
+    await appAlert('❌ Esta capacitación no tiene asistentes para regenerar');
     return;
   }
 
@@ -449,10 +450,10 @@ async function regenerarFormatoCapacitacion(cap) {
 
   // Si la capacitación original no tiene datos del capacitador, pedirlos
   if (!capDni || !capNombre) {
-    const dniInput = (prompt('🔍 Ingresa el DNI del CAPACITADOR (quien dictó la capacitación):') || '').trim();
+    const dniInput = (await appPrompt('🔍 Ingresa el DNI del CAPACITADOR (quien dictó la capacitación):') || '').trim();
     if (!dniInput) return;
     if (!/^\d{7,8}$/.test(dniInput)) {
-      alert('❌ DNI inválido. Debe tener 7 u 8 dígitos.');
+      await appAlert('❌ DNI inválido. Debe tener 7 u 8 dígitos.');
       return;
     }
     capDni = dniInput;
@@ -480,10 +481,10 @@ async function regenerarFormatoCapacitacion(cap) {
 
     // Si NO está en BD_Supervisores → pedir nombre y cargo manualmente
     if (!encontrado) {
-      capNombre = (prompt('⚠️ DNI ' + dniInput + ' no está en BD_Supervisores.\n\nIngresa el nombre completo del capacitador:') || '').trim();
-      if (!capNombre) { alert('❌ El nombre es obligatorio'); return; }
-      capCargo = (prompt('📋 Ingresa el cargo del capacitador:') || '').trim();
-      if (!capCargo) { alert('❌ El cargo es obligatorio'); return; }
+      capNombre = (await appPrompt('⚠️ DNI ' + dniInput + ' no está en BD_Supervisores.\n\nIngresa el nombre completo del capacitador:') || '').trim();
+      if (!capNombre) { await appAlert('❌ El nombre es obligatorio'); return; }
+      capCargo = (await appPrompt('📋 Ingresa el cargo del capacitador:') || '').trim();
+      if (!capCargo) { await appAlert('❌ El cargo es obligatorio'); return; }
     }
   }
 
@@ -588,9 +589,9 @@ function cancelarCapacitacion() {
   showTab('registros', document.getElementById('tabBtnRegistros'));
 }
 
-function continuarAPaso1() {
+async function continuarAPaso1() {
   const n = parseInt(v('cantTrabajadores')) || 0;
-  if (n < 1) { alert('Ingresa al menos 1 trabajador'); return; }
+  if (n < 1) { await appAlert('Ingresa al menos 1 trabajador'); return; }
   _trabajadoresProgramados = n;
   _totalFormatos = Math.ceil(n / FILAS_POR_FORMATO);
   _mostrarPaso(1);
@@ -811,8 +812,8 @@ function agregarAsistente(t) {
   renderLista();
 }
 
-function eliminarAsistente(dni) {
-  if (!confirm('¿Eliminar este asistente de la lista?')) return;
+async function eliminarAsistente(dni) {
+  if (!await appConfirm('¿Eliminar este asistente de la lista?')) return;
   asistentes = asistentes.filter(a => String(a.dni) !== String(dni)).map((a, i) => ({ ...a, n: i + 1 }));
   renderLista();
 }
@@ -875,15 +876,15 @@ function cerrarModalManual() {
   if (el) el.classList.remove('open');
 }
 
-function agregarAsistenteManual() {
+async function agregarAsistenteManual() {
   const dni    = (v('manDni')    || '').trim().replace(/\D/g, '');
   const nombre = (v('manNombre') || '').trim();
   const cargo  = (v('manCargo')  || '').trim();
   const sexo   = v('manSexo') || '';
-  if (!dni || dni.length !== 8) { alert('El DNI debe tener exactamente 8 dígitos'); return; }
-  if (!nombre) { alert('El nombre es obligatorio'); return; }
+  if (!dni || dni.length !== 8) { await appAlert('El DNI debe tener exactamente 8 dígitos'); return; }
+  if (!nombre) { await appAlert('El nombre es obligatorio'); return; }
   if (asistentes.some(a => String(a.dni) === dni)) {
-    alert(`⚠️ DNI ${dni} ya está en la lista`); return;
+    await appAlert(`⚠️ DNI ${dni} ya está en la lista`); return;
   }
   agregarAsistente({ dni, nombre, cargo, sexo, empresa: v('capEmpresa') || '' });
   cerrarModalManual();
@@ -928,7 +929,7 @@ async function guardarCapacitacion() {
   btn.innerHTML = '<span class="spin"></span> Guardando...';
   let guardadoOk = false;
   try {
-    const { actividad, asistentesEnvio } = _buildBody();
+    const { actividad, asistentesEnvio } = await _buildBody();
     console.log('[GUARDAR CAP] Actividad a enviar:', actividad);
     console.log('[GUARDAR CAP] Asistentes:', asistentesEnvio);
     const d = await apiPost({ action: 'guardarCapacitacion', actividad, asistentes: asistentesEnvio });
@@ -951,7 +952,7 @@ async function guardarCapacitacion() {
   }
 }
 
-function _buildBody() {
+async function _buildBody() {
   // Objeto actividad con los nombres exactos que espera capGuardar() del backend
   const actividad = {
     idCapacitacion:    'CAP-' + Date.now(),
@@ -997,7 +998,7 @@ async function generarPDFsFormatos() {
   if (!empresa) { mostrarFeedback('err', 'Selecciona la empresa antes de generar el PDF'); return; }
   const respDni = v('capRespDni').trim(), respNombre = v('capRespNombre').trim(), respCargo = v('capRespCargo').trim();
   if (!respDni || !respNombre || !respCargo) {
-    alert('⚠️ Debes ingresar el DNI del responsable del registro.\n\nEl DNI debe existir en BD_Supervisores para auto-completar el nombre y cargo.');
+    await appAlert('⚠️ Debes ingresar el DNI del responsable del registro.\n\nEl DNI debe existir en BD_Supervisores para auto-completar el nombre y cargo.');
     document.getElementById('capRespDni').focus();
     return;
   }
@@ -1006,7 +1007,7 @@ async function generarPDFsFormatos() {
 
   const totalFormatos = Math.ceil(n / FILAS_POR_FORMATO);
   if (totalFormatos > 1) {
-    const ok = confirm(
+    const ok = await appConfirm(
       `📋 Se generarán ${totalFormatos} formatos R-SC-01\n` +
       `• ${n} asistentes en total\n` +
       `• ${FILAS_POR_FORMATO} asistentes por hoja\n\n¿Continuar?`
@@ -1604,8 +1605,8 @@ async function exportarCSV() {
 }
 
 /* ─────────────────────── RESET ─────────────────────── */
-function resetearFormulario() {
-  if (!confirm('¿Iniciar una nueva capacitación? Se perderá la lista actual de asistentes.')) return;
+async function resetearFormulario() {
+  if (!await appConfirm('¿Iniciar una nueva capacitación? Se perderá la lista actual de asistentes.')) return;
   asistentes = [];
   _dniCooldown = {};
   _esRetroactivo = false; _fechaRetroactiva = null; _motivoRetroactivo = '';
