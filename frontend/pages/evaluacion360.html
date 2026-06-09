@@ -738,7 +738,7 @@ async function guardarEvaluacion() {
   });
 
   if (!todasRespondidas) {
-    if (!confirm('Hay preguntas sin responder. ¿Deseas guardar igual?')) return;
+    if (!await appConfirm('Hay preguntas sin responder. ¿Deseas guardar igual?')) return;
   }
 
   const promGlobal = totalRespondidas > 0 ? totalPuntos / totalRespondidas : 0;
@@ -785,8 +785,8 @@ async function guardarEvaluacion() {
   }
 }
 
-function limpiarFormulario() {
-  if (!confirm('¿Limpiar todos los campos del formulario?')) return;
+async function limpiarFormulario() {
+  if (!await appConfirm('¿Limpiar todos los campos del formulario?')) return;
   document.getElementById('eval_supervisor').value = '';
   document.getElementById('eval_empresa').value = 'RAPEL';
   document.getElementById('eval_fecha').value = hoy();
@@ -942,8 +942,8 @@ h3{font-size:16px !important}
 }
 
 // ── Eliminar evaluación ──
-function eliminarEval(id) {
-  if (!confirm('¿Eliminar esta evaluación? Esta acción no se puede deshacer.')) return;
+async function eliminarEval(id) {
+  if (!await appConfirm('¿Eliminar esta evaluación? Esta acción no se puede deshacer.')) return;
   const historial = getHistorial().filter(e => e.id !== id);
   setHistorial(historial);
   renderRanking();
@@ -1175,5 +1175,7 @@ window.onload = function() {
   cargarEvaluacionesAPI();
 };
 </script>
-</body>
+
+  <script src="../js/modal-system.js"></script>
+  </body>
 </html>

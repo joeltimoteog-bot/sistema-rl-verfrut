@@ -1,3 +1,4 @@
+// _MODALES_CUSTOM_V1 (08-jun-2026): migración a appAlert/appConfirm/appPrompt
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════
    inventario.js  ·  Sistema RL v3.0  ·  v2
@@ -479,7 +480,7 @@ async function confirmarArmado() {
   if (!fecha)                  { mostrarAlerta('alArmar', 'err', 'La fecha es obligatoria'); return; }
   if (!sector)                 { mostrarAlerta('alArmar', 'err', 'Selecciona el sector'); return; }
   if (!resp)                   { mostrarAlerta('alArmar', 'err', 'Selecciona el responsable'); return; }
-  if (!confirm(`¿Confirmar armado de ${cant.toLocaleString('es-PE')} canastas? Esta acción descontará el stock.`)) return;
+  if (!await appConfirm(`¿Confirmar armado de ${cant.toLocaleString('es-PE')} canastas? Esta acción descontará el stock.`)) return;
 
   const btn = document.getElementById('btnConfirmarArmado');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Procesando...';
@@ -692,12 +693,12 @@ async function confirmarEditarProducto() {
 
 async function eliminarProductoCatalogo(id) {
   const prod = (DATA.productos || []).find(p => p.id === id);
-  if (!confirm(`¿Eliminar "${prod ? prod.nombre : id}" del catálogo?`)) return;
+  if (!await appConfirm(`¿Eliminar "${prod ? prod.nombre : id}" del catálogo?`)) return;
   try {
     const d = await apiPost({ action: 'invEliminarProducto', id, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error);
     await cargarDatos();
-  } catch(e) { alert('❌ ' + e.message); }
+  } catch(e) { await appAlert('❌ ' + e.message); }
 }
 
 /* ─────────────── TAB REPORTES ─────────────── */
@@ -913,13 +914,13 @@ function renderSelectsResponsable() {
 
 async function guardarMeta() {
   const meta = parseInt(v('cfgMeta'));
-  if (!meta || meta <= 0) { alert('Ingresa un número válido mayor a 0'); return; }
+  if (!meta || meta <= 0) { await appAlert('Ingresa un número válido mayor a 0'); return; }
   try {
     const d = await apiPost({ action: 'invGuardarMeta', meta_total: meta, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error);
-    alert('✅ Meta guardada: ' + meta.toLocaleString('es-PE') + ' canastas');
+    await appAlert('✅ Meta guardada: ' + meta.toLocaleString('es-PE') + ' canastas');
     await cargarDatos();
-  } catch(e) { alert('❌ ' + e.message); }
+  } catch(e) { await appAlert('❌ ' + e.message); }
 }
 
 async function agregarProductoReceta() {
@@ -939,23 +940,23 @@ async function agregarProductoReceta() {
 }
 
 async function eliminarProducto(prod) {
-  if (!confirm('¿Eliminar este producto de la receta? No afecta ingresos ya registrados.')) return;
+  if (!await appConfirm('¿Eliminar este producto de la receta? No afecta ingresos ya registrados.')) return;
   try {
     const d = await apiPost({ action: 'invEliminarReceta', producto: prod, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error);
     await cargarDatos();
-  } catch(e) { alert('❌ ' + e.message); }
+  } catch(e) { await appAlert('❌ ' + e.message); }
 }
 
 async function agregarResponsable() {
   const nombre = v('cfgRespNombre').trim();
-  if (!nombre) { alert('Ingresa el nombre del responsable'); return; }
+  if (!nombre) { await appAlert('Ingresa el nombre del responsable'); return; }
   try {
     const d = await apiPost({ action: 'invAgregarResponsable', nombre, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error);
     sv('cfgRespNombre', '');
     await cargarDatos();
-  } catch(e) { alert('❌ ' + e.message); }
+  } catch(e) { await appAlert('❌ ' + e.message); }
 }
 
 /* ─────────────── MODAL EDITAR (genérico) ─────────────── */
@@ -1156,40 +1157,40 @@ async function confirmarEditarSector() {
 }
 
 async function eliminarSector(id, nombre) {
-  if (!confirm(`¿Eliminar el sector "${nombre}"?`)) return;
+  if (!await appConfirm(`¿Eliminar el sector "${nombre}"?`)) return;
   try {
     const d = await apiPost({ action: 'invEliminarSector', id, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error || 'Error al eliminar');
     await cargarSectoresInv();
-  } catch(e) { alert('❌ ' + e.message); }
+  } catch(e) { await appAlert('❌ ' + e.message); }
 }
 
 /* ─────────────── ELIMINAR REGISTROS ─────────────── */
 async function eliminarIngreso(id) {
-  if (!confirm('¿Eliminar este ingreso? Afectará el cálculo de stock.')) return;
+  if (!await appConfirm('¿Eliminar este ingreso? Afectará el cálculo de stock.')) return;
   try {
     const d = await apiPost({ action: 'invEliminarIngreso', id, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error);
     await cargarDatos();
-  } catch(e) { alert('❌ ' + e.message); }
+  } catch(e) { await appAlert('❌ ' + e.message); }
 }
 
 async function eliminarArmado(id) {
-  if (!confirm('¿Eliminar este armado? El backend validará que no queden canastas disponibles en negativo.')) return;
+  if (!await appConfirm('¿Eliminar este armado? El backend validará que no queden canastas disponibles en negativo.')) return;
   try {
     const d = await apiPost({ action: 'invEliminarArmado', id, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error);
     await cargarDatos();
-  } catch(e) { alert('❌ ' + e.message); }
+  } catch(e) { await appAlert('❌ ' + e.message); }
 }
 
 async function eliminarEntrega(id) {
-  if (!confirm('¿Eliminar esta entrega?')) return;
+  if (!await appConfirm('¿Eliminar esta entrega?')) return;
   try {
     const d = await apiPost({ action: 'invEliminarEntrega', id, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error);
     await cargarDatos();
-  } catch(e) { alert('❌ ' + e.message); }
+  } catch(e) { await appAlert('❌ ' + e.message); }
 }
 
 /* ─────────────── HELPERS MODAL ─────────────── */

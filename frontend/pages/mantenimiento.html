@@ -336,7 +336,7 @@ function calcularKm(){
 }
 async function enviarSolicitud(){
   const km=document.getElementById('kilometraje').value,tipoMant=document.getElementById('tipoMant').value,tipoLic=document.getElementById('tipoLicencia').value;
-  if(!km||!tipoMant||!tipoLic){alert('Completá: tipo de licencia, kilometraje y tipo de mantenimiento.');return;}
+  if(!km||!tipoMant||!tipoLic){await appAlert('Completá: tipo de licencia, kilometraje y tipo de mantenimiento.');return;}
   const btn=document.getElementById('btnEnviar');btn.disabled=true;btn.textContent='Enviando...';
   const datos={action:'guardarSolicitudMantenimiento',
     dni:document.getElementById('dni').value.trim(),nombre:document.getElementById('nombre').value,
@@ -349,10 +349,10 @@ async function enviarSolicitud(){
   try{
     const r=await fetch(API,{method:'POST',body:JSON.stringify(datos),headers:{'Content-Type':'text/plain'}});
     const res=await r.json();btn.disabled=false;btn.textContent='ENVIAR SOLICITUD';
-    if(!res||!res.ok){alert((res&&res.msg)?res.msg:'Error al guardar.');return;}
+    if(!res||!res.ok){await appAlert((res&&res.msg)?res.msg:'Error al guardar.');return;}
     document.getElementById('solicitudId').textContent='N° de solicitud: '+(res.id||'—');
     document.getElementById('formMant').style.display='none';document.getElementById('confirmMsg').classList.add('show');
-  }catch(e){btn.disabled=false;btn.textContent='ENVIAR SOLICITUD';alert('Error de conexión al enviar.');console.error('[mant] enviar',e);}
+  }catch(e){btn.disabled=false;btn.textContent='ENVIAR SOLICITUD';await appAlert('Error de conexión al enviar.');console.error('[mant] enviar',e);}
 }
 function nuevaSolicitud(){
   document.getElementById('formMant').style.display='block';document.getElementById('confirmMsg').classList.remove('show');
@@ -412,10 +412,10 @@ function renderAdmin(){
 }
 
 let _idActual=null;
-function notificarCorreo(id){
+async function notificarCorreo(id){
   const s=_solicitudes.find(x=>x.id===id);
   if(!s){return;}
-  if(!s.correo){alert('Este solicitante no tiene correo cargado en BB.DD. RESPONSABLES (columna C).');return;}
+  if(!s.correo){await appAlert('Este solicitante no tiene correo cargado en BB.DD. RESPONSABLES (columna C).');return;}
   const asunto='Mantenimiento '+(String(s.estado).toUpperCase()==='COMPLETADO'?'completado':'programado')+' - '+s.id;
   let cuerpo='Estimado/a '+(s.nombre||'')+',\n\n';
   cuerpo+='Le informamos que su solicitud de mantenimiento '+s.id+' para la unidad '+(s.unidad||'')+' ';
@@ -445,17 +445,19 @@ function cerrarModal(){document.getElementById('modalProg').classList.remove('sh
 function _toISO(f){if(!f)return'';const p=f.split('/');return p.length===3?p[2]+'-'+('0'+p[1]).slice(-2)+'-'+('0'+p[0]).slice(-2):'';}
 function _toDMY(iso){const p=iso.split('-');return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:iso;}
 async function guardarProgramacion(){
-  const fecha=document.getElementById('progFecha').value;if(!fecha){alert('Seleccioná una fecha.');return;}
+  const fecha=document.getElementById('progFecha').value;if(!fecha){await appAlert('Seleccioná una fecha.');return;}
   const btn=document.getElementById('btnGuardarProg');btn.disabled=true;btn.textContent='Guardando...';
   const datos={action:'programarMantenimiento',id:_idActual,fechaProgramada:_toDMY(fecha),
     comentario:document.getElementById('progComentario').value,estado:document.getElementById('progEstado').value,admin:USER.usuario};
   try{
     const r=await fetch(API,{method:'POST',body:JSON.stringify(datos),headers:{'Content-Type':'text/plain'}});
     const res=await r.json();btn.disabled=false;btn.textContent='Guardar';
-    if(!res||!res.ok){alert((res&&res.msg)?res.msg:'Error al guardar.');return;}
+    if(!res||!res.ok){await appAlert((res&&res.msg)?res.msg:'Error al guardar.');return;}
     cerrarModal();cargarAdmin();
-  }catch(e){btn.disabled=false;btn.textContent='Guardar';alert('Error de conexión.');console.error('[mant] prog',e);}
+  }catch(e){btn.disabled=false;btn.textContent='Guardar';await appAlert('Error de conexión.');console.error('[mant] prog',e);}
 }
 </script>
-</body>
+
+  <script src="../js/modal-system.js"></script>
+  </body>
 </html>

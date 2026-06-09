@@ -1,3 +1,4 @@
+// _MODALES_CUSTOM_V1 (08-jun-2026): migración a appAlert/appConfirm/appPrompt
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════
    horas.js · Sistema RL v3.0 · Módulo Acumulación de Horas
@@ -210,12 +211,12 @@ async function agregarMotivo() {
 }
 
 async function eliminarMotivo(nombre) {
-  if (!confirm(`¿Eliminar el motivo "${nombre}"?`)) return;
+  if (!await appConfirm(`¿Eliminar el motivo "${nombre}"?`)) return;
   try {
     const d = await apiPost({ action: 'horasEliminarMotivo', usuario: USER.usuario, nombre });
     if (!d.success) throw new Error(d.error || 'Error al eliminar');
     await cargarMotivos();
-  } catch (e) { alert('❌ ' + e.message); }
+  } catch (e) { await appAlert('❌ ' + e.message); }
 }
 
 function renderMotivos() {
@@ -545,12 +546,12 @@ async function confirmarEditarRegistro() {
 }
 
 async function eliminarRegistro(id) {
-  if (!confirm('¿Eliminar este registro? Esta acción es definitiva.')) return;
+  if (!await appConfirm('¿Eliminar este registro? Esta acción es definitiva.')) return;
   try {
     const d = await apiPost({ action: 'horasEliminar', usuario: USER.usuario, id });
     if (!d.success) throw new Error(d.error || 'Error al eliminar');
     await refrescarTrasMutacion();
-  } catch (e) { alert('❌ ' + e.message); }
+  } catch (e) { await appAlert('❌ ' + e.message); }
 }
 
 async function aprobarRegistro(id, recargarAprob) {
@@ -559,7 +560,7 @@ async function aprobarRegistro(id, recargarAprob) {
     if (!d.success) throw new Error(d.error || 'Error al aprobar');
     if (recargarAprob) await cargarAprobaciones();
     else await refrescarTrasMutacion();
-  } catch (e) { alert('❌ ' + e.message); }
+  } catch (e) { await appAlert('❌ ' + e.message); }
 }
 
 async function refrescarTrasMutacion() {
@@ -678,12 +679,12 @@ function renderAprobaciones(registros) {
 }
 
 async function rechazarRegistro(id) {
-  if (!confirm('¿Rechazar (eliminar) este registro pendiente?')) return;
+  if (!await appConfirm('¿Rechazar (eliminar) este registro pendiente?')) return;
   try {
     const d = await apiPost({ action: 'horasEliminar', usuario: USER.usuario, id });
     if (!d.success) throw new Error(d.error || 'Error al rechazar');
     await cargarAprobaciones();
-  } catch (e) { alert('❌ ' + e.message); }
+  } catch (e) { await appAlert('❌ ' + e.message); }
 }
 
 /* ─────────────── EXPORTACIONES ─────────────── */
@@ -697,7 +698,7 @@ async function _logoBase64() {
 
 async function exportarIndividualPDF() {
   const d = window.horasCache.resumenIndividual;
-  if (!d) { alert('Carga primero un DNI'); return; }
+  if (!d) { await appAlert('Carga primero un DNI'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W = 210, mg = 12;
@@ -729,9 +730,9 @@ async function exportarIndividualPDF() {
   doc.save(`horas_individual_${d.dni || 'sin_dni'}.pdf`);
 }
 
-function exportarIndividualExcel() {
+async function exportarIndividualExcel() {
   const d = window.horasCache.resumenIndividual;
-  if (!d) { alert('Carga primero un DNI'); return; }
+  if (!d) { await appAlert('Carga primero un DNI'); return; }
   const rows = (d.registros || []).map(r => ({
     Fecha: formatFecha(r.fechaEntrada || r.fecha),
     Motivo: r.motivo || '',
@@ -749,7 +750,7 @@ function exportarIndividualExcel() {
 
 async function exportarGeneralPDF() {
   const rows = window.horasCache.resumenGeneral;
-  if (!rows || !rows.length) { alert('No hay datos para exportar'); return; }
+  if (!rows || !rows.length) { await appAlert('No hay datos para exportar'); return; }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const W = 297, mg = 12; let y = mg;
@@ -774,9 +775,9 @@ async function exportarGeneralPDF() {
   doc.save('horas_general.pdf');
 }
 
-function exportarGeneralExcel() {
+async function exportarGeneralExcel() {
   const rows = window.horasCache.resumenGeneral;
-  if (!rows || !rows.length) { alert('No hay datos para exportar'); return; }
+  if (!rows || !rows.length) { await appAlert('No hay datos para exportar'); return; }
   const data = rows.map(r => {
     const acum = Number(r.acum || 0), perm = Number(r.perm || 0), deuda = Number(r.deuda || 0);
     const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm - deuda);

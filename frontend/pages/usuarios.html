@@ -281,7 +281,7 @@ async function guardarUs() {
 }
 
 async function toggleUs(usr,act){
-  if(!confirm((act?'Activar':'Desactivar')+' a '+usr+'?'))return;
+  if(!await appConfirm((act?'Activar':'Desactivar')+' a '+usr+'?'))return;
   await apiPost({action:'updateUsuario',usuario:usr,activo:act});delete CACHE.usuarios;await cargarUs();
 }
 
@@ -296,5 +296,7 @@ window.onload = function() {
   cargarUs();
 };
 </script>
-</body>
+
+  <script src="../js/modal-system.js"></script>
+  </body>
 </html>

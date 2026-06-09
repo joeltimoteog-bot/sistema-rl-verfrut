@@ -305,7 +305,7 @@ function mostrarPantallaBloqueo(user, bloqueo) {
 async function enviarSolicitudAcceso() {
   const motivo = document.getElementById('blMotivo').value.trim();
   const horas  = document.getElementById('blHoras').value;
-  if (!motivo) { alert('Ingresa el motivo de tu solicitud.'); return; }
+  if (!motivo) { await appAlert('Ingresa el motivo de tu solicitud.'); return; }
   const user = _bloqueoUser;
   try {
     await fetch(API, {
@@ -425,7 +425,7 @@ async function doLogin(){
               const hR  = Math.floor(min / 60);
               const mR  = min % 60;
               const tiempoTxt = hR > 0 ? hR + 'h ' + mR + 'min' : mR + ' min';
-              alert('✅ Acceso temporal vigente\n\nHasta: ' + (acceso.hastaHora || acceso.hasta) + '\nTiempo restante: ' + tiempoTxt);
+              await appAlert('✅ Acceso temporal vigente\n\nHasta: ' + (acceso.hastaHora || acceso.hasta) + '\nTiempo restante: ' + tiempoTxt);
               irAPantallaModulo();
             }else{
               // Sin acceso temporal → pantalla de bloqueo, no entra a ningún sistema
@@ -455,7 +455,7 @@ async function doLogin(){
             const hR  = Math.floor(min / 60);
             const mR  = min % 60;
             const tiempoTxt = hR > 0 ? hR + 'h ' + mR + 'min' : mR + ' min';
-            alert('✅ Acceso temporal vigente\n\nHasta: ' + (acceso.hastaHora || acceso.hasta) + '\nTiempo restante: ' + tiempoTxt);
+            await appAlert('✅ Acceso temporal vigente\n\nHasta: ' + (acceso.hastaHora || acceso.hasta) + '\nTiempo restante: ' + tiempoTxt);
             mostrarBienvenida(d.user, function(){ window.location.href='frontend/pages/dashboard.html'; });
           }else{
             mostrarPantallaBloqueo(d.user, bloqueo);
@@ -546,5 +546,7 @@ function mostrarToastActualizacion(newWorker) {
 // Verificar sesión cacheada al cargar la página
 checkSessionCache();
 </script>
-</body>
+
+  <script src="frontend/js/modal-system.js"></script>
+  </body>
 </html>
