@@ -1985,7 +1985,7 @@ function renderSolicitudes(data) {
 
 async function resolverSolicitud(fila, decision) {
   const motivo = decision === 'RECHAZADA'
-    ? await appPrompt('Motivo del rechazo:')
+    ? prompt('Motivo del rechazo:')
     : '';
   if (decision === 'RECHAZADA' && !motivo) return;
 
@@ -2099,7 +2099,7 @@ function renderAccesosTem(data) {
 }
 
 async function aprobarAccesoTemporal(fila, decision, usuario, horas) {
-  if (decision === 'RECHAZADO' && !await appConfirm(`¿Rechazar la solicitud de acceso de ${usuario}?`)) return;
+  if (decision === 'RECHAZADO' && !confirm(`¿Rechazar la solicitud de acceso de ${usuario}?`)) return;
   const btn = document.querySelector(`button[data-fila="${fila}"][data-dec="${decision}"]`);
   if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
   try {
@@ -4843,7 +4843,7 @@ async function _marcarFinalizado(id, nro, doc, dni, supervisorOriginal) {
               `📄 ${doc}\n` +
               `👤 Atendido originalmente por: ${supervisorOriginal}\n\n` +
               `Se marcará como FINALIZADO en Google Sheets y Azure SQL.`;
-  if (!await appConfirm(msg)) return;
+  if (!confirm(msg)) return;
 
   console.log('[marcarFinalizado] id=' + id + ' nro=' + nro + ' dni=' + dni);
 
@@ -5114,7 +5114,7 @@ async function guardarAt() { if(window._savingAt) return;
 
 async function eliminarAt(nro) {
   console.log('[eliminarAt] iniciando nro:', nro, '| rol:', USER.rol, '| usuario:', USER.usuario);
-  if(!await appConfirm('¿Eliminar la atención N° '+nro+'? Esta acción no se puede deshacer.'))return;
+  if(!confirm('¿Eliminar la atención N° '+nro+'? Esta acción no se puede deshacer.'))return;
   try{
     console.log('[eliminarAt] llamando apiPost deleteAtencion...');
     const r=await apiPost({action:'deleteAtencion',nro,rol:USER.rol,usuario:USER.usuario});
@@ -6235,7 +6235,7 @@ function _armarHojaResumen(datos) {
   return ws;
 }
 
-async function enviarConConfirmacion() {
+function enviarConConfirmacion() {
   const para = getParaFinal();
   const cc   = getCCFinal();
   if (!para) { mostrarToast('❌ Agrega al menos un destinatario en el campo Para', 'error'); return; }
@@ -6250,7 +6250,7 @@ async function enviarConConfirmacion() {
   const nombreArchivo = `Reporte_RL_${emp}_${fiRaw}_${ffRaw}.xlsx`;
   const asunto    = `Reporte RR.LL. - ${empLabel} | ${fiF} al ${ffF}`;
   const msg = `📋 CONFIRMACIÓN DE ENVÍO\n\nRango: ${fiF} al ${ffF}\nEmpresa: ${empLabel}\nTotal de registros: ${total}\nDestinatarios: ${para}\n\n✅ El Excel se descargará automáticamente en Descargas.\n📎 Adjúntalo manualmente al correo en Outlook.\n\n¿Continuar?`;
-  if (await appConfirm(msg)) {
+  if (confirm(msg)) {
     // PASO 1: Descargar Excel
     exportarCorreoExcel();
     // PASO 2: Copiar HTML al portapapeles (para pegar en Outlook como cuerpo HTML)
@@ -6370,7 +6370,7 @@ async function guardarUs() {
   }catch(e){mostrarToast('❌ Error de conexión','error');}
 }
 async function toggleUs(usr,act){
-  if(!await appConfirm((act?'Activar':'Desactivar')+' a '+usr+'?'))return;
+  if(!confirm((act?'Activar':'Desactivar')+' a '+usr+'?'))return;
   await apiPost({action:'updateUsuario',usuario:usr,activo:act});delete CACHE.usuarios;await cargarUs();
 }
 
@@ -7170,7 +7170,7 @@ function _fbIniciarEscuchaEstadisticasConRetry(intentos) {
 
 
 // ─── SSO al Portal Bienestar Social ──────────────────────────────
-async function _irBienestar() {
+function _irBienestar() {
   try {
     const userBienestar = {
       usuario: USER.usuario,
@@ -7200,7 +7200,7 @@ async function _irBienestar() {
     window.location.href = 'https://joeltimoteog-bot.github.io/bienestar-social-verfrut/portal.html';
   } catch (e) {
     console.error('[_irBienestar] error:', e);
-    await appAlert('Error al acceder al sistema Bienestar: ' + e.message);
+    alert('Error al acceder al sistema Bienestar: ' + e.message);
   }
 }
 
@@ -7292,7 +7292,7 @@ function logout(){
   location.href='../../index.html';
 }
 
-async function iniciarCountdownAcceso() {
+function iniciarCountdownAcceso() {
   const raw = sessionStorage.getItem('accesoTemporal');
   if (!raw) return;
   let acceso;
@@ -7313,7 +7313,7 @@ async function iniciarCountdownAcceso() {
       clearInterval(intervalo);
       sessionStorage.removeItem('accesoTemporal');
       if (indicador.parentNode) indicador.remove();
-      await appAlert('⏰ Tu acceso temporal ha expirado. Serás desconectado.');
+      alert('⏰ Tu acceso temporal ha expirado. Serás desconectado.');
       logout();
       return;
     }
@@ -7943,7 +7943,7 @@ async function generarInformeVisita() {
   const cc   = encodeURIComponent(ccFinal);
   const body = encodeURIComponent(cuerpoEmail);
   setTimeout(() => {
-    if(await appConfirm('✅ Informe generado y guardado.\n\n¿Desea abrirlo en Outlook para enviarlo?')) {
+    if(confirm('✅ Informe generado y guardado.\n\n¿Desea abrirlo en Outlook para enviarlo?')) {
       window.location.href = 'mailto:' + para + '?subject=' + subj + '&body=' + body + (cc ? '&cc=' + cc : '');
     }
   }, 500);
@@ -9631,7 +9631,5 @@ h3{font-size:16px !important}
 </div>
 </div>
 
-
-  <script src="../js/modal-system.js"></script>
 </body>
 </html>
