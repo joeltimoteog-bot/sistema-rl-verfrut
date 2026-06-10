@@ -461,91 +461,110 @@ async function guardarProgramacion(){
 
   <script src="../js/modal-system.js"></script>
 
-  <!-- === FICHA DEL CONDUCTOR === -->
+  <!-- === FICHA DEL CONDUCTOR (LISTA TOTAL) === -->
   <style>
-    .fic-ov{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1200;align-items:flex-start;justify-content:center;padding:30px 14px;overflow:auto}
+    .fic-ov{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1200;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto}
     .fic-ov.show{display:flex}
-    .fic-card{background:#fff;border-radius:14px;border:1px solid var(--bd);max-width:680px;width:100%;overflow:hidden;font-family:Barlow,sans-serif}
-    .fic-h{background:#0a7d36;color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between}
+    .fic-card{background:#fff;border-radius:14px;border:1px solid var(--bd);max-width:1150px;width:100%;overflow:hidden;font-family:Barlow,sans-serif}
+    .fic-h{background:#0a7d36;color:#fff;padding:13px 18px;display:flex;align-items:center;justify-content:space-between}
     .fic-h h3{margin:0;font-size:16px;font-weight:800}
     .fic-x{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1}
-    .fic-b{padding:18px}
-    .fic-busca{display:flex;gap:8px;margin-bottom:14px}
-    .fic-busca input{flex:1;padding:10px 12px;border:1.5px solid var(--bd);border-radius:8px;font-family:Barlow,sans-serif;font-size:14px}
-    .fic-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
-    .fic-it{background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px 11px}
-    .fic-it .l{font-size:10px;font-weight:800;color:var(--gr);text-transform:uppercase;letter-spacing:.4px}
-    .fic-it .v{font-size:13.5px;font-weight:700;color:#0f172a;margin-top:2px;word-break:break-word}
-    .fic-sec{font-size:11px;font-weight:800;color:#0a7d36;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;border-bottom:1.5px solid #e2e8f0;padding-bottom:4px}
-    .fic-estado{margin-top:14px;background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:12px;text-align:center}
+    .fic-b{padding:14px 16px}
+    .fic-tools{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+    .fic-tools input{flex:1;min-width:200px;padding:9px 12px;border:1.5px solid var(--bd);border-radius:8px;font-family:Barlow,sans-serif;font-size:13px}
+    .fic-chip{font-size:12px;font-weight:800;padding:5px 11px;border-radius:20px;white-space:nowrap}
+    .fc-ven{background:#fee2e2;color:#b91c1c}.fc-pv{background:#fef3c7;color:#b45309}.fc-vig{background:#dcfce7;color:#15803d}
     .fic-msg{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:10px}
-    .fic-load{display:none;color:var(--gr);font-size:13px;margin-bottom:10px}
+    .fic-load{display:none;color:var(--gr);font-size:13px;padding:18px;text-align:center}
+    .fic-tablewrap{overflow:auto;max-height:62vh;border:1px solid var(--bd);border-radius:10px}
+    .fic-t{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1050px}
+    .fic-t th{background:#0a2540;color:#fff;padding:8px 9px;text-align:left;position:sticky;top:0;font-size:11px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
+    .fic-t td{padding:7px 9px;border-bottom:1px solid #eef2f7;white-space:nowrap}
+    .fic-t tr:hover td{background:#f8fafc}
+    .fic-t tr.r-ven td{background:#fff5f5}
+    .fic-t tr.r-ven:hover td{background:#fee2e2}
   </style>
   <div class="fic-ov" id="ficOverlay" onclick="if(event.target===this)cerrarFicha()">
     <div class="fic-card">
-      <div class="fic-h"><h3>🪪 Ficha del Conductor</h3><button class="fic-x" onclick="cerrarFicha()">✕</button></div>
+      <div class="fic-h"><h3>🪪 Conductores — BB.DD. RESPONSABLES</h3><button class="fic-x" onclick="cerrarFicha()">✕</button></div>
       <div class="fic-b">
-        <div class="fic-busca">
-          <input type="text" id="ficDni" placeholder="DNI del conductor (8 dígitos)" maxlength="8" inputmode="numeric" onkeydown="if(event.key==='Enter')buscarFicha()">
-          <button class="btn btn-az" id="ficBtn" onclick="buscarFicha()">🔍 Buscar</button>
+        <div class="fic-tools">
+          <input type="text" id="ficFiltro" placeholder="🔍 Filtrar por nombre, DNI, zona, licencia..." oninput="renderConductores()">
+          <span class="fic-chip fc-ven" id="chipVen">🔴 0 vencidas</span>
+          <span class="fic-chip fc-pv" id="chipPv">🟡 0 por vencer</span>
+          <span class="fic-chip fc-vig" id="chipVig">🟢 0 vigentes</span>
+          <button class="btn btn-az" id="ficRefresh" onclick="cargarConductores(true)" style="padding:8px 14px;font-size:12px">🔄 Actualizar</button>
         </div>
         <div class="fic-msg" id="ficMsg"></div>
-        <div class="fic-load" id="ficLoad">Buscando conductor...</div>
-        <div id="ficDatos" style="display:none">
-          <div class="fic-sec">Conductor</div>
-          <div class="fic-grid">
-            <div class="fic-it"><div class="l">DNI</div><div class="v" id="fDni">—</div></div>
-            <div class="fic-it" style="grid-column:span 2"><div class="l">Usuario</div><div class="v" id="fUsuario">—</div></div>
-            <div class="fic-it"><div class="l">Cargo</div><div class="v" id="fCargo">—</div></div>
-          </div>
-          <div class="fic-sec">Unidad</div>
-          <div class="fic-grid">
-            <div class="fic-it"><div class="l">Marca</div><div class="v" id="fMarca">—</div></div>
-            <div class="fic-it"><div class="l">Modelo</div><div class="v" id="fModelo">—</div></div>
-            <div class="fic-it"><div class="l">Año</div><div class="v" id="fAnio">—</div></div>
-            <div class="fic-it"><div class="l">Estatus</div><div class="v" id="fEstatus">—</div></div>
-            <div class="fic-it" style="grid-column:span 2"><div class="l">Zona de recorrido</div><div class="v" id="fZona">—</div></div>
-          </div>
-          <div class="fic-sec">Licencia de conducir</div>
-          <div class="fic-grid">
-            <div class="fic-it"><div class="l">N° de licencia</div><div class="v" id="fLic">—</div></div>
-            <div class="fic-it"><div class="l">F. expedición</div><div class="v" id="fExp">—</div></div>
-            <div class="fic-it"><div class="l">F. revalidación</div><div class="v" id="fRev">—</div></div>
-          </div>
-          <div class="fic-estado"><div class="l" style="font-size:10px;font-weight:800;color:var(--gr);text-transform:uppercase">Estado de la licencia</div><div id="fEstado" style="margin-top:6px;font-size:15px">—</div></div>
-        </div>
+        <div class="fic-load" id="ficLoad">Cargando lista de conductores...</div>
+        <div class="fic-tablewrap" id="ficTabla" style="display:none"></div>
       </div>
     </div>
   </div>
   <script>
+  let _CONDUCTORES = null;
   function abrirFicha(){
-    const ov=document.getElementById('ficOverlay');
-    // si ya hay un DNI escrito en el formulario, lo precarga
-    const dniForm=(document.getElementById('dni')||{}).value||'';
-    if(/^\d{8}$/.test(dniForm.trim())){document.getElementById('ficDni').value=dniForm.trim();}
-    ov.classList.add('show');
-    if(document.getElementById('ficDni').value)buscarFicha();
+    document.getElementById('ficOverlay').classList.add('show');
+    if (_CONDUCTORES) renderConductores(); else cargarConductores(false);
   }
   function cerrarFicha(){document.getElementById('ficOverlay').classList.remove('show');}
-  async function buscarFicha(){
-    const dni=document.getElementById('ficDni').value.trim();
-    const msg=document.getElementById('ficMsg'),load=document.getElementById('ficLoad'),datos=document.getElementById('ficDatos'),btn=document.getElementById('ficBtn');
-    msg.style.display='none';datos.style.display='none';
-    if(!/^\d{8}$/.test(dni)){msg.textContent='El DNI debe tener 8 dígitos.';msg.style.display='block';return;}
-    load.style.display='block';btn.disabled=true;
+  function _diasLic(fRev){
+    const d=parseFecha(fRev);if(!d)return null;
+    const hoy=new Date();hoy.setHours(0,0,0,0);d.setHours(0,0,0,0);
+    return Math.floor((d-hoy)/86400000);
+  }
+  async function cargarConductores(forzar){
+    const msg=document.getElementById('ficMsg'),load=document.getElementById('ficLoad'),tw=document.getElementById('ficTabla');
+    msg.style.display='none';
+    if(!_CONDUCTORES||forzar){load.style.display='block';tw.style.display='none';}
     try{
-      const r=await fetch(API+'?'+new URLSearchParams({action:'fichaConductor',dni:dni}));
-      const res=await r.json();load.style.display='none';btn.disabled=false;
-      if(!res||!res.ok||!res.data){msg.textContent=(res&&res.msg)?res.msg:'Conductor no encontrado en BB.DD. RESPONSABLES.';msg.style.display='block';return;}
-      const d=res.data;
-      const set=function(id,v){document.getElementById(id).textContent=(v!==undefined&&v!==null&&String(v).trim()!=='')?v:'—';};
-      set('fDni',d.dni);set('fUsuario',d.usuario);set('fCargo',d.cargo);
-      set('fMarca',d.marca);set('fModelo',d.modelo);set('fAnio',d.anio);set('fEstatus',d.estatus);set('fZona',d.zonaRecorrido);
-      set('fLic',d.numLicencia);set('fExp',d.fExpedicion);set('fRev',d.fRevalidacion);
-      document.getElementById('fEstado').innerHTML=calcEstadoLicencia(d.fRevalidacion);
-      datos.style.display='block';
-    }catch(e){load.style.display='none';btn.disabled=false;
-      msg.textContent='Error de conexión. Intenta de nuevo.';msg.style.display='block';console.error('[ficha]',e);}
+      const r=await fetch(API+'?'+new URLSearchParams({action:'listaConductores'}));
+      const res=await r.json();load.style.display='none';
+      if(!res||!res.ok||!res.items){msg.textContent=(res&&res.msg)?res.msg:'No se pudo cargar la lista.';msg.style.display='block';return;}
+      _CONDUCTORES=res.items;
+      renderConductores();
+    }catch(e){load.style.display='none';
+      msg.textContent='Error de conexión. Intenta de nuevo.';msg.style.display='block';console.error('[conductores]',e);}
+  }
+  function renderConductores(){
+    if(!_CONDUCTORES)return;
+    const tw=document.getElementById('ficTabla');
+    const f=(document.getElementById('ficFiltro').value||'').trim().toLowerCase();
+    // enriquecer con días y ordenar por urgencia (vencidas primero, sin fecha al final)
+    let items=_CONDUCTORES.map(function(d){const dias=_diasLic(d.fRevalidacion);return Object.assign({},d,{_dias:(dias===null?999999:dias)});});
+    items.sort(function(a,b){return a._dias-b._dias;});
+    // contadores (sobre el total, no el filtro)
+    let nv=0,np=0,ng=0;
+    items.forEach(function(d){if(d._dias===999999)return;if(d._dias<0)nv++;else if(d._dias<=30)np++;else ng++;});
+    document.getElementById('chipVen').textContent='🔴 '+nv+' vencidas';
+    document.getElementById('chipPv').textContent='🟡 '+np+' por vencer';
+    document.getElementById('chipVig').textContent='🟢 '+ng+' vigentes';
+    if(f){items=items.filter(function(d){
+      return ['dni','usuario','cargo','modelo','marca','anio','estatus','zonaRecorrido','numLicencia','empresa']
+        .some(function(k){return String(d[k]||'').toLowerCase().indexOf(f)>=0;});
+    });}
+    if(!items.length){tw.style.display='block';tw.innerHTML='<div style="padding:20px;text-align:center;color:var(--gr);font-size:13px">Sin resultados para ese filtro.</div>';return;}
+    let h='<table class="fic-t"><thead><tr><th>N°</th><th>DNI</th><th>Conductor</th><th>Cargo</th><th>Unidad</th><th>Año</th><th>Estatus</th><th>Zona de recorrido</th><th>N° Licencia</th><th>F. Expedición</th><th>F. Revalidación</th><th>Estado licencia</th></tr></thead><tbody>';
+    items.forEach(function(d,i){
+      const ven=(d._dias!==999999&&d._dias<0);
+      const uni=((d.marca||'')+' '+(d.modelo||'')).trim()||'—';
+      h+='<tr'+(ven?' class="r-ven"':'')+'>'+
+        '<td>'+(i+1)+'</td>'+
+        '<td><strong>'+(d.dni||'—')+'</strong></td>'+
+        '<td>'+(d.usuario||'—')+'</td>'+
+        '<td>'+(d.cargo||'—')+'</td>'+
+        '<td>'+uni+'</td>'+
+        '<td>'+(d.anio||'—')+'</td>'+
+        '<td>'+(d.estatus||'—')+'</td>'+
+        '<td>'+(d.zonaRecorrido||'—')+'</td>'+
+        '<td>'+(d.numLicencia||'—')+'</td>'+
+        '<td>'+(d.fExpedicion||'—')+'</td>'+
+        '<td>'+(d.fRevalidacion||'—')+'</td>'+
+        '<td>'+calcEstadoLicencia(d.fRevalidacion)+'</td>'+
+      '</tr>';
+    });
+    h+='</tbody></table>';
+    tw.innerHTML=h;tw.style.display='block';
   }
   </script>
   </body>
