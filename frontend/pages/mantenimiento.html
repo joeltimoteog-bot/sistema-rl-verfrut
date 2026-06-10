@@ -493,7 +493,7 @@ async function guardarProgramacion(){
           <span class="fic-chip fc-ven" id="chipVen">🔴 0 vencidas</span>
           <span class="fic-chip fc-pv" id="chipPv">🟡 0 por vencer</span>
           <span class="fic-chip fc-vig" id="chipVig">🟢 0 vigentes</span>
-          <button class="btn btn-az" id="ficRefresh" onclick="cargarConductores(true)" style="padding:8px 14px;font-size:12px">🔄 Actualizar</button>
+          <button class="btn btn-az" id="ficRefresh" onclick="cargarConductores(true)" style="padding:8px 14px;font-size:12px">🔄 Actualizar</button><button class="btn" onclick="exportarConductoresExcel()" style="padding:8px 14px;font-size:12px;background:#107c41;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">📊 Excel</button><button class="btn" onclick="exportarConductoresPDF()" style="padding:8px 14px;font-size:12px;background:#b91c1c;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">📄 PDF</button>
         </div>
         <div class="fic-msg" id="ficMsg"></div>
         <div class="fic-load" id="ficLoad">Cargando lista de conductores...</div>
@@ -503,6 +503,7 @@ async function guardarProgramacion(){
   </div>
   <script>
   let _CONDUCTORES = null;
+  let _ULTIMA_LISTA = [];
   function abrirFicha(){
     document.getElementById('ficOverlay').classList.add('show');
     if (_CONDUCTORES) renderConductores(); else cargarConductores(false);
@@ -543,6 +544,7 @@ async function guardarProgramacion(){
       return ['dni','usuario','cargo','modelo','marca','anio','estatus','zonaRecorrido','numLicencia','empresa']
         .some(function(k){return String(d[k]||'').toLowerCase().indexOf(f)>=0;});
     });}
+    _ULTIMA_LISTA = items;
     if(!items.length){tw.style.display='block';tw.innerHTML='<div style="padding:20px;text-align:center;color:var(--gr);font-size:13px">Sin resultados para ese filtro.</div>';return;}
     let h='<table class="fic-t"><thead><tr><th>N°</th><th>DNI</th><th>Conductor</th><th>Cargo</th><th>Unidad</th><th>Año</th><th>Estatus</th><th>Zona de recorrido</th><th>N° Licencia</th><th>F. Expedición</th><th>F. Revalidación</th><th>Estado licencia</th></tr></thead><tbody>';
     items.forEach(function(d,i){
@@ -565,6 +567,62 @@ async function guardarProgramacion(){
     });
     h+='</tbody></table>';
     tw.innerHTML=h;tw.style.display='block';
+  }
+  </script>
+  
+  <!-- === EXPORTAR CONDUCTORES: Excel + PDF === -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <script>
+  function _estadoLicTexto(d){
+    const dias=_diasLic(d.fRevalidacion);
+    if(dias===null)return 'SIN FECHA';
+    if(dias<0)return 'VENCIDA (hace '+Math.abs(dias)+' dias)';
+    if(dias<=30)return 'POR VENCER (en '+dias+' dias)';
+    return 'VIGENTE (en '+dias+' dias)';
+  }
+  async function exportarConductoresExcel(){
+    if(!_ULTIMA_LISTA.length){await appAlert('No hay datos para exportar. Abre la lista primero.');return;}
+    if(typeof XLSX==='undefined'){await appAlert('La librería de Excel aún está cargando, intenta en unos segundos.');return;}
+    const head=['N°','DNI','CONDUCTOR','CARGO','MARCA','MODELO','AÑO','ESTATUS','ZONA DE RECORRIDO','N° LICENCIA','F. EXPEDICIÓN','F. REVALIDACIÓN','ESTADO LICENCIA','EMPRESA'];
+    const filas=_ULTIMA_LISTA.map(function(d,i){return [i+1,d.dni||'',d.usuario||'',d.cargo||'',d.marca||'',d.modelo||'',d.anio||'',d.estatus||'',d.zonaRecorrido||'',d.numLicencia||'',d.fExpedicion||'',d.fRevalidacion||'',_estadoLicTexto(d),d.empresa||''];});
+    const ws=XLSX.utils.aoa_to_sheet([head].concat(filas));
+    ws['!cols']=[{wch:4},{wch:10},{wch:36},{wch:24},{wch:10},{wch:10},{wch:6},{wch:10},{wch:20},{wch:18},{wch:13},{wch:14},{wch:24},{wch:10}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'Conductores');
+    XLSX.writeFile(wb,'Conductores_Licencias_'+new Date().toISOString().slice(0,10)+'.xlsx');
+  }
+  async function exportarConductoresPDF(){
+    if(!_ULTIMA_LISTA.length){await appAlert('No hay datos para exportar. Abre la lista primero.');return;}
+    if(typeof window.jspdf==='undefined'){await appAlert('La librería de PDF aún está cargando, intenta en unos segundos.');return;}
+    const doc=new window.jspdf.jsPDF('l','mm','a4');
+    let nv=0,np=0,ng=0,sf=0;
+    _ULTIMA_LISTA.forEach(function(d){const x=_diasLic(d.fRevalidacion);if(x===null)sf++;else if(x<0)nv++;else if(x<=30)np++;else ng++;});
+    doc.setFontSize(14);doc.setTextColor(10,37,64);
+    doc.text('Conductores y Licencias — Sistema RR.LL · Solicitud de Mantenimiento',14,13);
+    doc.setFontSize(9);doc.setTextColor(90);
+    doc.text('Generado: '+new Date().toLocaleString('es-PE')+'    ·    Vencidas: '+nv+'   Por vencer: '+np+'   Vigentes: '+ng+(sf?'   Sin fecha: '+sf:''),14,19);
+    const f=(document.getElementById('ficFiltro').value||'').trim();
+    if(f){doc.text('Filtro aplicado: "'+f+'"',14,24);}
+    doc.autoTable({
+      startY:f?27:23,
+      head:[['N°','DNI','Conductor','Cargo','Unidad','Año','Estatus','Zona','N° Licencia','F. Exped.','F. Reval.','Estado']],
+      body:_ULTIMA_LISTA.map(function(d,i){return [i+1,d.dni||'',d.usuario||'',d.cargo||'',((d.marca||'')+' '+(d.modelo||'')).trim(),d.anio||'',d.estatus||'',d.zonaRecorrido||'',d.numLicencia||'',d.fExpedicion||'',d.fRevalidacion||'',_estadoLicTexto(d)];}),
+      styles:{font:'helvetica',fontSize:7,cellPadding:1.6,overflow:'linebreak'},
+      headStyles:{fillColor:[10,37,64],textColor:255,fontSize:7,fontStyle:'bold'},
+      alternateRowStyles:{fillColor:[247,249,252]},
+      didParseCell:function(data){
+        if(data.section==='body'&&data.column.index===11){
+          const v=String(data.cell.raw||'');
+          if(v.indexOf('VENCIDA')===0){data.cell.styles.textColor=[185,28,28];data.cell.styles.fontStyle='bold';}
+          else if(v.indexOf('POR VENCER')===0){data.cell.styles.textColor=[180,83,9];data.cell.styles.fontStyle='bold';}
+          else if(v.indexOf('VIGENTE')===0){data.cell.styles.textColor=[21,128,61];}
+        }
+      },
+      margin:{left:10,right:10}
+    });
+    doc.save('Conductores_Licencias_'+new Date().toISOString().slice(0,10)+'.pdf');
   }
   </script>
   </body>
