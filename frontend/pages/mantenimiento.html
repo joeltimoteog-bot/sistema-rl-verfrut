@@ -142,7 +142,7 @@ tr:hover td{background:#fafbfc}
         <button class="tab on" data-pane="paneNueva" onclick="irTab(this)">📝 Nueva Solicitud</button>
         <button class="tab" data-pane="paneMis" onclick="irTab(this);cargarMis()">📋 Mis Solicitudes</button>
         <button class="tab" data-pane="paneAdmin" id="tabAdmin" onclick="irTab(this);cargarAdmin()" style="display:none">⚙️ Panel Admin</button>
-        <button class="tab" id="btnFicha" onclick="abrirFicha()" style="flex:0 0 auto;background:#0a7d36;color:#fff">🪪 Ficha del Conductor</button>
+        <button class="tab" id="btnFicha" onclick="abrirFicha()" style="flex:0 0 auto;background:#0a7d36;color:#fff;display:none">🪪 Ficha del Conductor</button>
       </div>
 
       <!-- NUEVA SOLICITUD -->
@@ -279,7 +279,7 @@ document.getElementById('avR').textContent=USER.cargo||USER.rol||'';
 document.getElementById('av').textContent=(USER.nombre||USER.usuario||'U').charAt(0).toUpperCase();
 document.getElementById('empBadge').textContent=(USER.empresa||'SISTEMA RL').toUpperCase();
 document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-PE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-if(esAdmin||esSuper){document.getElementById('mainWrap').style.display='block';if(esAdmin)document.getElementById('tabAdmin').style.display='block';}
+if(esAdmin||esSuper){document.getElementById('mainWrap').style.display='block';if(esAdmin){document.getElementById('tabAdmin').style.display='block';document.getElementById('btnFicha').style.display='block';}}
 else{document.getElementById('denyBox').style.display='block';}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
 
