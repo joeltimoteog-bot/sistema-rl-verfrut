@@ -477,7 +477,7 @@ async function guardarProgramacion(){
     .fic-msg{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:10px}
     .fic-load{display:none;color:var(--gr);font-size:13px;padding:18px;text-align:center}
     .fic-tablewrap{overflow:auto;max-height:62vh;border:1px solid var(--bd);border-radius:10px}
-    .fic-t{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1050px}
+    .fic-t{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1450px}
     .fic-t th{background:#0a2540;color:#fff;padding:8px 9px;text-align:left;position:sticky;top:0;font-size:11px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
     .fic-t td{padding:7px 9px;border-bottom:1px solid #eef2f7;white-space:nowrap}
     .fic-t tr:hover td{background:#f8fafc}
@@ -532,23 +532,32 @@ async function guardarProgramacion(){
     const tw=document.getElementById('ficTabla');
     const f=(document.getElementById('ficFiltro').value||'').trim().toLowerCase();
     // enriquecer con días y ordenar por urgencia (vencidas primero, sin fecha al final)
-    let items=_CONDUCTORES.map(function(d){const dias=_diasLic(d.fRevalidacion);return Object.assign({},d,{_dias:(dias===null?999999:dias)});});
+    let items=_CONDUCTORES.map(function(d){
+      const dm=_diasLic(d.fRevalidacion), dc=_diasLic(d.fRevalidacionCarro);
+      const vm=(dm===null?999999:dm), vc=(dc===null?999999:dc);
+      return Object.assign({},d,{_diasMoto:vm,_diasCarro:vc,_dias:Math.min(vm,vc)});
+    });
     items.sort(function(a,b){return a._dias-b._dias;});
     // contadores (sobre el total, no el filtro)
     let nv=0,np=0,ng=0;
-    items.forEach(function(d){if(d._dias===999999)return;if(d._dias<0)nv++;else if(d._dias<=30)np++;else ng++;});
+    items.forEach(function(d){
+      [d._diasMoto,d._diasCarro].forEach(function(x){
+        if(x===999999)return;
+        if(x<0)nv++;else if(x<=30)np++;else ng++;
+      });
+    });
     document.getElementById('chipVen').textContent='🔴 '+nv+' vencidas';
     document.getElementById('chipPv').textContent='🟡 '+np+' por vencer';
     document.getElementById('chipVig').textContent='🟢 '+ng+' vigentes';
     if(f){items=items.filter(function(d){
-      return ['dni','usuario','cargo','modelo','marca','anio','estatus','zonaRecorrido','numLicencia','empresa']
+      return ['dni','usuario','cargo','modelo','marca','anio','estatus','zonaRecorrido','numLicencia','numLicenciaCarro','empresa']
         .some(function(k){return String(d[k]||'').toLowerCase().indexOf(f)>=0;});
     });}
     _ULTIMA_LISTA = items;
     if(!items.length){tw.style.display='block';tw.innerHTML='<div style="padding:20px;text-align:center;color:var(--gr);font-size:13px">Sin resultados para ese filtro.</div>';return;}
-    let h='<table class="fic-t"><thead><tr><th>N°</th><th>DNI</th><th>Conductor</th><th>Cargo</th><th>Unidad</th><th>Año</th><th>Estatus</th><th>Zona de recorrido</th><th>N° Licencia</th><th>F. Expedición</th><th>F. Revalidación</th><th>Estado licencia</th></tr></thead><tbody>';
+    let h='<table class="fic-t"><thead><tr><th>N°</th><th>DNI</th><th>Conductor</th><th>Cargo</th><th>Unidad</th><th>Año</th><th>Estatus</th><th>Zona de recorrido</th><th style="background:#0a7d36">🏍 Lic. MOTO</th><th style="background:#0a7d36">F. Exped.</th><th style="background:#0a7d36">F. Reval.</th><th style="background:#0a7d36">Estado MOTO</th><th style="background:#1d4ed8">🚗 Lic. CARRO</th><th style="background:#1d4ed8">F. Exped.</th><th style="background:#1d4ed8">F. Reval.</th><th style="background:#1d4ed8">Estado CARRO</th></tr></thead><tbody>';
     items.forEach(function(d,i){
-      const ven=(d._dias!==999999&&d._dias<0);
+      const ven=(d._dias!==999999&&d._dias<0); // vencida la más urgente (moto o carro)
       const uni=((d.marca||'')+' '+(d.modelo||'')).trim()||'—';
       h+='<tr'+(ven?' class="r-ven"':'')+'>'+
         '<td>'+(i+1)+'</td>'+
@@ -562,7 +571,11 @@ async function guardarProgramacion(){
         '<td>'+(d.numLicencia||'—')+'</td>'+
         '<td>'+(d.fExpedicion||'—')+'</td>'+
         '<td>'+(d.fRevalidacion||'—')+'</td>'+
-        '<td>'+calcEstadoLicencia(d.fRevalidacion)+'</td>'+
+        '<td>'+(d.fRevalidacion?calcEstadoLicencia(d.fRevalidacion):'<span class="muted">—</span>')+'</td>'+
+        '<td>'+(d.numLicenciaCarro||'—')+'</td>'+
+        '<td>'+(d.fExpedicionCarro||'—')+'</td>'+
+        '<td>'+(d.fRevalidacionCarro||'—')+'</td>'+
+        '<td>'+(d.fRevalidacionCarro?calcEstadoLicencia(d.fRevalidacionCarro):'<span class="muted">—</span>')+'</td>'+
       '</tr>';
     });
     h+='</tbody></table>';
@@ -575,8 +588,9 @@ async function guardarProgramacion(){
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
   <script>
-  function _estadoLicTexto(d){
-    const dias=_diasLic(d.fRevalidacion);
+  function _estadoLicTexto(fRev){
+    if(!fRev||!String(fRev).trim())return '—';
+    const dias=_diasLic(fRev);
     if(dias===null)return 'SIN FECHA';
     if(dias<0)return 'VENCIDA (hace '+Math.abs(dias)+' dias)';
     if(dias<=30)return 'POR VENCER (en '+dias+' dias)';
@@ -585,10 +599,10 @@ async function guardarProgramacion(){
   async function exportarConductoresExcel(){
     if(!_ULTIMA_LISTA.length){await appAlert('No hay datos para exportar. Abre la lista primero.');return;}
     if(typeof XLSX==='undefined'){await appAlert('La librería de Excel aún está cargando, intenta en unos segundos.');return;}
-    const head=['N°','DNI','CONDUCTOR','CARGO','MARCA','MODELO','AÑO','ESTATUS','ZONA DE RECORRIDO','N° LICENCIA','F. EXPEDICIÓN','F. REVALIDACIÓN','ESTADO LICENCIA','EMPRESA'];
-    const filas=_ULTIMA_LISTA.map(function(d,i){return [i+1,d.dni||'',d.usuario||'',d.cargo||'',d.marca||'',d.modelo||'',d.anio||'',d.estatus||'',d.zonaRecorrido||'',d.numLicencia||'',d.fExpedicion||'',d.fRevalidacion||'',_estadoLicTexto(d),d.empresa||''];});
+    const head=['N°','DNI','CONDUCTOR','CARGO','MARCA','MODELO','AÑO','ESTATUS','ZONA DE RECORRIDO','N° LIC. MOTO','F. EXPED. MOTO','F. REVAL. MOTO','ESTADO MOTO','N° LIC. CARRO','F. EXPED. CARRO','F. REVAL. CARRO','ESTADO CARRO','EMPRESA'];
+    const filas=_ULTIMA_LISTA.map(function(d,i){return [i+1,d.dni||'',d.usuario||'',d.cargo||'',d.marca||'',d.modelo||'',d.anio||'',d.estatus||'',d.zonaRecorrido||'',d.numLicencia||'',d.fExpedicion||'',d.fRevalidacion||'',_estadoLicTexto(d.fRevalidacion),d.numLicenciaCarro||'',d.fExpedicionCarro||'',d.fRevalidacionCarro||'',_estadoLicTexto(d.fRevalidacionCarro),d.empresa||''];});
     const ws=XLSX.utils.aoa_to_sheet([head].concat(filas));
-    ws['!cols']=[{wch:4},{wch:10},{wch:36},{wch:24},{wch:10},{wch:10},{wch:6},{wch:10},{wch:20},{wch:18},{wch:13},{wch:14},{wch:24},{wch:10}];
+    ws['!cols']=[{wch:4},{wch:10},{wch:36},{wch:24},{wch:10},{wch:10},{wch:6},{wch:10},{wch:20},{wch:18},{wch:13},{wch:14},{wch:24},{wch:18},{wch:13},{wch:14},{wch:24},{wch:10}];
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,ws,'Conductores');
     XLSX.writeFile(wb,'Conductores_Licencias_'+new Date().toISOString().slice(0,10)+'.xlsx');
@@ -607,13 +621,13 @@ async function guardarProgramacion(){
     if(f){doc.text('Filtro aplicado: "'+f+'"',14,24);}
     doc.autoTable({
       startY:f?27:23,
-      head:[['N°','DNI','Conductor','Cargo','Unidad','Año','Estatus','Zona','N° Licencia','F. Exped.','F. Reval.','Estado']],
-      body:_ULTIMA_LISTA.map(function(d,i){return [i+1,d.dni||'',d.usuario||'',d.cargo||'',((d.marca||'')+' '+(d.modelo||'')).trim(),d.anio||'',d.estatus||'',d.zonaRecorrido||'',d.numLicencia||'',d.fExpedicion||'',d.fRevalidacion||'',_estadoLicTexto(d)];}),
-      styles:{font:'helvetica',fontSize:7,cellPadding:1.6,overflow:'linebreak'},
+      head:[['N°','DNI','Conductor','Cargo','Unidad','Año','Zona','Lic. MOTO','F. Reval.','Estado MOTO','Lic. CARRO','F. Reval.','Estado CARRO']],
+      body:_ULTIMA_LISTA.map(function(d,i){return [i+1,d.dni||'',d.usuario||'',d.cargo||'',((d.marca||'')+' '+(d.modelo||'')).trim(),d.anio||'',d.zonaRecorrido||'',d.numLicencia||'',d.fRevalidacion||'',_estadoLicTexto(d.fRevalidacion),d.numLicenciaCarro||'',d.fRevalidacionCarro||'',_estadoLicTexto(d.fRevalidacionCarro)];}),
+      styles:{font:'helvetica',fontSize:6.5,cellPadding:1.4,overflow:'linebreak'},
       headStyles:{fillColor:[10,37,64],textColor:255,fontSize:7,fontStyle:'bold'},
       alternateRowStyles:{fillColor:[247,249,252]},
       didParseCell:function(data){
-        if(data.section==='body'&&data.column.index===11){
+        if(data.section==='body'&&(data.column.index===9||data.column.index===12)){
           const v=String(data.cell.raw||'');
           if(v.indexOf('VENCIDA')===0){data.cell.styles.textColor=[185,28,28];data.cell.styles.fontStyle='bold';}
           else if(v.indexOf('POR VENCER')===0){data.cell.styles.textColor=[180,83,9];data.cell.styles.fontStyle='bold';}
