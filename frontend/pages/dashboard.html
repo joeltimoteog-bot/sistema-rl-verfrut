@@ -2765,22 +2765,22 @@ window.onload = async () => {
     // ─── BIENESTAR SOCIAL: visibilidad del boton y restriccion del sidebar ───
     try {
       const _esBienestar = String(USER.sector || '').toUpperCase().trim() === 'BIENESTAR SOCIAL';
-      if (esAdmin || ['tvera','lmorales','dreyna','rfigueroa','cbecerra'].indexOf(String(USER.usuario||'').toLowerCase().trim()) >= 0) {
+      if (esAdmin || ['tvera','lmorales','dreyna','rfigueroa','cbecerra','cbeserra','mmechato','nestrada'].indexOf(String(USER.usuario||'').toLowerCase().trim()) >= 0) {
         const _btnBs = document.getElementById('navBienestar');
         if (_btnBs) _btnBs.style.display = '';
       }
       if (_esBienestar && !esAdmin) {
-        ['navRes','navCorreo','navVisitas','navCasos','navFusiones','navInventario','navHoras','navEstadisticas','navEval360','navSolicitudes','navFbAlertas','navUsr','navMantenimiento'].forEach(function(id) {
-          const el = document.getElementById(id);
-          if (el) el.style.display = 'none';
-        });
-        document.querySelectorAll('button.ni').forEach(function(btn) {
+        // WHITELIST: solo Mi Dashboard, Mis Atenciones, Buscar Trabajador y Consulta por DNI (+ Bienestar)
+        document.querySelectorAll('nav button.ni').forEach(function(btn) {
+          if (btn.id === 'navBienestar' || btn.id === 'navInicio') return;
           const oc = btn.getAttribute('onclick') || '';
-          if (oc.indexOf("'trabajadores'") >= 0 || oc.indexOf('capacitaciones.html') >= 0) {
-            btn.style.display = 'none';
-          }
+          const permitido = oc.indexOf("ir('dashboard'") >= 0 || oc.indexOf("ir('atenciones'") >= 0 ||
+                            oc.indexOf("ir('trabajadores'") >= 0 || oc.indexOf("ir('consulta'") >= 0;
+          btn.style.display = permitido ? '' : 'none';
         });
-        console.log('[bienestar] Sidebar limitado para sector BIENESTAR SOCIAL');
+        const _secAdm = document.getElementById('navAdmSec');
+        if (_secAdm) _secAdm.style.display = 'none';
+        console.log('[bienestar] Sidebar limitado (whitelist) para sector BIENESTAR SOCIAL');
       }
     } catch (_eBs) {
       console.error('[bienestar] Error en logica de visibilidad:', _eBs);
@@ -2794,22 +2794,22 @@ window.onload = async () => {
   // ─── BIENESTAR SOCIAL: visibilidad del boton y restriccion del sidebar ───
   try {
     const _esBienestar = String(USER.sector || '').toUpperCase().trim() === 'BIENESTAR SOCIAL';
-    if (esAdmin || ['tvera','lmorales','dreyna','rfigueroa','cbecerra'].indexOf(String(USER.usuario||'').toLowerCase().trim()) >= 0) {
+    if (esAdmin || ['tvera','lmorales','dreyna','rfigueroa','cbecerra','cbeserra','mmechato','nestrada'].indexOf(String(USER.usuario||'').toLowerCase().trim()) >= 0) {
       const _btnBs = document.getElementById('navBienestar');
       if (_btnBs) _btnBs.style.display = '';
     }
     if (_esBienestar && !esAdmin) {
-      ['navRes','navCorreo','navVisitas','navCasos','navFusiones','navInventario','navHoras','navEstadisticas','navEval360','navSolicitudes','navFbAlertas','navUsr','navMantenimiento'].forEach(function(id) {
-        const el = document.getElementById(id);
-        if (el) el.style.display = 'none';
-      });
-      document.querySelectorAll('button.ni').forEach(function(btn) {
+      // WHITELIST: solo Mi Dashboard, Mis Atenciones, Buscar Trabajador y Consulta por DNI (+ Bienestar)
+      document.querySelectorAll('nav button.ni').forEach(function(btn) {
+        if (btn.id === 'navBienestar' || btn.id === 'navInicio') return;
         const oc = btn.getAttribute('onclick') || '';
-        if (oc.indexOf("'trabajadores'") >= 0 || oc.indexOf('capacitaciones.html') >= 0) {
-          btn.style.display = 'none';
-        }
+        const permitido = oc.indexOf("ir('dashboard'") >= 0 || oc.indexOf("ir('atenciones'") >= 0 ||
+                          oc.indexOf("ir('trabajadores'") >= 0 || oc.indexOf("ir('consulta'") >= 0;
+        btn.style.display = permitido ? '' : 'none';
       });
-      console.log('[bienestar] Sidebar limitado para sector BIENESTAR SOCIAL');
+      const _secAdm = document.getElementById('navAdmSec');
+      if (_secAdm) _secAdm.style.display = 'none';
+      console.log('[bienestar] Sidebar limitado (whitelist) para sector BIENESTAR SOCIAL');
     }
   } catch (_eBs) {
     console.error('[bienestar] Error en logica de visibilidad:', _eBs);
@@ -7184,13 +7184,17 @@ function _irBienestar() {
         var u = String(USER.usuario || '').toLowerCase().trim();
         var esAdminLocal = (typeof ROLES_VER_TODO !== 'undefined') && ROLES_VER_TODO.includes(USER.rol);
         if (esAdminLocal) {
-          return {quejas: true, accidentes: true, hostigamiento: true, subsidios: true};
+          return {quejas: true, accidentes: true, hostigamiento: true, subsidios: true, rendiciones: true, panel: true, estadisticas: true};
         }
+        // Matriz de permisos Bienestar (mantener igual que la hoja Usuarios de Bienestar)
         return {
-          quejas:        ['tvera','lmorales','dreyna'].indexOf(u) >= 0,
-          accidentes:    ['rfigueroa','lmorales','dreyna','cbecerra'].indexOf(u) >= 0,
-          hostigamiento: ['tvera','dreyna'].indexOf(u) >= 0,
-          subsidios:     ['tvera','dreyna','lmorales'].indexOf(u) >= 0
+          quejas:        ['rfigueroa','tvera','lmorales','dreyna'].indexOf(u) >= 0,
+          accidentes:    ['rfigueroa','tvera','lmorales','dreyna','cbecerra','cbeserra','mmechato','nestrada'].indexOf(u) >= 0,
+          hostigamiento: ['rfigueroa','tvera','dreyna'].indexOf(u) >= 0,
+          subsidios:     ['rfigueroa','tvera','lmorales','dreyna'].indexOf(u) >= 0,
+          rendiciones:   false,
+          panel:         ['rfigueroa','tvera','lmorales','dreyna'].indexOf(u) >= 0,
+          estadisticas:  false
         };
       })(),
       timestamp: Date.now(),
