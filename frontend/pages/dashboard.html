@@ -1359,6 +1359,32 @@ function previsualizarFoto(input, prevId) {
   }
 }
 
+let _fusionEditandoId = null;
+let _fusionEditandoFotos = ['','',''];
+
+// Helper: asignar valor a un input/select por id (usado por editarFusion)
+function _svf(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
+
+function generarRutasOrigen(valores) {
+  const cont = document.getElementById('contenedorRutasOrigen');
+  if (!cont) return;
+  const n = parseInt(document.getElementById('fCantRutasOrigen').value) || 1;
+  const prev = [...cont.querySelectorAll('.fila-origen')].map(f => ({
+    nombre: f.querySelector('.roNombre')?.value || '',
+    codigo: f.querySelector('.roCodigo')?.value || ''
+  }));
+  const vals = valores || prev;
+  let html = '';
+  for (let i = 0; i < n; i++) {
+    html += `
+      <div class="fila-origen" style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-bottom:8px;align-items:end">
+        <div><label class="lbl" style="font-size:10px">Ruta origen ${i+1} *</label><input class="roNombre" placeholder="Ej: Ruta Angostura" value="${(vals[i]?.nombre||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+        <div><label class="lbl" style="font-size:10px">Código *</label><input class="roCodigo" placeholder="Ej: 70" value="${(vals[i]?.codigo||'').replace(/"/g,'&quot;')}" style="width:100%;padding:7px 9px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px"></div>
+      </div>`;
+  }
+  cont.innerHTML = html;
+}
+
 function abrirNuevaFusion() {
   limpiarFormFusion();
   abrir('mFusion');
@@ -1369,10 +1395,18 @@ function limpiarFormFusion() {
     const el = document.getElementById(id);
     if(el) el.selectedIndex = 0;
   });
-  ['fSupervisorAuto','fRutaOrigen','fCodigoOrigen','fMotivoOtro','fObservaciones'].forEach(id => {
+  ['fSupervisorAuto','fMotivoOtro','fObservaciones'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value = '';
   });
+  _fusionEditandoId = null;
+  _fusionEditandoFotos = ['','',''];
+  const cro = document.getElementById('fCantRutasOrigen');
+  if (cro) { cro.value = '1'; generarRutasOrigen([]); }
+  const titF = document.querySelector('#mFusion .modal > div:first-child span:first-child');
+  if (titF) titF.textContent = '🚌 Registro de Fusión de Buses';
+  const btnF = document.getElementById('btnGuardarFusion');
+  if (btnF) btnF.textContent = '💾 Guardar Registro';
   const tt = document.getElementById('fTotalTrab');
   if(tt) tt.value = '';
   document.getElementById('panelReemplazo').style.display = 'none';
@@ -1454,8 +1488,15 @@ async function guardarFusion() {
   const sector    = document.getElementById('fSector').value;
   const supervisor= document.getElementById('fSupervisorAuto').value;
   const cantBuses = document.getElementById('fCantBuses').value;
-  const rutaOrigen= document.getElementById('fRutaOrigen').value.trim();
-  const codOrigen = document.getElementById('fCodigoOrigen').value.trim();
+  // ⭐ Rutas de origen (múltiples): se concatenan con " | " en las columnas existentes
+  const filasOrig = [...document.querySelectorAll('#contenedorRutasOrigen .fila-origen')];
+  const rutasOrig = filasOrig.map(f => ({
+    nombre: f.querySelector('.roNombre')?.value.trim() || '',
+    codigo: f.querySelector('.roCodigo')?.value.trim() || ''
+  }));
+  const origIncompleta = rutasOrig.some(r => !r.nombre || !r.codigo);
+  const rutaOrigen = rutasOrig.map(r => r.nombre).join(' | ');
+  const codOrigen  = rutasOrig.map(r => r.codigo).join(' | ');
   const totalTrab = document.getElementById('fTotalTrab').value;
   const motivo    = document.getElementById('fMotivo').value;
   const motiOtro  = document.getElementById('fMotivoOtro').value.trim();
@@ -1467,7 +1508,7 @@ async function guardarFusion() {
   // Validaciones
   if(!sector)      { mostrarToast('❌ Selecciona el sector', 'error'); return; }
   if(!cantBuses)   { mostrarToast('❌ Selecciona cantidad de buses fusionados', 'error'); return; }
-  if(!rutaOrigen)  { mostrarToast('❌ Ingresa la ruta original', 'error'); return; }
+  if(!rutasOrig.length || origIncompleta) { mostrarToast('❌ Completa ruta y código de TODAS las rutas de origen', 'error'); return; }
   if(!totalTrab)   { mostrarToast('❌ Ingresa el total de trabajadores afectados', 'error'); return; }
   if(!motivo)      { mostrarToast('❌ Selecciona el motivo de la fusión', 'error'); return; }
   if(motivo==='Otro' && !motiOtro) { mostrarToast('❌ Especifica el motivo', 'error'); return; }
@@ -1499,7 +1540,7 @@ async function guardarFusion() {
 
   // Subir fotos
   const sectorLimpio = sector.replace(/\s/g,'');
-  const rutaLimpia   = rutaOrigen.replace(/\s/g,'');
+  const rutaLimpia   = (rutasOrig[0]?.nombre || 'RUTA').replace(/\s/g,'');
   const foto1file = document.getElementById('fFoto1').files[0];
   const foto2file = document.getElementById('fFoto2').files[0];
   const foto3file = document.getElementById('fFoto3').files[0];
@@ -1518,7 +1559,8 @@ async function guardarFusion() {
 
   const ahora = new Date();
   const payload = {
-    action: 'saveFusion',
+    action: _fusionEditandoId ? 'updateFusion' : 'saveFusion',
+    id:     _fusionEditandoId || '',
     fecha:  ahora.toLocaleDateString('es-PE'),
     hora:   ahora.toLocaleTimeString('es-PE', {hour:'2-digit',minute:'2-digit'}),
     usuario: USER.nombre || USER.email || '',
@@ -1529,7 +1571,9 @@ async function guardarFusion() {
     ruta3:     rutas[2]?.nombre||'', codigo3: rutas[2]?.codigo||'', personal3: rutas[2]?.personal||'',
     motivo: motivo==='Otro' ? motiOtro : motivo,
     observaciones: obs,
-    foto1: link1, foto2: link2, foto3: link3,
+    foto1: link1 || _fusionEditandoFotos[0] || '',
+    foto2: link2 || _fusionEditandoFotos[1] || '',
+    foto3: link3 || _fusionEditandoFotos[2] || '',
     estado: 'Pendiente'
   };
 
@@ -1542,7 +1586,10 @@ async function guardarFusion() {
       await cargarFusiones(true);
       cargarStats();
       guardarCacheLS();
-      mostrarToast('✅ Fusión de ruta ' + rutaOrigen + ' registrada. El administrador validará este registro.');
+      mostrarToast(_fusionEditandoId
+        ? '✅ Fusión ' + _fusionEditandoId + ' actualizada correctamente.'
+        : '✅ Fusión de ruta(s) ' + rutaOrigen + ' registrada. El administrador validará este registro.');
+      _fusionEditandoId = null;
     } else {
       mostrarToast('❌ Error al guardar: ' + (d.error || d.message || 'Error desconocido'), 'error');
     }
@@ -2221,20 +2268,29 @@ function renderFusiones(data) {
   window._fusFiltradas = data;
   const tb = document.getElementById('tbFusiones');
   if(!data || !data.length){ tb.innerHTML='<tr><td colspan="9" class="empty">Sin registros</td></tr>'; return; }
+  const esAdminF = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
+  const miNombreF = String(USER.nombre || USER.usuario || '').toLowerCase();
   tb.innerHTML = data.map((r,i) => {
     const estColor = r.estado==='Validado'?'#16a34a':r.estado==='Observado'?'#dc2626':'#f59e0b';
     const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
+    const rNoms = String(r.ruta_origen||'').split('|').map(s=>s.trim()).filter(Boolean);
+    const rCods = String(r.codigo_origen||'').split('|').map(s=>s.trim());
+    const rutasHtml = rNoms.length
+      ? rNoms.map((n,j)=>`${n} <span style="font-size:10px;color:#94a3b8">cod.${rCods[j]||''}</span>`).join('<br>')
+      : '—';
+    const puedeEditarF = esAdminF || String(r.usuario||'').toLowerCase().includes(miNombreF.split(' ')[0]);
     return `<tr>
       <td>${i+1}</td>
       <td>${r.fecha||''}</td>
       <td>${r.sector||''}</td>
       <td style="font-size:11px">${r.supervisor||''}</td>
-      <td>${r.ruta_origen||''} <span style="font-size:10px;color:#94a3b8">cod.${r.codigo_origen||''}</span></td>
+      <td style="font-size:11px">${rutasHtml}</td>
       <td style="text-align:center;font-weight:700">${r.total_trab||''}</td>
       <td style="font-size:11px">${r.motivo||''}</td>
       <td><span style="background:${estColor}20;color:${estColor};padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700">${r.estado||'Pendiente'}</span></td>
-      <td>
-        ${fotos.length ? '<button onclick="verFotosFusion('+i+')" style="background:#e0e7ff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px">📷 '+fotos.length+'</button>' : ''}
+      <td style="display:flex;gap:4px;flex-wrap:wrap">
+        <button onclick="verFusion(${i})" style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">👁️ Ver${fotos.length?' 📷'+fotos.length:''}</button>
+        ${puedeEditarF ? `<button onclick="editarFusion(${i})" style="background:#d97706;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">✏️ Editar</button>` : ''}
       </td>
     </tr>`;
   }).join('');
@@ -2278,6 +2334,130 @@ function verFotosFusion(idx) {
   const r = (window._fusFiltradas || _fusionesData)[idx];
   const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
   fotos.forEach((url,i) => window.open(url,'_blank'));
+}
+
+// ⭐ Modal "Ver": descripción completa + galería de imágenes desde Azure
+function verFusion(idx) {
+  const r = (window._fusFiltradas || _fusionesData)[idx];
+  if (!r) return;
+  const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const estColor = r.estado==='Validado'?'#16a34a':r.estado==='Observado'?'#dc2626':'#f59e0b';
+
+  const oNoms = String(r.ruta_origen||'').split('|').map(s=>s.trim()).filter(Boolean);
+  const oCods = String(r.codigo_origen||'').split('|').map(s=>s.trim());
+  const origenHtml = oNoms.length
+    ? oNoms.map((n,j)=>`<div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:7px;padding:7px 10px;margin-bottom:5px;font-size:12px">🚌 <b>${esc(n)}</b> — Código: <b>${esc(oCods[j]||'—')}</b></div>`).join('')
+    : '<span style="color:#94a3b8">—</span>';
+
+  const dests = [1,2,3].map(n => ({
+    ruta: r['ruta'+n] ?? r['ruta_destino'+n] ?? '',
+    cod:  r['codigo'+n] ?? r['codigo_destino'+n] ?? '',
+    per:  r['personal'+n] ?? r['personal_destino'+n] ?? ''
+  })).filter(d => String(d.ruta).trim());
+  const destinoHtml = dests.length
+    ? dests.map(d=>`<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:7px;padding:7px 10px;margin-bottom:5px;font-size:12px">🔀 <b>${esc(d.ruta)}</b> — Código: <b>${esc(d.cod||'—')}</b> — Personal: <b>${esc(d.per||'0')}</b></div>`).join('')
+    : '<span style="color:#94a3b8">—</span>';
+
+  const campo = (l,v) => `<div style="background:#f8fafc;border-radius:7px;padding:7px 10px"><div style="font-size:10px;color:#64748b;font-weight:700">${l}</div><div style="font-size:12.5px;font-weight:600;color:#0b1e45">${esc(v)||'—'}</div></div>`;
+
+  const fotos = [r.foto1,r.foto2,r.foto3].filter(Boolean);
+  const fotosHtml = fotos.length
+    ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">` +
+      fotos.map((u,j)=>`<a href="${u}" target="_blank" title="Abrir foto ${j+1} en tamaño completo"><img src="${u}" alt="Evidencia ${j+1}" style="width:100%;height:130px;object-fit:cover;border-radius:8px;border:2px solid #e2e8f0;cursor:zoom-in" loading="lazy" onerror="this.parentElement.innerHTML='<div style=&quot;padding:20px;font-size:11px;color:#94a3b8;text-align:center&quot;>⚠️ No se pudo cargar</div>'"></a>`).join('') +
+      `</div>`
+    : '<div style="color:#94a3b8;font-size:12px">Sin fotos de evidencia</div>';
+
+  document.getElementById('vfusBody').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="font-size:13px;font-weight:800;color:#0b1e45">${esc(r.id||'')} — ${esc(r.fecha||'')} ${esc(r.hora||'')}</div>
+      <span style="background:${estColor}20;color:${estColor};padding:4px 12px;border-radius:20px;font-size:12px;font-weight:800">${esc(r.estado||'Pendiente')}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">
+      ${campo('Sector', r.sector)}
+      ${campo('Supervisor responsable', r.supervisor)}
+      ${campo('Buses fusionados', r.cantBuses ?? r.cant_buses)}
+      ${campo('Total trabajadores', r.total_trab)}
+      ${campo('¿Hubo reemplazo?', r.reemplazo)}
+      ${campo('Registrado por', r.usuario)}
+      ${String(r.reemplazo||'').toLowerCase().startsWith('s') ? campo('Reemplazante', r.reemplazante) : ''}
+      ${String(r.reemplazo||'').toLowerCase().startsWith('s') ? campo('Reemplazado', r.reemplazado) : ''}
+    </div>
+    <div style="margin-top:12px"><div style="font-size:11px;font-weight:800;color:#9a3412;margin-bottom:6px">RUTAS DE ORIGEN (FUSIONADAS)</div>${origenHtml}</div>
+    <div style="margin-top:10px"><div style="font-size:11px;font-weight:800;color:#166534;margin-bottom:6px">DISTRIBUCIÓN A RUTAS DESTINO</div>${destinoHtml}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+      ${campo('Motivo', r.motivo)}
+      ${campo('Observaciones', r.observaciones)}
+    </div>
+    <div style="margin-top:14px"><div style="font-size:11px;font-weight:800;color:#0b1e45;margin-bottom:8px">📷 EVIDENCIA FOTOGRÁFICA (${fotos.length})</div>${fotosHtml}</div>`;
+  abrir('mVerFusion');
+}
+
+// ⭐ Editar: precarga el formulario y cambia a modo updateFusion
+function editarFusion(idx) {
+  const r = (window._fusFiltradas || _fusionesData)[idx];
+  if (!r) return;
+  limpiarFormFusion();
+  _fusionEditandoId = r.id || '';
+  _fusionEditandoFotos = [r.foto1||'', r.foto2||'', r.foto3||''];
+
+  _svf('fSector', r.sector||'');
+  autoSupervisor();
+  if (!document.getElementById('fSupervisorAuto').value) _svf('fSupervisorAuto', r.supervisor||'');
+  _svf('fCantBuses', r.cantBuses ?? r.cant_buses ?? '');
+  _svf('fTotalTrab', r.total_trab||'');
+  _svf('fObservaciones', r.observaciones||'');
+
+  const selMot = document.getElementById('fMotivo');
+  const motVal = String(r.motivo||'');
+  if (selMot) {
+    const existe = [...selMot.options].some(o => o.value === motVal || o.textContent === motVal);
+    if (existe) { selMot.value = motVal; }
+    else if (motVal) { selMot.value = 'Otro'; _svf('fMotivoOtro', motVal); }
+    toggleMotivoOtro();
+  }
+
+  const esSi = String(r.reemplazo||'').toLowerCase().startsWith('s');
+  const radio = document.querySelector('input[name="fReemplazo"][value="' + (esSi?'Sí':'No') + '"]');
+  if (radio) radio.checked = true;
+  toggleReemplazo();
+  if (esSi) { _svf('fReemplazante', r.reemplazante||''); _svf('fReemplazado', r.reemplazado||''); }
+
+  const oNoms = String(r.ruta_origen||'').split('|').map(s=>s.trim()).filter(Boolean);
+  const oCods = String(r.codigo_origen||'').split('|').map(s=>s.trim());
+  const cantO = Math.min(4, Math.max(1, oNoms.length));
+  _svf('fCantRutasOrigen', String(cantO));
+  generarRutasOrigen(oNoms.map((n,j)=>({nombre:n, codigo:oCods[j]||''})));
+
+  const dests = [1,2,3].map(n => ({
+    ruta: r['ruta'+n] ?? r['ruta_destino'+n] ?? '',
+    cod:  r['codigo'+n] ?? r['codigo_destino'+n] ?? '',
+    per:  r['personal'+n] ?? r['personal_destino'+n] ?? ''
+  })).filter(d => String(d.ruta).trim());
+  const cont = document.getElementById('contenedorRutas');
+  while (cont.querySelectorAll('.fila-ruta').length > Math.max(1, dests.length)) {
+    cont.querySelectorAll('.fila-ruta')[cont.querySelectorAll('.fila-ruta').length-1].remove();
+  }
+  while (cont.querySelectorAll('.fila-ruta').length < dests.length) agregarRuta();
+  cont.querySelectorAll('.fila-ruta').forEach((f,j) => {
+    if (!dests[j]) return;
+    f.querySelector('.rNombre').value   = dests[j].ruta;
+    f.querySelector('.rCodigo').value   = dests[j].cod;
+    f.querySelector('.rPersonal').value = dests[j].per;
+  });
+  validarDistribucion();
+
+  [['fFoto1Msg',0],['fFoto2Msg',1],['fFoto3Msg',2]].forEach(([id,j]) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = _fusionEditandoFotos[j]
+      ? '📎 <a href="'+_fusionEditandoFotos[j]+'" target="_blank" style="color:#2563eb">Foto actual</a> (sube una nueva para reemplazarla)'
+      : '';
+  });
+
+  const titF = document.querySelector('#mFusion .modal > div:first-child span:first-child');
+  if (titF) titF.textContent = '✏️ Editar Fusión ' + _fusionEditandoId;
+  const btnF = document.getElementById('btnGuardarFusion');
+  if (btnF) btnF.textContent = '💾 Guardar Cambios';
+  abrir('mFusion');
 }
 
 // ══════════════════ FIN FUSIONES ══════════════════
@@ -9396,6 +9576,19 @@ window._fbSuscribirEstadisticas = function(callback) {
 </div>
 </div>
 
+<div class="ov" id="mVerFusion">
+<div class="modal" style="max-width:760px;width:96vw;max-height:95vh;overflow-y:auto;padding:0">
+  <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-weight:700;font-size:15px">👁️ Detalle de Fusión de Buses</span>
+    <span onclick="cerrar('mVerFusion')" style="cursor:pointer;font-size:22px;line-height:1">✕</span>
+  </div>
+  <div style="padding:20px" id="vfusBody"></div>
+  <div style="padding:0 20px 18px;text-align:right">
+    <button class="btn-n" onclick="cerrar('mVerFusion')" style="background:#64748b">Cerrar</button>
+  </div>
+</div>
+</div>
+
 <div class="ov" id="mFusion">
 <div class="modal" style="max-width:900px;width:96vw;max-height:95vh;overflow-y:auto;padding:0">
   <div style="background:var(--azul);color:#fff;padding:16px 20px;border-radius:14px 14px 0 0;display:flex;justify-content:space-between;align-items:center">
@@ -9457,13 +9650,17 @@ window._fbSuscribirEstadisticas = function(callback) {
         </select>
       </div>
       <div>
-        <label class="lbl">Ruta original *</label>
-        <input id="fRutaOrigen" placeholder="Ej: Ruta Angostura" style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
+        <label class="lbl">¿Cuántas rutas se van a fusionar? *</label>
+        <select id="fCantRutasOrigen" onchange="generarRutasOrigen()" style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
+          <option value="1">1 ruta</option><option value="2">2 rutas</option>
+          <option value="3">3 rutas</option><option value="4">4 rutas</option>
+        </select>
       </div>
-      <div>
-        <label class="lbl">Código ruta *</label>
-        <input id="fCodigoOrigen" placeholder="Ej: 70" style="width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px">
-      </div>
+      <div></div>
+    </div>
+    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:14px">
+      <div style="font-size:12px;font-weight:700;color:#9a3412;margin-bottom:10px">🚌 Rutas de Origen (las que se fusionan)</div>
+      <div id="contenedorRutasOrigen"></div>
     </div>
     <div>
       <label class="lbl">Total trabajadores afectados *</label>
