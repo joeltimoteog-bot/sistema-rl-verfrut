@@ -2943,8 +2943,6 @@ window.onload = async () => {
     const _usrHoras = (USER.usuario || '').toLowerCase().trim();
     if (['jtimoteo','ovilela','jchavez'].includes(_usrHoras)) {
       document.getElementById('navHoras').style.display='';
-      var _navCR = document.getElementById('navCalcRemu');
-      if (_navCR) _navCR.style.display='';
     }
     document.getElementById('navVisitas').style.display='flex';
   if(ROLES_ADMIN.includes(USER.rol)) {
@@ -2985,6 +2983,9 @@ window.onload = async () => {
   // ─── BIENESTAR SOCIAL: visibilidad del boton y restriccion del sidebar ───
   try {
     const _esBienestar = String(USER.sector || '').toUpperCase().trim() === 'BIENESTAR SOCIAL';
+    // 🧮 Cálculo Remunerativo: visible para TODOS los usuarios excepto sector Bienestar Social
+    const _navCR = document.getElementById('navCalcRemu');
+    if (_navCR) _navCR.style.display = _esBienestar ? 'none' : '';
     if (esAdmin || ['tvera','lmorales','dreyna','rfigueroa','cbecerra','cbeserra','mmechato','nestrada'].indexOf(String(USER.usuario||'').toLowerCase().trim()) >= 0) {
       const _btnBs = document.getElementById('navBienestar');
       if (_btnBs) _btnBs.style.display = '';

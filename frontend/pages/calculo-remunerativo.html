@@ -195,6 +195,27 @@
   </div>
 </div>
 <script>
+/* ── Guard de sesión Sistema RL: requiere login y bloquea sector Bienestar Social ── */
+window._crBloqueado = false;
+(function(){
+  var _u = null;
+  try { _u = JSON.parse(sessionStorage.getItem('user') || 'null'); } catch(e) {}
+  if (!_u || !_u.usuario) {
+    window._crBloqueado = true;
+    location.replace('../../index.html');
+    return;
+  }
+  if (String(_u.sector || '').toUpperCase().trim() === 'BIENESTAR SOCIAL') {
+    window._crBloqueado = true;
+    document.addEventListener('DOMContentLoaded', function(){
+      document.body.innerHTML = '<div style="font-family:Barlow,Arial,sans-serif;text-align:center;padding:70px 20px">' +
+        '<div style="font-size:46px">🚫</div><h2 style="color:#dc2626;margin:10px 0">Acceso restringido</h2>' +
+        '<p style="color:#64748b">Tu perfil no tiene acceso al módulo de Cálculo Remunerativo.</p>' +
+        '<p style="margin-top:16px"><a href="dashboard.html" style="color:#0a2463;font-weight:700;text-decoration:none">← Volver al Dashboard</a></p></div>';
+    });
+  }
+})();
+
 /* ═══════════════════════════════════════════════════════════════
    MOTOR DE CÁLCULO REMUNERATIVO — Régimen Agrario (Obrero Campo)
    Réplica exacta de NUEVO CALCULO REMUNERATIVO 2026 (.xlsm)
@@ -578,7 +599,7 @@ function restaurarParams() {
 }
 
 /* ════════ INIT ════════ */
-initCal(); initQuin(); initDia(); initHE();
+if (!window._crBloqueado) { initCal(); initQuin(); initDia(); initHE(); }
 
 </script>
 </body>
