@@ -1318,13 +1318,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     // página, pero si por algún caso edge se desborda, mejor 2 páginas que
     // un PDF roto sin responsable.
 
-    // ── Footer ──
-    doc.setPage(1);
-    const fechaGen = new Date().toLocaleString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-    doc.setFont('helvetica','normal'); doc.setFontSize(6); doc.setTextColor(140,140,140);
-    doc.text(`Generado: ${fechaGen}  |  Sistema RL v3.0  |  ${USER.nombre}`, MGS, H - 4);
-    if (formatoLabel) doc.text(formatoLabel, W / 2, H - 4, { align: 'center' });
-    doc.text('Pág. 1 de 1', W - MGS, H - 4, { align: 'right' });
+    // ── Footer eliminado: el formato oficial R-SC-01 no lleva pie de página ──
 
     const fmtSuffix = formatoLabel ? `_${formatoLabel.replace(/[^a-zA-Z0-9]/g,'_')}` : '';
     const fname = `R-SC-01_${empresa}_${v('capFecha')}${fmtSuffix}_${v('capTema').trim().substring(0,20).replace(/[\s/\\:*?"<>|]+/g,'-')}.pdf`;
