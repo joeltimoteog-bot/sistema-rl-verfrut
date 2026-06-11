@@ -10,6 +10,9 @@
 <link rel="apple-touch-icon" sizes="180x180" href="/sistema-rl-verfrut/frontend/images/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
@@ -213,10 +216,13 @@ h3{font-size:16px !important}
 
     <!-- PANEL PRINCIPAL: ranking + botones -->
     <div id="panelDashboard">
+      <!-- RESUMEN GERENCIAL -->
+      <div id="resumenGerencial" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin-bottom:16px"></div>
       <div class="card">
         <div class="card-h">
-          <span class="card-t">⭐ Ranking de Supervisores Evaluados</span>
+          <span class="card-t">🏆 Ranking Mensual de Supervisores</span>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <select class="fi" id="filtMesRank" onchange="renderRanking()" style="width:160px;font-weight:700;color:var(--azul)"></select>
             <select class="fi" id="filtEmpRank" onchange="renderRanking()" style="width:130px">
               <option value="">Todas las empresas</option>
               <option value="RAPEL">RAPEL S.A.C</option>
@@ -225,6 +231,8 @@ h3{font-size:16px !important}
             <select class="fi" id="filtSupRank" onchange="renderRanking()" style="min-width:160px">
               <option value="">Todos los supervisores</option>
             </select>
+            <button class="btn-blue" onclick="exportarRankingExcel()" title="Exportar a Excel">📊 Excel</button>
+            <button class="btn-blue" onclick="exportarRankingPDF()" title="Reporte gerencial PDF">📄 PDF</button>
             <button class="btn-n" onclick="mostrarFormulario()">+ Nueva Evaluación</button>
             <button class="btn-blue" onclick="abrir('mSupCustom')">+ Agregar Supervisor</button>
           </div>
@@ -234,7 +242,7 @@ h3{font-size:16px !important}
             <thead>
               <tr>
                 <th>#</th><th>Supervisor</th><th>Empresa</th>
-                <th>Promedio</th><th>Clasificación</th><th>Fecha</th><th>Acciones</th>
+                <th>Promedio</th><th>Clasificación</th><th>vs Mes Anterior</th><th>Acciones</th>
               </tr>
             </thead>
             <tbody id="tbRanking">
@@ -269,11 +277,15 @@ h3{font-size:16px !important}
           </div>
           <div class="fc">
             <label>Fecha de Evaluación</label>
-            <input type="date" id="eval_fecha">
+            <input type="date" id="eval_fecha" onchange="actualizarPeriodo()">
+          </div>
+          <div class="fc">
+            <label>Periodo (evaluación mensual)</label>
+            <input type="text" id="eval_periodo_display" readonly style="background:#f1f5f9;font-weight:800;color:#0b1e45">
           </div>
           <div class="fc">
             <label>Evaluador</label>
-            <input type="text" id="eval_evaluador" placeholder="Nombre del evaluador">
+            <input type="text" id="eval_evaluador" readonly style="background:#f1f5f9">
           </div>
           <div class="fc" style="grid-column:1/-1">
             <label>Observaciones Generales</label>
@@ -396,16 +408,16 @@ async function cargarEvaluacionesAPI() {
     const d = await apiGet({action:'getEvaluaciones360', empresa: empresaParam});
     if (!d.success || !d.data) { console.warn('[eval360] API sin datos:', d); return; }
     console.log('[eval360] total recibidos de API:', d.data.length);
-    const local = getHistorial();
-    const localIds = new Set(local.map(e => e.id));
-    let agregados = 0;
-    d.data.forEach(ev => {
-      if (!localIds.has(ev.id)) { local.push(ev); agregados++; }
-    });
-    console.log('[eval360] nuevos agregados:', agregados, '| total historial local:', local.length);
-    if (agregados > 0) { setHistorial(local); renderRanking(); }
-    console.log('[eval360] filas visibles en ranking:', document.querySelectorAll('#tbRanking tr:not(:has(.empty))').length);
-  } catch(e) { console.warn('[eval360] cargarEvaluacionesAPI → API no disponible:', e.message); }
+    // ⭐ Google Sheets es la FUENTE DE VERDAD: reemplaza el caché local por completo
+    const data = d.data.map(ev => ({
+      ...ev,
+      porcentaje: Number(ev.porcentaje) || 0,
+      periodo: ev.periodo || periodoDe(ev.fecha)
+    }));
+    setHistorial(data);
+    poblarMesesRanking();
+    renderRanking();
+  } catch(e) { console.warn('[eval360] cargarEvaluacionesAPI → API no disponible (se usa caché local):', e.message); }
 }
 
 async function guardarEnAPI(evaluacion) {
@@ -452,27 +464,30 @@ const SUPERVISORES_BASE = [
 // ── Competencias y preguntas ──
 const COMPETENCIAS = [
   {
-    nombre: 'Liderazgo',
+    nombre: 'Cumplimiento de Metas y Reportes',
+    preguntas: [
+      'Cumple las metas asignadas del mes (atenciones, casos, registros)',
+      'Realiza y registra las capacitaciones programadas',
+      'Envía sus informes de visitas de campo dentro del plazo',
+      'Registra la información en el sistema de forma completa y correcta'
+    ]
+  },
+  {
+    nombre: 'Comunicación y Coordinación',
+    preguntas: [
+      'Comunica a los coordinadores los acuerdos tomados con jefaturas y administradores',
+      'Consulta con los coordinadores las decisiones importantes antes de ejecutarlas',
+      'Reporta incidencias y novedades a tiempo',
+      'Mantiene comunicación clara y respetuosa con la coordinación'
+    ]
+  },
+  {
+    nombre: 'Liderazgo y Conducta',
     preguntas: [
       'Conduce a su equipo con claridad y ejemplo',
+      'Demuestra buen comportamiento y respeto en el trabajo',
       'Motiva y mantiene el compromiso del equipo',
-      'Toma decisiones oportunas y efectivas'
-    ]
-  },
-  {
-    nombre: 'Comunicación',
-    preguntas: [
-      'Transmite información de forma clara y oportuna',
-      'Escucha activamente y atiende consultas del equipo',
-      'Reporta incidencias y novedades a tiempo'
-    ]
-  },
-  {
-    nombre: 'Cumplimiento',
-    preguntas: [
-      'Cumple con los plazos establecidos',
-      'Sigue los procedimientos y normativas vigentes',
-      'Registra correctamente las atenciones y visitas'
+      'Es puntual en las reuniones y compromisos'
     ]
   },
   {
@@ -487,20 +502,22 @@ const COMPETENCIAS = [
     nombre: 'Resolución de Problemas',
     preguntas: [
       'Identifica problemas y busca soluciones rápidas',
-      'Maneja situaciones de presión con serenidad'
+      'Maneja situaciones de presión con serenidad',
+      'Toma decisiones oportunas y efectivas'
     ]
   },
   {
-    nombre: 'Planificación',
+    nombre: 'Planificación e Iniciativa',
     preguntas: [
       'Organiza su trabajo con anticipación',
-      'Coordina recursos y tiempos eficientemente'
+      'Muestra iniciativa y propone mejoras',
+      'Se adapta positivamente a los cambios'
     ]
   }
 ];
 
 const ESCALA = ['Deficiente','Regular','Bueno','Muy Bueno','Excelente'];
-const TOTAL_PREGUNTAS = COMPETENCIAS.reduce((s,c) => s + c.preguntas.length, 0); // 16
+const TOTAL_PREGUNTAS = COMPETENCIAS.reduce((s,c) => s + c.preguntas.length, 0); // 21
 
 // ── Helpers ──
 function mostrarToast(msg, tipo='ok') {
@@ -520,6 +537,26 @@ function mostrarToast(msg, tipo='ok') {
 }
 function cap(s){return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
 function hoy(){return new Date().toISOString().split('T')[0];}
+const MESES_ES = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+function periodoDe(fecha){ return String(fecha||'').substring(0,7); }
+function periodoLabel(per){
+  per = String(per||'');
+  if (per.length < 7) return per;
+  const m = parseInt(per.substring(5,7));
+  return (MESES_ES[m-1]||'') + ' ' + per.substring(0,4);
+}
+function mesAnterior(per){
+  per = String(per||'');
+  if (per.length < 7) return '';
+  let a = parseInt(per.substring(0,4)), m = parseInt(per.substring(5,7)) - 1;
+  if (m < 1) { m = 12; a--; }
+  return a + '-' + String(m).padStart(2,'0');
+}
+function actualizarPeriodo(){
+  const f = document.getElementById('eval_fecha')?.value || '';
+  const el = document.getElementById('eval_periodo_display');
+  if (el) el.value = f ? periodoLabel(periodoDe(f)) : '';
+}
 function abrir(id){document.getElementById(id).classList.add('on');}
 function cerrar(id){document.getElementById(id).classList.remove('on');}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
@@ -738,16 +775,27 @@ async function guardarEvaluacion() {
   });
 
   if (!todasRespondidas) {
-    if (!await appConfirm('Hay preguntas sin responder. ¿Deseas guardar igual?')) return;
+    mostrarToast(`❌ Debes responder las ${TOTAL_PREGUNTAS} preguntas (llevas ${totalRespondidas}/${TOTAL_PREGUNTAS}). Una evaluación incompleta distorsiona el puntaje.`, 'error');
+    return;
   }
 
   const promGlobal = totalRespondidas > 0 ? totalPuntos / totalRespondidas : 0;
   const pct = Math.round((promGlobal / 5) * 100);
   const cl = clasificar(pct);
 
+  const periodo = periodoDe(fecha);
+
+  // Upsert mensual: una evaluación por supervisor por mes
+  const yaExiste = getHistorial().some(e =>
+    String(e.supervisor).trim() === String(supervisor).trim() &&
+    (e.periodo || periodoDe(e.fecha)) === periodo);
+  if (yaExiste) {
+    if (!await appConfirm(`Ya existe una evaluación de ${supervisor} en ${periodoLabel(periodo)}. ¿Actualizarla con estos nuevos resultados?`)) return;
+  }
+
   const evaluacion = {
-    id: Date.now().toString(),
-    supervisor, empresa, fecha, evaluador, obs,
+    id: 'EVA-' + Date.now(),
+    supervisor, empresa, fecha, evaluador, obs, periodo,
     competencias: resultComp,
     promGlobal: promGlobal.toFixed(2),
     porcentaje: pct,
@@ -769,13 +817,16 @@ async function guardarEvaluacion() {
       mostrarToast('❌ No se pudo guardar en Google Sheets: ' + msg, 'error');
       return;
     }
-    // 2. API confirmó éxito → agregar al caché local
-    const historial = getHistorial();
+    // 2. API confirmó éxito → actualizar caché local (upsert)
+    evaluacion.id = r.id || evaluacion.id;
+    const historial = getHistorial().filter(e =>
+      !(String(e.supervisor).trim() === String(supervisor).trim() &&
+        (e.periodo || periodoDe(e.fecha)) === periodo));
     historial.unshift(evaluacion);
     setHistorial(historial);
     // 3. Actualizar UI solo tras confirmación exitosa
-    mostrarToast('✅ Evaluación guardada correctamente');
-    renderRanking();
+    mostrarToast(r.accion === 'actualizada' ? '✅ Evaluación del mes actualizada' : '✅ Evaluación guardada correctamente');
+    poblarMesesRanking();
     mostrarDashboard();
   } catch(e) {
     console.error('[eval360] guardarEvaluacion → error de red:', e);
@@ -943,57 +994,218 @@ h3{font-size:16px !important}
 
 // ── Eliminar evaluación ──
 async function eliminarEval(id) {
-  if (!await appConfirm('¿Eliminar esta evaluación? Esta acción no se puede deshacer.')) return;
-  const historial = getHistorial().filter(e => e.id !== id);
-  setHistorial(historial);
-  renderRanking();
-  mostrarToast('🗑️ Evaluación eliminada');
+  if (!await appConfirm('¿Eliminar esta evaluación? Se archivará en la hoja Evaluaciones360_Eliminadas del Google Sheets.')) return;
+  try {
+    const r = await apiPost({ action: 'deleteEvaluacion360', id: id, usuario: USER.usuario });
+    if (!r || !r.success) {
+      mostrarToast('❌ ' + ((r && r.error) || 'No se pudo eliminar en el servidor'), 'error');
+      return;
+    }
+    setHistorial(getHistorial().filter(e => e.id !== id));
+    poblarMesesRanking();
+    renderRanking();
+    mostrarToast('🗑️ Evaluación eliminada');
+  } catch(e) {
+    mostrarToast('❌ Error de conexión: ' + e.message, 'error');
+  }
 }
 
-// ── Render ranking ──
-function renderRanking() {
-  let historial = getHistorial();
-  // Supervisores solo ven evaluaciones propias (donde ellos son el evaluado)
-  if (esSupervisor) {
-    historial = historial.filter(ev => ev.supervisor === USER.nombre);
-  }
+// ── Datos del ranking mensual (compartido por tabla, resumen y exportes) ──
+function _datosRanking() {
+  let historial = getHistorial().map(ev => ({
+    ...ev,
+    periodo: ev.periodo || periodoDe(ev.fecha),
+    porcentaje: Number(ev.porcentaje) || 0
+  }));
+  if (esSupervisor) historial = historial.filter(ev => ev.supervisor === USER.nombre);
   const filtEmp = document.getElementById('filtEmpRank')?.value || '';
   const filtSup = document.getElementById('filtSupRank')?.value || '';
-
-  const filtrado = historial.filter(ev =>
+  const mesSel  = document.getElementById('filtMesRank')?.value || '';
+  const base = historial.filter(ev =>
     (!filtEmp || ev.empresa === filtEmp) &&
-    (!filtSup || ev.supervisor === filtSup)
-  );
+    (!filtSup || ev.supervisor === filtSup));
+  const delMes = mesSel ? base.filter(ev => ev.periodo === mesSel) : base;
+  // UNA fila por supervisor (la más reciente del periodo/histórico)
+  const porSup = {};
+  delMes.forEach(ev => {
+    const k = ev.supervisor;
+    if (!porSup[k] || String(ev.fecha).localeCompare(String(porSup[k].fecha)) > 0) porSup[k] = ev;
+  });
+  const lista = Object.values(porSup).sort((a, b) => b.porcentaje - a.porcentaje);
+  // Mes anterior (para tendencia)
+  const perAnt = mesSel ? mesAnterior(mesSel) : '';
+  const mapAnt = {};
+  if (perAnt) historial.filter(ev => ev.periodo === perAnt).forEach(ev => { mapAnt[ev.supervisor] = ev.porcentaje; });
+  return { lista, mapAnt, mesSel, historial };
+}
 
+// ── Selector de meses ──
+function poblarMesesRanking() {
+  const sel = document.getElementById('filtMesRank');
+  if (!sel) return;
+  const primeraVez = sel.options.length === 0;
+  const actual = sel.value;
+  const periodos = new Set();
+  getHistorial().forEach(e => {
+    const p = e.periodo || periodoDe(e.fecha);
+    if (p && p.length === 7) periodos.add(p);
+  });
+  periodos.add(periodoDe(hoy()));
+  const orden = Array.from(periodos).sort().reverse();
+  sel.innerHTML = orden.map(p => `<option value="${p}">📅 ${periodoLabel(p)}</option>`).join('') +
+    '<option value="">📚 Histórico (todos)</option>';
+  sel.value = primeraVez ? periodoDe(hoy()) : actual;
+  if (sel.selectedIndex === -1) sel.value = periodoDe(hoy());
+}
+
+// ── Resumen gerencial (KPIs) ──
+function _kpiCard(label, val, color, sub) {
+  return `<div style="background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-top:3px solid ${color}">
+    <div style="font-size:10.5px;font-weight:700;color:${color};margin-bottom:4px">${label}</div>
+    <div style="font-size:24px;font-weight:900;color:${color}">${val}</div>
+    <div style="font-size:10px;color:#94a3b8;margin-top:2px">${sub}</div>
+  </div>`;
+}
+
+function renderResumenGerencial(lista, mapAnt, mesSel) {
+  const cont = document.getElementById('resumenGerencial');
+  if (!cont) return;
+  if (!lista || !lista.length) { cont.innerHTML = ''; return; }
+  const prom = Math.round(lista.reduce((s, e) => s + e.porcentaje, 0) / lista.length);
+  const clP = clasificar(prom);
+  const mejor = lista[0];
+  const peor = lista[lista.length - 1];
+  const criticos = lista.filter(e => e.porcentaje < 60).length;
+  let cardTend = '';
+  const antVals = Object.values(mapAnt || {});
+  if (antVals.length) {
+    const promAnt = Math.round(antVals.reduce((s, v) => s + v, 0) / antVals.length);
+    const dif = prom - promAnt;
+    cardTend = _kpiCard((dif >= 0 ? '▲' : '▼') + ' vs Mes Anterior',
+      (dif >= 0 ? '+' : '') + dif + '%',
+      dif >= 0 ? '#16a34a' : '#dc2626',
+      'promedio anterior: ' + promAnt + '%');
+  }
+  cont.innerHTML =
+    _kpiCard('📊 Promedio del Equipo', prom + '%', clP.color, (mesSel ? periodoLabel(mesSel) + ' · ' : '') + clP.texto) +
+    _kpiCard('🥇 Mejor Desempeño', mejor.porcentaje + '%', '#16a34a', mejor.supervisor) +
+    _kpiCard('📉 Menor Desempeño', peor.porcentaje + '%', '#d97706', peor.supervisor) +
+    _kpiCard('🔴 En Nivel Crítico', criticos, criticos > 0 ? '#dc2626' : '#16a34a', criticos > 0 ? 'requieren plan de acción' : 'ninguno 👏') +
+    _kpiCard('📝 Evaluados', lista.length, '#0b1e45', mesSel ? 'en ' + periodoLabel(mesSel) : 'histórico') +
+    cardTend;
+}
+
+// ── Render ranking MENSUAL: una fila por supervisor, ordenado por puntaje ──
+function renderRanking() {
+  const { lista, mapAnt, mesSel, historial } = _datosRanking();
   const tb = document.getElementById('tbRanking');
   if (!tb) return;
+  renderResumenGerencial(lista, mapAnt, mesSel);
 
-  if (!filtrado.length) {
-    tb.innerHTML = '<tr><td colspan="7" class="empty">No hay evaluaciones registradas' + (filtEmp || filtSup ? ' con los filtros seleccionados' : '. Haga clic en "Nueva Evaluación" para comenzar') + '.</td></tr>';
+  if (!lista.length) {
+    tb.innerHTML = '<tr><td colspan="7" class="empty">No hay evaluaciones' + (mesSel ? ' en ' + periodoLabel(mesSel) : ' registradas') + '. Haga clic en "Nueva Evaluación" para comenzar.</td></tr>';
     return;
   }
 
-  // Contar evaluaciones por supervisor (para mostrar botón historial)
+  // Periodos distintos evaluados por supervisor (para botón historial)
   const conteoSup = {};
-  historial.forEach(e => { conteoSup[e.supervisor] = (conteoSup[e.supervisor] || 0) + 1; });
+  historial.forEach(e => {
+    if (!conteoSup[e.supervisor]) conteoSup[e.supervisor] = new Set();
+    conteoSup[e.supervisor].add(e.periodo);
+  });
 
-  tb.innerHTML = filtrado.map((ev, i) => {
+  const medallas = ['🥇', '🥈', '🥉'];
+  tb.innerHTML = lista.map((ev, i) => {
     const cl = clasificar(ev.porcentaje);
-    const tieneHistorial = (conteoSup[ev.supervisor] || 0) > 1;
+    const tieneHistorial = (conteoSup[ev.supervisor] ? conteoSup[ev.supervisor].size : 0) > 1;
+    const ant = mapAnt[ev.supervisor];
+    let tend = '<span style="color:#94a3b8">—</span>';
+    if (ant !== undefined) {
+      const dif = ev.porcentaje - ant;
+      tend = `<span style="font-weight:700;color:${dif >= 0 ? '#16a34a' : '#dc2626'}">${dif >= 0 ? '▲ +' : '▼ '}${dif}%</span>`;
+    }
     return `<tr>
-      <td style="font-weight:700;color:var(--gr)">${i+1}</td>
+      <td style="font-weight:700;color:var(--gr);font-size:${i < 3 ? '16px' : '12px'}">${medallas[i] || (i + 1)}</td>
       <td style="font-weight:700;color:var(--azul)">${ev.supervisor}</td>
       <td><span class="bg ${empC(ev.empresa)}">${ev.empresa}</span></td>
       <td style="font-weight:900;color:${cl.color};font-size:14px">${ev.porcentaje}%</td>
       <td><span class="rank-badge ${cl.clase}">${cl.texto}</span></td>
-      <td style="color:var(--gr)">${ev.fecha}</td>
+      <td>${tend}</td>
       <td>
         ${!esSupervisor ? `<button class="btn-a bv" onclick="emitirReporte('${ev.id}')">📄 Reporte</button>` : ''}
         ${!esSupervisor && tieneHistorial ? `<button class="btn-a" style="background:#ede9fe;color:#5b21b6" onclick="verHistorialSupervisor('${ev.supervisor.replace(/'/g,"\\'")}')">📊 Historial</button>` : ''}
-        ${!esSupervisor ? `<button class="btn-a bd" onclick="eliminarEval('${ev.id}')">🗑️</button>` : ''}
+        ${esAdmin ? `<button class="btn-a bd" onclick="eliminarEval('${ev.id}')">🗑️</button>` : ''}
       </td>
     </tr>`;
   }).join('');
+}
+
+// ── Exporte Excel del ranking ──
+function exportarRankingExcel() {
+  const { lista, mapAnt, mesSel } = _datosRanking();
+  if (!lista.length) { mostrarToast('❌ No hay datos para exportar', 'error'); return; }
+  const filas = lista.map((ev, i) => {
+    const ant = mapAnt[ev.supervisor];
+    const o = {
+      'Puesto': i + 1,
+      'Supervisor': ev.supervisor,
+      'Empresa': ev.empresa,
+      'Promedio %': ev.porcentaje,
+      'Clasificación': clasificar(ev.porcentaje).texto,
+      'vs Mes Anterior': ant !== undefined ? ((ev.porcentaje - ant >= 0 ? '+' : '') + (ev.porcentaje - ant) + '%') : '—',
+      'Periodo': periodoLabel(ev.periodo),
+      'Fecha': ev.fecha || '',
+      'Evaluador': ev.evaluador || '',
+      'Observaciones': ev.obs || ''
+    };
+    (ev.competencias || []).forEach(c => { o[c.nombre] = Number(c.promedio) || ''; });
+    return o;
+  });
+  const ws = XLSX.utils.json_to_sheet(filas);
+  ws['!cols'] = [{wch:6},{wch:28},{wch:10},{wch:11},{wch:13},{wch:14},{wch:14},{wch:11},{wch:24},{wch:35}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Ranking');
+  XLSX.writeFile(wb, 'Evaluacion360_Ranking_' + (mesSel || 'historico') + '.xlsx');
+  mostrarToast('📊 Excel exportado');
+}
+
+// ── Exporte PDF gerencial ──
+function exportarRankingPDF() {
+  const { lista, mapAnt, mesSel } = _datosRanking();
+  if (!lista.length) { mostrarToast('❌ No hay datos para exportar', 'error'); return; }
+  const _pdfColor = p => p >= 90 ? [22,163,74] : p >= 75 ? [59,130,246] : p >= 60 ? [249,115,22] : [220,38,38];
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  doc.setFontSize(14); doc.setTextColor(11, 30, 69);
+  doc.text('EVALUACIÓN 360° — RANKING ' + (mesSel ? periodoLabel(mesSel) : 'HISTÓRICO'), 14, 14);
+  doc.setFontSize(9); doc.setTextColor(100, 116, 139);
+  doc.text('VERFRUT S.A.C / RAPEL S.A.C — UNIFRUTTI GROUP  ·  Generado: ' + new Date().toLocaleDateString('es-PE') + '  ·  Evaluador: ' + (USER.nombre || ''), 14, 20);
+  const prom = Math.round(lista.reduce((s, e) => s + e.porcentaje, 0) / lista.length);
+  const criticos = lista.filter(e => e.porcentaje < 60).length;
+  doc.setFontSize(10); doc.setTextColor(11, 30, 69);
+  doc.text('Promedio del equipo: ' + prom + '% (' + clasificar(prom).texto + ')   ·   Evaluados: ' + lista.length + '   ·   En nivel crítico: ' + criticos, 14, 27);
+  const body = lista.map((ev, i) => {
+    const ant = mapAnt[ev.supervisor];
+    const gC = n => { const c = (ev.competencias || []).find(c => String(c.nombre).startsWith(n)); return c ? (Number(c.promedio) || 0).toFixed(1) : '—'; };
+    return [i + 1, ev.supervisor, ev.empresa, ev.porcentaje + '%', clasificar(ev.porcentaje).texto,
+      gC('Liderazgo'), gC('Comunicación'), gC('Cumplimiento'), gC('Gestión'), gC('Resolución'), gC('Planificación'),
+      ant !== undefined ? ((ev.porcentaje - ant >= 0 ? '+' : '') + (ev.porcentaje - ant) + '%') : '—'];
+  });
+  doc.autoTable({
+    startY: 31,
+    head: [['#', 'Supervisor', 'Empresa', 'Promedio', 'Nivel', 'Lid.', 'Com.', 'Cump.', 'G.Eq.', 'Res.', 'Plan.', 'vs Ant.']],
+    body: body,
+    styles: { fontSize: 7.5, cellPadding: 1.5 },
+    headStyles: { fillColor: [11, 30, 69], fontSize: 7.5 },
+    didParseCell: function(data) {
+      if (data.section === 'body' && (data.column.index === 3 || data.column.index === 4)) {
+        data.cell.styles.textColor = _pdfColor(lista[data.row.index].porcentaje);
+        data.cell.styles.fontStyle = 'bold';
+      }
+    }
+  });
+  doc.save('Evaluacion360_Ranking_' + (mesSel || 'historico') + '.pdf');
+  mostrarToast('📄 PDF generado');
 }
 
 // ── Historial por supervisor ──
@@ -1155,6 +1367,7 @@ function mostrarFormulario() {
   calcularResultado();
   document.getElementById('eval_fecha').value = hoy();
   document.getElementById('eval_evaluador').value = USER.nombre || '';
+  actualizarPeriodo();
 }
 
 // ── Init ──
@@ -1170,8 +1383,9 @@ window.onload = function() {
     if (navUsr) navUsr.style.display = '';
   }
   poblarSelectSupervisores();
+  poblarMesesRanking();
   renderRanking();
-  // Sincronizar con API en background
+  // Sincronizar con API (Sheets es la fuente de verdad)
   cargarEvaluacionesAPI();
 };
 </script>
