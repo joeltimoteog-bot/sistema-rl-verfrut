@@ -4887,9 +4887,16 @@ function renderAt(lista) {
 
 function filtrarAt() {
   const q=v('fAQ').toLowerCase(), e=v('fAE'), emp=v('fAEmp'), m=v('fAM');
-  const filtradas = atTodas.filter(a=>
-    (!q||String(a.dni).includes(q)||String(a.nombre).toLowerCase().includes(q))&&
-    (!e||String(a.estado).toUpperCase()===e)&&(!emp||a.empresa===emp)&&(!m||String(a.mes)===m)
+  // ⭐ Sin filtros: vista por defecto (solo HOY, igual que siempre).
+  //    Con cualquier filtro activo: buscar sobre TODO lo cargado en caché
+  //    (antes solo buscaba en las atenciones de hoy y el filtro Mes daba vacío).
+  const hayFiltro = !!(q || e || emp || m);
+  const base = hayFiltro ? ((CACHE.atenciones && CACHE.atenciones.length) ? CACHE.atenciones : atTodas) : atTodas;
+  const filtradas = base.filter(a=>
+    (!q||String(a.dni).includes(q)||String(a.nombre||'').toLowerCase().includes(q))&&
+    (!e||String(a.estado).toUpperCase()===e)&&
+    (!emp||String(a.empresa||'').toUpperCase().includes(emp))&&
+    (!m||String(a.mes)===m)
   );
   window._atFiltradas = filtradas;
   renderAt(filtradas);
