@@ -3835,9 +3835,20 @@ async function guardarCaso() {
       mostrarToast(textoOk);
       _editandoCasoNro = null;
 
-      // Recargar desde API en background para sincronizar
-      invalidarCache('casos');
-      cargarCasos();
+      // ⭐ Revalidar en SEGUNDO PLANO sin borrar la tabla (antes: invalidarCache +
+      //    cargarCasos dejaba "Cargando..." 2-5 seg y podía pisar los informes recién subidos)
+      window._casoRecienGuardado = {
+        nro: String(nroCaso), ts: Date.now(),
+        urls: {
+          archivo_informe_url:  payload.archivo_informe_url  || '',
+          enlace_informe:       payload.enlace_informe       || '',
+          nombre_informe:       payload.nombre_informe       || '',
+          archivo_descargo_url: payload.archivo_descargo_url || '',
+          enlace_reporte:       payload.enlace_reporte       || '',
+          nombre_reporte:       payload.nombre_reporte       || ''
+        }
+      };
+      cargarCasosSilencioso();
       guardarCacheLS();
     } else {
       mostrarToast('❌ Error: ' + res.error, 'error');
@@ -3957,6 +3968,31 @@ async function cargarCasos() {
     if(tb2) tb2.innerHTML='<tr><td colspan="16" class="empty">❌ Error de conexión</td></tr>';
     console.error('cargarCasos error:', e);
   }
+}
+
+// ⭐ Revalidación silenciosa: trae datos frescos del servidor SIN tocar la tabla
+// visible. Al llegar, re-renderiza con los filtros activos. Si el caso recién
+// guardado vuelve del servidor SIN los informes (lag del backend), conserva las
+// URLs locales que acaban de subirse a Azure.
+async function cargarCasosSilencioso() {
+  try {
+    const params = { action:'getCasos', empresa:'', motivo:'', nombre:USER.nombre||USER.usuario, usuario:USER.usuario, rol:USER.rol };
+    const d = await apiGet(params);
+    if (!d || !d.success || !Array.isArray(d.data)) return;
+    let lista = d.data;
+    const rg = window._casoRecienGuardado;
+    if (rg && (Date.now() - rg.ts) < 120000) {
+      lista = lista.map(c => {
+        if (String(c.nro) !== rg.nro) return c;
+        const m = { ...c };
+        Object.keys(rg.urls).forEach(k => { if (rg.urls[k] && !m[k]) m[k] = rg.urls[k]; });
+        return m;
+      });
+    }
+    CACHE.casos = lista;
+    guardarCacheLS();
+    cargarCasos();   // re-render inmediato con caché fresco (sin "Cargando...")
+  } catch(e) { console.warn('[casos] Revalidación silenciosa falló:', e); }
 }
 
 function _gravColor(g) {
