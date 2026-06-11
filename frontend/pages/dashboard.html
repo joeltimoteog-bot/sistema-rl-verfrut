@@ -1861,14 +1861,22 @@ function renderVisitas(data) {
       const puedeEditar = esAdmin ||
         String(v.supervisor||'').toLowerCase().includes(miNombreR.split(' ')[0]) ||
         String(v.registrado_por||'').toLowerCase().includes(miNombreR.split(' ')[0]);
+      // ⭐ % CONGELADO al momento del registro del informe (no se degrada con el tiempo)
       let _pctAv = 100;
-      if (v.fecha_fin) {
+      const _dRetrG = parseInt(v.dias_retraso) || 0;
+      if (_dRetrG > 0) {
+        // Visitas con métricas guardadas: usar los días de retraso del registro
+        _pctAv = calcularAvance(_dRetrG);
+      } else if (v.fecha_fin) {
+        // Antiguas o sin dato: retraso entre el plazo y la FECHA DE REGISTRO del informe (no hoy)
         const _ff = new Date(String(v.fecha_fin).split('T')[0] + 'T00:00:00');
         if (!isNaN(_ff)) {
           const _lim = fechaLimiteInforme(_ff);
           const _limStr = _lim.getFullYear() + '-' + String(_lim.getMonth()+1).padStart(2,'0') + '-' + String(_lim.getDate()).padStart(2,'0');
-          const _hoyV = new Date(); _hoyV.setHours(0,0,0,0);
-          _pctAv = calcularAvance(calcularRetraso(_limStr, _hoyV));
+          const _regStr = String(v.fecha_reg || '').substring(0, 10);
+          const _refD = /^\d{4}-\d{2}-\d{2}/.test(_regStr) ? new Date(_regStr + 'T00:00:00') : new Date();
+          _refD.setHours(0,0,0,0);
+          _pctAv = calcularAvance(calcularRetraso(_limStr, _refD));
         }
       }
       const _pctColor = _pctAv >= 100 ? '#16a34a' : (_pctAv >= 50 ? '#d97706' : '#dc2626');
@@ -3798,7 +3806,11 @@ function renderTablaCasos(data) {
       const porVencer = !vencido && !concluido && !!c.fecha_limite && diasRestantes <= 1;
       const estColor = vencido ? '#dc2626' : (porVencer ? '#d97706' : '#16a34a');
       const estBg    = vencido ? '#fee2e2' : (porVencer ? '#fef3c7' : '#dcfce7');
-      const porcentaje = c.fecha_limite ? calcularAvance(calcularRetraso(String(c.fecha_limite).split('T')[0], hoy)) : Math.min(100, Math.max(0, Number(c.porcentaje_avance ?? c.porcentaje) || 0));
+      // ⭐ Concluidos: % congelado de la hoja; en proceso: recálculo contra hoy (caso vivo)
+      const _pctGuardado = Math.min(100, Math.max(0, Number(c.porcentaje_avance ?? c.porcentaje) || 0));
+      const porcentaje = concluido
+        ? (_pctGuardado > 0 ? _pctGuardado : ((estadoCaso.includes('RETRASO') || estadoCaso.includes('VENCIDO')) ? _pctGuardado : 100))
+        : (c.fecha_limite ? calcularAvance(calcularRetraso(String(c.fecha_limite).split('T')[0], hoy)) : _pctGuardado);
       const estadoLabel = concluido ? 'CONCLUIDO' : (vencido ? 'VENCIDO' : (porVencer ? 'POR VENCER' : (c.fecha_limite ? 'EN PLAZO' : '-')));
       const urlInforme  = c.archivo_informe_url  || c.enlace_informe  || '';
       const urlDescargo = c.archivo_descargo_url || c.enlace_reporte  || '';
@@ -7660,15 +7672,17 @@ function calcSemanaVisita() {
 
   // Calcular plazo y estado
   const hoy      = new Date(); hoy.setHours(0,0,0,0);
-  const ffD      = new Date(ff); ffD.setHours(0,0,0,0);
+  // FIX TZ: parsear como hora local (new Date('yyyy-MM-dd') es UTC y retrocede un día en Perú)
+  const ffD      = new Date(ff + 'T00:00:00'); ffD.setHours(0,0,0,0);
   const limite   = fechaLimiteInforme(ffD);
   limite.setHours(0,0,0,0);
 
   const diasTrans  = diasHabilesEntre(ffD, hoy);
   const diasPerm   = 2;
   const diasRetr   = Math.max(0, diasTrans - diasPerm);
-  const pctAvance  = Math.min(1, diasTrans / diasPerm);
-  const pctRetraso = diasRetr / diasPerm;
+  // ⭐ Escala unificada con Casos: 100 = puntual, −10 pts por día hábil de retraso
+  const pctAvance  = calcularAvance(diasRetr);
+  const pctRetraso = 100 - pctAvance;
   const estado     = hoy > limite ? 'RETRASADO' : 'EN PLAZO';
   const temporada  = esTemporadaAlta(ffD) ? 'ALTA (Lun-Sáb)' : 'BAJA (Lun-Vie)';
 
@@ -7676,8 +7690,8 @@ function calcSemanaVisita() {
   document.getElementById('vFF').dataset.diasTrans  = diasTrans;
   document.getElementById('vFF').dataset.diasPerm   = diasPerm;
   document.getElementById('vFF').dataset.diasRetr   = diasRetr;
-  document.getElementById('vFF').dataset.pctAvance  = pctAvance.toFixed(2);
-  document.getElementById('vFF').dataset.pctRetraso = pctRetraso.toFixed(2);
+  document.getElementById('vFF').dataset.pctAvance  = String(pctAvance);
+  document.getElementById('vFF').dataset.pctRetraso = String(pctRetraso);
   document.getElementById('vFF').dataset.estado     = estado;
   document.getElementById('vFF').dataset.temporada  = temporada;
 
@@ -7694,12 +7708,12 @@ function calcSemanaVisita() {
   if (estado === 'EN PLAZO') {
     indDiv.style.background = '#f0fdf4';
     indDiv.style.border = '1.5px solid #16a34a';
-    indDiv.innerHTML = `✅ <b>EN PLAZO</b> — Temporada ${temporada}. Plazo máximo: <b>${fmtLimite}</b>. Días hábiles transcurridos: ${diasTrans}/${diasPerm}.`;
+    indDiv.innerHTML = `✅ <b>EN PLAZO</b> — Temporada ${temporada}. Plazo máximo: <b>${fmtLimite}</b>. Días hábiles transcurridos: ${diasTrans}/${diasPerm}. Avance: <b>${pctAvance}%</b>.`;
     document.getElementById('motivoRetrasoDiv').style.display = 'none';
   } else {
     indDiv.style.background = '#fef2f2';
     indDiv.style.border = '1.5px solid #dc2626';
-    indDiv.innerHTML = `⚠️ <b>FUERA DE PLAZO</b> — Temporada ${temporada}. Plazo venció: <b>${fmtLimite}</b>. Días de retraso: <b>${diasRetr}</b>. Debes ingresar el motivo para continuar.`;
+    indDiv.innerHTML = `⚠️ <b>FUERA DE PLAZO</b> — Temporada ${temporada}. Plazo venció: <b>${fmtLimite}</b>. Días de retraso: <b>${diasRetr}</b> (Avance: <b>${pctAvance}%</b> · Retraso: <b>${pctRetraso}%</b>). Debes ingresar el motivo para continuar.`;
     document.getElementById('motivoRetrasoDiv').style.display = 'block';
   }
 }
@@ -7783,7 +7797,15 @@ async function guardarVisitaSheets(datos) {
     fotos:           fotosUrls.join('|'),
     fotos_urls:      fotosUrls,
     enlace_informe:  enlacePDF,
-    registrado_por:  USER.nombre || USER.usuario
+    registrado_por:  USER.nombre || USER.usuario,
+    // ⭐ Métricas de plazo calculadas por calcSemanaVisita (antes nunca se enviaban
+    //    y las columnas % Avance / % Retraso de la hoja quedaban vacías)
+    temporada:           document.getElementById('vFF').dataset.temporada  || '',
+    dias_transcurridos:  parseInt(document.getElementById('vFF').dataset.diasTrans) || 0,
+    dias_permitidos:     parseInt(document.getElementById('vFF').dataset.diasPerm)  || 2,
+    dias_retraso:        parseInt(document.getElementById('vFF').dataset.diasRetr)  || 0,
+    pct_avance:          document.getElementById('vFF').dataset.pctAvance  || '100',
+    pct_retraso:         document.getElementById('vFF').dataset.pctRetraso || '0'
   };
   const d = await apiPost(payload);
   if (!d.success) throw new Error(d.error || 'Error al guardar');
@@ -9636,4 +9658,4 @@ h3{font-size:16px !important}
 </div>
 
 </body>
-</html>
+</html>
