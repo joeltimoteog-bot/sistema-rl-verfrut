@@ -1067,7 +1067,6 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     const nombreEmp = esRapel ? 'SOCIEDAD AGRÍCOLA RAPEL S.A.C.' : 'SOCIEDAD EXPORTADORA VERFRUT S.A.C.';
     const rucEmp    = esRapel ? 'RUC 20451779711' : 'RUC 20601438586';
     const tipos     = getTipos();
-    const tiposAll  = ['INDUCCIÓN', 'PAUTA-CHARLA', 'CAPACITACIÓN', 'ENTRENAMIENTO', 'SIMULACRO'];
     const nH        = asistentes.filter(a => (a.sexo || '').toUpperCase() === 'M').length;
     const nM        = asistentes.filter(a => (a.sexo || '').toUpperCase() === 'F').length;
     const logoB64   = await _getLogoBase64();
@@ -1093,7 +1092,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
           { content: '', styles: { cellWidth: COL1, minCellHeight: 15, valign: 'middle' } },
           { content: '', styles: { cellWidth: COL2, minCellHeight: 15, valign: 'middle' } },
           { content: 'R-SC-01\nVersión N.° 0.0\nÚltima revisión:\n24/03/2026',
-            styles: { halign: 'center', valign: 'middle', fontSize: 8,
+            styles: { halign: 'center', valign: 'middle', fontSize: 8, fontStyle: 'bold',
                       textColor: C.negro, cellWidth: COL3, minCellHeight: 15, cellPadding: 1 } }
         ],
         [
@@ -1118,7 +1117,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     // Texto celda central fila 1: empresa (8pt normal) + título (10pt bold)
     // Centro horizontal de COL2: x = MGS + COL1 + COL2/2 = 10+35+55 = 100mm
     const cX = MGS + COL1 + COL2 / 2;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...C.negro);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...C.negro);
     doc.text(nombreEmp, cX, y + 4.5, { align: 'center' });
     doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C.negro);
     doc.text('REGISTRO DE INDUCCIÓN, CAPACITACIÓN,', cX, y + 9.5, { align: 'center' });
@@ -1155,83 +1154,83 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     // 3. DATOS SIN CELDAS — texto + líneas horizontales
     // ═══════════════════════════════════════════════════════
 
-    // TEMA
+    // ── Réplica EXACTA del formato oficial R-SC-01 ──
+    yA += 1.5;
+
+    // TEMA (línea solo bajo el valor, como el oficial)
     _lbl('TEMA:', MGS + 1, yA);
-    _val(v('capTema').trim(), MGS + 15, yA, bW - 16);
-    _sub(MGS, yA + ROW, MGS + bW);
-    yA += ROW;
+    _val(v('capTema').trim(), MGS + 16, yA, bW - 17);
+    _sub(MGS + 15, yA + 5, MGS + bW);
+    yA += 6.5;
 
     // FUENTE
     _lbl('FUENTE:', MGS + 1, yA);
-    _val(v('capFuente').trim(), MGS + 20, yA, bW - 21);
-    _sub(MGS, yA + ROW, MGS + bW);
-    yA += ROW;
+    _val(v('capFuente').trim(), MGS + 16, yA, bW - 17);
+    _sub(MGS + 15, yA + 5, MGS + bW);
+    yA += 9;
 
-    // ═══════════════════════════════════════════════════════
-    // 4. TIPO DE ACTIVIDAD — checkboxes manuales (banda gris)
-    // ═══════════════════════════════════════════════════════
-    const checkH = 10;
-    doc.setFillColor(...C.banner);
-    doc.setDrawColor(...C.negro); doc.setLineWidth(0.3);
-    doc.rect(MGS, yA, bW, checkH, 'FD');
-    doc.setFont('helvetica','bold'); doc.setFontSize(7.5); doc.setTextColor(...C.negro);
-    doc.text('TIPO DE ACTIVIDAD:', MGS + 2, yA + 4);
-    const labW2 = 38, colW2 = (bW - labW2) / tiposAll.length;
-    tiposAll.forEach((t, i) => {
-      const bx = MGS + labW2 + i * colW2 + 1, by = yA + 1.2;
-      doc.setDrawColor(...C.negro); doc.setLineWidth(0.3);
-      doc.rect(bx, by, 4, 4);
-      if (tipos.includes(t)) {
+    // CHECKBOXES estilo oficial: etiqueta + recuadro grande, fondo blanco, x roja
+    const tiposPDF = ['INDUCCIÓN', 'PAUTA/CHARLA', 'CAPACITACIÓN', 'ENTRENAMIENTO', 'SIMULACRO'];
+    const tiposSel = tipos.map(t => String(t).replace(/-/g, '/'));
+    const grpW = bW / tiposPDF.length;
+    tiposPDF.forEach((t, i) => {
+      const gx = MGS + i * grpW;
+      doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...C.negro);
+      doc.text(t, gx + 1, yA + 5);
+      const tw = doc.getTextWidth(t);
+      const bx = gx + 1 + tw + 2.5, by = yA;
+      doc.setDrawColor(...C.negro); doc.setLineWidth(0.5);
+      doc.rect(bx, by, 10, 7.5);
+      if (tiposSel.includes(t)) {
         doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...C.rojo);
-        doc.text('X', bx + 2, by + 3.4, { align: 'center' });
+        doc.text('x', bx + 5, by + 5.3, { align: 'center' });
       }
-      doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(...C.negro);
-      doc.text(t, bx + 5.5, yA + 4);
     });
-    yA += checkH;
+    yA += 12;
 
-    // ÁREA (mitad izq) + N° TRAB H/M (mitad der)
-    const halfW = bW / 2;
+    // ÁREA + N° TRABAJADORES + H / M (como el oficial)
     const nTrabV = v('capNTrab') || String(asistentes.length);
     const nHv    = v('capNH') || String(nH);
     const nMv    = v('capNM') || String(nM);
     _lbl('ÁREA:', MGS + 1, yA);
-    _val(v('capArea').trim(), MGS + 13, yA, halfW - 14);
-    _sub(MGS, yA + ROW, MGS + halfW);
-    _lbl('N° TRAB:', MGS + halfW + 1, yA);
-    _val(`${nTrabV}  H: ${nHv}  M: ${nMv}`, MGS + halfW + 22, yA, halfW - 23);
-    _sub(MGS + halfW, yA + ROW, MGS + bW);
-    yA += ROW;
+    _val(v('capArea').trim(), MGS + 15, yA, 78);
+    _sub(MGS + 13, yA + 5, MGS + 95);
+    _lbl('N° TRABAJADORES:', MGS + 99, yA);
+    _val(nTrabV, MGS + 132, yA);
+    _sub(MGS + 130, yA + 5, MGS + 152);
+    _lbl('H:', MGS + 158, yA);
+    _val(nHv, MGS + 163, yA);
+    _lbl('M:', MGS + 173, yA);
+    _val(nMv, MGS + 178, yA);
+    yA += 9;
 
-    // LUGAR (65%) + FECHA (35%)
-    const lugW = Math.round(bW * 0.65);
-    _lbl('LUGAR:', MGS + 1, yA);
-    _val(v('capLugar').trim(), MGS + 15, yA, lugW - 16);
-    _sub(MGS, yA + ROW, MGS + lugW);
-    _lbl('FECHA:', MGS + lugW + 1, yA);
-    _val(v('capFecha'), MGS + lugW + 16, yA, bW - lugW - 17);
-    _sub(MGS + lugW, yA + ROW, MGS + bW);
-    yA += ROW;
+    // FECHA (izquierda) + LUGAR (derecha), como el oficial
+    _lbl('FECHA:', MGS + 1, yA);
+    _val(v('capFecha'), MGS + 17, yA, 76);
+    _sub(MGS + 15, yA + 5, MGS + 95);
+    _lbl('LUGAR:', MGS + 99, yA);
+    _val(v('capLugar').trim(), MGS + 114, yA, bW - 115);
+    _sub(MGS + 112, yA + 5, MGS + bW);
+    yA += 10;
 
-    // H. INICIO + H. TÉRMINO + TOTAL HORAS (tercios)
-    const segW = Math.round(bW / 3);
-    _lbl('H. INICIO:', MGS + 1, yA);
-    _val(v('capHoraInicio') || '', MGS + 24, yA);
-    _sub(MGS, yA + ROW, MGS + segW);
-    _lbl('H. TÉRMINO:', MGS + segW + 1, yA);
-    _val(v('capHoraTermino') || '', MGS + segW + 28, yA);
-    _sub(MGS + segW, yA + ROW, MGS + segW * 2);
-    _lbl('TOTAL HORAS:', MGS + segW * 2 + 1, yA);
-    _val(v('capHoras') || '—', MGS + segW * 2 + 30, yA);
-    _sub(MGS + segW * 2, yA + ROW, MGS + bW);
-    yA += ROW;
+    // HORA DE INICIO + HORA DE TÉRMINO + TOTAL DE HORAS (etiquetas completas)
+    _lbl('HORA DE INICIO:', MGS + 8, yA);
+    _val(v('capHoraInicio') || '', MGS + 38, yA);
+    _sub(MGS + 36, yA + 5, MGS + 72);
+    _lbl('HORA DE TÉRMINO:', MGS + 80, yA);
+    _val(v('capHoraTermino') || '', MGS + 114, yA);
+    _sub(MGS + 112, yA + 5, MGS + 148);
+    _lbl('TOTAL DE HORAS:', MGS + 152, yA);
+    _val(v('capHoras') || '', MGS + 183, yA);
+    _sub(MGS + 181, yA + 5, MGS + bW);
+    yA += 9;
 
     // PRODUCTOR
-    const prodV = v('capProductor') || nombreEmp;
+    const prodV = v('capProductor') || (esRapel ? 'Sociedad Agrícola Rapel S.A.C.' : 'Sociedad Exportadora Verfrut S.A.C.');
     _lbl('PRODUCTOR:', MGS + 1, yA);
-    _val(prodV, MGS + 27, yA, bW - 28);
-    _sub(MGS, yA + 6, MGS + bW);
-    yA += 6;
+    _val(prodV, MGS + 24, yA, bW - 25);
+    _sub(MGS, yA + 5.5, MGS + bW);
+    yA += 7;
 
     y = yA;
 
@@ -1297,7 +1296,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     // ═══════════════════════════════════════════════════════
     doc.autoTable({
       startY: y, margin: { left: MGS, right: MGS, bottom: 5 },
-      body: [[{ content: 'RESPONSABLE DEL REGISTRO / SEGURIDAD ALIMENTARIA', styles: sBanner }]],
+      body: [[{ content: esRapel ? 'RESPONSABLE DEL REGISTRO / SEGURIDAD ALIMENTARIA' : 'RESPONSABLE DEL REGISTRO', styles: sBanner }]],
       theme: 'grid', styles: sBorder
     });
     y = doc.lastAutoTable.finalY;
