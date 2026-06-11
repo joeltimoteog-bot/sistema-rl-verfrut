@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cálculo Remunerativo · Sistema RL</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root { --azul:#0a2463; --azul2:#1e3a8a; --bd:#e2e8f0; --gris:#64748b; --verde:#16a34a; --rojo:#dc2626; --ambar:#d97706; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Barlow',sans-serif; background:#f1f5f9; color:#1e293b; min-height:100vh; }
+  header { background:var(--azul); color:#fff; padding:14px 22px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  header h1 { font-size:18px; font-weight:800; letter-spacing:.3px; }
+  header .sub { font-size:11.5px; opacity:.8; }
+  .wrap { max-width:1180px; margin:0 auto; padding:18px 16px 60px; }
+  .tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:16px; }
+  .tab { padding:9px 16px; border:1.5px solid var(--bd); background:#fff; border-radius:9px; cursor:pointer; font-family:inherit; font-size:13px; font-weight:600; color:#334155; }
+  .tab.act { background:var(--azul); color:#fff; border-color:var(--azul); }
+  .card { background:#fff; border:1px solid var(--bd); border-radius:12px; padding:18px; margin-bottom:16px; box-shadow:0 1px 3px rgba(15,23,42,.05); }
+  .card h2 { font-size:15px; font-weight:800; color:var(--azul); margin-bottom:12px; }
+  .card h3 { font-size:13px; font-weight:700; color:#334155; margin:10px 0 8px; }
+  .grid { display:grid; gap:12px; }
+  .g2 { grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); }
+  .g3 { grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); }
+  .g5 { grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); }
+  label { display:block; font-size:11.5px; font-weight:700; color:#475569; margin-bottom:4px; text-transform:uppercase; letter-spacing:.3px; }
+  input, select { width:100%; padding:8px 10px; border:1.5px solid #cbd5e1; border-radius:7px; font-family:inherit; font-size:13.5px; background:#fff; }
+  input:focus, select:focus { outline:none; border-color:var(--azul2); }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th { background:var(--azul); color:#fff; padding:8px 10px; text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:.3px; }
+  td { padding:7px 10px; border-bottom:1px solid #f1f5f9; }
+  tr:hover td { background:#f8fafc; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; }
+  .tot td { background:#eff6ff; font-weight:800; border-top:2px solid var(--azul); }
+  .neto td { background:#dcfce7; font-weight:800; color:#14532d; }
+  .neto2 td { background:#fef9c3; font-weight:800; color:#713f12; }
+  .kpi { background:linear-gradient(135deg,var(--azul),#13399b); color:#fff; border-radius:11px; padding:14px 16px; }
+  .kpi .v { font-size:23px; font-weight:800; } .kpi .l { font-size:11px; opacity:.85; text-transform:uppercase; letter-spacing:.4px; }
+  .kpi.verde { background:linear-gradient(135deg,#15803d,#16a34a); }
+  .kpi.ambar { background:linear-gradient(135deg,#b45309,#d97706); }
+  /* Calendario */
+  .calgrid { display:grid; grid-template-columns:repeat(7,1fr); gap:5px; }
+  .calhd { text-align:center; font-size:10.5px; font-weight:800; color:#475569; text-transform:uppercase; padding:4px 0; }
+  .cd { border:1.5px solid var(--bd); border-radius:8px; min-height:58px; padding:5px 6px; background:#fff; cursor:pointer; position:relative; }
+  .cd .n { font-size:11.5px; font-weight:700; color:#64748b; }
+  .cd .h { font-size:15px; font-weight:800; color:var(--azul); margin-top:3px; }
+  .cd.cero { background:#f8fafc; } .cd.cero .h { color:#cbd5e1; }
+  .cd.fer { background:#fee2e2; border-color:#fca5a5; } .cd.fer .h { color:var(--rojo); }
+  .cd.ina { background:#fef3c7; border-color:#fcd34d; } .cd.ina .h { color:var(--ambar); }
+  .cd.vacio { border:none; background:transparent; cursor:default; }
+  .cd .tag { position:absolute; top:4px; right:5px; font-size:9px; font-weight:800; }
+  .leyenda { display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:#475569; margin-top:10px; }
+  .dot { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+  .pill { display:inline-block; background:#eff6ff; color:var(--azul2); border:1px solid #bfdbfe; border-radius:99px; padding:2px 10px; font-size:11.5px; font-weight:700; margin:2px 4px 2px 0; }
+  .pill button { border:none; background:none; color:var(--rojo); cursor:pointer; font-weight:800; margin-left:4px; font-size:12px; }
+  .btn { background:var(--azul); color:#fff; border:none; border-radius:8px; padding:9px 16px; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn.sec { background:#fff; color:var(--azul); border:1.5px solid var(--azul); }
+  .nota { font-size:11.5px; color:#64748b; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; padding:8px 12px; margin-top:10px; }
+  .ok { color:var(--verde); font-weight:700; }
+  @media (max-width:640px){ .cd{min-height:48px} .cd .h{font-size:13px} }
+  @media print { header,.tabs,.btn,.nota{display:none} .card{border:none;box-shadow:none} }
+</style>
+</head>
+<body>
+<header>
+  <div style="font-size:26px">🧮</div>
+  <div>
+    <h1>CÁLCULO REMUNERATIVO — OBRERO CAMPO</h1>
+    <div class="sub">Régimen Agrario · VERFRUT S.A.C / RAPEL S.A.C — UNIFRUTTI GROUP · Sistema RL v3.0</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button class="tab act" data-t="tCal"  onclick="tab('tCal',this)">📅 Calendario</button>
+    <button class="tab" data-t="tQuin" onclick="tab('tQuin',this)">🧮 Cálculo Quincenal</button>
+    <button class="tab" data-t="tDia"  onclick="tab('tDia',this)">☀️ Cálculo Diario</button>
+    <button class="tab" data-t="tHE"   onclick="tab('tHE',this)">⏱️ Horas Extras</button>
+    <button class="tab" data-t="tPar"  onclick="tab('tPar',this)">⚙️ Parámetros</button>
+  </div>
+
+  <!-- ════════ TAB CALENDARIO ════════ -->
+  <div id="tCal" class="tabpane">
+    <div class="card">
+      <h2>📅 Calendario de Jornada Laboral</h2>
+      <div class="grid g3" style="margin-bottom:14px">
+        <div><label>Año</label><select id="cAnio" onchange="renderCal()"></select></div>
+        <div><label>Mes</label><select id="cMes" onchange="renderCal()"></select></div>
+        <div><label>Marcar inasistencia</label><input type="date" id="cIna" onchange="addInasistencia()"></div>
+      </div>
+      <div class="grid g3" style="margin-bottom:14px">
+        <div class="kpi"><div class="v" id="kQ1">0</div><div class="l">Horas 1° Quincena (1–15)</div></div>
+        <div class="kpi"><div class="v" id="kQ2">0</div><div class="l">Horas 2° Quincena (16–fin)</div></div>
+        <div class="kpi verde"><div class="v" id="kMes">0</div><div class="l">Total Horas del Mes</div></div>
+      </div>
+      <div class="calgrid" id="calHd"></div>
+      <div class="calgrid" id="calGrid" style="margin-top:5px"></div>
+      <div class="leyenda">
+        <span><span class="dot" style="background:#fff;border:1.5px solid #cbd5e1"></span>Laborable</span>
+        <span><span class="dot" style="background:#fee2e2;border:1.5px solid #fca5a5"></span>Feriado</span>
+        <span><span class="dot" style="background:#fef3c7;border:1.5px solid #fcd34d"></span>Inasistencia (clic en el día para marcar/quitar)</span>
+        <span><span class="dot" style="background:#f8fafc;border:1.5px solid #e2e8f0"></span>No laborable</span>
+      </div>
+      <div style="margin-top:10px" id="cInaList"></div>
+      <div class="nota">Jornadas: <b>02–03 ene</b> 8.45h · <b>04 ene</b> (si sábado) 5.75h · <b>Temporada Alta</b> (05 ene–26 jun) Lun-Vie 9.6h · <b>Temporada Baja</b> (27 jun–31 dic) Lun-Vie 8.45h y Sáb 5.75h · Domingos y feriados 0h. Feriados editables en ⚙️ Parámetros.</div>
+    </div>
+  </div>
+
+  <!-- ════════ TAB QUINCENAL ════════ -->
+  <div id="tQuin" class="tabpane" style="display:none">
+    <div class="card">
+      <h2>🧮 Cálculo Quincenal (réplica OBRERO ACTUAL)</h2>
+      <div class="grid g5" style="margin-bottom:6px">
+        <div><label>Rem. Bruta (S/)</label><input type="number" id="qBruta" step="0.01" onchange="renderQuin()"></div>
+        <div><label>AFP / ONP</label><select id="qAfp" onchange="renderQuin()"></select></div>
+        <div><label>Tipo comisión</label><select id="qCom" onchange="renderQuin()"><option value="flujo">FLUJO</option><option value="mixta">MIXTA</option></select></div>
+        <div><label>Tasa AFP/ONP</label><input type="number" id="qTasa" step="0.0001" onchange="renderQuin()"></div>
+        <div><label>Usar horas del calendario</label><select id="qAuto" onchange="renderQuin()"><option value="1">Sí (mes seleccionado)</option><option value="0">No, manual</option></select></div>
+      </div>
+      <div class="nota" id="qInfo"></div>
+      <div class="grid g2" style="margin-top:14px" id="qCols"></div>
+      <div class="grid g3" style="margin-top:14px">
+        <div class="kpi verde"><div class="v" id="kNetoMes">—</div><div class="l">Neto Mensual CON Asig. Fam.</div></div>
+        <div class="kpi ambar"><div class="v" id="kNetoMesSin">—</div><div class="l">Neto Mensual SIN Asig. Fam.</div></div>
+        <div class="kpi"><div class="v" id="kBasica">—</div><div class="l">Rem. Básica (Bruta ÷ 1.2638)</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ TAB DIARIO ════════ -->
+  <div id="tDia" class="tabpane" style="display:none">
+    <div class="card">
+      <h2>☀️ Cálculo de Neto Diario (réplica Calc.Diario)</h2>
+      <div class="grid g3" style="margin-bottom:12px">
+        <div><label>Rem. Básica (S/)</label><input type="number" id="dBasica" step="0.01" onchange="renderDia()"></div>
+        <div><label>Tasa AFP/ONP</label><input type="number" id="dTasa" step="0.0001" onchange="renderDia()"></div>
+        <div><label>Jornada personalizada (horas)</label><input type="number" id="dHrs" step="0.05" value="9.6" onchange="renderDia()"></div>
+      </div>
+      <div style="overflow-x:auto"><table id="tblDia"></table></div>
+    </div>
+  </div>
+
+  <!-- ════════ TAB HORAS EXTRAS ════════ -->
+  <div id="tHE" class="tabpane" style="display:none">
+    <div class="card">
+      <h2>⏱️ Costo Neto de Horas Extras (réplica Calc. Horas Extras)</h2>
+      <div class="grid g3" style="margin-bottom:12px">
+        <div><label>Rem. Bruta (S/)</label><input type="number" id="hBruta" step="0.01" onchange="renderHE()"></div>
+        <div><label>Tipo jornal</label><select id="hJornal" onchange="renderHE()"><option value="MENSUAL">MENSUAL</option><option value="DIARIO">DIARIO</option></select></div>
+        <div><label>Tasa AFP/ONP</label><input type="number" id="hTasa" step="0.0001" onchange="renderHE()"></div>
+      </div>
+      <div style="overflow-x:auto"><table id="tblHE"></table></div>
+      <h3 style="margin-top:16px">Calculadora rápida</h3>
+      <div class="grid g3">
+        <div><label>Concepto</label><select id="hTipo" onchange="renderHE()">
+          <option value="he25">Hrs. Extras 25%</option><option value="he35">Hrs. Extras 35%</option>
+          <option value="he25noc">Hrs. Extras 25% Nocturna</option><option value="he35noc">Hrs. Extras 35% Nocturna</option>
+          <option value="domfer">Domingo / Feriado Laborado (día)</option></select></div>
+        <div><label id="hLblCant">Cantidad de horas</label><input type="number" id="hCant" step="0.5" value="8" onchange="renderHE()"></div>
+        <div class="kpi verde" style="align-self:end"><div class="v" id="kHE">—</div><div class="l">Monto Neto</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════ TAB PARÁMETROS ════════ -->
+  <div id="tPar" class="tabpane" style="display:none">
+    <div class="card">
+      <h2>⚙️ Parámetros del Cálculo <span style="font-size:11px;color:#64748b;font-weight:600">(se guardan en este navegador)</span></h2>
+      <div class="grid g5">
+        <div><label>Rem. Bruta base (S/)</label><input type="number" id="pBruta" step="0.01"></div>
+        <div><label>Factor Bruta→Básica</label><input type="number" id="pFactor" step="0.0001"></div>
+        <div><label>% CTS Agraria</label><input type="number" id="pCts" step="0.0001"></div>
+        <div><label>% Gratif. Agraria</label><input type="number" id="pGrat" step="0.0001"></div>
+        <div><label>% Bonif. Extr. (de Gratif.)</label><input type="number" id="pBon" step="0.01"></div>
+        <div><label>% Asig. Familiar</label><input type="number" id="pAf" step="0.01"></div>
+        <div><label>% BETA</label><input type="number" id="pBeta" step="0.01"></div>
+        <div><label>Tarifa Bono Aplicación (S/ x h)</label><input type="number" id="pBonoAp" step="0.1"></div>
+        <div><label>Jornada T.Alta L-V (h)</label><input type="number" id="pJA" step="0.05"></div>
+        <div><label>Jornada T.Baja L-V (h)</label><input type="number" id="pJB" step="0.05"></div>
+        <div><label>Jornada T.Baja Sáb (h)</label><input type="number" id="pJS" step="0.05"></div>
+      </div>
+      <h3>Tasas AFP / ONP</h3>
+      <div style="overflow-x:auto"><table id="tblAfp"></table></div>
+      <h3>Feriados</h3>
+      <div class="grid g3" style="margin-bottom:8px">
+        <div><label>Agregar feriado</label><input type="date" id="pFerNew" onchange="addFeriado()"></div>
+      </div>
+      <div id="pFerList"></div>
+      <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn" onclick="guardarParams()">💾 Guardar parámetros</button>
+        <button class="btn sec" onclick="restaurarParams()">↩️ Restaurar valores 2026</button>
+      </div>
+      <div class="nota">El cálculo replica la hoja oficial <b>NUEVO CÁLCULO REMUNERATIVO 2026 – OBRERO CAMPO</b>: Básica = Bruta ÷ 1.2638 · CTS 9.72% y Gratif. 16.66% sobre remuneraciones (sin Asig. Fam. ni Bono Aplicación) · Bonif. Extr. 6% de la Gratificación · AFP sobre lo afecto (incluye Asig. Fam.; excluye CTS/Gratif/Bonif y BETA) · BETA 30% pagada proporcional por días.</div>
+    </div>
+  </div>
+</div>
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   MOTOR DE CÁLCULO REMUNERATIVO — Régimen Agrario (Obrero Campo)
+   Réplica exacta de NUEVO CALCULO REMUNERATIVO 2026 (.xlsm)
+   ═══════════════════════════════════════════════════════════════ */
+
+const PARAMS_DEFAULT = {
+  remBruta: 1428.09,          // Rem. Bruta mensual (BB.DD- SUELDOS)
+  factorBruta: 1.2638,        // Bruta = Básica × (1 + CTS 9.72% + Gratif 16.66%)
+  pctCTS: 0.0972,
+  pctGratif: 0.1666,
+  pctBonif: 0.06,             // Bonif. Extraordinaria = 6% de la Gratificación
+  pctAF: 0.10,                // Asignación Familiar = 10% de la básica
+  pctBETA: 0.30,              // BETA = 30% de la básica
+  tarifaBonoAplicacion: 9.2,  // S/ por hora (Bono Aplicación, 2° quincena)
+  afps: [
+    { nombre: 'HABITAT',   flujo: 0.1284, mixta: 0.1137 },
+    { nombre: 'INTEGRA',   flujo: 0.1292, mixta: 0.1137 },
+    { nombre: 'PRIMA',     flujo: 0.1297, mixta: 0.1137 },
+    { nombre: 'PROFUTURO', flujo: 0.1306, mixta: 0.1137 },
+    { nombre: 'ONP',       flujo: 0.13,   mixta: 0.13   }
+  ],
+  // Jornadas del calendario (horas por día)
+  jornadaAltaLV: 9.6,    // Temporada Alta: Lun-Vie (05 ene - 26 jun)
+  jornadaBajaLV: 8.45,   // Temporada Baja: Lun-Vie (27 jun - 31 dic)
+  jornadaBajaSab: 5.75,  // Temporada Baja: Sábado
+  // Feriados (réplica EXACTA de la hoja Calendario N4:N19)
+  feriados: ['2026-01-01','2026-04-17','2026-04-18','2026-05-01','2026-06-07',
+             '2026-06-29','2026-07-23','2026-07-25','2026-07-29','2026-08-06',
+             '2026-08-30','2026-10-08','2026-11-01','2026-12-08','2026-12-09','2026-12-25']
+};
+
+function basicaDe(p) { return p.remBruta / p.factorBruta; }
+
+/* ── Horas de jornada de un día (réplica fórmula hoja Calendario) ──
+   d: Date local · feriadosSet/inasistSet: Set de 'yyyy-mm-dd' */
+function horasDia(d, p, feriadosSet, inasistSet) {
+  const iso = fmtISO(d);
+  if (feriadosSet.has(iso) || inasistSet.has(iso)) return 0;
+  const y = d.getFullYear();
+  const dow = d.getDay() === 0 ? 7 : d.getDay();   // 1=Lun ... 7=Dom (WEEKDAY(,2))
+  const t = d.getTime();
+  const D = (m, day) => new Date(y, m - 1, day).getTime();
+  if (t >= D(1, 2) && t <= D(1, 3)) return p.jornadaBajaLV;                 // 02-03 ene: 8.45
+  if (t === D(1, 4) && dow === 6) return p.jornadaBajaSab;                  // 04 ene sábado: 5.75
+  if (t >= D(1, 5) && t <= D(6, 26)) return dow <= 5 ? p.jornadaAltaLV : 0; // T. Alta
+  if (t >= D(6, 27) && t <= D(12, 31)) {                                    // T. Baja
+    if (dow > 6) return 0;
+    return dow === 6 ? p.jornadaBajaSab : p.jornadaBajaLV;
+  }
+  return 0;  // 01 ene
+}
+
+function fmtISO(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+/* ── Calendario del mes: días con horas + totales por quincena ── */
+function calendarioMes(anio, mes, p, inasistencias) {
+  const fer = new Set(p.feriados || []);
+  const ina = new Set(inasistencias || []);
+  const diasMes = new Date(anio, mes, 0).getDate();
+  const dias = [];
+  let q1 = 0, q2 = 0;
+  for (let dd = 1; dd <= diasMes; dd++) {
+    const d = new Date(anio, mes - 1, dd);
+    const h = horasDia(d, p, fer, ina);
+    dias.push({ dia: dd, iso: fmtISO(d), dow: d.getDay(), horas: h,
+                feriado: fer.has(fmtISO(d)), inasistencia: ina.has(fmtISO(d)) });
+    if (dd <= 15) q1 += h; else q2 += h;
+  }
+  return { dias, diasMes, horasQ1: r2(q1, 10), horasQ2: r2(q2, 10), horasMes: r2(q1 + q2, 10) };
+}
+function r2(x, dec) { const f = Math.pow(10, dec === undefined ? 2 : dec); return Math.round(x * f) / f; }
+
+/* ── Cálculo QUINCENAL (réplica hoja OBRERO ACTUAL) ──
+   in: { horas, diasDescSem, diasAF, diasBETA, diasMes, tasaAFP,
+         hrsBasicoNoc, diasFeriado, diasDomFer, hrs25, hrs35, hrs25noc,
+         hrs35noc, diasDescMed, hrsBonoAplic } */
+function calcQuincena(inp, p) {
+  const basica = basicaDe(p);
+  const basicoDiario = basica / 30;
+  const basicoHora = basicoDiario / 8;
+  const afMensual = basica * p.pctAF;
+  const betaMensual = basica * p.pctBETA;
+
+  const basico    = (inp.horas || 0) * basicoHora;
+  const basicoNoc = (inp.hrsBasicoNoc || 0) * basicoHora * 1.35;
+  const derFeriado= (inp.diasFeriado || 0) * basicoDiario;
+  const descSem   = (inp.diasDescSem || 0) * (basicoDiario / 5);
+  const asigFam   = (inp.diasAF || 0) * (afMensual / inp.diasMes);
+  const domFer    = (inp.diasDomFer || 0) * (basica / 30 * 2);
+  const he25      = (inp.hrs25 || 0) * basicoHora * 1.25;
+  const he35      = (inp.hrs35 || 0) * basicoHora * 1.35;
+  const he25n     = (inp.hrs25noc || 0) * basicoHora * 1.25 * 1.35;
+  const he35n     = (inp.hrs35noc || 0) * basicoHora * 1.35 * 1.35;
+  const descMed   = (inp.diasDescMed || 0) * basicoDiario;
+  const bonoAplic = (inp.hrsBonoAplic || 0) * p.tarifaBonoAplicacion;
+
+  // Base CTS/Gratif: remuneraciones SIN Asig. Fam. y SIN Bono Aplicación
+  const baseBeneficios = basico + basicoNoc + derFeriado + descSem + domFer + he25 + he35 + he25n + he35n + descMed;
+  const cts    = baseBeneficios * p.pctCTS;
+  const gratif = baseBeneficios * p.pctGratif;
+  const bonif  = gratif * p.pctBonif;
+
+  const totalIngresos = baseBeneficios + asigFam + bonoAplic + cts + gratif + bonif;
+  // AFP: sobre todo lo AFECTO (incluye AF y Bono Aplicación; excluye CTS/Gratif/Bonif y BETA)
+  const baseAFP = baseBeneficios + asigFam + bonoAplic;
+  const dsctoAFP = baseAFP * inp.tasaAFP;
+
+  const betaQ = (inp.diasBETA || 0) * (betaMensual / inp.diasMes);
+  const netoConAF = totalIngresos - dsctoAFP + betaQ;
+  const netoSinAF = netoConAF - (asigFam - asigFam * inp.tasaAFP);
+
+  return { basica, basicoDiario, basicoHora, afMensual, betaMensual,
+           basico, basicoNoc, derFeriado, descSem, asigFam, domFer,
+           he25, he35, he25n, he35n, descMed, bonoAplic,
+           cts, gratif, bonif, totalIngresos, dsctoAFP, betaQ, netoConAF, netoSinAF };
+}
+
+/* ── Cálculo DIARIO (réplica hoja Calc.Diario) ── */
+function calcDiario(horas, basica, tasaAFP, p) {
+  const remDiaria = (basica / 30 / 8) * horas;
+  const descSem   = (basica / 30) / 6;
+  const afDiaria  = (basica * p.pctAF) / 30;
+  const cts    = (remDiaria + descSem) * p.pctCTS;
+  const gratif = (remDiaria + descSem) * p.pctGratif;
+  const bonif  = gratif * p.pctBonif;
+  const beta   = (basica * p.pctBETA) / 30;
+  const total  = remDiaria + descSem + afDiaria + cts + gratif + bonif + beta;
+  const afp    = (remDiaria + descSem + afDiaria) * tasaAFP;
+  const netoConAF = total - afp;
+  const netoSinAF = netoConAF - (afDiaria - afDiaria * tasaAFP);
+  return { remDiaria, descSem, afDiaria, cts, gratif, bonif, beta, total, afp, netoConAF, netoSinAF };
+}
+
+/* ── HORAS EXTRAS (réplica hoja Calc. Horas Extras) ──
+   tipo: 'domfer' | 'he25' | 'he35' | 'he25noc' | 'he35noc' */
+function calcHoraExtra(tipo, basicoHora, tasaAFP, p) {
+  let x;
+  if (tipo === 'domfer')       x = basicoHora * 8 * 2;
+  else if (tipo === 'he25')    x = basicoHora * 1.25;
+  else if (tipo === 'he35')    x = basicoHora * 1.35;
+  else if (tipo === 'he25noc') x = basicoHora * 1.25 * 1.35;
+  else                         x = basicoHora * 1.35 * 1.35;
+  const cts = x * p.pctCTS, gratif = x * p.pctGratif, bonif = gratif * p.pctBonif;
+  const total = x + cts + gratif + bonif;
+  const afp = x * tasaAFP;
+  return { base: x, cts, gratif, bonif, total, afp, neto: total - afp };
+}
+
+
+
+/* ═══════ UI DEL MÓDULO ═══════ */
+const LS_KEY = 'calcRemu_params_v1';
+const LS_INA = 'calcRemu_inasist_v1';
+let P = cargarParams();
+let INA = JSON.parse(localStorage.getItem(LS_INA) || '[]');
+
+function cargarParams() {
+  try {
+    const s = localStorage.getItem(LS_KEY);
+    if (s) { const o = JSON.parse(s); if (o && o.remBruta) return Object.assign(JSON.parse(JSON.stringify(PARAMS_DEFAULT)), o); }
+  } catch(e) {}
+  return JSON.parse(JSON.stringify(PARAMS_DEFAULT));
+}
+function fmt(n, dec) { return 'S/ ' + Number(n).toLocaleString('es-PE', { minimumFractionDigits: dec===undefined?2:dec, maximumFractionDigits: dec===undefined?2:dec }); }
+function fnum(n, dec) { return Number(n).toLocaleString('es-PE', { minimumFractionDigits: dec===undefined?2:dec, maximumFractionDigits: dec===undefined?2:dec }); }
+function v(id) { return document.getElementById(id).value; }
+function el(id) { return document.getElementById(id); }
+
+function tab(id, btn) {
+  document.querySelectorAll('.tabpane').forEach(p => p.style.display = 'none');
+  el(id).style.display = 'block';
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('act'));
+  btn.classList.add('act');
+  if (id === 'tQuin') renderQuin();
+  if (id === 'tDia')  renderDia();
+  if (id === 'tHE')   renderHE();
+  if (id === 'tPar')  renderPar();
+}
+
+/* ════════ CALENDARIO ════════ */
+const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function initCal() {
+  const sA = el('cAnio'), sM = el('cMes');
+  const hoy = new Date();
+  for (let y = 2025; y <= 2032; y++) sA.innerHTML += `<option ${y===hoy.getFullYear()?'selected':''}>${y}</option>`;
+  MESES.forEach((m,i) => sM.innerHTML += `<option value="${i+1}" ${i===hoy.getMonth()?'selected':''}>${m}</option>`);
+  el('calHd').innerHTML = ['LUN','MAR','MIÉ','JUE','VIE','SÁB','DOM'].map(d=>`<div class="calhd">${d}</div>`).join('');
+  renderCal();
+}
+function renderCal() {
+  const anio = parseInt(v('cAnio')), mes = parseInt(v('cMes'));
+  const cal = calendarioMes(anio, mes, P, INA);
+  el('kQ1').textContent = fnum(cal.horasQ1) + ' h';
+  el('kQ2').textContent = fnum(cal.horasQ2) + ' h';
+  el('kMes').textContent = fnum(cal.horasMes) + ' h';
+  const primer = new Date(anio, mes-1, 1).getDay();           // 0=dom
+  const offset = primer === 0 ? 6 : primer - 1;               // lunes primero
+  let html = '';
+  for (let i = 0; i < offset; i++) html += '<div class="cd vacio"></div>';
+  cal.dias.forEach(d => {
+    let cls = 'cd', tag = '';
+    if (d.feriado) { cls += ' fer'; tag = 'FER'; }
+    else if (d.inasistencia) { cls += ' ina'; tag = 'INA'; }
+    else if (d.horas === 0) cls += ' cero';
+    html += `<div class="${cls}" onclick="toggleIna('${d.iso}')" title="${d.iso}">
+      <div class="n">${d.dia}</div><div class="h">${d.horas ? fnum(d.horas) : '0'}</div>
+      ${tag ? `<div class="tag" style="color:${d.feriado?'#dc2626':'#d97706'}">${tag}</div>` : ''}</div>`;
+  });
+  el('calGrid').innerHTML = html;
+  el('cInaList').innerHTML = INA.length
+    ? '<b style="font-size:12px;color:#475569">Inasistencias:</b> ' + INA.slice().sort().map(f => `<span class="pill">${f}<button onclick="event.stopPropagation();quitarIna('${f}')">✕</button></span>`).join('')
+    : '';
+  if (el('tQuin').style.display !== 'none') renderQuin();
+}
+function toggleIna(iso) {
+  const fer = new Set(P.feriados); if (fer.has(iso)) return;
+  const i = INA.indexOf(iso);
+  if (i === -1) INA.push(iso); else INA.splice(i, 1);
+  localStorage.setItem(LS_INA, JSON.stringify(INA)); renderCal();
+}
+function addInasistencia() { const f = v('cIna'); if (f && INA.indexOf(f) === -1) { INA.push(f); localStorage.setItem(LS_INA, JSON.stringify(INA)); } el('cIna').value=''; renderCal(); }
+function quitarIna(f) { INA = INA.filter(x => x !== f); localStorage.setItem(LS_INA, JSON.stringify(INA)); renderCal(); }
+
+/* ════════ QUINCENAL ════════ */
+let qManual = null; // estado de inputs manuales por quincena
+function initQuin() {
+  el('qBruta').value = P.remBruta;
+  const sel = el('qAfp');
+  sel.innerHTML = P.afps.map((a,i) => `<option value="${i}" ${a.nombre==='PROFUTURO'?'selected':''}>${a.nombre}</option>`).join('');
+  setTasaQ();
+}
+function setTasaQ() {
+  const a = P.afps[parseInt(v('qAfp'))] || P.afps[0];
+  el('qTasa').value = v('qCom') === 'mixta' ? a.mixta : a.flujo;
+}
+el && null;
+function renderQuin() {
+  if (el('qAfp').dataset.last !== v('qAfp') + '|' + v('qCom')) {
+    setTasaQ(); el('qAfp').dataset.last = v('qAfp') + '|' + v('qCom');
+  }
+  const anio = parseInt(v('cAnio')), mes = parseInt(v('cMes'));
+  const cal = calendarioMes(anio, mes, P, INA);
+  const auto = v('qAuto') === '1';
+  const tasa = parseFloat(v('qTasa')) || 0;
+  const bruta = parseFloat(v('qBruta')) || P.remBruta;
+  const pLocal = Object.assign({}, P, { remBruta: bruta });
+  const diasMes = cal.diasMes;
+  const dq2 = diasMes - 15;
+
+  if (!qManual) qManual = {
+    q1: { horas:'', hrsBasicoNoc:0, diasFeriado:0, diasDescSem:11, diasAF:15, diasDomFer:0, hrs25:0, hrs35:0, hrs25noc:0, hrs35noc:0, diasDescMed:0, hrsBonoAplic:0, diasBETA:15 },
+    q2: { horas:'', hrsBasicoNoc:0, diasFeriado:0, diasDescSem:11, diasAF:dq2, diasDomFer:0, hrs25:0, hrs35:0, hrs25noc:0, hrs35noc:0, diasDescMed:0, hrsBonoAplic:0, diasBETA:dq2 }
+  };
+  el('qInfo').innerHTML = `Mes en cálculo: <b>${MESES[mes-1]} ${anio}</b> (${diasMes} días) · Horas del calendario — Q1: <b>${fnum(cal.horasQ1)}</b> h · Q2: <b>${fnum(cal.horasQ2)}</b> h. Edita días/horas en cada quincena si lo necesitas.`;
+
+  const cols = [['q1','1° QUINCENA (días 1–15)', cal.horasQ1], ['q2','2° QUINCENA (días 16–'+diasMes+')', cal.horasQ2]];
+  let netoMes = 0, netoMesSin = 0;
+  el('qCols').innerHTML = cols.map(([k, titulo, hCal]) => {
+    const m = qManual[k];
+    const horas = auto ? hCal : (parseFloat(m.horas) || 0);
+    const inp = Object.assign({}, m, { horas, diasMes, tasaAFP: tasa });
+    const r = calcQuincena(inp, pLocal);
+    netoMes += r.netoConAF; netoMesSin += r.netoSinAF;
+    const fila = (lbl, cant, monto, edId, paso) => `<tr><td>${lbl}</td>
+      <td class="num" style="width:86px">${edId ? `<input style="padding:4px 6px;font-size:12.5px;text-align:right" type="number" step="${paso||1}" value="${cant}" onchange="qSet('${k}','${edId}',this.value)">` : (cant!==null?fnum(cant,2):'')}</td>
+      <td class="num">${fnum(monto)}</td></tr>`;
+    return `<div>
+      <h3 style="color:var(--azul)">${titulo}</h3>
+      <table>
+        <tr><th>Concepto</th><th class="num">Hrs / Días</th><th class="num">Monto S/</th></tr>
+        ${auto ? fila('Básico (horas calendario)', horas, r.basico, null) : fila('Básico (horas)', m.horas||0, r.basico, 'horas', 0.05)}
+        ${fila('Básico Nocturno ×1.35 (hrs)', m.hrsBasicoNoc, r.basicoNoc, 'hrsBasicoNoc', 0.5)}
+        ${fila('Der. Feriado (días)', m.diasFeriado, r.derFeriado, 'diasFeriado')}
+        ${fila('Desc. Semanal (días)', m.diasDescSem, r.descSem, 'diasDescSem')}
+        ${fila('Asig. Familiar (días)', m.diasAF, r.asigFam, 'diasAF')}
+        ${fila('Dom/Fer Laborado (días)', m.diasDomFer, r.domFer, 'diasDomFer')}
+        ${fila('Hrs. Ex. 25%', m.hrs25, r.he25, 'hrs25', 0.5)}
+        ${fila('Hrs. Ex. 35%', m.hrs35, r.he35, 'hrs35', 0.5)}
+        ${fila('Hrs. Ex. 25% Noc.', m.hrs25noc, r.he25n, 'hrs25noc', 0.5)}
+        ${fila('Hrs. Ex. 35% Noc.', m.hrs35noc, r.he35n, 'hrs35noc', 0.5)}
+        ${fila('Descanso médico (días)', m.diasDescMed, r.descMed, 'diasDescMed')}
+        ${fila('Bono Aplicación (hrs × S/ '+P.tarifaBonoAplicacion+')', m.hrsBonoAplic, r.bonoAplic, 'hrsBonoAplic', 0.5)}
+        <tr><td>CTS Agraria ${(P.pctCTS*100).toFixed(2)}%</td><td></td><td class="num">${fnum(r.cts)}</td></tr>
+        <tr><td>Gratif. Agraria ${(P.pctGratif*100).toFixed(2)}%</td><td></td><td class="num">${fnum(r.gratif)}</td></tr>
+        <tr><td>Bonif. Extraordinaria ${(P.pctBonif*100).toFixed(0)}%</td><td></td><td class="num">${fnum(r.bonif)}</td></tr>
+        <tr class="tot"><td>TOTAL INGRESOS</td><td></td><td class="num">${fnum(r.totalIngresos)}</td></tr>
+        <tr><td>Desc. AFP/ONP (${(tasa*100).toFixed(2)}%)</td><td></td><td class="num" style="color:var(--rojo)">− ${fnum(r.dsctoAFP)}</td></tr>
+        ${fila('BETA (días)', m.diasBETA, r.betaQ, 'diasBETA')}
+        <tr class="neto"><td>NETO ${k==='q1'?'1°':'2°'} QUINCENA — CON Asig. Fam.</td><td></td><td class="num">${fnum(r.netoConAF)}</td></tr>
+        <tr class="neto2"><td>NETO — SIN Asig. Fam.</td><td></td><td class="num">${fnum(r.netoSinAF)}</td></tr>
+      </table>
+    </div>`;
+  }).join('');
+  el('kNetoMes').textContent = fmt(netoMes);
+  el('kNetoMesSin').textContent = fmt(netoMesSin);
+  el('kBasica').textContent = fmt(basicaDe(pLocal));
+}
+function qSet(q, campo, val) { qManual[q][campo] = parseFloat(val) || 0; renderQuin(); }
+
+/* ════════ DIARIO ════════ */
+function initDia() {
+  el('dBasica').value = Math.round(basicaDe(P) * 100) / 100;
+  el('dTasa').value = 0.1306;
+}
+function renderDia() {
+  const basica = parseFloat(v('dBasica')) || basicaDe(P);
+  const tasa = parseFloat(v('dTasa')) || 0;
+  const hPers = parseFloat(v('dHrs')) || 0;
+  const escenarios = [
+    ['T. Alta — Lun a Vie', P.jornadaAltaLV], ['Jornada Ordinaria', 8],
+    ['T. Baja — Lun a Vie', P.jornadaBajaLV], ['T. Baja — Sábado', P.jornadaBajaSab],
+    ['Personalizada', hPers]
+  ];
+  const filas = ['remDiaria|Remun. Diaria','descSem|Desc. Semanal','afDiaria|Asig. Familiar','cts|CTS Agraria','gratif|Gratif. Agraria','bonif|Bonif. Ext. Agraria','beta|BETA','total|TOTAL INGRESOS','afp|Desc. AFP/ONP','netoConAF|NETO DIARIO CON Asig. Fam.','netoSinAF|NETO DIARIO SIN Asig. Fam.'];
+  const res = escenarios.map(e => calcDiario(e[1], basica, tasa, P));
+  let html = '<tr><th>Concepto</th>' + escenarios.map(e => `<th class="num">${e[0]}<br><span style="font-weight:600;opacity:.85">${fnum(e[1])} h</span></th>`).join('') + '</tr>';
+  filas.forEach(f => {
+    const [key, lbl] = f.split('|');
+    const cls = key === 'total' ? 'tot' : key === 'netoConAF' ? 'neto' : key === 'netoSinAF' ? 'neto2' : '';
+    html += `<tr class="${cls}"><td>${lbl}</td>` + res.map(r => `<td class="num">${key==='afp' ? '− '+fnum(r[key]) : fnum(r[key])}</td>`).join('') + '</tr>';
+  });
+  el('tblDia').innerHTML = html;
+}
+
+/* ════════ HORAS EXTRAS ════════ */
+function initHE() { el('hBruta').value = P.remBruta; el('hTasa').value = 0.1306; }
+function renderHE() {
+  const bruta = parseFloat(v('hBruta')) || P.remBruta;
+  const tasa = parseFloat(v('hTasa')) || 0;
+  const basica = bruta / P.factorBruta;
+  const bH = v('hJornal') === 'DIARIO' ? basica / 8 : basica / 30 / 8;
+  const tipos = [['domfer','Dom./Fer. Laborado (día)'],['he25','Hrs. Extras 25%'],['he35','Hrs. Extras 35%'],['he25noc','Hrs. Extras 25% NOC.'],['he35noc','Hrs. Extras 35% NOC.']];
+  const res = tipos.map(t => calcHoraExtra(t[0], bH, tasa, P));
+  const filas = ['base|Básico','cts|CTS Agraria','gratif|Gratif. Agraria','bonif|Bonif. Extr.','total|Total Ingresos','afp|Desc. AFP/ONP','neto|MONTO NETO'];
+  let html = '<tr><th>Concepto</th>' + tipos.map(t => `<th class="num">${t[1]}</th>`).join('') + '</tr>';
+  filas.forEach(f => {
+    const [key, lbl] = f.split('|');
+    const cls = key === 'neto' ? 'neto' : key === 'total' ? 'tot' : '';
+    html += `<tr class="${cls}"><td>${lbl}</td>` + res.map(r => `<td class="num">${key==='afp' ? '− '+fnum(r[key],4) : fnum(r[key],4)}</td>`).join('') + '</tr>';
+  });
+  el('tblHE').innerHTML = html;
+  html = `<tr><td colspan="6" style="font-size:11px;color:#64748b">Básico hora: ${fnum(bH,6)} (Rem. Básica ${fnum(basica)} ${v('hJornal')==='DIARIO'?'÷ 8':'÷ 30 ÷ 8'})</td></tr>`;
+  el('tblHE').innerHTML += html;
+  const tipo = v('hTipo'), cant = parseFloat(v('hCant')) || 0;
+  el('hLblCant').textContent = tipo === 'domfer' ? 'Cantidad de días' : 'Cantidad de horas';
+  el('kHE').textContent = fmt(calcHoraExtra(tipo, bH, tasa, P).neto * cant);
+}
+
+/* ════════ PARÁMETROS ════════ */
+function renderPar() {
+  el('pBruta').value = P.remBruta; el('pFactor').value = P.factorBruta;
+  el('pCts').value = P.pctCTS; el('pGrat').value = P.pctGratif; el('pBon').value = P.pctBonif;
+  el('pAf').value = P.pctAF; el('pBeta').value = P.pctBETA; el('pBonoAp').value = P.tarifaBonoAplicacion;
+  el('pJA').value = P.jornadaAltaLV; el('pJB').value = P.jornadaBajaLV; el('pJS').value = P.jornadaBajaSab;
+  el('tblAfp').innerHTML = '<tr><th>AFP / ONP</th><th class="num">Flujo</th><th class="num">Mixta</th></tr>' +
+    P.afps.map((a,i) => `<tr><td>${a.nombre}</td>
+      <td class="num"><input style="width:100px;text-align:right;padding:4px 6px" type="number" step="0.0001" value="${a.flujo}" onchange="P.afps[${i}].flujo=parseFloat(this.value)||0"></td>
+      <td class="num"><input style="width:100px;text-align:right;padding:4px 6px" type="number" step="0.0001" value="${a.mixta}" onchange="P.afps[${i}].mixta=parseFloat(this.value)||0"></td></tr>`).join('');
+  el('pFerList').innerHTML = P.feriados.slice().sort().map(f => `<span class="pill">${f}<button onclick="quitarFeriado('${f}')">✕</button></span>`).join('');
+}
+function addFeriado() { const f = v('pFerNew'); if (f && P.feriados.indexOf(f) === -1) P.feriados.push(f); el('pFerNew').value=''; renderPar(); }
+function quitarFeriado(f) { P.feriados = P.feriados.filter(x => x !== f); renderPar(); }
+function guardarParams() {
+  P.remBruta = parseFloat(v('pBruta')) || P.remBruta;
+  P.factorBruta = parseFloat(v('pFactor')) || P.factorBruta;
+  P.pctCTS = parseFloat(v('pCts')); P.pctGratif = parseFloat(v('pGrat')); P.pctBonif = parseFloat(v('pBon'));
+  P.pctAF = parseFloat(v('pAf')); P.pctBETA = parseFloat(v('pBeta'));
+  P.tarifaBonoAplicacion = parseFloat(v('pBonoAp'));
+  P.jornadaAltaLV = parseFloat(v('pJA')); P.jornadaBajaLV = parseFloat(v('pJB')); P.jornadaBajaSab = parseFloat(v('pJS'));
+  localStorage.setItem(LS_KEY, JSON.stringify(P));
+  el('qBruta').value = P.remBruta; el('hBruta').value = P.remBruta;
+  el('dBasica').value = Math.round(basicaDe(P) * 100) / 100;
+  renderCal(); alert('✅ Parámetros guardados');
+}
+function restaurarParams() {
+  if (!confirm('¿Restaurar todos los parámetros a los valores 2026 del Excel oficial?')) return;
+  localStorage.removeItem(LS_KEY); P = JSON.parse(JSON.stringify(PARAMS_DEFAULT));
+  initQuin(); initDia(); initHE(); renderPar(); renderCal(); alert('✅ Valores restaurados');
+}
+
+/* ════════ INIT ════════ */
+initCal(); initQuin(); initDia(); initHE();
+
+</script>
+</body>
+</html>
