@@ -309,7 +309,7 @@ h3{font-size:16px !important}
         <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
         <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
       </select>
-      <select class="fi" id="rAnio" onchange="filtrarRes()"><option value="">Todos los años</option><option value="2025">2025</option><option value="2026">2026</option></select>
+      <select class="fi" id="rAnio" onchange="cargarResumen()"><option value="">Todos los años</option><option value="2024">2024</option><option value="2025">2025</option><option value="2026">2026</option></select>
       <select class="fi" id="rFiltroEst" onchange="filtrarRes()" style="min-width:130px">
         <option value="">Todos los estados</option>
         <option value="EN PROCESO">En Proceso</option>
@@ -473,8 +473,12 @@ function _aplicarDatosResumen(data) {
   // FIX: conteos globales reales (Firebase si disponible, fallback al slice si no)
   const _fbGl = (window._fbDatosEstadisticasR && window._fbDatosEstadisticasR.resumen_global) || null;
   document.getElementById('rT').textContent = (data.total != null ? data.total : resData.length).toLocaleString('es-PE');
-  document.getElementById('rP').textContent = _fbGl ? (_fbGl.en_proceso || 0) : resData.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
-  document.getElementById('rR').textContent = _fbGl ? (_fbGl.finalizados || 0) : resData.filter(a=>String(a.estado||'').toUpperCase()==='FINALIZADO').length;
+  // ⭐ Conteos reales: agregados del servidor (respetan los filtros) → Firebase → recorte
+  const _pe = data.porEstado || null;
+  document.getElementById('rP').textContent = _pe ? (_pe['EN PROCESO'] || 0).toLocaleString('es-PE')
+    : (_fbGl ? (_fbGl.en_proceso || 0) : resData.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length);
+  document.getElementById('rR').textContent = _pe ? (_pe['FINALIZADO'] || 0).toLocaleString('es-PE')
+    : (_fbGl ? (_fbGl.finalizados || 0) : resData.filter(a=>String(a.estado||'').toUpperCase()==='FINALIZADO').length);
   const ps = data.porSupervisor || {};
   document.getElementById('supR').innerHTML = Object.entries(ps).length ?
     Object.entries(ps).sort((a,b)=>b[1].total-a[1].total).map(([k,val])=>`
@@ -639,34 +643,52 @@ function verDet(nro) {
 function dibujarGraficosResumen(datos) {
   const labels=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   const anioSel = v('rAnio') || '';
+  // ⭐ Agregados del servidor: calculados sobre TODOS los registros filtrados
+  // (empresa/mes/año), no sobre el recorte de 1,000. Se usan cuando no hay
+  // sub-filtros locales de tabla (empresa tabla / estado / supervisor).
+  const agg = (CACHE.resumen && CACHE.resumen.porMes) ? CACHE.resumen : null;
+  const sinSubfiltros = !v('rFE') && !v('rFiltroEst') && !v('rFiltroSup');
+  const usarAgg = !!(agg && sinSubfiltros);
+
   const porMes={};
   if(anioSel) {
     for(let i=1;i<=12;i++) porMes[anioSel+'-'+String(i).padStart(2,'0')]=0;
   } else {
     for(let i=5;i>=0;i--){const d=new Date();d.setMonth(d.getMonth()-i);porMes[d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')]=0;}
   }
-  datos.forEach(a=>{const f=String(a.fecha_atencion||'').substring(0,7);if(porMes.hasOwnProperty(f)) porMes[f]++;});
+  if (usarAgg) {
+    Object.keys(porMes).forEach(k => { porMes[k] = agg.porMes[k] || 0; });
+  } else {
+    datos.forEach(a=>{const f=String(a.fecha_atencion||'').substring(0,7);if(porMes.hasOwnProperty(f)) porMes[f]++;});
+  }
   const lm=Object.keys(porMes).map(k=>labels[parseInt(k.split('-')[1])-1]||k);
   _destroyChart('rMes');
   const elRM=document.getElementById('rChartMes');
   if(elRM) charts.rMes=new Chart(elRM,{type:'bar',data:{labels:lm,datasets:[{label:'Atenciones',data:Object.values(porMes),backgroundColor:'#0b1e45',borderRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
-  const pend=datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
-  const proc=0;
-  const res=datos.filter(a=>String(a.estado||'').toUpperCase()==='FINALIZADO').length;
+  const pend = usarAgg ? (agg.porEstado['EN PROCESO'] || 0) : datos.filter(a=>String(a.estado||'').toUpperCase()==='EN PROCESO').length;
+  const res  = usarAgg ? (agg.porEstado['FINALIZADO'] || 0) : datos.filter(a=>String(a.estado||'').toUpperCase()==='FINALIZADO').length;
   _destroyChart('rEst');
   const elRE=document.getElementById('rChartEst');
   if(elRE) charts.rEst=new Chart(elRE,{type:'doughnut',data:{labels:['En Proceso','Finalizado'],datasets:[{data:[pend,res],backgroundColor:['#f97316','#22c55e']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
   const porAnio={};
-  datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
+  if (usarAgg) {
+    Object.keys(agg.porAnio || {}).forEach(y => { porAnio[y] = agg.porAnio[y].total || 0; });
+  } else {
+    datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(y&&y.length===4) porAnio[y]=(porAnio[y]||0)+1;});
+  }
   _destroyChart('rAnual');
   const elRA=document.getElementById('rChartAnual');
   if(elRA){const anios=Object.keys(porAnio).sort();charts.rAnual=new Chart(elRA,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#d9292b',backgroundColor:'rgba(217,41,43,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
   const tbody=document.getElementById('tbResAnualBodyAdmin');
   if(tbody){
     const resAnio={};
-    datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(!y||y.length!==4) return;if(!resAnio[y]) resAnio[y]={total:0,proc:0,res:0};resAnio[y].total++;const e=String(a.estado||'').toUpperCase();if(e==='EN PROCESO') resAnio[y].proc++;else if(e==='FINALIZADO') resAnio[y].res++;});
+    if (usarAgg) {
+      Object.keys(agg.porAnio || {}).forEach(y => { resAnio[y] = { total: agg.porAnio[y].total||0, proc: agg.porAnio[y].proc||0, res: agg.porAnio[y].res||0 }; });
+    } else {
+      datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(!y||y.length!==4) return;if(!resAnio[y]) resAnio[y]={total:0,proc:0,res:0};resAnio[y].total++;const e=String(a.estado||'').toUpperCase();if(e==='EN PROCESO') resAnio[y].proc++;else if(e==='FINALIZADO') resAnio[y].res++;});
+    }
     const aniosOrden=Object.keys(resAnio).sort().reverse();
-    tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total}</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
+    tbody.innerHTML=aniosOrden.length?aniosOrden.map(y=>`<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">${y}</td><td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">${resAnio[y].total.toLocaleString('es-PE')}</td><td style="padding:7px 10px;text-align:center;color:#f97316">${resAnio[y].proc}</td><td style="padding:7px 10px;text-align:center;color:#22c55e">${resAnio[y].res.toLocaleString('es-PE')}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
   }
 }
 
