@@ -3003,6 +3003,24 @@ window.onload = async () => {
       if (_secAdm) _secAdm.style.display = 'none';
       console.log('[bienestar] Sidebar limitado (whitelist) para sector BIENESTAR SOCIAL');
     }
+    // ─── DSANCHEZ: sidebar restringido — solo Buscar Trabajador, Fusiones de Buses,
+    //     Visitas de Campo + botón Bienestar Social (acceso a Rendiciones se controla
+    //     en la hoja Usuarios de Bienestar). Ningún otro usuario se ve afectado. ───
+    if (String(USER.usuario || '').toLowerCase().trim() === 'dsanchez') {
+      const _btnBsD = document.getElementById('navBienestar');
+      if (_btnBsD) _btnBsD.style.display = '';
+      document.querySelectorAll('nav button.ni').forEach(function(btn) {
+        if (btn.id === 'navBienestar' || btn.id === 'navInicio') return;
+        const oc = btn.getAttribute('onclick') || '';
+        const permitido = oc.indexOf("ir('trabajadores'") >= 0 ||
+                          oc.indexOf("ir('fusiones'") >= 0 ||
+                          oc.indexOf("ir('visitas'") >= 0;
+        btn.style.display = permitido ? '' : 'none';
+      });
+      const _secAdmD = document.getElementById('navAdmSec');
+      if (_secAdmD) _secAdmD.style.display = 'none';
+      console.log('[dsanchez] Sidebar limitado: Buscar Trabajador, Fusiones, Visitas + Bienestar');
+    }
   } catch (_eBs) {
     console.error('[bienestar] Error en logica de visibilidad:', _eBs);
   }
@@ -8868,9 +8886,14 @@ function generarHTMLInforme(d) {
 // ============================================================
 // ESTADÍSTICAS POR AÑO - MI DASHBOARD (SUPERVISOR)
 // ============================================================
-function filtrarEstadisticasDash() {
+async function filtrarEstadisticasDash() {
   const anio = document.getElementById('dFiltroAnio')?.value || '';
   const est  = document.getElementById('dFiltroEst')?.value || '';
+  // ⭐ Si se aplica cualquier filtro y aún no está el historial completo, cargarlo
+  //    (el caché del día es parcial y el filtro saldría vacío o engañoso)
+  if ((anio || est) && !CACHE.historialAtenciones) {
+    try { await cargarHistorialCompleto(); } catch(e) { console.warn('historial filtro:', e); }
+  }
   // Si hay año seleccionado y hay historial cargado, usarlo
   let datos = CACHE.historialAtenciones || CACHE.atenciones || [];
   if ((USER.rol || '').toLowerCase() === 'supervisor') {
@@ -8880,7 +8903,7 @@ function filtrarEstadisticasDash() {
   }
   if (anio) datos = datos.filter(a => String(a.anio||a.fecha_atencion||'').substring(0,4) === anio);
   if (est)  datos = datos.filter(a => String(a.estado||'').toUpperCase() === est);
-  dibujarEstadisticasDash(datos);
+  dibujarEstadisticasDash(datos, true);   // esFiltro=true: redibuja SIEMPRE
 }
 
 async function cargarHistorialDash() {
@@ -8901,16 +8924,18 @@ async function cargarHistorialCompleto() {
     }
   } catch(e) { console.warn('historial error:', e); }
 }
-function dibujarEstadisticasDash(datos) {
+function dibujarEstadisticasDash(datos, esFiltro) {
   // GUARD anti-machaque: si es ADMIN y Firebase ya pinto indicadores frescos (por_mes),
   // NO recrear cM/cTendAnual/tabla desde CACHE.atenciones (parcial) -> deja el render bueno de Firebase.
   // Supervisores SI siguen normal (Firebase no tiene su desglose por mes).
+  // ⭐ EXCEPCIÓN: si el usuario está FILTRANDO (esFiltro=true), SIEMPRE redibujar,
+  //    porque el guard hacía que los filtros de Mi Dashboard parecieran no funcionar.
   try {
     var _esAdminDash = (typeof ROLES_VER_TODO !== 'undefined' && ROLES_VER_TODO.includes(USER.rol)) ||
                        (typeof ROLES_ADMIN   !== 'undefined' && ROLES_ADMIN.includes(USER.rol)) ||
                        (typeof ROLES_ADMIN2  !== 'undefined' && ROLES_ADMIN2.includes(USER.rol));
     var _fbFresco = _fbEstadisticas && _fbEstadisticas.por_mes && Object.keys(_fbEstadisticas.por_mes).length > 0;
-    if (_esAdminDash && _fbFresco) {
+    if (_esAdminDash && _fbFresco && !esFiltro) {
       console.log('[GUARD] dibujarEstadisticasDash: admin + Firebase fresco -> no recreo (deja FB)');
       return;
     }
