@@ -463,9 +463,9 @@ async function guardarProgramacion(){
 
   <!-- === FICHA DEL CONDUCTOR (LISTA TOTAL) === -->
   <style>
-    .fic-ov{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1200;align-items:flex-start;justify-content:center;padding:24px 12px;overflow:auto}
+    .fic-ov{display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1200;align-items:flex-start;justify-content:center;padding:10px 8px;overflow:auto}
     .fic-ov.show{display:flex}
-    .fic-card{background:#fff;border-radius:14px;border:1px solid var(--bd);max-width:1150px;width:100%;overflow:hidden;font-family:Barlow,sans-serif}
+    .fic-card{background:#fff;border-radius:14px;border:1px solid var(--bd);max-width:98vw;width:98vw;overflow:hidden;font-family:Barlow,sans-serif}
     .fic-h{background:#0a7d36;color:#fff;padding:13px 18px;display:flex;align-items:center;justify-content:space-between}
     .fic-h h3{margin:0;font-size:16px;font-weight:800}
     .fic-x{background:none;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1}
@@ -476,8 +476,9 @@ async function guardarProgramacion(){
     .fc-ven{background:#fee2e2;color:#b91c1c}.fc-pv{background:#fef3c7;color:#b45309}.fc-vig{background:#dcfce7;color:#15803d}
     .fic-msg{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:10px}
     .fic-load{display:none;color:var(--gr);font-size:13px;padding:18px;text-align:center}
-    .fic-tablewrap{overflow:auto;max-height:62vh;border:1px solid var(--bd);border-radius:10px}
+    .fic-tablewrap{overflow:auto;max-height:80vh;border:1px solid var(--bd);border-radius:10px}
     .fic-t{width:100%;border-collapse:collapse;font-size:12.5px;min-width:1450px}
+    .fic-t td{max-width:260px;overflow:hidden;text-overflow:ellipsis}
     .fic-t th{background:#0a2540;color:#fff;padding:8px 9px;text-align:left;position:sticky;top:0;font-size:11px;text-transform:uppercase;letter-spacing:.3px;white-space:nowrap}
     .fic-t td{padding:7px 9px;border-bottom:1px solid #eef2f7;white-space:nowrap}
     .fic-t tr:hover td{background:#f8fafc}
