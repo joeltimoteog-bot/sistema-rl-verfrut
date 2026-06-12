@@ -334,12 +334,12 @@ h3{font-size:16px !important}
             <div><label class="lb">💬 Comentarios de colaboradores</label><textarea class="fi" id="infComColab" rows="3" style="width:100%;resize:vertical" placeholder="Pega o escribe los comentarios..."></textarea></div>
             <div><label class="lb">💬 Comentarios de jefaturas</label><textarea class="fi" id="infComJef" rows="3" style="width:100%;resize:vertical"></textarea></div>
             <div><label class="lb">💬 Comentarios de otros supervisores</label><textarea class="fi" id="infComSup" rows="3" style="width:100%;resize:vertical"></textarea></div>
-            <div><label class="lb">💬 Comentarios de administradores de fundo</label><textarea class="fi" id="infComAdm" rows="3" style="width:100%;resize:vertical"></textarea></div>
+            <div><label class="lb">💬 Comentarios del administrador de fundo</label><textarea class="fi" id="infComAdm" rows="3" style="width:100%;resize:vertical"></textarea></div>
             <div><label class="lb">🚜 Comentarios en visitas de campo (Coordinación RL)</label><textarea class="fi" id="infComVis" rows="3" style="width:100%;resize:vertical"></textarea></div>
             <div><label class="lb">📝 Observaciones (liderazgo, comunicación, disciplina, presencia en campo, resolución de conflictos, gestión)</label><textarea class="fi" id="infObs" rows="3" style="width:100%;resize:vertical"></textarea></div>
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px">
-            <div><label class="lb">Percepción general de los administradores</label>
+            <div><label class="lb">Percepción del administrador de fundo</label>
               <select class="fi" id="infPercep" style="width:100%">
                 <option value="">— Sin determinar —</option>
                 <option>Muy positiva</option><option>Positiva</option><option>Neutral</option>
@@ -527,7 +527,7 @@ const COMPETENCIAS = [
   {
     nombre: 'Liderazgo y Conducta',
     preguntas: [
-      'Conduce a su equipo con claridad y ejemplo',
+      'Es referente de conducta y disciplina en el sector a su cargo, liderando con el ejemplo',
       'Demuestra buen comportamiento y respeto en el trabajo',
       'Motiva y mantiene el compromiso del equipo',
       'Es puntual en las reuniones y compromisos'
@@ -1466,7 +1466,8 @@ async function infCargarSistema() {
   kp.innerHTML = '<div style="grid-column:1/-1;color:#64748b">⏳ Consolidando datos del sistema...</div>';
 
   // 1) Eval 360 del periodo (local, ya cargada)
-  const evs = getHistorial().filter(e => String(e.supervisor).trim().toLowerCase() === sup.trim().toLowerCase());
+  const evs = getHistorial().filter(e =>
+    String(e.supervisor).trim().toLowerCase() === sup.trim().toLowerCase() || _infMatch(sup, e.supervisor));
   const ev  = evs.find(e => e.periodo === per) || evs.sort((a,b)=>String(b.periodo).localeCompare(String(a.periodo)))[0] || null;
 
   // 2) Visitas y Casos desde el GAS (en paralelo)
@@ -1565,7 +1566,7 @@ function generarInformeIntegral() {
   fuertes.forEach(c => F.push(`<b>${_INF_AREA[c.nombre]||c.nombre}</b>: promedio ${c.prom.toFixed(2)}/5 en la Evaluación 360°, lo que sostiene la operación diaria del sector.`));
   if (d.vis && d.vis.pct !== null && d.vis.pct >= 85) F.push(`<b>Presencia y acompañamiento en campo</b>: ${d.vis.enPlazo} de ${d.vis.total} visitas con informe en plazo (${d.vis.pct}%), asegurando trazabilidad oportuna de lo observado.`);
   if (d.cas && d.cas.pct !== null && d.cas.pct >= 85) F.push(`<b>Seguimiento de casos laborales</b>: ${d.cas.enPlazo} de ${d.cas.total} casos gestionados dentro del plazo (${d.cas.pct}%), con ${d.cas.concluidos} concluidos, reduciendo el riesgo laboral para la empresa.`);
-  if (percep === 'Muy positiva' || percep === 'Positiva') F.push(`<b>Relación con los sectores</b>: los administradores de fundo expresan una percepción ${percep.toLowerCase()} de su gestión, lo que facilita la coordinación operativa.`);
+  if (percep === 'Muy positiva' || percep === 'Positiva') F.push(`<b>Relación con los sectores</b>: el administrador de fundo expresa una percepción ${percep.toLowerCase()} de su gestión, lo que facilita la coordinación operativa.`);
   if (!F.length) F.push('No se identifican fortalezas claramente destacadas en la evidencia disponible; el desempeño se ubica dentro de rangos básicos.');
 
   // ── 2. Oportunidades ──
@@ -1573,15 +1574,15 @@ function generarInformeIntegral() {
   debiles.forEach(c => O.push({ asp: _INF_AREA[c.nombre]||c.nombre, det: `Promedio ${c.prom.toFixed(2)}/5 en la Evaluación 360°. Impacto: ${_infImpacto(c.nombre)}` }));
   if (d.vis && d.vis.retrasadas > 0) O.push({ asp: 'cumplimiento de informes de visitas', det: `${d.vis.retrasadas} de ${d.vis.total} visitas con informe fuera de plazo. Impacto: la jefatura pierde visibilidad oportuna de lo que ocurre en campo y se debilita la trazabilidad documental.` });
   if (d.cas && d.cas.retrasados > 0) O.push({ asp: 'seguimiento y documentación de casos laborales', det: `${d.cas.retrasados} de ${d.cas.total} casos en estado RETRASADO. Impacto: exposición a contingencias laborales y gestión reactiva en lugar de preventiva.` });
-  if (percep === 'Negativa' || percep === 'Muy negativa') O.push({ asp: 'relación y comunicación con los administradores de fundo', det: `La percepción de los administradores es ${percep.toLowerCase()}. Impacto: se erosiona la confianza del sector y se dificulta la coordinación de acciones de personal.` });
+  if (percep === 'Negativa' || percep === 'Muy negativa') O.push({ asp: 'relación y comunicación con el administrador de fundo', det: `La percepción del administrador es ${percep.toLowerCase()}. Impacto: se erosiona la confianza del sector y se dificulta la coordinación de acciones de personal.` });
   if (!O.length) O.push({ asp: 'consolidación del estándar alcanzado', det: 'No se detectan brechas relevantes en la evidencia disponible; el reto es sostener el nivel y documentarlo.' });
 
   // ── 4. Percepción administradores ──
   const percepTxt = percep || 'Sin determinar (no se registró el selector de percepción)';
   const admBloque = coms.adm
-    ? `Comentarios registrados de los administradores: <i>"${_infRec(coms.adm)}"</i>. ` +
+    ? `Comentarios registrados del administrador: <i>"${_infRec(coms.adm)}"</i>. ` +
       `De su lectura se desprende ${percep && (percep==='Muy positiva'||percep==='Positiva') ? 'un reconocimiento recurrente a la disponibilidad y capacidad de respuesta del supervisor' : percep==='Neutral' ? 'una valoración funcional pero sin elementos diferenciadores: cumple, sin generar todavía un nivel alto de confianza' : percep ? 'señales recurrentes de insatisfacción asociadas a tiempos de respuesta, presencia en campo y comunicación con el sector' : 'la necesidad de sistematizar la recolección de percepción para futuras mediciones'}.`
-    : 'No se registraron comentarios de administradores de fundo en este periodo, lo que limita el análisis de percepción; se recomienda recogerlos sistemáticamente en las visitas de la Coordinación RL.';
+    : 'No se registraron comentarios del administrador de fundo en este periodo, lo que limita el análisis de percepción; se recomienda recogerlos sistemáticamente en las visitas de la Coordinación RL.';
 
   // ── 5. Consistencia ──
   let consist = '';
@@ -1589,9 +1590,9 @@ function generarInformeIntegral() {
   if (d.ev && percep) {
     const dif = Math.abs((Number(d.ev.porcentaje)||0) - percepMapN[percep]);
     if (dif <= 12) consist = `La Evaluación 360° del sistema (${Number(d.ev.porcentaje).toFixed(1)}%) y la percepción de campo (${percep}) son <b>coherentes</b>: las fortalezas registradas se confirman en la voz de los administradores. No se detectan contradicciones relevantes.`;
-    else if ((Number(d.ev.porcentaje)||0) > percepMapN[percep]) consist = `Se detecta una <b>contradicción</b>: el sistema registra ${Number(d.ev.porcentaje).toFixed(1)}% de cumplimiento, pero la percepción de campo es ${percep.toLowerCase()}. Riesgo: la información declarada/registrada podría no reflejar la realidad operativa; corresponde priorizar la versión de administradores y jefaturas y verificar en campo los registros del supervisor.`;
+    else if ((Number(d.ev.porcentaje)||0) > percepMapN[percep]) consist = `Se detecta una <b>contradicción</b>: el sistema registra ${Number(d.ev.porcentaje).toFixed(1)}% de cumplimiento, pero la percepción de campo es ${percep.toLowerCase()}. Riesgo: la información declarada/registrada podría no reflejar la realidad operativa; corresponde priorizar la versión del administrador y las jefaturas y verificar en campo los registros del supervisor.`;
     else consist = `La percepción de campo (${percep}) es <b>mejor</b> que el resultado del sistema (${Number(d.ev.porcentaje).toFixed(1)}%): el supervisor genera confianza operativa, pero presenta brechas de registro/cumplimiento formal. Riesgo documental más que relacional.`;
-  } else consist = 'No es posible un análisis de consistencia completo: falta ' + (!d.ev ? 'la Evaluación 360° del periodo' : 'la percepción de los administradores') + '. Se recomienda completar ambos insumos.';
+  } else consist = 'No es posible un análisis de consistencia completo: falta ' + (!d.ev ? 'la Evaluación 360° del periodo' : 'la percepción del administrador de fundo') + '. Se recomienda completar ambos insumos.';
 
   // ── 6. Feedback ejecutivo ──
   const FB = [];
@@ -1621,7 +1622,7 @@ function generarInformeIntegral() {
     d.ev ? `Eval 360°: <b>${Number(d.ev.porcentaje).toFixed(1)}%</b> (${d.ev.clasificacion||''}, periodo ${d.ev.periodo})` : 'Eval 360°: sin registro',
     d.vis ? `Visitas: <b>${d.vis.total}</b> (${d.vis.retrasadas} fuera de plazo)` : 'Visitas: sin datos',
     d.cas ? `Casos: <b>${d.cas.total}</b> (${d.cas.retrasados} retrasados, ${d.cas.concluidos} concluidos)` : 'Casos: sin datos',
-    `Percepción administradores: <b>${percepTxt}</b>`
+    `Percepción administrador: <b>${percepTxt}</b>`
   ].join(' · ');
 
   let html = `<div style="text-align:center;margin-bottom:12px">
@@ -1633,10 +1634,10 @@ function generarInformeIntegral() {
 
   html += sec(1, 'RESUMEN EJECUTIVO',
     `<p>El desempeño integral de <b>${sup}</b> en el periodo alcanza un nivel <b style="font-size:15px;color:${global>=80?'#16a34a':global>=70?'#3b82f6':global>=55?'#f97316':'#dc2626'}">${nivel.toUpperCase()}</b>, con una calificación global de <b>${global}/100</b>. ` +
-    `La conclusión se sustenta en: ${d.ev?`resultado 360° de ${Number(d.ev.porcentaje).toFixed(1)}%`:''}${d.vis?`, ${d.vis.pct}% de visitas en plazo`:''}${d.cas?`, ${d.cas.pct}% de casos en plazo`:''}${percep?` y una percepción ${percep.toLowerCase()} de los administradores de fundo`:''}.</p>`);
+    `La conclusión se sustenta en: ${d.ev?`resultado 360° de ${Number(d.ev.porcentaje).toFixed(1)}%`:''}${d.vis?`, ${d.vis.pct}% de visitas en plazo`:''}${d.cas?`, ${d.cas.pct}% de casos en plazo`:''}${percep?` y una percepción ${percep.toLowerCase()} del administrador de fundo`:''}.</p>`);
   html += sec(2, 'PRINCIPALES FORTALEZAS IDENTIFICADAS', li(F));
   html += sec(3, 'PRINCIPALES OPORTUNIDADES DE MEJORA', li(O.map(o => `<b>${o.asp.charAt(0).toUpperCase()+o.asp.slice(1)}</b> — ${o.det}`)));
-  html += sec(4, 'ANÁLISIS DE PERCEPCIÓN DE LOS ADMINISTRADORES DE FUNDO', `<p>Percepción general: <b>${percepTxt}</b>. ${admBloque}</p>`);
+  html += sec(4, 'ANÁLISIS DE PERCEPCIÓN DEL ADMINISTRADOR DE FUNDO', `<p>Percepción general: <b>${percepTxt}</b>. ${admBloque}</p>`);
   html += sec(5, 'ANÁLISIS DE CONSISTENCIA', `<p>${consist}</p>`);
   html += sec(6, 'FEEDBACK EJECUTIVO PERSONALIZADO', li(FB));
   html += sec(7, 'PLAN DE MEJORA PROPUESTO',
@@ -1707,14 +1708,14 @@ function copiarPromptIA() {
 DESARROLLA EL INFORME BAJO LA SIGUIENTE ESTRUCTURA:
 1. RESUMEN EJECUTIVO — evaluación general indicando el nivel: Sobresaliente / Destacado / Adecuado / Regular / Deficiente, con justificación objetiva.
 2. PRINCIPALES FORTALEZAS IDENTIFICADAS — liderazgo, comunicación, gestión de personal, relación con los sectores, seguimiento de casos, organización, cumplimiento de procedimientos, trabajo en equipo, resolución de conflictos, presencia en campo; explica su impacto positivo en la operación.
-3. PRINCIPALES OPORTUNIDADES DE MEJORA — retrasos, falta de seguimiento, comunicación deficiente, control de personal, presencia en campo, liderazgo, gestión reactiva, documentación de casos, coordinación con administradores; explica el impacto operativo de cada una.
-4. ANÁLISIS DE PERCEPCIÓN DE LOS ADMINISTRADORES DE FUNDO — aspectos positivos/negativos recurrentes, confianza, comunicación, resolución, capacidad de respuesta, disponibilidad, presencia; concluye si la percepción es Muy positiva / Positiva / Neutral / Negativa / Muy negativa, con justificación.
+3. PRINCIPALES OPORTUNIDADES DE MEJORA — retrasos, falta de seguimiento, comunicación deficiente, control de personal, presencia en campo, liderazgo, gestión reactiva, documentación de casos, coordinación con el administrador de fundo; explica el impacto operativo de cada una.
+4. ANÁLISIS DE PERCEPCIÓN DEL ADMINISTRADOR DE FUNDO — aspectos positivos/negativos recurrentes, confianza que genera en el administrador, comunicación, resolución, capacidad de respuesta, disponibilidad, presencia; concluye si la percepción del administrador es Muy positiva / Positiva / Neutral / Negativa / Muy negativa, con justificación.
 5. ANÁLISIS DE CONSISTENCIA — compara lo registrado en el sistema con la percepción de campo: coincidencias, contradicciones, fortalezas y debilidades confirmadas, riesgos.
 6. FEEDBACK EJECUTIVO PERSONALIZADO — directo al supervisor, profesional y constructivo, usando: "Estás realizando una buena gestión en...", "Debes mantener...", "Debes fortalecer...", "Debes mejorar...", "Se recomienda trabajar en...", "El principal reto identificado es...".
 7. PLAN DE MEJORA PROPUESTO — tabla con: Aspecto a mejorar / Acción recomendada / Responsable / Plazo sugerido / Indicador de cumplimiento.
 8. CONCLUSIÓN FINAL — nivel alcanzado, riesgos, potencial de desarrollo y recomendación de continuidad.
 
-IMPORTANTE: no generes respuestas genéricas; basa todo en la evidencia; identifica patrones repetitivos; prioriza comentarios de administradores y jefaturas ante discrepancias; entrega observaciones críticas cuando correspondan; sé objetivo, profesional y estratégico. Finaliza con una calificación global sobre 100 puntos y una clasificación de desempeño.
+IMPORTANTE: no generes respuestas genéricas; basa todo en la evidencia; identifica patrones repetitivos; prioriza los comentarios del administrador de fundo y las jefaturas ante discrepancias; entrega observaciones críticas cuando correspondan; sé objetivo, profesional y estratégico. Finaliza con una calificación global sobre 100 puntos y una clasificación de desempeño.
 
 ═══════════ DATOS CONSOLIDADOS DEL SISTEMA RL ═══════════
 SUPERVISOR: ${d.supervisor}
@@ -1729,7 +1730,7 @@ ${d.vis ? `  Total: ${d.vis.total} · En plazo: ${d.vis.enPlazo} (${d.vis.pct}%)
 INDICADORES DE GESTIÓN — CASOS LABORALES:
 ${d.cas ? `  Total gestionados: ${d.cas.total} · En plazo: ${d.cas.enPlazo} (${d.cas.pct}%) · Retrasados: ${d.cas.retrasados} · Concluidos: ${d.cas.concluidos}` : '  (sin datos)'}
 
-PERCEPCIÓN GENERAL DE LOS ADMINISTRADORES: ${percep}
+PERCEPCIÓN GENERAL DEL ADMINISTRADOR DE FUNDO: ${percep}
 
 COMENTARIOS DE COLABORADORES:
 ${C('infComColab')}
@@ -1740,7 +1741,7 @@ ${C('infComJef')}
 COMENTARIOS DE OTROS SUPERVISORES:
 ${C('infComSup')}
 
-COMENTARIOS DE ADMINISTRADORES DE FUNDO:
+COMENTARIOS DEL ADMINISTRADOR DE FUNDO:
 ${C('infComAdm')}
 
 COMENTARIOS EN VISITAS DE CAMPO (COORDINACIÓN RL):
@@ -1788,7 +1789,7 @@ function exportarInformePDF() {
   I.F.forEach(f => parrafo(f, true));
   titulo('3. PRINCIPALES OPORTUNIDADES DE MEJORA');
   I.O.forEach(o => parrafo(`${o.asp.charAt(0).toUpperCase()+o.asp.slice(1)} — ${o.det}`, true));
-  titulo('4. PERCEPCIÓN DE LOS ADMINISTRADORES DE FUNDO');
+  titulo('4. PERCEPCIÓN DEL ADMINISTRADOR DE FUNDO');
   parrafo(`Percepción general: ${I.percepTxt}. ${I.admBloque}`);
   titulo('5. ANÁLISIS DE CONSISTENCIA');
   parrafo(I.consist);
