@@ -1084,6 +1084,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     // ═══════════════════════════════════════════════════════
     // 1. ENCABEZADO — 2 filas; celda central dibujada manualmente
     // ═══════════════════════════════════════════════════════
+    // Fila 1 del encabezado: CON bordes (logo | título | R-SC-01)
     doc.autoTable({
       startY: y,
       margin: { left: MGS, right: MGS, bottom: 5 },
@@ -1092,7 +1093,18 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
           { content: '', styles: { cellWidth: COL1, minCellHeight: 15, valign: 'middle' } },
           { content: '', styles: { cellWidth: COL2, minCellHeight: 15, valign: 'middle' } },
           { content: '', styles: { cellWidth: COL3, minCellHeight: 15 } }
-        ],
+        ]
+      ],
+      theme: 'grid',
+      styles: sBorder
+    });
+    const yFila2 = doc.lastAutoTable.finalY;
+
+    // Fila 2: SIN bordes (dirección | frase | Frecuencia), como el formato oficial
+    doc.autoTable({
+      startY: yFila2,
+      margin: { left: MGS, right: MGS, bottom: 5 },
+      body: [
         [
           { content: `Caserío El Papayo Mz. O, Castilla,\nPiura, Piura, Perú\n${rucEmp}`,
             styles: { halign: 'center', valign: 'middle', fontSize: 7,
@@ -1100,14 +1112,17 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
           { content: 'Empresa dedicada al cultivo, procesamiento y comercialización de fruta fresca.',
             styles: { halign: 'center', valign: 'middle', fontStyle: 'italic', fontSize: 8,
                       textColor: C.negro, cellWidth: COL2, minCellHeight: 8, cellPadding: 1 } },
-          { content: 'Frecuencia:\n_______________',
-            styles: { halign: 'left', valign: 'middle', fontSize: 8,
-                      textColor: C.negro, cellWidth: COL3, minCellHeight: 8, cellPadding: 2 } }
+          { content: '', styles: { cellWidth: COL3, minCellHeight: 8 } }
         ]
       ],
-      theme: 'grid',
-      styles: sBorder
+      theme: 'plain',
+      styles: { lineWidth: 0 }
     });
+    // Frecuencia: etiqueta en negrita + línea (como el oficial)
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.negro);
+    doc.text('Frecuencia:', MGS + COL1 + COL2 + 2, yFila2 + 3.5);
+    doc.setDrawColor(...C.negro); doc.setLineWidth(0.2);
+    doc.line(MGS + COL1 + COL2 + 2, yFila2 + 7, MGS + bW - 2, yFila2 + 7);
 
     // Logo encima celda izquierda fila 1 — CUADRADO 12×12mm (el original es 225×225, 1:1)
     if (logoB64) { try { doc.addImage(logoB64, 'JPEG', MGS + (COL1 - 12) / 2, y + 1.5, 12, 12); } catch(e) {} }
