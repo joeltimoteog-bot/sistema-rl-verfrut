@@ -3345,7 +3345,14 @@ function editarCaso(idx) {
   window._casoTrabajador = { nombre:c.nombre, empresa:c.empresa, cargo:c.cargo };
 
   // Prefill caso
-  document.getElementById('cSupervisor').value   = c.supervisor     || '';
+  (function(){
+    const sel = document.getElementById('cSupervisor');
+    const val = c.supervisor || '';
+    if (val && ![...sel.options].some(o => o.value === val || o.textContent === val)) {
+      const o = document.createElement('option'); o.value = o.textContent = val; sel.appendChild(o);
+    }
+    sel.value = val;
+  })();
   document.getElementById('cMotivo').value        = c.motivo         || '';
   mostrarMotivoExtraCaso();
   document.getElementById('cMotivoExtra').value   = c.motivo_extra   || '';
@@ -9451,16 +9458,16 @@ window._fbSuscribirEstadisticas = function(callback) {
             <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Supervisor *</label>
             <select id="cSupervisor" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
               <option value="">-- Seleccionar --</option>
-              <option>CASTRO BAYONA ELBERTH JAN PIERRE</option>
-              <option>TAMAYO RODRIGUEZ POOL WILFREDO</option>
-              <option>VIERA GIRON SERGIO</option>
-              <option>TINEO RAMOS ALEXANDER</option>
-              <option>MARTINEZ JUAREZ ALEXANDER</option>
-              <option>ZAPATA SUAREZ ALEX FABIAN</option>
-              <option>LUZON VENEGAS YHANELLY GERALDENY</option>
-              <option>MIRANDA PASAPERA SOCORRO DEL PILAR</option>
-              <option>PULACHE VIERA FLOR DE LOS MILAGROS</option>
-              <option>MOLERO ABAD ROBERTO CARLOS</option>
+              <option>ELBERTH JAN PIERRE CASTRO BAYONA</option>
+              <option>POOL WILFREDO TAMAYO RODRIGUEZ</option>
+              <option>SERGIO VIERA GIRON</option>
+              <option>ALEXANDER TINEO RAMOS</option>
+              <option>ALEXANDER MARTINEZ JUAREZ</option>
+              <option>ALEX FABIAN ZAPATA SUAREZ</option>
+              <option>YHANELLY GERALDENY LUZON VENEGAS</option>
+              <option>SOCORRO DEL PILAR MIRANDA PASAPERA</option>
+              <option>FLOR DE LOS MILAGROS VIERA PULACHE</option>
+              <option>ROBERTO MOLERO ABAD</option>
             </select>
           </div>
           <div>
