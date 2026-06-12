@@ -67,7 +67,7 @@ textarea{resize:vertical;min-height:68px}
 .box{display:none}.box.show{display:block;animation:fade .3s}
 .badge{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:800}
 .b-vig{background:#d1fae5;color:#065f46} .b-ven{background:#fee2e2;color:#991b1b} .b-pv{background:#ffedd5;color:#9a3412}
-.b-pend{background:#fef3c7;color:#92400e} .b-prog{background:#dbeafe;color:#1e40af} .b-comp{background:#d1fae5;color:#065f46}
+.b-pend{background:#fef3c7;color:#92400e} .b-prog{background:#dbeafe;color:#1e40af} .b-comp{background:#d1fae5;color:#065f46} .b-aten{background:#dcfce7;color:#14532d} .b-cerr{background:#e2e8f0;color:#475569}
 .dot{width:7px;height:7px;border-radius:50%} .dg{background:#16a34a} .dr{background:#dc2626} .da{background:#d97706}
 .km-res{background:var(--azul);color:#fff;border-radius:10px;padding:13px 15px;margin-top:10px;font-size:12px;display:none}
 .km-res.show{display:block} .km-res strong{font-size:17px} .km-res.alert{background:var(--rojo)}
@@ -231,6 +231,8 @@ tr:hover td{background:#fafbfc}
                 <option value="PENDIENTE">Pendientes</option>
                 <option value="PROGRAMADO">Programados</option>
                 <option value="COMPLETADO">Completados</option>
+                <option value="ATENDIDO">Atendidos</option>
+                <option value="CERRADO">Cerrados</option>
               </select>
               <button class="btn btn-az btn-sm" onclick="cargarAdmin()">🔄 Actualizar</button>
             </div>
@@ -366,6 +368,8 @@ function badgeEstado(est){
   est=(est||'PENDIENTE').toUpperCase();
   if(est==='PROGRAMADO')return '<span class="badge b-prog">PROGRAMADO</span>';
   if(est==='COMPLETADO')return '<span class="badge b-comp">COMPLETADO</span>';
+  if(est==='ATENDIDO')return '<span class="badge b-aten">✅ ATENDIDO</span>';
+  if(est==='CERRADO')return '<span class="badge b-cerr">🔒 CERRADO</span>';
   return '<span class="badge b-pend">PENDIENTE</span>';
 }
 async function cargarMis(){
@@ -384,11 +388,17 @@ async function cargarMis(){
 }
 
 let _solicitudes=[];
+let _estadosExtra={};
 async function cargarAdmin(){
   const body=document.getElementById('adminBody');body.innerHTML='<tr><td colspan="9" class="empty">Cargando...</td></tr>';
   try{
-    const r=await fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento'}));
-    const res=await r.json();_solicitudes=(res&&res.ok&&res.data)?res.data:[];renderAdmin();
+    const [r,r2]=await Promise.all([
+      fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento'})),
+      fetch(API+'?'+new URLSearchParams({action:'getEstadosMantenimiento'})).catch(function(){return null;})
+    ]);
+    const res=await r.json();_solicitudes=(res&&res.ok&&res.data)?res.data:[];
+    try{const res2=r2?await r2.json():null;_estadosExtra=(res2&&res2.ok&&res2.data)?res2.data:{};}catch(e){_estadosExtra={};}
+    renderAdmin();
   }catch(e){body.innerHTML='<tr><td colspan="9" class="empty">Error de conexión.</td></tr>';console.error('[mant] admin',e);}
 }
 function renderAdmin(){
@@ -397,8 +407,12 @@ function renderAdmin(){
   if(!datos.length){body.innerHTML='<tr><td colspan="10" class="empty">No hay solicitudes'+(filtro?' '+filtro.toLowerCase():'')+'.</td></tr>';return;}
   body.innerHTML=datos.map(s=>{
     const est=(s.estado||'PENDIENTE').toUpperCase();
-    const accion=(est==='PENDIENTE')?'<button class="btn btn-az btn-sm" onclick="abrirModal(\''+s.id+'\')">📅 Programar</button>'
-      :'<button class="btn btn-gh btn-sm" onclick="abrirModal(\''+s.id+'\')">✏️ Editar</button>';
+    let accion;
+    if(est==='PENDIENTE')accion='<button class="btn btn-az btn-sm" onclick="abrirModal(\''+s.id+'\')">📅 Programar</button>';
+    else if(est==='ATENDIDO')accion='<button class="btn btn-sm" style="background:#475569;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer" onclick="cerrarSolicitud(\''+s.id+'\')">🔒 Cerrar</button>';
+    else if(est==='CERRADO')accion='<span class="muted">—</span>';
+    else accion='<button class="btn btn-gh btn-sm" onclick="abrirModal(\''+s.id+'\')">✏️ Editar</button>'+
+      ' <button class="btn btn-sm" style="background:#16a34a;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer" onclick="marcarAtendida(\''+s.id+'\')">✅ Atendida</button>';
     // Botón notificar (solo si ya está programado y tiene correo)
     const notif=(est!=='PENDIENTE'&&s.correo)
       ? ' <button class="btn btn-vd btn-sm" onclick="notificarCorreo(\''+s.id+'\')">📧 Notificar</button>' : '';
@@ -407,10 +421,59 @@ function renderAdmin(){
       '<td>'+(s.nombre||'')+'<br><span class="muted">DNI '+(s.dni||'')+' · '+(s.empresa||'')+'</span></td>'+
       '<td>'+(s.unidad||'')+'<br><span class="muted">'+(s.codInterno||'')+'</span></td>'+
       '<td>'+lic+'</td><td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td>'+
-      '<td>'+badgeEstado(s.estado)+'</td><td>'+(s.fechaProgramada||'<span class="muted">—</span>')+'</td>'+
+      '<td>'+badgeEstado(s.estado)+_fechasExtra(s.id)+'</td><td>'+(s.fechaProgramada||'<span class="muted">—</span>')+'</td>'+
       '<td style="white-space:nowrap">'+accion+notif+'</td></tr>';
   }).join('');
 }
+
+function _fechasExtra(id){
+  const ex=_estadosExtra[id];if(!ex)return '';
+  let t='';
+  if(ex.fechaAtencion)t+='<br><span class="muted">✅ Atendida: '+ex.fechaAtencion+'</span>';
+  if(ex.fechaCierre)t+='<br><span class="muted">🔒 Cerrada: '+ex.fechaCierre+'</span>';
+  return t;
+}
+async function _cambiarEstadoMant(id,estado,msj){
+  const ok=await appConfirm(msj);if(!ok)return;
+  try{
+    const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'actualizarEstadoMantenimiento',id:id,estado:estado,admin:USER.usuario}),headers:{'Content-Type':'text/plain'}});
+    const res=await r.json();
+    if(!res||!res.ok){await appAlert((res&&res.msg)?res.msg:'No se pudo actualizar.');return;}
+    await cargarAdmin();
+  }catch(e){await appAlert('Error de conexión.');console.error('[mant] estado',e);}
+}
+function marcarAtendida(id){_cambiarEstadoMant(id,'ATENDIDO','¿Marcar la solicitud '+id+' como ATENDIDA? Se registrará la fecha de hoy como fecha de atención.');}
+function cerrarSolicitud(id){_cambiarEstadoMant(id,'CERRADO','¿CERRAR definitivamente la solicitud '+id+'? Quedará archivada con fecha de cierre.');}
+
+/* ── Historial de mantenimientos por conductor ── */
+async function verHistorialConductor(dni,nombre){
+  document.getElementById('histTitulo').textContent='📜 Historial de mantenimientos — '+nombre+' (DNI '+dni+')';
+  document.getElementById('histBody').innerHTML='<div style="padding:18px;text-align:center;color:var(--gr)">Cargando...</div>';
+  document.getElementById('histOverlay').classList.add('show');
+  try{
+    if(!_solicitudes.length){
+      const r=await fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento'}));
+      const res=await r.json();_solicitudes=(res&&res.ok&&res.data)?res.data:[];
+    }
+    if(!Object.keys(_estadosExtra).length){
+      try{const r2=await fetch(API+'?'+new URLSearchParams({action:'getEstadosMantenimiento'}));
+      const res2=await r2.json();_estadosExtra=(res2&&res2.ok&&res2.data)?res2.data:{};}catch(e){}
+    }
+    const lista=_solicitudes.filter(function(s){return String(s.dni||'').trim()===String(dni).trim();});
+    if(!lista.length){document.getElementById('histBody').innerHTML='<div style="padding:18px;text-align:center;color:var(--gr)">Este conductor no tiene solicitudes de mantenimiento registradas.</div>';return;}
+    let h='<table class="fic-t" style="min-width:0"><thead><tr><th>N° Solicitud</th><th>F. Solicitud</th><th>Unidad</th><th>Km</th><th>Tipo</th><th>Estado</th><th>F. Programada</th></tr></thead><tbody>';
+    lista.forEach(function(s){
+      h+='<tr><td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'—')+'</td>'+
+        '<td>'+(s.unidad||((s.marca||'')+' '+(s.modelo||'')).trim()||'—')+'</td>'+
+        '<td>'+(s.km||s.kilometraje||'—')+'</td><td>'+(s.tipo||s.tipoMantenimiento||'—')+'</td>'+
+        '<td>'+badgeEstado(s.estado)+_fechasExtra(s.id)+'</td>'+
+        '<td>'+(s.fechaProgramada||'<span class="muted">—</span>')+'</td></tr>';
+    });
+    h+='</tbody></table>';
+    document.getElementById('histBody').innerHTML=h;
+  }catch(e){document.getElementById('histBody').innerHTML='<div style="padding:18px;text-align:center;color:#dc2626">Error al cargar el historial.</div>';console.error('[mant] historial',e);}
+}
+function cerrarHistorial(){document.getElementById('histOverlay').classList.remove('show');}
 
 let _idActual=null;
 async function notificarCorreo(id){
@@ -485,6 +548,12 @@ async function guardarProgramacion(){
     .fic-t tr.r-ven td{background:#fff5f5}
     .fic-t tr.r-ven:hover td{background:#fee2e2}
   </style>
+  <div class="fic-ov" id="histOverlay" onclick="if(event.target===this)cerrarHistorial()" style="z-index:1300">
+    <div class="fic-card" style="max-width:980px;width:96vw">
+      <div class="fic-h" style="background:#0a2540"><h3 id="histTitulo">📜 Historial de mantenimientos</h3><button class="fic-x" onclick="cerrarHistorial()">✕</button></div>
+      <div class="fic-b"><div class="fic-tablewrap" id="histBody" style="max-height:70vh"></div></div>
+    </div>
+  </div>
   <div class="fic-ov" id="ficOverlay" onclick="if(event.target===this)cerrarFicha()">
     <div class="fic-card">
       <div class="fic-h"><h3>🪪 Conductores — BB.DD. RESPONSABLES</h3><button class="fic-x" onclick="cerrarFicha()">✕</button></div>
@@ -556,7 +625,7 @@ async function guardarProgramacion(){
     });}
     _ULTIMA_LISTA = items;
     if(!items.length){tw.style.display='block';tw.innerHTML='<div style="padding:20px;text-align:center;color:var(--gr);font-size:13px">Sin resultados para ese filtro.</div>';return;}
-    let h='<table class="fic-t"><thead><tr><th>N°</th><th>DNI</th><th>Conductor</th><th>Cargo</th><th>Unidad</th><th>Año</th><th>Estatus</th><th>Zona de recorrido</th><th style="background:#0a7d36">🏍 Lic. MOTO</th><th style="background:#0a7d36">F. Exped.</th><th style="background:#0a7d36">F. Reval.</th><th style="background:#0a7d36">Estado MOTO</th><th style="background:#1d4ed8">🚗 Lic. CARRO</th><th style="background:#1d4ed8">F. Exped.</th><th style="background:#1d4ed8">F. Reval.</th><th style="background:#1d4ed8">Estado CARRO</th></tr></thead><tbody>';
+    let h='<table class="fic-t"><thead><tr><th>N°</th><th>DNI</th><th>Conductor</th><th>Cargo</th><th>Unidad</th><th>Año</th><th>Estatus</th><th>Zona de recorrido</th><th style="background:#0a7d36">🏍 Lic. MOTO</th><th style="background:#0a7d36">F. Exped.</th><th style="background:#0a7d36">F. Reval.</th><th style="background:#0a7d36">Estado MOTO</th><th style="background:#1d4ed8">🚗 Lic. CARRO</th><th style="background:#1d4ed8">F. Exped.</th><th style="background:#1d4ed8">F. Reval.</th><th style="background:#1d4ed8">Estado CARRO</th><th>📜</th></tr></thead><tbody>';
     items.forEach(function(d,i){
       const ven=(d._dias!==999999&&d._dias<0); // vencida la más urgente (moto o carro)
       const uni=((d.marca||'')+' '+(d.modelo||'')).trim()||'—';
@@ -577,6 +646,7 @@ async function guardarProgramacion(){
         '<td>'+(d.fExpedicionCarro||'—')+'</td>'+
         '<td>'+(d.fRevalidacionCarro||'—')+'</td>'+
         '<td>'+(d.fRevalidacionCarro?calcEstadoLicencia(d.fRevalidacionCarro):'<span class="muted">—</span>')+'</td>'+
+        '<td><button class="btn btn-az btn-sm" title="Historial de mantenimientos" onclick="verHistorialConductor(\''+(d.dni||'')+'\',\''+String(d.usuario||'').replace(/'/g,'')+'\')">📜</button></td>'+
       '</tr>';
     });
     h+='</tbody></table>';
