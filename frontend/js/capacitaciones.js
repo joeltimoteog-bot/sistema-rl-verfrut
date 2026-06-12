@@ -1091,9 +1091,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
         [
           { content: '', styles: { cellWidth: COL1, minCellHeight: 15, valign: 'middle' } },
           { content: '', styles: { cellWidth: COL2, minCellHeight: 15, valign: 'middle' } },
-          { content: 'R-SC-01\nVersión N.° 0.0\nÚltima revisión:\n24/03/2026',
-            styles: { halign: 'center', valign: 'middle', fontSize: 8, fontStyle: 'bold',
-                      textColor: C.negro, cellWidth: COL3, minCellHeight: 15, cellPadding: 1 } }
+          { content: '', styles: { cellWidth: COL3, minCellHeight: 15 } }
         ],
         [
           { content: `Caserío El Papayo Mz. O, Castilla,\nPiura, Piura, Perú\n${rucEmp}`,
@@ -1111,17 +1109,31 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       styles: sBorder
     });
 
-    // Logo encima celda izquierda fila 1 (x:10→45, y:5→20) — 22×11mm
-    if (logoB64) { try { doc.addImage(logoB64, 'JPEG', MGS + 5.5, y + 2, 22, 11); } catch(e) {} }
+    // Logo encima celda izquierda fila 1 — CUADRADO 12×12mm (el original es 225×225, 1:1)
+    if (logoB64) { try { doc.addImage(logoB64, 'JPEG', MGS + (COL1 - 12) / 2, y + 1.5, 12, 12); } catch(e) {} }
 
     // Texto celda central fila 1: empresa (8pt normal) + título (10pt bold)
     // Centro horizontal de COL2: x = MGS + COL1 + COL2/2 = 10+35+55 = 100mm
     const cX = MGS + COL1 + COL2 / 2;
+    // Empresa en su propia franja, con línea divisoria que cruza hasta R-SC-01 (como el oficial)
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...C.negro);
-    doc.text(nombreEmp, cX, y + 4.5, { align: 'center' });
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(...C.negro);
-    doc.text('REGISTRO DE INDUCCIÓN, CAPACITACIÓN,', cX, y + 9.5, { align: 'center' });
-    doc.text('ENTRENAMIENTO Y SIMULACROS DE EMERGENCIA', cX, y + 14, { align: 'center' });
+    doc.text(nombreEmp, cX, y + 3.7, { align: 'center' });
+    doc.setDrawColor(...C.negro); doc.setLineWidth(0.3);
+    doc.line(MGS + COL1, y + 5, MGS + bW, y + 5);   // divide empresa/título y R-SC-01/Versión
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+    doc.text('REGISTRO DE INDUCCIÓN, CAPACITACIÓN,', cX, y + 9.6, { align: 'center' });
+    doc.text('ENTRENAMIENTO Y SIMULACROS DE EMERGENCIA', cX, y + 13.8, { align: 'center' });
+
+    // Celda derecha por compartimentos: R-SC-01 / Versión N.° 0.0 / Última revisión (como el oficial)
+    const rX = MGS + COL1 + COL2, rC = rX + COL3 / 2;
+    doc.setFont('helvetica', 'bold'); doc.setTextColor(...C.negro);
+    doc.setFontSize(9);
+    doc.text('R-SC-01', rC, y + 3.7, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text('Versión N.° 0.0', rC, y + 8.6, { align: 'center' });
+    doc.line(rX, y + 10, rX + COL3, y + 10);        // divide Versión / Última revisión
+    doc.text('Última revisión:', rC, y + 12.6, { align: 'center' });
+    doc.text('24/03/2026', rC, y + 14.6, { align: 'center' });
 
     y = doc.lastAutoTable.finalY;
 
@@ -1134,6 +1146,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       theme: 'grid', styles: sBorder
     });
     let yA = doc.lastAutoTable.finalY;
+    const yDatosIni = yA;   // ⭐ inicio del marco de la sección
 
     // ── Helpers de dibujo manual ──
     const ROW = 7;
@@ -1229,8 +1242,12 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     const prodV = v('capProductor') || (esRapel ? 'Sociedad Agrícola Rapel S.A.C.' : 'Sociedad Exportadora Verfrut S.A.C.');
     _lbl('PRODUCTOR:', MGS + 1, yA);
     _val(prodV, MGS + 24, yA, bW - 25);
-    _sub(MGS, yA + 5.5, MGS + bW);
+    _sub(MGS + 23, yA + 5.5, MGS + bW - 1.5);
     yA += 7;
+
+    // ⭐ MARCO: encierra toda la sección DATOS DE LA ACTIVIDAD (como el formato oficial)
+    doc.setDrawColor(...C.negro); doc.setLineWidth(0.3);
+    doc.rect(MGS, yDatosIni, bW, yA - yDatosIni);
 
     y = yA;
 
