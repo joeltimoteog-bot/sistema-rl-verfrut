@@ -234,6 +234,7 @@ h3{font-size:16px !important}
             <button class="btn-blue" onclick="exportarRankingExcel()" title="Exportar a Excel">📊 Excel</button>
             <button class="btn-blue" onclick="exportarRankingPDF()" title="Reporte gerencial PDF">📄 PDF</button>
             <button class="btn-n" onclick="mostrarFormulario()">+ Nueva Evaluación</button>
+            <button class="btn-blue" onclick="mostrarInforme()">🤖 Informe Integral</button>
             <button class="btn-blue" onclick="abrir('mSupCustom')">+ Agregar Supervisor</button>
           </div>
         </div>
@@ -316,6 +317,48 @@ h3{font-size:16px !important}
     </div>
 
     <!-- HISTORIAL POR SUPERVISOR -->
+    <!-- ════════ PANEL INFORME INTEGRAL DE DESEMPEÑO ════════ -->
+    <div id="panelInforme" style="display:none">
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><span class="card-t">🤖 Informe Integral de Desempeño — Supervisor de Gestión Humana</span>
+          <button class="btn-blue" onclick="mostrarDashboard()">← Volver</button></div>
+        <div style="padding:16px">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:12px">
+            <div><label class="lb">Supervisor</label><select class="fi" id="infSup" style="width:100%" onchange="infLimpiar()"></select></div>
+            <div><label class="lb">Periodo Eval. 360</label><select class="fi" id="infPer" style="width:100%"></select></div>
+            <div style="align-self:end"><button class="btn-n" style="width:100%" onclick="infCargarSistema()">🔄 Cargar datos del sistema</button></div>
+          </div>
+          <div id="infKpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:10px;margin-bottom:14px"></div>
+
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px">
+            <div><label class="lb">💬 Comentarios de colaboradores</label><textarea class="fi" id="infComColab" rows="3" style="width:100%;resize:vertical" placeholder="Pega o escribe los comentarios..."></textarea></div>
+            <div><label class="lb">💬 Comentarios de jefaturas</label><textarea class="fi" id="infComJef" rows="3" style="width:100%;resize:vertical"></textarea></div>
+            <div><label class="lb">💬 Comentarios de otros supervisores</label><textarea class="fi" id="infComSup" rows="3" style="width:100%;resize:vertical"></textarea></div>
+            <div><label class="lb">💬 Comentarios de administradores de fundo</label><textarea class="fi" id="infComAdm" rows="3" style="width:100%;resize:vertical"></textarea></div>
+            <div><label class="lb">🚜 Comentarios en visitas de campo (Coordinación RL)</label><textarea class="fi" id="infComVis" rows="3" style="width:100%;resize:vertical"></textarea></div>
+            <div><label class="lb">📝 Observaciones (liderazgo, comunicación, disciplina, presencia en campo, resolución de conflictos, gestión)</label><textarea class="fi" id="infObs" rows="3" style="width:100%;resize:vertical"></textarea></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px">
+            <div><label class="lb">Percepción general de los administradores</label>
+              <select class="fi" id="infPercep" style="width:100%">
+                <option value="">— Sin determinar —</option>
+                <option>Muy positiva</option><option>Positiva</option><option>Neutral</option>
+                <option>Negativa</option><option>Muy negativa</option>
+              </select></div>
+            <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn-n" onclick="generarInformeIntegral()">📄 Generar Informe</button>
+              <button class="btn-blue" onclick="copiarPromptIA()">🤖 Copiar datos para IA</button>
+              <button class="btn-blue" id="infBtnPDF" style="display:none" onclick="exportarInformePDF()">🖨️ Exportar PDF</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card" id="infResultadoCard" style="display:none">
+        <div class="card-h"><span class="card-t">📑 Informe Generado</span></div>
+        <div id="infResultado" style="padding:20px;font-size:13.5px;line-height:1.65"></div>
+      </div>
+    </div>
+
     <div id="panelHistorial" style="display:none">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px" class="no-print">
         <h3 style="color:var(--azul);font-size:16px">📊 Evolución — <span id="histSupNombre"></span></h3>
@@ -1344,6 +1387,7 @@ function verHistorialSupervisor(nombre) {
 }
 
 function mostrarHistorial() {
+  var _pi = document.getElementById('panelInforme'); if (_pi) _pi.style.display = 'none';
   document.getElementById('panelDashboard').style.display  = 'none';
   document.getElementById('panelFormulario').style.display = 'none';
   document.getElementById('panelReporte').style.display    = 'none';
@@ -1352,6 +1396,7 @@ function mostrarHistorial() {
 
 // ── Navegación paneles ──
 function mostrarDashboard() {
+  var _pi = document.getElementById('panelInforme'); if (_pi) _pi.style.display = 'none';
   document.getElementById('panelDashboard').style.display  = 'block';
   document.getElementById('panelFormulario').style.display = 'none';
   document.getElementById('panelReporte').style.display    = 'none';
@@ -1360,6 +1405,7 @@ function mostrarDashboard() {
 }
 
 function mostrarFormulario() {
+  var _pi = document.getElementById('panelInforme'); if (_pi) _pi.style.display = 'none';
   document.getElementById('panelDashboard').style.display = 'none';
   document.getElementById('panelFormulario').style.display = 'block';
   document.getElementById('panelReporte').style.display = 'none';
@@ -1369,6 +1415,389 @@ function mostrarFormulario() {
   document.getElementById('eval_evaluador').value = USER.nombre || '';
   actualizarPeriodo();
 }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   INFORME INTEGRAL DE DESEMPEÑO — Supervisor de Gestión Humana
+   Consolida Eval 360 + Visitas + Casos + comentarios de campo
+   ═══════════════════════════════════════════════════════════════ */
+let _infDatos = null;       // datos consolidados del sistema
+let _infInformeTxt = null;  // estructura del informe generado (para PDF)
+
+function mostrarInforme() {
+  ['panelDashboard','panelFormulario','panelReporte','panelHistorial'].forEach(id => {
+    const p = document.getElementById(id); if (p) p.style.display = 'none';
+  });
+  document.getElementById('panelInforme').style.display = 'block';
+  // Poblar supervisores
+  const sel = document.getElementById('infSup');
+  const actual = sel.value;
+  sel.innerHTML = '<option value="">— Selecciona —</option>' +
+    getSupervisores().map(s => `<option value="${s.nombre}">${s.nombre}</option>`).join('');
+  if (actual) sel.value = actual;
+  infPoblarPeriodos();
+}
+function infPoblarPeriodos() {
+  const sel = document.getElementById('infPer');
+  const pers = [...new Set(getHistorial().map(e => e.periodo).filter(Boolean))].sort().reverse();
+  sel.innerHTML = pers.length ? pers.map(p => `<option>${p}</option>`).join('') : '<option value="">Sin evaluaciones</option>';
+}
+function infLimpiar() { _infDatos = null; document.getElementById('infKpis').innerHTML = ''; }
+
+async function infCargarSistema() {
+  const sup = document.getElementById('infSup').value;
+  const per = document.getElementById('infPer').value;
+  if (!sup) { mostrarToast('Selecciona un supervisor', 'error'); return; }
+  const kp = document.getElementById('infKpis');
+  kp.innerHTML = '<div style="grid-column:1/-1;color:#64748b">⏳ Consolidando datos del sistema...</div>';
+
+  // 1) Eval 360 del periodo (local, ya cargada)
+  const evs = getHistorial().filter(e => String(e.supervisor).trim().toLowerCase() === sup.trim().toLowerCase());
+  const ev  = evs.find(e => e.periodo === per) || evs.sort((a,b)=>String(b.periodo).localeCompare(String(a.periodo)))[0] || null;
+
+  // 2) Visitas y Casos desde el GAS (en paralelo)
+  let vis = null, cas = null;
+  try {
+    const [dv, dc] = await Promise.all([
+      apiGet({ action: 'getVisitas', supervisor: sup }),
+      apiGet({ action: 'getCasos', supervisor: sup, rol: USER.rol, usuario: USER.usuario, nombre: USER.nombre || USER.usuario })
+    ]);
+    if (dv && dv.success) {
+      const lista = dv.data || [];
+      vis = { total: lista.length,
+              retrasadas: lista.filter(v => String(v.estado).toUpperCase().includes('RETRAS')).length };
+      vis.enPlazo = vis.total - vis.retrasadas;
+      vis.pct = vis.total ? Math.round(vis.enPlazo / vis.total * 100) : null;
+    }
+    if (dc && dc.success) {
+      const lista = dc.data || [];
+      cas = { total: lista.length,
+              retrasados: lista.filter(c => String(c.estado).toUpperCase().includes('RETRAS')).length,
+              concluidos: lista.filter(c => String(c.estado_gestion||'').toUpperCase().includes('CONCLU')).length };
+      cas.enPlazo = cas.total - cas.retrasados;
+      cas.pct = cas.total ? Math.round(cas.enPlazo / cas.total * 100) : null;
+    }
+  } catch(e) { console.warn('[informe] visitas/casos:', e.message); }
+
+  _infDatos = { supervisor: sup, periodo: ev ? ev.periodo : per, ev, vis, cas };
+
+  const kpi = (v, l, color) => `<div style="background:${color};color:#fff;border-radius:10px;padding:12px 14px">
+    <div style="font-size:21px;font-weight:800">${v}</div><div style="font-size:10.5px;opacity:.9;text-transform:uppercase">${l}</div></div>`;
+  let html = '';
+  html += ev ? kpi((Number(ev.porcentaje)||0).toFixed(1) + '%', 'Eval 360 · ' + (ev.clasificacion||'') + ' (' + (ev.periodo||'') + ')', 'linear-gradient(135deg,#0a2463,#1e3a8a)')
+             : kpi('—', 'Sin Eval 360 registrada', '#94a3b8');
+  html += vis ? kpi(vis.total + ' / ' + vis.retrasadas + ' retr.', 'Visitas (' + (vis.pct===null?'—':vis.pct+'% en plazo') + ')', 'linear-gradient(135deg,#15803d,#16a34a)')
+              : kpi('—', 'Visitas: sin datos', '#94a3b8');
+  html += cas ? kpi(cas.total + ' / ' + cas.retrasados + ' retr.', 'Casos (' + cas.concluidos + ' concluidos)', 'linear-gradient(135deg,#b45309,#d97706)')
+              : kpi('—', 'Casos: sin datos', '#94a3b8');
+  if (ev && Array.isArray(ev.competencias)) {
+    const top = [...ev.competencias].sort((a,b)=>(b.promedio||0)-(a.promedio||0));
+    if (top.length) html += kpi('▲ ' + _infCorto(top[0].nombre) + ' (' + Number(top[0].promedio).toFixed(2) + ')', 'Competencia más fuerte', '#334155');
+    if (top.length > 1) { const w = top[top.length-1]; html += kpi('▼ ' + _infCorto(w.nombre) + ' (' + Number(w.promedio).toFixed(2) + ')', 'Competencia más débil', '#7c2d12'); }
+  }
+  kp.innerHTML = html;
+  mostrarToast('Datos del sistema consolidados ✓');
+}
+function _infCorto(n) { return String(n||'').replace('Cumplimiento de Metas y Reportes','Metas y Reportes').replace('Comunicación y Coordinación','Comunicación').replace('Liderazgo y Conducta','Liderazgo').replace('Resolución de Problemas','Resolución').replace('Planificación e Iniciativa','Planificación'); }
+
+/* ── Motor de reglas: puntaje global y nivel ── */
+function _infPuntaje() {
+  const d = _infDatos || {};
+  const percepMap = { 'Muy positiva': 100, 'Positiva': 80, 'Neutral': 60, 'Negativa': 40, 'Muy negativa': 20 };
+  const percep = document.getElementById('infPercep').value;
+  const comps = [];
+  if (d.ev)  comps.push({ k:'eval',   peso: 40, val: Number(d.ev.porcentaje)||0 });
+  if (d.vis && d.vis.pct !== null) comps.push({ k:'visitas', peso: 20, val: d.vis.pct });
+  if (d.cas && d.cas.pct !== null) comps.push({ k:'casos',   peso: 20, val: d.cas.pct });
+  if (percep) comps.push({ k:'percep', peso: 20, val: percepMap[percep] });
+  if (!comps.length) return { global: null, comps, percep };
+  const sumPeso = comps.reduce((s,c)=>s+c.peso,0);
+  const global = Math.round(comps.reduce((s,c)=>s + c.val * (c.peso/sumPeso), 0) * 10) / 10;
+  return { global, comps, percep };
+}
+function _infNivel(g) {
+  if (g >= 90) return 'Sobresaliente';
+  if (g >= 80) return 'Destacado';
+  if (g >= 70) return 'Adecuado';
+  if (g >= 55) return 'Regular';
+  return 'Deficiente';
+}
+const _INF_AREA = {
+  'Cumplimiento de Metas y Reportes': 'cumplimiento de procedimientos y reportes',
+  'Comunicación y Coordinación': 'comunicación y coordinación con jefaturas y sectores',
+  'Liderazgo y Conducta': 'liderazgo y conducta ejemplar',
+  'Gestión de Equipo': 'gestión de personal',
+  'Resolución de Problemas': 'resolución de conflictos',
+  'Planificación e Iniciativa': 'capacidad de organización e iniciativa'
+};
+
+function generarInformeIntegral() {
+  if (!_infDatos) { mostrarToast('Primero carga los datos del sistema 🔄', 'error'); return; }
+  const d = _infDatos;
+  const sup = d.supervisor;
+  const { global, percep } = _infPuntaje();
+  if (global === null) { mostrarToast('No hay datos suficientes para calcular', 'error'); return; }
+  const nivel = _infNivel(global);
+  const C = (id) => document.getElementById(id).value.trim();
+  const coms = { colab: C('infComColab'), jef: C('infComJef'), sups: C('infComSup'), adm: C('infComAdm'), vis: C('infComVis'), obs: C('infObs') };
+
+  const comps = (d.ev && d.ev.competencias) ? d.ev.competencias.map(c => ({ nombre: c.nombre, prom: Number(c.promedio)||0 })) : [];
+  const fuertes = comps.filter(c => c.prom >= 4).sort((a,b)=>b.prom-a.prom);
+  const debiles = comps.filter(c => c.prom > 0 && c.prom < 3.5).sort((a,b)=>a.prom-b.prom);
+
+  // ── 1. Fortalezas ──
+  const F = [];
+  fuertes.forEach(c => F.push(`<b>${_INF_AREA[c.nombre]||c.nombre}</b>: promedio ${c.prom.toFixed(2)}/5 en la Evaluación 360°, lo que sostiene la operación diaria del sector.`));
+  if (d.vis && d.vis.pct !== null && d.vis.pct >= 85) F.push(`<b>Presencia y acompañamiento en campo</b>: ${d.vis.enPlazo} de ${d.vis.total} visitas con informe en plazo (${d.vis.pct}%), asegurando trazabilidad oportuna de lo observado.`);
+  if (d.cas && d.cas.pct !== null && d.cas.pct >= 85) F.push(`<b>Seguimiento de casos laborales</b>: ${d.cas.enPlazo} de ${d.cas.total} casos gestionados dentro del plazo (${d.cas.pct}%), con ${d.cas.concluidos} concluidos, reduciendo el riesgo laboral para la empresa.`);
+  if (percep === 'Muy positiva' || percep === 'Positiva') F.push(`<b>Relación con los sectores</b>: los administradores de fundo expresan una percepción ${percep.toLowerCase()} de su gestión, lo que facilita la coordinación operativa.`);
+  if (!F.length) F.push('No se identifican fortalezas claramente destacadas en la evidencia disponible; el desempeño se ubica dentro de rangos básicos.');
+
+  // ── 2. Oportunidades ──
+  const O = [];
+  debiles.forEach(c => O.push({ asp: _INF_AREA[c.nombre]||c.nombre, det: `Promedio ${c.prom.toFixed(2)}/5 en la Evaluación 360°. Impacto: ${_infImpacto(c.nombre)}` }));
+  if (d.vis && d.vis.retrasadas > 0) O.push({ asp: 'cumplimiento de informes de visitas', det: `${d.vis.retrasadas} de ${d.vis.total} visitas con informe fuera de plazo. Impacto: la jefatura pierde visibilidad oportuna de lo que ocurre en campo y se debilita la trazabilidad documental.` });
+  if (d.cas && d.cas.retrasados > 0) O.push({ asp: 'seguimiento y documentación de casos laborales', det: `${d.cas.retrasados} de ${d.cas.total} casos en estado RETRASADO. Impacto: exposición a contingencias laborales y gestión reactiva en lugar de preventiva.` });
+  if (percep === 'Negativa' || percep === 'Muy negativa') O.push({ asp: 'relación y comunicación con los administradores de fundo', det: `La percepción de los administradores es ${percep.toLowerCase()}. Impacto: se erosiona la confianza del sector y se dificulta la coordinación de acciones de personal.` });
+  if (!O.length) O.push({ asp: 'consolidación del estándar alcanzado', det: 'No se detectan brechas relevantes en la evidencia disponible; el reto es sostener el nivel y documentarlo.' });
+
+  // ── 4. Percepción administradores ──
+  const percepTxt = percep || 'Sin determinar (no se registró el selector de percepción)';
+  const admBloque = coms.adm
+    ? `Comentarios registrados de los administradores: <i>"${_infRec(coms.adm)}"</i>. ` +
+      `De su lectura se desprende ${percep && (percep==='Muy positiva'||percep==='Positiva') ? 'un reconocimiento recurrente a la disponibilidad y capacidad de respuesta del supervisor' : percep==='Neutral' ? 'una valoración funcional pero sin elementos diferenciadores: cumple, sin generar todavía un nivel alto de confianza' : percep ? 'señales recurrentes de insatisfacción asociadas a tiempos de respuesta, presencia en campo y comunicación con el sector' : 'la necesidad de sistematizar la recolección de percepción para futuras mediciones'}.`
+    : 'No se registraron comentarios de administradores de fundo en este periodo, lo que limita el análisis de percepción; se recomienda recogerlos sistemáticamente en las visitas de la Coordinación RL.';
+
+  // ── 5. Consistencia ──
+  let consist = '';
+  const percepMapN = { 'Muy positiva': 100, 'Positiva': 80, 'Neutral': 60, 'Negativa': 40, 'Muy negativa': 20 };
+  if (d.ev && percep) {
+    const dif = Math.abs((Number(d.ev.porcentaje)||0) - percepMapN[percep]);
+    if (dif <= 12) consist = `La Evaluación 360° del sistema (${Number(d.ev.porcentaje).toFixed(1)}%) y la percepción de campo (${percep}) son <b>coherentes</b>: las fortalezas registradas se confirman en la voz de los administradores. No se detectan contradicciones relevantes.`;
+    else if ((Number(d.ev.porcentaje)||0) > percepMapN[percep]) consist = `Se detecta una <b>contradicción</b>: el sistema registra ${Number(d.ev.porcentaje).toFixed(1)}% de cumplimiento, pero la percepción de campo es ${percep.toLowerCase()}. Riesgo: la información declarada/registrada podría no reflejar la realidad operativa; corresponde priorizar la versión de administradores y jefaturas y verificar en campo los registros del supervisor.`;
+    else consist = `La percepción de campo (${percep}) es <b>mejor</b> que el resultado del sistema (${Number(d.ev.porcentaje).toFixed(1)}%): el supervisor genera confianza operativa, pero presenta brechas de registro/cumplimiento formal. Riesgo documental más que relacional.`;
+  } else consist = 'No es posible un análisis de consistencia completo: falta ' + (!d.ev ? 'la Evaluación 360° del periodo' : 'la percepción de los administradores') + '. Se recomienda completar ambos insumos.';
+
+  // ── 6. Feedback ejecutivo ──
+  const FB = [];
+  if (fuertes.length) FB.push(`<b>Estás realizando una buena gestión en</b> ${fuertes.slice(0,2).map(c=>_INF_AREA[c.nombre]||c.nombre).join(' y ')}.`);
+  if (d.vis && d.vis.pct >= 85) FB.push(`<b>Debes mantener</b> el ritmo de visitas e informes en plazo (${d.vis.pct}%).`);
+  else if (fuertes.length > 2) FB.push(`<b>Debes mantener</b> el estándar mostrado en ${_INF_AREA[fuertes[2].nombre]||fuertes[2].nombre}.`);
+  if (debiles.length) FB.push(`<b>Debes fortalecer</b> ${_INF_AREA[debiles[0].nombre]||debiles[0].nombre} (promedio ${debiles[0].prom.toFixed(2)}/5).`);
+  if (d.cas && d.cas.retrasados > 0) FB.push(`<b>Debes mejorar</b> los tiempos de gestión de casos: hoy tienes ${d.cas.retrasados} retrasado(s).`);
+  if (d.vis && d.vis.retrasadas > 0) FB.push(`<b>Se recomienda trabajar en</b> la entrega de informes de visita dentro del plazo (${d.vis.retrasadas} fuera de plazo).`);
+  const reto = debiles.length ? (_INF_AREA[debiles[0].nombre]||debiles[0].nombre)
+             : (d.cas && d.cas.retrasados>0) ? 'la gestión preventiva y en plazo de los casos laborales'
+             : (d.vis && d.vis.retrasadas>0) ? 'la puntualidad documental de las visitas de campo'
+             : 'sostener el nivel alcanzado y desarrollar a su equipo';
+  FB.push(`<b>El principal reto identificado es</b> ${reto}.`);
+
+  // ── 7. Plan de mejora ──
+  const plan = O.slice(0,5).map(o => ({
+    asp: o.asp.charAt(0).toUpperCase() + o.asp.slice(1),
+    acc: _infAccion(o.asp), resp: 'Supervisor / Coordinación RL',
+    plazo: '30–60 días', ind: _infIndicador(o.asp)
+  }));
+
+  // ── Render ──
+  const sec = (n, t, body) => `<h3 style="color:#0a2463;border-bottom:2px solid #0a2463;padding-bottom:4px;margin:18px 0 8px">${n}. ${t}</h3>${body}`;
+  const li = arr => '<ul style="margin:4px 0 4px 18px">' + arr.map(x=>`<li style="margin-bottom:5px">${x}</li>`).join('') + '</ul>';
+  const datosLinea = [
+    d.ev ? `Eval 360°: <b>${Number(d.ev.porcentaje).toFixed(1)}%</b> (${d.ev.clasificacion||''}, periodo ${d.ev.periodo})` : 'Eval 360°: sin registro',
+    d.vis ? `Visitas: <b>${d.vis.total}</b> (${d.vis.retrasadas} fuera de plazo)` : 'Visitas: sin datos',
+    d.cas ? `Casos: <b>${d.cas.total}</b> (${d.cas.retrasados} retrasados, ${d.cas.concluidos} concluidos)` : 'Casos: sin datos',
+    `Percepción administradores: <b>${percepTxt}</b>`
+  ].join(' · ');
+
+  let html = `<div style="text-align:center;margin-bottom:12px">
+      <div style="font-size:17px;font-weight:800;color:#0a2463">INFORME INTEGRAL DE DESEMPEÑO</div>
+      <div style="font-size:14px;font-weight:700">${sup}</div>
+      <div style="font-size:11.5px;color:#64748b">Periodo ${d.periodo||'-'} · Generado ${new Date().toLocaleDateString('es-PE')} · Coordinación de Relaciones Laborales</div>
+    </div>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:12px">${datosLinea}</div>`;
+
+  html += sec(1, 'RESUMEN EJECUTIVO',
+    `<p>El desempeño integral de <b>${sup}</b> en el periodo alcanza un nivel <b style="font-size:15px;color:${global>=80?'#16a34a':global>=70?'#3b82f6':global>=55?'#f97316':'#dc2626'}">${nivel.toUpperCase()}</b>, con una calificación global de <b>${global}/100</b>. ` +
+    `La conclusión se sustenta en: ${d.ev?`resultado 360° de ${Number(d.ev.porcentaje).toFixed(1)}%`:''}${d.vis?`, ${d.vis.pct}% de visitas en plazo`:''}${d.cas?`, ${d.cas.pct}% de casos en plazo`:''}${percep?` y una percepción ${percep.toLowerCase()} de los administradores de fundo`:''}.</p>`);
+  html += sec(2, 'PRINCIPALES FORTALEZAS IDENTIFICADAS', li(F));
+  html += sec(3, 'PRINCIPALES OPORTUNIDADES DE MEJORA', li(O.map(o => `<b>${o.asp.charAt(0).toUpperCase()+o.asp.slice(1)}</b> — ${o.det}`)));
+  html += sec(4, 'ANÁLISIS DE PERCEPCIÓN DE LOS ADMINISTRADORES DE FUNDO', `<p>Percepción general: <b>${percepTxt}</b>. ${admBloque}</p>`);
+  html += sec(5, 'ANÁLISIS DE CONSISTENCIA', `<p>${consist}</p>`);
+  html += sec(6, 'FEEDBACK EJECUTIVO PERSONALIZADO', li(FB));
+  html += sec(7, 'PLAN DE MEJORA PROPUESTO',
+    `<table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#0a2463;color:#fff">
+      <th style="padding:6px 8px;text-align:left">Aspecto a mejorar</th><th style="padding:6px 8px;text-align:left">Acción recomendada</th>
+      <th style="padding:6px 8px">Responsable</th><th style="padding:6px 8px">Plazo</th><th style="padding:6px 8px;text-align:left">Indicador</th></tr>` +
+    plan.map(p => `<tr><td style="padding:6px 8px;border-bottom:1px solid #e2e8f0">${p.asp}</td><td style="padding:6px 8px;border-bottom:1px solid #e2e8f0">${p.acc}</td><td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:center">${p.resp}</td><td style="padding:6px 8px;border-bottom:1px solid #e2e8f0;text-align:center">${p.plazo}</td><td style="padding:6px 8px;border-bottom:1px solid #e2e8f0">${p.ind}</td></tr>`).join('') + '</table>');
+  html += sec(8, 'CONCLUSIÓN FINAL',
+    `<p>Nivel de desempeño alcanzado: <b>${nivel}</b> (${global}/100). ` +
+    `${O.length && O[0].asp !== 'consolidación del estándar alcanzado' ? 'Riesgos detectados: ' + O.slice(0,2).map(o=>o.asp).join('; ') + '. ' : 'No se detectan riesgos relevantes con la evidencia disponible. '}` +
+    `Potencial de desarrollo: ${global>=80?'alto — perfil con condiciones para asumir mayores responsabilidades':global>=70?'medio-alto — con plan de mejora focalizado puede escalar de nivel':global>=55?'medio — requiere acompañamiento cercano de la Coordinación RL':'bajo en las condiciones actuales — requiere intervención inmediata y seguimiento quincenal'}. ` +
+    `Recomendación: ${global>=70?'continuidad de la gestión, ejecutando el plan de mejora propuesto y midiendo sus indicadores en la siguiente evaluación mensual':'continuidad condicionada al cumplimiento del plan de mejora en los plazos definidos, con revisión obligatoria al cierre'}.</p>
+    <div style="margin-top:14px;background:#0a2463;color:#fff;border-radius:10px;padding:14px;text-align:center">
+      <div style="font-size:12px;opacity:.85">CALIFICACIÓN GLOBAL</div>
+      <div style="font-size:30px;font-weight:800">${global} / 100</div>
+      <div style="font-size:14px;font-weight:700">${nivel.toUpperCase()}</div>
+    </div>`);
+
+  document.getElementById('infResultado').innerHTML = html;
+  document.getElementById('infResultadoCard').style.display = 'block';
+  document.getElementById('infBtnPDF').style.display = '';
+  _infInformeTxt = { sup, periodo: d.periodo, global, nivel, F, O, percepTxt, admBloque, consist, FB, plan, datosLinea };
+  try { document.getElementById('infResultadoCard').scrollIntoView({ behavior: 'smooth' }); } catch(e) {}
+}
+function _infRec(t) { t = String(t).replace(/\s+/g,' ').trim(); return t.length > 320 ? t.substring(0,320) + '…' : t; }
+function _infImpacto(n) {
+  const m = {
+    'Cumplimiento de Metas y Reportes': 'la jefatura pierde control sobre los avances del mes y los reportes llegan tarde o incompletos.',
+    'Comunicación y Coordinación': 'los acuerdos con jefaturas no llegan al sector y se generan reprocesos y malentendidos operativos.',
+    'Liderazgo y Conducta': 'el equipo pierde referente de conducta y disciplina, debilitando el orden del sector.',
+    'Gestión de Equipo': 'el control del personal a cargo se debilita y aumentan ausentismos e incidencias sin gestión.',
+    'Resolución de Problemas': 'los conflictos escalan a instancias superiores en lugar de resolverse en campo.',
+    'Planificación e Iniciativa': 'la gestión se vuelve reactiva: se atiende lo urgente y se descuida lo preventivo.'
+  };
+  return m[n] || 'afecta la operación regular del sector.';
+}
+function _infAccion(asp) {
+  if (asp.includes('informe')) return 'Programar la redacción del informe el mismo día de la visita y enviarlo antes de 48 horas';
+  if (asp.includes('casos')) return 'Revisión semanal de casos abiertos con semáforo de plazos y cierre documentado en el sistema';
+  if (asp.includes('administradores') || asp.includes('comunicación')) return 'Reunión quincenal con el administrador del fundo con acta de acuerdos y seguimiento';
+  if (asp.includes('liderazgo')) return 'Acompañamiento en campo de la Coordinación RL y retroalimentación mensual estructurada';
+  if (asp.includes('gestión de personal') || asp.includes('equipo')) return 'Implementar control diario de asistencia e incidencias del personal a cargo con reporte semanal';
+  if (asp.includes('organización') || asp.includes('planificación') || asp.includes('iniciativa')) return 'Plan semanal de trabajo presentado cada lunes a la Coordinación RL';
+  if (asp.includes('procedimientos') || asp.includes('reportes') || asp.includes('metas')) return 'Tablero mensual de metas con revisión de avance a mitad de mes';
+  return 'Definir acciones específicas con la Coordinación RL y documentar avances quincenales';
+}
+function _infIndicador(asp) {
+  if (asp.includes('informe')) return '100% de informes entregados ≤ 48h';
+  if (asp.includes('casos')) return '0 casos en estado RETRASADO';
+  if (asp.includes('administradores') || asp.includes('comunicación')) return 'Percepción ≥ Positiva en la siguiente medición';
+  if (asp.includes('metas') || asp.includes('reportes') || asp.includes('procedimientos')) return '≥ 90% de metas del mes cumplidas';
+  return 'Mejora del promedio de la competencia a ≥ 4.0 en la próxima Eval 360°';
+}
+
+/* ── Copiar prompt completo para IA ── */
+function copiarPromptIA() {
+  if (!_infDatos) { mostrarToast('Primero carga los datos del sistema 🔄', 'error'); return; }
+  const d = _infDatos;
+  const C = (id) => document.getElementById(id).value.trim() || '(sin registros)';
+  const percep = document.getElementById('infPercep').value || '(sin determinar)';
+  let compsTxt = '(sin evaluación 360 en el periodo)';
+  if (d.ev && Array.isArray(d.ev.competencias)) {
+    compsTxt = d.ev.competencias.map(c => `  - ${c.nombre}: ${Number(c.promedio||0).toFixed(2)}/5`).join('\n');
+  }
+  const prompt =
+`Voy a proporcionarte la información consolidada de un Supervisor de Gestión Humana. Tu función será realizar un análisis profesional e integral del desempeño del supervisor.
+
+DESARROLLA EL INFORME BAJO LA SIGUIENTE ESTRUCTURA:
+1. RESUMEN EJECUTIVO — evaluación general indicando el nivel: Sobresaliente / Destacado / Adecuado / Regular / Deficiente, con justificación objetiva.
+2. PRINCIPALES FORTALEZAS IDENTIFICADAS — liderazgo, comunicación, gestión de personal, relación con los sectores, seguimiento de casos, organización, cumplimiento de procedimientos, trabajo en equipo, resolución de conflictos, presencia en campo; explica su impacto positivo en la operación.
+3. PRINCIPALES OPORTUNIDADES DE MEJORA — retrasos, falta de seguimiento, comunicación deficiente, control de personal, presencia en campo, liderazgo, gestión reactiva, documentación de casos, coordinación con administradores; explica el impacto operativo de cada una.
+4. ANÁLISIS DE PERCEPCIÓN DE LOS ADMINISTRADORES DE FUNDO — aspectos positivos/negativos recurrentes, confianza, comunicación, resolución, capacidad de respuesta, disponibilidad, presencia; concluye si la percepción es Muy positiva / Positiva / Neutral / Negativa / Muy negativa, con justificación.
+5. ANÁLISIS DE CONSISTENCIA — compara lo registrado en el sistema con la percepción de campo: coincidencias, contradicciones, fortalezas y debilidades confirmadas, riesgos.
+6. FEEDBACK EJECUTIVO PERSONALIZADO — directo al supervisor, profesional y constructivo, usando: "Estás realizando una buena gestión en...", "Debes mantener...", "Debes fortalecer...", "Debes mejorar...", "Se recomienda trabajar en...", "El principal reto identificado es...".
+7. PLAN DE MEJORA PROPUESTO — tabla con: Aspecto a mejorar / Acción recomendada / Responsable / Plazo sugerido / Indicador de cumplimiento.
+8. CONCLUSIÓN FINAL — nivel alcanzado, riesgos, potencial de desarrollo y recomendación de continuidad.
+
+IMPORTANTE: no generes respuestas genéricas; basa todo en la evidencia; identifica patrones repetitivos; prioriza comentarios de administradores y jefaturas ante discrepancias; entrega observaciones críticas cuando correspondan; sé objetivo, profesional y estratégico. Finaliza con una calificación global sobre 100 puntos y una clasificación de desempeño.
+
+═══════════ DATOS CONSOLIDADOS DEL SISTEMA RL ═══════════
+SUPERVISOR: ${d.supervisor}
+PERIODO: ${d.periodo || '-'}
+
+RESULTADOS EVALUACIÓN 360°:
+${d.ev ? `  % Cumplimiento: ${Number(d.ev.porcentaje).toFixed(1)}% — Clasificación: ${d.ev.clasificacion || '-'} (periodo ${d.ev.periodo})\n${compsTxt}${d.ev.obs ? '\n  Observaciones del evaluador: ' + d.ev.obs : ''}` : '  (sin evaluación registrada)'}
+
+INDICADORES DE GESTIÓN — VISITAS DE CAMPO:
+${d.vis ? `  Total: ${d.vis.total} · En plazo: ${d.vis.enPlazo} (${d.vis.pct}%) · Fuera de plazo: ${d.vis.retrasadas}` : '  (sin datos)'}
+
+INDICADORES DE GESTIÓN — CASOS LABORALES:
+${d.cas ? `  Total gestionados: ${d.cas.total} · En plazo: ${d.cas.enPlazo} (${d.cas.pct}%) · Retrasados: ${d.cas.retrasados} · Concluidos: ${d.cas.concluidos}` : '  (sin datos)'}
+
+PERCEPCIÓN GENERAL DE LOS ADMINISTRADORES: ${percep}
+
+COMENTARIOS DE COLABORADORES:
+${C('infComColab')}
+
+COMENTARIOS DE JEFATURAS:
+${C('infComJef')}
+
+COMENTARIOS DE OTROS SUPERVISORES:
+${C('infComSup')}
+
+COMENTARIOS DE ADMINISTRADORES DE FUNDO:
+${C('infComAdm')}
+
+COMENTARIOS EN VISITAS DE CAMPO (COORDINACIÓN RL):
+${C('infComVis')}
+
+OBSERVACIONES (liderazgo, comunicación, disciplina, presencia en campo, resolución de conflictos, gestión):
+${C('infObs')}`;
+
+  const fin = () => mostrarToast('🤖 Prompt copiado — pégalo en la IA');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(prompt).then(fin).catch(() => _infCopiaFallback(prompt, fin));
+  } else _infCopiaFallback(prompt, fin);
+}
+function _infCopiaFallback(t, fin) {
+  const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta);
+  ta.select(); try { document.execCommand('copy'); fin(); } catch(e) { mostrarToast('No se pudo copiar', 'error'); }
+  document.body.removeChild(ta);
+}
+
+/* ── Exportar informe a PDF ── */
+function exportarInformePDF() {
+  if (!_infInformeTxt) return;
+  const I = _infInformeTxt;
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const W = 210, MG = 14, bW = W - 2 * MG;
+  let y = 14;
+  const strip = h => String(h).replace(/<[^>]+>/g, '');
+  const salto = (need) => { if (y + need > 282) { doc.addPage(); y = 14; } };
+  const titulo = (t) => { salto(12); doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.setTextColor(10,36,99); doc.text(t, MG, y); doc.setDrawColor(10,36,99); doc.setLineWidth(0.4); doc.line(MG, y+1.5, MG+bW, y+1.5); y += 6.5; };
+  const parrafo = (t, bullet) => { doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(30,41,59);
+    const lines = doc.splitTextToSize((bullet?'• ':'') + strip(t), bW - (bullet?3:0));
+    lines.forEach(l => { salto(5); doc.text(l, MG + (bullet?3:0), y); y += 4.3; }); y += 1; };
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(10,36,99);
+  doc.text('INFORME INTEGRAL DE DESEMPEÑO', W/2, y, { align: 'center' }); y += 6;
+  doc.setFontSize(11); doc.setTextColor(0,0,0); doc.text(I.sup, W/2, y, { align: 'center' }); y += 5;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(100,116,139);
+  doc.text(`Periodo ${I.periodo||'-'} · ${new Date().toLocaleDateString('es-PE')} · Coordinación de Relaciones Laborales — Sistema RL v3.0`, W/2, y, { align:'center' }); y += 6;
+  parrafo(I.datosLinea);
+
+  titulo('1. RESUMEN EJECUTIVO');
+  parrafo(`Nivel alcanzado: ${I.nivel.toUpperCase()} — Calificación global: ${I.global}/100.`);
+  titulo('2. PRINCIPALES FORTALEZAS IDENTIFICADAS');
+  I.F.forEach(f => parrafo(f, true));
+  titulo('3. PRINCIPALES OPORTUNIDADES DE MEJORA');
+  I.O.forEach(o => parrafo(`${o.asp.charAt(0).toUpperCase()+o.asp.slice(1)} — ${o.det}`, true));
+  titulo('4. PERCEPCIÓN DE LOS ADMINISTRADORES DE FUNDO');
+  parrafo(`Percepción general: ${I.percepTxt}. ${I.admBloque}`);
+  titulo('5. ANÁLISIS DE CONSISTENCIA');
+  parrafo(I.consist);
+  titulo('6. FEEDBACK EJECUTIVO PERSONALIZADO');
+  I.FB.forEach(f => parrafo(f, true));
+  titulo('7. PLAN DE MEJORA PROPUESTO');
+  salto(30);
+  doc.autoTable({ startY: y, margin: { left: MG, right: MG },
+    head: [['Aspecto a mejorar','Acción recomendada','Responsable','Plazo','Indicador']],
+    body: I.plan.map(p => [p.asp, p.acc, p.resp, p.plazo, p.ind]),
+    theme: 'grid', headStyles: { fillColor: [10,36,99], fontSize: 7.5 },
+    styles: { fontSize: 7.5, cellPadding: 1.5, textColor: [30,41,59] },
+    columnStyles: { 0:{cellWidth:38}, 1:{cellWidth:60}, 2:{cellWidth:30}, 3:{cellWidth:18}, 4:{cellWidth:36} } });
+  y = doc.lastAutoTable.finalY + 6;
+  titulo('8. CONCLUSIÓN FINAL');
+  parrafo(`Nivel de desempeño: ${I.nivel} (${I.global}/100). Recomendación: ${I.global>=70?'continuidad de la gestión con ejecución del plan de mejora.':'continuidad condicionada al cumplimiento del plan de mejora.'}`);
+  salto(22);
+  doc.setFillColor(10,36,99); doc.roundedRect(MG, y, bW, 18, 2, 2, 'F');
+  doc.setFont('helvetica','bold'); doc.setTextColor(255,255,255);
+  doc.setFontSize(9);  doc.text('CALIFICACIÓN GLOBAL', W/2, y+5.5, { align: 'center' });
+  doc.setFontSize(15); doc.text(`${I.global} / 100  —  ${I.nivel.toUpperCase()}`, W/2, y+13, { align: 'center' });
+  doc.save(`Informe_Integral_${I.sup.replace(/\s+/g,'_')}_${I.periodo||''}.pdf`);
+}
+
 
 // ── Init ──
 window.onload = function() {
