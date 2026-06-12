@@ -353,6 +353,20 @@ h3{font-size:16px !important}
           </div>
         </div>
       </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-h"><span class="card-t">📂 Informes guardados</span>
+          <button class="btn-blue" onclick="cargarInformesGuardados()">🔄 Actualizar lista</button></div>
+        <div class="tw" style="padding:0 16px 16px">
+          <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+            <thead><tr style="text-align:left;color:#64748b;border-bottom:1.5px solid #e2e8f0">
+              <th style="padding:7px 6px">Fecha</th><th style="padding:7px 6px">Supervisor</th>
+              <th style="padding:7px 6px">Periodo</th><th style="padding:7px 6px">Calificación</th>
+              <th style="padding:7px 6px">Nivel</th><th style="padding:7px 6px">Generado por</th>
+              <th style="padding:7px 6px">Acción</th></tr></thead>
+            <tbody id="tbInformes"><tr><td colspan="7" style="padding:12px;color:#94a3b8">Presiona "Actualizar lista" para cargar los informes guardados.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
       <div class="card" id="infResultadoCard" style="display:none">
         <div class="card-h"><span class="card-t">📑 Informe Generado</span></div>
         <div id="infResultado" style="padding:20px;font-size:13.5px;line-height:1.65"></div>
@@ -1437,6 +1451,8 @@ function _infMatch(nombreEval, nombreRegistro) {
   return hits >= Math.min(2, toks.length);
 }
 let _infInformeTxt = null;  // estructura del informe generado (para PDF)
+let _infInformeId = null;   // id del informe guardado en Sheets (para actualizar en vez de duplicar)
+let _infGuardados = [];     // caché de la lista de informes guardados
 
 function mostrarInforme() {
   ['panelDashboard','panelFormulario','panelReporte','panelHistorial'].forEach(id => {
@@ -1450,13 +1466,14 @@ function mostrarInforme() {
     getSupervisores().map(s => `<option value="${s.nombre}">${s.nombre}</option>`).join('');
   if (actual) sel.value = actual;
   infPoblarPeriodos();
+  cargarInformesGuardados();
 }
 function infPoblarPeriodos() {
   const sel = document.getElementById('infPer');
   const pers = [...new Set(getHistorial().map(e => e.periodo).filter(Boolean))].sort().reverse();
   sel.innerHTML = pers.length ? pers.map(p => `<option>${p}</option>`).join('') : '<option value="">Sin evaluaciones</option>';
 }
-function infLimpiar() { _infDatos = null; document.getElementById('infKpis').innerHTML = ''; }
+function infLimpiar() { _infDatos = null; _infInformeId = null; document.getElementById('infKpis').innerHTML = ''; }
 
 async function infCargarSistema() {
   const sup = document.getElementById('infSup').value;
@@ -1660,6 +1677,7 @@ function generarInformeIntegral() {
   document.getElementById('infResultadoCard').style.display = 'block';
   document.getElementById('infBtnPDF').style.display = '';
   _infInformeTxt = { sup, periodo: d.periodo, global, nivel, F, O, percepTxt, admBloque, consist, FB, plan, datosLinea };
+  _infGuardarEnBase(sup, d.periodo, global, nivel, coms, percep);
   try { document.getElementById('infResultadoCard').scrollIntoView({ behavior: 'smooth' }); } catch(e) {}
 }
 function _infRec(t) { t = String(t).replace(/\s+/g,' ').trim(); return t.length > 320 ? t.substring(0,320) + '…' : t; }
@@ -1690,6 +1708,80 @@ function _infIndicador(asp) {
   if (asp.includes('administradores') || asp.includes('comunicación')) return 'Percepción ≥ Positiva en la siguiente medición';
   if (asp.includes('metas') || asp.includes('reportes') || asp.includes('procedimientos')) return '≥ 90% de metas del mes cumplidas';
   return 'Mejora del promedio de la competencia a ≥ 4.0 en la próxima Eval 360°';
+}
+
+/* ── Persistencia en Google Sheets (hoja Informes_Integrales) ── */
+async function _infGuardarEnBase(sup, periodo, global, nivel, coms, percep) {
+  const payload = {
+    supervisor: sup, periodo: periodo || '', percepcion: percep || '',
+    com_colaboradores: coms.colab, com_jefaturas: coms.jef, com_supervisores: coms.sups,
+    com_administrador: coms.adm, com_visitas: coms.vis, observaciones: coms.obs,
+    calificacion_global: global, nivel: nivel, generado_por: USER.nombre || USER.usuario || ''
+  };
+  try {
+    let r;
+    if (_infInformeId) {
+      payload.id = _infInformeId;
+      r = await apiPost(Object.assign({ action: 'updateInformeIntegral' }, payload));
+      if (r && r.success) mostrarToast('💾 Informe actualizado en la base');
+    } else {
+      r = await apiPost(Object.assign({ action: 'saveInformeIntegral' }, payload));
+      if (r && r.success && r.id) { _infInformeId = r.id; mostrarToast('💾 Informe guardado en la base'); }
+    }
+    if (!r || !r.success) mostrarToast('⚠️ No se pudo guardar en la base: ' + ((r && r.error) || 'sin conexión'), 'error');
+  } catch (e) {
+    mostrarToast('⚠️ Informe generado pero sin conexión a la base', 'error');
+  }
+}
+
+async function cargarInformesGuardados() {
+  const tb = document.getElementById('tbInformes');
+  tb.innerHTML = '<tr><td colspan="7" style="padding:12px;color:#64748b">⏳ Cargando...</td></tr>';
+  try {
+    const r = await apiGet({ action: 'getInformesIntegrales' });
+    if (!r.success) throw new Error(r.error || 'error');
+    _infGuardados = r.data || [];
+    if (!_infGuardados.length) { tb.innerHTML = '<tr><td colspan="7" style="padding:12px;color:#94a3b8">Aún no hay informes guardados.</td></tr>'; return; }
+    tb.innerHTML = _infGuardados.map((x, i) => `<tr style="border-bottom:1px solid #f1f5f9">
+      <td style="padding:7px 6px;white-space:nowrap">${String(x.fecha_actualizacion || x.fecha_creacion || '').substring(0, 16)}</td>
+      <td style="padding:7px 6px;font-weight:600">${x.supervisor || ''}</td>
+      <td style="padding:7px 6px">${x.periodo || ''}</td>
+      <td style="padding:7px 6px;font-weight:700">${x.calificacion_global !== '' ? x.calificacion_global + '/100' : '—'}</td>
+      <td style="padding:7px 6px">${x.nivel || ''}</td>
+      <td style="padding:7px 6px">${x.generado_por || ''}</td>
+      <td style="padding:7px 6px"><button class="btn-blue" style="font-size:11.5px;padding:5px 10px" onclick="abrirInformeGuardado(${i})">👁️ Abrir</button></td>
+    </tr>`).join('');
+  } catch (e) {
+    tb.innerHTML = '<tr><td colspan="7" style="padding:12px;color:#dc2626">No se pudo cargar la lista: ' + e.message + '</td></tr>';
+  }
+}
+
+async function abrirInformeGuardado(i) {
+  const x = _infGuardados[i];
+  if (!x) return;
+  // Restaurar supervisor (agregándolo al combo si fuera necesario)
+  const sel = document.getElementById('infSup');
+  if (![...sel.options].some(o => o.value === x.supervisor)) {
+    const o = document.createElement('option'); o.value = o.textContent = x.supervisor; sel.appendChild(o);
+  }
+  sel.value = x.supervisor;
+  const selP = document.getElementById('infPer');
+  if (x.periodo && ![...selP.options].some(o => o.value === String(x.periodo))) {
+    const o = document.createElement('option'); o.value = o.textContent = x.periodo; selP.appendChild(o);
+  }
+  if (x.periodo) selP.value = x.periodo;
+  // Restaurar comentarios y percepción
+  document.getElementById('infComColab').value = x.com_colaboradores || '';
+  document.getElementById('infComJef').value   = x.com_jefaturas || '';
+  document.getElementById('infComSup').value   = x.com_supervisores || '';
+  document.getElementById('infComAdm').value   = x.com_administrador || '';
+  document.getElementById('infComVis').value   = x.com_visitas || '';
+  document.getElementById('infObs').value      = x.observaciones || '';
+  document.getElementById('infPercep').value   = x.percepcion || '';
+  _infInformeId = x.id;   // las regeneraciones ACTUALIZAN este registro
+  mostrarToast('📂 Informe cargado — consolidando datos del sistema...');
+  await infCargarSistema();
+  generarInformeIntegral();
 }
 
 /* ── Copiar prompt completo para IA ── */
