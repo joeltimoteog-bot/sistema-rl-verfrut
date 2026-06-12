@@ -1422,6 +1422,20 @@ function mostrarFormulario() {
    Consolida Eval 360 + Visitas + Casos + comentarios de campo
    ═══════════════════════════════════════════════════════════════ */
 let _infDatos = null;       // datos consolidados del sistema
+
+/* Coincidencia tolerante de nombres: "Alex Zapata Suárez" ≈ "ALEX FABIAN ZAPATA SUAREZ"
+   Normaliza tildes/mayúsculas y exige que ≥2 palabras (o todas si solo hay 2) del
+   nombre de la evaluación aparezcan en el nombre del registro. */
+function _infNorm(s) {
+  return String(s || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+}
+function _infMatch(nombreEval, nombreRegistro) {
+  const reg = ' ' + _infNorm(nombreRegistro) + ' ';
+  const toks = _infNorm(nombreEval).split(' ').filter(t => t.length >= 3);
+  if (!toks.length || reg.trim() === '') return false;
+  const hits = toks.filter(t => reg.indexOf(' ' + t + ' ') !== -1).length;
+  return hits >= Math.min(2, toks.length);
+}
 let _infInformeTxt = null;  // estructura del informe generado (para PDF)
 
 function mostrarInforme() {
@@ -1459,18 +1473,19 @@ async function infCargarSistema() {
   let vis = null, cas = null;
   try {
     const [dv, dc] = await Promise.all([
-      apiGet({ action: 'getVisitas', supervisor: sup }),
-      apiGet({ action: 'getCasos', supervisor: sup, rol: USER.rol, usuario: USER.usuario, nombre: USER.nombre || USER.usuario })
+      apiGet({ action: 'getVisitas' }),
+      apiGet({ action: 'getCasos', rol: USER.rol, usuario: USER.usuario, nombre: USER.nombre || USER.usuario })
     ]);
     if (dv && dv.success) {
-      const lista = dv.data || [];
+      // Filtro tolerante en el cliente (los nombres de Eval 360 no coinciden literal con los registros)
+      const lista = (dv.data || []).filter(v => _infMatch(sup, v.supervisor || v.registrado_por || ''));
       vis = { total: lista.length,
               retrasadas: lista.filter(v => String(v.estado).toUpperCase().includes('RETRAS')).length };
       vis.enPlazo = vis.total - vis.retrasadas;
       vis.pct = vis.total ? Math.round(vis.enPlazo / vis.total * 100) : null;
     }
     if (dc && dc.success) {
-      const lista = dc.data || [];
+      const lista = (dc.data || []).filter(c => _infMatch(sup, c.supervisor || c.registrado_por || c.responsable || ''));
       cas = { total: lista.length,
               retrasados: lista.filter(c => String(c.estado).toUpperCase().includes('RETRAS')).length,
               concluidos: lista.filter(c => String(c.estado_gestion||'').toUpperCase().includes('CONCLU')).length };
