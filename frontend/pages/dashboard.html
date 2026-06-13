@@ -545,6 +545,19 @@ h3{font-size:16px !important}
         <button onclick="_limpiarFiltros('casos',['cFiltroEmp','cFiltroMotivo','cFiltroSup'],cargarCasos)" style="padding:5px 10px;border:1.5px solid var(--bd);border-radius:6px;font-size:11px;font-weight:600;background:#fff;cursor:pointer;color:var(--gr)" title="Limpiar todos los filtros">🔄 Limpiar</button>
       </div>
 
+      <!-- 🔍 BÚSQUEDA TURBO + CHIPS (filtrado en memoria, instantáneo) -->
+      <div style="margin-bottom:10px">
+        <div style="position:relative;margin-bottom:8px">
+          <span style="position:absolute;left:12px;top:50%;transform:translateY(-50%);font-size:15px;color:var(--gr)">🔍</span>
+          <input type="text" id="cBuscar" placeholder="Buscar por trabajador, DNI, motivo, sector o supervisor..." oninput="aplicarFiltrosCasos()"
+            style="width:100%;padding:9px 12px 9px 38px;border:2px solid var(--bd);border-radius:9px;font-size:13px;box-sizing:border-box">
+          <span id="cBuscarClear" onclick="document.getElementById('cBuscar').value='';aplicarFiltrosCasos()" style="display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--gr);font-size:16px" title="Limpiar">✕</span>
+        </div>
+        <div id="cChips" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+          <span style="font-size:11px;color:var(--gr);font-weight:700;margin-right:2px">Filtro rápido:</span>
+        </div>
+      </div>
+
       <!-- STATS (solo admin) -->
       <div id="statsCasos" style="display:none">
         <div class="cards" style="margin-bottom:14px">
@@ -3725,6 +3738,11 @@ function nombreArchivoCaso(dni, tipo, fechaReporte) {
 
 
 async function guardarCaso() {
+  try {
+    const _mSel = (document.getElementById('cMotivo')||{}).value || '';
+    const _mExtra = (document.getElementById('cMotivoExtra')||{}).value.trim();
+    if (_mSel === 'Otros' && _mExtra) _guardarMotivoNuevo(_mExtra);
+  } catch(e){}
   const dni         = document.getElementById('mCasoDNI').value.trim();
   const t           = window._casoTrabajador || {};
   const nombre      = t.nombre || '';
@@ -3976,6 +3994,118 @@ function verificarCasosPorVencer() {
   }
 }
 
+/* ═══ FASE 2: MOTIVOS DINÁMICOS COMPARTIDOS ═══ */
+async function cargarMotivosCasos() {
+  _aplicarMotivosAlSelect();
+  try {
+    const d = await apiGet({ action: 'getMotivosCasos' });
+    if (d && d.success && Array.isArray(d.data) && d.data.length) {
+      localStorage.setItem('motivosCasos_v1', JSON.stringify(d.data));
+      _aplicarMotivosAlSelect();
+      if (document.getElementById('cChips')) renderChipsCasos();
+    }
+  } catch(e) {}
+}
+function _motivosCasosLista() {
+  let lista = MOTIVOS_CASOS_BASE.slice();
+  try {
+    const cache = JSON.parse(localStorage.getItem('motivosCasos_v1') || '[]');
+    if (cache.length) lista = cache.slice();
+  } catch(e){}
+  lista = lista.filter(m => String(m).toLowerCase() !== 'otros');
+  lista.sort((a,b)=>a.localeCompare(b));
+  lista.push('Otros');
+  return lista;
+}
+function _aplicarMotivosAlSelect() {
+  const sel = document.getElementById('cMotivo');
+  if (!sel) return;
+  const actual = sel.value;
+  const lista = _motivosCasosLista();
+  sel.innerHTML = '<option value="">-- Seleccionar --</option>' +
+    lista.map(m => '<option>' + String(m) + '</option>').join('');
+  if (actual && lista.indexOf(actual) !== -1) sel.value = actual;
+}
+async function _guardarMotivoNuevo(motivo) {
+  motivo = String(motivo || '').trim();
+  if (!motivo) return;
+  try {
+    let cache = JSON.parse(localStorage.getItem('motivosCasos_v1') || '[]');
+    if (!cache.some(m => String(m).toLowerCase() === motivo.toLowerCase())) {
+      cache.push(motivo);
+      localStorage.setItem('motivosCasos_v1', JSON.stringify(cache));
+    }
+  } catch(e){}
+  try { await apiPost({ action: 'addMotivoCaso', motivo: motivo, usuario: USER.usuario }); } catch(e){}
+}
+
+/* ═══ FASE 1: BÚSQUEDA TURBO + CHIPS (todo en memoria, 0 llamadas) ═══ */
+var _casoFiltroChip = { tipo:'', valor:'' };
+var MOTIVOS_CASOS_BASE = ['Hurto','Indisciplina','Trato inadecuado','Incumplimiento de pauta','Incumplimiento de funciones','Faltas injustificadas','Daños a la propiedad de la empresa','Hostigamiento laboral','Otros'];
+
+function _chip(label, tipo, valor, color) {
+  const activo = _casoFiltroChip.tipo === tipo && _casoFiltroChip.valor === valor;
+  const bg = activo ? color : '#fff';
+  const fg = activo ? '#fff' : color;
+  return '<span onclick="toggleChipCaso(\''+tipo+'\',\''+String(valor).replace(/'/g,"\\'")+'\')" '+
+    'style="cursor:pointer;user-select:none;padding:4px 11px;border-radius:999px;font-size:11px;font-weight:700;'+
+    'border:1.5px solid '+color+';background:'+bg+';color:'+fg+';transition:all .12s">'+label+'</span>';
+}
+function renderChipsCasos() {
+  const cont = document.getElementById('cChips');
+  if (!cont) return;
+  let motivos = MOTIVOS_CASOS_BASE.slice();
+  try { const extra = JSON.parse(localStorage.getItem('motivosCasos_v1')||'[]'); extra.forEach(m=>{ if(m && motivos.indexOf(m)===-1) motivos.push(m); }); } catch(e){}
+  let h = '<span style="font-size:11px;color:var(--gr);font-weight:700;margin-right:2px">Filtro rápido:</span>';
+  motivos.forEach(m => { h += _chip(m, 'motivo', m, '#0b1e45'); });
+  h += '<span style="width:1px;height:18px;background:var(--bd);margin:0 3px"></span>';
+  h += _chip('🔴 En investigación', 'estado', 'investigacion', '#d97706');
+  h += _chip('✅ Concluidos', 'estado', 'concluido', '#16a34a');
+  h += '<span style="width:1px;height:18px;background:var(--bd);margin:0 3px"></span>';
+  h += _chip('⛔ Suspensión', 'medida', 'suspension', '#dc2626');
+  h += _chip('📄 Memorándum', 'medida', 'memorandum', '#7c3aed');
+  h += _chip('🗣️ Llamada de atención', 'medida', 'llamada', '#0891b2');
+  cont.innerHTML = h;
+}
+function toggleChipCaso(tipo, valor) {
+  if (_casoFiltroChip.tipo === tipo && _casoFiltroChip.valor === valor) _casoFiltroChip = { tipo:'', valor:'' };
+  else _casoFiltroChip = { tipo:tipo, valor:valor };
+  renderChipsCasos();
+  aplicarFiltrosCasos();
+}
+function _norm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim(); }
+function aplicarFiltrosCasos() {
+  const q = _norm(document.getElementById('cBuscar')?.value);
+  const clr = document.getElementById('cBuscarClear');
+  if (clr) clr.style.display = q ? 'block' : 'none';
+  let lista = (casosData || []).slice();
+  if (q) {
+    lista = lista.filter(c =>
+      _norm(c.nombre).indexOf(q) !== -1 || String(c.dni||'').indexOf(q) !== -1 ||
+      _norm(c.motivo).indexOf(q) !== -1 || _norm(c.motivo_extra).indexOf(q) !== -1 ||
+      _norm(c.sector).indexOf(q) !== -1 || _norm(c.supervisor).indexOf(q) !== -1);
+  }
+  const ch = _casoFiltroChip;
+  if (ch.tipo === 'motivo') {
+    lista = lista.filter(c => _norm(c.motivo) === _norm(ch.valor) || _norm(c.motivo_extra) === _norm(ch.valor));
+  } else if (ch.tipo === 'estado') {
+    lista = lista.filter(c => {
+      const concl = String(c.estado_caso||c.estado||'').toUpperCase().startsWith('CONCLUIDO') ||
+        ['CERRADO','CONCLUIDO','RESUELTO','FINALIZADO'].some(s => String(c.estado_gestion||'').toUpperCase().includes(s));
+      return ch.valor === 'concluido' ? concl : !concl;
+    });
+  } else if (ch.tipo === 'medida') {
+    lista = lista.filter(c => {
+      const t = _norm(c.tipo_sancion);
+      if (ch.valor === 'suspension') return t.indexOf('suspension') !== -1;
+      if (ch.valor === 'memorandum') return t.indexOf('memorandum') !== -1 || t.indexOf('memorando') !== -1;
+      if (ch.valor === 'llamada')    return t.indexOf('llamada') !== -1 || t.indexOf('atencion') !== -1;
+      return true;
+    });
+  }
+  renderTablaCasos(lista);
+}
+
 async function cargarCasos() {
   _guardarFiltros('casos', ['cFiltroEmp','cFiltroMotivo','cFiltroSup']);
   const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
@@ -3995,7 +4125,8 @@ async function cargarCasos() {
         String(c.registrado_por||'').toLowerCase().trim().includes(miPrimerN) ||
         String(c.usuario_registro||'').toLowerCase().trim() === miUsuario)
     );
-    renderTablaCasos(casosData);
+    renderChipsCasos();
+    aplicarFiltrosCasos();
     if(ROLES_ADMIN.includes(USER.rol)) {
       const sc = document.getElementById('statsCasos');
       if(sc) sc.style.display='block';
@@ -4016,7 +4147,8 @@ async function cargarCasos() {
     if(d.data && d.data.length > 0) console.log('[getCasos] campos:', Object.keys(d.data[0]));
     casosData = d.data || [];
     CACHE.casos = casosData;
-    renderTablaCasos(casosData);
+    renderChipsCasos();
+    aplicarFiltrosCasos();
     if(ROLES_ADMIN.includes(USER.rol)) {
       document.getElementById('statsCasos').style.display='block';
       setTimeout(() => actualizarStatsCasos(casosData), 0);
@@ -7561,7 +7693,7 @@ function ir(id,btn){
         }, 120000);
       }
       if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
-      if(id==='casos'        && !casosData.length)          cargarCasos();
+      if(id==='casos') { cargarMotivosCasos(); if(!casosData.length) cargarCasos(); }
       if(id==='usuarios')                                   cargarUs();
     }, 0);
     // Redibujar gráficos al volver al dashboard
@@ -9503,9 +9635,10 @@ window._fbSuscribirEstadisticas = function(callback) {
             <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Motivo *</label>
             <select id="cMotivo" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px" onchange="mostrarMotivoExtraCaso()">
               <option value="">-- Seleccionar --</option>
-              <option>Beca del Foro</option><option>Contención</option><option>Enfermería</option>
-              <option>Transporte</option><option>Indisciplina</option><option>Incumplimiento RIT</option>
-              <option>Falta Grave</option><option>Observación Conductual</option><option>Otros</option>
+              <option>Hurto</option><option>Indisciplina</option><option>Trato inadecuado</option>
+              <option>Incumplimiento de pauta</option><option>Incumplimiento de funciones</option>
+              <option>Faltas injustificadas</option><option>Daños a la propiedad de la empresa</option>
+              <option>Hostigamiento laboral</option><option>Otros</option>
             </select>
           </div>
           <div id="panelMotivoExtraCaso" style="display:none;grid-column:1/-1">
