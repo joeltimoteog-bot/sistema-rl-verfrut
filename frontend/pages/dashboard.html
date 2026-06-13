@@ -3133,16 +3133,45 @@ function confirmarFundo() {
   document.getElementById('tbE').textContent = USER.empresa + ' · ' + fundo;
 }
 
-// API
+// API — con manejo de errores de red: si el GAS no responde, devuelve un objeto
+//       de error uniforme y muestra un aviso, en vez de congelar la vista.
+function _redAviso() {
+  try {
+    if (window._redAvisoTs && (Date.now() - window._redAvisoTs) < 10000) return; // máx 1 cada 10s
+    window._redAvisoTs = Date.now();
+    let t = document.getElementById('redToast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'redToast';
+      t.style.cssText = 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:99999;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none';
+      document.body.appendChild(t);
+    }
+    t.textContent = '📡 Sin conexión con el servidor. Verifica tu internet y vuelve a intentar.';
+    t.style.display = 'block';
+    setTimeout(function(){ t.style.display = 'none'; }, 5000);
+  } catch(e) {}
+}
 async function apiGet(p) {
   if (!API || API.trim() === '') API = API_URL_DEFAULT;
-  const r = await fetch(API+'?'+new URLSearchParams(p));
-  return r.json();
+  try {
+    const r = await fetch(API+'?'+new URLSearchParams(p));
+    return await r.json();
+  } catch(e) {
+    console.warn('[apiGet] error de red:', p && p.action, e.message);
+    _redAviso();
+    return { success:false, ok:false, error:'Sin conexión con el servidor', data:[], _redError:true };
+  }
 }
 async function apiPost(b) {
   if (!API || API.trim() === '') API = API_URL_DEFAULT;
-  const r = await fetch(API,{method:'POST',body:JSON.stringify(b),headers:{'Content-Type':'text/plain'}});
-  return r.json();
+  try {
+    const r = await fetch(API,{method:'POST',body:JSON.stringify(b),headers:{'Content-Type':'text/plain'}});
+    return await r.json();
+  } catch(e) {
+    console.warn('[apiPost] error de red:', b && b.action, e.message);
+    _redAviso();
+    return { success:false, ok:false, error:'Sin conexión con el servidor', data:[], _redError:true };
+  }
 }
 
 
