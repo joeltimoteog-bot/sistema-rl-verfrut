@@ -553,8 +553,16 @@ h3{font-size:16px !important}
             style="width:100%;padding:9px 12px 9px 38px;border:2px solid var(--bd);border-radius:9px;font-size:13px;box-sizing:border-box">
           <span id="cBuscarClear" onclick="document.getElementById('cBuscar').value='';aplicarFiltrosCasos()" style="display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--gr);font-size:16px" title="Limpiar">✕</span>
         </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+          <span style="font-size:11px;color:var(--gr);font-weight:700">Filtrar por motivo:</span>
+          <select id="cChipMotivo" onchange="filtrarPorMotivoChip(this.value)"
+            style="padding:6px 12px;border:2px solid var(--bd);border-radius:8px;font-size:12px;font-weight:600;background:#fff;cursor:pointer;min-width:200px">
+            <option value="">Todos los motivos</option>
+          </select>
+          <button id="cBtnVerTodos" onclick="verTodosLosCasos()" style="display:none;padding:6px 12px;border:1.5px solid #0b1e45;border-radius:8px;font-size:11px;font-weight:700;background:#0b1e45;color:#fff;cursor:pointer">← Ver todos</button>
+        </div>
         <div id="cChips" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-          <span style="font-size:11px;color:var(--gr);font-weight:700;margin-right:2px">Filtro rápido:</span>
+          <span style="font-size:11px;color:var(--gr);font-weight:700;margin-right:2px">Estado / Medida:</span>
         </div>
       </div>
 
@@ -4052,13 +4060,22 @@ function _chip(label, tipo, valor, color) {
     'border:1.5px solid '+color+';background:'+bg+';color:'+fg+';transition:all .12s">'+label+'</span>';
 }
 function renderChipsCasos() {
+  // 1) Desplegable de motivos (incluye los dinámicos)
+  const selM = document.getElementById('cChipMotivo');
+  if (selM) {
+    let motivos = MOTIVOS_CASOS_BASE.slice();
+    try { const extra = JSON.parse(localStorage.getItem('motivosCasos_v1')||'[]'); extra.forEach(m=>{ if(m && motivos.indexOf(m)===-1) motivos.push(m); }); } catch(e){}
+    motivos = motivos.filter(m => String(m).toLowerCase() !== 'otros');
+    motivos.sort((a,b)=>a.localeCompare(b));
+    motivos.push('Otros');
+    const actual = (_casoFiltroChip.tipo === 'motivo') ? _casoFiltroChip.valor : '';
+    selM.innerHTML = '<option value="">Todos los motivos</option>' +
+      motivos.map(m => '<option'+(m===actual?' selected':'')+'>'+String(m)+'</option>').join('');
+  }
+  // 2) Chips de estado/medida (botones)
   const cont = document.getElementById('cChips');
   if (!cont) return;
-  let motivos = MOTIVOS_CASOS_BASE.slice();
-  try { const extra = JSON.parse(localStorage.getItem('motivosCasos_v1')||'[]'); extra.forEach(m=>{ if(m && motivos.indexOf(m)===-1) motivos.push(m); }); } catch(e){}
-  let h = '<span style="font-size:11px;color:var(--gr);font-weight:700;margin-right:2px">Filtro rápido:</span>';
-  motivos.forEach(m => { h += _chip(m, 'motivo', m, '#0b1e45'); });
-  h += '<span style="width:1px;height:18px;background:var(--bd);margin:0 3px"></span>';
+  let h = '<span style="font-size:11px;color:var(--gr);font-weight:700;margin-right:2px">Estado / Medida:</span>';
   h += _chip('🔴 En investigación', 'estado', 'investigacion', '#d97706');
   h += _chip('✅ Concluidos', 'estado', 'concluido', '#16a34a');
   h += '<span style="width:1px;height:18px;background:var(--bd);margin:0 3px"></span>';
@@ -4066,6 +4083,23 @@ function renderChipsCasos() {
   h += _chip('📄 Memorándum', 'medida', 'memorandum', '#7c3aed');
   h += _chip('🗣️ Llamada de atención', 'medida', 'llamada', '#0891b2');
   cont.innerHTML = h;
+}
+
+// Filtrar por motivo desde el desplegable
+function filtrarPorMotivoChip(valor) {
+  if (valor) _casoFiltroChip = { tipo:'motivo', valor:valor };
+  else if (_casoFiltroChip.tipo === 'motivo') _casoFiltroChip = { tipo:'', valor:'' };
+  renderChipsCasos();
+  aplicarFiltrosCasos();
+}
+
+// Botón "← Ver todos": limpia buscador + cualquier filtro y muestra todo
+function verTodosLosCasos() {
+  _casoFiltroChip = { tipo:'', valor:'' };
+  const b = document.getElementById('cBuscar'); if (b) b.value = '';
+  const selM = document.getElementById('cChipMotivo'); if (selM) selM.value = '';
+  renderChipsCasos();
+  aplicarFiltrosCasos();
 }
 function toggleChipCaso(tipo, valor) {
   if (_casoFiltroChip.tipo === tipo && _casoFiltroChip.valor === valor) _casoFiltroChip = { tipo:'', valor:'' };
@@ -4103,6 +4137,9 @@ function aplicarFiltrosCasos() {
       return true;
     });
   }
+  // Botón "Ver todos": visible solo si hay búsqueda o filtro activo
+  const btnVt = document.getElementById('cBtnVerTodos');
+  if (btnVt) btnVt.style.display = (q || _casoFiltroChip.tipo) ? 'inline-block' : 'none';
   renderTablaCasos(lista);
 }
 
