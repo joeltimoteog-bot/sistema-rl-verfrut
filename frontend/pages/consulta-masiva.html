@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consulta Masiva de Trabajadores Â· Sistema RR.LL.</title>
+
+<!-- LibrerÃ­a local (NO CDN) -->
+<script src="../lib/xlsx.full.min.js"></script>
+
+<style>
+  :root{
+    --azul-900:#002b5c;
+    --azul-800:#013a78;
+    --azul-700:#0a4a8f;
+    --azul-600:#1462ad;
+    --azul-50:#eaf1f9;
+    --rojo:#d3232a;
+    --rojo-700:#b01c22;
+    --rojo-50:#fdeceb;
+    --tinta:#1b2733;
+    --gris:#62707d;
+    --fondo:#f4f6f9;
+    --linea:#e1e7ee;
+    --blanco:#ffffff;
+    --radio:14px;
+    --sombra:0 1px 2px rgba(0,43,92,.06), 0 8px 24px rgba(0,43,92,.07);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--tinta);
+    background:var(--fondo);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 24px 80px}
+
+  /* ---------- Barra del sistema ---------- */
+  header.top{
+    background:linear-gradient(180deg,var(--azul-900),var(--azul-700));
+    border-bottom:3px solid var(--rojo);
+    color:#eaf3ff;
+  }
+  .top-inner{max-width:1180px;margin:0 auto;padding:16px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:13px;text-decoration:none;color:inherit}
+  .logo-img{height:42px;width:auto;display:block;border-radius:6px;background:#fff;padding:4px 7px}
+  .brand-mark{
+    height:42px;min-width:42px;padding:0 11px;border-radius:9px;
+    background:#fff;display:grid;place-items:center;
+    font-weight:800;font-size:16px;letter-spacing:-.5px;color:var(--azul-700);
+    border-bottom:3px solid var(--rojo);
+  }
+  .brand-txt h1{font-size:18px;font-weight:800;letter-spacing:-.3px;margin:0;line-height:1.15}
+  .brand-txt p{margin:2px 0 0;font-size:12px;color:#9cc4ee;letter-spacing:.3px}
+  .top-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .btn-volver{
+    text-decoration:none;font-size:13px;font-weight:700;color:#dbe9fb;
+    border:1px solid rgba(255,255,255,.28);padding:8px 13px;border-radius:9px;
+    transition:background .15s;
+  }
+  .btn-volver:hover{background:rgba(255,255,255,.12)}
+
+  /* ---------- Intro ---------- */
+  .lead{margin:34px 0 26px}
+  .lead .eyebrow{font-size:12px;letter-spacing:1.4px;text-transform:uppercase;color:var(--azul-600);font-weight:700}
+  .lead .eyebrow::before{content:"";display:inline-block;width:22px;height:3px;background:var(--rojo);vertical-align:middle;margin-right:9px;border-radius:2px}
+  .lead h2{font-size:27px;letter-spacing:-.6px;margin:8px 0 6px;font-weight:800}
+  .lead p{margin:0;color:var(--gris);max-width:62ch;font-size:15px}
+
+  /* ---------- Cards ---------- */
+  .card{background:var(--blanco);border:1px solid var(--linea);border-radius:var(--radio);box-shadow:var(--sombra)}
+
+  .instru{display:flex;gap:14px;align-items:flex-start;padding:18px 24px;border-bottom:1px solid var(--linea);background:var(--azul-50)}
+  .instru .ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--azul-600);color:#fff;display:grid;place-items:center;font-size:18px}
+  .instru b{display:block;font-size:14.5px}
+  .instru span{font-size:13.5px;color:var(--gris)}
+  .instru .tpl-btn{margin-left:auto;align-self:center}
+
+  .dropzone{
+    margin:24px;border:2px dashed #b9cbe0;border-radius:12px;
+    padding:40px 20px;text-align:center;cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+    background:#fbfcfe;
+  }
+  .dropzone:hover,.dropzone.drag{border-color:var(--azul-600);background:var(--azul-50)}
+  .dropzone .big{font-size:40px;line-height:1;margin-bottom:10px}
+  .dropzone .t1{font-weight:700;font-size:15.5px}
+  .dropzone .t2{font-size:13px;color:var(--gris);margin-top:4px}
+  .dropzone .fname{margin-top:12px;font-size:13.5px;color:var(--azul-700);font-weight:700}
+
+  .valida{display:none;margin:0 24px 24px;gap:10px;flex-wrap:wrap}
+  .valida.show{display:flex}
+  .pill{font-size:13px;font-weight:700;padding:7px 13px;border-radius:999px;display:inline-flex;align-items:center;gap:7px}
+  .pill .n{font-variant-numeric:tabular-nums}
+  .pill-ok{background:var(--azul-50);color:var(--azul-700)}
+  .pill-warn{background:#fff5e6;color:#9a6207}
+  .pill-bad{background:var(--rojo-50);color:var(--rojo-700)}
+
+  .btn{font:inherit;font-weight:700;border:0;border-radius:10px;padding:11px 18px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:transform .05s, background .15s, box-shadow .15s}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn-primary{background:var(--azul-600);color:#fff}
+  .btn-primary:hover:not(:disabled){background:var(--azul-700)}
+  .btn-ghost{background:#fff;color:var(--azul-700);border:1px solid #c3d4e6}
+  .btn-ghost:hover:not(:disabled){background:var(--azul-50)}
+  .btn-rojo{background:var(--rojo);color:#fff}
+  .btn-rojo:hover:not(:disabled){background:var(--rojo-700)}
+  .btn-sm{padding:8px 13px;font-size:13px}
+
+  .acciones{display:none;justify-content:flex-end;gap:12px;margin:0 24px 24px}
+  .acciones.show{display:flex}
+
+  .progreso{display:none;margin:0 24px 24px}
+  .progreso.show{display:block}
+  .bar{height:9px;background:#e6ecf3;border-radius:999px;overflow:hidden}
+  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--azul-600),var(--rojo));transition:width .2s ease}
+  .progreso .lbl{font-size:13px;color:var(--gris);margin-top:8px;font-variant-numeric:tabular-nums}
+
+  /* ---------- Resultados ---------- */
+  .res{display:none;margin-top:28px}
+  .res.show{display:block}
+  .res-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .res-head h3{font-size:19px;letter-spacing:-.3px;margin:0;font-weight:800}
+  .chips{display:flex;gap:10px;flex-wrap:wrap}
+  .chip{font-size:13px;font-weight:700;padding:6px 12px;border-radius:8px;font-variant-numeric:tabular-nums}
+  .chip-ok{background:var(--azul-50);color:var(--azul-700)}
+  .chip-bad{background:var(--rojo-50);color:var(--rojo-700)}
+  .res-head .right{margin-left:auto;display:flex;gap:10px}
+
+  .tabla-wrap{overflow-x:auto;border:1px solid var(--linea);border-radius:12px;background:#fff}
+  table{border-collapse:collapse;width:100%;min-width:980px;font-size:13.5px}
+  thead th{
+    background:var(--azul-900);color:#dcebfb;text-align:left;font-weight:700;
+    padding:12px 14px;white-space:nowrap;letter-spacing:.2px;position:sticky;top:0;
+  }
+  tbody td{padding:11px 14px;border-top:1px solid var(--linea);white-space:nowrap;vertical-align:top}
+  tbody tr:nth-child(even){background:#fafbfd}
+  tbody tr:hover{background:var(--azul-50)}
+  td.dni{font-variant-numeric:tabular-nums;font-weight:700;color:var(--azul-700)}
+  td.nombre{white-space:normal;min-width:230px}
+  td.cargo{white-space:normal;min-width:200px}
+  .emp-tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--azul-50);color:var(--azul-700)}
+  .vacio{color:#b9c2cc}
+  .sx{font-weight:700}
+
+  .ne{display:none;margin-top:22px}
+  .ne.show{display:block}
+  .ne h4{font-size:15px;margin:0 0 10px;color:var(--rojo-700);font-weight:800}
+  .ne-list{display:flex;flex-wrap:wrap;gap:8px}
+  .ne-list span{font-size:13px;font-variant-numeric:tabular-nums;background:var(--rojo-50);color:var(--rojo-700);padding:5px 11px;border-radius:7px;font-weight:700}
+
+  .aviso{display:none;margin:0 24px 24px;padding:13px 16px;border-radius:10px;font-size:13.5px;font-weight:600}
+  .aviso.show{display:block}
+  .aviso-warn{background:#fff5e6;color:#8a5800;border:1px solid #f1d79a}
+  .aviso-error{background:var(--rojo-50);color:var(--rojo-700);border:1px solid #eeb6b2}
+
+  footer.pie{margin-top:50px;text-align:center;color:#97a2ad;font-size:12.5px}
+
+  @media (max-width:640px){
+    .lead h2{font-size:22px}
+    .instru{flex-wrap:wrap}
+    .instru .tpl-btn{margin-left:0;width:100%}
+    .acciones{flex-direction:column}
+    .acciones .btn{width:100%;justify-content:center}
+    .top-actions{width:100%;margin-left:0}
+  }
+  @media (prefers-reduced-motion:reduce){ *{transition:none !important} }
+  :focus-visible{outline:3px solid var(--rojo);outline-offset:2px;border-radius:6px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="dashboard.html" title="Volver al Sistema RR.LL.">
+      <img src="../img/logo-unifrutti.png" alt="Unifrutti Group" class="logo-img"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='grid';">
+      <span class="brand-mark" style="display:none">UNIFRUTTI</span>
+      <span class="brand-txt">
+        <h1>Sistema RR.LL.</h1>
+        <p>Consulta Masiva de Trabajadores</p>
+      </span>
+    </a>
+    <div class="top-actions">
+      <a class="btn-volver" href="dashboard.html">â† Volver al panel</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="lead">
+    <div class="eyebrow">BÃºsqueda por lote</div>
+    <h2>Sube tu archivo con los DNI y obtÃ©n la ficha de cada trabajador</h2>
+    <p>Carga un Excel o CSV con una sola columna de DNI (uno por fila). El sistema busca cada documento en la base y te devuelve nombre, cargo, rÃ©gimen, periodo, zona, ruta y cÃ³digo â€” listo para exportar.</p>
+  </div>
+
+  <!-- ====== PASO 1: CARGA ====== -->
+  <div class="card">
+    <div class="instru">
+      <div class="ic">ðŸ“„</div>
+      <div>
+        <b>Sube el archivo con los DNI para la bÃºsqueda</b>
+        <span>Formatos aceptados: .xlsx, .xls o .csv Â· una columna llamada Â«DNIÂ», un documento por fila.</span>
+      </div>
+      <button class="btn btn-ghost btn-sm tpl-btn" id="btnPlantilla">â¬‡ï¸ Descargar plantilla</button>
+    </div>
+
+    <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Subir archivo de DNI">
+      <div class="big">ðŸ“¥</div>
+      <div class="t1">Arrastra tu archivo aquÃ­ o haz clic para seleccionar</div>
+      <div class="t2">Se procesa en tu navegador. No se sube ningÃºn archivo a internet.</div>
+      <div class="fname" id="fname" hidden></div>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" hidden>
+
+    <div class="valida" id="valida">
+      <span class="pill pill-ok"><span class="n" id="vOk">0</span>&nbsp;DNI vÃ¡lidos</span>
+      <span class="pill pill-warn"><span class="n" id="vDup">0</span>&nbsp;duplicados removidos</span>
+      <span class="pill pill-bad"><span class="n" id="vBad">0</span>&nbsp;invÃ¡lidos descartados</span>
+    </div>
+
+    <div class="acciones" id="acciones">
+      <button class="btn btn-ghost" id="btnLimpiar">Limpiar</button>
+      <button class="btn btn-primary" id="btnConsultar">ðŸ” Consultar trabajadores</button>
+    </div>
+
+    <div class="progreso" id="progreso">
+      <div class="bar"><i id="barFill"></i></div>
+      <div class="lbl" id="progLbl">Consultandoâ€¦</div>
+    </div>
+
+    <div class="aviso aviso-error" id="avisoError"></div>
+  </div>
+
+  <!-- ====== RESULTADOS ====== -->
+  <section class="res" id="res">
+    <div class="res-head">
+      <h3>Resultados</h3>
+      <div class="chips">
+        <span class="chip chip-ok">âœ… <span id="cOk">0</span> encontrados</span>
+        <span class="chip chip-bad">âŒ <span id="cBad">0</span> no encontrados</span>
+      </div>
+      <div class="right">
+        <button class="btn btn-rojo btn-sm" id="btnExport">ðŸ“Š Exportar a Excel</button>
+      </div>
+    </div>
+
+    <div class="aviso aviso-warn" id="avisoRed"></div>
+
+    <div class="tabla-wrap">
+      <table id="tabla">
+        <thead>
+          <tr>
+            <th>DNI</th>
+            <th>Nombre y apellidos</th>
+            <th>Sexo</th>
+            <th>Cargo</th>
+            <th>Tipo de rÃ©gimen</th>
+            <th>F. inicio periodo</th>
+            <th>F. tÃ©rmino periodo</th>
+            <th>Zona de labor</th>
+            <th>Ruta</th>
+            <th>CÃ³digo</th>
+            <th>Empresa</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="ne" id="ne">
+      <h4>DNI no encontrados</h4>
+      <div class="ne-list" id="neList"></div>
+    </div>
+  </section>
+
+  <footer class="pie">
+    CoordinaciÃ³n de Relaciones Laborales Â· VERFRUT S.A.C / RAPEL S.A.C â€” Unifrutti Group
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+/* ============================================================
+   CONFIG
+   ============================================================ */
+const AZURE_BUSCAR = "https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/trabajadores/buscar";
+const CONCURRENCIA = 15;   // peticiones en paralelo por bloque
+
+/* Estado en memoria */
+let DNIS = [];
+let ENCONTRADOS = [];
+let NO_ENCONTRADOS = [];
+
+/* ============================================================
+   HELPERS
+   ============================================================ */
+const $ = (id) => document.getElementById(id);
+
+function normalizarDNI(v){
+  if (v === null || v === undefined) return "";
+  let s = String(v).trim();
+  if (!s) return "";
+  s = s.replace(/[.\s\-]/g, "");
+  if (/^\d{1,8}$/.test(s)) s = s.padStart(8, "0");
+  return s;
+}
+
+function esDNIValido(s){
+  return /^\d{8}$/.test(s);
+}
+
+function fechaDDMMYYYY(iso){
+  if (!iso) return "";
+  const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return String(iso);
+  return `${m[3]}/${m[2]}/${m[1]}`;
+}
+
+function celda(v){
+  if (v === null || v === undefined || v === "") return '<span class="vacio">â€”</span>';
+  return String(v).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+}
+
+/* ============================================================
+   PLANTILLA DESCARGABLE
+   ============================================================ */
+$("btnPlantilla").addEventListener("click", () => {
+  const aoa = [["DNI"], ["46073509"], ["04673509"], ["00000000"]];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [{ wch: 14 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "DNI");
+  XLSX.writeFile(wb, "plantilla_consulta_dni.xlsx");
+});
+
+/* ============================================================
+   CARGA DE ARCHIVO
+   ============================================================ */
+const dz = $("dropzone");
+const fileInput = $("fileInput");
+
+dz.addEventListener("click", () => fileInput.click());
+dz.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } });
+dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("drag"); });
+dz.addEventListener("dragleave", () => dz.classList.remove("drag"));
+dz.addEventListener("drop", (e) => {
+  e.preventDefault(); dz.classList.remove("drag");
+  if (e.dataTransfer.files && e.dataTransfer.files.length) procesarArchivo(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener("change", (e) => {
+  if (e.target.files && e.target.files.length) procesarArchivo(e.target.files[0]);
+});
+
+function procesarArchivo(file){
+  ocultarError();
+  $("fname").hidden = false;
+  $("fname").textContent = "ðŸ“Ž " + file.name;
+
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const data = new Uint8Array(ev.target.result);
+      const wb = XLSX.read(data, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const filas = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false, defval: "" });
+      extraerDNIs(filas);
+    } catch (err) {
+      mostrarError("No se pudo leer el archivo. Verifica que sea un Excel o CSV vÃ¡lido.");
+      console.error(err);
+    }
+  };
+  reader.onerror = () => mostrarError("Error al leer el archivo.");
+  reader.readAsArrayBuffer(file);
+}
+
+function extraerDNIs(filas){
+  if (!filas || !filas.length){ mostrarError("El archivo estÃ¡ vacÃ­o."); return; }
+
+  let colIdx = 0, tieneHeader = false;
+  const head = filas[0].map(c => String(c).trim().toLowerCase());
+  const idx = head.findIndex(h => h.includes("dni") || h.includes("documento"));
+  if (idx >= 0){ colIdx = idx; tieneHeader = true; }
+  else if (esDNIValido(normalizarDNI(filas[0][0]))) { tieneHeader = false; }
+
+  const inicio = tieneHeader ? 1 : 0;
+  const vistos = new Set();
+  let validos = [], duplicados = 0, invalidos = 0;
+
+  for (let i = inicio; i < filas.length; i++){
+    const crudo = filas[i][colIdx];
+    const dni = normalizarDNI(crudo);
+    if (!dni){ continue; }
+    if (!esDNIValido(dni)){ invalidos++; continue; }
+    if (vistos.has(dni)){ duplicados++; continue; }
+    vistos.add(dni);
+    validos.push(dni);
+  }
+
+  DNIS = validos;
+  $("vOk").textContent = validos.length;
+  $("vDup").textContent = duplicados;
+  $("vBad").textContent = invalidos;
+  $("valida").classList.add("show");
+
+  if (!validos.length){
+    mostrarError("No se encontraron DNI vÃ¡lidos (8 dÃ­gitos) en el archivo.");
+    $("acciones").classList.remove("show");
+    return;
+  }
+  $("acciones").classList.add("show");
+}
+
+/* ============================================================
+   CONSULTA A AZURE (iteraciÃ³n por bloques con Promise.all)
+   ============================================================ */
+$("btnConsultar").addEventListener("click", consultar);
+$("btnLimpiar").addEventListener("click", reiniciar);
+
+async function consultar(){
+  if (!DNIS.length) return;
+  ocultarError();
+  $("btnConsultar").disabled = true;
+  $("btnLimpiar").disabled = true;
+  $("res").classList.remove("show");
+  $("progreso").classList.add("show");
+
+  ENCONTRADOS = [];
+  NO_ENCONTRADOS = [];
+  let errores = 0, hechos = 0;
+  const total = DNIS.length;
+
+  for (let i = 0; i < total; i += CONCURRENCIA){
+    const bloque = DNIS.slice(i, i + CONCURRENCIA);
+    await Promise.all(bloque.map(async (dni) => {
+      try {
+        const r = await fetch(`${AZURE_BUSCAR}?dni=${encodeURIComponent(dni)}`);
+        if (r.ok){
+          const j = await r.json();
+          if (j && j.success && Array.isArray(j.trabajadores) && j.trabajadores.length){
+            j.trabajadores.forEach(t => ENCONTRADOS.push(t));
+          } else {
+            NO_ENCONTRADOS.push(dni);
+          }
+        } else if (r.status === 404){
+          NO_ENCONTRADOS.push(dni);
+        } else {
+          errores++; NO_ENCONTRADOS.push(dni);
+        }
+      } catch(e){
+        errores++; NO_ENCONTRADOS.push(dni);
+      } finally {
+        hechos++;
+        const pct = Math.round(hechos / total * 100);
+        $("barFill").style.width = pct + "%";
+        $("progLbl").textContent = `Consultando ${hechos} de ${total} (${pct}%)`;
+      }
+    }));
+  }
+
+  $("progreso").classList.remove("show");
+  $("btnConsultar").disabled = false;
+  $("btnLimpiar").disabled = false;
+  pintarResultados(errores);
+}
+
+/* ============================================================
+   RENDER DE RESULTADOS
+   ============================================================ */
+function pintarResultados(errores){
+  ENCONTRADOS.sort((a,b) => String(a.nombre_completo||"").localeCompare(String(b.nombre_completo||""), "es"));
+
+  const tbody = $("tbody");
+  tbody.innerHTML = ENCONTRADOS.map(t => `
+    <tr>
+      <td class="dni">${celda(t.dni)}</td>
+      <td class="nombre">${celda(t.nombre_completo)}</td>
+      <td class="sx">${celda(t.sexo)}</td>
+      <td class="cargo">${celda(t.oficio)}</td>
+      <td>${celda(t.tipo_regimen)}</td>
+      <td>${celda(fechaDDMMYYYY(t.fecha_inicio))}</td>
+      <td>${celda(fechaDDMMYYYY(t.fecha_termino))}</td>
+      <td>${celda(t.zona_labor)}</td>
+      <td>${celda(t.ruta)}</td>
+      <td>${celda(t.cod)}</td>
+      <td>${t.empresa ? '<span class="emp-tag">'+celda(t.empresa)+'</span>' : '<span class="vacio">â€”</span>'}</td>
+    </tr>`).join("");
+
+  $("cOk").textContent = ENCONTRADOS.length;
+  $("cBad").textContent = NO_ENCONTRADOS.length;
+
+  if (NO_ENCONTRADOS.length){
+    $("neList").innerHTML = NO_ENCONTRADOS.map(d => `<span>${celda(d)}</span>`).join("");
+    $("ne").classList.add("show");
+  } else {
+    $("ne").classList.remove("show");
+  }
+
+  if (errores > 0){
+    $("avisoRed").textContent = `âš ï¸ ${errores} DNI no se pudieron consultar por un problema de conexiÃ³n y se listan como no encontrados. Revisa tu red y vuelve a consultar para completarlos.`;
+    $("avisoRed").classList.add("show");
+  } else {
+    $("avisoRed").classList.remove("show");
+  }
+
+  $("res").classList.add("show");
+  $("res").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/* ============================================================
+   EXPORTAR A EXCEL (2 hojas)
+   ============================================================ */
+$("btnExport").addEventListener("click", () => {
+  if (!ENCONTRADOS.length && !NO_ENCONTRADOS.length) return;
+
+  const wb = XLSX.utils.book_new();
+
+  const enc = ENCONTRADOS.map(t => ({
+    "DNI": t.dni || "",
+    "Nombre y apellidos": t.nombre_completo || "",
+    "Sexo": t.sexo || "",
+    "Cargo": t.oficio || "",
+    "Tipo de rÃ©gimen": t.tipo_regimen || "",
+    "Fecha inicio periodo": fechaDDMMYYYY(t.fecha_inicio),
+    "Fecha tÃ©rmino periodo": fechaDDMMYYYY(t.fecha_termino),
+    "Zona de labor": t.zona_labor || "",
+    "Ruta": t.ruta || "",
+    "CÃ³digo": t.cod || "",
+    "Empresa": t.empresa || ""
+  }));
+  const wsEnc = enc.length ? XLSX.utils.json_to_sheet(enc)
+                           : XLSX.utils.aoa_to_sheet([["Sin resultados"]]);
+  wsEnc["!cols"] = [{wch:12},{wch:32},{wch:6},{wch:30},{wch:18},{wch:16},{wch:16},{wch:28},{wch:16},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, wsEnc, "Encontrados");
+
+  const ne = [["DNI no encontrado"], ...NO_ENCONTRADOS.map(d => [d])];
+  const wsNe = XLSX.utils.aoa_to_sheet(ne);
+  wsNe["!cols"] = [{wch:18}];
+  XLSX.utils.book_append_sheet(wb, wsNe, "No encontrados");
+
+  const hoy = new Date();
+  const stamp = `${hoy.getFullYear()}${String(hoy.getMonth()+1).padStart(2,"0")}${String(hoy.getDate()).padStart(2,"0")}`;
+  XLSX.writeFile(wb, `consulta_trabajadores_${stamp}.xlsx`);
+});
+
+/* ============================================================
+   RESET
+   ============================================================ */
+function reiniciar(){
+  DNIS = []; ENCONTRADOS = []; NO_ENCONTRADOS = [];
+  fileInput.value = "";
+  $("fname").hidden = true; $("fname").textContent = "";
+  $("valida").classList.remove("show");
+  $("acciones").classList.remove("show");
+  $("res").classList.remove("show");
+  $("ne").classList.remove("show");
+  $("avisoRed").classList.remove("show");
+  ocultarError();
+  $("barFill").style.width = "0%";
+}
+
+function mostrarError(msg){
+  $("avisoError").textContent = "âš ï¸ " + msg;
+  $("avisoError").classList.add("show");
+}
+function ocultarError(){
+  $("avisoError").classList.remove("show");
+  $("avisoError").textContent = "";
+}
+</script>
+</body>
+</html>
