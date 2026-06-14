@@ -520,6 +520,7 @@ h3{font-size:16px !important}
       <div class="sec-hd">
         <h2>⚖️ Registro de Casos</h2>
         <button class="btn-n" onclick="abrirNuevoCaso()">+ Nuevo Caso</button>
+        <button class="btn-n" id="btnCumplimientoCasos" onclick="mostrarCumplimientoCasos()" style="background:#0a4a8f">📊 Indicadores de Cumplimiento</button>
       </div>
 
       <!-- FILTROS -->
@@ -3196,6 +3197,64 @@ async function apiPost(b) {
   }
 }
 
+
+// ============================================================
+// INDICADORES DE CUMPLIMIENTO DE CASOS (modal autónomo)
+// ============================================================
+async function mostrarCumplimientoCasos(){
+  let ov = document.getElementById('ovCumpl');
+  if(ov) ov.remove();
+  ov = document.createElement('div');
+  ov.id='ovCumpl';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(10,30,69,.55);z-index:99999;display:flex;align-items:flex-start;justify-content:center;padding:24px;overflow:auto';
+  ov.innerHTML='<div style="background:#fff;border-radius:14px;max-width:880px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);overflow:hidden">'
+    +'<div style="background:linear-gradient(135deg,#002b5c,#1462ad);color:#fff;padding:18px 22px;display:flex;justify-content:space-between;align-items:center">'
+    +'<h2 style="margin:0;font-size:18px">📊 Indicadores de Cumplimiento — Casos</h2>'
+    +'<button onclick="document.getElementById(\'ovCumpl\').remove()" style="background:rgba(255,255,255,.2);border:none;color:#fff;width:32px;height:32px;border-radius:8px;font-size:18px;cursor:pointer">✕</button>'
+    +'</div>'
+    +'<div id="cumplBody" style="padding:22px;min-height:120px"><p style="text-align:center;color:#64748b">Cargando indicadores…</p></div>'
+    +'</div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
+
+  const emp = (document.getElementById('cFiltroEmp')||{}).value || '';
+  const res = await apiGet({ action:'getCumplimientoCasos', empresa: emp, rol: USER.rol||'', usuario: USER.usuario||'' });
+  const body = document.getElementById('cumplBody');
+  if(!body) return;
+  if(!res || !res.success){ body.innerHTML='<p style="color:#dc2626;text-align:center">No se pudo cargar: '+((res&&res.error)||'error')+'</p>'; return; }
+
+  const d = res.data, t = d.totales||{};
+  const card=(lbl,val,col)=>'<div style="flex:1;min-width:120px;background:#f4f6f9;border-radius:10px;padding:12px;text-align:center"><div style="font-size:26px;font-weight:800;color:'+col+'">'+val+'</div><div style="font-size:11px;color:#55626c;text-transform:uppercase;letter-spacing:.4px">'+lbl+'</div></div>';
+  const fila=(s)=>{
+    const pct=s.pct||0;
+    const col = pct>=90?'#16a34a':pct>=70?'#d97706':'#dc2626';
+    return '<tr>'
+      +'<td style="padding:8px 10px;border-bottom:1px solid #eef2f6">'+s.supervisor+'</td>'
+      +'<td style="padding:8px 10px;border-bottom:1px solid #eef2f6;text-align:center;color:#16a34a;font-weight:700">'+s.cumplidos+'</td>'
+      +'<td style="padding:8px 10px;border-bottom:1px solid #eef2f6;text-align:center;color:#dc2626;font-weight:700">'+s.fueraPlazo+'</td>'
+      +'<td style="padding:8px 10px;border-bottom:1px solid #eef2f6;text-align:center;color:#64748b">'+s.pendientes+'</td>'
+      +'<td style="padding:8px 10px;border-bottom:1px solid #eef2f6;min-width:120px">'
+        +'<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:#eef2f6;border-radius:5px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+'"></div></div>'
+        +'<span style="font-weight:700;color:'+col+';font-size:12px">'+pct+'%</span></div>'
+      +'</td></tr>';
+  };
+  const tabla=(arr,titulo,bg)=> !arr.length ? '' :
+    '<h3 style="margin:18px 0 8px;font-size:14px;color:#002b5c">'+titulo+' ('+arr.length+')</h3>'
+    +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
+    +'<tr style="background:'+bg+';color:#fff"><th style="padding:8px 10px;text-align:left">Supervisor</th><th style="padding:8px 10px">A tiempo</th><th style="padding:8px 10px">Fuera</th><th style="padding:8px 10px">Pend.</th><th style="padding:8px 10px">Cumplimiento</th></tr>'
+    +arr.map(fila).join('')+'</table>';
+
+  body.innerHTML =
+    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
+    + card('Cumplimiento global', (t.pct||0)+'%', '#0a4a8f')
+    + card('A tiempo', t.cumplidos||0, '#16a34a')
+    + card('Fuera de plazo', t.fueraPlazo||0, '#dc2626')
+    + card('Pendientes', t.pendientes||0, '#64748b')
+    + '</div>'
+    + tabla(d.noCumplen||[], '🔴 Con incumplimientos', '#dc2626')
+    + tabla(d.cumplen||[], '🟢 Al día', '#16a34a')
+    + ((!(d.supervisores||[]).length) ? '<p style="text-align:center;color:#64748b;padding:20px">Aún no hay casos con investigación registrada.</p>' : '');
+}
 
 // ============================================================
 // MÓDULO CASOS
