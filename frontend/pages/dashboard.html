@@ -3439,6 +3439,20 @@ function editarCaso(idx) {
   _editandoCasoNro = c.nro; // limpiarFormCaso lo resetea a null — re-asignar
   document.getElementById('mCasoTitulo').textContent = '✏️ Editar Caso N° ' + c.nro;
   document.getElementById('panelAdjuntosCaso').style.display = _modoCaso === 'concluido' ? 'block' : 'none';
+  // Archivos ya subidos: mostrar estado y dejar la re-subida como opcional (no exigir)
+  (function(){
+    const uInf = c.archivo_informe_url || c.enlace_informe || '';
+    const uRep = c.archivo_descargo_url || c.enlace_reporte || '';
+    window._casoEditUrls = { informe: uInf, reporte: uRep };
+    const cim = document.getElementById('cInformeMsg');
+    const crm = document.getElementById('cReporteMsg');
+    if (cim) cim.innerHTML = uInf
+      ? '✅ Ya subido — <a href="'+uInf+'" target="_blank" style="color:#1462ad;font-weight:600">Ver informe</a> · <span style="color:#94a3b8">reemplazar es opcional</span>'
+      : (_modoCaso === 'concluido' ? '<span style="color:#dc2626">Aún sin informe — adjunta el PDF</span>' : '');
+    if (crm) crm.innerHTML = uRep
+      ? '✅ Ya subido — <a href="'+uRep+'" target="_blank" style="color:#1462ad;font-weight:600">Ver reporte</a> · <span style="color:#94a3b8">reemplazar es opcional</span>'
+      : (_modoCaso === 'concluido' ? '<span style="color:#dc2626">Aún sin reporte — adjunta el PDF</span>' : '');
+  })();
   // Mostrar botón "Concluir caso" solo si el caso está actualmente en Investigación
   const btnConcluir = document.getElementById('btnPasarConcluido');
   if (btnConcluir) btnConcluir.style.display = _modoCaso === 'investigacion' ? 'inline-block' : 'none';
@@ -3613,6 +3627,7 @@ function limpiarFormCaso() {
   const cgm = document.getElementById('cGuardarMsg');
   if(cgm) { cgm.textContent=''; cgm.style.display='none'; }
   window._casoTrabajador = null;
+  window._casoEditUrls = { informe:'', reporte:'' };
   _editandoCasoNro = null;
   _transicionoAConcluido = false;
   const titulo = document.getElementById('mCasoTitulo');
@@ -3858,7 +3873,9 @@ async function guardarCaso() {
   // Adjuntos obligatorios:
   //  - al crear un caso concluido nuevo
   //  - al pasar de Investigación → Concluido durante edición
-  const exigirAdjuntos = esConcluido && (!_editandoCasoNro || _transicionoAConcluido);
+  const _uEdit = window._casoEditUrls || {};
+  const _yaTieneArchivos = !!_uEdit.informe && !!_uEdit.reporte;
+  const exigirAdjuntos = esConcluido && (!_editandoCasoNro || _transicionoAConcluido) && !_yaTieneArchivos;
   if (exigirAdjuntos) {
     if (!informeFile.files[0]) { mostrarToast('❌ Adjunta el Informe (PDF)','error'); return; }
     if (!reporteFile.files[0]) { mostrarToast('❌ Adjunta el Reporte de Infracción (PDF)','error'); return; }
@@ -3984,11 +4001,11 @@ async function guardarCaso() {
       window._casoRecienGuardado = {
         nro: String(nroCaso), ts: Date.now(),
         urls: {
-          archivo_informe_url:  payload.archivo_informe_url  || '',
-          enlace_informe:       payload.enlace_informe       || '',
+          archivo_informe_url:  payload.archivo_informe_url  || _uEdit.informe || '',
+          enlace_informe:       payload.enlace_informe       || _uEdit.informe || '',
           nombre_informe:       payload.nombre_informe       || '',
-          archivo_descargo_url: payload.archivo_descargo_url || '',
-          enlace_reporte:       payload.enlace_reporte       || '',
+          archivo_descargo_url: payload.archivo_descargo_url || _uEdit.reporte || '',
+          enlace_reporte:       payload.enlace_reporte       || _uEdit.reporte || '',
           nombre_reporte:       payload.nombre_reporte       || ''
         }
       };
