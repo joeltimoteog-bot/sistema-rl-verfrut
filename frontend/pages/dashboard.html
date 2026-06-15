@@ -4072,7 +4072,8 @@ function verificarCasosPorVencer() {
           tipo: 'caso_por_vencer',
           mensaje: 'Caso #' + nro + ' — ' + trab + ' ' + cuando,
           fecha: Date.now(),
-          caso_nro: nro
+          caso_nro: nro,
+          dias: diasRestantes
         });
       });
     }
@@ -9494,12 +9495,25 @@ function _fbRenderLista(alertas) {
   el.innerHTML = alertas.map(a => {
     const fbKey = a._fbKey || a.id || '';
     const fecha = a.fecha ? new Date(a.fecha).toLocaleDateString('es-PE', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
-    return `<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 14px;margin-bottom:8px">
-      <div style="font-size:10px;font-weight:700;color:#991b1b;margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">⚠️ Caso por vencer</div>
+    // Severidad por color: usa el campo 'dias' si viene; si no, la infiere del mensaje
+    let _sev;
+    if (typeof a.dias === 'number') _sev = a.dias <= 0 ? 'vencido' : (a.dias <= 1 ? 'hoy' : 'porvencer');
+    else {
+      const _m = String(a.mensaje || '').toLowerCase();
+      _sev = (_m.includes('venció') || _m.includes('vencido') || _m.includes('retras')) ? 'vencido'
+           : (_m.includes('hoy') || _m.includes('mañana')) ? 'hoy' : 'porvencer';
+    }
+    const _est = {
+      vencido:   { bg:'#fef2f2', bd:'#fecaca', tx:'#991b1b', lb:'🔴 Vencido / retrasado' },
+      hoy:       { bg:'#fff7ed', bd:'#fed7aa', tx:'#9a3412', lb:'🟠 Vence hoy / mañana' },
+      porvencer: { bg:'#fefce8', bd:'#fde68a', tx:'#854d0e', lb:'🟡 Por vencer' }
+    }[_sev];
+    return `<div style="background:${_est.bg};border:1px solid ${_est.bd};border-radius:10px;padding:12px 14px;margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;color:${_est.tx};margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px">${_est.lb}</div>
       <div style="font-size:12px;color:#0f172a;font-weight:600;margin-bottom:8px">${a.mensaje || ''}</div>
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:10px;color:#94a3b8">${fecha}</span>
-        <button onclick="_fbMarcarLeidaUI('${fbKey}')" style="padding:4px 12px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;transition:opacity .2s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">✓ Marcar leída</button>
+        <button onclick="_fbMarcarLeidaUI('${fbKey}')" style="padding:4px 12px;background:${_est.tx};color:#fff;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;transition:opacity .2s" onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">✓ Marcar leída</button>
       </div>
     </div>`;
   }).join('');
@@ -9581,7 +9595,8 @@ window._fbEnviarAlerta = async function(alerta) {
       tipo:     alerta.tipo,
       mensaje:  alerta.mensaje,
       fecha:    alerta.fecha,
-      caso_nro: alerta.caso_nro
+      caso_nro: alerta.caso_nro,
+      dias:     (alerta.dias !== undefined ? alerta.dias : null)
     });
   } catch(e) {
     console.error('[Firebase] Error enviando alerta:', e);
