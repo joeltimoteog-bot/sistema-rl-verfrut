@@ -161,26 +161,32 @@ const CONFIG = {
   timeoutMs: 8000,        // si tarda más, se marca como caído
   umbralVerde: 1200,      // <= ms  -> verde
   umbralAmbar: 4000,      // <= ms  -> ámbar (lento);  mayor o error -> rojo
+  // Cada componente tiene su propio baseline. Apps Script (web app con
+  // redirección + arranque del proyecto) vive normalmente en 1.5-3s;
+  // Azure y el frontend responden en cientos de ms. Por eso umbrales aparte.
   componentes: [
     {
       id:'frontend',
       nombre:'Frontend',
       desc:'La interfaz que usan los supervisores (GitHub Pages)',
-      tipo:'self'
+      tipo:'self',
+      umbralVerde:800, umbralAmbar:2000
     },
     {
       id:'gas',
       nombre:'Backend Apps Script',
       desc:'Procesa atenciones, casos, visitas y reportes',
       tipo:'fetch',
-      url:'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec?action=ping'
+      url:'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec?action=ping',
+      umbralVerde:3000, umbralAmbar:6000   // baseline real de Apps Script
     },
     {
       id:'azure',
       nombre:'Azure Functions',
       desc:'Sincronización y API de trabajadores',
       tipo:'fetch',
-      url:'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/auth/login'
+      url:'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/auth/login',
+      umbralVerde:800, umbralAmbar:2500
     }
   ]
 };
@@ -209,9 +215,10 @@ CONFIG.componentes.forEach(c=>{
   grid.appendChild(el);
 });
 
-function clasificar(ms, ok){
+function clasificar(ms, ok, comp){
   if(!ok) return 'down';
-  if(ms <= CONFIG.umbralVerde) return 'up';
+  const uV = (comp && comp.umbralVerde) || CONFIG.umbralVerde;
+  if(ms <= uV) return 'up';
   return 'slow';
 }
 const ETIQUETAS = {
@@ -242,12 +249,13 @@ async function medir(c){
 
 function pintar(c, r){
   const card = document.getElementById('card-'+c.id);
-  const s = clasificar(r.ms, r.ok);
+  const s = clasificar(r.ms, r.ok, c);
   card.dataset.s = s;
   card.querySelector('.pill-t').textContent = ETIQUETAS[s].pill;
   card.querySelector('.c-state').textContent = ETIQUETAS[s].estado;
   card.querySelector('.ms').textContent = r.ok ? r.ms : '—';
-  const pct = r.ok ? Math.min(100, Math.round(r.ms / (CONFIG.umbralAmbar*1.3) * 100)) : 100;
+  const uA = c.umbralAmbar || CONFIG.umbralAmbar;
+  const pct = r.ok ? Math.min(100, Math.round(r.ms / (uA*1.3) * 100)) : 100;
   card.querySelector('.bar i').style.width = pct + '%';
   card.querySelector('.c-time').textContent = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   return s;
