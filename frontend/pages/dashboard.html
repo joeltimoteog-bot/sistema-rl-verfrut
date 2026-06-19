@@ -3422,6 +3422,11 @@ function abrirCasoConcluido() {
   abrir('mCaso');
 }
 
+function concluirCasoDirecto(idx) {
+  editarCaso(idx);
+  setTimeout(function(){ try { pasarACasoConcluido(); } catch(e){ console.warn('concluir directo:', e); } }, 0);
+}
+
 function editarCaso(idx) {
   const c = casosData[idx];
   if (!c) return;
@@ -4354,7 +4359,7 @@ function renderTablaCasos(data) {
         <td><span style="font-size:10px;font-weight:700;color:#fff;background:${_gravColor(c.gravedad)};padding:2px 7px;border-radius:10px">${c.gravedad||'—'}</span></td>
         <td style="display:flex;gap:4px;flex-wrap:wrap">
           <button class="btn-a" style="font-size:10px" onclick="verDetalleCaso(${i})">👁️ Ver</button>
-          ${puedeEditar ? `<button style="font-size:10px;padding:4px 8px;background:#d97706;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="editarCaso(${i})">✏️ Editar</button>` : ''}
+          ${puedeEditar ? `<button style="font-size:10px;padding:4px 8px;background:#d97706;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer" onclick="editarCaso(${i})">✏️ Editar</button>` : ''}${puedeEditar && !(String(c.estado_caso||c.estado||'').toUpperCase().startsWith('CONCLUIDO') || ['CERRADO','CONCLUIDO','RESUELTO','FINALIZADO'].some(s => String(c.estado_gestion||'').toUpperCase().includes(s))) ? `<button style="font-size:10px;padding:4px 8px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;margin-left:4px" onclick="concluirCasoDirecto(${i})">✅ Concluir</button>` : ''}
           ${urlInforme  ? `<button class="btn-n" style="font-size:10px;padding:4px 8px" onclick="abrirUrlCaso(${i},'informe')">📄 Informe</button>`  : `<button class="btn-n" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin informe">📄 Informe</button>`}
           ${urlDescargo ? `<button class="btn-s" style="font-size:10px;padding:4px 8px" onclick="abrirUrlCaso(${i},'descargo')">📋 Descargo</button>` : `<button class="btn-s" disabled style="font-size:10px;padding:4px 8px;opacity:.4;cursor:not-allowed" title="Sin descargo">📋 Descargo</button>`}
         </td>
