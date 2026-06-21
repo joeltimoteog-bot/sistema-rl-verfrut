@@ -6794,7 +6794,7 @@ function _armarHojaResumen(datos) {
   return ws;
 }
 
-function enviarConConfirmacion() {
+async function enviarConConfirmacion() {
   const para = getParaFinal();
   const cc   = getCCFinal();
   if (!para) { mostrarToast('❌ Agrega al menos un destinatario en el campo Para', 'error'); return; }
@@ -6809,7 +6809,7 @@ function enviarConConfirmacion() {
   const nombreArchivo = `Reporte_RL_${emp}_${fiRaw}_${ffRaw}.xlsx`;
   const asunto    = `Reporte RR.LL. - ${empLabel} | ${fiF} al ${ffF}`;
   const msg = `📋 CONFIRMACIÓN DE ENVÍO\n\nRango: ${fiF} al ${ffF}\nEmpresa: ${empLabel}\nTotal de registros: ${total}\nDestinatarios: ${para}\n\n✅ El Excel se descargará automáticamente en Descargas.\n📎 Adjúntalo manualmente al correo en Outlook.\n\n¿Continuar?`;
-  if (confirm(msg)) {
+  if (await appConfirm(msg)) {
     // PASO 1: Descargar Excel
     exportarCorreoExcel();
     // PASO 2: Copiar HTML al portapapeles (para pegar en Outlook como cuerpo HTML)
@@ -7870,13 +7870,13 @@ function iniciarCountdownAcceso() {
     document.body.appendChild(indicador);
   }
 
-  const intervalo = setInterval(() => {
+  const intervalo = setInterval(async () => {
     const restanteMs = acceso.expiraEn - Date.now();
     if (restanteMs <= 0) {
       clearInterval(intervalo);
       sessionStorage.removeItem('accesoTemporal');
       if (indicador.parentNode) indicador.remove();
-      alert('⏰ Tu acceso temporal ha expirado. Serás desconectado.');
+      await appAlert('⏰ Tu acceso temporal ha expirado. Serás desconectado.');
       logout();
       return;
     }
@@ -8515,8 +8515,8 @@ async function generarInformeVisita() {
   const para = encodeURIComponent('ovilela@verfrut.pe;jchavez@verfrut.pe;jtimoteo@verfrut.pe');
   const cc   = encodeURIComponent(ccFinal);
   const body = encodeURIComponent(cuerpoEmail);
-  setTimeout(() => {
-    if(confirm('✅ Informe generado y guardado.\n\n¿Desea abrirlo en Outlook para enviarlo?')) {
+  setTimeout(async () => {
+    if(await appConfirm('✅ Informe generado y guardado.\n\n¿Desea abrirlo en Outlook para enviarlo?')) {
       window.location.href = 'mailto:' + para + '?subject=' + subj + '&body=' + body + (cc ? '&cc=' + cc : '');
     }
   }, 500);
