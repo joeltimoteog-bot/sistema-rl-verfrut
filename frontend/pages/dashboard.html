@@ -2065,7 +2065,7 @@ function renderSolicitudes(data) {
 
 async function resolverSolicitud(fila, decision) {
   const motivo = decision === 'RECHAZADA'
-    ? prompt('Motivo del rechazo:')
+    ? await appPrompt('Motivo del rechazo:')
     : '';
   if (decision === 'RECHAZADA' && !motivo) return;
 
@@ -2179,7 +2179,7 @@ function renderAccesosTem(data) {
 }
 
 async function aprobarAccesoTemporal(fila, decision, usuario, horas) {
-  if (decision === 'RECHAZADO' && !confirm(`¿Rechazar la solicitud de acceso de ${usuario}?`)) return;
+  if (decision === 'RECHAZADO' && !await appConfirm(`¿Rechazar la solicitud de acceso de ${usuario}?`)) return;
   const btn = document.querySelector(`button[data-fila="${fila}"][data-dec="${decision}"]`);
   if (btn) { btn.disabled = true; btn.textContent = '⏳...'; }
   try {
@@ -5673,7 +5673,7 @@ async function guardarAt() { if(window._savingAt) return;
 
 async function eliminarAt(nro) {
   console.log('[eliminarAt] iniciando nro:', nro, '| rol:', USER.rol, '| usuario:', USER.usuario);
-  if(!confirm('¿Eliminar la atención N° '+nro+'? Esta acción no se puede deshacer.'))return;
+  if(!await appConfirm('¿Eliminar la atención N° '+nro+'? Esta acción no se puede deshacer.'))return;
   try{
     console.log('[eliminarAt] llamando apiPost deleteAtencion...');
     const r=await apiPost({action:'deleteAtencion',nro,rol:USER.rol,usuario:USER.usuario});
@@ -6929,7 +6929,7 @@ async function guardarUs() {
   }catch(e){mostrarToast('❌ Error de conexión','error');}
 }
 async function toggleUs(usr,act){
-  if(!confirm((act?'Activar':'Desactivar')+' a '+usr+'?'))return;
+  if(!await appConfirm((act?'Activar':'Desactivar')+' a '+usr+'?'))return;
   await apiPost({action:'updateUsuario',usuario:usr,activo:act});delete CACHE.usuarios;await cargarUs();
 }
 
@@ -7763,7 +7763,7 @@ function _irBienestar() {
     window.location.href = 'https://joeltimoteog-bot.github.io/bienestar-social-verfrut/portal.html';
   } catch (e) {
     console.error('[_irBienestar] error:', e);
-    alert('Error al acceder al sistema Bienestar: ' + e.message);
+    appAlert('Error al acceder al sistema Bienestar: ' + e.message);
   }
 }
 
