@@ -15,6 +15,7 @@
 <script src="../lib/chart.umd.js"></script>
 <script src="../lib/xlsx.full.min.js"></script>
 <script src="../lib/html2pdf.bundle.min.js"></script>
+<script src="../js/modal-system.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
@@ -5390,7 +5391,7 @@ async function _marcarFinalizado(id, nro, doc, dni, supervisorOriginal) {
               `📄 ${doc}\n` +
               `👤 Atendido originalmente por: ${supervisorOriginal}\n\n` +
               `Se marcará como FINALIZADO en Google Sheets y Azure SQL.`;
-  if (!confirm(msg)) return;
+  if (!(await appConfirm(msg))) return;
 
   console.log('[marcarFinalizado] id=' + id + ' nro=' + nro + ' dni=' + dni);
 
