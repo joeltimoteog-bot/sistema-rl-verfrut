@@ -4006,7 +4006,6 @@ async function guardarCaso() {
       window._casoRecienGuardado = {
         nro: String(nroCaso), ts: Date.now(),
         estado: { estado_caso: payload.estado_caso||payload.estado_plazo||payload.estado||'', estado_gestion: payload.estado_gestion||'', porcentaje: payload.porcentaje, porcentaje_avance: payload.porcentaje_avance, dias_retraso: payload.dias_retraso, fecha_limite: payload.fecha_limite, motivo_retraso: payload.motivo_retraso, tipo_sancion: payload.tipo_sancion, sancion_fecha_inicio: payload.sancion_fecha_inicio, sancion_fecha_fin: payload.sancion_fecha_fin, sancion_dias: payload.sancion_dias },
-        estado: { estado_caso: payload.estado_caso||payload.estado_plazo||payload.estado||'', estado_gestion: payload.estado_gestion||'', porcentaje: payload.porcentaje, porcentaje_avance: payload.porcentaje_avance, dias_retraso: payload.dias_retraso, fecha_limite: payload.fecha_limite, motivo_retraso: payload.motivo_retraso, tipo_sancion: payload.tipo_sancion, sancion_fecha_inicio: payload.sancion_fecha_inicio, sancion_fecha_fin: payload.sancion_fecha_fin, sancion_dias: payload.sancion_dias },
         urls: {
           archivo_informe_url:  payload.archivo_informe_url  || _uEdit.informe || '',
           enlace_informe:       payload.enlace_informe       || _uEdit.informe || '',
@@ -4298,7 +4297,6 @@ async function cargarCasosSilencioso() {
         if (String(c.nro) !== rg.nro) return c;
         const m = { ...c };
         Object.keys(rg.urls).forEach(k => { if (rg.urls[k] && !m[k]) m[k] = rg.urls[k]; });
-        if (rg.estado) Object.keys(rg.estado).forEach(k => { const v = rg.estado[k]; if (v !== undefined && v !== null && v !== '') m[k] = v; });
         if (rg.estado) Object.keys(rg.estado).forEach(k => { const v = rg.estado[k]; if (v !== undefined && v !== null && v !== '') m[k] = v; });
         return m;
       });
