@@ -5446,6 +5446,8 @@ async function _marcarFinalizado(id, nro, doc, dni, supervisorOriginal) {
     if (window.CACHE && window.CACHE.atenciones) {
       const idx = CACHE.atenciones.findIndex(a => String(a.nro) === String(nro));
       if (idx >= 0) CACHE.atenciones[idx].estado = 'FINALIZADO';
+    window._atRegularizadas = window._atRegularizadas || [];
+    window._atRegularizadas.push({ dni: String(dni||'').trim(), nro: nro, doc: doc, por: USER.usuario, fecha: (new Date()).toISOString().substring(0,10) });
     }
   } catch (e) {
     console.error('[marcarFinalizado] error:', e);
@@ -5544,6 +5546,15 @@ async function guardarAt() { if(window._savingAt) return;
     estado:v('at_est'), supervisor:USER.nombre||USER.usuario, usuario_sistema:USER.usuario
   };
   const _miss=[];if(!/^\d{8}$/.test(String(d.dni||'').trim()))_miss.push(['at_dni','DNI (8 digitos)']);if(!String(d.nombre||'').trim())_miss.push(['at_nom','Nombre']);if(!String(d.detalle_documento||'').trim())_miss.push(['at_doc_txt','Documento']);if(_miss.length){const el=document.getElementById(_miss[0][0]);if(el){el.focus();el.style.borderColor='#ef4444';setTimeout(function(){el.style.borderColor='';},2500);}mostrarToast('Falta completar: '+_miss.map(function(m){return m[1];}).join(', '),'error');return;}
+  if (!modoEdicion && window._atRegularizadas && window._atRegularizadas.length) {
+    const _regs = window._atRegularizadas.filter(x => String(x.dni) === String(d.dni||'').trim());
+    if (_regs.length) {
+      const _docs = _regs.map(x => (x.doc || ('Nro ' + x.nro))).join('; ');
+      const _nota = 'Regulariza: ' + _docs + ' - finalizado por ' + (_regs[0].por || USER.usuario) + ' el ' + (_regs[0].fecha || '');
+      d.observaciones = d.observaciones ? (_nota + ' | ' + d.observaciones) : _nota;
+      window._atRegularizadas = window._atRegularizadas.filter(x => String(x.dni) !== String(d.dni||'').trim());
+    }
+  }
   // Snapshot del registro original para historial de cambios
   const _snapAt = (modoEdicion && nroEdit)
     ? Object.assign({}, (CACHE.atenciones||[]).find(a => String(a.nro) === String(nroEdit)) || {})
