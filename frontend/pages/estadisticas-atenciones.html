@@ -360,9 +360,8 @@ async function cargarDatos(){
     const LIM = 1000;
     let pagina = 1, acumulado = [], totalServidor = null, seguir = true;
 
-    while(seguir && pagina <= 30){   // tope duro de 30 páginas (30k filas) por seguridad
+    while(seguir && pagina <= 60){   // tope duro de 30 páginas (30k filas) por seguridad
       const _url = AZURE_FN_BASE + '/atenciones?limit=' + LIM + '&page=' + pagina +
-                   '&desde=' + _desde + '&hasta=' + _hasta +
                    '&code=' + encodeURIComponent(AZURE_FN_KEY_ATLIST);
       const resp = await fetch(_url);
       if(!resp.ok){ if(pagina===1){ console.warn('[estadisticas] Azure status', resp.status, '- fallback a GAS'); } break; }
