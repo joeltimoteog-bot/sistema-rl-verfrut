@@ -353,6 +353,7 @@ async function cargarDatos(){
   // 1) Azure primero: histórico del año con PAGINACIÓN (la function topa en 1000/página)
   try{
     const _t0 = Date.now();
+    const _ANIO = new Date().getFullYear();   // solo el anio actual (2026)
     const _hoy = new Date();
     const _desde = (_hoy.getFullYear()-1) + '-01-01';   // cubre 12+ meses hacia atrás
     const _hasta = fmtISO(_hoy);
@@ -360,7 +361,7 @@ async function cargarDatos(){
     const LIM = 1000;
     let pagina = 1, acumulado = [], totalServidor = null, seguir = true;
 
-    while(seguir && pagina <= 60){   // tope duro de 30 páginas (30k filas) por seguridad
+    while(seguir && pagina <= 20){   // tope duro de 30 páginas (30k filas) por seguridad
       const _url = AZURE_FN_BASE + '/atenciones?limit=' + LIM + '&page=' + pagina +
                    '&code=' + encodeURIComponent(AZURE_FN_KEY_ATLIST);
       const resp = await fetch(_url);
@@ -368,9 +369,16 @@ async function cargarDatos(){
       const json = await resp.json();
       if(!(json && json.success && Array.isArray(json.data))){ break; }
       json.data.forEach(a=>_fld.forEach(c=>{ if(a[c]) a[c]=String(a[c]).slice(0,10); }));
-      acumulado = acumulado.concat(json.data);
+      // Datos vienen ordenados por fecha_atencion DESC: 2026 va primero.
+      // Guardamos solo filas del anio actual; si ya aparecio un anio menor, cortamos.
+      let _hayAnioMenor = false;
+      json.data.forEach(a=>{
+        const _y = parseInt(String(a.anio||a.fecha_atencion||'').slice(0,4),10);
+        if(_y === _ANIO){ acumulado.push(a); }
+        else if(_y && _y < _ANIO){ _hayAnioMenor = true; }
+      });
       totalServidor = json.total;
-      seguir = (json.data.length === LIM) && (acumulado.length < (json.total||0));
+      seguir = (json.data.length === LIM) && !_hayAnioMenor;
       pagina++;
     }
 
