@@ -37,6 +37,11 @@ body{font-family:Barlow,sans-serif;background:var(--bg);color:var(--tx);min-heig
   border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;
   font-family:inherit;transition:.15s;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
 .btn-back:hover{background:rgba(255,255,255,.2)}
+.top-scope{display:flex;gap:3px;background:rgba(255,255,255,.12);border-radius:9px;padding:3px;margin-right:6px}
+.scope-btn{border:none;background:transparent;color:rgba(255,255,255,.7);font-size:12px;font-weight:700;
+  padding:6px 14px;border-radius:7px;cursor:pointer;font-family:inherit;transition:.12s}
+.scope-btn.on{background:#fff;color:var(--azul)}
+.scope-btn:hover:not(.on){color:#fff}
 
 .wrap{max-width:1320px;margin:0 auto;padding:22px}
 
@@ -171,6 +176,10 @@ table.tb tbody tr:hover{background:#f8fafc}
     <div class="top-s">Sistema RR.LL. · Unifrutti — Vista personal</div>
   </div>
   <div class="top-sp"></div>
+  <div class="top-scope" id="scopeWrap" style="display:none">
+    <button class="scope-btn on" id="scopeMias" onclick="setScope('mias')">Mías</button>
+    <button class="scope-btn" id="scopeTodas" onclick="setScope('todas')">Todas</button>
+  </div>
   <div class="top-user">
     <span id="uNombre">—</span>
     <div class="top-av" id="uAvatar">·</div>
@@ -239,20 +248,30 @@ table.tb tbody tr:hover{background:#f8fafc}
 
 const API_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 let USER = {}, API = API_DEFAULT;
-let RAW = [];          // todas las atenciones del usuario
+let RAW_ALL = [];      // todo lo que devuelve el backend (segun permisos)
+let RAW = [];          // tras aplicar scope (mias/todas)
 let FILT = [];         // tras aplicar filtros
 let charts = {};       // instancias Chart.js
 let _periodoModo = 'mes';   // semanal | quincenal | mensual
+let _scope = 'mias';        // mias | todas
+let _esAdmin = false;
 
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const MESES_L = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
-// Documentos que generan retorno (fecha_termino_doc + 1 día)
-const DOCS_RETORNO = {
-  'DESCANSO MEDICO':   { label:'Descanso Médico',   color:'#dc2626', pill:'pill-dm' },
-  'CERTIFICADO MEDICO':{ label:'Certificado Médico', color:'#1d4ed8', pill:'pill-cm' },
-  'FALTA JUSTIFICADA': { label:'Falta Justificada',  color:'#a16207', pill:'pill-fj' }
-};
+// Un documento "genera retorno" si tiene fecha_termino_doc válida y días > 0.
+// Retorno = fecha_termino_doc + 1 día. (Detección dinámica, sin lista fija.)
+function generaRetorno(r){
+  const ftd = getFTD(r);
+  const dias = getDias(r);
+  return !!(ftd && dias > 0);
+}
+// Paleta estable por nombre de documento (para tarjetas/colores consistentes)
+const _palBase=['#dc2626','#1d4ed8','#a16207','#0891b2','#7c3aed','#16a34a','#ea580c','#0a2463','#be123c','#0f766e'];
+function colorDoc(nombre){
+  let h=0; const s=String(nombre||''); for(let i=0;i<s.length;i++){ h=(h*31+s.charCodeAt(i))>>>0; }
+  return _palBase[h % _palBase.length];
+}
 
 /* ───────── Helpers ───────── */
 function norm(s){ return String(s==null?'':s).trim().toUpperCase()
@@ -333,20 +352,48 @@ async function cargarDatos(){
       mostrarVacio('No se pudieron cargar las atenciones', d && d.error ? d.error : 'Respuesta inesperada del servidor');
       return;
     }
-    // Filtro DURO por usuario_sistema = usuario logueado (vista personal)
-    const miUser = norm(USER.usuario);
-    RAW = d.data.filter(r => norm(getUsuarioSistema(r)) === miUser);
+    RAW_ALL = d.data;
 
-    if(!RAW.length){
-      mostrarVacio('Aún no tienes atenciones registradas',
-        'Cuando registres atenciones con tu usuario aparecerán aquí.');
-      return;
-    }
-    poblarFiltros();
-    aplicarFiltros();
+    // Solo 'jtimoteo' (administrador) puede ver estadísticas generales (Todas)
+    _esAdmin = (norm(USER.usuario) === 'JTIMOTEO');
+    document.getElementById('scopeWrap').style.display = _esAdmin ? 'flex' : 'none';
+
+    aplicarScope();   // define RAW segun _scope, luego puebla filtros y renderiza
   }catch(e){
     mostrarVacio('Error de conexión', e.message);
   }
+}
+
+function aplicarScope(){
+  const miUser = norm(USER.usuario);
+  const verTodas = (_scope === 'todas' && _esAdmin);   // doble candado
+  RAW = verTodas
+    ? RAW_ALL.slice()
+    : RAW_ALL.filter(r => norm(getUsuarioSistema(r)) === miUser);
+
+  if(!RAW.length){
+    poblarFiltros();
+    mostrarVacio(_scope==='todas' ? 'No hay atenciones registradas' : 'Aún no tienes atenciones registradas',
+      _scope==='todas' ? 'Aún no hay registros en el sistema.' : 'Cuando registres atenciones con tu usuario aparecerán aquí. Si eres admin, prueba el botón «Todas».');
+    return;
+  }
+  poblarFiltros();
+  aplicarFiltros();
+}
+
+function setScope(s){
+  if(s==='todas' && !_esAdmin){
+    appAlert('Solo el administrador puede ver las estadísticas generales.\n\nTú puedes ver únicamente tus propias atenciones registradas.');
+    return;
+  }
+  if(_scope===s) return;
+  _scope=s;
+  document.getElementById('scopeMias').classList.toggle('on', s==='mias');
+  document.getElementById('scopeTodas').classList.toggle('on', s==='todas');
+  // Reset de filtros para evitar selecciones que ya no aplican al nuevo universo
+  ['fAnio','fMes','fSemana','fQuincena','fDesde','fHasta','fEmpresa','fFundo','fSupervisor','fResp','fDoc','fEstado']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  aplicarScope();
 }
 
 function mostrarVacio(t, s){
@@ -431,6 +478,7 @@ function render(){
   renderGraficoFundo();
   renderRetornos();
   renderTableroRetornos();
+  renderComparativoDoc();
   renderTop10();
 }
 
@@ -479,6 +527,16 @@ function plantilla(){
     </table></div>
   </div>
 
+  <div class="card" style="margin-bottom:18px">
+    <div class="card-h"><span style="font-size:17px">📊</span><span class="t">Comparativo por documento · mes vs mes anterior</span>
+      <span id="compMesLbl" style="margin-left:auto;font-size:11px;color:#94a3b8"></span>
+    </div>
+    <div class="tbl-wrap"><table class="tb">
+      <thead><tr><th>Documento</th><th style="text-align:right">Mes anterior</th><th style="text-align:right">Mes actual</th><th style="text-align:right">Variación</th></tr></thead>
+      <tbody id="tbComp"></tbody>
+    </table></div>
+  </div>
+
   <div class="card">
     <div class="card-h"><span style="font-size:17px">🏆</span><span class="t">Top 10 documentos más registrados</span></div>
     <div class="tbl-wrap"><table class="tb">
@@ -490,13 +548,40 @@ function plantilla(){
 }
 
 /* ───────── KPIs ───────── */
+// Determina el "mes de referencia": el más reciente presente en FILT
+function mesReferencia(){
+  let maxY=-1,maxM=-1;
+  FILT.forEach(r=>{ const f=getFechaAt(r); if(!f) return;
+    const y=f.getFullYear(), m=f.getMonth();
+    if(y>maxY || (y===maxY && m>maxM)){ maxY=y; maxM=m; } });
+  return {y:maxY,m:maxM};
+}
+function contarMes(y,m){
+  return FILT.filter(r=>{ const f=getFechaAt(r); return f && f.getFullYear()===y && f.getMonth()===m; }).length;
+}
 function renderKPIs(){
   const total=FILT.length;
   const dnis=new Set(FILT.map(r=>String(getDNI(r)).trim()).filter(Boolean)).size;
   const docs=new Set(FILT.map(r=>norm(getDoc(r))).filter(Boolean)).size;
-  // Promedio por día: total / días distintos con atención
   const dias=new Set(FILT.map(r=>{const f=getFechaAt(r);return f?fmtISO(f):null;}).filter(Boolean)).size || 1;
   const prom=(total/dias);
+
+  // Comparativo mes actual (referencia) vs mes anterior
+  const ref=mesReferencia();
+  let compHTML='';
+  if(ref.y>=0){
+    const actual=contarMes(ref.y,ref.m);
+    const pa = ref.m===0 ? {y:ref.y-1,m:11} : {y:ref.y,m:ref.m-1};
+    const anterior=contarMes(pa.y,pa.m);
+    const diff = anterior===0 ? (actual>0?100:0) : ((actual-anterior)/anterior*100);
+    const up = actual>=anterior;
+    const arrow = up?'▲':'▼';
+    const col = up?'var(--verde)':'var(--rojo)';
+    compHTML = `<div class="kpi" style="--accent:${col}"><span class="ic">📊</span>
+      <div class="n" style="color:${col}">${arrow} ${Math.abs(diff).toFixed(0)}%</div>
+      <div class="l">${MESES_L[ref.m]} vs mes anterior</div>
+      <div class="sub">${actual} vs ${anterior} atención(es)</div></div>`;
+  }
 
   const data=[
     {ic:'📋',n:total,l:'Total de atenciones',sub:'registros encontrados',c:'var(--azul)'},
@@ -506,7 +591,7 @@ function renderKPIs(){
   ];
   document.getElementById('kpis').innerHTML = data.map(k=>
     `<div class="kpi" style="--accent:${k.c}"><span class="ic">${k.ic}</span>
-      <div class="n">${k.n}</div><div class="l">${k.l}</div><div class="sub">${k.sub}</div></div>`).join('');
+      <div class="n">${k.n}</div><div class="l">${k.l}</div><div class="sub">${k.sub}</div></div>`).join('') + compHTML;
 }
 
 /* ───────── Gráfico 1: por período ───────── */
@@ -602,46 +687,50 @@ function renderGraficoFundo(){
   });
 }
 
-/* ───────── Control de retornos ───────── */
+/* ───────── Control de retornos (dinámico) ───────── */
+// Agrupa por tipo de documento todos los registros que generan retorno
 function calcularRetornos(){
-  // Devuelve por tipo: lista de {dni,nombre,fechaRetorno,dias} con FTD+1 >= hoy
   const h=hoy0();
-  const out={};
-  Object.keys(DOCS_RETORNO).forEach(k=>out[k]={trabajadores:new Set(),dias:0,registros:[]});
+  const porDoc=new Map();   // doc -> {trabajadores:Set, dias:num, registros:[]}
   FILT.forEach(r=>{
-    const dk=norm(getDoc(r));
-    if(!out[dk]) return;
-    const ftd=getFTD(r); if(!ftd) return;
-    const ret=addDias(ftd,1);
-    out[dk].trabajadores.add(String(getDNI(r)).trim());
-    out[dk].dias += getDias(r) || (getFID(r)?Math.max(0,diasEntre(getFID(r),ftd)+1):0);
-    out[dk].registros.push({ dni:getDNI(r), nombre:getNombre(r), fechaRetorno:ret, dias:getDias(r),
-      fundo:getFundo(r), futuro: ret>=h });
+    if(!generaRetorno(r)) return;
+    const doc=String(getDoc(r)||'(sin documento)').trim()||'(sin documento)';
+    const ftd=getFTD(r); const ret=addDias(ftd,1);
+    if(!porDoc.has(doc)) porDoc.set(doc,{trabajadores:new Set(),dias:0,registros:[]});
+    const o=porDoc.get(doc);
+    o.trabajadores.add(String(getDNI(r)).trim());
+    o.dias += getDias(r);
+    o.registros.push({ dni:getDNI(r), nombre:getNombre(r), fechaRetorno:ret, dias:getDias(r),
+      fundo:getFundo(r), doc, futuro: ret>=h });
   });
-  return out;
+  return porDoc;
 }
+
 function renderRetornos(){
-  const ret=calcularRetornos();
-  const h=hoy0();
-  const html=Object.entries(DOCS_RETORNO).map(([k,cfg])=>{
-    const data=ret[k];
-    const nTrab=data.trabajadores.size;
-    const nDias=data.dias;
-    // próximos: agrupa por fecha de retorno futura
+  const porDoc=calcularRetornos();
+  const cont=document.getElementById('retGrid');
+  if(!porDoc.size){
+    cont.innerHTML='<div class="ret-empty" style="grid-column:1/-1;padding:18px;text-align:center">Ningún documento con fecha de término y días en el período seleccionado.</div>';
+    return;
+  }
+  // Ordenar por cantidad de trabajadores desc, top 6 tarjetas
+  const arr=[...porDoc.entries()].sort((a,b)=>b[1].trabajadores.size-a[1].trabajadores.size).slice(0,6);
+  cont.innerHTML = arr.map(([doc,data])=>{
+    const color=colorDoc(doc);
     const fut=data.registros.filter(x=>x.futuro);
     const porFecha=new Map();
-    fut.forEach(x=>{ const key=fmtISO(x.fechaRetorno); porFecha.set(key,(porFecha.get(key)||0)+1); });
+    fut.forEach(x=>{ const k=fmtISO(x.fechaRetorno); porFecha.set(k,(porFecha.get(k)||0)+1); });
     const prox=[...porFecha.entries()].sort((a,b)=>a[0].localeCompare(b[0])).slice(0,4);
     const proxHTML = prox.length
       ? prox.map(([f,q])=>{ const d=parseFecha(f); return '<div class="it"><span class="f">'+fmt(d)+'</span><span class="q">'+q+'</span></div>'; }).join('')
       : '<div class="ret-empty">Sin retornos próximos</div>';
     return `<div class="ret-card">
-      <div class="ret-head" style="background:${cfg.color}">
-        <span class="ic">🩺</span><span class="t">${cfg.label}</span>
+      <div class="ret-head" style="background:${color}">
+        <span class="ic">🩺</span><span class="t">${esc(doc)}</span>
       </div>
       <div class="ret-body">
-        <div class="ret-stat"><span class="lab">Trabajadores</span><span class="val">${nTrab}</span></div>
-        <div class="ret-stat"><span class="lab">Días acumulados</span><span class="val">${nDias}</span></div>
+        <div class="ret-stat"><span class="lab">Trabajadores</span><span class="val">${data.trabajadores.size}</span></div>
+        <div class="ret-stat"><span class="lab">Días acumulados</span><span class="val">${data.dias}</span></div>
         <div class="ret-next">
           <div class="h">Próximos retornos</div>
           ${proxHTML}
@@ -649,49 +738,48 @@ function renderRetornos(){
       </div>
     </div>`;
   }).join('');
-  document.getElementById('retGrid').innerHTML = html;
 }
 
 /* ───────── Tablero próximos retornos (tabla con clic) ───────── */
-let _retDetalle = {};  // key fechaISO|tipo -> registros
+let _retDetalle = {};  // key fechaISO|doc -> registros
 function renderTableroRetornos(){
-  const ret=calcularRetornos();
-  const h=hoy0();
+  const porDoc=calcularRetornos();
   _retDetalle={};
   const filas=[];
-  Object.entries(DOCS_RETORNO).forEach(([k,cfg])=>{
-    const fut=ret[k].registros.filter(x=>x.futuro);
+  porDoc.forEach((data,doc)=>{
+    const fut=data.registros.filter(x=>x.futuro);
     const porFecha=new Map();
-    fut.forEach(x=>{ const key=fmtISO(x.fechaRetorno);
-      if(!porFecha.has(key)) porFecha.set(key,[]);
-      porFecha.get(key).push(x);
+    fut.forEach(x=>{ const k=fmtISO(x.fechaRetorno);
+      if(!porFecha.has(k)) porFecha.set(k,[]);
+      porFecha.get(k).push(x);
     });
     porFecha.forEach((regs,fISO)=>{
-      const dk=fISO+'|'+k; _retDetalle[dk]=regs;
-      filas.push({ fISO, tipo:cfg.label, pill:cfg.pill, cant:regs.length, dk });
+      const dk=fISO+'||'+doc; _retDetalle[dk]=regs;
+      filas.push({ fISO, doc, cant:regs.length, dk, color:colorDoc(doc) });
     });
   });
-  filas.sort((a,b)=>a.fISO.localeCompare(b.fISO));
+  filas.sort((a,b)=> a.fISO===b.fISO ? b.cant-a.cant : a.fISO.localeCompare(b.fISO));
   const tb=document.getElementById('tbReta');
   if(!filas.length){ tb.innerHTML='<tr><td colspan="3" style="text-align:center;color:#94a3b8;padding:20px">No hay retornos próximos con los filtros actuales</td></tr>'; return; }
   tb.innerHTML = filas.map(f=>{
     const d=parseFecha(f.fISO);
-    return `<tr onclick="verDetalleRetorno('${f.dk}')">
+    return `<tr onclick="verDetalleRetorno('${esc(f.dk).replace(/'/g,'')}')">
       <td style="font-weight:700">${fmt(d)}</td>
-      <td><span class="pill ${f.pill}">${f.tipo}</span></td>
+      <td><span class="pill" style="background:${f.color}15;color:${f.color}">${esc(f.doc)}</span></td>
       <td style="text-align:right"><span class="pill pill-q">${f.cant}</span></td>
     </tr>`;
   }).join('');
 }
 function verDetalleRetorno(dk){
-  const regs=_retDetalle[dk]||[];
-  const [fISO,tipo]=dk.split('|');
+  const regs=_retDetalle[dk]||Object.values(_retDetalle).find((v,i)=>Object.keys(_retDetalle)[i].replace(/'/g,'')===dk)||[];
+  const [fISO,doc]=dk.split('||');
   const d=parseFecha(fISO);
   document.getElementById('dlgRetTit').textContent = 'Retornos · '+fmt(d);
   const body=document.getElementById('dlgRetBody');
   if(!regs.length){ body.innerHTML='<div class="ret-empty" style="padding:20px">Sin trabajadores</div>'; }
   else{
-    body.innerHTML='<table class="tb"><thead><tr><th>DNI</th><th>Nombre</th><th>Fundo</th><th style="text-align:right">Días</th></tr></thead><tbody>'+
+    body.innerHTML='<div style="padding:10px 16px 0;font-size:12px;color:#64748b;font-weight:600">'+esc(doc||'')+'</div>'+
+      '<table class="tb"><thead><tr><th>DNI</th><th>Nombre</th><th>Fundo</th><th style="text-align:right">Días</th></tr></thead><tbody>'+
       regs.map(x=>`<tr style="cursor:default"><td>${esc(x.dni)}</td><td>${esc(x.nombre)}</td><td>${esc(x.fundo||'—')}</td><td style="text-align:right;font-weight:700">${x.dias||'—'}</td></tr>`).join('')+
       '</tbody></table>';
   }
@@ -699,7 +787,46 @@ function verDetalleRetorno(dk){
 }
 function cerrarDlg(){ document.getElementById('dlgRet').classList.remove('on'); }
 
-/* ───────── Top 10 ───────── */
+/* ───────── Comparativo por documento (mes vs mes anterior) ───────── */
+function renderComparativoDoc(){
+  const ref=mesReferencia();
+  const tb=document.getElementById('tbComp');
+  const lbl=document.getElementById('compMesLbl');
+  if(ref.y<0){ tb.innerHTML='<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:18px">Sin datos de fecha para comparar</td></tr>'; lbl.textContent=''; return; }
+  const pa = ref.m===0 ? {y:ref.y-1,m:11} : {y:ref.y,m:ref.m-1};
+  lbl.textContent = MESES_L[pa.m]+' '+pa.y+'  →  '+MESES_L[ref.m]+' '+ref.y;
+
+  const cuenta=(y,m)=>{
+    const map=new Map();
+    FILT.forEach(r=>{ const f=getFechaAt(r); if(!f||f.getFullYear()!==y||f.getMonth()!==m) return;
+      const d=String(getDoc(r)||'(sin documento)').trim()||'(sin documento)';
+      map.set(d,(map.get(d)||0)+1); });
+    return map;
+  };
+  const act=cuenta(ref.y,ref.m), ant=cuenta(pa.y,pa.m);
+  const docs=new Set([...act.keys(),...ant.keys()]);
+  const filas=[...docs].map(d=>{
+    const a=act.get(d)||0, b=ant.get(d)||0;
+    const diff = b===0 ? (a>0?100:0) : ((a-b)/b*100);
+    return {doc:d, ant:b, act:a, diff, abs:Math.abs(a-b)};
+  }).sort((x,y)=>y.act-x.act);
+
+  if(!filas.length){ tb.innerHTML='<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:18px">Sin documentos en estos meses</td></tr>'; return; }
+  tb.innerHTML = filas.map(f=>{
+    const up=f.act>=f.ant;
+    const col=up?'var(--verde)':'var(--rojo)';
+    const arrow=f.act===f.ant?'=':(up?'▲':'▼');
+    const pct = (f.ant===0 && f.act>0) ? 'nuevo' : (Math.abs(f.diff).toFixed(0)+'%');
+    return `<tr style="cursor:default">
+      <td style="font-weight:600">${esc(f.doc)}</td>
+      <td style="text-align:right;color:var(--gr)">${f.ant}</td>
+      <td style="text-align:right;font-weight:800;color:var(--azul)">${f.act}</td>
+      <td style="text-align:right;font-weight:700;color:${col}">${arrow} ${pct}</td>
+    </tr>`;
+  }).join('');
+}
+
+
 function renderTop10(){
   const map=new Map();
   FILT.forEach(r=>{ const d=String(getDoc(r)||'(sin documento)').trim()||'(sin documento)';
