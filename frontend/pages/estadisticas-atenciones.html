@@ -247,6 +247,9 @@ table.tb tbody tr:hover{background:#f8fafc}
    ════════════════════════════════════════════════════════════════ */
 
 const API_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+// Azure (solo lectura): histórico completo de atenciones — misma vía que el dashboard
+const AZURE_FN_BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api';
+const AZURE_FN_KEY_ATLIST = 'mAcqIAfE5WQdqpcPxLvWmh6-FDk0rrIkQZyVIllZONO0AzFuaEOVBQ==';
 let USER = {}, API = API_DEFAULT;
 let RAW_ALL = [];      // todo lo que devuelve el backend (segun permisos)
 let RAW = [];          // tras aplicar scope (mias/todas)
@@ -345,23 +348,42 @@ async function apiGet(params){
 })();
 
 async function cargarDatos(){
+  let data = null, fuente = '';
+
+  // 1) Azure primero: histórico completo (dias=365), igual que el dashboard
   try{
-    const d = await apiGet({ action:'getAtencionesOptimizado', usuario:USER.usuario,
-      nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa:'' });
-    if(!d || !d.success || !Array.isArray(d.data)){
-      mostrarVacio('No se pudieron cargar las atenciones', d && d.error ? d.error : 'Respuesta inesperada del servidor');
-      return;
+    const _t0 = Date.now();
+    const resp = await fetch(AZURE_FN_BASE + '/atenciones?dias=365&code=' + encodeURIComponent(AZURE_FN_KEY_ATLIST));
+    if(resp.ok){
+      const json = await resp.json();
+      if(json && json.success && Array.isArray(json.data)){
+        // normalizar fechas a YYYY-MM-DD (como hace el dashboard)
+        const _fld=['fecha_atencion','fecha_inicio_periodo','fecha_termino_periodo','fecha_inicio_doc','fecha_termino_doc','fecha_registro','fecha_creacion'];
+        json.data.forEach(a=>_fld.forEach(c=>{ if(a[c]) a[c]=String(a[c]).slice(0,10); }));
+        data = json.data; fuente = 'Azure';
+        console.log('[estadisticas] Azure:', data.length, 'registros |', (Date.now()-_t0)+'ms');
+      }
     }
-    RAW_ALL = d.data;
+    if(!data) console.warn('[estadisticas] Azure status', resp.status, '- fallback a GAS');
+  }catch(e){ console.warn('[estadisticas] Azure error:', e.message, '- fallback a GAS'); }
 
-    // Solo 'jtimoteo' (administrador) puede ver estadísticas generales (Todas)
-    _esAdmin = (norm(USER.usuario) === 'JTIMOTEO');
-    document.getElementById('scopeWrap').style.display = _esAdmin ? 'flex' : 'none';
-
-    aplicarScope();   // define RAW segun _scope, luego puebla filtros y renderiza
-  }catch(e){
-    mostrarVacio('Error de conexión', e.message);
+  // 2) Fallback: GAS (puede traer menos histórico, pero asegura datos)
+  if(!data){
+    try{
+      const d = await apiGet({ action:'getAtencionesOptimizado', usuario:USER.usuario,
+        nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa:'' });
+      if(d && d.success && Array.isArray(d.data)){ data = d.data; fuente = 'GAS'; }
+      else { mostrarVacio('No se pudieron cargar las atenciones', d && d.error ? d.error : 'Respuesta inesperada del servidor'); return; }
+    }catch(e){ mostrarVacio('Error de conexión', e.message); return; }
   }
+
+  RAW_ALL = data;
+
+  // Solo 'jtimoteo' (administrador) puede ver estadísticas generales (Todas)
+  _esAdmin = (norm(USER.usuario) === 'JTIMOTEO');
+  document.getElementById('scopeWrap').style.display = _esAdmin ? 'flex' : 'none';
+
+  aplicarScope();
 }
 
 function aplicarScope(){
