@@ -258,6 +258,8 @@ let charts = {};       // instancias Chart.js
 let _periodoModo = 'mes';   // semanal | quincenal | mensual
 let _scope = 'mias';        // mias | todas
 let _esAdmin = false;
+let _soloMias = true;     // al cargar pedimos solo las atenciones del usuario (rapido)
+let _cargoTodas = false;  // true cuando ya bajamos el historico completo (admin)
 
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 const MESES_L = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -403,6 +405,7 @@ async function cargarDatos(){
   }
 
   RAW_ALL = data;
+  _cargoTodas = !_soloMias;   // si trajimos todo, el historico ya esta completo
 
   // Solo 'jtimoteo' (administrador) puede ver estadísticas generales (Todas)
   _esAdmin = (norm(USER.usuario) === 'JTIMOTEO');
@@ -434,6 +437,15 @@ function setScope(s){
     return;
   }
   if(_scope===s) return;
+  if(s==='todas' && _esAdmin && !_cargoTodas){
+    _scope=s;
+    document.getElementById('scopeMias').classList.toggle('on', false);
+    document.getElementById('scopeTodas').classList.toggle('on', true);
+    mostrarVacio('Cargando historico completo...', 'Esto puede tardar unos segundos la primera vez.');
+    _soloMias = false;
+    cargarDatos();
+    return;
+  }
   _scope=s;
   document.getElementById('scopeMias').classList.toggle('on', s==='mias');
   document.getElementById('scopeTodas').classList.toggle('on', s==='todas');
