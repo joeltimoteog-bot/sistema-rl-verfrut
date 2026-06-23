@@ -522,7 +522,7 @@ h3{font-size:16px !important}
       <div class="sec-hd">
         <h2>⚖️ Registro de Casos</h2>
         <button class="btn-n" onclick="abrirNuevoCaso()">+ Nuevo Caso</button>
-        <button class="btn-n" id="btnCumplimientoCasos" onclick="mostrarCumplimientoCasos()" style="background:#0a4a8f">📊 Indicadores de Cumplimiento</button>
+        <button class="btn-n" id="btnCumplimientoCasos" onclick="mostrarCumplimientoCasos()" style="background:#0a4a8f;display:none">📊 Indicadores de Cumplimiento</button>
       </div>
 
       <!-- FILTROS -->
@@ -7828,7 +7828,12 @@ function ir(id,btn){
         }, 120000);
       }
       if(id==='fusiones'     && !_fusionesData.length)      cargarFusiones();
-      if(id==='casos') { cargarMotivosCasos(); if(!casosData.length) cargarCasos(); }
+      if(id==='casos') {
+        // Solo admins ven 'Indicadores de Cumplimiento'
+        var _bCump = document.getElementById('btnCumplimientoCasos');
+        if(_bCump){ _bCump.style.display = (ROLES_ADMIN.includes(USER.rol)||ROLES_ADMIN2.includes(USER.rol)) ? '' : 'none'; }
+        cargarMotivosCasos(); if(!casosData.length) cargarCasos();
+      }
       if(id==='usuarios')                                   cargarUs();
     }, 0);
     // Redibujar gráficos al volver al dashboard
