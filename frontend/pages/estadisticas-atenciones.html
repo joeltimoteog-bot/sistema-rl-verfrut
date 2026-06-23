@@ -362,7 +362,9 @@ async function cargarDatos(){
     const _fld=['fecha_atencion','fecha_inicio_periodo','fecha_termino_periodo','fecha_inicio_doc','fecha_termino_doc','fecha_registro','fecha_creacion'];
     const LIM = 1000;
     // Si NO es admin, pedimos a Azure SOLO las atenciones de este usuario (mucho mas rapido).
-    const _qUser = _soloMias ? ('&usuario=' + encodeURIComponent(USER.usuario)) : '';
+    const _qUser = _soloMias
+      ? ('&usuario=' + encodeURIComponent(USER.usuario))
+      : ('&desde=' + _ANIO + '-01-01');   // Todas: solo el anio actual desde el servidor
     let pagina = 1, acumulado = [], totalServidor = null, seguir = true;
 
     while(seguir && pagina <= 20){   // tope duro de 30 páginas (30k filas) por seguridad
