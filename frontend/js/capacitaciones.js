@@ -762,7 +762,7 @@ async function procesarDni(dni) {
 
   mostrarFeedback('ok', `🔍 Buscando DNI ${dni}...`);
   try {
-    const d = await apiGet({ action: 'buscarTrabajador', q: dni, empresa: 'AMBAS' });
+    const d = await buscarTrabajadorAzure(dni);
 
     // CAPA 2b: Re-chequeo POST-await (race condition safe)
     // Otro escaneo del mismo DNI pudo agregarlo mientras esperábamos la API.
@@ -789,6 +789,29 @@ async function procesarDni(dni) {
 }
 
 /* ─────────────────────── DNI MANUAL ─────────────────────── */
+async function buscarTrabajadorAzure(dni) {
+  const d = String(dni || '').trim().replace(/\D/g, '');
+  const dni8 = d.length === 7 ? '0' + d : d;
+  const URL = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/trabajadores/buscar?dni=' + encodeURIComponent(dni8);
+  try {
+    const r = await fetch(URL, { method: 'GET' });
+    if (!r.ok) return { success: false, data: [] };
+    const j = await r.json();
+    const arr = (j.trabajadores || []).map(function(t) {
+      return {
+        dni:     String(t.dni || dni8),
+        nombre:  t.nombre_completo || '',
+        empresa: t.empresa || '',
+        cargo:   t.oficio || '',
+        sexo:    t.sexo || ''
+      };
+    });
+    return { success: true, data: arr };
+  } catch (e) {
+    return { success: false, data: [], error: String(e) };
+  }
+}
+
 async function buscarDniManual() {
   const raw = (v('dniManual') || '').trim().replace(/\D/g, '');
   if (raw.length !== 8) { mostrarFeedback('err', 'El DNI debe tener exactamente 8 dígitos'); return; }
@@ -853,7 +876,7 @@ function renderLista() {
 async function buscarCapacitador(dni) {
   if ((dni || '').length !== 8) return;
   try {
-    const d = await apiGet({ action: 'buscarTrabajador', q: dni, empresa: 'AMBAS' });
+    const d = await buscarTrabajadorAzure(dni);
     if (d.success && d.data && d.data.length) {
       const t = d.data[0];
       if (!v('capCapNombre')) sv('capCapNombre', t.nombre || '');
@@ -1379,7 +1402,7 @@ async function buscarSupervisorPorDNI() {
       }
     }
     // 2. Fallback: buscar en BD_Trabajadores
-    const dt = await apiGet({ action: 'buscarTrabajador', q: dni, empresa: 'AMBAS' });
+    const dt = await buscarTrabajadorAzure(dni);
     if (dt.success && dt.data && dt.data.length) {
       sv('capRespNombre', dt.data[0].nombre || '');
       sv('capRespCargo',  dt.data[0].cargo  || '');

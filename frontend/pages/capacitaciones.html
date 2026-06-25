@@ -14,6 +14,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body{ font-family: 'Barlow', sans-serif; background: #f1f5f9; color: #0f172a; min-height: 100vh; }
@@ -191,6 +192,7 @@ h3{font-size:16px !important}
 <div class="tabs">
   <button class="tab-btn on"  id="tabBtnNueva"       onclick="abrirNuevaCapacitacion()">➕ Nueva Capacitación</button>
   <button class="tab-btn"     id="tabBtnRetroactivo"  onclick="abrirCapacitacionRetroactiva()">📅 Fecha Anterior</button>
+  <button class="tab-btn"     id="tabBtnExcel"        onclick="abrirCargaExcel()">📤 Cargar Excel</button>
   <button class="tab-btn"     id="tabBtnRegistros"    onclick="showTab('registros',this)">📋 Registros</button>
   <button class="tab-btn"     id="tabBtnExportar"     onclick="showTab('exportar',this)">📤 Exportar</button>
 </div>
@@ -424,6 +426,20 @@ h3{font-size:16px !important}
   </div>
 </div>
 
+<!-- ══ TAB: CARGAR EXCEL ══ -->
+<div class="tab-content" id="tab-excel">
+  <div class="card">
+    <div class="card-title">📤 Cargar asistentes desde Excel</div>
+    <p style="color:#475569;font-size:13px;margin-bottom:14px">Sube un Excel/CSV con una columna <b>DNI</b>. Se consultan en Azure y se pre-cargan como asistentes del formato R-SC-01 (20 por hoja).</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+      <input type="file" id="excelFile" accept=".xlsx,.xls,.csv" onchange="onExcelFile(event)">
+      <button class="btn btn-gray btn-sm" onclick="descargarPlantillaExcel()">⬇️ Descargar plantilla</button>
+    </div>
+    <div id="excelEstado" style="font-size:13px;color:#475569;margin-bottom:10px"></div>
+    <div id="excelResultado"></div>
+  </div>
+</div>
+
 <!-- ══════════════════ TAB: REGISTROS ══════════════════ -->
 <div class="tab-content" id="tab-registros">
 
@@ -551,5 +567,6 @@ h3{font-size:16px !important}
 
 <script src="../js/modal-system.js"></script>
   <script src="../js/capacitaciones.js"></script>
+  <script src="../js/capacitaciones-excel.js"></script>
 </body>
 </html>
