@@ -3498,7 +3498,14 @@ function editarCaso(idx) {
   if (psanc) psanc.style.display = _modoCaso === 'concluido' ? 'block' : 'none';
   // Prefill sanción
   const ts = document.getElementById('cTipoSancion');
-  if (ts) ts.value = c.tipo_sancion || '';
+  const _tsGuardada = String(c.tipo_sancion || '').trim();
+  const _tieneMedidaReal = _tsGuardada !== '' && _tsGuardada.toUpperCase() !== 'PENDIENTE';
+  // Toggle segun lo guardado: medida real => SI; vacio/PENDIENTE => NO
+  const _rSi = document.querySelector('input[name="medidaDisp"][value="SI"]');
+  const _rNo = document.querySelector('input[name="medidaDisp"][value="NO"]');
+  if (_rSi && _rNo) { _rSi.checked = _tieneMedidaReal; _rNo.checked = !_tieneMedidaReal; }
+  if (ts) ts.value = _tieneMedidaReal ? _tsGuardada : '';
+  if (typeof toggleMedidaDisponible === 'function') toggleMedidaDisponible();
   const si = document.getElementById('cSancionInicio');
   if (si) si.value = c.sancion_fecha_inicio || '';
   const sf = document.getElementById('cSancionFin');
@@ -3785,6 +3792,17 @@ function calcularEstadoCaso(fechaLimiteStr) {
 }
 
 // ── Sanción: mostrar/ocultar panel de suspensión y calcular días ──
+function toggleMedidaDisponible() {
+  const sel = document.querySelector('input[name="medidaDisp"]:checked');
+  const tieneMedida = sel && sel.value === 'SI';
+  const wrap = document.getElementById('wrapTipoSancion');
+  if (wrap) wrap.style.display = tieneMedida ? 'grid' : 'none';
+  if (!tieneMedida) {
+    const ts = document.getElementById('cTipoSancion'); if (ts) ts.value = '';
+    const ps = document.getElementById('panelSuspension'); if (ps) ps.style.display = 'none';
+  }
+}
+
 function mostrarSuspensionCaso() {
   const tipo = document.getElementById('cTipoSancion').value;
   const panel = document.getElementById('panelSuspension');
@@ -3893,7 +3911,10 @@ async function guardarCaso() {
   const sancionInicio = (document.getElementById('cSancionInicio')?.value || '').trim();
   const sancionFin    = (document.getElementById('cSancionFin')?.value || '').trim();
   const sancionDias   = (document.getElementById('cSancionDias')?.value || '').trim();
-  if (esConcluido) {
+  // Toggle: ¿ya tiene la medida? Por defecto NO => PENDIENTE
+  const _medidaSel = document.querySelector('input[name="medidaDisp"]:checked');
+  const _medidaDisponible = _medidaSel && _medidaSel.value === 'SI';
+  if (esConcluido && _medidaDisponible) {
     if (!tipoSancion) { mostrarToast('❌ Selecciona el Tipo de Sanción','error'); return; }
     if (tipoSancion === 'Suspensión') {
       if (!sancionInicio) { mostrarToast('❌ Indica la fecha de inicio de la suspensión','error'); return; }
@@ -3941,7 +3962,7 @@ async function guardarCaso() {
       estado_caso:                estadoPlazo,
       estado_gestion:             estadoGestion,
       gravedad,
-      tipo_sancion:               esConcluido ? tipoSancion : '',
+      tipo_sancion:               esConcluido ? (_medidaDisponible ? tipoSancion : 'PENDIENTE') : '',
       sancion_fecha_inicio:       (esConcluido && tipoSancion === 'Suspensión') ? sancionInicio : '',
       sancion_fecha_fin:          (esConcluido && tipoSancion === 'Suspensión') ? sancionFin : '',
       sancion_dias:               (esConcluido && tipoSancion === 'Suspensión') ? Number(sancionDias) || 0 : 0,
@@ -3990,9 +4011,12 @@ async function guardarCaso() {
 
       // BUG 1: NO cerrar el modal — mostrar mensaje de éxito dentro
       const msgEl = document.getElementById('cGuardarMsg');
-      const textoOk = _editandoCasoNro
+      const _avisoPend = (esConcluido && !_medidaDisponible)
+        ? ' — Medida PENDIENTE: cuando tu jefatura la indique, da Editar y registra la medida.'
+        : '';
+      const textoOk = (_editandoCasoNro
         ? '✅ Caso actualizado correctamente'
-        : '✅ Caso registrado correctamente (N° ' + nroCaso + ')';
+        : '✅ Caso registrado correctamente (N° ' + nroCaso + ')') + _avisoPend;
       if (msgEl) {
         msgEl.textContent = textoOk;
         msgEl.style.display = 'block';
@@ -9866,7 +9890,12 @@ window._fbSuscribirEstadisticas = function(callback) {
       <!-- Sanción (solo en modo concluido) -->
       <div id="panelSancionCaso" style="display:none;border-top:2px solid #e2e8f0;padding-top:14px;margin-bottom:14px">
         <div style="font-size:12px;font-weight:700;color:#0b1e45;margin-bottom:10px">⚖️ Tipo de Sanción</div>
-        <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:10px">
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:10px">
+          <label style="font-size:11px;font-weight:700;color:#475569;display:block;margin-bottom:6px">¿La administración ya indicó la medida?</label>
+          <label style="font-size:12px;margin-right:16px;cursor:pointer"><input type="radio" name="medidaDisp" value="NO" checked onchange="toggleMedidaDisponible()"> No, queda <b>PENDIENTE</b></label>
+          <label style="font-size:12px;cursor:pointer"><input type="radio" name="medidaDisp" value="SI" onchange="toggleMedidaDisponible()"> Sí, la registro ahora</label>
+        </div>
+        <div id="wrapTipoSancion" style="display:none;grid-template-columns:1fr;gap:10px;margin-bottom:10px">
           <div>
             <label style="font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:3px">Sanción aplicada *</label>
             <select id="cTipoSancion" onchange="mostrarSuspensionCaso()" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
