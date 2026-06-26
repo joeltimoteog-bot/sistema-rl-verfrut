@@ -22,6 +22,7 @@ let _totalFormatos           = 1;
 let _esRetroactivo           = false;
 let _fechaRetroactiva        = null;
 let _motivoRetroactivo       = '';
+let _capGuardada             = false; // flujo unificado guardar+PDF
 
 /* ─────────────────────── LISTAS DESPLEGABLES ─────────────────────── */
 const LISTAS_DEFAULT = {
@@ -590,6 +591,8 @@ function cancelarCapacitacion() {
 }
 
 async function continuarAPaso1() {
+  _capGuardada = false;
+  { const _bg = document.getElementById('btnGuardarGen'); if (_bg) { _bg.disabled = false; _bg.innerHTML = '💾 Guardar y generar PDF R-SC-01'; } }
   const n = parseInt(v('cantTrabajadores')) || 0;
   if (n < 1) { await appAlert('Ingresa al menos 1 trabajador'); return; }
   _trabajadoresProgramados = n;
@@ -934,6 +937,24 @@ function calcHoras() {
 }
 
 /* ─────────────────────── GUARDAR ─────────────────────── */
+async function guardarYGenerar() {
+  const btn = document.getElementById('btnGuardarGen');
+  if (_capGuardada) {            // ya guardado en BD: solo (re)generar PDF
+    await generarPDFsFormatos();
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Guardando...'; }
+  const ok = await guardarCapacitacion();   // 1) guarda en BD primero
+  if (!ok) {                                 // si falla, NO genera PDF
+    if (btn) { btn.disabled = false; btn.innerHTML = '💾 Guardar y generar PDF R-SC-01'; }
+    return;
+  }
+  _capGuardada = true;
+  if (btn) btn.innerHTML = '<span class="spin"></span> Generando PDF...';
+  await generarPDFsFormatos();               // 2) genera PDF(s)
+  if (btn) { btn.disabled = true; btn.innerHTML = '✅ Guardado y PDF generado — usa "Nueva"'; }
+}
+
 async function guardarCapacitacion() {
   // ── Pre-validación completa ──
   if (!asistentes.length) {
@@ -947,7 +968,7 @@ async function guardarCapacitacion() {
     return;
   }
 
-  const btn = document.getElementById('btnGuardar');
+  const btn = document.getElementById('btnGuardar') || {};
   btn.disabled = true;
   btn.innerHTML = '<span class="spin"></span> Guardando...';
   let guardadoOk = false;
@@ -973,6 +994,7 @@ async function guardarCapacitacion() {
       btn.innerHTML = '💾 Guardar';
     }
   }
+  return guardadoOk;
 }
 
 async function _buildBody() {
@@ -1038,7 +1060,7 @@ async function generarPDFsFormatos() {
     if (!ok) return;
   }
 
-  const btn = document.getElementById('btnPDF');
+  const btn = document.getElementById('btnPDF') || {};
   btn.disabled = true;
   try {
     for (let i = 0; i < totalFormatos; i++) {
@@ -1756,6 +1778,7 @@ window.cancelarCapacitacion         = cancelarCapacitacion;
 window.continuarAPaso1              = continuarAPaso1;
 window.actualizarProgresoAsistentes = actualizarProgresoAsistentes;
 window.generarPDFsFormatos          = generarPDFsFormatos;
+window.guardarYGenerar              = guardarYGenerar;
 window.regenerarFormatoCapacitacion = regenerarFormatoCapacitacion;
 window._mostrarModalBusquedaCapacitaciones = _mostrarModalBusquedaCapacitaciones;
 window._ejecutarBusquedaCapacitaciones = _ejecutarBusquedaCapacitaciones;
