@@ -205,6 +205,7 @@ h3{font-size:16px !important}
     <button class="ni" id="navCasos" onclick="ir('casos',this)" style="position:relative"><span class="ic">⚖️</span>Registro de Casos<span id="badgeCasos" style="display:none;background:#dc2626;color:#fff;border-radius:10px;font-size:10px;font-weight:700;min-width:17px;height:17px;line-height:17px;text-align:center;padding:0 4px;margin-left:auto;flex-shrink:0"></span></button>
     <button class="ni" id="navFusiones" onclick="ir('fusiones',this)"><span class="ic">🚌</span>Fusiones de Buses</button>
     <button class="ni" onclick="location.href='capacitaciones.html'"><span class="ic">📚</span>Capacitaciones</button>
+    <button class="ni" id="navPreaviso" style="display:none" onclick="location.href='preaviso.html'"><span class="ic">⚖️</span>Cartas de Preaviso</button>
     <button class="ni" id="navInventario" style="display:none" onclick="location.href='inventario.html'"><span class="ic">📦</span>Inventario Canastas</button>
     <button class="ni" id="navHoras" style="display:none" onclick="location.href='horas.html'"><span class="ic">⏱️</span>Acumulación de Horas</button>
     <button class="ni" id="navCalcRemu" style="display:none" onclick="location.href='calculo-remunerativo.html'"><span class="ic">🧮</span>Cálculo Remunerativo</button>
@@ -2968,6 +2969,10 @@ window.onload = async () => {
     const _usrHoras = (USER.usuario || '').toLowerCase().trim();
     if (['jtimoteo','ovilela','jchavez'].includes(_usrHoras)) {
       document.getElementById('navHoras').style.display='';
+    }
+    // Cartas de Preaviso: solo jtimoteo, ovilela, jchavez
+    if (['jtimoteo','ovilela','jchavez'].includes((USER.usuario || '').toLowerCase().trim())) {
+      var _np = document.getElementById('navPreaviso'); if (_np) _np.style.display='';
     }
     document.getElementById('navVisitas').style.display='flex';
   if(ROLES_ADMIN.includes(USER.rol)) {
