@@ -20,13 +20,15 @@
     .tabs{background:#fff;display:flex;border-bottom:1px solid #e2e8f0;padding:0 12px;overflow-x:auto;position:sticky;top:54px;z-index:90}
     .tab-btn{padding:13px 18px;font-family:'Barlow',sans-serif;font-size:13px;font-weight:700;color:#64748b;background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;letter-spacing:.2px;white-space:nowrap}
     .tab-btn.on{color:#0a2463;border-bottom-color:#dc2626}
-    .tab-content{display:none;max-width:1280px;margin:0 auto;padding:18px}
+    .tab-content{display:none;max-width:1400px;margin:0 auto;padding:18px}
     .tab-content.on{display:block}
-    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:8px}
     .kpi{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:13px 16px}
     .kpi .n{font-size:30px;font-weight:800;line-height:1;font-family:'Barlow Condensed',sans-serif}
     .kpi .l{font-size:10px;color:#475569;margin-top:5px;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
-    .motivos-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+    .kpi .sub{font-size:11px;color:#64748b;margin-top:4px;font-weight:600}
+    .kpi .sub b{font-family:'Barlow Condensed',sans-serif;font-size:13px}
+    .motivos-chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 14px}
     .mchip{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;color:#475569}
     .mchip b{color:#dc2626;font-family:'Barlow Condensed',sans-serif;font-size:13px}
     .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px}
@@ -53,29 +55,31 @@
     .hint{font-size:11px;color:#94a3b8;margin-top:4px}
     table{width:100%;border-collapse:collapse;font-size:12px}
     th{text-align:left;color:#475569;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:9px 8px;border-bottom:2px solid #e2e8f0;font-weight:700;white-space:nowrap}
-    td{padding:7px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+    td{padding:6px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
     tr:hover td{background:#f8fafc}
-    td select{padding:6px 8px;font-size:12px;border-width:1px}
+    td select,td input{padding:6px 8px;font-size:12px;border-width:1px}
     td select.estado-activo{border-color:#86efac;background:#f0fdf4;color:#15803d;font-weight:700}
     td select.estado-inactivo{border-color:#fca5a5;background:#fef2f2;color:#991b1b;font-weight:700}
+    td select.tipo-almuerzo{border-color:#bfdbfe;background:#eff6ff;color:#1e40af;font-weight:700}
+    td select.tipo-dieta{border-color:#fde68a;background:#fffbeb;color:#92400e;font-weight:700}
+    td .obs-input{min-width:150px}
     .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap}
-    .b-activo{background:#dcfce7;color:#15803d}
-    .b-inactivo{background:#fee2e2;color:#991b1b}
+    .b-emp{background:#e0e7ff;color:#3730a3}
     .empty{text-align:center;color:#94a3b8;padding:30px}
     .loading{text-align:center;color:#94a3b8;padding:24px;font-size:13px}
     .req{color:#dc2626}
-    .grid{display:grid;grid-template-columns:420px 1fr;gap:16px;align-items:start}
+    .grid{display:grid;grid-template-columns:440px 1fr;gap:16px;align-items:start}
     @media(max-width:920px){.grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(3,1fr)}}
     .overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
     .overlay.on{display:flex}
-    .modal{background:#fff;border-radius:14px;padding:22px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto}
+    .modal{background:#fff;border-radius:14px;padding:22px;max-width:560px;width:100%;max-height:85vh;overflow-y:auto}
     .modal h3{font-size:15px;color:#0a2463;margin-bottom:6px}
     .modal p{font-size:12px;color:#475569;margin-bottom:8px}
     .modal .acc{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
-    .preview{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;white-space:pre-wrap;line-height:1.5;max-height:280px;overflow-y:auto;font-family:'Barlow',sans-serif}
+    .preview{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;white-space:pre-wrap;line-height:1.5;max-height:320px;overflow-y:auto;font-family:'Barlow',sans-serif}
     .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0a2463;color:#fff;padding:11px 20px;border-radius:9px;font-size:13px;font-weight:600;opacity:0;transition:.3s;z-index:300;pointer-events:none}
     .toast.on{opacity:1}
-    .saving{font-size:10px;color:#16a34a;font-weight:700;margin-left:6px}
+    .saving{font-size:11px;font-weight:700;margin-left:5px}
   </style>
 </head>
 <body>
@@ -96,8 +100,12 @@
 <div class="tab-content on" id="tab-lista">
 
   <div class="kpis">
-    <div class="kpi"><div class="n" id="kActivos" style="color:#16a34a">0</div><div class="l">Con almuerzo activo</div></div>
-    <div class="kpi"><div class="n" id="kInactivos" style="color:#dc2626">0</div><div class="l">Almuerzo inactivo</div></div>
+    <div class="kpi">
+      <div class="n" id="kActivos" style="color:#16a34a">0</div>
+      <div class="l">Programación activa</div>
+      <div class="sub">🍽️ Almuerzo <b id="kAlmuerzo">0</b> · 🥗 Dieta <b id="kDieta">0</b></div>
+    </div>
+    <div class="kpi"><div class="n" id="kInactivos" style="color:#dc2626">0</div><div class="l">Inactivos (no reciben)</div></div>
     <div class="kpi"><div class="n" id="kTotal" style="color:#0a2463">0</div><div class="l">Total colaboradores</div></div>
   </div>
 
@@ -106,14 +114,17 @@
   <div class="card">
     <div class="toolbar">
       <div class="filtros">
-        <input id="fBuscar" placeholder="🔍 Buscar nombre o DNI…" oninput="render()" style="min-width:200px">
-        <select id="fComedor" onchange="render()">
-          <option value="">Todos los comedores</option>
+        <input id="fBuscar" placeholder="🔍 Buscar nombre o DNI…" oninput="render()" style="min-width:190px">
+        <select id="fComedor" onchange="render()"><option value="">Todos los comedores</option></select>
+        <select id="fTipo" onchange="render()">
+          <option value="">Almuerzo y Dieta</option>
+          <option value="ALMUERZO">Solo Almuerzo</option>
+          <option value="DIETA">Solo Dieta</option>
         </select>
         <select id="fEstado" onchange="render()">
-          <option value="">Todos los estados</option>
-          <option value="ALMUERZO ACTIVO">Activo</option>
-          <option value="ALMUERZO INACTIVO">Inactivo</option>
+          <option value="">Todos</option>
+          <option value="activo">Solo activos</option>
+          <option value="inactivo">Solo inactivos</option>
         </select>
       </div>
       <button class="btn btn-green" onclick="abrirEnvioCorreo()">📧 Enviar resumen por correo</button>
@@ -121,9 +132,9 @@
     <div style="overflow-x:auto">
       <table>
         <thead>
-          <tr><th>DNI</th><th>Nombre y Apellidos</th><th>Cargo</th><th>Régimen</th><th>Comedor asignado</th><th>Estado</th><th>Motivo (si inactivo)</th></tr>
+          <tr><th>DNI</th><th>Nombre y Apellidos</th><th>Cargo</th><th>Régimen</th><th>Empresa</th><th>Comedor</th><th>Tipo</th><th>Estado / Motivo</th><th>Observación</th></tr>
         </thead>
-        <tbody id="tbody"><tr><td colspan="7" class="loading">Cargando lista…</td></tr></tbody>
+        <tbody id="tbody"><tr><td colspan="9" class="loading">Cargando lista…</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -134,7 +145,7 @@
   <div class="grid">
     <div class="card">
       <h2>➕ Agregar colaborador nuevo</h2>
-      <p class="hint" style="margin-top:0">Usar solo cuando ingresa personal nuevo a la empresa. Busca por DNI para traer sus datos y asignarle comedor.</p>
+      <p class="hint" style="margin-top:0">Usar solo cuando ingresa personal nuevo. La empresa se obtiene de Azure al buscar el DNI.</p>
 
       <label>DNI del colaborador <span class="req">*</span></label>
       <div class="dni-row">
@@ -151,15 +162,15 @@
       <label>Comedor asignado <span class="req">*</span></label>
       <select id="nComedor"></select>
 
-      <label>Estado <span class="req">*</span></label>
-      <select id="nEstado" onchange="toggleMotivoNuevo()">
-        <option value="ALMUERZO ACTIVO">Almuerzo activo</option>
-        <option value="ALMUERZO INACTIVO">Almuerzo inactivo</option>
-      </select>
+      <label>Tipo de comida <span class="req">*</span></label>
+      <select id="nTipo"></select>
 
-      <div id="nMotivoWrap" style="display:none">
-        <label>Motivo <span class="req">*</span></label>
-        <select id="nMotivo"></select>
+      <label>Estado <span class="req">*</span></label>
+      <select id="nEstado" onchange="toggleMotivoNuevo()"></select>
+
+      <div id="nObsWrap">
+        <label>Observación</label>
+        <input id="nObs" type="text" placeholder="Ej. Recojo de almuerzos en taper">
       </div>
 
       <div style="display:flex;gap:8px;margin-top:16px">
@@ -170,10 +181,11 @@
     <div class="card">
       <h2>ℹ️ Cómo funciona</h2>
       <p class="hint" style="margin-top:0;line-height:1.6">
-        • La lista de colaboradores ya está cargada en la pestaña <b>Programación</b>.<br>
-        • Ahí puedes cambiar el comedor, el estado (activo/inactivo) y el motivo de cada persona — los cambios se guardan al instante.<br>
-        • Esta pestaña es solo para <b>incorporar a alguien que aún no está</b> en la lista.<br>
-        • El botón <b>Enviar resumen por correo</b> manda a Lucía el detalle del personal con almuerzo activo, agrupado por comedor.
+        • La lista ya está cargada en la pestaña <b>Programación</b>.<br>
+        • Ahí editas comedor, tipo de comida, estado y observación de cada persona — se guarda al instante.<br>
+        • <b>Estado</b>: "ACTIVO" = recibe su comida; cualquier motivo (vacaciones, permiso, etc.) = no recibe.<br>
+        • Esta pestaña es solo para <b>incorporar a alguien nuevo</b> que aún no está en la lista.<br>
+        • <b>Enviar resumen por correo</b> manda a Lucía el detalle de los activos por comedor, separando almuerzo y dieta.
       </p>
     </div>
   </div>
@@ -183,7 +195,7 @@
 <div class="overlay" id="ovCorreo">
   <div class="modal">
     <h3>📧 Enviar resumen de almuerzos</h3>
-    <p>Se enviará a <b>lucia.castillo@unifrutti.com</b> el detalle del personal con almuerzo <b>activo</b> para hoy, agrupado por comedor.</p>
+    <p>Se enviará a <b>lucia.castillo@unifrutti.com</b> el detalle del personal <b>activo</b> de hoy, por comedor y separando almuerzo/dieta.</p>
     <label>Vista previa del correo</label>
     <div class="preview" id="correoPreview">—</div>
     <div class="acc">
