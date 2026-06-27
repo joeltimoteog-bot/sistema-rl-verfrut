@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Programador de Almuerzos — Sistema RR.LL.</title>
+  <link rel="manifest" href="/sistema-rl-verfrut/manifest.json">
+  <link rel="icon" type="image/png" sizes="32x32" href="/sistema-rl-verfrut/frontend/images/favicon-32.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Barlow',sans-serif;background:#f1f5f9;color:#1e293b;font-size:14px}
+    .topbar{background:#0a2463;color:#fff;display:flex;align-items:center;gap:12px;padding:0 16px;height:54px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+    .topbar-logo{height:32px;border-radius:4px;object-fit:contain}
+    .btn-back{color:#fff;text-decoration:none;font-size:13px;font-weight:600;opacity:.85;white-space:nowrap}
+    .btn-back:hover{opacity:1}
+    .topbar-title{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:16px;letter-spacing:.5px;flex:1}
+    .topbar-user{font-size:12px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+    .tabs{background:#fff;display:flex;border-bottom:1px solid #e2e8f0;padding:0 12px;overflow-x:auto;position:sticky;top:54px;z-index:90}
+    .tab-btn{padding:13px 18px;font-family:'Barlow',sans-serif;font-size:13px;font-weight:700;color:#64748b;background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;letter-spacing:.2px;white-space:nowrap}
+    .tab-btn.on{color:#0a2463;border-bottom-color:#dc2626}
+    .tab-content{display:none;max-width:1280px;margin:0 auto;padding:18px}
+    .tab-content.on{display:block}
+    .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+    .kpi{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:13px 16px}
+    .kpi .n{font-size:30px;font-weight:800;line-height:1;font-family:'Barlow Condensed',sans-serif}
+    .kpi .l{font-size:10px;color:#475569;margin-top:5px;text-transform:uppercase;letter-spacing:.4px;font-weight:600}
+    .motivos-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+    .mchip{background:#fff;border:1px solid #e2e8f0;border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;color:#475569}
+    .mchip b{color:#dc2626;font-family:'Barlow Condensed',sans-serif;font-size:13px}
+    .card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:18px}
+    .card h2{font-size:14px;color:#0a2463;margin-bottom:14px;display:flex;align-items:center;gap:7px;font-weight:700}
+    label{font-size:11px;font-weight:600;color:#475569;display:block;margin-bottom:4px;margin-top:10px}
+    input,select,textarea{width:100%;padding:8px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:13px;font-family:inherit}
+    input:focus,select:focus,textarea:focus{outline:none;border-color:#0a2463}
+    .toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+    .filtros{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .filtros input,.filtros select{width:auto;padding:7px 10px;font-size:12px}
+    .btn{border:none;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit}
+    .btn-primary{background:#0a2463;color:#fff}
+    .btn-primary:hover{background:#0b1e45}
+    .btn-green{background:#16a34a;color:#fff}
+    .btn-green:hover{background:#15803d}
+    .btn-ghost{background:#fff;border:1px solid #e2e8f0;color:#475569}
+    .btn-sm{padding:5px 10px;font-size:11px}
+    .dni-row{display:flex;gap:8px}
+    .dni-row input{flex:1}
+    .worker-box{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-top:10px;font-size:12px;display:none}
+    .worker-box.on{display:block}
+    .worker-box .nm{font-weight:700;color:#0a2463;font-size:13px}
+    .worker-box .meta{color:#475569;margin-top:3px}
+    .hint{font-size:11px;color:#94a3b8;margin-top:4px}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    th{text-align:left;color:#475569;font-size:10px;text-transform:uppercase;letter-spacing:.4px;padding:9px 8px;border-bottom:2px solid #e2e8f0;font-weight:700;white-space:nowrap}
+    td{padding:7px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+    tr:hover td{background:#f8fafc}
+    td select{padding:6px 8px;font-size:12px;border-width:1px}
+    td select.estado-activo{border-color:#86efac;background:#f0fdf4;color:#15803d;font-weight:700}
+    td select.estado-inactivo{border-color:#fca5a5;background:#fef2f2;color:#991b1b;font-weight:700}
+    .badge{display:inline-block;padding:3px 9px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap}
+    .b-activo{background:#dcfce7;color:#15803d}
+    .b-inactivo{background:#fee2e2;color:#991b1b}
+    .empty{text-align:center;color:#94a3b8;padding:30px}
+    .loading{text-align:center;color:#94a3b8;padding:24px;font-size:13px}
+    .req{color:#dc2626}
+    .grid{display:grid;grid-template-columns:420px 1fr;gap:16px;align-items:start}
+    @media(max-width:920px){.grid{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(3,1fr)}}
+    .overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+    .overlay.on{display:flex}
+    .modal{background:#fff;border-radius:14px;padding:22px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto}
+    .modal h3{font-size:15px;color:#0a2463;margin-bottom:6px}
+    .modal p{font-size:12px;color:#475569;margin-bottom:8px}
+    .modal .acc{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+    .preview{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px;font-size:12px;white-space:pre-wrap;line-height:1.5;max-height:280px;overflow-y:auto;font-family:'Barlow',sans-serif}
+    .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0a2463;color:#fff;padding:11px 20px;border-radius:9px;font-size:13px;font-weight:600;opacity:0;transition:.3s;z-index:300;pointer-events:none}
+    .toast.on{opacity:1}
+    .saving{font-size:10px;color:#16a34a;font-weight:700;margin-left:6px}
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <img src="../images/logo-unifrutti.jpg" alt="Unifrutti" class="topbar-logo">
+  <a href="dashboard.html" class="btn-back">← Volver</a>
+  <div class="topbar-title">🍽️ Programador de Almuerzos</div>
+  <div class="topbar-user" id="topNombre"></div>
+</div>
+
+<div class="tabs">
+  <button class="tab-btn on" id="tabBtnLista"   onclick="showTab('lista',this)">📋 Programación</button>
+  <button class="tab-btn"    id="tabBtnNuevo"   onclick="showTab('nuevo',this)">➕ Agregar colaborador</button>
+</div>
+
+<!-- TAB LISTA MAESTRA -->
+<div class="tab-content on" id="tab-lista">
+
+  <div class="kpis">
+    <div class="kpi"><div class="n" id="kActivos" style="color:#16a34a">0</div><div class="l">Con almuerzo activo</div></div>
+    <div class="kpi"><div class="n" id="kInactivos" style="color:#dc2626">0</div><div class="l">Almuerzo inactivo</div></div>
+    <div class="kpi"><div class="n" id="kTotal" style="color:#0a2463">0</div><div class="l">Total colaboradores</div></div>
+  </div>
+
+  <div class="motivos-chips" id="motivosChips"></div>
+
+  <div class="card">
+    <div class="toolbar">
+      <div class="filtros">
+        <input id="fBuscar" placeholder="🔍 Buscar nombre o DNI…" oninput="render()" style="min-width:200px">
+        <select id="fComedor" onchange="render()">
+          <option value="">Todos los comedores</option>
+        </select>
+        <select id="fEstado" onchange="render()">
+          <option value="">Todos los estados</option>
+          <option value="ALMUERZO ACTIVO">Activo</option>
+          <option value="ALMUERZO INACTIVO">Inactivo</option>
+        </select>
+      </div>
+      <button class="btn btn-green" onclick="abrirEnvioCorreo()">📧 Enviar resumen por correo</button>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr><th>DNI</th><th>Nombre y Apellidos</th><th>Cargo</th><th>Régimen</th><th>Comedor asignado</th><th>Estado</th><th>Motivo (si inactivo)</th></tr>
+        </thead>
+        <tbody id="tbody"><tr><td colspan="7" class="loading">Cargando lista…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- TAB AGREGAR NUEVO -->
+<div class="tab-content" id="tab-nuevo">
+  <div class="grid">
+    <div class="card">
+      <h2>➕ Agregar colaborador nuevo</h2>
+      <p class="hint" style="margin-top:0">Usar solo cuando ingresa personal nuevo a la empresa. Busca por DNI para traer sus datos y asignarle comedor.</p>
+
+      <label>DNI del colaborador <span class="req">*</span></label>
+      <div class="dni-row">
+        <input id="dni" maxlength="8" inputmode="numeric" placeholder="8 dígitos" oninput="this.value=this.value.replace(/\D/g,'')">
+        <button class="btn btn-primary btn-sm" onclick="buscarDni()">Buscar</button>
+      </div>
+      <div class="hint" id="dniHint"></div>
+
+      <div class="worker-box" id="workerBox">
+        <div class="nm" id="wNombre">—</div>
+        <div class="meta" id="wMeta">—</div>
+      </div>
+
+      <label>Comedor asignado <span class="req">*</span></label>
+      <select id="nComedor"></select>
+
+      <label>Estado <span class="req">*</span></label>
+      <select id="nEstado" onchange="toggleMotivoNuevo()">
+        <option value="ALMUERZO ACTIVO">Almuerzo activo</option>
+        <option value="ALMUERZO INACTIVO">Almuerzo inactivo</option>
+      </select>
+
+      <div id="nMotivoWrap" style="display:none">
+        <label>Motivo <span class="req">*</span></label>
+        <select id="nMotivo"></select>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" style="flex:1" id="btnAgregar" onclick="agregarColaborador()">Guardar colaborador</button>
+        <button class="btn btn-ghost" onclick="limpiarNuevo()">Limpiar</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>ℹ️ Cómo funciona</h2>
+      <p class="hint" style="margin-top:0;line-height:1.6">
+        • La lista de colaboradores ya está cargada en la pestaña <b>Programación</b>.<br>
+        • Ahí puedes cambiar el comedor, el estado (activo/inactivo) y el motivo de cada persona — los cambios se guardan al instante.<br>
+        • Esta pestaña es solo para <b>incorporar a alguien que aún no está</b> en la lista.<br>
+        • El botón <b>Enviar resumen por correo</b> manda a Lucía el detalle del personal con almuerzo activo, agrupado por comedor.
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- Modal envío correo -->
+<div class="overlay" id="ovCorreo">
+  <div class="modal">
+    <h3>📧 Enviar resumen de almuerzos</h3>
+    <p>Se enviará a <b>lucia.castillo@unifrutti.com</b> el detalle del personal con almuerzo <b>activo</b> para hoy, agrupado por comedor.</p>
+    <label>Vista previa del correo</label>
+    <div class="preview" id="correoPreview">—</div>
+    <div class="acc">
+      <button class="btn btn-ghost" onclick="cerrarEnvioCorreo()">Cancelar</button>
+      <button class="btn btn-green" id="btnEnviar" onclick="enviarCorreo()">Enviar correo</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="../js/modal-system.js"></script>
+<script src="../js/almuerzos.js"></script>
+</body>
+</html>

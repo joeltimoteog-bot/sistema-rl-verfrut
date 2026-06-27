@@ -206,6 +206,7 @@ h3{font-size:16px !important}
     <button class="ni" id="navFusiones" onclick="ir('fusiones',this)"><span class="ic">🚌</span>Fusiones de Buses</button>
     <button class="ni" onclick="location.href='capacitaciones.html'"><span class="ic">📚</span>Capacitaciones</button>
     <button class="ni" id="navPreaviso" style="display:none" onclick="location.href='preaviso.html'"><span class="ic">⚖️</span>Cartas de Preaviso</button>
+    <button class="ni" id="navAlmuerzos" style="display:none" onclick="location.href='almuerzos.html'"><span class="ic">🍽️</span>Programador de Almuerzos</button>
     <button class="ni" id="navInventario" style="display:none" onclick="location.href='inventario.html'"><span class="ic">📦</span>Inventario Canastas</button>
     <button class="ni" id="navHoras" style="display:none" onclick="location.href='horas.html'"><span class="ic">⏱️</span>Acumulación de Horas</button>
     <button class="ni" id="navCalcRemu" style="display:none" onclick="location.href='calculo-remunerativo.html'"><span class="ic">🧮</span>Cálculo Remunerativo</button>
@@ -2973,6 +2974,10 @@ window.onload = async () => {
     // Cartas de Preaviso: solo jtimoteo, ovilela, jchavez
     if (['jtimoteo','ovilela','jchavez'].includes((USER.usuario || '').toLowerCase().trim())) {
       var _np = document.getElementById('navPreaviso'); if (_np) _np.style.display='';
+    }
+    // Programador de Almuerzos: solo jtimoteo, ovilela, jchavez, smiranda
+    if (['jtimoteo','ovilela','jchavez','smiranda'].includes((USER.usuario || '').toLowerCase().trim())) {
+      var _na = document.getElementById('navAlmuerzos'); if (_na) _na.style.display='';
     }
     document.getElementById('navVisitas').style.display='flex';
   if(ROLES_ADMIN.includes(USER.rol)) {
