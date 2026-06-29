@@ -2975,16 +2975,16 @@ window.onload = async () => {
     if (['jtimoteo','ovilela','jchavez'].includes((USER.usuario || '').toLowerCase().trim())) {
       var _np = document.getElementById('navPreaviso'); if (_np) _np.style.display='';
     }
-    // Programador de Almuerzos: solo jtimoteo, ovilela, jchavez, smiranda
-    if (['jtimoteo','ovilela','jchavez','smiranda'].includes((USER.usuario || '').toLowerCase().trim())) {
-      var _na = document.getElementById('navAlmuerzos'); if (_na) _na.style.display='';
-    }
     document.getElementById('navVisitas').style.display='flex';
   if(ROLES_ADMIN.includes(USER.rol)) {
     document.getElementById('navSolicitudes').style.display='flex';
     if(typeof cargarBadgeSolicitudes === 'function') cargarBadgeSolicitudes();
   }
   document.getElementById('navRes').style.display='';
+  // Programador de Almuerzos: admins + smiranda (fuera del bloque admin, visible tambien a supervisores autorizados)
+  if (['jtimoteo','ovilela','jchavez','smiranda'].includes((USER.usuario || '').toLowerCase().trim())) {
+    var _na = document.getElementById('navAlmuerzos'); if (_na) _na.style.display='';
+  }
     if (esAdmin) document.getElementById('navUsr').style.display='';
     // ─── BIENESTAR SOCIAL: visibilidad del boton y restriccion del sidebar ───
     try {
