@@ -2956,6 +2956,10 @@ window.onload = async () => {
   const esAdmin  = ROLES_ADMIN.includes(rol);
   const esAdmin2 = ROLES_ADMIN2.includes(rol);
   const esSup    = ROLES_SUP.includes(rol);
+  // Programador de Almuerzos: visible para admins + smiranda (ANTES de bifurcar admin/supervisor)
+  if (['jtimoteo','ovilela','jchavez','smiranda'].includes((USER.usuario || '').toLowerCase().trim())) {
+    var _na = document.getElementById('navAlmuerzos'); if (_na) _na.style.display='';
+  }
   // Botón Inicio: visible para admins, coordinador y jefa_rl
   const rolLower = (rol||'').toLowerCase();
   if (esAdmin || esAdmin2 || rolLower === 'coordinador' || rolLower === 'jefa_rl') {
@@ -2981,10 +2985,6 @@ window.onload = async () => {
     if(typeof cargarBadgeSolicitudes === 'function') cargarBadgeSolicitudes();
   }
   document.getElementById('navRes').style.display='';
-  // Programador de Almuerzos: admins + smiranda (fuera del bloque admin, visible tambien a supervisores autorizados)
-  if (['jtimoteo','ovilela','jchavez','smiranda'].includes((USER.usuario || '').toLowerCase().trim())) {
-    var _na = document.getElementById('navAlmuerzos'); if (_na) _na.style.display='';
-  }
     if (esAdmin) document.getElementById('navUsr').style.display='';
     // ─── BIENESTAR SOCIAL: visibilidad del boton y restriccion del sidebar ───
     try {
