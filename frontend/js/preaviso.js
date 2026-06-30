@@ -100,6 +100,7 @@ function recalcLimite(){
 /* ─────────── Estado / semáforo ─────────── */
 function calcularEstado(p){
   const des = String(p.desenlace || '').toLowerCase();
+  if(des === 'cerrado')    return {key:'cerrado',   label:'Cerrado / Entregado', cls:'b-cerrado', dias:null};
   if(des === 'sinefecto') return {key:'sinefecto', label:'Sin efecto', cls:'b-sinefecto', dias:null};
   if(des === 'despido')   return {key:'despido',   label:'Procede despido', cls:'b-despido', dias:null};
   const restantes = diasEntre(hoyISO(), String(p.fechaLimite).split('T')[0]);
@@ -178,6 +179,27 @@ async function cargarPreavisos(){
     return;
   }
   render();
+  actualizarBanner();
+}
+
+/* ─────────── Banner de alerta (1 día antes / vence hoy, sin desenlace) ─────────── */
+function actualizarBanner(){
+  const banner = document.getElementById('alertBanner');
+  const txt = document.getElementById('alertBannerTxt');
+  const pendientes = preavisos.filter(p=>{
+    if(p.desenlace) return false; // ya tiene desenlace (cerrado/sin efecto/despido)
+    const restantes = diasEntre(hoyISO(), String(p.fechaLimite).split('T')[0]);
+    return restantes === 0 || restantes === 1;
+  });
+  if(!pendientes.length){ banner.classList.remove('on'); return; }
+  const hoy = pendientes.filter(p=>diasEntre(hoyISO(), String(p.fechaLimite).split('T')[0])===0).length;
+  const manana = pendientes.length - hoy;
+  let partes = [];
+  if(hoy)    partes.push(hoy + ' vence' + (hoy>1?'n':'') + ' HOY');
+  if(manana) partes.push(manana + ' vence' + (manana>1?'n':'') + ' mañana');
+  txt.innerHTML = '<b>' + pendientes.length + ' preaviso' + (pendientes.length>1?'s':'') + ' requiere' + (pendientes.length>1?'n':'') + ' atención:</b> ' +
+    partes.join(' · ') + '. Si el trabajador ya respondió, márcalo como <b>Cerrado / Entregado</b>.';
+  banner.classList.add('on');
 }
 
 // Normaliza campos del backend a los que usa el front
@@ -239,7 +261,7 @@ function render(){
     total++;
     if(e.key==='plazo'||e.key==='porvencer') plazo++;
     if(e.key==='vencido') vencidos++;
-    if(e.key==='sinefecto'||e.key==='despido') resueltos++;
+    if(e.key==='sinefecto'||e.key==='despido'||e.key==='cerrado') resueltos++;
     return {p, e};
   }).filter(x => !filtro || x.e.key===filtro);
 
