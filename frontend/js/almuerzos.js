@@ -339,41 +339,136 @@ function abrirEnvioCorreo(){
 }
 function cerrarEnvioCorreo(){ document.getElementById('ovCorreo').classList.remove('on'); }
 
-async function enviarCorreo(){
-  const cuerpo = _construirCuerpo();
-  const hoy = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit', year:'numeric'});
-  const asunto = 'Programación de almuerzos - ' + hoy;
+/* Devuelve los activos ordenados por comedor (orden base + extras) */
+function _filasActivasOrdenadas(){
+  const activos = colaboradores.filter(esActivo);
+  const orden = COMEDORES.slice();
+  activos.forEach(c=>{ if(c.comedor && orden.indexOf(c.comedor)<0) orden.push(c.comedor); });
+  const filas = [];
+  orden.forEach(co=>{
+    activos.filter(c=>c.comedor===co).forEach(c=>filas.push(c));
+  });
+  // por si algún activo no tiene comedor
+  activos.filter(c=>!c.comedor).forEach(c=>filas.push(c));
+  return filas;
+}
 
-  // 1) Copiar SIEMPRE el detalle completo al portapapeles (respaldo por si mailto trunca)
-  let copiado = false;
-  try{ await navigator.clipboard.writeText(cuerpo); copiado = true; }catch(e){ copiado = false; }
+/* Tabla HTML (para pegar con Ctrl+V en Outlook) — Comedor, DNI, Nombre, Tipo, Empresa */
+function _construirTablaHTML(){
+  const filas = _filasActivasOrdenadas();
+  let totalAlm=0, totalDie=0;
+  filas.forEach(c=>{ if(c.tipoComida==='DIETA') totalDie++; else totalAlm++; });
 
-  // 2) Abrir Outlook de escritorio vía mailto (Para=Lucía, CC=los 4)
-  const cuerpoCRLF = cuerpo.replace(/\n/g, '\r\n');
-  const base = 'mailto:' + ALM_TO + '?cc=' + ALM_CC + '&subject=' + encodeURIComponent(asunto) + '&body=';
-  const bodyEnc = encodeURIComponent(cuerpoCRLF);
+  let rows = '';
+  filas.forEach(c=>{
+    const tipo = (c.tipoComida==='DIETA') ? 'DIETA' : 'ALMUERZO';
+    rows += '<tr>'+
+      '<td style="border:1px solid #c9c9c9;padding:5px 9px">'+esc(c.comedor||'')+'</td>'+
+      '<td style="border:1px solid #c9c9c9;padding:5px 9px">'+esc(c.dni||'')+'</td>'+
+      '<td style="border:1px solid #c9c9c9;padding:5px 9px">'+esc(c.nombre||'')+'</td>'+
+      '<td style="border:1px solid #c9c9c9;padding:5px 9px">'+tipo+'</td>'+
+      '<td style="border:1px solid #c9c9c9;padding:5px 9px">'+esc(c.empresa||'')+'</td>'+
+    '</tr>';
+  });
 
-  let url, largo = false;
-  if((base + bodyEnc).length < 1900){
-    url = base + bodyEnc;                       // cabe completo
-  }else{
-    // demasiado largo para mailto: cuerpo corto + detalle en portapapeles
-    largo = true;
-    url = base + encodeURIComponent(
-      'Estimada Lucía, buenos días.\r\n\r\n' +
-      'El detalle del personal programado se copió al portapapeles.\r\n' +
-      'Haz clic en el cuerpo de este correo y pega con Ctrl+V.\r\n'
-    );
+  return ''+
+    '<table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt">'+
+      '<thead><tr style="background:#0a2463;color:#ffffff">'+
+        '<th style="border:1px solid #0a2463;padding:6px 9px;text-align:left">Comedor</th>'+
+        '<th style="border:1px solid #0a2463;padding:6px 9px;text-align:left">DNI</th>'+
+        '<th style="border:1px solid #0a2463;padding:6px 9px;text-align:left">Nombre y Apellidos</th>'+
+        '<th style="border:1px solid #0a2463;padding:6px 9px;text-align:left">Tipo</th>'+
+        '<th style="border:1px solid #0a2463;padding:6px 9px;text-align:left">Empresa</th>'+
+      '</tr></thead>'+
+      '<tbody>'+rows+'</tbody>'+
+      '<tfoot><tr style="background:#eef2ff;font-weight:bold">'+
+        '<td colspan="5" style="border:1px solid #c9c9c9;padding:6px 9px">'+
+        'Total activos: '+filas.length+'  (Almuerzo: '+totalAlm+' · Dieta: '+totalDie+')</td>'+
+      '</tr></tfoot>'+
+    '</table>';
+}
+
+/* Copia la tabla con formato al portapapeles (HTML + texto de respaldo) */
+async function _copiarTablaPortapapeles(){
+  const html = _construirTablaHTML();
+  const texto = _construirCuerpo();
+  try{
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html':  new Blob([html],  {type:'text/html'}),
+      'text/plain': new Blob([texto], {type:'text/plain'})
+    })]);
+    return true;
+  }catch(e){
+    try{ await navigator.clipboard.writeText(texto); return true; }catch(e2){ return false; }
   }
+}
+
+/* Genera y descarga el Excel (.xls) con la programación del día */
+function descargarExcelAlmuerzos(){
+  if(!colaboradores.length){ toast('No hay colaboradores cargados', true); return; }
+  const filas = _filasActivasOrdenadas();
+  if(!filas.length){ toast('No hay personal activo para exportar', true); return; }
+
+  const hoy = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'long', year:'numeric'});
+  let rows = '';
+  filas.forEach(c=>{
+    const tipo = (c.tipoComida==='DIETA') ? 'DIETA' : 'ALMUERZO';
+    rows += '<tr>'+
+      '<td>'+esc(c.comedor||'')+'</td>'+
+      '<td style="mso-number-format:\'\\@\'">'+esc(c.dni||'')+'</td>'+  // DNI como texto (conserva ceros)
+      '<td>'+esc(c.nombre||'')+'</td>'+
+      '<td>'+tipo+'</td>'+
+      '<td>'+esc(c.empresa||'')+'</td>'+
+    '</tr>';
+  });
+
+  const tabla =
+    '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'+
+    '<head><meta charset="UTF-8"></head><body>'+
+    '<table border="1">'+
+      '<tr><td colspan="5" style="font-weight:bold;font-size:14px">Programación de almuerzos - '+esc(hoy)+'</td></tr>'+
+      '<tr style="background:#0a2463;color:#fff;font-weight:bold">'+
+        '<td>Comedor</td><td>DNI</td><td>Nombre y Apellidos</td><td>Tipo</td><td>Empresa</td></tr>'+
+      rows+
+    '</table></body></html>';
+
+  const blob = new Blob(['\ufeff'+tabla], {type:'application/vnd.ms-excel'});
+  const url = URL.createObjectURL(blob);
+  const d = new Date();
+  const ymd = d.getFullYear()+('0'+(d.getMonth()+1)).slice(-2)+('0'+d.getDate()).slice(-2);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'Programacion_Almuerzos_'+ymd+'.xls';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('⬇️ Excel descargado. Adjúntalo al correo.');
+}
+
+async function enviarCorreo(){
+  const hoyCorto = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit', year:'numeric'});
+  const hoyLargo = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'long', year:'numeric'});
+  const asunto = 'Programación de almuerzos - ' + hoyCorto;
+  const firma = USER ? (USER.nombre || USER.usuario) : '';
+
+  // 1) Copiar la TABLA con formato al portapapeles (para pegar con Ctrl+V)
+  const copiado = await _copiarTablaPortapapeles();
+
+  // 2) Cuerpo de texto corto para el mailto (la tabla se pega; el Excel se adjunta)
+  const cuerpo =
+    'Estimada Lucía, buenos días.\r\n\r\n' +
+    'Adjunto el detalle del personal que se está programando su almuerzo para el día de hoy ' + hoyLargo + ', ' +
+    'así mismo los comedores donde han sido designados.\r\n\r\n' +
+    '(El detalle va en la tabla (pega con Ctrl+V) y/o en el Excel adjunto.)\r\n\r\n' +
+    'Saludos,\r\n' + firma;
+
+  const url = 'mailto:' + ALM_TO + '?cc=' + ALM_CC +
+    '&subject=' + encodeURIComponent(asunto) +
+    '&body='    + encodeURIComponent(cuerpo);
   window.location.href = url;
 
   cerrarEnvioCorreo();
-  if(largo){
-    toast(copiado ? '📋 Outlook abierto. El detalle se copió: pega con Ctrl+V en el correo'
-                  : '⚠️ Lista larga: abre Outlook y copia el detalle desde la vista previa', true);
-  }else{
-    toast('📤 Outlook abierto con el correo listo. Revísalo y dale Enviar');
-  }
+  toast(copiado
+    ? '📋 Tabla copiada — en Outlook pega con Ctrl+V. (También puedes adjuntar el Excel)'
+    : '📤 Outlook abierto. Usa el botón Excel para adjuntar el detalle.', !copiado);
 
   // 3) Registro en bitácora (opcional, no bloquea si el backend no la tiene)
   try{
@@ -450,3 +545,4 @@ window.render = render;
 window.abrirEnvioCorreo = abrirEnvioCorreo;
 window.cerrarEnvioCorreo = cerrarEnvioCorreo;
 window.enviarCorreo = enviarCorreo;
+window.descargarExcelAlmuerzos = descargarExcelAlmuerzos;

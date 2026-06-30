@@ -228,12 +228,14 @@
 <div class="overlay" id="ovCorreo">
   <div class="modal">
     <h3>📧 Enviar resumen de almuerzos</h3>
-    <p>Se abrirá tu <b>Outlook</b> con el correo listo para <b>lucia.castillo@unifrutti.com</b> (en copia: Olga Vilela, Jorge Chávez, Joel Timoteo y Eduardo Coveñas). El detalle también se copia al portapapeles por si necesitas pegarlo. Revísalo y dale <b>Enviar</b>.</p>
+    <p>Se abrirá tu <b>Outlook</b> para <b>lucia.castillo@unifrutti.com</b> (en copia: Olga Vilela, Jorge Chávez, Joel Timoteo y Eduardo Coveñas).<br>
+    La <b>tabla</b> se copia al portapapeles: en el correo pega con <b>Ctrl+V</b>. También puedes <b>descargar el Excel</b> y adjuntarlo.</p>
     <label>Vista previa del correo</label>
     <div class="preview" id="correoPreview">—</div>
     <div class="acc">
       <button class="btn btn-ghost" onclick="cerrarEnvioCorreo()">Cancelar</button>
-      <button class="btn btn-green" id="btnEnviar" onclick="enviarCorreo()">📤 Abrir en Outlook para enviar</button>
+      <button class="btn btn-ghost" id="btnExcel" onclick="descargarExcelAlmuerzos()">⬇️ Descargar Excel</button>
+      <button class="btn btn-green" id="btnEnviar" onclick="enviarCorreo()">📤 Abrir en Outlook</button>
     </div>
   </div>
 </div>
