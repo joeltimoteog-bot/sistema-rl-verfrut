@@ -344,17 +344,17 @@ async function enviarCorreo(){
   const hoy = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit', year:'numeric'});
   const asunto = 'Programación de almuerzos - ' + hoy;
 
-  // Abre Gmail con el correo listo: Para=Lucía, CC=los 4, asunto y cuerpo.
+  // Abre Outlook (Microsoft 365) con el correo listo: Para=Lucía, CC=los 4, asunto y cuerpo.
   // El usuario revisa y envía desde SU cuenta (queda en sus Enviados).
-  const url = 'https://mail.google.com/mail/?view=cm&fs=1'
-    + '&to='  + encodeURIComponent(ALM_TO)
-    + '&cc='  + encodeURIComponent(ALM_CC)
-    + '&su='  + encodeURIComponent(asunto)
-    + '&body='+ encodeURIComponent(cuerpo);
+  const url = 'https://outlook.office.com/mail/deeplink/compose?'
+    + 'to='      + encodeURIComponent(ALM_TO)
+    + '&cc='     + encodeURIComponent(ALM_CC)
+    + '&subject='+ encodeURIComponent(asunto)
+    + '&body='   + encodeURIComponent(cuerpo);
   window.open(url, '_blank');
 
   cerrarEnvioCorreo();
-  toast('Se abrió Gmail con el correo listo. Revísalo y dale Enviar 📤');
+  toast('Se abrió Outlook con el correo listo. Revísalo y dale Enviar 📤');
 
   // Registro en bitácora (opcional, no bloquea si el backend no la tiene)
   try{
