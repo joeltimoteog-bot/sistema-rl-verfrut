@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3.7.0-nocache';
+const CACHE_VERSION = 'v3.8.0-autoupdate';
 const CACHE_NAME    = 'sistema-rl-' + CACHE_VERSION;
 const BASE          = '/sistema-rl-verfrut';
 // Solo lo mínimo para soporte offline básico — el resto se pide por red
@@ -21,6 +21,9 @@ const ARCHIVOS_BASE = [
 // (boton Recargar -> mensaje SKIP_WAITING -> skipWaiting()). Esto evita
 // recargas automaticas en medio de un trabajo en curso.
 self.addEventListener('install', (event) => {
+  // Activacion automatica: el SW nuevo toma control sin esperar al toast,
+  // asi los cambios desplegados llegan al recargar sin limpiar cache a mano.
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => Promise.allSettled(
