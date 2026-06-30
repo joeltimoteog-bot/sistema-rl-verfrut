@@ -15,6 +15,10 @@ let _trabajadorActual = null;
 
 const AZURE_DNI = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/trabajadores/buscar?dni=';
 
+// Destinatarios del correo de almuerzos
+const ALM_TO = 'lucia.castillo@unifrutti.com';                                  // Para:
+const ALM_CC = 'olga.vilela@unifrutti.com,jorge.chavez@unifrutti.com,joel.timoteo@unifrutti.com,eduardo.covenas@unifrutti.com';  // CC:
+
 const COMEDORES = [
   'COMEDOR ADMINISTRACION',
   'COMEDOR GENERAL',
@@ -336,26 +340,30 @@ function abrirEnvioCorreo(){
 function cerrarEnvioCorreo(){ document.getElementById('ovCorreo').classList.remove('on'); }
 
 async function enviarCorreo(){
-  const btn = document.getElementById('btnEnviar');
-  btn.disabled = true; btn.textContent = 'Enviando…';
+  const cuerpo = _construirCuerpo();
+  const hoy = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit', year:'numeric'});
+  const asunto = 'Programación de almuerzos - ' + hoy;
+
+  // Abre Gmail con el correo listo: Para=Lucía, CC=los 4, asunto y cuerpo.
+  // El usuario revisa y envía desde SU cuenta (queda en sus Enviados).
+  const url = 'https://mail.google.com/mail/?view=cm&fs=1'
+    + '&to='  + encodeURIComponent(ALM_TO)
+    + '&cc='  + encodeURIComponent(ALM_CC)
+    + '&su='  + encodeURIComponent(asunto)
+    + '&body='+ encodeURIComponent(cuerpo);
+  window.open(url, '_blank');
+
+  cerrarEnvioCorreo();
+  toast('Se abrió Gmail con el correo listo. Revísalo y dale Enviar 📤');
+
+  // Registro en bitácora (opcional, no bloquea si el backend no la tiene)
   try{
-    const d = await apiPost({
-      action:'enviarResumenAlmuerzos',
-      cuerpo: _construirCuerpo(),
+    await apiPost({
+      action:'registrarEnvioAlmuerzos',
       usuario: USER ? USER.usuario : '',
       remitente_nombre: USER ? (USER.nombre || USER.usuario) : ''
     });
-    if(d && d.success){
-      cerrarEnvioCorreo();
-      toast('Correo enviado a Lucía ✓ ('+(d.activos!=null?d.activos+' activos':'enviado')+')');
-    }else{
-      toast('Error al enviar: ' + ((d && d.error) || 'desconocido'), true);
-    }
-  }catch(e){
-    toast('Error de conexión: ' + e.message, true);
-  }finally{
-    btn.disabled = false; btn.textContent = 'Enviar correo';
-  }
+  }catch(e){ /* silencioso */ }
 }
 
 /* ─────────── Helpers ─────────── */
