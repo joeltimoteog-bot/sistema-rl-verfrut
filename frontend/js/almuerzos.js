@@ -344,19 +344,38 @@ async function enviarCorreo(){
   const hoy = new Date().toLocaleDateString('es-PE', {day:'2-digit', month:'2-digit', year:'numeric'});
   const asunto = 'Programación de almuerzos - ' + hoy;
 
-  // Abre Outlook (Microsoft 365) con el correo listo: Para=Lucía, CC=los 4, asunto y cuerpo.
-  // El usuario revisa y envía desde SU cuenta (queda en sus Enviados).
-  const url = 'https://outlook.office.com/mail/deeplink/compose?'
-    + 'to='      + encodeURIComponent(ALM_TO)
-    + '&cc='     + encodeURIComponent(ALM_CC)
-    + '&subject='+ encodeURIComponent(asunto)
-    + '&body='   + encodeURIComponent(cuerpo);
-  window.open(url, '_blank');
+  // 1) Copiar SIEMPRE el detalle completo al portapapeles (respaldo por si mailto trunca)
+  let copiado = false;
+  try{ await navigator.clipboard.writeText(cuerpo); copiado = true; }catch(e){ copiado = false; }
+
+  // 2) Abrir Outlook de escritorio vía mailto (Para=Lucía, CC=los 4)
+  const cuerpoCRLF = cuerpo.replace(/\n/g, '\r\n');
+  const base = 'mailto:' + ALM_TO + '?cc=' + ALM_CC + '&subject=' + encodeURIComponent(asunto) + '&body=';
+  const bodyEnc = encodeURIComponent(cuerpoCRLF);
+
+  let url, largo = false;
+  if((base + bodyEnc).length < 1900){
+    url = base + bodyEnc;                       // cabe completo
+  }else{
+    // demasiado largo para mailto: cuerpo corto + detalle en portapapeles
+    largo = true;
+    url = base + encodeURIComponent(
+      'Estimada Lucía, buenos días.\r\n\r\n' +
+      'El detalle del personal programado se copió al portapapeles.\r\n' +
+      'Haz clic en el cuerpo de este correo y pega con Ctrl+V.\r\n'
+    );
+  }
+  window.location.href = url;
 
   cerrarEnvioCorreo();
-  toast('Se abrió Outlook con el correo listo. Revísalo y dale Enviar 📤');
+  if(largo){
+    toast(copiado ? '📋 Outlook abierto. El detalle se copió: pega con Ctrl+V en el correo'
+                  : '⚠️ Lista larga: abre Outlook y copia el detalle desde la vista previa', true);
+  }else{
+    toast('📤 Outlook abierto con el correo listo. Revísalo y dale Enviar');
+  }
 
-  // Registro en bitácora (opcional, no bloquea si el backend no la tiene)
+  // 3) Registro en bitácora (opcional, no bloquea si el backend no la tiene)
   try{
     await apiPost({
       action:'registrarEnvioAlmuerzos',
