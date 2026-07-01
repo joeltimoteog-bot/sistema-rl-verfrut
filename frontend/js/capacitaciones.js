@@ -1344,21 +1344,22 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     y = doc.lastAutoTable.finalY;
 
     const filasPart = partList.map((p, i) => [
-      String(i + 1), p.dni || '', p.nombre || '', p.cargo || '', '', p.obs || ''
+      String(i + 1), p.dni || '', p.nombre || '', p.cargo || '', '', '', p.obs || ''
     ]);
 
     doc.autoTable({
       startY: y, margin: { left: MGS, right: MGS, bottom: 5 },
-      head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / ÁREA', 'FIRMA / HUELLA', 'OBS.']],
+      head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / ÁREA', 'FIRMA', 'HUELLA', 'OBS.']],
       body: filasPart,
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 0.5, textColor: C.negro }, /* _FIX_RESPONSABLE_PAG1_V1 */
       bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 6 },
       columnStyles: {
-        0: { cellWidth: 8 }, 1: { cellWidth: 20 },
-        2: { cellWidth: 80, halign: 'left' }, 3: { cellWidth: 35, halign: 'left' },
-        4: { cellWidth: 27 }, 5: { cellWidth: 20, halign: 'left' }
+        /* _FIX_FIRMA_HUELLA_ANCHO_V1: firma y huella separadas y mas anchas (pedido auditoria) */
+        0: { cellWidth: 7 }, 1: { cellWidth: 17 },
+        2: { cellWidth: 67, halign: 'left' }, 3: { cellWidth: 32, halign: 'left' },
+        4: { cellWidth: 30 }, 5: { cellWidth: 25 }, 6: { cellWidth: 12, halign: 'left' }
       },
       didParseCell: d => {
         if (d.section === 'body') {
