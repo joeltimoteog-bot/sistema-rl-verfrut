@@ -213,7 +213,8 @@ function _normalizar(p){
     plazo: p.plazo || PLAZO_DEFAULT,
     fechaLimite: String(p.fecha_limite || p.fechaLimite || '').split('T')[0],
     desenlace: p.desenlace || '',
-    observacion: p.observacion || ''
+    observacion: p.observacion || '',
+    apelado: String(p.apelado || '').split('T')[0]
   };
 }
 
@@ -227,6 +228,40 @@ function abrirDesenlace(nro){
   document.getElementById('ovDesenlace').classList.add('on');
 }
 function cerrarDesenlace(){ document.getElementById('ovDesenlace').classList.remove('on'); _desenlaceNro=null; }
+
+/* ─────────── Apelación con descargo (extiende plazo +3 días, NO cierra el caso) ─────────── */
+let _apelacionNro = null;
+function abrirApelacion(nro){
+  const p = preavisos.find(x=>String(x.nro)===String(nro)); if(!p) return;
+  _apelacionNro = nro;
+  const nuevaFecha = sumarDiasNaturales(hoyISO(), 3);
+  document.getElementById('apelacionWho').textContent = p.nombre + ' · DNI ' + p.dni;
+  document.getElementById('apelacionInfo').innerHTML =
+    'Plazo actual: <b>' + fmtFecha(p.fechaLimite) + '</b><br>' +
+    'Nuevo plazo (hoy + 3 días naturales): <b style="color:#0a2463">' + fmtFecha(nuevaFecha) + '</b>';
+  document.getElementById('ovApelacion').classList.add('on');
+}
+function cerrarApelacion(){ document.getElementById('ovApelacion').classList.remove('on'); _apelacionNro=null; }
+
+async function confirmarApelacion(){
+  const p = preavisos.find(x=>String(x.nro)===String(_apelacionNro)); if(!p) return;
+  const btn = document.getElementById('btnApelacion');
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  try{
+    const d = await apiPost({ action: 'registrarApelacionPreaviso', nro: p.nro, usuario: USER ? USER.usuario : '' });
+    if(d && d.success){
+      cerrarApelacion();
+      toast('Apelación registrada — nuevo plazo: ' + fmtFecha(d.nueva_fecha_limite || ''));
+      await cargarPreavisos();
+    }else{
+      toast('Error: ' + ((d && d.error) || 'desconocido'), true);
+    }
+  }catch(e){
+    toast('Error de conexión: ' + e.message, true);
+  }finally{
+    btn.disabled = false; btn.textContent = 'Confirmar apelación (+3 días)';
+  }
+}
 
 async function guardarDesenlace(){
   const p = preavisos.find(x=>String(x.nro)===String(_desenlaceNro)); if(!p) return;
@@ -280,6 +315,15 @@ function render(){
       else diasTxt = '<span class="dias-chip" style="color:#dc2626">+'+Math.abs(e.dias)+'</span>';
     }
     const puede = !p.desenlace;
+    const yaApelado = !!p.apelado;
+    const estadoCelda = '<span class="badge '+e.cls+'">'+e.label+'</span>' +
+      (yaApelado ? '<div style="margin-top:3px"><span class="badge b-apelado">🔁 Apelado +3d</span></div>' : '');
+    const acciones = puede
+      ? '<div style="display:flex;gap:6px;flex-wrap:wrap">' +
+          '<button class="btn btn-ghost btn-sm" onclick="abrirDesenlace(\''+esc(p.nro)+'\')">Desenlace</button>' +
+          (yaApelado ? '' : '<button class="btn btn-ghost btn-sm" onclick="abrirApelacion(\''+esc(p.nro)+'\')">Apelación</button>') +
+        '</div>'
+      : '<span style="color:#94a3b8;font-size:11px">resuelto</span>';
     return '<tr>'+
       '<td>'+esc(p.nro)+'</td>'+
       '<td><div style="font-weight:600">'+esc(p.nombre)+'</div><div style="color:#94a3b8;font-size:11px">'+esc(p.dni)+' · '+esc(p.empresa)+'</div></td>'+
@@ -287,8 +331,8 @@ function render(){
       '<td>'+fmtFecha(p.fechaEmision)+'</td>'+
       '<td>'+fmtFecha(p.fechaLimite)+'</td>'+
       '<td>'+diasTxt+'</td>'+
-      '<td><span class="badge '+e.cls+'">'+e.label+'</span></td>'+
-      '<td>'+(puede ? '<button class="btn btn-ghost btn-sm" onclick="abrirDesenlace(\''+esc(p.nro)+'\')">Desenlace</button>' : '<span style="color:#94a3b8;font-size:11px">resuelto</span>')+'</td>'+
+      '<td>'+estadoCelda+'</td>'+
+      '<td>'+acciones+'</td>'+
     '</tr>';
   }).join('');
 }
@@ -341,4 +385,7 @@ window.limpiarForm = limpiarForm;
 window.abrirDesenlace = abrirDesenlace;
 window.cerrarDesenlace = cerrarDesenlace;
 window.guardarDesenlace = guardarDesenlace;
+window.abrirApelacion = abrirApelacion;
+window.cerrarApelacion = cerrarApelacion;
+window.confirmarApelacion = confirmarApelacion;
 window.render = render;

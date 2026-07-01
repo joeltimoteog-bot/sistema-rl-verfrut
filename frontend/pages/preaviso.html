@@ -63,6 +63,7 @@
     .b-sinefecto{background:#dbeafe;color:#1e40af}
     .b-despido{background:#fce7f3;color:#9d174d}
     .b-cerrado{background:#e5e7eb;color:#374151}
+    .b-apelado{background:#ede9fe;color:#6d28d9;font-size:9px;padding:2px 7px}
     .alert-banner{display:none;align-items:center;gap:10px;background:#fef3c7;border:1px solid #fbbf24;border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px;color:#78350f}
     .alert-banner.on{display:flex}
     .alert-banner b{font-weight:700}
@@ -200,6 +201,19 @@
     <div class="acc">
       <button class="btn btn-ghost" onclick="cerrarDesenlace()">Cancelar</button>
       <button class="btn btn-primary" id="btnDesenlace" onclick="guardarDesenlace()">Guardar desenlace</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="ovApelacion">
+  <div class="modal">
+    <h3>🔁 Registrar apelación con descargo</h3>
+    <p id="apelacionWho">—</p>
+    <p style="font-size:12px;color:#475569;margin:10px 0">El caso <b>sigue abierto</b> — no se cierra. Se extiende el plazo para que el trabajador presente su descargo, y se avisa de inmediato a los administradores del nuevo vencimiento.</p>
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;font-size:12px;line-height:1.6" id="apelacionInfo">—</div>
+    <div class="acc">
+      <button class="btn btn-ghost" onclick="cerrarApelacion()">Cancelar</button>
+      <button class="btn btn-primary" id="btnApelacion" onclick="confirmarApelacion()">Confirmar apelación (+3 días)</button>
     </div>
   </div>
 </div>
