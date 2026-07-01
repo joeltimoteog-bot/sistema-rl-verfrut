@@ -123,11 +123,20 @@ function agregarItem() {
 async function editarItem(idx) {
   if (!_listaActiva) return;
   const items = cargarLista(_listaActiva);
+  const anterior = items[idx];
   const nuevo = await appPrompt('Editar ítem:', items[idx]);
   if (nuevo === null || !nuevo.trim()) return;
-  items[idx] = nuevo.trim();
+  const nuevoTexto = nuevo.trim();
+  const id = 'cap' + _listaActiva.charAt(0).toUpperCase() + _listaActiva.slice(1);
+  const sel = document.getElementById(id);
+  // ¿el ítem que se está corrigiendo era justo el elegido en el formulario?
+  const eraSeleccionado = !!(sel && sel.value === anterior);
+  items[idx] = nuevoTexto;
   guardarLista(_listaActiva, items);
   poblarSelect(_listaActiva);
+  // _FIX_EDICION_LISTA_V1: si era el seleccionado, forzar el texto ya corregido
+  // (evita que el campo quede con un ítem distinto tras editar el actualmente elegido)
+  if (eraSeleccionado && sel) sel.value = nuevoTexto;
   renderizarItemsLista(_listaActiva);
 }
 
@@ -1356,10 +1365,10 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       styles: { ...sBorder, cellPadding: 0.5, textColor: C.negro }, /* _FIX_RESPONSABLE_PAG1_V1 */
       bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 6 },
       columnStyles: {
-        /* _FIX_FIRMA_HUELLA_ANCHO_V1: firma y huella separadas y mas anchas (pedido auditoria) */
-        0: { cellWidth: 7 }, 1: { cellWidth: 17 },
-        2: { cellWidth: 67, halign: 'left' }, 3: { cellWidth: 32, halign: 'left' },
-        4: { cellWidth: 30 }, 5: { cellWidth: 25 }, 6: { cellWidth: 12, halign: 'left' }
+        /* _FIX_FIRMA_HUELLA_ANCHO_V2: mas ancho aun para firma y huella (pedido auditoria) — misma estructura/encabezados */
+        0: { cellWidth: 6 }, 1: { cellWidth: 16 },
+        2: { cellWidth: 60, halign: 'left' }, 3: { cellWidth: 28, halign: 'left' },
+        4: { cellWidth: 36 }, 5: { cellWidth: 32 }, 6: { cellWidth: 12, halign: 'left' }
       },
       didParseCell: d => {
         if (d.section === 'body') {
