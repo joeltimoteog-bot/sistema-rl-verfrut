@@ -1353,22 +1353,24 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     y = doc.lastAutoTable.finalY;
 
     const filasPart = partList.map((p, i) => [
-      String(i + 1), p.dni || '', p.nombre || '', p.cargo || '', '', '', p.obs || ''
+      String(i + 1), p.dni || '', p.nombre || '', p.cargo || '', '', p.obs || ''
     ]);
 
     doc.autoTable({
       startY: y, margin: { left: MGS, right: MGS, bottom: 5 },
-      head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / ÁREA', 'FIRMA', 'HUELLA', 'OBS.']],
+      head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / ÁREA', 'FIRMA / HUELLA', 'OBS.']],
       body: filasPart,
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 0.5, textColor: C.negro }, /* _FIX_RESPONSABLE_PAG1_V1 */
       bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 6 },
       columnStyles: {
-        /* _FIX_FIRMA_HUELLA_ANCHO_V2: mas ancho aun para firma y huella (pedido auditoria) — misma estructura/encabezados */
-        0: { cellWidth: 6 }, 1: { cellWidth: 16 },
-        2: { cellWidth: 60, halign: 'left' }, 3: { cellWidth: 28, halign: 'left' },
-        4: { cellWidth: 36 }, 5: { cellWidth: 32 }, 6: { cellWidth: 12, halign: 'left' }
+        /* _FIX_FIRMA_HUELLA_ANCHO_V3: estructura ORIGINAL (6 columnas, sin dividir).
+           Solo se amplia la columna combinada FIRMA / HUELLA: 27mm -> 40mm.
+           Compensado achicando Nombre y Cargo (tenian espacio de sobra); N°, DNI y OBS quedan igual que el original. */
+        0: { cellWidth: 8 }, 1: { cellWidth: 20 },
+        2: { cellWidth: 70, halign: 'left' }, 3: { cellWidth: 32, halign: 'left' },
+        4: { cellWidth: 40 }, 5: { cellWidth: 20, halign: 'left' }
       },
       didParseCell: d => {
         if (d.section === 'body') {
