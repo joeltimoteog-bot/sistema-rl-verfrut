@@ -139,7 +139,7 @@ async function guardarPreaviso(){
   const btn = document.getElementById('btnGuardar');
   btn.disabled = true; btn.textContent = 'Guardando…';
   try{
-    const d = await apiPost({ action: 'savePreaviso', preaviso: payload });
+    const d = await apiPost({ action: 'savePreaviso', preaviso: payload, usuario: USER ? USER.usuario : '' });
     if(d && d.success){
       toast('Preaviso registrado (N° ' + (d.nro || '—') + ')');
       limpiarForm();
@@ -171,7 +171,7 @@ async function cargarPreavisos(){
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '<tr><td colspan="8" class="loading">Cargando…</td></tr>';
   try{
-    const d = await apiGet({ action: 'getPreavisos' });
+    const d = await apiGet({ action: 'getPreavisos', usuario: USER ? USER.usuario : '' });
     preavisos = (d && d.preavisos) ? d.preavisos.map(_normalizar) : [];
   }catch(e){
     preavisos = [];

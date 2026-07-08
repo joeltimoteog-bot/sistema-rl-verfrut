@@ -147,7 +147,7 @@ async function cargarLista(){
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '<tr><td colspan="9" class="loading">Cargando lista…</td></tr>';
   try{
-    const d = await apiGet({ action:'getAlmuerzos' });
+    const d = await apiGet({ action:'getAlmuerzos', usuario: USER ? USER.usuario : '' });
     colaboradores = (d && d.colaboradores) ? d.colaboradores.map(_normalizar) : [];
   }catch(e){
     colaboradores = [];
