@@ -1,4 +1,5 @@
 ﻿// Capturar errores incluso del require
+const { exigirAuth } = require('../shared/auth');
 let sql, getPool;
 let dbLoadError = null;
 try {
@@ -10,6 +11,10 @@ try {
 }
 
 module.exports = async function (context, req) {
+  // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
+  const authUser = exigirAuth(context, req);
+  if (authUser === null) return;
+
   const startTime = Date.now();
 
   try {

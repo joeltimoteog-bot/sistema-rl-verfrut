@@ -1,4 +1,9 @@
 ﻿const { sql, getPool } = require('../shared/db');
+const bcrypt = require('bcryptjs');
+const { firmarToken } = require('../shared/auth');
+
+const BCRYPT_ROUNDS = 10;
+const esHashBcrypt = (s) => /^\$2[aby]\$/.test(String(s || ''));
 
 // Constantes que estaban en GAS — replicadas para el endpoint
 const FUNDOS_SUPERVISOR = {
@@ -60,8 +65,32 @@ module.exports = async function (context, req) {
 
     const u = result.recordset[0];
 
-    // 5. Validar password (texto plano por ahora — TODO: bcrypt en el futuro)
-    if (String(u.password).trim() !== password) {
+    // 5. Validar password — bcrypt con auto-migración desde texto plano
+    const stored = String(u.password || '').trim();
+    let passwordOk = false;
+
+    if (esHashBcrypt(stored)) {
+      passwordOk = await bcrypt.compare(password, stored);
+    } else {
+      // Registro legado en texto plano: comparar y, si es correcto,
+      // reemplazarlo por su hash bcrypt (migración transparente).
+      passwordOk = (stored === password);
+      if (passwordOk) {
+        try {
+          const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+          await pool.request()
+            .input('usuario', sql.NVarChar, usuario)
+            .input('hash', sql.NVarChar, hash)
+            .query('UPDATE dbo.usuarios SET password = @hash WHERE usuario = @usuario');
+          context.log('Password migrado a bcrypt →', usuario);
+        } catch (mErr) {
+          // No bloquear el login si falla la migración; se reintenta en el próximo login
+          context.log.warn('No se pudo migrar password a bcrypt:', mErr.message);
+        }
+      }
+    }
+
+    if (!passwordOk) {
       context.log('Login fallido: password incorrecto →', usuario);
       context.res = {
         status: 401,
@@ -77,10 +106,24 @@ module.exports = async function (context, req) {
     const elapsed = Date.now() - startTime;
     context.log('Login OK →', usuario, '(' + elapsed + 'ms)');
 
+    // 7. Firmar JWT de sesión (8 horas)
+    let token = null;
+    try {
+      token = firmarToken({
+        sub:     u.id_sistema,
+        usuario: u.usuario,
+        rol:     (u.rol || '').trim().toLowerCase(),
+        empresa: (u.empresa || '').trim().toUpperCase()
+      });
+    } catch (tErr) {
+      context.log.warn('No se pudo firmar JWT (¿falta JWT_SECRET?):', tErr.message);
+    }
+
     context.res = {
       status: 200,
       body: {
         success: true,
+        token: token,
         user: {
           id:                  u.id_sistema,
           usuario:             u.usuario,

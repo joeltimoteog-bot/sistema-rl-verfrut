@@ -5,6 +5,10 @@
 
 const AZURE_CONFIG = {
   storageUrl: 'https://sistemarlverfrut.blob.core.windows.net',
+  // Endpoint que emite tokens SAS de corta duración (Function blob-sas)
+  sasEndpoint: 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/blob-sas',
+  // ⚠️ FALLBACK LEGADO: eliminar estos tokens y revocar la política
+  // "sistemrl2027" en Azure Portal cuando la Function blob-sas esté deployada.
   sasTokens: {
     'casos-rl':      'st=2026-04-16T03:12:08Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=HHiVoXQN4a4S0W5qAS04%2Br1tIYt9jSEJprnPwK8LKkk%3D',
     'visitas-campo': 'st=2026-04-16T03:09:16Z&si=sistemrl2027&spr=https&sv=2025-11-05&sr=c&sig=yNpnqGq2zEesLw0y%2BUHRikEJjNJoGqsxrtEoO1NqrkA%3D',
@@ -26,6 +30,36 @@ const AZURE_CONFIG = {
   ]
 };
 
+// Caché de tokens SAS pedidos al backend (se renuevan solos al expirar)
+const _sasCache = {}; // { contenedor: { token, expira } }
+
+async function _obtenerSAS(contenedor) {
+  // 1. Caché vigente (margen de 60s)
+  const c = _sasCache[contenedor];
+  if (c && (c.expira - Date.now()) > 60000) return c.token;
+
+  // 2. Pedir token corto a la Function blob-sas
+  try {
+    const jwt = sessionStorage.getItem('rl_token') || '';
+    const r = await fetch(AZURE_CONFIG.sasEndpoint + '?contenedor=' + encodeURIComponent(contenedor), {
+      headers: jwt ? { 'Authorization': 'Bearer ' + jwt } : {}
+    });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.success && d.sasToken) {
+        _sasCache[contenedor] = { token: d.sasToken, expira: new Date(d.expiraEn).getTime() };
+        return d.sasToken;
+      }
+    }
+    console.warn('[Azure-SAS] Function blob-sas no disponible (status ' + r.status + '), usando fallback');
+  } catch (e) {
+    console.warn('[Azure-SAS] Error pidiendo SAS, usando fallback:', e.message);
+  }
+
+  // 3. Fallback legado (eliminar cuando blob-sas esté deployada)
+  return AZURE_CONFIG.sasTokens[contenedor] || AZURE_CONFIG.sasTokens['documentos'];
+}
+
 async function subirArchivoAzure(fileInput, modulo, msgElId, meta = {}) {
   console.log('[Azure-DEBUG] Entrada:', {fileInput, modulo, msgElId, meta});
 
@@ -45,7 +79,7 @@ async function subirArchivoAzure(fileInput, modulo, msgElId, meta = {}) {
   console.log('[Azure-DEBUG] File:', file.name, file.size, file.type);
 
   const contenedor  = AZURE_CONFIG.contenedores[modulo] || AZURE_CONFIG.contenedores.default;
-  const sasToken    = AZURE_CONFIG.sasTokens[contenedor] || AZURE_CONFIG.sasTokens['documentos'];
+  const sasToken    = await _obtenerSAS(contenedor);
   const nombreUnico = `${modulo}/${Date.now()}_${file.name}`;
   const blobUrl     = `${AZURE_CONFIG.storageUrl}/${contenedor}/${nombreUnico}?${sasToken}`;
 

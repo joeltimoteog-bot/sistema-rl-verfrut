@@ -273,9 +273,34 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
 </div>
 
 <script>
+// ── Modo producción: silenciar logs de debug (activar con localStorage.setItem('rl_debug','1')) ──
+(function(){
+  if (localStorage.getItem('rl_debug') === '1') return;
+  const noop = function(){};
+  console.log = noop; console.debug = noop; console.info = noop;
+  console.time = noop; console.timeEnd = noop; console.table = noop;
+})();
 const API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 const AZURE_LOGIN_URL='https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/auth/login';
 let intentos=0,MAX=3;
+
+// ── JWT: adjuntar Authorization a toda llamada a Azure Functions ──
+(function(){
+  const _fetch = window.fetch;
+  window.fetch = function(url, opts){
+    try {
+      const u = (typeof url === 'string') ? url : (url && url.url) || '';
+      if (u.includes('azurewebsites.net/api')) {
+        const tk = sessionStorage.getItem('rl_token');
+        if (tk) {
+          opts = opts || {};
+          opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + tk });
+        }
+      }
+    } catch(e) {}
+    return _fetch.call(this, url, opts);
+  };
+})();
 
 // Roles que ven la selección de módulo (admins y coordinadores)
 const ROLES_SELECCION = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl','jefe_rl','admin','admin01','admin02','rrhh','supervisor'];
@@ -442,6 +467,7 @@ function checkSessionCache() {
     // Restaurar sesión
     sessionStorage.setItem('user', JSON.stringify(user));
     sessionStorage.setItem('api', API);
+    if (s.token) sessionStorage.setItem('rl_token', s.token);
     if (ROLES_SELECCION.includes(rol)) {
       // Admin/coordinador → pantalla de módulos
       document.getElementById('pmNombre').textContent = user.nombre || user.usuario || '';
@@ -471,9 +497,10 @@ async function doLogin(){
     console.log('[login] credenciales: '+Math.round(performance.now()-_tLogin0)+'ms');
     if(d.success){
       // Guardar sesión en localStorage (válida 8 horas)
-      try { localStorage.setItem('rl_session', JSON.stringify({user: d.user, timestamp: Date.now()})); } catch(e){}
+      try { localStorage.setItem('rl_session', JSON.stringify({user: d.user, token: d.token || null, timestamp: Date.now()})); } catch(e){}
       sessionStorage.setItem('user',JSON.stringify(d.user));
       sessionStorage.setItem('api',API);
+      if (d.token) sessionStorage.setItem('rl_token', d.token);
       const rol=(d.user.rol||'').toLowerCase().trim();
       // Precalentar caché del backend (fire & forget) — medir respuesta
       const _tPre=performance.now();

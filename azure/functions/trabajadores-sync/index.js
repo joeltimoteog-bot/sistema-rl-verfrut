@@ -1,4 +1,5 @@
 ﻿const { sql, getPool } = require('../shared/db');
+const { exigirAuth } = require('../shared/auth');
 
 // Helper: parsea fechas que pueden venir como Date, string ISO, o número serial de Sheets
 function parseDate(value) {
@@ -105,6 +106,10 @@ async function syncTabla(pool, tableName, rows) {
 }
 
 module.exports = async function (context, req) {
+  // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
+  const authUser = exigirAuth(context, req);
+  if (authUser === null) return;
+
   context.log('trabajadores-sync triggered');
   const startTime = Date.now();
 

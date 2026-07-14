@@ -1,6 +1,11 @@
 const { sql, getPool } = require('../shared/db');
+const { exigirAuth } = require('../shared/auth');
 
 module.exports = async function (context, req) {
+  // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
+  const authUser = exigirAuth(context, req);
+  if (authUser === null) return;
+
   context.log('atenciones-batch triggered');
   const startTime = Date.now();
 

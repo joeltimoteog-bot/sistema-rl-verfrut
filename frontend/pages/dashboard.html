@@ -181,6 +181,17 @@ h2{font-size:18px !important}
 h3{font-size:16px !important}
 </style>
 <script>if(localStorage.getItem('rl_dark')==='1')document.documentElement.classList.add('dark');</script>
+<script>
+// ── Modo producción: silenciar logs de debug ──
+// Para activar logs: localStorage.setItem('rl_debug','1') y recargar.
+// console.warn y console.error siempre quedan activos.
+(function(){
+  if (localStorage.getItem('rl_debug') === '1') return;
+  const noop = function(){};
+  console.log = noop; console.debug = noop; console.info = noop;
+  console.time = noop; console.timeEnd = noop; console.table = noop;
+})();
+</script>
 <!-- azure-blob-upload.js eliminado: subida ahora va por backend Apps Script (action subirArchivoAzure) -->
 </head>
 <body>
@@ -2812,6 +2823,24 @@ const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7
 
 // Azure Functions: búsqueda rápida de trabajador por DNI (reemplaza GAS para DNI exacto)
 const AZURE_FN_BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api';
+
+// ── JWT: adjuntar Authorization a toda llamada a Azure Functions ──
+(function(){
+  const _fetch = window.fetch;
+  window.fetch = function(url, opts){
+    try {
+      const u = (typeof url === 'string') ? url : (url && url.url) || '';
+      if (u.includes('azurewebsites.net/api')) {
+        const tk = sessionStorage.getItem('rl_token');
+        if (tk) {
+          opts = opts || {};
+          opts.headers = Object.assign({}, opts.headers, { 'Authorization': 'Bearer ' + tk });
+        }
+      }
+    } catch(e) {}
+    return _fetch.call(this, url, opts);
+  };
+})();
         const AZURE_FN_KEY_ATLIST = 'mAcqIAfE5WQdqpcPxLvWmh6-FDk0rrIkQZyVIllZONO0AzFuaEOVBQ=='; // function-specific key de atenciones-list (solo lectura GET /atenciones)
 
 /**
