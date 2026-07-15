@@ -564,7 +564,7 @@ function renderEstadisticasAdmin(data) {
   };
   set('eAtTotal', stats.atenciones.total);
   set('eAtProc',  stats.atenciones.enProceso);
-  set('eAtFin',   stats.atenciones.resueltos);
+  set('eAtFin',   stats.atenciones.finalizados);
   set('eAtMes',   stats.atenciones.esteMes);
   set('eVisTotal',  stats.visitas.total);
   set('eVisPlazo',  stats.visitas.enPlazo);
@@ -809,7 +809,7 @@ function exportarEstadisticasAdmin() {
   const s = d.stats;
   const h1 = [
     ['Módulo','Total','Este mes','Indicador 1','Valor 1','Indicador 2','Valor 2'],
-    ['Atenciones', s.atenciones.total, s.atenciones.esteMes, 'Pendientes', s.atenciones.pendientes, 'Resueltos',  s.atenciones.resueltos],
+    ['Atenciones', s.atenciones.total, s.atenciones.esteMes, 'En Proceso', s.atenciones.enProceso, 'Finalizados', s.atenciones.finalizados],
     ['Visitas',    s.visitas.total,    s.visitas.esteMes,    'En plazo',   s.visitas.enPlazo,         'Retrasadas', s.visitas.retrasadas],
     ['Casos',      s.casos.total,      s.casos.esteMes,      'En plazo',   s.casos.enPlazo,           'Retrasados', s.casos.retrasados],
     ['Fusiones',   s.fusiones.total,   s.fusiones.esteMes,   'Pendientes', s.fusiones.pendientes,     'Validados',  s.fusiones.validados]
