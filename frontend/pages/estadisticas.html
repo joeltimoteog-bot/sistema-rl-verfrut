@@ -76,9 +76,28 @@ button{font-size:13.5px !important}
 h1{font-size:22px !important}
 h2{font-size:18px !important}
 h3{font-size:16px !important}
+
+/* ── Mejoras visuales Estadísticas Admin ── */
+#estCardsGlobales>div{position:relative;overflow:hidden;transition:transform .25s cubic-bezier(.4,0,.2,1),box-shadow .25s;animation:estIn .5s ease backwards;border-radius:16px!important}
+#estCardsGlobales>div:nth-child(1){animation-delay:.05s}#estCardsGlobales>div:nth-child(2){animation-delay:.15s}
+#estCardsGlobales>div:nth-child(3){animation-delay:.25s}#estCardsGlobales>div:nth-child(4){animation-delay:.35s}
+#estCardsGlobales>div:hover{transform:translateY(-5px);box-shadow:0 16px 38px rgba(15,23,42,.14)!important}
+#estCardsGlobales>div::after{content:"";position:absolute;top:0;right:0;width:90px;height:90px;border-radius:50%;background:radial-gradient(circle,rgba(10,36,99,.05),transparent 70%);pointer-events:none}
+@keyframes estIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+.est-skel{background:linear-gradient(90deg,#eef2f9 25%,#f8fafc 50%,#eef2f9 75%);background-size:200% 100%;animation:estShim 1.2s linear infinite;border-radius:8px;color:transparent!important}
+@keyframes estShim{to{background-position:-200% 0}}
+#fbBadgeEst,.badge-vivo{animation:estPulse 2.2s ease-in-out infinite}
+@keyframes estPulse{0%,100%{opacity:1}50%{opacity:.55}}
+table tbody tr{transition:background .15s}
+.gc{border-radius:16px!important;transition:box-shadow .25s}
+.gc:hover{box-shadow:0 12px 30px rgba(15,23,42,.1)}
 </style>
 <link rel="stylesheet" href="../css/rl-theme.css">
 <script>(function(){if(localStorage.getItem('rl_theme')==='glass' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
+<script>
+(function(){if(localStorage.getItem('rl_debug')!=='1'){const n=function(){};console.log=n;console.debug=n;console.info=n;console.time=n;console.timeEnd=n;}})();
+(function(){const f=window.fetch;window.fetch=function(u,o){try{const s=(typeof u==='string')?u:(u&&u.url)||'';if(s.includes('azurewebsites.net/api')){const t=sessionStorage.getItem('rl_token');if(t){o=o||{};o.headers=Object.assign({},o.headers,{'Authorization':'Bearer '+t});}}}catch(e){}return f.call(this,u,o);};})();
+</script>
 </head>
 <body>
 
@@ -527,7 +546,22 @@ function renderEstadisticasAdmin(data) {
   if (!stats || !porSupervisor) { console.error('renderEstadisticasAdmin: datos incompletos', data); return; }
   const tb = document.getElementById('tbEstSupervisores');
 
-  const set = (id, val) => { const el=document.getElementById(id); if(el) el.textContent=val; };
+  const set = (id, val) => {
+    const el=document.getElementById(id); if(!el) return;
+    el.classList.remove('est-skel');
+    const raw = val ?? '—';
+    const num = (typeof raw==='number') ? raw : parseFloat(String(raw).replace(/[^0-9.]/g,''));
+    if (!isFinite(num) || !/[0-9]/.test(String(raw))) { el.textContent = raw; return; }
+    const desde = parseFloat(String(el.textContent).replace(/[^0-9.]/g,'')) || 0;
+    if (desde === num) { el.textContent = raw; return; }
+    const conFmt = (typeof raw==='string' && raw.includes(','));
+    const t0 = performance.now(), dur = 800;
+    (function paso(t){
+      const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3), cur=desde+(num-desde)*e;
+      el.textContent = conFmt ? Math.round(cur).toLocaleString('es-PE') : Math.round(cur);
+      if(k<1) requestAnimationFrame(paso); else el.textContent = raw;
+    })(t0);
+  };
   set('eAtTotal', stats.atenciones.total);
   set('eAtProc',  stats.atenciones.enProceso);
   set('eAtFin',   stats.atenciones.resueltos);
@@ -1343,6 +1377,24 @@ window._fbSuscribirModulosEst = function(callback) {
     console.error('[Firebase][Est][module] Error onValue estadisticas_modulos:', err.code, err.message);
   });
 };
+</script>
+
+<script>
+// ── Auto-actualización de indicadores ──
+(function(){
+  const REFRESCO_MS = 2*60*1000; // cada 2 minutos
+  setInterval(function(){
+    if(document.hidden) return;
+    try{ _actualizarEnBackground(); }catch(e){}
+  }, REFRESCO_MS);
+  let _ultimaVista = Date.now();
+  document.addEventListener('visibilitychange', function(){
+    if(!document.hidden && Date.now()-_ultimaVista > 60*1000){
+      try{ _actualizarEnBackground(); }catch(e){}
+    }
+    if(document.hidden) _ultimaVista = Date.now();
+  });
+})();
 </script>
 </body>
 </html>
