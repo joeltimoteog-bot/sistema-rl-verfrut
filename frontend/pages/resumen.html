@@ -382,28 +382,6 @@ body.presmode #btnPres{background:linear-gradient(135deg,#e23c3c,#b91c1c)}
       <div id="supR"><div class="empty">⏳ Cargando...</div></div>
     </div>
 
-    <div class="gg" style="margin-top:14px">
-      <div class="gc"><div class="gc-t">📊 Atenciones por mes</div><canvas id="rChartMes" style="height:200px;max-height:200px"></canvas></div>
-      <div class="gc"><div class="gc-t">🍩 Por Estado</div><canvas id="rChartEst" style="height:200px;max-height:200px"></canvas></div>
-    </div>
-    <div class="gg" style="margin-top:14px">
-      <div class="gc"><div class="gc-t">📈 Tendencia anual</div><canvas id="rChartAnual" style="height:200px;max-height:200px"></canvas></div>
-      <div class="gc">
-        <div class="gc-t">📋 Resumen por año</div>
-        <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse;font-size:12px">
-            <thead><tr style="background:#0b1e45;color:#fff">
-              <th style="padding:7px 10px;text-align:left">Año</th>
-              <th style="padding:7px 10px;text-align:center">Total</th>
-              <th style="padding:7px 10px;text-align:center">En Proceso</th>
-              <th style="padding:7px 10px;text-align:center">Finalizado</th>
-            </tr></thead>
-            <tbody id="tbResAnualBodyAdmin"><tr><td colspan="4" style="text-align:center;padding:10px;color:#64748b">⏳ Cargando...</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
     <div class="card">
       <div class="card-h">
         <span class="card-t">Todas las Atenciones <span class="tw-info" id="twInfo"></span></span>
@@ -644,7 +622,6 @@ function filtrarRes() {
     (!filtAnio|| String(a.anio||a.fecha_atencion||'').substring(0,4)===filtAnio)
   );
   window._resFiltradas = lista;
-  setTimeout(()=>dibujarGraficosResumen(lista),100);
   _renderTablaRes(lista);
 }
 
@@ -762,6 +739,7 @@ async function cargarResumenEjecutivo() {
   try {
     const resp = await apiPost({ action: 'resumenEjecutivo', empresa });
     if (!resp.success) { console.warn('[RejEjec] Error:', resp.error); return; }
+    try{localStorage.setItem('rl_rej_cache',JSON.stringify({ts:Date.now(),empresa:empresa,resp:resp}));}catch(e){}
 
     // --- Firebase-first: si hay Firebase fresco, NO sobreescribir cards ---
     const _hayFb = _rFbEstaFresco();
@@ -1180,6 +1158,27 @@ function _renderVersus(r,v){
       d.por_empresa.forEach(e=>{const n=String(e.empresa||'').toUpperCase();if(n==='RAPEL')rr=Number(e.total||0);if(n==='VERFRUT')vv=Number(e.total||0);});
       if(rr||vv)_renderVersus(rr,vv);
     }
+  }catch(e){}
+})();
+
+// ── Cache instantáneo del Resumen Ejecutivo (tendencia/alertas/comparativa) ──
+(function(){
+  try{
+    const raw=localStorage.getItem('rl_rej_cache'); if(!raw) return;
+    const c=JSON.parse(raw);
+    if(Date.now()-c.ts > 10*60*1000) return;
+    const sel=document.getElementById('filtroEmpresaResumen');
+    if(sel && c.empresa && sel.value!==c.empresa) return;
+    const r=c.resp||{};
+    try{renderizarComparativa(r.comparativa||{});}catch(e){}
+    try{renderizarTendenciaGeneral(r.tendencia||[]);}catch(e){}
+    try{renderizarAlertas(r.alertas||[]);}catch(e){}
+    try{_rejRenderMiniVisitas(r.visitas||{});}catch(e){}
+    try{_rejRenderMiniCasos(r.casos||{});}catch(e){}
+    try{_rejRenderMiniFusiones(r.comparativa&&r.comparativa.fusiones||{});}catch(e){}
+    try{_rejRenderMiniCapacitaciones(r.comparativa&&r.comparativa.capacitaciones||{});}catch(e){}
+    const ts=document.getElementById('rejTimestamp');
+    if(ts)ts.textContent='caché · actualizando...';
   }catch(e){}
 })();
 function togglePresentacion(){
