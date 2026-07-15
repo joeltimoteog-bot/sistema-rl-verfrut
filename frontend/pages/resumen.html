@@ -157,9 +157,39 @@ button{font-size:13.5px !important}
 h1{font-size:22px !important}
 h2{font-size:18px !important}
 h3{font-size:16px !important}
+
+/* ── Mejoras ejecutivas ── */
+.kpi-card{position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s}
+.kpi-card:hover{transform:translateY(-4px);box-shadow:0 14px 34px rgba(15,23,42,.13)}
+.kpi-spark{display:block;width:100%;height:30px;margin-top:8px;opacity:.85}
+.vs-wrap{background:#fff;border-radius:14px;padding:18px 20px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,.07)}
+.vs-title{font-size:12px;font-weight:800;letter-spacing:1.5px;color:#64748b;text-transform:uppercase;text-align:center;margin-bottom:12px}
+.vs-bar{display:flex;height:34px;border-radius:10px;overflow:hidden;box-shadow:inset 0 2px 6px rgba(0,0,0,.12)}
+.vs-r{background:linear-gradient(90deg,#D91F26,#b91c1c);display:flex;align-items:center;padding-left:12px;color:#fff;font-weight:800;font-size:13px;width:0%;transition:width 1.2s cubic-bezier(.25,.9,.3,1);white-space:nowrap}
+.vs-v{background:linear-gradient(270deg,#0a2463,#1e3a8a);display:flex;align-items:center;justify-content:flex-end;padding-right:12px;color:#fff;font-weight:800;font-size:13px;width:0%;transition:width 1.2s cubic-bezier(.25,.9,.3,1);white-space:nowrap}
+.vs-leg{display:flex;justify-content:space-between;margin-top:8px;font-size:11.5px;color:#64748b;font-weight:700}
+.tw-toggle{cursor:pointer;user-select:none;font-size:12px;font-weight:800;color:#0a2463;background:#eef2fb;border:1px solid #d7e0f2;border-radius:8px;padding:6px 14px;transition:background .2s}
+.tw-toggle:hover{background:#e0e8f8}
+.tw-info{font-size:11.5px;color:#64748b;font-weight:600}
+.btn-vermas{display:block;margin:12px auto;background:linear-gradient(135deg,#1e3a8a,#0a2463);color:#fff;border:none;border-radius:9px;padding:10px 26px;font-size:12.5px;font-weight:800;letter-spacing:1px;cursor:pointer;font-family:'Barlow',sans-serif}
+body.presmode{background:radial-gradient(ellipse 100% 80% at 50% 0%,#122a63 0%,#0a1c4d 45%,#050d24 100%)!important;overflow:auto}
+body.presmode .sb,body.presmode .topbar,body.presmode .content>*:not(#secEjecutivo){display:none!important}
+body.presmode .main{margin-left:0}
+body.presmode .content{padding:40px clamp(24px,5vw,80px)}
+body.presmode #secEjecutivo .rej-header h2{color:#fff;font-size:30px;text-shadow:0 2px 16px rgba(0,0,0,.4)}
+body.presmode .kpi-card,body.presmode .modulo-card,body.presmode .vs-wrap,body.presmode .gc{background:linear-gradient(165deg,rgba(13,27,58,.82),rgba(8,18,42,.88));backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.12);box-shadow:0 20px 50px rgba(0,0,0,.4)}
+body.presmode .kpi-value{color:#fff;font-size:44px}
+body.presmode .kpi-label,body.presmode .vs-title{color:#9db4dd}
+body.presmode .modulo-card h3,body.presmode .gc-t{color:#fff}
+body.presmode .modulo-card{color:#c6d4ee}
+body.presmode #btnPres{background:linear-gradient(135deg,#e23c3c,#b91c1c)}
 </style>
 <link rel="stylesheet" href="../css/rl-theme.css">
 <script>(function(){if(localStorage.getItem('rl_theme')==='glass' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
+<script>
+(function(){if(localStorage.getItem('rl_debug')!=='1'){const n=function(){};console.log=n;console.debug=n;console.info=n;console.time=n;console.timeEnd=n;}})();
+(function(){const f=window.fetch;window.fetch=function(u,o){try{const s=(typeof u==='string')?u:(u&&u.url)||'';if(s.includes('azurewebsites.net/api')){const t=sessionStorage.getItem('rl_token');if(t){o=o||{};o.headers=Object.assign({},o.headers,{'Authorization':'Bearer '+t});}}}catch(e){}return f.call(this,u,o);};})();
+</script>
 </head>
 <body>
 
@@ -227,16 +257,17 @@ h3{font-size:16px !important}
             <option value="VERFRUT">Solo VERFRUT</option>
           </select>
           <button class="btn-rej" onclick="cargarResumenEjecutivo()">🔄 Actualizar</button>
+          <button class="btn-rej" id="btnPres" onclick="togglePresentacion()">🖥️ Modo Presentación</button>
           <span id="rejTimestamp" style="font-size:10px;color:#94a3b8"></span>
         </div>
       </div>
 
       <!-- KPIs -->
       <div class="kpis-grid">
-        <div class="kpi-card verde"><div class="kpi-icon">📅</div><div class="kpi-value" id="kpiHoy">—</div><div class="kpi-label">Atenciones HOY</div></div>
-        <div class="kpi-card azul"><div class="kpi-icon">📆</div><div class="kpi-value" id="kpiMes">—</div><div class="kpi-label">Este Mes</div></div>
-        <div class="kpi-card naranja"><div class="kpi-icon">⏳</div><div class="kpi-value" id="kpiProceso">—</div><div class="kpi-label">En Proceso</div></div>
-        <div class="kpi-card rojo"><div class="kpi-icon">📊</div><div class="kpi-value" id="kpiTotal">—</div><div class="kpi-label">Total Histórico</div></div>
+        <div class="kpi-card verde"><div class="kpi-icon">📅</div><div class="kpi-value" id="kpiHoy">—</div><div class="kpi-label">Atenciones HOY</div><canvas class="kpi-spark" id="spark_kpiHoy"></canvas></div>
+        <div class="kpi-card azul"><div class="kpi-icon">📆</div><div class="kpi-value" id="kpiMes">—</div><div class="kpi-label">Este Mes</div><canvas class="kpi-spark" id="spark_kpiMes"></canvas></div>
+        <div class="kpi-card naranja"><div class="kpi-icon">⏳</div><div class="kpi-value" id="kpiProceso">—</div><div class="kpi-label">En Proceso</div><canvas class="kpi-spark" id="spark_kpiProceso"></canvas></div>
+        <div class="kpi-card rojo"><div class="kpi-icon">📊</div><div class="kpi-value" id="kpiTotal">—</div><div class="kpi-label">Total Histórico</div><canvas class="kpi-spark" id="spark_kpiTotal"></canvas></div>
       </div>
 
       <!-- Cards de módulos -->
@@ -285,6 +316,11 @@ h3{font-size:16px !important}
 
       <!-- Gráficos comparativa + tendencia -->
       <div class="gg" style="margin-bottom:20px">
+      <div class="vs-wrap" id="vsWrap" style="display:none">
+        <div class="vs-title">⚔️ RAPEL vs VERFRUT — Actividad total</div>
+        <div class="vs-bar"><div class="vs-r" id="vsR">RAPEL</div><div class="vs-v" id="vsV">VERFRUT</div></div>
+        <div class="vs-leg"><span id="vsRleg"></span><span id="vsVleg"></span></div>
+      </div>
         <div class="gc">
           <div class="gc-t">📊 Comparativa RAPEL vs VERFRUT</div>
           <canvas id="chartComparativa" style="max-height:220px"></canvas>
@@ -370,13 +406,14 @@ h3{font-size:16px !important}
 
     <div class="card">
       <div class="card-h">
-        <span class="card-t">Todas las Atenciones</span>
-        <div style="display:flex;gap:8px">
+        <span class="card-t">Todas las Atenciones <span class="tw-info" id="twInfo"></span></span>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="tw-toggle" id="twToggle" onclick="toggleTablaRes()">▶ Mostrar tabla</button>
           <select class="fi" id="rFE" onchange="filtrarRes()" style="width:120px"><option value="">Todas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
           <select class="fi" id="rFEst" onchange="filtrarRes()" style="width:140px"><option value="">Todos estados</option><option>EN PROCESO</option><option>FINALIZADO</option></select>
         </div>
       </div>
-      <div class="tw">
+      <div class="tw" id="twRes" style="display:none">
         <table><thead><tr>
           <th>N°</th><th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Empresa</th>
           <th>Documento</th><th>Supervisor</th><th>Estado</th><th>Ver</th>
@@ -608,16 +645,7 @@ function filtrarRes() {
   );
   window._resFiltradas = lista;
   setTimeout(()=>dibujarGraficosResumen(lista),100);
-  document.getElementById('tbRes').innerHTML=lista.length?
-    lista.map(a=>`<tr>
-      <td>${a.nro||''}</td><td>${fmtF(a.fecha_atencion)}</td>
-      <td><strong>${a.dni||''}</strong></td><td>${a.nombre||''}</td>
-      <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
-      <td>${a.detalle_documento||''}</td><td>${a.supervisor||''}</td>
-      <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
-      <td><button class="btn-a bv" onclick="verDet('${a.nro}')">Ver</button></td>
-    </tr>`).join('') :
-    '<tr><td colspan="9" class="empty">No hay registros</td></tr>';
+  _renderTablaRes(lista);
 }
 
 function verDet(nro) {
@@ -711,7 +739,23 @@ function exportarResumen() {
 // ══════════════ RESUMEN EJECUTIVO ══════════════
 let _rejCharts = {};
 function _rejDestroy(key) { if (_rejCharts[key]) { _rejCharts[key].destroy(); delete _rejCharts[key]; } }
-function _set(id, val) { const el = document.getElementById(id); if (el) el.textContent = val ?? '—'; }
+function _set(id, val) {
+  const el = document.getElementById(id); if (!el) return;
+  const raw = val ?? '—';
+  const num = (typeof raw==='number') ? raw : parseFloat(String(raw).replace(/[^0-9.]/g,''));
+  const esNum = isFinite(num) && /[0-9]/.test(String(raw));
+  if (!esNum) { el.textContent = raw; return; }
+  const conFmt = (typeof raw==='string' && raw.includes(','));
+  const desde = parseFloat(String(el.textContent).replace(/[^0-9.]/g,'')) || 0;
+  if (desde === num) { el.textContent = raw; return; }
+  const t0 = performance.now(), dur = 900;
+  (function paso(t){
+    const k = Math.min(1,(t-t0)/dur), e = 1-Math.pow(1-k,3);
+    const cur = desde+(num-desde)*e;
+    el.textContent = conFmt ? Math.round(cur).toLocaleString('es-PE') : Math.round(cur);
+    if (k<1) requestAnimationFrame(paso); else el.textContent = raw;
+  })(t0);
+}
 
 async function cargarResumenEjecutivo() {
   const empresa = document.getElementById('filtroEmpresaResumen')?.value || 'AMBAS';
@@ -1056,6 +1100,96 @@ window._fbSuscribirModulosR = function(callback) {
 
 // Acceso directo a los datos en caché del listener
 window._fbDatosEstadisticas = function() { return null; }; // sobrescrito por listener
+</script>
+
+<script>
+// ═══ Mejoras ejecutivas ═══
+let _twPagina=1; const _TW_PAG=100; let _twLista=[];
+function _tplFilas(lista){ return lista.map(a=>`<tr>
+      <td>${a.nro||''}</td><td>${fmtF(a.fecha_atencion)}</td>
+      <td><strong>${a.dni||''}</strong></td><td>${a.nombre||''}</td>
+      <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
+      <td>${a.detalle_documento||''}</td><td>${a.supervisor||''}</td>
+      <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
+      <td><button class="btn-a bv" onclick="verDet('${a.nro}')">Ver</button></td>
+    </tr>`).join(''); }
+function _renderTablaRes(lista){ _twLista=lista||[]; _twPagina=1; _pintarTabla(); }
+function _pintarTabla(){
+  const tb=document.getElementById('tbRes'); if(!tb) return;
+  const vis=_twLista.slice(0,_TW_PAG*_twPagina);
+  tb.innerHTML = vis.length ? _tplFilas(vis) : '<tr><td colspan="9" class="empty">No hay registros</td></tr>';
+  const resto=_twLista.length-vis.length;
+  let btn=document.getElementById('btnVerMas'); if(btn)btn.remove();
+  if(resto>0){
+    btn=document.createElement('button');
+    btn.id='btnVerMas'; btn.className='btn-vermas';
+    btn.textContent='Ver 100 más ('+resto.toLocaleString('es-PE')+' restantes)';
+    btn.onclick=function(){_twPagina++;_pintarTabla();};
+    const tw=document.getElementById('twRes'); if(tw)tw.appendChild(btn);
+  }
+  const inf=document.getElementById('twInfo');
+  const total=(CACHE.resumen&&CACHE.resumen.total)||_twLista.length;
+  if(inf)inf.textContent='· mostrando '+vis.length.toLocaleString('es-PE')+' de '+Number(total).toLocaleString('es-PE')+' registros';
+}
+function toggleTablaRes(){
+  const tw=document.getElementById('twRes'), b=document.getElementById('twToggle');
+  const abierto=tw.style.display!=='none';
+  tw.style.display=abierto?'none':'';
+  b.textContent=abierto?'▶ Mostrar tabla':'▼ Ocultar tabla';
+}
+function _spark(id,serie,color){
+  const c=document.getElementById(id); if(!c||!serie||serie.length<2) return;
+  const x=c.getContext('2d'); const W=c.width=c.offsetWidth||180, H=c.height=30;
+  const mx=Math.max.apply(null,serie), mn=Math.min.apply(null,serie);
+  const px=i=>i/(serie.length-1)*(W-4)+2, py=v=>H-3-((v-mn)/((mx-mn)||1))*(H-8);
+  x.beginPath(); serie.forEach((v,i)=>i?x.lineTo(px(i),py(v)):x.moveTo(px(i),py(v)));
+  x.strokeStyle=color; x.lineWidth=2; x.lineJoin='round'; x.stroke();
+  x.lineTo(px(serie.length-1),H); x.lineTo(px(0),H); x.closePath();
+  const g=x.createLinearGradient(0,0,0,H); g.addColorStop(0,color+'44'); g.addColorStop(1,color+'00');
+  x.fillStyle=g; x.fill();
+}
+function _sparksDesde(porMes){
+  if(!porMes||!porMes.length) return;
+  const serie=porMes.slice(-8).map(m=>Number(m.total||m.cantidad||0));
+  _spark('spark_kpiHoy',serie,'#16a34a'); _spark('spark_kpiMes',serie,'#0a2463');
+  _spark('spark_kpiProceso',serie,'#f59e0b'); _spark('spark_kpiTotal',serie,'#D91F26');
+}
+function _renderVersus(r,v){
+  const w=document.getElementById('vsWrap'); if(!w) return;
+  const tot=(r+v)||1; w.style.display='';
+  requestAnimationFrame(function(){
+    document.getElementById('vsR').style.width=Math.max(8,r/tot*100)+'%';
+    document.getElementById('vsV').style.width=Math.max(8,v/tot*100)+'%';
+  });
+  document.getElementById('vsRleg').textContent='RAPEL: '+r.toLocaleString('es-PE')+' ('+Math.round(r/tot*100)+'%)';
+  document.getElementById('vsVleg').textContent='VERFRUT: '+v.toLocaleString('es-PE')+' ('+Math.round(v/tot*100)+'%)';
+}
+(async function(){
+  try{
+    const r=await fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/atenciones/stats');
+    if(!r.ok) return;
+    const d=await r.json(); if(!d.success) return;
+    const g=d.resumen_global||{};
+    if(g.hoy!=null)_set('kpiHoy',g.hoy);
+    if(g.este_mes!=null)_set('kpiMes',g.este_mes);
+    if(g.en_proceso!=null)_set('kpiProceso',g.en_proceso);
+    if(g.total!=null)_set('kpiTotal',Number(g.total).toLocaleString('es-PE'));
+    if(d.por_mes)_sparksDesde(d.por_mes);
+    if(d.por_empresa){
+      let rr=0,vv=0;
+      d.por_empresa.forEach(e=>{const n=String(e.empresa||'').toUpperCase();if(n==='RAPEL')rr=Number(e.total||0);if(n==='VERFRUT')vv=Number(e.total||0);});
+      if(rr||vv)_renderVersus(rr,vv);
+    }
+  }catch(e){}
+})();
+function togglePresentacion(){
+  const on=document.body.classList.toggle('presmode');
+  const b=document.getElementById('btnPres');
+  if(b)b.textContent=on?'✖ Salir de Presentación':'🖥️ Modo Presentación';
+  try{ if(on){if(document.documentElement.requestFullscreen)document.documentElement.requestFullscreen();}
+       else{if(document.fullscreenElement)document.exitFullscreen();} }catch(e){}
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.body.classList.contains('presmode'))togglePresentacion();});
 </script>
 </body>
 </html>
