@@ -105,6 +105,7 @@
     <div><h1>🛰️ Monitor en Vivo</h1><div class="sub">Sistema RL · Relaciones Laborales</div></div>
     <div class="grow"></div>
     <div class="pill"><span id="modoConn" style="color:var(--mut)">conectando…</span></div>
+    <div class="pill" id="pillResp" style="display:none;color:#fbbf24">💬 <span id="cntResp">0</span> respuesta(s)</div>
     <div class="pill"><span class="dotlive"></span><span id="cntOn">0</span> conectados</div>
     <div class="pill" style="color:var(--mut)"><span id="cntTot">0</span> registrados</div>
     <button class="btnGhost" onclick="location.href='dashboard.html'">← Dashboard</button>
@@ -174,6 +175,7 @@ function initFB(){
 
 /* ── Estado UI ── */
 let PRES = {};
+let MSGS = {};   // todas las conversaciones (para respuestas y badges 💬)
 let filtro = 'todos';
 let busqueda = '';
 let seleccion = null;
@@ -219,6 +221,34 @@ function estado(u){
   return fresco ? 'on' : 'idle';
 }
 
+/* Un mensaje es RESPUESTA si lo escribió el propio usuario de esa conversación
+   (y no un admin). Los mensajes del admin quedan como salientes. */
+function esRespuesta(m, k){
+  if(!m || !m.de_usuario) return false;
+  const du = String(m.de_usuario).toLowerCase();
+  return ukey(du) === k && !MONITOR_ADMINS.includes(du);
+}
+function respuestasNoLeidas(k){
+  const conv = MSGS[k]; if(!conv) return 0;
+  return Object.keys(conv).filter(id => esRespuesta(conv[id], k) && !conv[id].leido).length;
+}
+/* Marca como vistas las respuestas de la conversación abierta (vía REST,
+   funciona en ambos modos de conexión) */
+function marcarRespuestasLeidas(){
+  const k = seleccion; if(!k) return;
+  const conv = MSGS[k]; if(!conv) return;
+  Object.keys(conv).forEach(id=>{
+    const m = conv[id];
+    if(esRespuesta(m,k) && !m.leido){
+      m.leido = true; // local, para no repetir el PATCH
+      fetch(DB_URL+'/mensajes/'+k+'/'+id+'.json',{
+        method:'PATCH',
+        body:JSON.stringify({leido:true, leido_ts:{'.sv':'timestamp'}})
+      }).catch(()=>{});
+    }
+  });
+}
+
 /* ── MODO RESPALDO: lectura por REST cada 5s (funciona en cualquier red) ── */
 function iniciarREST(){
   if(restTimer) return;
@@ -228,9 +258,13 @@ function iniciarREST(){
       const r = await fetch(DB_URL+'/presencia.json?nc='+Date.now());
       if(!r.ok) throw 0;
       PRES = (await r.json()) || {};
+      try{
+        const rm = await fetch(DB_URL+'/mensajes.json?nc='+Date.now());
+        if(rm.ok) MSGS = (await rm.json()) || {};
+      }catch(e){}
       render();
       if(modoConexion!=='sdk') setModo('rest');
-      if(seleccion && modoConexion!=='sdk') refrescarHistorialREST();
+      if(seleccion && modoConexion!=='sdk'){ pintarHistorial(MSGS[seleccion]||null); marcarRespuestasLeidas(); }
     }catch(e){ setModo('error'); }
   };
   tick();
@@ -254,6 +288,12 @@ function arrancar(){
       console.error('[Monitor] onValue presencia', err);
       iniciarREST();
     });
+    // Todas las conversaciones: respuestas en vivo + badges 💬
+    onValue(ref(db,'mensajes'), snap=>{
+      MSGS = snap.val() || {};
+      render();
+      if(seleccion){ pintarHistorial(MSGS[seleccion]||null); marcarRespuestasLeidas(); }
+    }, ()=>{});
   }catch(e){ iniciarREST(); }
 
   // Si el tiempo real no entrega nada en 4s (proxy/red) → respaldo REST
@@ -297,6 +337,9 @@ function render(){
   $('cntOn').textContent = online;
   $('cntTot').textContent = total;
   $('listCnt').textContent = arr.length + (arr.length===1?' usuario':' usuarios');
+  const totResp = Object.keys(MSGS).reduce((a,k)=>a+respuestasNoLeidas(k),0);
+  const pr = $('pillResp');
+  if(pr){ pr.style.display = totResp ? 'inline-flex' : 'none'; $('cntResp').textContent = totResp; }
 
   if(!arr.length){
     $('lista').innerHTML = '<div class="empty">Nadie por aquí todavía.</div>';
@@ -309,7 +352,7 @@ function render(){
           <div class="dot ${st}"></div>
         </div>
         <div class="info">
-          <div class="nm">${esc(u.nombre||u.usuario)} ${badgeEmp(u.empresa)}</div>
+          <div class="nm">${esc(u.nombre||u.usuario)} ${badgeEmp(u.empresa)} ${respuestasNoLeidas(u.k)?'<span class="badge" style="background:rgba(245,158,11,.2);color:#fbbf24">💬 '+respuestasNoLeidas(u.k)+'</span>':''}</div>
           <div class="mt">${st==='off'?'Desconectado':'📍 <span class="mod">'+esc(u.modulo||'—')+'</span>'}</div>
         </div>
         <div class="rt">${haceCuanto(u.ultimo_ping)}</div>
@@ -422,14 +465,19 @@ function pintarHistorial(val){
   const box = $('histBox'); if(!box) return;
   if(!val){ box.innerHTML = '<div class="msg" style="color:var(--mut)">Sin mensajes aún.</div>'; return; }
   const arr = Object.keys(val).map(id=>({id,...val[id]})).sort((a,b)=>Number(b.ts||0)-Number(a.ts||0));
-  box.innerHTML = arr.map(m=>`
-    <div class="msg">
+  const k = seleccion;
+  box.innerHTML = arr.map(m=>{
+    const rep = esRespuesta(m, k);
+    const etiqueta = rep ? ('↩️ ' + esc(m.de||m.de_usuario||'Respuesta')) : esc(m.de||'Coordinación RR.LL.');
+    return `
+    <div class="msg" style="border-left:3px solid ${rep?'#22c55e':'#38bdf8'};${rep?'background:rgba(34,197,94,.07)':''}">
+      <div style="font-size:10.5px;font-weight:800;letter-spacing:.4px;color:${rep?'#4ade80':'#7dd3fc'};margin-bottom:3px">${etiqueta}</div>
       <div>${esc(m.texto)}</div>
       <div class="meta">
         <span>${haceCuanto(m.ts)}</span>
-        <span class="${m.leido?'leido':'noleido'}">${m.leido?'✓ Leído':'• No leído'}</span>
+        <span class="${m.leido?'leido':'noleido'}">${m.leido ? (rep?'✓ Vista':'✓ Leído') : (rep?'• Nueva':'• No leído')}</span>
       </div>
-    </div>`).join('');
+    </div>`;}).join('');
 }
 
 async function refrescarHistorialREST(){
@@ -437,20 +485,18 @@ async function refrescarHistorialREST(){
   try{
     const r = await fetch(DB_URL+'/mensajes/'+ukey(u.usuario)+'.json?nc='+Date.now());
     if(!r.ok) return;
-    pintarHistorial(await r.json());
+    MSGS[ukey(u.usuario)] = await r.json();
+    pintarHistorial(MSGS[ukey(u.usuario)]);
+    marcarRespuestasLeidas();
   }catch(e){}
 }
 
 function suscribirHistorial(u){
-  if(unsubMsgs){ try{unsubMsgs();}catch(e){} unsubMsgs=null; }
-  if(modoConexion==='sdk'){
-    try{
-      unsubMsgs = onValue(ref(db,'mensajes/'+ukey(u.usuario)), snap=>pintarHistorial(snap.val()),
-        ()=>refrescarHistorialREST());
-    }catch(e){ refrescarHistorialREST(); }
-  } else {
-    refrescarHistorialREST();
-  }
+  // El listener global de /mensajes ya mantiene MSGS al día (SDK) y el tick
+  // REST lo refresca en modo respaldo — aquí solo pintamos lo que hay.
+  pintarHistorial(MSGS[ukey(u.usuario)] || null);
+  marcarRespuestasLeidas();
+  if(modoConexion!=='sdk') refrescarHistorialREST();
 }
 
 let _toTimer;

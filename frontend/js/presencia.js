@@ -110,6 +110,23 @@
       .replace(/"/g, '&quot;');
   }
 
+  // Envía la respuesta del usuario a su propia conversación (vía REST — funciona
+  // en cualquier red; el monitor la detecta como respuesta y la marca 💬)
+  function enviarRespuesta(texto, cb) {
+    try {
+      fetch(DB_URL + '/mensajes/' + UKEY + '.json', {
+        method: 'POST',
+        body: JSON.stringify({
+          texto: String(texto).slice(0, 990),
+          de: USER.nombre || USER.usuario,
+          de_usuario: USER.usuario,
+          ts: { '.sv': 'timestamp' },
+          leido: false
+        })
+      }).then(function (r) { cb(!!(r && r.ok)); }).catch(function () { cb(false); });
+    } catch (e) { cb(false); }
+  }
+
   function mostrarMensajeAdmin(id, msg) {
     try {
       var wrap = document.getElementById('_rlMsgWrap');
@@ -130,12 +147,35 @@
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:700;color:#7dd3fc;">' +
         '<span style="font-size:16px;">📌</span><span>Mensaje de ' + _esc(de) + '</span></div>' +
         '<div style="margin-bottom:10px;white-space:pre-wrap;">' + _esc(texto) + '</div>' +
-        '<button type="button" style="background:#38bdf8;color:#0f172a;border:none;border-radius:8px;' +
-        'padding:6px 14px;font-weight:700;font-size:12.5px;cursor:pointer;">Entendido</button>';
-      var btn = card.querySelector('button');
-      btn.addEventListener('click', function () {
+        '<textarea placeholder="Escribe tu respuesta…" style="width:100%;box-sizing:border-box;background:#1e293b;' +
+        'color:#f1f5f9;border:1px solid #334155;border-radius:8px;padding:8px;font-size:12.5px;font-family:inherit;' +
+        'min-height:52px;resize:vertical;margin-bottom:8px;"></textarea>' +
+        '<div style="display:flex;gap:8px;">' +
+        '<button type="button" data-acc="resp" style="background:#22c55e;color:#052e16;border:none;border-radius:8px;' +
+        'padding:6px 14px;font-weight:700;font-size:12.5px;cursor:pointer;">↩️ Responder</button>' +
+        '<button type="button" data-acc="ok" style="background:#38bdf8;color:#0f172a;border:none;border-radius:8px;' +
+        'padding:6px 14px;font-weight:700;font-size:12.5px;cursor:pointer;">Entendido</button>' +
+        '</div>';
+      var cerrar = function () {
         card.style.transition = 'opacity .3s'; card.style.opacity = '0';
         setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 300);
+      };
+      card.querySelector('[data-acc="ok"]').addEventListener('click', cerrar);
+      card.querySelector('[data-acc="resp"]').addEventListener('click', function () {
+        var ta = card.querySelector('textarea');
+        var rTxt = ((ta && ta.value) || '').trim();
+        if (!rTxt) { if (ta) ta.focus(); return; }
+        var b = this; b.disabled = true; b.textContent = 'Enviando…';
+        enviarRespuesta(rTxt, function (ok) {
+          if (ok) {
+            b.textContent = '✓ Enviada';
+            setTimeout(cerrar, 900);
+          } else {
+            b.disabled = false; b.textContent = '↩️ Responder';
+            b.style.background = '#ef4444';
+            setTimeout(function () { b.style.background = '#22c55e'; }, 1500);
+          }
+        });
       });
       wrap.appendChild(card);
 
@@ -154,6 +194,8 @@
       Object.keys(val).forEach(function (id) {
         var m = val[id];
         if (!m || m.leido) return;
+        // No mostrar mis propias respuestas (las lee el admin, no yo)
+        if (m.de_usuario && String(m.de_usuario) === String(USER.usuario)) return;
         if (_mostrados[id]) return;
         _mostrados[id] = true;
         mostrarMensajeAdmin(id, m);
