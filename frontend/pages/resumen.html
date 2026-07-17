@@ -185,7 +185,7 @@ body.presmode .modulo-card{color:#c6d4ee}
 body.presmode #btnPres{background:linear-gradient(135deg,#e23c3c,#b91c1c)}
 </style>
 <link rel="stylesheet" href="../css/rl-theme.css">
-<script>(function(){if(localStorage.getItem('rl_theme')==='glass' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
+<script>(function(){if(localStorage.getItem('rl_theme')!=='classic' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
 <script>
 (function(){if(localStorage.getItem('rl_debug')!=='1'){const n=function(){};console.log=n;console.debug=n;console.info=n;console.time=n;console.timeEnd=n;}})();
 (function(){const f=window.fetch;window.fetch=function(u,o){try{const s=(typeof u==='string')?u:(u&&u.url)||'';if(s.includes('azurewebsites.net/api')){const t=sessionStorage.getItem('rl_token');if(t){o=o||{};o.headers=Object.assign({},o.headers,{'Authorization':'Bearer '+t});}}}catch(e){}return f.call(this,u,o);};})();
@@ -1190,5 +1190,6 @@ function togglePresentacion(){
 }
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.body.classList.contains('presmode'))togglePresentacion();});
 </script>
+<script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Resumen General"></script>
 </body>
 </html>

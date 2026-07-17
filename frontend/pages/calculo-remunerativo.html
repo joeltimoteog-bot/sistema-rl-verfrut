@@ -61,7 +61,7 @@
   @media print { header,.tabs,.btn,.nota{display:none} .card{border:none;box-shadow:none} }
 </style>
 <link rel="stylesheet" href="../css/rl-theme.css">
-<script>(function(){if(localStorage.getItem('rl_theme')==='glass' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
+<script>(function(){if(localStorage.getItem('rl_theme')!=='classic' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
 </head>
 <body>
 <header>
@@ -605,5 +605,6 @@ function restaurarParams() {
 if (!window._crBloqueado) { initCal(); initQuin(); initDia(); initHE(); }
 
 </script>
+<script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Cálculo Remunerativo"></script>
 </body>
 </html>

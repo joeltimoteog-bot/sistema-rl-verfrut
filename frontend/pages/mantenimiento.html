@@ -107,7 +107,7 @@ tr:hover td{background:#fafbfc}
 @media(max-width:860px){.sb{transform:translateX(-100%)}.sb.open{transform:translateX(0)}.main{margin-left:0}.grid2,.grid3{grid-template-columns:1fr}.hamb{display:block}}
 </style>
 <link rel="stylesheet" href="../css/rl-theme.css">
-<script>(function(){if(localStorage.getItem('rl_theme')==='glass' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
+<script>(function(){if(localStorage.getItem('rl_theme')!=='classic' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
 </head>
 <body>
 <aside class="sb">
@@ -712,5 +712,6 @@ async function guardarProgramacion(){
     doc.save('Conductores_Licencias_'+new Date().toISOString().slice(0,10)+'.pdf');
   }
   </script>
-  </body>
+  <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Solicitud de Mantenimiento"></script>
+</body>
 </html>

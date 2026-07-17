@@ -1,5 +1,5 @@
 /* ============================================================================
- *  presencia.js — Sistema RL v3.0  (v2 con modo respaldo REST)
+ *  presencia.js — Sistema RL v3.0  (v3: submódulos automáticos + respaldo REST)
  *  Módulo de PRESENCIA EN VIVO + RECEPCIÓN DE MENSAJES DEL ADMIN
  *
  *  Se incluye UNA sola vez por página, justo antes de </body>:
@@ -9,12 +9,15 @@
  *
  *  - Escribe en Firebase RTDB  /presencia/{usuario}   (latido + onDisconnect)
  *  - Escucha                    /mensajes/{usuario}    y muestra avisos del admin
- *  - Si la conexión en tiempo real (WebSocket) no abre en ~6s (proxy/red
- *    corporativa), pasa SOLO a modo respaldo: escrituras y lecturas por REST
- *    (HTTP normal) cada 15-20 segundos. Funciona en cualquier red.
+ *  - DETECCIÓN AUTOMÁTICA DE SUBMÓDULO: si el usuario navega por el menú
+ *    lateral (botones .ni — como en dashboard.html), el módulo reportado se
+ *    actualiza solo ("Visitas de Campo", "Registro de Casos", "Bienestar
+ *    Social", ...). También hay API manual: RLPresencia.setModulo('X · Y')
+ *  - Si el tiempo real (WebSocket) no abre en ~6s, pasa SOLO a modo respaldo
+ *    REST (HTTP normal). Funciona en cualquier red.
  *
- *  DISEÑO A PRUEBA DE FALLOS: todo en try/catch. Si algo falla, el módulo
- *  no hace nada y la página sigue funcionando igual.
+ *  A PRUEBA DE FALLOS: todo en try/catch — si algo falla, el módulo no hace
+ *  nada y la página sigue funcionando igual.
  * ========================================================================== */
 (function () {
   'use strict';
@@ -49,6 +52,41 @@
   var MODULO = detectarModulo();
   var PAGINA = '';
   try { PAGINA = location.pathname.split('/').pop() || ''; } catch (e) {}
+
+  // Función que "empuja" el estado al canal activo (SDK o REST). La asigna
+  // cada modo al arrancar; setModulo la usa para reflejar el cambio al instante.
+  var _flushPresencia = null;
+
+  // ── 2b) API pública + detección automática de submódulo ────────────────
+  window.RLPresencia = {
+    setModulo: function (m) {
+      try {
+        if (!m) return;
+        MODULO = String(m).slice(0, 78);
+        if (_flushPresencia) _flushPresencia();
+      } catch (e) {}
+    },
+    getModulo: function () { return MODULO; }
+  };
+
+  // Clic en botones del menú lateral (.ni): toma el texto del botón como
+  // nombre de submódulo. Cubre dashboard.html sin tocar su código.
+  document.addEventListener('click', function (ev) {
+    try {
+      var t = ev.target;
+      var btn = t && t.closest ? t.closest('.ni') : null;
+      if (!btn) return;
+      if (btn.id === 'navMonitor') return;
+      var txt = btn.textContent || '';
+      var ic = btn.querySelector ? btn.querySelector('.ic') : null;
+      if (ic && ic.textContent) txt = txt.replace(ic.textContent, '');
+      txt = txt.replace(/[0-9]+\s*$/, '').trim();
+      if (!txt) return;
+      if (/cerrar sesi/i.test(txt)) return;
+      if (/^inicio$/i.test(txt)) return;
+      window.RLPresencia.setModulo(txt);
+    } catch (e) {}
+  }, true);
 
   // ── 3) Config Firebase ─────────────────────────────────────────────────
   var DB_URL = 'https://sistema-rl-verfrut-default-rtdb.firebaseio.com';
@@ -110,8 +148,6 @@
     } catch (e) {}
   }
 
-  // Procesa el objeto de mensajes (viene del SDK o de REST) y muestra los no leídos.
-  // marcarLeido(id) es la función que persiste el "leído" según el canal activo.
   function procesarMensajes(val, marcarLeido) {
     try {
       if (!val) return;
@@ -126,7 +162,7 @@
     } catch (e) {}
   }
 
-  // ── 5) MODO RESPALDO (REST) — funciona en cualquier red ────────────────
+  // ── 5) MODO RESPALDO (REST) ────────────────────────────────────────────
   var restActivo = false;
   var restTimers = [];
 
@@ -139,25 +175,27 @@
       modulo:  MODULO,
       pagina:  PAGINA,
       online:  !!online,
-      ultimo_ping: { '.sv': 'timestamp' }   // el servidor pone la hora
+      ultimo_ping: { '.sv': 'timestamp' }
     };
+  }
+
+  function escribirREST() {
+    try {
+      fetch(DB_URL + '/presencia/' + UKEY + '.json', {
+        method: 'PUT',
+        body: JSON.stringify(payloadREST(!document.hidden))
+      }).catch(function () {});
+    } catch (e) {}
   }
 
   function iniciarREST() {
     if (restActivo) return;
     restActivo = true;
+    _flushPresencia = escribirREST;
     console.warn('[Presencia] Tiempo real no disponible — usando modo respaldo (REST).');
 
-    var escribir = function () {
-      try {
-        fetch(DB_URL + '/presencia/' + UKEY + '.json', {
-          method: 'PUT',
-          body: JSON.stringify(payloadREST(!document.hidden))
-        }).catch(function () {});
-      } catch (e) {}
-    };
-    escribir();
-    restTimers.push(setInterval(escribir, 20000));
+    escribirREST();
+    restTimers.push(setInterval(escribirREST, 20000));
 
     var pollMensajes = function () {
       try {
@@ -246,19 +284,28 @@
       };
     }
 
-    // ¿La conexión en tiempo real llegó a abrir? (.info/connected)
     var conectadoSDK = false;
+
+    function flushSDK() {
+      if (!conectadoSDK) return;
+      try { update(rPres, { online: true, modulo: MODULO, pagina: PAGINA, ultimo_ping: serverTimestamp() }); }
+      catch (e) {}
+    }
+
     try {
       onValue(ref(db, '.info/connected'), function (s) {
         var ok = !!(s && s.val());
-        if (ok) { conectadoSDK = true; pararREST(); }
+        if (ok) {
+          conectadoSDK = true;
+          pararREST();
+          _flushPresencia = flushSDK;
+          flushSDK();
+        }
       });
     } catch (e) {}
 
-    // Si en 6s no abrió la conexión en tiempo real → modo respaldo
     setTimeout(function () { if (!conectadoSDK) iniciarREST(); }, 6000);
 
-    // Escritura por SDK (queda en cola si aún no conecta; no estorba)
     try {
       set(rPres, payloadSDK(true));
       onDisconnect(rPres).update({ online: false, ultimo_ping: serverTimestamp() });
@@ -267,13 +314,8 @@
       console.warn('[Presencia] No se pudo registrar presencia por SDK.', e);
     }
 
-    // Latido SDK cada 20s (solo tiene efecto real cuando hay conexión)
     var HEARTBEAT_MS = 20000;
-    var latido = setInterval(function () {
-      if (!conectadoSDK) return;
-      try { update(rPres, { online: true, modulo: MODULO, pagina: PAGINA, ultimo_ping: serverTimestamp() }); }
-      catch (e) {}
-    }, HEARTBEAT_MS);
+    var latido = setInterval(flushSDK, HEARTBEAT_MS);
 
     document.addEventListener('visibilitychange', function () {
       if (!conectadoSDK) return;
@@ -289,7 +331,6 @@
       } catch (e) {}
     });
 
-    // Mensajes por SDK (cuando hay tiempo real; en respaldo los trae el poll REST)
     try {
       var rMsg = ref(db, 'mensajes/' + UKEY);
       onValue(rMsg, function (snap) {

@@ -170,7 +170,7 @@
   :focus-visible{outline:3px solid var(--rojo);outline-offset:2px;border-radius:6px}
 </style>
 <link rel="stylesheet" href="../css/rl-theme.css">
-<script>(function(){if(localStorage.getItem('rl_theme')==='glass' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
+<script>(function(){if(localStorage.getItem('rl_theme')!=='classic' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
 </head>
 <body>
 
@@ -574,5 +574,6 @@ function ocultarError(){
   $("avisoError").textContent = "";
 }
 </script>
+<script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Consulta Masiva"></script>
 </body>
 </html>

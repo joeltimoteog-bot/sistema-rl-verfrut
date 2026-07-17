@@ -167,7 +167,7 @@ table.tb tbody tr:hover{background:#f8fafc}
 }
 </style>
 <link rel="stylesheet" href="../css/rl-theme.css">
-<script>(function(){if(localStorage.getItem('rl_theme')==='glass' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
+<script>(function(){if(localStorage.getItem('rl_theme')!=='classic' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
 </head>
 <body>
 
@@ -957,5 +957,6 @@ function exportarPDF(){
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') cerrarDlg(); });
 document.getElementById('dlgRet').addEventListener('click',e=>{ if(e.target.id==='dlgRet') cerrarDlg(); });
 </script>
+<script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Mis Estadísticas"></script>
 </body>
 </html>
