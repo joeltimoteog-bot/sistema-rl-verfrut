@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diagnóstico Firebase · Sistema RL</title>
+<style>
+  body{background:#0b1220;color:#e5eefc;font-family:'Segoe UI',system-ui,sans-serif;margin:0;padding:24px;font-size:15px}
+  h1{font-size:19px;margin:0 0 4px}
+  .sub{color:#8ea3c4;font-size:13px;margin-bottom:20px}
+  .test{background:#111a2e;border:1px solid #1e2b45;border-radius:12px;padding:14px 16px;margin-bottom:10px;
+    display:flex;align-items:center;gap:12px}
+  .test .st{font-size:22px;width:30px;text-align:center;flex:0 0 auto}
+  .test .tt{font-weight:700}
+  .test .dt{color:#8ea3c4;font-size:12.5px;margin-top:2px;word-break:break-all}
+  .test .ms{margin-left:auto;color:#8ea3c4;font-size:12px;flex:0 0 auto}
+  #veredicto{margin-top:18px;border-radius:14px;padding:18px;font-weight:700;font-size:15px;line-height:1.5;display:none}
+  .v-ok{background:#14532d;color:#dcfce7}
+  .v-warn{background:#713f12;color:#fef9c3}
+  .v-bad{background:#7f1d1d;color:#fee2e2}
+  .meta{margin-top:14px;color:#64748b;font-size:11.5px;word-break:break-all}
+</style>
+</head>
+<body>
+<h1>🩺 Diagnóstico de conexión — Sistema RL</h1>
+<div class="sub">Se ejecuta solo. Espera ~15 segundos y toma una captura completa de esta pantalla.</div>
+
+<div id="tests"></div>
+<div id="veredicto"></div>
+<div class="meta" id="meta"></div>
+
+<script type="module">
+const DB_URL = "https://sistema-rl-verfrut-default-rtdb.firebaseio.com";
+const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
+const R = {};   // resultados
+
+const TESTS = [
+  {id:'rest_get',  tt:'1. Lectura directa (REST GET)',        dt:'fetch a /presencia.json — lo que usa el modo respaldo'},
+  {id:'rest_put',  tt:'2. Escritura directa (REST PUT)',      dt:'escribir y borrar un registro de prueba en /presencia'},
+  {id:'sdk_load',  tt:'3. Carga del SDK de Firebase',         dt:'import desde gstatic.com'},
+  {id:'sdk_conn',  tt:'4. Conexión en TIEMPO REAL (WebSocket)',dt:'.info/connected — lo que usa el modo ⚡'},
+  {id:'sdk_read',  tt:'5. Lectura por SDK',                   dt:'onValue de /presencia vía SDK'}
+];
+
+const box = document.getElementById('tests');
+TESTS.forEach(t=>{
+  box.insertAdjacentHTML('beforeend',
+    `<div class="test" id="t_${t.id}">
+       <div class="st" id="st_${t.id}">⏳</div>
+       <div><div class="tt">${t.tt}</div><div class="dt" id="dt_${t.id}">${t.dt}</div></div>
+       <div class="ms" id="ms_${t.id}"></div>
+     </div>`);
+});
+
+function marcar(id, ok, detalle, ms){
+  R[id] = ok;
+  document.getElementById('st_'+id).textContent = ok ? '✅' : '❌';
+  if(detalle) document.getElementById('dt_'+id).textContent = detalle;
+  if(ms != null) document.getElementById('ms_'+id).textContent = ms+' ms';
+}
+
+function conTimeout(promesa, ms){
+  return Promise.race([
+    promesa,
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error('TIMEOUT '+ms+'ms — se quedó colgado')), ms))
+  ]);
+}
+
+async function correr(){
+  // 1) REST GET
+  let t0 = performance.now();
+  try{
+    const r = await conTimeout(fetch(DB_URL+'/presencia.json?nc='+Date.now()), 8000);
+    const txt = await r.text();
+    marcar('rest_get', r.ok, r.ok ? ('OK — respuesta: '+txt.slice(0,60)+'…') : ('HTTP '+r.status), Math.round(performance.now()-t0));
+  }catch(e){ marcar('rest_get', false, 'FALLÓ: '+e.message, Math.round(performance.now()-t0)); }
+
+  // 2) REST PUT (+ DELETE de limpieza)
+  t0 = performance.now();
+  try{
+    const r = await conTimeout(fetch(DB_URL+'/presencia/_diag.json', {
+      method:'PUT',
+      body: JSON.stringify({usuario:'_diag', nombre:'PRUEBA DIAGNOSTICO', online:false, ultimo_ping:{'.sv':'timestamp'}})
+    }), 8000);
+    marcar('rest_put', r.ok, r.ok ? 'OK — escritura y validación de reglas funcionando' : ('HTTP '+r.status+' — revisar reglas'), Math.round(performance.now()-t0));
+    fetch(DB_URL+'/presencia/_diag.json', {method:'DELETE'}).catch(()=>{});
+  }catch(e){ marcar('rest_put', false, 'FALLÓ: '+e.message, Math.round(performance.now()-t0)); }
+
+  // 3) SDK load
+  t0 = performance.now();
+  let appMod=null, dbMod=null;
+  try{
+    appMod = await conTimeout(import(SDK+'firebase-app.js'), 8000);
+    dbMod  = await conTimeout(import(SDK+'firebase-database.js'), 8000);
+    marcar('sdk_load', true, 'OK — SDK descargado de gstatic.com', Math.round(performance.now()-t0));
+  }catch(e){ marcar('sdk_load', false, 'FALLÓ: '+e.message, Math.round(performance.now()-t0)); }
+
+  // 4) SDK realtime connect + 5) SDK read
+  if(dbMod){
+    try{
+      const app = appMod.initializeApp({
+        apiKey:"AIzaSyBTp4WHO5bGEoYDhTbyWZVfdQxbAQHwp4I",
+        authDomain:"sistema-rl-verfrut.firebaseapp.com",
+        projectId:"sistema-rl-verfrut",
+        databaseURL:DB_URL
+      }, 'diag-app');
+      const db = dbMod.getDatabase(app);
+
+      t0 = performance.now();
+      try{
+        await conTimeout(new Promise((res,rej)=>{
+          dbMod.onValue(dbMod.ref(db,'.info/connected'), s=>{ if(s.val()===true) res(); }, rej);
+        }), 7000);
+        marcar('sdk_conn', true, 'OK — tiempo real disponible en esta red', Math.round(performance.now()-t0));
+      }catch(e){ marcar('sdk_conn', false, 'FALLÓ: '+e.message, Math.round(performance.now()-t0)); }
+
+      t0 = performance.now();
+      try{
+        const snap = await conTimeout(new Promise((res,rej)=>{
+          dbMod.onValue(dbMod.ref(db,'presencia'), s=>res(s), rej, {onlyOnce:true});
+        }), 7000);
+        const n = snap && snap.val() ? Object.keys(snap.val()).length : 0;
+        marcar('sdk_read', true, 'OK — '+n+' usuario(s) leídos por SDK', Math.round(performance.now()-t0));
+      }catch(e){ marcar('sdk_read', false, 'FALLÓ: '+e.message, Math.round(performance.now()-t0)); }
+    }catch(e){
+      marcar('sdk_conn', false, 'No se pudo inicializar: '+e.message);
+      marcar('sdk_read', false, 'No se pudo inicializar: '+e.message);
+    }
+  }else{
+    marcar('sdk_conn', false, 'Sin SDK (falló el paso 3)');
+    marcar('sdk_read', false, 'Sin SDK (falló el paso 3)');
+  }
+
+  veredicto();
+}
+
+function veredicto(){
+  const v = document.getElementById('veredicto');
+  v.style.display = 'block';
+  if(R.rest_get && R.rest_put && R.sdk_conn){
+    v.className = 'v-ok';
+    v.textContent = '✅ TODO FUNCIONA en esta red. Firebase responde por los dos canales. Si el Monitor no muestra datos, el problema es de la página, no de la conexión — avísale a Claude con una captura de esto.';
+  } else if(R.rest_get && R.rest_put && !R.sdk_conn){
+    v.className = 'v-warn';
+    v.textContent = '🔁 El TIEMPO REAL está bloqueado en esta red (WebSocket), pero el canal de respaldo (REST) funciona bien. El Monitor y presencia.js deben funcionar en modo respaldo 🔁. Si igual no cargan datos, captura esto y avísale a Claude.';
+  } else if(!R.rest_get && !R.sdk_conn){
+    v.className = 'v-bad';
+    v.textContent = '⛔ Algo en TU navegador o red está bloqueando TODAS las llamadas de página a firebaseio.com (aunque la URL abra como pestaña normal). Sospechosos típicos: extensión adblock (uBlock/AdBlock/AdGuard), antivirus con "protección web" (Kaspersky/Avast/ESET), o el proxy corporativo. Prueba: ventana de INVITADO de Chrome (desactiva extensiones) o pausar el antivirus 5 minutos y recargar esta página.';
+  } else {
+    v.className = 'v-warn';
+    v.textContent = '⚠️ Resultado mixto — captura esta pantalla completa y mándasela a Claude para el análisis fino.';
+  }
+}
+
+document.getElementById('meta').textContent =
+  new Date().toLocaleString('es-PE') + ' · ' + navigator.userAgent;
+
+correr();
+</script>
+</body>
+</html>
