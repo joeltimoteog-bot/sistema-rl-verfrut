@@ -149,12 +149,7 @@ let USER = null;
 try { USER = JSON.parse(sessionStorage.getItem('user') || 'null'); } catch(e) {}
 if (!USER || !USER.usuario) { location.href = '../../index.html'; }
 const soyAdmin = USER && MONITOR_ADMINS.includes(String(USER.usuario).toLowerCase());
-if (!soyAdmin) {
-  document.getElementById('gate').style.display = 'flex';
-} else {
-  document.getElementById('app').style.display = 'block';
-  arrancar();
-}
+// (el arranque está al FINAL del módulo, cuando ya existen todas las variables)
 
 /* ── Firebase ── */
 const firebaseConfig = {
@@ -464,6 +459,14 @@ function toast(msg, err){
   t.style.background = err ? '#7f1d1d' : '#14532d';
   t.style.color = '#fff'; t.style.opacity = '1';
   clearTimeout(_toTimer); _toTimer = setTimeout(()=>t.style.opacity='0', 3000);
+}
+
+/* ── ARRANQUE (al final: todas las variables y funciones ya existen) ── */
+if (!soyAdmin) {
+  document.getElementById('gate').style.display = 'flex';
+} else {
+  document.getElementById('app').style.display = 'block';
+  arrancar();
 }
 </script>
 </body>
