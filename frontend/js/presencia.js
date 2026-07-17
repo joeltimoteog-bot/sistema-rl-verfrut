@@ -1,5 +1,5 @@
 /* ============================================================================
- *  presencia.js — Sistema RL v3.0
+ *  presencia.js — Sistema RL v3.0  (v2 con modo respaldo REST)
  *  Módulo de PRESENCIA EN VIVO + RECEPCIÓN DE MENSAJES DEL ADMIN
  *
  *  Se incluye UNA sola vez por página, justo antes de </body>:
@@ -7,21 +7,21 @@
  *    <script src="/sistema-rl-verfrut/frontend/js/presencia.js"
  *            data-modulo="Visitas de Campo"></script>
  *
- *  - Escribe en Firebase RTDB  /presencia/{usuario}   (con latido + onDisconnect)
+ *  - Escribe en Firebase RTDB  /presencia/{usuario}   (latido + onDisconnect)
  *  - Escucha                    /mensajes/{usuario}    y muestra avisos del admin
+ *  - Si la conexión en tiempo real (WebSocket) no abre en ~6s (proxy/red
+ *    corporativa), pasa SOLO a modo respaldo: escrituras y lecturas por REST
+ *    (HTTP normal) cada 15-20 segundos. Funciona en cualquier red.
  *
- *  DISEÑO A PRUEBA DE FALLOS: todo va envuelto en try/catch. Si no hay sesión,
- *  si Firebase no carga o si algo falla, el módulo simplemente NO hace nada y
- *  la página sigue funcionando igual. Nunca lanza errores que rompan el sistema.
+ *  DISEÑO A PRUEBA DE FALLOS: todo en try/catch. Si algo falla, el módulo
+ *  no hace nada y la página sigue funcionando igual.
  * ========================================================================== */
 (function () {
   'use strict';
 
-  // Evita doble carga si por error se incluye dos veces
   if (window.__RL_PRESENCIA_CARGADO__) return;
   window.__RL_PRESENCIA_CARGADO__ = true;
 
-  // Captura la etiqueta <script> actual para leer sus data-* (antes de que corra async)
   var _thisScript = document.currentScript;
 
   // ── 1) Sesión ──────────────────────────────────────────────────────────
@@ -30,21 +30,17 @@
     var ud = sessionStorage.getItem('user');
     if (ud) USER = JSON.parse(ud);
   } catch (e) { USER = null; }
-
-  // Sin sesión válida → no hacemos nada (la propia página ya redirige al login)
   if (!USER || !USER.usuario) return;
 
-  // Firebase no admite . # $ [ ] / en las claves → sanitizamos el usuario
   var UKEY = String(USER.usuario).toLowerCase().replace(/[.#$/\[\]]/g, '_');
 
-  // ── 2) Nombre del módulo/página ────────────────────────────────────────
+  // ── 2) Módulo/página ───────────────────────────────────────────────────
   function detectarModulo() {
     try {
       if (_thisScript && _thisScript.getAttribute('data-modulo')) {
         return _thisScript.getAttribute('data-modulo');
       }
     } catch (e) {}
-    // Fallback: nombre del archivo → "dashboard.html" → "Dashboard"
     var archivo = '';
     try { archivo = (location.pathname.split('/').pop() || '').replace('.html', ''); } catch (e) {}
     if (!archivo) return 'Sistema';
@@ -54,7 +50,8 @@
   var PAGINA = '';
   try { PAGINA = location.pathname.split('/').pop() || ''; } catch (e) {}
 
-  // ── 3) Config Firebase (idéntica a la del resto del sistema) ────────────
+  // ── 3) Config Firebase ─────────────────────────────────────────────────
+  var DB_URL = 'https://sistema-rl-verfrut-default-rtdb.firebaseio.com';
   var firebaseConfig = {
     apiKey: "AIzaSyBTp4WHO5bGEoYDhTbyWZVfdQxbAQHwp4I",
     authDomain: "sistema-rl-verfrut.firebaseapp.com",
@@ -62,13 +59,18 @@
     storageBucket: "sistema-rl-verfrut.firebasestorage.app",
     messagingSenderId: "769176418481",
     appId: "1:769176418481:web:53a487fcaf736b11e24a90",
-    databaseURL: "https://sistema-rl-verfrut-default-rtdb.firebaseio.com"
+    databaseURL: DB_URL
   };
-
   var SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
 
-  // ── 4) Toast de mensaje del admin (autocontenido, sin depender del CSS) ─
-  var _mostrados = {}; // ids ya mostrados en esta sesión (evita repetir)
+  // ── 4) Toast de mensaje del admin ──────────────────────────────────────
+  var _mostrados = {};
+
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
 
   function mostrarMensajeAdmin(id, msg) {
     try {
@@ -105,23 +107,103 @@
         st.textContent = '@keyframes _rlIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}';
         document.head.appendChild(st);
       }
-    } catch (e) { /* jamás rompemos la página */ }
+    } catch (e) {}
   }
 
-  function _esc(s) {
-    return String(s == null ? '' : s)
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  // Procesa el objeto de mensajes (viene del SDK o de REST) y muestra los no leídos.
+  // marcarLeido(id) es la función que persiste el "leído" según el canal activo.
+  function procesarMensajes(val, marcarLeido) {
+    try {
+      if (!val) return;
+      Object.keys(val).forEach(function (id) {
+        var m = val[id];
+        if (!m || m.leido) return;
+        if (_mostrados[id]) return;
+        _mostrados[id] = true;
+        mostrarMensajeAdmin(id, m);
+        try { marcarLeido(id); } catch (e) {}
+      });
+    } catch (e) {}
   }
 
-  // ── 5) Arranque de Firebase (import dinámico de los módulos ESM) ────────
+  // ── 5) MODO RESPALDO (REST) — funciona en cualquier red ────────────────
+  var restActivo = false;
+  var restTimers = [];
+
+  function payloadREST(online) {
+    return {
+      usuario: USER.usuario,
+      nombre:  USER.nombre || USER.usuario,
+      rol:     USER.rol || '',
+      empresa: USER.empresa || '',
+      modulo:  MODULO,
+      pagina:  PAGINA,
+      online:  !!online,
+      ultimo_ping: { '.sv': 'timestamp' }   // el servidor pone la hora
+    };
+  }
+
+  function iniciarREST() {
+    if (restActivo) return;
+    restActivo = true;
+    console.warn('[Presencia] Tiempo real no disponible — usando modo respaldo (REST).');
+
+    var escribir = function () {
+      try {
+        fetch(DB_URL + '/presencia/' + UKEY + '.json', {
+          method: 'PUT',
+          body: JSON.stringify(payloadREST(!document.hidden))
+        }).catch(function () {});
+      } catch (e) {}
+    };
+    escribir();
+    restTimers.push(setInterval(escribir, 20000));
+
+    var pollMensajes = function () {
+      try {
+        fetch(DB_URL + '/mensajes/' + UKEY + '.json')
+          .then(function (r) { return r.json(); })
+          .then(function (val) {
+            procesarMensajes(val, function (id) {
+              fetch(DB_URL + '/mensajes/' + UKEY + '/' + id + '.json', {
+                method: 'PATCH',
+                body: JSON.stringify({ leido: true, leido_ts: { '.sv': 'timestamp' } })
+              }).catch(function () {});
+            });
+          }).catch(function () {});
+      } catch (e) {}
+    };
+    pollMensajes();
+    restTimers.push(setInterval(pollMensajes, 15000));
+
+    window.addEventListener('beforeunload', function () {
+      try {
+        fetch(DB_URL + '/presencia/' + UKEY + '.json', {
+          method: 'PATCH',
+          body: JSON.stringify({ online: false }),
+          keepalive: true
+        }).catch(function () {});
+      } catch (e) {}
+    });
+  }
+
+  function pararREST() {
+    if (!restActivo) return;
+    restActivo = false;
+    restTimers.forEach(function (t) { try { clearInterval(t); } catch (e) {} });
+    restTimers = [];
+    console.log('[Presencia] Tiempo real recuperado — modo respaldo apagado.');
+  }
+
+  // ── 6) Arranque: intenta SDK (tiempo real); si no conecta → REST ────────
   (async function iniciar() {
     var appMod, dbMod;
     try {
       appMod = await import(SDK + "firebase-app.js");
       dbMod  = await import(SDK + "firebase-database.js");
     } catch (e) {
-      console.warn('[Presencia] Firebase no disponible, presencia desactivada.', e);
+      console.warn('[Presencia] SDK Firebase no cargó — voy directo a modo respaldo.', e);
+      iniciarREST();
       return;
     }
 
@@ -138,21 +220,20 @@
 
     var app, db;
     try {
-      // App con nombre propio para no chocar con 'resumen-app', 'default', etc.
       var NOMBRE_APP = 'presencia-app';
       var existente = null;
       try { existente = getApps().find(function (a) { return a.name === NOMBRE_APP; }); } catch (e) {}
       app = existente ? getApp(NOMBRE_APP) : initializeApp(firebaseConfig, NOMBRE_APP);
       db  = getDatabase(app);
     } catch (e) {
-      console.warn('[Presencia] No se pudo inicializar Firebase.', e);
+      console.warn('[Presencia] No se pudo inicializar Firebase — modo respaldo.', e);
+      iniciarREST();
       return;
     }
 
     var rPres = ref(db, 'presencia/' + UKEY);
 
-    // Datos base de presencia
-    function payload(online) {
+    function payloadSDK(online) {
       return {
         usuario: USER.usuario,
         nombre:  USER.nombre || USER.usuario,
@@ -165,63 +246,58 @@
       };
     }
 
-    // Escribe estado ONLINE y programa el OFFLINE automático al desconectarse
+    // ¿La conexión en tiempo real llegó a abrir? (.info/connected)
+    var conectadoSDK = false;
     try {
-      await set(rPres, payload(true));
-      // Cuando el navegador se cae / cierra pestaña, Firebase marca offline solo:
+      onValue(ref(db, '.info/connected'), function (s) {
+        var ok = !!(s && s.val());
+        if (ok) { conectadoSDK = true; pararREST(); }
+      });
+    } catch (e) {}
+
+    // Si en 6s no abrió la conexión en tiempo real → modo respaldo
+    setTimeout(function () { if (!conectadoSDK) iniciarREST(); }, 6000);
+
+    // Escritura por SDK (queda en cola si aún no conecta; no estorba)
+    try {
+      set(rPres, payloadSDK(true));
       onDisconnect(rPres).update({ online: false, ultimo_ping: serverTimestamp() });
       console.log('[Presencia] Activa —', USER.usuario, '| módulo:', MODULO);
     } catch (e) {
-      console.warn('[Presencia] No se pudo registrar presencia (¿reglas de Firebase?).', e);
-      // seguimos: aunque falle la escritura, no rompemos la página
+      console.warn('[Presencia] No se pudo registrar presencia por SDK.', e);
     }
 
-    // ── Latido cada 20s: mantiene "ultimo_ping" fresco ──
+    // Latido SDK cada 20s (solo tiene efecto real cuando hay conexión)
     var HEARTBEAT_MS = 20000;
     var latido = setInterval(function () {
+      if (!conectadoSDK) return;
       try { update(rPres, { online: true, modulo: MODULO, pagina: PAGINA, ultimo_ping: serverTimestamp() }); }
       catch (e) {}
     }, HEARTBEAT_MS);
 
-    // Al volver a la pestaña, refresca de inmediato
     document.addEventListener('visibilitychange', function () {
+      if (!conectadoSDK) return;
       try {
-        update(rPres, {
-          online: !document.hidden,
-          modulo: MODULO, pagina: PAGINA,
-          ultimo_ping: serverTimestamp()
-        });
+        update(rPres, { online: !document.hidden, modulo: MODULO, pagina: PAGINA, ultimo_ping: serverTimestamp() });
       } catch (e) {}
     });
 
-    // Al cerrar/recargar, intenta marcar offline (onDisconnect es el respaldo real)
     window.addEventListener('beforeunload', function () {
       try {
         clearInterval(latido);
-        update(rPres, { online: false, ultimo_ping: serverTimestamp() });
+        if (conectadoSDK) update(rPres, { online: false, ultimo_ping: serverTimestamp() });
       } catch (e) {}
     });
 
-    // ── Escucha de mensajes del admin dirigidos a este usuario ──
+    // Mensajes por SDK (cuando hay tiempo real; en respaldo los trae el poll REST)
     try {
       var rMsg = ref(db, 'mensajes/' + UKEY);
       onValue(rMsg, function (snap) {
-        try {
-          var val = snap.val();
-          if (!val) return;
-          Object.keys(val).forEach(function (id) {
-            var m = val[id];
-            if (!m || m.leido) return;          // ya leído → no mostrar
-            if (_mostrados[id]) return;          // ya mostrado en esta sesión
-            _mostrados[id] = true;
-            mostrarMensajeAdmin(id, m);
-            // Marca como leído para que no reaparezca al recargar
-            try { update(ref(db, 'mensajes/' + UKEY + '/' + id), { leido: true, leido_ts: serverTimestamp() }); }
-            catch (e) {}
-          });
-        } catch (e) {}
+        procesarMensajes(snap.val(), function (id) {
+          update(ref(db, 'mensajes/' + UKEY + '/' + id), { leido: true, leido_ts: serverTimestamp() });
+        });
       }, function (err) {
-        console.warn('[Presencia] No se pudieron leer mensajes.', err);
+        console.warn('[Presencia] No se pudieron leer mensajes por SDK.', err);
       });
     } catch (e) {}
   })();

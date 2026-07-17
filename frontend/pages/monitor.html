@@ -18,9 +18,8 @@
     color:var(--tx);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:14px;
   }
   a{color:inherit}
-  /* Topbar */
   .top{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);
-    background:rgba(17,26,46,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10}
+    background:rgba(17,26,46,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10;flex-wrap:wrap}
   .top h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
   .top .sub{color:var(--mut);font-size:12px}
   .top .grow{flex:1}
@@ -31,7 +30,6 @@
   .btnGhost{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:7px 12px;cursor:pointer;font-weight:600}
   .btnGhost:hover{color:var(--tx);border-color:var(--acc)}
 
-  /* Layout */
   .wrap{display:grid;grid-template-columns:1fr 380px;gap:16px;padding:16px 22px;max-width:1400px;margin:0 auto}
   @media(max-width:980px){.wrap{grid-template-columns:1fr}}
 
@@ -48,7 +46,6 @@
   .seg button{background:transparent;border:none;color:var(--mut);padding:8px 12px;cursor:pointer;font-weight:700;font-size:12.5px}
   .seg button.on{background:var(--acc);color:#08131f}
 
-  /* Lista de usuarios */
   .list{padding:8px;max-height:70vh;overflow:auto}
   .u{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;cursor:pointer;border:1px solid transparent}
   .u:hover{background:rgba(56,189,248,.06);border-color:var(--line)}
@@ -68,7 +65,6 @@
   .b-ambas{background:rgba(168,139,250,.16);color:#c4b5fd}
   .empty{padding:34px 16px;text-align:center;color:var(--mut)}
 
-  /* Panel derecho */
   .side .body{padding:16px}
   .side .who{display:flex;align-items:center;gap:12px;margin-bottom:12px}
   .side .who .av{width:46px;height:46px;border-radius:50%;background:#1c2942;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--acc2)}
@@ -95,7 +91,6 @@
 </head>
 <body>
 
-<!-- Pantalla de bloqueo si no es el admin autorizado -->
 <div id="gate" style="display:none">
   <div class="box">
     <div style="font-size:40px;margin-bottom:8px">🔒</div>
@@ -109,13 +104,13 @@
   <div class="top">
     <div><h1>🛰️ Monitor en Vivo</h1><div class="sub">Sistema RL · Relaciones Laborales</div></div>
     <div class="grow"></div>
+    <div class="pill"><span id="modoConn" style="color:var(--mut)">conectando…</span></div>
     <div class="pill"><span class="dotlive"></span><span id="cntOn">0</span> conectados</div>
     <div class="pill" style="color:var(--mut)"><span id="cntTot">0</span> registrados</div>
     <button class="btnGhost" onclick="location.href='dashboard.html'">← Dashboard</button>
   </div>
 
   <div class="wrap">
-    <!-- Columna izquierda: usuarios en vivo -->
     <div class="card">
       <div class="hd"><h2>Usuarios</h2><span class="cnt" id="listCnt"></span></div>
       <div class="tools">
@@ -128,7 +123,6 @@
       <div class="list" id="lista"><div class="empty">Conectando con Firebase…</div></div>
     </div>
 
-    <!-- Columna derecha: detalle + mensaje -->
     <div class="card side">
       <div class="hd"><h2>Interacción</h2></div>
       <div class="body" id="detalle">
@@ -142,12 +136,13 @@
 
 <script type="module">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, onValue, push, update, serverTimestamp }
+import { getDatabase, ref, onValue, push, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 /* ── Configuración ── */
-const MONITOR_ADMINS = ['jtimoteo'];   // ← solo estos usuarios pueden abrir el panel
-const UMBRAL_ACTIVO_MS = 60000;        // ping más viejo que esto = "inactivo" aunque figure online
+const MONITOR_ADMINS = ['jtimoteo'];
+const UMBRAL_ACTIVO_MS = 60000;
+const DB_URL = "https://sistema-rl-verfrut-default-rtdb.firebaseio.com";
 
 /* ── Sesión / guardia de acceso ── */
 let USER = null;
@@ -169,7 +164,7 @@ const firebaseConfig = {
   storageBucket: "sistema-rl-verfrut.firebasestorage.app",
   messagingSenderId: "769176418481",
   appId: "1:769176418481:web:53a487fcaf736b11e24a90",
-  databaseURL: "https://sistema-rl-verfrut-default-rtdb.firebaseio.com"
+  databaseURL: DB_URL
 };
 
 let db = null;
@@ -183,15 +178,27 @@ function initFB(){
 }
 
 /* ── Estado UI ── */
-let PRES = {};              // usuario → datos de presencia
+let PRES = {};
 let filtro = 'todos';
 let busqueda = '';
-let seleccion = null;       // clave del usuario seleccionado
-let unsubMsgs = null;       // desuscriptor del historial de mensajes
+let seleccion = null;
+let unsubMsgs = null;
+let modoConexion = 'conectando';   // 'sdk' | 'rest' | 'error' | 'conectando'
+let restTimer = null;
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const inicial = n => (String(n||'?').trim()[0]||'?').toUpperCase();
+const ukey = s => String(s||'').toLowerCase().replace(/[.#$/\[\]]/g,'_');
+
+function setModo(m){
+  modoConexion = m;
+  const el = $('modoConn'); if(!el) return;
+  if(m==='sdk'){ el.textContent='⚡ tiempo real'; el.style.color='var(--ok)'; }
+  else if(m==='rest'){ el.textContent='🔁 respaldo · 5s'; el.style.color='var(--idle)'; }
+  else if(m==='error'){ el.textContent='⛔ sin conexión'; el.style.color='var(--danger)'; }
+  else { el.textContent='conectando…'; el.style.color='var(--mut)'; }
+}
 function badgeEmp(e){
   const s = String(e||'').toUpperCase();
   if(s==='RAPEL') return '<span class="badge b-rapel">RAPEL</span>';
@@ -217,16 +224,45 @@ function estado(u){
   return fresco ? 'on' : 'idle';
 }
 
-function arrancar(){
-  if(!initFB()){ $('lista').innerHTML = '<div class="empty">No se pudo conectar con Firebase.</div>'; return; }
+/* ── MODO RESPALDO: lectura por REST cada 5s (funciona en cualquier red) ── */
+function iniciarREST(){
+  if(restTimer) return;
+  setModo('rest');
+  const tick = async ()=>{
+    try{
+      const r = await fetch(DB_URL+'/presencia.json?nc='+Date.now());
+      if(!r.ok) throw 0;
+      PRES = (await r.json()) || {};
+      render();
+      if(modoConexion!=='sdk') setModo('rest');
+      if(seleccion && modoConexion!=='sdk') refrescarHistorialREST();
+    }catch(e){ setModo('error'); }
+  };
+  tick();
+  restTimer = setInterval(tick, 5000);
+}
+function pararREST(){
+  if(restTimer){ clearInterval(restTimer); restTimer = null; }
+}
 
-  onValue(ref(db,'presencia'), snap=>{
-    PRES = snap.val() || {};
-    render();
-  }, err=>{
-    console.error('[Monitor] onValue presencia', err);
-    $('lista').innerHTML = '<div class="empty">Error al leer presencia. Revisá las reglas de Firebase.</div>';
-  });
+function arrancar(){
+  if(!initFB()){ iniciarREST(); return; }
+
+  let recibioSDK = false;
+  try{
+    onValue(ref(db,'presencia'), snap=>{
+      recibioSDK = true;
+      if(modoConexion!=='sdk'){ setModo('sdk'); pararREST(); }
+      PRES = snap.val() || {};
+      render();
+    }, err=>{
+      console.error('[Monitor] onValue presencia', err);
+      iniciarREST();
+    });
+  }catch(e){ iniciarREST(); }
+
+  // Si el tiempo real no entrega nada en 4s (proxy/red) → respaldo REST
+  setTimeout(()=>{ if(!recibioSDK) iniciarREST(); }, 4000);
 
   // refresca los "hace X" cada 5s sin recargar datos
   setInterval(()=>{ if(Object.keys(PRES).length) render(); }, 5000);
@@ -288,13 +324,13 @@ function render(){
       el.addEventListener('click', ()=>{ seleccionar(el.dataset.k); });
     });
   }
-  if(seleccion && PRES[seleccion]) pintarDetalle();
+  if(seleccion && PRES[seleccion]) pintarDetalle(false);
 }
 
 function seleccionar(k){
   seleccion = k;
   render();
-  pintarDetalle();
+  pintarDetalle(true);
 }
 
 const TEMPLATES = [
@@ -304,11 +340,22 @@ const TEMPLATES = [
   '¿Por qué no registraste la atención? Coordina conmigo.'
 ];
 
-function pintarDetalle(){
+/* pintarDetalle(reiniciar): si reiniciar=false solo refresca datos sin
+   reconstruir el textarea (para no borrar lo que estés escribiendo) */
+function pintarDetalle(reiniciar){
   const u = PRES[seleccion];
   if(!u){ $('detalle').innerHTML = '<div class="nopick">Usuario no disponible.</div>'; return; }
   const st = estado(u);
   const estTxt = st==='on'?'🟢 En línea':(st==='idle'?'🟠 Inactivo':'⚪ Desconectado');
+
+  if(!reiniciar && $('kvEstado')){
+    $('kvEstado').textContent = estTxt;
+    $('kvModulo').textContent = u.modulo||'—';
+    $('kvPagina').textContent = u.pagina||'—';
+    $('kvPing').textContent = haceCuanto(u.ultimo_ping);
+    return;
+  }
+
   $('detalle').innerHTML = `
     <div class="who">
       <div class="av">${esc(inicial(u.nombre))}</div>
@@ -317,11 +364,11 @@ function pintarDetalle(){
         <div class="mt">@${esc(u.usuario)} · ${badgeEmp(u.empresa)}</div>
       </div>
     </div>
-    <div class="kv"><span>Estado</span><span>${estTxt}</span></div>
-    <div class="kv"><span>Módulo actual</span><span>${esc(u.modulo||'—')}</span></div>
-    <div class="kv"><span>Página</span><span>${esc(u.pagina||'—')}</span></div>
+    <div class="kv"><span>Estado</span><span id="kvEstado">${estTxt}</span></div>
+    <div class="kv"><span>Módulo actual</span><span id="kvModulo">${esc(u.modulo||'—')}</span></div>
+    <div class="kv"><span>Página</span><span id="kvPagina">${esc(u.pagina||'—')}</span></div>
     <div class="kv"><span>Rol</span><span>${esc(u.rol||'—')}</span></div>
-    <div class="kv"><span>Última actividad</span><span>${haceCuanto(u.ultimo_ping)}</span></div>
+    <div class="kv"><span>Última actividad</span><span id="kvPing">${haceCuanto(u.ultimo_ping)}</span></div>
 
     <div style="margin-top:16px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Enviar mensaje</div>
     <div class="tpl" id="tpl"></div>
@@ -340,43 +387,75 @@ function pintarDetalle(){
   suscribirHistorial(u);
 }
 
+/* ── Envío de mensaje: SDK si hay tiempo real, si no REST directo ── */
+async function enviarREST(key, data){
+  const r = await fetch(DB_URL+'/mensajes/'+key+'.json', {
+    method:'POST',
+    body: JSON.stringify({...data, ts: {'.sv':'timestamp'}})
+  });
+  if(!r.ok) throw new Error('REST '+r.status);
+}
+
 function enviarMensaje(){
   const u = PRES[seleccion]; if(!u) return;
   const txt = $('txtMsg').value.trim();
   if(!txt){ toast('Escribe un mensaje primero', true); return; }
   const btn = $('btnEnviar'); btn.disabled = true; btn.textContent = 'Enviando…';
-  const key = String(u.usuario).toLowerCase().replace(/[.#$/\[\]]/g,'_');
-  push(ref(db,'mensajes/'+key), {
-    texto: txt,
-    de: USER.nombre || USER.usuario,
-    de_usuario: USER.usuario,
-    ts: serverTimestamp(),
-    leido: false
-  }).then(()=>{
+  const key = ukey(u.usuario);
+  const base = { texto: txt, de: USER.nombre || USER.usuario, de_usuario: USER.usuario, leido: false };
+
+  const listo = ()=>{
     $('txtMsg').value = '';
     toast('✅ Mensaje enviado a '+(u.nombre||u.usuario));
-  }).catch(e=>{
-    console.error(e); toast('No se pudo enviar (¿reglas de Firebase?)', true);
-  }).finally(()=>{ btn.disabled=false; btn.textContent='📨 Enviar aviso'; });
+    if(modoConexion!=='sdk') refrescarHistorialREST();
+  };
+  const fallo = e=>{ console.error(e); toast('No se pudo enviar el mensaje', true); };
+  const fin = ()=>{ btn.disabled=false; btn.textContent='📨 Enviar aviso'; };
+
+  if(modoConexion==='sdk'){
+    push(ref(db,'mensajes/'+key), {...base, ts: serverTimestamp()})
+      .then(listo)
+      .catch(()=> enviarREST(key, base).then(listo).catch(fallo))
+      .finally(fin);
+  } else {
+    enviarREST(key, base).then(listo).catch(fallo).finally(fin);
+  }
+}
+
+/* ── Historial ── */
+function pintarHistorial(val){
+  const box = $('histBox'); if(!box) return;
+  if(!val){ box.innerHTML = '<div class="msg" style="color:var(--mut)">Sin mensajes aún.</div>'; return; }
+  const arr = Object.keys(val).map(id=>({id,...val[id]})).sort((a,b)=>Number(b.ts||0)-Number(a.ts||0));
+  box.innerHTML = arr.map(m=>`
+    <div class="msg">
+      <div>${esc(m.texto)}</div>
+      <div class="meta">
+        <span>${haceCuanto(m.ts)}</span>
+        <span class="${m.leido?'leido':'noleido'}">${m.leido?'✓ Leído':'• No leído'}</span>
+      </div>
+    </div>`).join('');
+}
+
+async function refrescarHistorialREST(){
+  const u = PRES[seleccion]; if(!u) return;
+  try{
+    const r = await fetch(DB_URL+'/mensajes/'+ukey(u.usuario)+'.json?nc='+Date.now());
+    if(!r.ok) return;
+    pintarHistorial(await r.json());
+  }catch(e){}
 }
 
 function suscribirHistorial(u){
   if(unsubMsgs){ try{unsubMsgs();}catch(e){} unsubMsgs=null; }
-  const key = String(u.usuario).toLowerCase().replace(/[.#$/\[\]]/g,'_');
-  unsubMsgs = onValue(ref(db,'mensajes/'+key), snap=>{
-    const box = $('histBox'); if(!box) return;
-    const val = snap.val();
-    if(!val){ box.innerHTML = '<div class="msg" style="color:var(--mut)">Sin mensajes aún.</div>'; return; }
-    const arr = Object.keys(val).map(id=>({id,...val[id]})).sort((a,b)=>Number(b.ts||0)-Number(a.ts||0));
-    box.innerHTML = arr.map(m=>`
-      <div class="msg">
-        <div>${esc(m.texto)}</div>
-        <div class="meta">
-          <span>${haceCuanto(m.ts)}</span>
-          <span class="${m.leido?'leido':'noleido'}">${m.leido?'✓ Leído':'• No leído'}</span>
-        </div>
-      </div>`).join('');
-  });
+  if(modoConexion==='sdk'){
+    try{
+      unsubMsgs = onValue(ref(db,'mensajes/'+ukey(u.usuario)), snap=>pintarHistorial(snap.val()),
+        ()=>refrescarHistorialREST());
+    }catch(e){ refrescarHistorialREST(); }
+  } else {
+    refrescarHistorialREST();
+  }
 }
 
 let _toTimer;
