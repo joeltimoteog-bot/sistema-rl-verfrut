@@ -1043,6 +1043,7 @@ function _rFbIniciarConRetry(intentos) {
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBTp4WHO5bGEoYDhTbyWZVfdQxbAQHwp4I",
@@ -1058,6 +1059,7 @@ let _dbR;
 try {
   const app = initializeApp(firebaseConfig, 'resumen-app');
   _dbR = getDatabase(app);
+  try { signInAnonymously(getAuth(app)).catch(function(e){console.warn("[Auth anon]",e&&e.code);}); } catch(e){}
   console.log('[Firebase Resumen] Inicializado OK');
 } catch(e) {
   console.error('[Firebase Resumen] Error al inicializar:', e);
@@ -1190,6 +1192,5 @@ function togglePresentacion(){
 }
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&document.body.classList.contains('presmode'))togglePresentacion();});
 </script>
-<script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Resumen General"></script>
 </body>
 </html>

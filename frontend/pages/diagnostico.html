@@ -39,7 +39,8 @@ const TESTS = [
   {id:'rest_put',  tt:'2. Escritura directa (REST PUT)',      dt:'escribir y borrar un registro de prueba en /presencia'},
   {id:'sdk_load',  tt:'3. Carga del SDK de Firebase',         dt:'import desde gstatic.com'},
   {id:'sdk_conn',  tt:'4. Conexión en TIEMPO REAL (WebSocket)',dt:'.info/connected — lo que usa el modo ⚡'},
-  {id:'sdk_read',  tt:'5. Lectura por SDK',                   dt:'onValue de /presencia vía SDK'}
+  {id:'sdk_read',  tt:'5. Lectura por SDK',                   dt:'onValue de /presencia vía SDK'},
+  {id:'anon_auth', tt:'6. Autenticación anónima (Fase 2)',    dt:'signInAnonymously — necesaria antes de cerrar las reglas'}
 ];
 
 const box = document.getElementById('tests');
@@ -131,15 +132,34 @@ async function correr(){
     marcar('sdk_read', false, 'Sin SDK (falló el paso 3)');
   }
 
+  // 6) Autenticación anónima (Fase 2)
+  let t6 = performance.now();
+  try{
+    const authMod = await conTimeout(import(SDK+'firebase-auth.js'), 8000);
+    const app2 = appMod.getApps().find(a=>a.name==='diag-app') ||
+                 appMod.initializeApp({apiKey:"AIzaSyBTp4WHO5bGEoYDhTbyWZVfdQxbAQHwp4I",authDomain:"sistema-rl-verfrut.firebaseapp.com",projectId:"sistema-rl-verfrut",databaseURL:DB_URL}, 'diag-app');
+    const cred = await conTimeout(authMod.signInAnonymously(authMod.getAuth(app2)), 8000);
+    const uid = cred && cred.user && cred.user.uid ? cred.user.uid.slice(0,8) : '?';
+    marcar('anon_auth', true, 'OK — sesión anónima creada (uid '+uid+'…). Ya puedes cerrar las reglas.', Math.round(performance.now()-t6));
+  }catch(e){
+    let hint = e.message;
+    if(/admin-restricted|configuration-not-found|operation-not-allowed/i.test(e.message||''))
+      hint = 'El proveedor "Anónimo" NO está activado en Firebase Console → Authentication → Sign-in method.';
+    marcar('anon_auth', false, 'FALLÓ: '+hint, Math.round(performance.now()-t6));
+  }
+
   veredicto();
 }
 
 function veredicto(){
   const v = document.getElementById('veredicto');
   v.style.display = 'block';
-  if(R.rest_get && R.rest_put && R.sdk_conn){
+  if(R.rest_get && R.rest_put && R.sdk_conn && R.anon_auth){
     v.className = 'v-ok';
-    v.textContent = '✅ TODO FUNCIONA en esta red. Firebase responde por los dos canales. Si el Monitor no muestra datos, el problema es de la página, no de la conexión — avísale a Claude con una captura de esto.';
+    v.textContent = '✅ TODO FUNCIONA, incluida la autenticación anónima (Fase 2). Ya es seguro cerrar las reglas de lectura. Avísale a Claude con una captura de esto.';
+  } else if(R.rest_get && R.rest_put && R.sdk_conn && !R.anon_auth){
+    v.className = 'v-warn';
+    v.textContent = '⚠️ Conexión perfecta, pero la AUTENTICACIÓN ANÓNIMA falló (prueba 6). NO cierres las reglas todavía. Casi seguro falta activar el proveedor "Anónimo" en Firebase Console → Authentication → Sign-in method → Anónimo → Habilitar. Actívalo y vuelve a correr esta prueba.';
   } else if(R.rest_get && R.rest_put && !R.sdk_conn){
     v.className = 'v-warn';
     v.textContent = '🔁 El TIEMPO REAL está bloqueado en esta red (WebSocket), pero el canal de respaldo (REST) funciona bien. El Monitor y presencia.js deben funcionar en modo respaldo 🔁. Si igual no cargan datos, captura esto y avísale a Claude.';

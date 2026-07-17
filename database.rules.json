@@ -2,36 +2,18 @@
   "rules": {
     ".read": false,
     ".write": false,
-    "estadisticas": {
-      ".read": true,
-      ".write": "auth != null"
-    },
-    "estadisticas_modulos": {
-      ".read": true,
-      ".write": "auth != null"
-    },
-    "alertas": {
-      ".read": true,
-      ".write": "auth != null"
-    },
-    "sistema": {
-      ".read": true,
-      ".write": "auth != null"
-    },
-    "accesos_temporales": {
-      ".read": true,
-      ".write": "auth != null"
-    },
-    "actividad_reciente": {
-      ".read": true,
-      ".write": "auth != null"
-    },
+
+    "estadisticas":         { ".read": "auth != null", ".write": "auth != null" },
+    "estadisticas_modulos": { ".read": "auth != null", ".write": "auth != null" },
+    "alertas":              { ".read": "auth != null", ".write": "auth != null" },
+    "sistema":              { ".read": "auth != null", ".write": "auth != null" },
+    "accesos_temporales":   { ".read": "auth != null", ".write": "auth != null" },
+    "actividad_reciente":   { ".read": "auth != null", ".write": "auth != null" },
+
     "bienestar": {
-      "senales": {
-        ".read": true,
-        ".write": true
-      }
+      "senales": { ".read": "auth != null", ".write": true }
     },
+
     "presencia": {
       ".read": true,
       "$uid": {
@@ -48,6 +30,7 @@
         "$otros":      { ".validate": false }
       }
     },
+
     "mensajes": {
       ".read": true,
       "$uid": {
@@ -64,6 +47,7 @@
         }
       }
     },
+
     "historial": {
       ".read": true,
       "$uid": {

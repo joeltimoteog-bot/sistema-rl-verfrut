@@ -371,6 +371,14 @@
       try { existente = getApps().find(function (a) { return a.name === NOMBRE_APP; }); } catch (e) {}
       app = existente ? getApp(NOMBRE_APP) : initializeApp(firebaseConfig, NOMBRE_APP);
       db  = getDatabase(app);
+      // Autenticación anónima (Fase 2) — necesaria cuando las reglas exigen auth.
+      // Si el proveedor Anónimo no está activo aún, falla en silencio y sigue igual.
+      try {
+        var authMod = await import(SDK + "firebase-auth.js");
+        authMod.signInAnonymously(authMod.getAuth(app)).catch(function (e) {
+          console.warn('[Presencia] Auth anónima:', e && e.code);
+        });
+      } catch (e) {}
     } catch (e) {
       console.warn('[Presencia] No se pudo inicializar Firebase — modo respaldo.', e);
       iniciarREST();

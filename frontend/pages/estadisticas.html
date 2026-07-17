@@ -1345,6 +1345,7 @@ window.addEventListener('beforeunload', () => { clearTimeout(_estTimer); });
 <script type="module">
 import { initializeApp }        from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import { getDatabase, ref, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const _fbConfigEst = {
   apiKey:            "AIzaSyBTp4WHO5bGEoYDhTbyWZVfdQxbAQHwp4I",
@@ -1358,6 +1359,7 @@ const _fbConfigEst = {
 
 const _fbAppEst = initializeApp(_fbConfigEst, 'estadisticas-app');
 const _fbDbEst  = getDatabase(_fbAppEst);
+  try { signInAnonymously(getAuth(_fbAppEst)).catch(function(e){console.warn("[Auth anon]",e&&e.code);}); } catch(e){}
 
 window._fbSuscribirEstEst = function(callback) {
   console.log('[Firebase][Est][module] _fbSuscribirEstEst llamado — registrando onValue en /estadisticas');
@@ -1396,6 +1398,5 @@ window._fbSuscribirModulosEst = function(callback) {
   });
 })();
 </script>
-<script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Estadísticas Admin"></script>
 </body>
 </html>
