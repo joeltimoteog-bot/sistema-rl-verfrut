@@ -186,7 +186,7 @@ h3{font-size:16px !important}
 // Activar solo en tu navegador: localStorage.setItem('rl_theme','glass') y recargar.
 // Desactivar: localStorage.removeItem('rl_theme')
 (function(){
-  if(localStorage.getItem('rl_theme')==='glass' && localStorage.getItem('rl_dark')!=='1'){
+  if(localStorage.getItem('rl_theme')!=='classic' && localStorage.getItem('rl_dark')!=='1'){
     document.documentElement.classList.add('theme-glass');
   }
 })();
@@ -10378,5 +10378,6 @@ h3{font-size:16px !important}
 </div>
 </div>
 
+<script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Dashboard"></script>
 </body>
 </html>

@@ -1,0 +1,40 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": false,
+
+    "presencia": {
+      ".read": true,
+      "$uid": {
+        ".write": true,
+        ".validate": "newData.hasChildren(['usuario','online','ultimo_ping'])",
+        "usuario":     { ".validate": "newData.isString() && newData.val().length < 60" },
+        "nombre":      { ".validate": "newData.isString() && newData.val().length < 120" },
+        "rol":         { ".validate": "newData.isString() && newData.val().length < 60" },
+        "empresa":     { ".validate": "newData.isString() && newData.val().length < 40" },
+        "modulo":      { ".validate": "newData.isString() && newData.val().length < 80" },
+        "pagina":      { ".validate": "newData.isString() && newData.val().length < 80" },
+        "online":      { ".validate": "newData.isBoolean()" },
+        "ultimo_ping": { ".validate": "newData.isNumber()" },
+        "$otros":      { ".validate": false }
+      }
+    },
+
+    "mensajes": {
+      ".read": true,
+      "$uid": {
+        "$msgId": {
+          ".write": true,
+          ".validate": "newData.hasChildren(['texto'])",
+          "texto":      { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 1000" },
+          "de":         { ".validate": "newData.isString() && newData.val().length < 120" },
+          "de_usuario": { ".validate": "newData.isString() && newData.val().length < 60" },
+          "ts":         { ".validate": "newData.isNumber()" },
+          "leido":      { ".validate": "newData.isBoolean()" },
+          "leido_ts":   { ".validate": "newData.isNumber()" },
+          "$otros":     { ".validate": false }
+        }
+      }
+    }
+  }
+}

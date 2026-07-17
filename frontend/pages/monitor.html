@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor en Vivo · Sistema RL</title>
+<link rel="icon" href="/sistema-rl-verfrut/favicon.ico">
+<style>
+  :root{
+    --bg:#0b1220; --panel:#111a2e; --panel2:#0f1728; --line:#1e2b45;
+    --tx:#e5eefc; --mut:#8ea3c4; --acc:#38bdf8; --acc2:#22d3ee;
+    --ok:#22c55e; --idle:#f59e0b; --off:#64748b; --danger:#ef4444;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 700px at 80% -10%,#16223c 0%,var(--bg) 60%);
+    color:var(--tx);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:14px;
+  }
+  a{color:inherit}
+  /* Topbar */
+  .top{display:flex;align-items:center;gap:14px;padding:14px 22px;border-bottom:1px solid var(--line);
+    background:rgba(17,26,46,.7);backdrop-filter:blur(8px);position:sticky;top:0;z-index:10}
+  .top h1{font-size:16px;margin:0;font-weight:800;letter-spacing:.2px}
+  .top .sub{color:var(--mut);font-size:12px}
+  .top .grow{flex:1}
+  .pill{display:inline-flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);
+    border-radius:999px;padding:7px 14px;font-weight:700;font-size:12.5px}
+  .dotlive{width:9px;height:9px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:pulse 1.8s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.5)}70%{box-shadow:0 0 0 8px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+  .btnGhost{background:transparent;border:1px solid var(--line);color:var(--mut);border-radius:9px;padding:7px 12px;cursor:pointer;font-weight:600}
+  .btnGhost:hover{color:var(--tx);border-color:var(--acc)}
+
+  /* Layout */
+  .wrap{display:grid;grid-template-columns:1fr 380px;gap:16px;padding:16px 22px;max-width:1400px;margin:0 auto}
+  @media(max-width:980px){.wrap{grid-template-columns:1fr}}
+
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:16px}
+  .card .hd{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .card .hd h2{font-size:14px;margin:0;font-weight:800}
+  .card .hd .cnt{margin-left:auto;color:var(--mut);font-size:12px}
+
+  .tools{display:flex;gap:10px;padding:12px 16px;flex-wrap:wrap;align-items:center}
+  .tools input[type=text]{flex:1;min-width:160px;background:var(--panel2);border:1px solid var(--line);color:var(--tx);
+    border-radius:10px;padding:9px 12px;font-size:13px}
+  .tools input::placeholder{color:var(--mut)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{background:transparent;border:none;color:var(--mut);padding:8px 12px;cursor:pointer;font-weight:700;font-size:12.5px}
+  .seg button.on{background:var(--acc);color:#08131f}
+
+  /* Lista de usuarios */
+  .list{padding:8px;max-height:70vh;overflow:auto}
+  .u{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;cursor:pointer;border:1px solid transparent}
+  .u:hover{background:rgba(56,189,248,.06);border-color:var(--line)}
+  .u.sel{background:rgba(56,189,248,.12);border-color:var(--acc)}
+  .u .st{position:relative;flex:0 0 auto}
+  .u .av{width:40px;height:40px;border-radius:50%;background:#1c2942;display:flex;align-items:center;justify-content:center;
+    font-weight:800;color:var(--acc2);font-size:14px}
+  .u .dot{position:absolute;right:-1px;bottom:-1px;width:13px;height:13px;border-radius:50%;border:2.5px solid var(--panel)}
+  .dot.on{background:var(--ok)} .dot.idle{background:var(--idle)} .dot.off{background:var(--off)}
+  .u .info{flex:1;min-width:0}
+  .u .nm{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .u .mt{color:var(--mut);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .u .mod{color:var(--acc2);font-weight:600}
+  .u .rt{color:var(--mut);font-size:11.5px;white-space:nowrap;flex:0 0 auto}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:800;letter-spacing:.3px}
+  .b-rapel{background:rgba(34,197,94,.15);color:#4ade80} .b-verfrut{background:rgba(56,189,248,.15);color:#7dd3fc}
+  .b-ambas{background:rgba(168,139,250,.16);color:#c4b5fd}
+  .empty{padding:34px 16px;text-align:center;color:var(--mut)}
+
+  /* Panel derecho */
+  .side .body{padding:16px}
+  .side .who{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .side .who .av{width:46px;height:46px;border-radius:50%;background:#1c2942;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--acc2)}
+  .side .who .nm{font-weight:800;font-size:15px}
+  .side .who .mt{color:var(--mut);font-size:12.5px}
+  .kv{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+  .kv span:first-child{color:var(--mut)}
+  .tpl{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0}
+  .tpl button{background:var(--panel2);border:1px solid var(--line);color:var(--mut);border-radius:999px;padding:6px 11px;cursor:pointer;font-size:11.5px;font-weight:600}
+  .tpl button:hover{color:var(--tx);border-color:var(--acc)}
+  textarea{width:100%;min-height:80px;background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:12px;padding:11px;font-size:13px;font-family:inherit;resize:vertical}
+  .send{margin-top:10px;width:100%;background:linear-gradient(90deg,var(--acc),var(--acc2));color:#062033;border:none;border-radius:12px;padding:12px;font-weight:800;cursor:pointer;font-size:13.5px}
+  .send:disabled{opacity:.5;cursor:not-allowed}
+  .hist{margin-top:16px}
+  .hist h3{font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin:0 0 8px}
+  .msg{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;font-size:12.5px}
+  .msg .meta{color:var(--mut);font-size:11px;margin-top:5px;display:flex;justify-content:space-between}
+  .msg .leido{color:var(--ok);font-weight:700} .msg .noleido{color:var(--idle);font-weight:700}
+  .nopick{padding:40px 18px;text-align:center;color:var(--mut)}
+  .toast{position:fixed;bottom:22px;right:22px;padding:12px 18px;border-radius:12px;font-weight:700;font-size:13px;z-index:99;opacity:0;transition:opacity .35s;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  #gate{display:flex;align-items:center;justify-content:center;height:100vh;padding:24px;text-align:center}
+  #gate .box{max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:30px}
+</style>
+</head>
+<body>
+
+<!-- Pantalla de bloqueo si no es el admin autorizado -->
+<div id="gate" style="display:none">
+  <div class="box">
+    <div style="font-size:40px;margin-bottom:8px">🔒</div>
+    <h2 style="margin:0 0 8px">Acceso restringido</h2>
+    <p style="color:var(--mut)">Este panel es exclusivo de la Coordinación de RR.LL.</p>
+    <button class="btnGhost" onclick="location.href='dashboard.html'">Volver al dashboard</button>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="top">
+    <div><h1>🛰️ Monitor en Vivo</h1><div class="sub">Sistema RL · Relaciones Laborales</div></div>
+    <div class="grow"></div>
+    <div class="pill"><span class="dotlive"></span><span id="cntOn">0</span> conectados</div>
+    <div class="pill" style="color:var(--mut)"><span id="cntTot">0</span> registrados</div>
+    <button class="btnGhost" onclick="location.href='dashboard.html'">← Dashboard</button>
+  </div>
+
+  <div class="wrap">
+    <!-- Columna izquierda: usuarios en vivo -->
+    <div class="card">
+      <div class="hd"><h2>Usuarios</h2><span class="cnt" id="listCnt"></span></div>
+      <div class="tools">
+        <input type="text" id="buscar" placeholder="Buscar por nombre o usuario…">
+        <div class="seg">
+          <button id="fTodos" class="on" data-f="todos">Todos</button>
+          <button id="fOn" data-f="on">En línea</button>
+        </div>
+      </div>
+      <div class="list" id="lista"><div class="empty">Conectando con Firebase…</div></div>
+    </div>
+
+    <!-- Columna derecha: detalle + mensaje -->
+    <div class="card side">
+      <div class="hd"><h2>Interacción</h2></div>
+      <div class="body" id="detalle">
+        <div class="nopick">Seleccioná un usuario de la izquierda para ver su actividad y enviarle un mensaje.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, onValue, push, update, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+/* ── Configuración ── */
+const MONITOR_ADMINS = ['jtimoteo'];   // ← solo estos usuarios pueden abrir el panel
+const UMBRAL_ACTIVO_MS = 60000;        // ping más viejo que esto = "inactivo" aunque figure online
+
+/* ── Sesión / guardia de acceso ── */
+let USER = null;
+try { USER = JSON.parse(sessionStorage.getItem('user') || 'null'); } catch(e) {}
+if (!USER || !USER.usuario) { location.href = '../../index.html'; }
+const soyAdmin = USER && MONITOR_ADMINS.includes(String(USER.usuario).toLowerCase());
+if (!soyAdmin) {
+  document.getElementById('gate').style.display = 'flex';
+} else {
+  document.getElementById('app').style.display = 'block';
+  arrancar();
+}
+
+/* ── Firebase ── */
+const firebaseConfig = {
+  apiKey: "AIzaSyBTp4WHO5bGEoYDhTbyWZVfdQxbAQHwp4I",
+  authDomain: "sistema-rl-verfrut.firebaseapp.com",
+  projectId: "sistema-rl-verfrut",
+  storageBucket: "sistema-rl-verfrut.firebasestorage.app",
+  messagingSenderId: "769176418481",
+  appId: "1:769176418481:web:53a487fcaf736b11e24a90",
+  databaseURL: "https://sistema-rl-verfrut-default-rtdb.firebaseio.com"
+};
+
+let db = null;
+function initFB(){
+  try{
+    const nombre = 'monitor-app';
+    const app = getApps().find(a=>a.name===nombre) ? getApp(nombre) : initializeApp(firebaseConfig, nombre);
+    db = getDatabase(app);
+    return true;
+  }catch(e){ console.error('[Monitor] Firebase error', e); return false; }
+}
+
+/* ── Estado UI ── */
+let PRES = {};              // usuario → datos de presencia
+let filtro = 'todos';
+let busqueda = '';
+let seleccion = null;       // clave del usuario seleccionado
+let unsubMsgs = null;       // desuscriptor del historial de mensajes
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const inicial = n => (String(n||'?').trim()[0]||'?').toUpperCase();
+function badgeEmp(e){
+  const s = String(e||'').toUpperCase();
+  if(s==='RAPEL') return '<span class="badge b-rapel">RAPEL</span>';
+  if(s==='VERFRUT') return '<span class="badge b-verfrut">VERFRUT</span>';
+  if(s) return '<span class="badge b-ambas">'+esc(s)+'</span>';
+  return '';
+}
+function haceCuanto(ts){
+  if(!ts) return '—';
+  const d = Date.now() - Number(ts);
+  if(d < 0) return 'ahora';
+  const s = Math.floor(d/1000);
+  if(s < 60) return 'hace '+s+'s';
+  const m = Math.floor(s/60);
+  if(m < 60) return 'hace '+m+' min';
+  const h = Math.floor(m/60);
+  if(h < 24) return 'hace '+h+' h';
+  return 'hace '+Math.floor(h/24)+' d';
+}
+function estado(u){
+  if(!u.online) return 'off';
+  const fresco = u.ultimo_ping && (Date.now() - Number(u.ultimo_ping) < UMBRAL_ACTIVO_MS);
+  return fresco ? 'on' : 'idle';
+}
+
+function arrancar(){
+  if(!initFB()){ $('lista').innerHTML = '<div class="empty">No se pudo conectar con Firebase.</div>'; return; }
+
+  onValue(ref(db,'presencia'), snap=>{
+    PRES = snap.val() || {};
+    render();
+  }, err=>{
+    console.error('[Monitor] onValue presencia', err);
+    $('lista').innerHTML = '<div class="empty">Error al leer presencia. Revisá las reglas de Firebase.</div>';
+  });
+
+  // refresca los "hace X" cada 5s sin recargar datos
+  setInterval(()=>{ if(Object.keys(PRES).length) render(); }, 5000);
+
+  $('buscar').addEventListener('input', e=>{ busqueda = e.target.value.toLowerCase().trim(); render(); });
+  document.querySelectorAll('.seg button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on'); filtro = b.dataset.f; render();
+    });
+  });
+}
+
+function listaOrdenada(){
+  let arr = Object.keys(PRES).map(k=>({k, ...PRES[k]}));
+  arr = arr.filter(u=>{
+    if(filtro==='on' && estado(u)==='off') return false;
+    if(busqueda){
+      const t = (String(u.nombre||'')+' '+String(u.usuario||'')).toLowerCase();
+      if(!t.includes(busqueda)) return false;
+    }
+    return true;
+  });
+  const rank = {on:0, idle:1, off:2};
+  arr.sort((a,b)=>{
+    const ra=rank[estado(a)], rb=rank[estado(b)];
+    if(ra!==rb) return ra-rb;
+    return Number(b.ultimo_ping||0) - Number(a.ultimo_ping||0);
+  });
+  return arr;
+}
+
+function render(){
+  const arr = listaOrdenada();
+  const total = Object.keys(PRES).length;
+  const online = Object.values(PRES).filter(u=>estado(u)!=='off').length;
+  $('cntOn').textContent = online;
+  $('cntTot').textContent = total;
+  $('listCnt').textContent = arr.length + (arr.length===1?' usuario':' usuarios');
+
+  if(!arr.length){
+    $('lista').innerHTML = '<div class="empty">Nadie por aquí todavía.</div>';
+  } else {
+    $('lista').innerHTML = arr.map(u=>{
+      const st = estado(u);
+      return `<div class="u ${seleccion===u.k?'sel':''}" data-k="${esc(u.k)}">
+        <div class="st">
+          <div class="av">${esc(inicial(u.nombre))}</div>
+          <div class="dot ${st}"></div>
+        </div>
+        <div class="info">
+          <div class="nm">${esc(u.nombre||u.usuario)} ${badgeEmp(u.empresa)}</div>
+          <div class="mt">${st==='off'?'Desconectado':'📍 <span class="mod">'+esc(u.modulo||'—')+'</span>'}</div>
+        </div>
+        <div class="rt">${haceCuanto(u.ultimo_ping)}</div>
+      </div>`;
+    }).join('');
+    document.querySelectorAll('.u').forEach(el=>{
+      el.addEventListener('click', ()=>{ seleccionar(el.dataset.k); });
+    });
+  }
+  if(seleccion && PRES[seleccion]) pintarDetalle();
+}
+
+function seleccionar(k){
+  seleccion = k;
+  render();
+  pintarDetalle();
+}
+
+const TEMPLATES = [
+  'Recuerda subir tu informe de visitas pendiente.',
+  'Tienes un caso pendiente por atender.',
+  'Por favor completa el registro del día de hoy.',
+  '¿Por qué no registraste la atención? Coordina conmigo.'
+];
+
+function pintarDetalle(){
+  const u = PRES[seleccion];
+  if(!u){ $('detalle').innerHTML = '<div class="nopick">Usuario no disponible.</div>'; return; }
+  const st = estado(u);
+  const estTxt = st==='on'?'🟢 En línea':(st==='idle'?'🟠 Inactivo':'⚪ Desconectado');
+  $('detalle').innerHTML = `
+    <div class="who">
+      <div class="av">${esc(inicial(u.nombre))}</div>
+      <div>
+        <div class="nm">${esc(u.nombre||u.usuario)}</div>
+        <div class="mt">@${esc(u.usuario)} · ${badgeEmp(u.empresa)}</div>
+      </div>
+    </div>
+    <div class="kv"><span>Estado</span><span>${estTxt}</span></div>
+    <div class="kv"><span>Módulo actual</span><span>${esc(u.modulo||'—')}</span></div>
+    <div class="kv"><span>Página</span><span>${esc(u.pagina||'—')}</span></div>
+    <div class="kv"><span>Rol</span><span>${esc(u.rol||'—')}</span></div>
+    <div class="kv"><span>Última actividad</span><span>${haceCuanto(u.ultimo_ping)}</span></div>
+
+    <div style="margin-top:16px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Enviar mensaje</div>
+    <div class="tpl" id="tpl"></div>
+    <textarea id="txtMsg" placeholder="Escribe tu mensaje para ${esc(u.nombre||u.usuario)}…"></textarea>
+    <button class="send" id="btnEnviar">📨 Enviar aviso</button>
+
+    <div class="hist"><h3>Historial de mensajes</h3><div id="histBox"><div class="msg" style="color:var(--mut)">Cargando…</div></div></div>
+  `;
+  const tpl = $('tpl');
+  TEMPLATES.forEach(t=>{
+    const b = document.createElement('button'); b.textContent = t;
+    b.addEventListener('click', ()=>{ $('txtMsg').value = t; $('txtMsg').focus(); });
+    tpl.appendChild(b);
+  });
+  $('btnEnviar').addEventListener('click', enviarMensaje);
+  suscribirHistorial(u);
+}
+
+function enviarMensaje(){
+  const u = PRES[seleccion]; if(!u) return;
+  const txt = $('txtMsg').value.trim();
+  if(!txt){ toast('Escribe un mensaje primero', true); return; }
+  const btn = $('btnEnviar'); btn.disabled = true; btn.textContent = 'Enviando…';
+  const key = String(u.usuario).toLowerCase().replace(/[.#$/\[\]]/g,'_');
+  push(ref(db,'mensajes/'+key), {
+    texto: txt,
+    de: USER.nombre || USER.usuario,
+    de_usuario: USER.usuario,
+    ts: serverTimestamp(),
+    leido: false
+  }).then(()=>{
+    $('txtMsg').value = '';
+    toast('✅ Mensaje enviado a '+(u.nombre||u.usuario));
+  }).catch(e=>{
+    console.error(e); toast('No se pudo enviar (¿reglas de Firebase?)', true);
+  }).finally(()=>{ btn.disabled=false; btn.textContent='📨 Enviar aviso'; });
+}
+
+function suscribirHistorial(u){
+  if(unsubMsgs){ try{unsubMsgs();}catch(e){} unsubMsgs=null; }
+  const key = String(u.usuario).toLowerCase().replace(/[.#$/\[\]]/g,'_');
+  unsubMsgs = onValue(ref(db,'mensajes/'+key), snap=>{
+    const box = $('histBox'); if(!box) return;
+    const val = snap.val();
+    if(!val){ box.innerHTML = '<div class="msg" style="color:var(--mut)">Sin mensajes aún.</div>'; return; }
+    const arr = Object.keys(val).map(id=>({id,...val[id]})).sort((a,b)=>Number(b.ts||0)-Number(a.ts||0));
+    box.innerHTML = arr.map(m=>`
+      <div class="msg">
+        <div>${esc(m.texto)}</div>
+        <div class="meta">
+          <span>${haceCuanto(m.ts)}</span>
+          <span class="${m.leido?'leido':'noleido'}">${m.leido?'✓ Leído':'• No leído'}</span>
+        </div>
+      </div>`).join('');
+  });
+}
+
+let _toTimer;
+function toast(msg, err){
+  const t = $('toast'); t.textContent = msg;
+  t.style.background = err ? '#7f1d1d' : '#14532d';
+  t.style.color = '#fff'; t.style.opacity = '1';
+  clearTimeout(_toTimer); _toTimer = setTimeout(()=>t.style.opacity='0', 3000);
+}
+</script>
+</body>
+</html>
