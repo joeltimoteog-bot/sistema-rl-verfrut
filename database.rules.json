@@ -1,8 +1,37 @@
 {
   "rules": {
-    ".read": true,
+    ".read": false,
     ".write": false,
-
+    "estadisticas": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "estadisticas_modulos": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "alertas": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "sistema": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "accesos_temporales": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "actividad_reciente": {
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "bienestar": {
+      "senales": {
+        ".read": true,
+        ".write": true
+      }
+    },
     "presencia": {
       ".read": true,
       "$uid": {
@@ -19,7 +48,6 @@
         "$otros":      { ".validate": false }
       }
     },
-
     "mensajes": {
       ".read": true,
       "$uid": {
@@ -33,6 +61,20 @@
           "leido":      { ".validate": "newData.isBoolean()" },
           "leido_ts":   { ".validate": "newData.isNumber()" },
           "$otros":     { ".validate": false }
+        }
+      }
+    },
+    "historial": {
+      ".read": true,
+      "$uid": {
+        "$id": {
+          ".write": "!data.exists()",
+          ".validate": "newData.hasChildren(['ts','evento'])",
+          "ts":      { ".validate": "newData.isNumber()" },
+          "evento":  { ".validate": "newData.isString() && newData.val().length < 30" },
+          "pagina":  { ".validate": "newData.isString() && newData.val().length < 80" },
+          "modulo":  { ".validate": "newData.isString() && newData.val().length < 80" },
+          "$otros":  { ".validate": false }
         }
       }
     }

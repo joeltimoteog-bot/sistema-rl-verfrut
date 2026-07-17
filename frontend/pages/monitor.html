@@ -108,6 +108,7 @@
     <div class="pill" id="pillResp" style="display:none;color:#fbbf24">💬 <span id="cntResp">0</span> respuesta(s)</div>
     <div class="pill"><span class="dotlive"></span><span id="cntOn">0</span> conectados</div>
     <div class="pill" style="color:var(--mut)"><span id="cntTot">0</span> registrados</div>
+    <button class="btnGhost" id="btnDifu" style="color:#fbbf24">📢 Difusión</button>
     <button class="btnGhost" onclick="location.href='dashboard.html'">← Dashboard</button>
   </div>
 
@@ -129,6 +130,24 @@
       <div class="body" id="detalle">
         <div class="nopick">Seleccioná un usuario de la izquierda para ver su actividad y enviarle un mensaje.</div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Panel de difusión -->
+<div id="difuOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,6,17,.65);z-index:50;align-items:center;justify-content:center">
+  <div class="card" style="width:min(480px,92vw)">
+    <div class="hd"><h2>📢 Mensaje de difusión</h2><span class="cnt" id="difuCerrar" style="cursor:pointer;font-size:16px">✕</span></div>
+    <div style="padding:16px">
+      <div style="margin-bottom:8px;color:var(--mut);font-size:12.5px">Destino:</div>
+      <select id="difuDest" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:9px;margin-bottom:10px;font-size:13px">
+        <option value="conectados">Solo conectados ahora</option>
+        <option value="todos">Todos los registrados</option>
+        <option value="RAPEL">Empresa RAPEL (incluye AMBAS)</option>
+        <option value="VERFRUT">Empresa VERFRUT (incluye AMBAS)</option>
+      </select>
+      <textarea id="difuTxt" placeholder="Escribe el aviso para el grupo…"></textarea>
+      <button class="send" id="difuEnviar">📢 Enviar difusión</button>
     </div>
   </div>
 </div>
@@ -232,6 +251,114 @@ function respuestasNoLeidas(k){
   const conv = MSGS[k]; if(!conv) return 0;
   return Object.keys(conv).filter(id => esRespuesta(conv[id], k) && !conv[id].leido).length;
 }
+/* ── Difusión: un aviso para varios usuarios a la vez ── */
+async function enviarDifusion(){
+  const txt = $('difuTxt').value.trim();
+  if(!txt){ toast('Escribe el aviso primero', true); return; }
+  const dest = $('difuDest').value;
+  const targets = Object.keys(PRES).filter(k=>{
+    const u = PRES[k];
+    if(MONITOR_ADMINS.includes(String(u.usuario||'').toLowerCase())) return false;
+    const emp = String(u.empresa||'').toUpperCase();
+    if(dest==='conectados') return estado(u)!=='off';
+    if(dest==='RAPEL' || dest==='VERFRUT') return emp===dest || emp==='AMBAS';
+    return true;
+  });
+  if(!targets.length){ toast('No hay destinatarios para ese filtro', true); return; }
+  const b = $('difuEnviar'); b.disabled = true; b.textContent = 'Enviando…';
+  const rs = await Promise.all(targets.map(k=>
+    fetch(DB_URL+'/mensajes/'+k+'.json',{method:'POST',body:JSON.stringify({
+      texto: txt, de: USER.nombre||USER.usuario, de_usuario: USER.usuario,
+      ts: {'.sv':'timestamp'}, leido: false
+    })}).then(r=>!!r.ok).catch(()=>false)
+  ));
+  const ok = rs.filter(Boolean).length;
+  b.disabled = false; b.textContent = '📢 Enviar difusión';
+  $('difuTxt').value = ''; $('difuOverlay').style.display = 'none';
+  toast('📢 Difusión enviada a '+ok+' de '+targets.length+' usuario(s)', ok!==targets.length);
+}
+
+/* ── Pendientes automáticos (misma fuente que el banner del dashboard: GAS getCumplimiento) ── */
+const GAS_API = sessionStorage.getItem('api') || 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+let PEND = {};   // NOMBRE NORMALIZADO -> {visitas:[estados], casos:[1,1,...]}
+const normN = s => String(s||'').toUpperCase().replace(/\s+/g,' ').trim();
+
+async function cargarPendientes(){
+  try{
+    const r = await fetch(GAS_API+'?'+new URLSearchParams({action:'getCumplimiento', usuario: USER.usuario||''}));
+    const res = await r.json();
+    if(!res || !res.success) return;
+    const map = {};
+    (res.pendientesVisitas||[]).forEach(p=>{
+      const n = normN(p.nombre); if(!n) return;
+      (map[n] = map[n] || {visitas:[],casos:[]}).visitas.push(p.estado||'vencido');
+    });
+    (res.casosPendientes||[]).forEach(p=>{
+      const n = normN(p.nombre_mostrar); if(!n) return;
+      (map[n] = map[n] || {visitas:[],casos:[]}).casos.push(1);
+    });
+    PEND = map;
+    render();
+  }catch(e){ console.warn('[Monitor] pendientes:', e); }
+}
+
+/* Empareja el nombre de presencia con los nombres del cumplimiento
+   (tolera orden distinto de apellidos: compara palabras en común) */
+function pendDe(u){
+  const n = normN(u && (u.nombre||u.usuario));
+  if(PEND[n]) return PEND[n];
+  const A = n.split(' ').filter(w=>w.length>2);
+  for(const c of Object.keys(PEND)){
+    const B = new Set(c.split(' ').filter(w=>w.length>2));
+    const comunes = A.filter(w=>B.has(w)).length;
+    if(comunes >= 3 || (comunes >= 2 && (A.length<=2 || B.size<=2))) return PEND[c];
+  }
+  return null;
+}
+function pendCount(u){ const p = pendDe(u); return p ? (p.visitas.length + p.casos.length) : 0; }
+
+function filaPend(titulo, msg){
+  return '<div style="display:flex;align-items:center;gap:8px;justify-content:space-between;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:8px 10px;margin-top:7px;font-size:12.5px">'+
+    '<span>'+esc(titulo)+'</span>'+
+    '<button type="button" data-msg="'+esc(msg)+'" style="background:#f59e0b;color:#451a03;border:none;border-radius:8px;padding:5px 10px;font-weight:800;font-size:11.5px;cursor:pointer;flex:0 0 auto">🔔 Recordar</button></div>';
+}
+
+function renderPendientesDetalle(u){
+  const box = $('pendBox'); if(!box) return;
+  const p = pendDe(u);
+  if(!p){ box.innerHTML = ''; return; }
+  let h = '<div style="margin-top:14px;font-size:12px;color:#f87171;text-transform:uppercase;letter-spacing:.5px;font-weight:800">⏰ Pendientes detectados</div>';
+  p.visitas.forEach(est=>{
+    const msg = est==='plazo_hoy'
+      ? 'Recuerda que HOY vence el plazo para subir tu informe de visitas de la semana pasada.'
+      : 'Tienes VENCIDO el informe de visitas de la semana pasada. Por favor regularízalo hoy.';
+    h += filaPend('📋 Informe de visitas '+(est==='plazo_hoy'?'(plazo HOY)':'(vencido)'), msg);
+  });
+  if(p.casos.length){
+    const msg = 'Tienes '+p.casos.length+' caso(s) sin Informe ni Reporte subido en Registro de Casos. Por favor regularízalo.';
+    h += filaPend('📁 '+p.casos.length+' caso(s) sin informe/reporte', msg);
+  }
+  box.innerHTML = h;
+  box.querySelectorAll('[data-msg]').forEach(el=>{
+    el.addEventListener('click', ()=>{ $('txtMsg').value = el.dataset.msg; $('txtMsg').focus(); });
+  });
+}
+
+/* ── Historial de conexiones (últimos ingresos) ── */
+async function cargarHistorialConexiones(u){
+  const box = $('histCon'); if(!box) return;
+  try{
+    const r = await fetch(DB_URL+'/historial/'+ukey(u.usuario)+'.json?nc='+Date.now());
+    const val = r.ok ? await r.json() : null;
+    if(!val){ box.textContent = 'Sin registros aún (se llenan con cada ingreso al sistema).'; return; }
+    const arr = Object.values(val).sort((a,b)=>Number(b.ts||0)-Number(a.ts||0)).slice(0,8);
+    box.innerHTML = arr.map(h=>{
+      const f = h.ts ? new Date(Number(h.ts)).toLocaleString('es-PE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '—';
+      return '<div style="padding:4px 0;border-bottom:1px dashed var(--line)">🟢 '+f+' — '+esc(h.modulo||h.pagina||'')+'</div>';
+    }).join('');
+  }catch(e){ box.textContent = 'No disponible.'; }
+}
+
 /* Marca como vistas las respuestas de la conversación abierta (vía REST,
    funciona en ambos modos de conexión) */
 function marcarRespuestasLeidas(){
@@ -303,6 +430,11 @@ function arrancar(){
   setInterval(()=>{ if(Object.keys(PRES).length) render(); }, 5000);
 
   $('buscar').addEventListener('input', e=>{ busqueda = e.target.value.toLowerCase().trim(); render(); });
+  const bd = $('btnDifu'); if(bd) bd.addEventListener('click', ()=>{ $('difuOverlay').style.display='flex'; });
+  const dc = $('difuCerrar'); if(dc) dc.addEventListener('click', ()=>{ $('difuOverlay').style.display='none'; });
+  const de = $('difuEnviar'); if(de) de.addEventListener('click', enviarDifusion);
+  cargarPendientes();
+  setInterval(cargarPendientes, 10*60*1000);   // refresca pendientes cada 10 min
   document.querySelectorAll('.seg button').forEach(b=>{
     b.addEventListener('click', ()=>{
       document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));
@@ -352,7 +484,7 @@ function render(){
           <div class="dot ${st}"></div>
         </div>
         <div class="info">
-          <div class="nm">${esc(u.nombre||u.usuario)} ${badgeEmp(u.empresa)} ${respuestasNoLeidas(u.k)?'<span class="badge" style="background:rgba(245,158,11,.2);color:#fbbf24">💬 '+respuestasNoLeidas(u.k)+'</span>':''}</div>
+          <div class="nm">${esc(u.nombre||u.usuario)} ${badgeEmp(u.empresa)} ${respuestasNoLeidas(u.k)?'<span class="badge" style="background:rgba(245,158,11,.2);color:#fbbf24">💬 '+respuestasNoLeidas(u.k)+'</span>':''} ${pendCount(u)?'<span class="badge" style="background:rgba(239,68,68,.15);color:#f87171">⏰ '+pendCount(u)+'</span>':''}</div>
           <div class="mt">${st==='off'?'Desconectado':'📍 <span class="mod">'+esc(u.modulo||'—')+'</span>'}</div>
         </div>
         <div class="rt">${haceCuanto(u.ultimo_ping)}</div>
@@ -408,12 +540,15 @@ function pintarDetalle(reiniciar){
     <div class="kv"><span>Rol</span><span>${esc(u.rol||'—')}</span></div>
     <div class="kv"><span>Última actividad</span><span id="kvPing">${haceCuanto(u.ultimo_ping)}</span></div>
 
+    <div id="pendBox"></div>
+
     <div style="margin-top:16px;font-size:12px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px">Enviar mensaje</div>
     <div class="tpl" id="tpl"></div>
     <textarea id="txtMsg" placeholder="Escribe tu mensaje para ${esc(u.nombre||u.usuario)}…"></textarea>
     <button class="send" id="btnEnviar">📨 Enviar aviso</button>
 
     <div class="hist"><h3>Historial de mensajes</h3><div id="histBox"><div class="msg" style="color:var(--mut)">Cargando…</div></div></div>
+    <div class="hist"><h3>🕓 Últimos ingresos</h3><div id="histCon" style="color:var(--mut);font-size:12px">Cargando…</div></div>
   `;
   const tpl = $('tpl');
   TEMPLATES.forEach(t=>{
@@ -423,6 +558,8 @@ function pintarDetalle(reiniciar){
   });
   $('btnEnviar').addEventListener('click', enviarMensaje);
   suscribirHistorial(u);
+  renderPendientesDetalle(u);
+  cargarHistorialConexiones(u);
 }
 
 /* ── Envío de mensaje: SDK si hay tiempo real, si no REST directo ── */

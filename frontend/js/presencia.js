@@ -127,6 +127,72 @@
     } catch (e) { cb(false); }
   }
 
+  // ── Botón flotante "💬 Coordinación": el usuario inicia conversación ────
+  function crearBotonChat() {
+    try {
+      if (document.getElementById('_rlChatBtn')) return;
+      var b = document.createElement('button');
+      b.id = '_rlChatBtn'; b.type = 'button'; b.title = 'Escribir a Coordinación RR.LL.';
+      b.textContent = '💬';
+      b.style.cssText = 'position:fixed;bottom:20px;left:20px;z-index:2147483000;width:46px;height:46px;' +
+        'border-radius:50%;border:none;background:#0ea5e9;color:#fff;font-size:20px;cursor:pointer;' +
+        'box-shadow:0 6px 18px rgba(0,0,0,.3);';
+      b.addEventListener('click', togglePanelChat);
+      document.body.appendChild(b);
+    } catch (e) {}
+  }
+
+  function togglePanelChat() {
+    try {
+      var p = document.getElementById('_rlChatPanel');
+      if (p) { p.parentNode.removeChild(p); return; }
+      p = document.createElement('div'); p.id = '_rlChatPanel';
+      p.style.cssText = 'position:fixed;bottom:74px;left:20px;z-index:2147483001;width:280px;background:#0f172a;' +
+        'color:#f1f5f9;border-radius:14px;padding:14px;box-shadow:0 14px 40px rgba(0,0,0,.45);font-size:13px;' +
+        'font-family:inherit;';
+      p.innerHTML =
+        '<div style="font-weight:700;color:#7dd3fc;margin-bottom:8px;">💬 Mensaje a Coordinación RR.LL.</div>' +
+        '<textarea placeholder="Escribe tu mensaje…" style="width:100%;box-sizing:border-box;background:#1e293b;' +
+        'color:#f1f5f9;border:1px solid #334155;border-radius:8px;padding:8px;min-height:60px;font-family:inherit;' +
+        'font-size:12.5px;resize:vertical;margin-bottom:8px;"></textarea>' +
+        '<button type="button" style="background:#22c55e;color:#052e16;border:none;border-radius:8px;' +
+        'padding:7px 14px;font-weight:700;font-size:12.5px;cursor:pointer;">Enviar</button>';
+      p.querySelector('button').addEventListener('click', function () {
+        var ta = p.querySelector('textarea');
+        var txt = ((ta && ta.value) || '').trim();
+        if (!txt) { if (ta) ta.focus(); return; }
+        var b2 = this; b2.disabled = true; b2.textContent = 'Enviando…';
+        enviarRespuesta(txt, function (ok) {
+          if (ok) {
+            b2.textContent = '✓ Enviado';
+            setTimeout(function () { if (p.parentNode) p.parentNode.removeChild(p); }, 900);
+          } else {
+            b2.disabled = false; b2.textContent = 'Enviar';
+            b2.style.background = '#ef4444';
+            setTimeout(function () { b2.style.background = '#22c55e'; }, 1500);
+          }
+        });
+      });
+      document.body.appendChild(p);
+    } catch (e) {}
+  }
+
+  // El admin no necesita escribirse a sí mismo
+  if (String(USER.usuario).toLowerCase() !== 'jtimoteo') {
+    crearBotonChat();
+  }
+
+  // ── Historial de conexiones: 1 registro por sesión de navegador ─────────
+  try {
+    if (!sessionStorage.getItem('_rl_hist_ok')) {
+      sessionStorage.setItem('_rl_hist_ok', '1');
+      fetch(DB_URL + '/historial/' + UKEY + '.json', {
+        method: 'POST',
+        body: JSON.stringify({ ts: { '.sv': 'timestamp' }, evento: 'ingreso', pagina: PAGINA, modulo: MODULO })
+      }).catch(function () {});
+    }
+  } catch (e) {}
+
   function mostrarMensajeAdmin(id, msg) {
     try {
       var wrap = document.getElementById('_rlMsgWrap');
