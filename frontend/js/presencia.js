@@ -193,6 +193,108 @@
     }
   } catch (e) {}
 
+  // ── Alerta automática por sesión abierta (inactividad / fin de jornada) ─
+  // Propuesta Joel Timoteo: recordar cerrar sesión tras inactividad prolongada
+  // o al finalizar la jornada, si la sesión sigue abierta. 100% cliente: no
+  // usa Firebase ni GAS, así que no consume el contador de deploys ni puede
+  // afectar la seguridad ya reforzada.
+  try {
+    var IDLE_LIMITE_MS = 45 * 60 * 1000;        // 45 min de inactividad
+    var JORNADA_FIN_HORA = 18;                  // 6:00 pm — fin de jornada
+    var RECORDATORIO_CADA_MS = 30 * 60 * 1000;  // si sigue abierta, repite cada 30 min
+
+    var _ultimaActividadRL = Date.now();
+    var _avisoSesionActivo = false;
+    var _ultimoAvisoSesionTs = 0;
+
+    ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(function (ev) {
+      document.addEventListener(ev, function () { _ultimaActividadRL = Date.now(); }, { passive: true });
+    });
+
+    function _cerrarSesionRL() {
+      try {
+        if (typeof window.logout === 'function') { window.logout(); return; }
+      } catch (e) {}
+      try { sessionStorage.clear(); } catch (e) {}
+      try { location.href = '../../index.html'; } catch (e) {}
+    }
+
+    function _nombrePilaRL() {
+      var n = ((USER.nombre || USER.usuario) || '').toString().trim();
+      if (!n) return 'usuario';
+      return n.split(' ')[0];
+    }
+
+    function mostrarAvisoSesion() {
+      try {
+        if (_avisoSesionActivo) return;
+        _avisoSesionActivo = true;
+        _ultimoAvisoSesionTs = Date.now();
+        var wrap = document.getElementById('_rlMsgWrap');
+        if (!wrap) {
+          wrap = document.createElement('div');
+          wrap.id = '_rlMsgWrap';
+          wrap.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;' +
+            'display:flex;flex-direction:column;gap:10px;max-width:340px;font-family:inherit;';
+          document.body.appendChild(wrap);
+        }
+        var card = document.createElement('div');
+        card.id = '_rlAvisoSesion';
+        card.style.cssText = 'background:#0f172a;color:#f1f5f9;border-left:4px solid #f59e0b;' +
+          'border-radius:12px;padding:14px 16px;box-shadow:0 12px 34px rgba(0,0,0,.35);' +
+          'animation:_rlIn .35s ease;font-size:13.5px;line-height:1.5;';
+        var texto = 'Estimado(a) ' + _esc(_nombrePilaRL()) + ':\n\n' +
+          'Se ha detectado que su sesión en el Sistema de Relaciones Laborales continúa abierta. ' +
+          'Si ha finalizado sus actividades, le solicitamos cerrar su sesión para mantener la seguridad ' +
+          'de la información y asegurar el correcto funcionamiento del sistema.\n\n' +
+          'Gracias por su colaboración.';
+        card.innerHTML =
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:700;color:#fbbf24;">' +
+          '<span style="font-size:16px;">⏰</span><span>Sesión abierta</span></div>' +
+          '<div style="margin-bottom:10px;white-space:pre-wrap;">' + texto + '</div>' +
+          '<div style="display:flex;gap:8px;">' +
+          '<button type="button" data-acc="cerrar" style="background:#f59e0b;color:#1c1917;border:none;' +
+          'border-radius:8px;padding:6px 14px;font-weight:700;font-size:12.5px;cursor:pointer;">🚪 Cerrar sesión</button>' +
+          '<button type="button" data-acc="seguir" style="background:#334155;color:#f1f5f9;border:none;' +
+          'border-radius:8px;padding:6px 14px;font-weight:700;font-size:12.5px;cursor:pointer;">Sigo trabajando</button>' +
+          '</div>';
+        var _quitarAvisoSesion = function () {
+          card.style.transition = 'opacity .3s'; card.style.opacity = '0';
+          setTimeout(function () {
+            if (card.parentNode) card.parentNode.removeChild(card);
+            _avisoSesionActivo = false;
+          }, 300);
+        };
+        card.querySelector('[data-acc="cerrar"]').addEventListener('click', _cerrarSesionRL);
+        card.querySelector('[data-acc="seguir"]').addEventListener('click', function () {
+          _ultimaActividadRL = Date.now();
+          _quitarAvisoSesion();
+        });
+        wrap.appendChild(card);
+
+        if (!document.getElementById('_rlMsgKeyframes')) {
+          var st = document.createElement('style');
+          st.id = '_rlMsgKeyframes';
+          st.textContent = '@keyframes _rlIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}';
+          document.head.appendChild(st);
+        }
+      } catch (e) { _avisoSesionActivo = false; }
+    }
+
+    setInterval(function () {
+      try {
+        if (_avisoSesionActivo) return;
+        var yaToca = (Date.now() - _ultimoAvisoSesionTs) >= RECORDATORIO_CADA_MS;
+        if (!yaToca) return;
+        var inactivoMs = Date.now() - _ultimaActividadRL;
+        var finJornada = new Date().getHours() >= JORNADA_FIN_HORA;
+        if (inactivoMs >= IDLE_LIMITE_MS || finJornada) {
+          mostrarAvisoSesion();
+        }
+      } catch (e) {}
+    }, 60000);
+  } catch (e) {}
+
   function mostrarMensajeAdmin(id, msg) {
     try {
       var wrap = document.getElementById('_rlMsgWrap');
