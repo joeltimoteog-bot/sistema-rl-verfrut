@@ -134,7 +134,7 @@
       var b = document.createElement('button');
       b.id = '_rlChatBtn'; b.type = 'button'; b.title = 'Escribir a Coordinación RR.LL.';
       b.textContent = '💬';
-      b.style.cssText = 'position:fixed;bottom:20px;left:20px;z-index:2147483000;width:46px;height:46px;' +
+      b.style.cssText = 'position:fixed;bottom:94px;right:24px;z-index:2147483000;width:46px;height:46px;' +
         'border-radius:50%;border:none;background:#0ea5e9;color:#fff;font-size:20px;cursor:pointer;' +
         'box-shadow:0 6px 18px rgba(0,0,0,.3);';
       b.addEventListener('click', togglePanelChat);
@@ -147,7 +147,7 @@
       var p = document.getElementById('_rlChatPanel');
       if (p) { p.parentNode.removeChild(p); return; }
       p = document.createElement('div'); p.id = '_rlChatPanel';
-      p.style.cssText = 'position:fixed;bottom:74px;left:20px;z-index:2147483001;width:280px;background:#0f172a;' +
+      p.style.cssText = 'position:fixed;bottom:150px;right:24px;z-index:2147483001;width:280px;background:#0f172a;' +
         'color:#f1f5f9;border-radius:14px;padding:14px;box-shadow:0 14px 40px rgba(0,0,0,.45);font-size:13px;' +
         'font-family:inherit;';
       p.innerHTML =
