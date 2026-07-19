@@ -7854,6 +7854,15 @@ function _fbIniciarEscuchaEstadisticasConRetry(intentos) {
 // ─── SSO al Portal Bienestar Social ──────────────────────────────
 function _irBienestar() {
   try {
+    // Si el login RL ya obtuvo una sesión de Bienestar CON token, usarla tal cual
+    try {
+      var _bsSes = JSON.parse(localStorage.getItem('bienestarSocialAuth') || 'null');
+      if (_bsSes && _bsSes.token && String(_bsSes.usuario).toLowerCase() === String(USER.usuario).toLowerCase()) {
+        window.location.href = 'https://joeltimoteog-bot.github.io/bienestar-social-verfrut/portal.html';
+        return;
+      }
+    } catch(_eTok) {}
+    // Fallback (sin token): sesión local — el usuario verá el login de Bienestar una vez
     const userBienestar = {
       usuario: USER.usuario,
       nombre: USER.nombre || USER.usuario,

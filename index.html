@@ -555,6 +555,24 @@ async function doLogin(){
       sessionStorage.setItem('user',JSON.stringify(d.user));
       sessionStorage.setItem('api',API);
       if (d.token) sessionStorage.setItem('rl_token', d.token);
+      // ── SSO Bienestar Social: obtener token con las mismas credenciales (no bloquea el login RL) ──
+      try {
+        fetch('https://script.google.com/macros/s/AKfycbyJIUtdpApEc35Jj4ZNP-3ONqGe64J1VhaRvkt87vVUNTgSagrOgOS0T99eIt0-w3Yi/exec', {
+          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'bs_login', usuario: u, password: p })
+        }).then(function(rb){ return rb.json(); }).then(function(db){
+          if (db && db.ok && db.user) {
+            localStorage.setItem('bienestarSocialAuth', JSON.stringify({
+              usuario: db.user.usuario, nombre: db.user.nombre, rol: db.user.rol,
+              permisos: db.user.permisos, token: db.user.token,
+              loginAt: new Date().toISOString(), source: 'sistema-rl-verfrut'
+            }));
+            console.log('[login] SSO Bienestar: token obtenido');
+          } else {
+            console.log('[login] SSO Bienestar: sin cuenta en Bienestar (ok)');
+          }
+        }).catch(function(eb){ console.warn('[login] SSO Bienestar fallo:', eb); });
+      } catch(eSso) {}
       const rol=(d.user.rol||'').toLowerCase().trim();
       // Precalentar caché del backend (fire & forget) — medir respuesta
       const _tPre=performance.now();
