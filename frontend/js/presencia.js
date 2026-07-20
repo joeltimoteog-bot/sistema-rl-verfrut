@@ -387,7 +387,7 @@
     var pill = document.createElement('button');
     pill.id = '_rlPendPill'; pill.type = 'button';
     pill.innerHTML = '⏰ ' + total + ' pendiente(s)';
-    pill.style.cssText = 'position:fixed;bottom:20px;left:20px;z-index:2147482000;background:#f59e0b;color:#451a03;' +
+    pill.style.cssText = 'position:fixed;bottom:130px;left:20px;z-index:2147482000;background:#f59e0b;color:#451a03;' +
       'border:none;border-radius:999px;padding:9px 16px;font-weight:800;font-size:12.5px;cursor:pointer;' +
       'box-shadow:0 8px 24px rgba(0,0,0,.45);animation:_rlPulso 1.6s infinite;font-family:inherit;';
     pill.title = 'Ver mis pendientes';
@@ -424,8 +424,8 @@
     }
     var card = document.createElement('div');
     card.id = '_rlPendCard';
-    card.style.cssText = 'position:fixed;bottom:20px;left:20px;z-index:2147482000;width:340px;max-width:calc(100vw - 40px);' +
-      'max-height:calc(100vh - 60px);overflow-y:auto;background:#0f172a;color:#f1f5f9;border-left:4px solid #f59e0b;' +
+    card.style.cssText = 'position:fixed;bottom:130px;left:20px;z-index:2147482000;width:340px;max-width:calc(100vw - 40px);' +
+      'max-height:calc(100vh - 190px);overflow-y:auto;background:#0f172a;color:#f1f5f9;border-left:4px solid #f59e0b;' +
       'border-radius:14px;padding:14px 16px;box-shadow:0 14px 40px rgba(0,0,0,.5);font-size:13px;line-height:1.5;font-family:inherit;';
     card.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">' +
