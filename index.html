@@ -370,12 +370,16 @@ function togglePass(){const p=document.getElementById('password');p.type=p.type=
 function aplicarVisibilidadModulos(user){
   const rol = String((user && user.rol) || '').toLowerCase().trim();
   const sector = String((user && user.sector) || '').toUpperCase().trim();
+  const usu = String((user && user.usuario) || '').toLowerCase().trim();
   const esAdmin = rol === 'administrador';
-  const esBienestar = sector === 'BIENESTAR SOCIAL';
-  // Sistema ETI Capacitaciones: visible para todos los roles
+  // Usuarios de Bienestar Social: SOLO ven el Sistema RR.LL
+  // (por sector, o por la lista explícita de usuarios de Bienestar)
+  const USUARIOS_BIENESTAR = ['lmorales','rfigueroa','mmechato','nestrada','tvera','cbecerra','dsanchez'];
+  const esBienestar = sector === 'BIENESTAR SOCIAL' || USUARIOS_BIENESTAR.includes(usu);
+  // Sistema ETI Capacitaciones: visible para todos, excepto Bienestar Social (no admin)
   const eti = document.getElementById('modETI');
-  if (eti) eti.style.display = '';
-  // Sistema de Evaluaciones: oculto para usuarios de sector BIENESTAR SOCIAL (no admin)
+  if (eti) eti.style.display = (esBienestar && !esAdmin) ? 'none' : '';
+  // Sistema de Evaluaciones: oculto para Bienestar Social (no admin)
   const evalCard = document.getElementById('modEval');
   if (evalCard) evalCard.style.display = (esBienestar && !esAdmin) ? 'none' : '';
 }
