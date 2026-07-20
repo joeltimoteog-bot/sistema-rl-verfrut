@@ -178,8 +178,75 @@
   }
 
   // El admin no necesita escribirse a sí mismo
-  if (String(USER.usuario).toLowerCase() !== 'jtimoteo') {
+  var ES_ADMIN = ['jtimoteo'].indexOf(String(USER.usuario).toLowerCase()) !== -1;
+  if (!ES_ADMIN) {
     crearBotonChat();
+  }
+
+  // ── 4b) ADMIN: aviso cuando un usuario se conecta (RR.LL o Evaluaciones ETI) ──
+  // Vigila /presencia (donde escriben TODOS los sistemas, incluido el Sistema de
+  // Evaluaciones ETI) y muestra una tarjeta cuando alguien pasa a estar en línea.
+  var _presVistos = null;   // null = primera carga (línea base, sin avisos)
+
+  function _wrapAvisos() {
+    var wrap = document.getElementById('_rlMsgWrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.id = '_rlMsgWrap';
+      wrap.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;' +
+        'display:flex;flex-direction:column;gap:10px;max-width:340px;font-family:inherit;';
+      document.body.appendChild(wrap);
+    }
+    if (!document.getElementById('_rlMsgKeyframes')) {
+      var st = document.createElement('style');
+      st.id = '_rlMsgKeyframes';
+      st.textContent = '@keyframes _rlIn{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:translateX(0)}}';
+      document.head.appendChild(st);
+    }
+    return wrap;
+  }
+
+  function _tarjetaIngreso(nombre, sistemaTxt) {
+    try {
+      var wrap = _wrapAvisos();
+      var card = document.createElement('div');
+      card.style.cssText = 'background:#0f172a;color:#f1f5f9;border-left:4px solid #22c55e;' +
+        'border-radius:12px;padding:12px 14px;box-shadow:0 12px 34px rgba(0,0,0,.35);' +
+        'animation:_rlIn .35s ease;font-size:13px;line-height:1.5;';
+      card.innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#4ade80;margin-bottom:4px;">' +
+        '<span>🟢</span><span>Usuario conectado</span></div>' +
+        '<div>' + _esc(nombre) + ' está en ' + _esc(sistemaTxt) + '.</div>';
+      wrap.appendChild(card);
+      setTimeout(function () {
+        card.style.transition = 'opacity .4s'; card.style.opacity = '0';
+        setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 400);
+      }, 12000);
+    } catch (e) {}
+  }
+
+  function procesarPresenciaAdmin(val) {
+    try {
+      if (!val) return;
+      var activos = {};
+      Object.keys(val).forEach(function (k) {
+        var p = val[k] || {};
+        if (String(p.usuario || '').toLowerCase() === String(USER.usuario).toLowerCase()) return;
+        var fresco = p.online && (Date.now() - Number(p.ultimo_ping || 0)) < 130000;
+        if (fresco) activos[k] = p;
+      });
+      if (_presVistos === null) { _presVistos = activos; return; }   // primera carga: solo línea base
+      Object.keys(activos).forEach(function (k) {
+        if (!_presVistos[k]) {
+          var p = activos[k];
+          var sis = p.modulo === 'Evaluaciones ETI'
+            ? 'el Sistema de Evaluaciones (ETI)'
+            : 'el Sistema RR.LL' + (p.modulo ? ' — ' + p.modulo : '');
+          _tarjetaIngreso(p.nombre || p.usuario || k, sis);
+        }
+      });
+      _presVistos = activos;
+    } catch (e) {}
   }
 
   // ── Historial de conexiones: 1 registro por sesión de navegador ─────────
@@ -424,6 +491,19 @@
     pollMensajes();
     restTimers.push(setInterval(pollMensajes, 15000));
 
+    // Admin: vigilar presencia por REST (avisos de ingreso ETI / RR.LL)
+    if (ES_ADMIN) {
+      var pollPres = function () {
+        try {
+          fetch(DB_URL + '/presencia.json?nc=' + Date.now())
+            .then(function (r) { return r.json(); })
+            .then(procesarPresenciaAdmin).catch(function () {});
+        } catch (e) {}
+      };
+      pollPres();
+      restTimers.push(setInterval(pollPres, 20000));
+    }
+
     window.addEventListener('beforeunload', function () {
       try {
         fetch(DB_URL + '/presencia/' + UKEY + '.json', {
@@ -559,5 +639,16 @@
         console.warn('[Presencia] No se pudieron leer mensajes por SDK.', err);
       });
     } catch (e) {}
+
+    // Admin: vigilar presencia en tiempo real (avisos de ingreso ETI / RR.LL)
+    if (ES_ADMIN) {
+      try {
+        onValue(ref(db, 'presencia'), function (snap) {
+          procesarPresenciaAdmin(snap.val());
+        }, function (err) {
+          console.warn('[Presencia] No se pudo vigilar presencia (admin).', err);
+        });
+      } catch (e) {}
+    }
   })();
 })();
