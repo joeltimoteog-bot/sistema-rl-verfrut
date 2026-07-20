@@ -351,6 +351,34 @@
       });
   }
 
+  // Evaluaciones de Ética Social programadas pendientes para este usuario
+  function _pCargarEvaluaciones() {
+    return _fsGet('programaciones_eval').catch(function () { return []; }).then(function (progs) {
+      var hoy = _pHoyISO(), lista = [];
+      var miNombre = USER.nombre || USER.usuario;
+      progs.forEach(function (p) {
+        if (p.estado === 'ejecutada') return;
+        if (!_pCoincide(p.sup || '', miNombre)) return;
+        var ejec = p.fechasEjecutadas || [];
+        var pend = (p.fechas || []).filter(function (f) { return ejec.indexOf(f) < 0; }).sort();
+        if (!pend.length) return;
+        var venc = pend.filter(function (f) { return f < hoy; });
+        var prox = pend.filter(function (f) { return f >= hoy; });
+        if (!venc.length) {
+          if (!prox.length) return;
+          var d = Math.round((new Date(prox[0]) - new Date(hoy)) / 86400000);
+          if (d > 7) return;
+          lista.push({ fechasTxt: pend.map(_pFmt).join(' · '), vencida: false,
+                       estado: d === 0 ? 'programada para HOY' : 'próxima — en ' + d + ' día(s)' });
+        } else {
+          lista.push({ fechasTxt: pend.map(_pFmt).join(' · '), vencida: true,
+                       estado: 'VENCIDA — la fecha programada ya pasó y aún no registras' });
+        }
+      });
+      return lista;
+    });
+  }
+
   // Pendientes RR.LL (visitas y casos) para este usuario
   function _pCargarRRLL() {
     return fetch(PEND_GAS + '?' + new URLSearchParams({ action: 'getCumplimiento', usuario: USER.usuario || '' }))
@@ -403,7 +431,7 @@
     _pendReabrirT = setTimeout(function () { _pendMin = false; _pActualizar(); }, PEND_REABRIR_MS);
   }
 
-  function _pRenderCard(caps, rrll) {
+  function _pRenderCard(caps, evals, rrll) {
     _pQuitarUI();
     var items = '';
     caps.forEach(function (c) {
@@ -411,7 +439,13 @@
         '🎓 <b>Capacitación de Ética Social programada:</b> ' + _esc(c.tema) +
         (c.sector ? ' · ' + _esc(c.sector) : '') +
         '<br>Fechas designadas: <b>' + _esc(c.fechasTxt) + '</b> — <b style="color:' + (c.vencida ? '#f87171' : '#7dd3fc') + '">' + _esc(c.estado) + '</b>' +
-        '<br><span style="opacity:.85">Recuerda realizarla en las fechas programadas, según el correo enviado por el coordinador Joel Timoteo.</span></div>';
+        '<br><span style="opacity:.85">' + (c.vencida ? 'Aún no la registras en el módulo de Capacitaciones ETI y la fecha programada ya venció. ' : '') +
+        'Recuerda realizarla y registrarla según el correo enviado por el coordinador Joel Timoteo.</span></div>';
+    });
+    evals.forEach(function (ev) {
+      items += '<div style="background:rgba(250,204,21,.08);border:1px solid rgba(250,204,21,.35);border-radius:10px;padding:9px 11px;margin-top:8px;">' +
+        '⭐ <b>Evaluación de Ética Social programada:</b> fechas <b>' + _esc(ev.fechasTxt) + '</b> — <b style="color:' + (ev.vencida ? '#f87171' : '#fde047') + '">' + _esc(ev.estado) + '</b>' +
+        '<br><span style="opacity:.85">' + (ev.vencida ? 'Todavía no registras tus evaluaciones en el Sistema de Evaluaciones ETI. Por favor regístralas o coordina tu reprogramación.' : 'Recuerda registrar tus evaluaciones en el Sistema de Evaluaciones ETI en las fechas programadas.') + '</span></div>';
     });
     rrll.visitas.forEach(function (est) {
       items += '<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:9px 11px;margin-top:8px;">' +
@@ -439,16 +473,18 @@
     document.body.appendChild(card);
     card.querySelector('#_rlPendMin').addEventListener('click', function () {
       _pendMin = true;
-      _pRenderPill(caps.length + rrll.visitas.length + (rrll.casos ? 1 : 0));
+      _pRenderPill(caps.length + evals.length + rrll.visitas.length + (rrll.casos ? 1 : 0));
     });
   }
 
   var _pTeniaPend = false;
   function _pActualizar() {
-    Promise.all([_pCargarCapacitaciones().catch(function () { return []; }), _pCargarRRLL()])
+    Promise.all([_pCargarCapacitaciones().catch(function () { return []; }),
+                 _pCargarEvaluaciones().catch(function () { return []; }),
+                 _pCargarRRLL()])
       .then(function (res) {
-        var caps = res[0] || [], rrll = res[1] || { visitas: [], casos: 0 };
-        var total = caps.length + rrll.visitas.length + (rrll.casos ? 1 : 0);
+        var caps = res[0] || [], evals = res[1] || [], rrll = res[2] || { visitas: [], casos: 0 };
+        var total = caps.length + evals.length + rrll.visitas.length + (rrll.casos ? 1 : 0);
         if (!total) {
           _pQuitarUI();
           if (_pTeniaPend) {
@@ -469,7 +505,7 @@
         }
         _pTeniaPend = true;
         if (_pendMin) _pRenderPill(total);
-        else _pRenderCard(caps, rrll);
+        else _pRenderCard(caps, evals, rrll);
       }).catch(function () {});
   }
 
