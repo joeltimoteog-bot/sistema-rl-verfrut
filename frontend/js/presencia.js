@@ -251,6 +251,236 @@
     } catch (e) {}
   }
 
+  // ── 4c) ALERTA FLOTANTE DE PENDIENTES — seguimiento de gestión ──────────
+  // Junta dos fuentes: capacitaciones de Ética Social programadas (Firestore
+  // del Sistema ETI · Capacitaciones) y pendientes RR.LL (informes de visitas
+  // y casos sin informe/reporte, vía GAS getCumplimiento — la misma fuente del
+  // Monitor). Muestra una tarjeta flotante que NO se puede cerrar: solo
+  // minimizar. Desaparece únicamente cuando el usuario ya no tiene pendientes.
+  var PEND_GAS = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+  var PEND_FS = 'https://firestore.googleapis.com/v1/projects/sistema-eti-verfrut/databases/(default)/documents/';
+  var PEND_FS_KEY = 'AIzaSyAv-1VcbT8VCerClNAeVtVXzOxhSffeDpc';
+  var PEND_REFRESCO_MS = 10 * 60 * 1000;    // re-verificar cada 10 min
+  var PEND_REABRIR_MS = 30 * 60 * 1000;     // si la minimizan, reabrir a los 30 min
+
+  function _pNorm(s) { return String(s || '').toUpperCase().replace(/\s+/g, ' ').trim(); }
+  function _pCoincide(a, b) {
+    a = _pNorm(a); b = _pNorm(b);
+    if (!a || !b) return false;
+    if (a === b) return true;
+    var A = a.split(' ').filter(function (w) { return w.length > 2; });
+    var Bw = b.split(' ').filter(function (w) { return w.length > 2; });
+    // Palabra en común = igual, o una es prefijo de la otra (ALEX ~ ALEXANDER, VENEGA ~ VENEGAS)
+    var igual = function (x, y) {
+      if (x === y) return true;
+      if (x.length >= 4 && y.length >= 4) return x.indexOf(y) === 0 || y.indexOf(x) === 0;
+      return false;
+    };
+    var c = A.filter(function (w) { return Bw.some(function (v) { return igual(w, v); }); }).length;
+    return c >= 3 || (c >= 2 && (A.length <= 2 || Bw.length <= 2));
+  }
+  function _fsVal(v) {
+    if (!v) return null;
+    if (v.stringValue !== undefined) return v.stringValue;
+    if (v.integerValue !== undefined) return Number(v.integerValue);
+    if (v.doubleValue !== undefined) return v.doubleValue;
+    if (v.booleanValue !== undefined) return v.booleanValue;
+    if (v.arrayValue) return (v.arrayValue.values || []).map(_fsVal);
+    if (v.mapValue) {
+      var o = {}, f = v.mapValue.fields || {};
+      Object.keys(f).forEach(function (k) { o[k] = _fsVal(f[k]); });
+      return o;
+    }
+    return null;
+  }
+  function _fsDocs(json) {
+    return (json && json.documents || []).map(function (d) {
+      var o = {}, f = d.fields || {};
+      Object.keys(f).forEach(function (k) { o[k] = _fsVal(f[k]); });
+      return o;
+    });
+  }
+  function _fsGet(col) {
+    return fetch(PEND_FS + col + '?pageSize=300&key=' + PEND_FS_KEY)
+      .then(function (r) { return r.json(); }).then(_fsDocs);
+  }
+  function _pHoyISO() {
+    var d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function _pFmt(iso) {
+    try {
+      var d = new Date(iso + 'T12:00:00');
+      return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
+    } catch (e) { return iso || ''; }
+  }
+
+  // Capacitaciones ETI programadas pendientes para este usuario
+  function _pCargarCapacitaciones() {
+    return Promise.all([_fsGet('usuarios_eti').catch(function () { return []; }),
+                        _fsGet('programaciones_eti').catch(function () { return []; })])
+      .then(function (res) {
+        var cuentas = res[0], progs = res[1];
+        var miNombre = USER.nombre || USER.usuario;
+        var cta = cuentas.find(function (c) { return String(c.usuario || '').toLowerCase() === String(USER.usuario).toLowerCase(); });
+        var nombreSup = (cta && cta.supervisorNombre) || miNombre;
+        var hoy = _pHoyISO();
+        var lista = [];
+        progs.forEach(function (p) {
+          if (p.estado === 'ejecutada') return;
+          if (!_pCoincide(p.supervisor || '', nombreSup) && !_pCoincide(p.supervisor || '', miNombre)) return;
+          var fechas = (p.fechas && p.fechas.length ? p.fechas.slice().sort() : [p.fechaProgramada, p.fechaFin || p.fechaProgramada].filter(Boolean).sort());
+          if (!fechas.length) return;
+          var ini = fechas[0], fin = fechas[fechas.length - 1];
+          var estado, dias;
+          if (hoy > fin) {
+            dias = Math.round((new Date(hoy) - new Date(fin)) / 86400000);
+            estado = 'VENCIDA — ' + dias + ' día(s) de atraso';
+          } else if (hoy >= ini) {
+            estado = (ini === fin) ? 'programada para HOY' : 'EN CURSO';
+          } else {
+            dias = Math.round((new Date(ini) - new Date(hoy)) / 86400000);
+            if (dias > 7) return;   // avisar desde 7 días antes
+            estado = 'próxima — en ' + dias + ' día(s)';
+          }
+          lista.push({ tema: p.tema || 'Capacitación ETI', sector: p.sector || '',
+                       fechasTxt: ini === fin ? _pFmt(ini) : _pFmt(ini) + ' al ' + _pFmt(fin),
+                       estado: estado, vencida: hoy > fin });
+        });
+        return lista;
+      });
+  }
+
+  // Pendientes RR.LL (visitas y casos) para este usuario
+  function _pCargarRRLL() {
+    return fetch(PEND_GAS + '?' + new URLSearchParams({ action: 'getCumplimiento', usuario: USER.usuario || '' }))
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (!res || !res.success) return { visitas: [], casos: 0 };
+        var miNombre = USER.nombre || USER.usuario;
+        var visitas = (res.pendientesVisitas || [])
+          .filter(function (p) { return _pCoincide(p.nombre, miNombre); })
+          .map(function (p) { return p.estado || 'vencido'; });
+        var casos = (res.casosPendientes || [])
+          .filter(function (p) { return _pCoincide(p.nombre_mostrar, miNombre); }).length;
+        return { visitas: visitas, casos: casos };
+      })
+      .catch(function () { return { visitas: [], casos: 0 }; });
+  }
+
+  var _pendMin = false, _pendReabrirT = null;
+
+  function _pNombrePila() {
+    var n = ((USER.nombre || USER.usuario) || '').toString().trim().split(' ')[0] || 'colega';
+    return n.charAt(0).toUpperCase() + n.slice(1).toLowerCase();
+  }
+
+  function _pQuitarUI() {
+    ['_rlPendCard', '_rlPendPill'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
+  }
+
+  function _pRenderPill(total) {
+    _pQuitarUI();
+    var pill = document.createElement('button');
+    pill.id = '_rlPendPill'; pill.type = 'button';
+    pill.innerHTML = '⏰ ' + total + ' pendiente(s)';
+    pill.style.cssText = 'position:fixed;bottom:20px;left:20px;z-index:2147482000;background:#f59e0b;color:#451a03;' +
+      'border:none;border-radius:999px;padding:9px 16px;font-weight:800;font-size:12.5px;cursor:pointer;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,.45);animation:_rlPulso 1.6s infinite;font-family:inherit;';
+    pill.title = 'Ver mis pendientes';
+    pill.addEventListener('click', function () { _pendMin = false; _pActualizar(); });
+    document.body.appendChild(pill);
+    if (!document.getElementById('_rlPendKf')) {
+      var st = document.createElement('style');
+      st.id = '_rlPendKf';
+      st.textContent = '@keyframes _rlPulso{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}';
+      document.head.appendChild(st);
+    }
+    clearTimeout(_pendReabrirT);
+    _pendReabrirT = setTimeout(function () { _pendMin = false; _pActualizar(); }, PEND_REABRIR_MS);
+  }
+
+  function _pRenderCard(caps, rrll) {
+    _pQuitarUI();
+    var items = '';
+    caps.forEach(function (c) {
+      items += '<div style="background:rgba(56,189,248,.08);border:1px solid rgba(56,189,248,.3);border-radius:10px;padding:9px 11px;margin-top:8px;">' +
+        '🎓 <b>Capacitación de Ética Social programada:</b> ' + _esc(c.tema) +
+        (c.sector ? ' · ' + _esc(c.sector) : '') +
+        '<br>Fechas designadas: <b>' + _esc(c.fechasTxt) + '</b> — <b style="color:' + (c.vencida ? '#f87171' : '#7dd3fc') + '">' + _esc(c.estado) + '</b>' +
+        '<br><span style="opacity:.85">Recuerda realizarla en las fechas programadas, según el correo enviado por el coordinador Joel Timoteo.</span></div>';
+    });
+    rrll.visitas.forEach(function (est) {
+      items += '<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:9px 11px;margin-top:8px;">' +
+        '📋 <b>Informe de visitas ' + (est === 'plazo_hoy' ? '(el plazo vence HOY)' : '(VENCIDO)') + ':</b> ' +
+        (est === 'plazo_hoy' ? 'recuerda que hoy vence el plazo para subir tu informe de visitas.' : 'tienes vencido el informe de visitas de la semana pasada. Por favor regularízalo hoy.') + '</div>';
+    });
+    if (rrll.casos) {
+      items += '<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:9px 11px;margin-top:8px;">' +
+        '📁 <b>' + rrll.casos + ' caso(s) por vencer:</b> registrados sin informe ni reporte subido en Registro de Casos. Por favor regularízalos antes de que venzan.</div>';
+    }
+    var card = document.createElement('div');
+    card.id = '_rlPendCard';
+    card.style.cssText = 'position:fixed;bottom:20px;left:20px;z-index:2147482000;width:340px;max-width:calc(100vw - 40px);' +
+      'max-height:calc(100vh - 60px);overflow-y:auto;background:#0f172a;color:#f1f5f9;border-left:4px solid #f59e0b;' +
+      'border-radius:14px;padding:14px 16px;box-shadow:0 14px 40px rgba(0,0,0,.5);font-size:13px;line-height:1.5;font-family:inherit;';
+    card.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">' +
+      '<div style="font-weight:800;color:#fbbf24;">⏰ Seguimiento de tu gestión</div>' +
+      '<button type="button" id="_rlPendMin" title="Minimizar (la alerta seguirá activa)" style="background:#334155;color:#f1f5f9;border:none;border-radius:8px;padding:3px 10px;font-weight:800;cursor:pointer;">—</button></div>' +
+      '<div>Hola, <b>' + _esc(_pNombrePila()) + '</b> 👋 — tienes pendientes que requieren tu atención:</div>' +
+      items +
+      '<div style="margin-top:10px;font-size:12px;opacity:.85;border-top:1px solid #334155;padding-top:8px;">' +
+      'Esta alerta es parte del <b>seguimiento de tu gestión</b> y se cerrará automáticamente cuando registres tus pendientes. ' +
+      'Si no podrás cumplir en las fechas programadas, comunícate con el coordinador <b>Joel Timoteo</b> para reprogramar y ponerte al día en los tiempos prudentes dispuestos por tu jefatura.</div>';
+    document.body.appendChild(card);
+    card.querySelector('#_rlPendMin').addEventListener('click', function () {
+      _pendMin = true;
+      _pRenderPill(caps.length + rrll.visitas.length + (rrll.casos ? 1 : 0));
+    });
+  }
+
+  var _pTeniaPend = false;
+  function _pActualizar() {
+    Promise.all([_pCargarCapacitaciones().catch(function () { return []; }), _pCargarRRLL()])
+      .then(function (res) {
+        var caps = res[0] || [], rrll = res[1] || { visitas: [], casos: 0 };
+        var total = caps.length + rrll.visitas.length + (rrll.casos ? 1 : 0);
+        if (!total) {
+          _pQuitarUI();
+          if (_pTeniaPend) {
+            _pTeniaPend = false;
+            try {
+              var wrap = _wrapAvisos();
+              var okCard = document.createElement('div');
+              okCard.style.cssText = 'background:#0f172a;color:#f1f5f9;border-left:4px solid #22c55e;' +
+                'border-radius:12px;padding:12px 14px;box-shadow:0 12px 34px rgba(0,0,0,.35);' +
+                'animation:_rlIn .35s ease;font-size:13px;line-height:1.5;';
+              okCard.innerHTML = '<b style="color:#4ade80">✅ ¡Ya estás al día, ' + _esc(_pNombrePila()) + '!</b><br>' +
+                'Gracias por cumplir con lo programado. Seguimos con el seguimiento de tu gestión.';
+              wrap.appendChild(okCard);
+              setTimeout(function () { if (okCard.parentNode) okCard.parentNode.removeChild(okCard); }, 10000);
+            } catch (e) {}
+          }
+          return;
+        }
+        _pTeniaPend = true;
+        if (_pendMin) _pRenderPill(total);
+        else _pRenderCard(caps, rrll);
+      }).catch(function () {});
+  }
+
+  function iniciarAlertaPendientes() {
+    try {
+      _pActualizar();
+      setInterval(_pActualizar, PEND_REFRESCO_MS);
+    } catch (e) {}
+  }
+  if (!ES_ADMIN) iniciarAlertaPendientes();
+
   // ── Historial de conexiones: 1 registro por sesión de navegador ─────────
   try {
     if (!sessionStorage.getItem('_rl_hist_ok')) {
