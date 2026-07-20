@@ -364,15 +364,17 @@ const ROLES_SIN_HORARIO = ['administrador','administrador 01','administrador 02'
 function togglePass(){const p=document.getElementById('password');p.type=p.type==='password'?'text':'password';document.getElementById('eyeBtn').textContent=p.type==='password'?'👁️':'🙈';}
 
 // ── Visibilidad de tarjetas en pantallaModulo según rol ──────────
-// Solo administrador ve la tarjeta de Sistema ETI; el resto la oculta.
+// Sistema ETI (Capacitaciones): visible para todos — los supervisores registran
+// ahí sus capacitaciones programadas; dentro del sistema cada rol ve solo lo suyo
+// (supervisor → solo su formulario "Mi Panel"; administrador → todo).
 function aplicarVisibilidadModulos(user){
   const rol = String((user && user.rol) || '').toLowerCase().trim();
   const sector = String((user && user.sector) || '').toUpperCase().trim();
   const esAdmin = rol === 'administrador';
   const esBienestar = sector === 'BIENESTAR SOCIAL';
-  // Sistema ETI Capacitaciones: solo administrador
+  // Sistema ETI Capacitaciones: visible para todos los roles
   const eti = document.getElementById('modETI');
-  if (eti) eti.style.display = esAdmin ? '' : 'none';
+  if (eti) eti.style.display = '';
   // Sistema de Evaluaciones: oculto para usuarios de sector BIENESTAR SOCIAL (no admin)
   const evalCard = document.getElementById('modEval');
   if (evalCard) evalCard.style.display = (esBienestar && !esAdmin) ? 'none' : '';
