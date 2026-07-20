@@ -241,7 +241,9 @@
           var p = activos[k];
           var sis = p.modulo === 'Evaluaciones ETI'
             ? 'el Sistema de Evaluaciones (ETI)'
-            : 'el Sistema RR.LL' + (p.modulo ? ' — ' + p.modulo : '');
+            : p.modulo === 'Sistema ETI · Capacitaciones'
+              ? 'el Sistema ETI (Capacitaciones)'
+              : 'el Sistema RR.LL' + (p.modulo ? ' — ' + p.modulo : '');
           _tarjetaIngreso(p.nombre || p.usuario || k, sis);
         }
       });
