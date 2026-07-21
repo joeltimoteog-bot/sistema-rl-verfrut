@@ -5315,10 +5315,37 @@ function renderAt(lista) {
           <button class="btn-a bv" onclick="verDet('${a.nro}','at')">Ver</button>
           ${puedeMod?`<button class="btn-a be" onclick="editarAt('${a.nro}')">✏️</button>`:''}
           ${puedeMod?`<button class="btn-a bd" onclick="eliminarAt('${a.nro}')">🗑️</button>`:''}
+          ${(String(a.estado||'').toUpperCase()==='EN PROCESO'&&a.celular)?`<button class="btn-a" style="background:#25D366;color:#fff;" title="Recordar al trabajador por WhatsApp que tiene documentos por regularizar" onclick="waRegularizar('${a.nro}')">📱</button>`:''}
         </td>
       </tr>`;
     }).join('');
   }, 0);
+}
+
+// ── WhatsApp al TRABAJADOR con documentos por regularizar (atención EN PROCESO) ──
+function waNumPeru(cel){
+  var d = String(cel||'').replace(/\D/g,'');
+  if (d.length === 9 && d.charAt(0) === '9') return '51' + d;
+  if (d.length === 11 && d.indexOf('51') === 0 && d.charAt(2) === '9') return d;
+  return null;
+}
+function waRegularizar(nro){
+  try{
+    var fuentes = [].concat(window._atFiltradas||[], atTodas||[], (CACHE&&CACHE.atenciones)||[]);
+    var a = fuentes.find(function(x){ return x && String(x.nro) === String(nro); });
+    if(!a){ alert('No se encontró la atención N.° ' + nro + '.'); return; }
+    var num = waNumPeru(a.celular);
+    if(!num){ alert('El celular registrado no es válido para WhatsApp: "' + (a.celular||'(vacío)') + '".\nCorrige el número en la atención y vuelve a intentar.'); return; }
+    var nom = String(a.nombre||'').trim().split(/\s+/)[0] || '';
+    nom = nom ? (nom.charAt(0).toUpperCase() + nom.slice(1).toLowerCase()) : 'trabajador(a)';
+    var doc = a.detalle_documento ? (' (' + a.detalle_documento + ')') : '';
+    var msg = 'Estimado(a) ' + nom + ', le saluda ' + (USER.nombre||'el área de Relaciones Laborales') +
+      ' de Relaciones Laborales' + (a.empresa ? (' · ' + a.empresa) : '') + '.\n\n' +
+      'Le recordamos que su atención N.° ' + a.nro + ' del ' + fmtF(a.fecha_atencion) +
+      ' se encuentra EN PROCESO: tiene documentos pendientes por regularizar' + doc + '.\n\n' +
+      'Por favor acérquese a la oficina de RR.LL o responda este mensaje para coordinar la regularización. ¡Gracias!';
+    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank', 'noopener');
+  }catch(e){ console.error('waRegularizar:', e); }
 }
 
 function filtrarAt() {
