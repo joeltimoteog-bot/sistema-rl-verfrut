@@ -101,6 +101,30 @@
   };
   var SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
 
+  // ── 3b) Notificaciones del navegador (avisos con la pestaña en 2.º plano) ──
+  try {
+    if ('Notification' in window && Notification.permission === 'default') {
+      var _pedirPermisoNotif = function () {
+        try { Notification.requestPermission().then(function(){})['catch'](function () {}); }
+        catch (e) { try { Notification.requestPermission(function () {}); } catch (e2) {} }
+        document.removeEventListener('click', _pedirPermisoNotif, true);
+      };
+      document.addEventListener('click', _pedirPermisoNotif, true);
+    }
+  } catch (e) {}
+  function _notifNav(titulo, cuerpo) {
+    try {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      if (!document.hidden) return;   // solo cuando la pestaña NO está visible
+      var n = new Notification(titulo, {
+        body: String(cuerpo || '').slice(0, 180),
+        icon: '/sistema-rl-verfrut/frontend/images/icon-192.png'
+      });
+      n.onclick = function () { try { window.focus(); n.close(); } catch (e) {} };
+      setTimeout(function () { try { n.close(); } catch (e) {} }, 12000);
+    } catch (e) {}
+  }
+
   // ── 4) Toast de mensaje del admin ──────────────────────────────────────
   var _mostrados = {};
 
@@ -217,6 +241,7 @@
         '<div style="display:flex;align-items:center;gap:8px;font-weight:700;color:#4ade80;margin-bottom:4px;">' +
         '<span>🟢</span><span>Usuario conectado</span></div>' +
         '<div>' + _esc(nombre) + ' está en ' + _esc(sistemaTxt) + '.</div>';
+      _notifNav('🟢 ' + nombre, 'Está en ' + sistemaTxt);
       wrap.appendChild(card);
       setTimeout(function () {
         card.style.transition = 'opacity .4s'; card.style.opacity = '0';
@@ -517,6 +542,107 @@
   }
   if (!ES_ADMIN) iniciarAlertaPendientes();
 
+  // ── 4d) RESUMEN DE SEGUIMIENTO DEL EQUIPO (solo administrador) ──────────
+  // Tarjeta compacta con los vencidos de todo el equipo: capacitaciones,
+  // evaluaciones, informes de visitas y casos sin cerrar. Minimizable (se
+  // recuerda por sesión). Se actualiza cada 10 minutos.
+  var _raMin = false, _raDatos = null;
+  try { _raMin = sessionStorage.getItem('_rlResMin') === '1'; } catch (e) {}
+  function _raSetMin(v) { _raMin = v; try { sessionStorage.setItem('_rlResMin', v ? '1' : '0'); } catch (e) {} }
+  function _raNomCorto(n) { return String(n || '').trim().split(/\s+/).slice(0, 2).join(' '); }
+  function _raQuitar() {
+    ['_rlResCard', '_rlResPill'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    });
+  }
+
+  function _raCargar() {
+    var hoy = _pHoyISO();
+    return Promise.all([
+      _fsGet('programaciones_eti')['catch'](function () { return []; }),
+      _fsGet('programaciones_eval')['catch'](function () { return []; }),
+      fetch(PEND_GAS + '?' + new URLSearchParams({ action: 'getCumplimiento', usuario: USER.usuario || '' }))
+        .then(function (r) { return r.json(); })['catch'](function () { return null; })
+    ]).then(function (res) {
+      var caps = [], evals = [], visitas = [], casos = [];
+      (res[0] || []).forEach(function (p) {
+        if (p.estado === 'ejecutada') return;
+        var fechas = (p.fechas && p.fechas.length ? p.fechas.slice().sort() : [p.fechaProgramada, p.fechaFin || p.fechaProgramada].filter(Boolean).sort());
+        if (!fechas.length) return;
+        var fin = fechas[fechas.length - 1];
+        if (hoy > fin) caps.push({ sup: p.supervisor || '?', dias: Math.round((new Date(hoy) - new Date(fin)) / 86400000) });
+      });
+      (res[1] || []).forEach(function (p) {
+        if (p.estado === 'ejecutada') return;
+        var ejec = p.fechasEjecutadas || [];
+        var pend = (p.fechas || []).filter(function (f) { return ejec.indexOf(f) < 0; }).sort();
+        var venc = pend.filter(function (f) { return f < hoy; });
+        if (venc.length) evals.push({ sup: p.sup || '?', dias: Math.round((new Date(hoy) - new Date(venc[0])) / 86400000) });
+      });
+      var c = res[2];
+      if (c && c.success) {
+        (c.pendientesVisitas || []).forEach(function (p) { visitas.push({ nom: p.nombre || '?', est: p.estado || 'vencido' }); });
+        var porNom = {};
+        (c.casosPendientes || []).forEach(function (p) { var n = p.nombre_mostrar || '?'; porNom[n] = (porNom[n] || 0) + 1; });
+        Object.keys(porNom).forEach(function (n) { casos.push({ nom: n, n: porNom[n] }); });
+      }
+      return { caps: caps, evals: evals, visitas: visitas, casos: casos };
+    });
+  }
+
+  function _raPill(total) {
+    _raQuitar();
+    var pill = document.createElement('button');
+    pill.id = '_rlResPill'; pill.type = 'button';
+    pill.innerHTML = '👁️ Equipo: ' + total + ' pendiente(s)';
+    pill.style.cssText = 'position:fixed;bottom:130px;left:20px;z-index:2147481900;background:#334155;color:#f1f5f9;' +
+      'border:1px solid #475569;border-radius:999px;padding:8px 14px;font-weight:800;font-size:12px;cursor:pointer;' +
+      'box-shadow:0 8px 24px rgba(0,0,0,.4);font-family:inherit;';
+    pill.title = 'Ver el resumen de seguimiento del equipo';
+    pill.addEventListener('click', function () { _raSetMin(false); _raRender(_raDatos); });
+    document.body.appendChild(pill);
+  }
+
+  function _raRender(d) {
+    _raDatos = d;
+    if (!d) return;
+    var total = d.caps.length + d.evals.length + d.visitas.length + d.casos.length;
+    if (!total) { _raQuitar(); return; }
+    if (_raMin) { _raPill(total); return; }
+    _raQuitar();
+    var sec = function (t, arr, fmt) {
+      if (!arr.length) return '';
+      return '<div style="margin-top:7px;"><b>' + t + ' (' + arr.length + ')</b><br><span style="opacity:.85">' + arr.map(fmt).join(' · ') + '</span></div>';
+    };
+    var card = document.createElement('div');
+    card.id = '_rlResCard';
+    card.style.cssText = 'position:fixed;bottom:130px;left:20px;z-index:2147481900;width:330px;max-width:calc(100vw - 40px);' +
+      'max-height:calc(100vh - 190px);overflow-y:auto;background:#0f172a;color:#f1f5f9;border-left:4px solid #38bdf8;' +
+      'border-radius:14px;padding:13px 15px;box-shadow:0 14px 40px rgba(0,0,0,.5);font-size:12.5px;line-height:1.5;font-family:inherit;';
+    card.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;">' +
+      '<div style="font-weight:800;color:#7dd3fc;">👁️ Seguimiento del equipo</div>' +
+      '<button type="button" id="_rlResMinB" title="Minimizar" style="background:#334155;color:#f1f5f9;border:none;border-radius:8px;padding:2px 9px;font-weight:800;cursor:pointer;">—</button></div>' +
+      sec('🎓 Capacitaciones vencidas', d.caps, function (x) { return _esc(_raNomCorto(x.sup)) + ' (' + x.dias + 'd)'; }) +
+      sec('⭐ Evaluaciones vencidas', d.evals, function (x) { return _esc(_raNomCorto(x.sup)) + ' (' + x.dias + 'd)'; }) +
+      sec('📋 Informes de visitas', d.visitas, function (x) { return _esc(_raNomCorto(x.nom)) + (x.est === 'plazo_hoy' ? ' (hoy)' : ' (vencido)'); }) +
+      sec('📁 Casos sin cerrar', d.casos, function (x) { return _esc(_raNomCorto(x.nom)) + ' (' + x.n + ')'; }) +
+      '<div style="margin-top:8px;font-size:11px;opacity:.7;">Se actualiza cada 10 min · Detalle completo en el Monitor.</div>';
+    document.body.appendChild(card);
+    card.querySelector('#_rlResMinB').addEventListener('click', function () {
+      _raSetMin(true);
+      _raPill(total);
+    });
+  }
+
+  function iniciarResumenAdmin() {
+    var tick = function () { _raCargar().then(_raRender)['catch'](function () {}); };
+    tick();
+    setInterval(tick, PEND_REFRESCO_MS);
+  }
+  if (ES_ADMIN) iniciarResumenAdmin();
+
   // ── Historial de conexiones: 1 registro por sesión de navegador ─────────
   try {
     if (!sessionStorage.getItem('_rl_hist_ok')) {
@@ -630,6 +756,116 @@
     }, 60000);
   } catch (e) {}
 
+  // ── CIERRE AUTOMÁTICO DE SESIÓN POR HORARIO ────────────────────────────
+  // Replica la misma regla del login (verificarHorarioLogin del portal):
+  // supervisores solo de 05:30 a 17:00, Lun-Vie (baja) / Lun-Sáb (alta desde
+  // el 27-jun). Fuera de horario: aviso con cuenta regresiva de 5 minutos y
+  // cierre forzado de sesión, registrando el evento en /historial (visible
+  // para el administrador en el Monitor). Respeta sin_restriccion, los roles
+  // exentos y los accesos temporales otorgados vía GAS.
+  var AC_GAS = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+  var AC_ROLES_EXENTOS = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl', 'jefe_rl'];
+  var _acCard = null, _acCuentaT = null, _acExtUsada = false, _acCerrando = false, _acPosponerHasta = 0;
+
+  function acFueraDeHorario() {
+    try {
+      var rol = String(USER.rol || '').toLowerCase().trim();
+      if (USER.sin_restriccion) return false;
+      if (AC_ROLES_EXENTOS.indexOf(rol) >= 0) return false;
+      if (ES_ADMIN) return false;
+      if (rol !== 'supervisor') return false;
+      var a = new Date();
+      var mes = a.getMonth() + 1, dia = a.getDate(), dow = a.getDay();
+      var h = a.getHours() + a.getMinutes() / 60;
+      var esAlta = mes > 6 || (mes === 6 && dia >= 27);
+      if (!esAlta) {
+        if (dow === 0 || dow === 6) return true;
+      } else {
+        if (dow === 0) return true;
+      }
+      return (h < 5.5 || h >= 17);
+    } catch (e) { return false; }
+  }
+
+  function acCerrarSesion() {
+    if (_acCerrando) return;
+    _acCerrando = true;
+    try {
+      fetch(DB_URL + '/historial/' + UKEY + '.json', {
+        method: 'POST', keepalive: true,
+        body: JSON.stringify({ ts: { '.sv': 'timestamp' }, evento: 'cierre_automatico', pagina: PAGINA, modulo: MODULO })
+      })['catch'](function () {});
+    } catch (e) {}
+    try {
+      fetch(DB_URL + '/presencia/' + UKEY + '.json', {
+        method: 'PATCH', keepalive: true, body: JSON.stringify({ online: false })
+      })['catch'](function () {});
+    } catch (e) {}
+    setTimeout(function () {
+      try { if (typeof window.logout === 'function') { window.logout(); return; } } catch (e) {}
+      try { sessionStorage.clear(); } catch (e) {}
+      try { location.href = '../../index.html'; } catch (e) {}
+    }, 500);
+  }
+
+  function acQuitarCard() {
+    clearInterval(_acCuentaT); _acCuentaT = null;
+    if (_acCard && _acCard.parentNode) _acCard.parentNode.removeChild(_acCard);
+    _acCard = null;
+  }
+
+  function acMostrarCuentaRegresiva() {
+    if (_acCard || _acCerrando) return;
+    var wrap = _wrapAvisos();
+    var seg = 5 * 60;
+    _acCard = document.createElement('div');
+    _acCard.style.cssText = 'background:#0f172a;color:#f1f5f9;border-left:4px solid #ef4444;' +
+      'border-radius:12px;padding:14px 16px;box-shadow:0 12px 34px rgba(0,0,0,.45);' +
+      'animation:_rlIn .35s ease;font-size:13.5px;line-height:1.55;';
+    var nom = ((USER.nombre || USER.usuario) || '').toString().trim().split(' ')[0] || 'colega';
+    _acCard.innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:800;color:#f87171;">' +
+      '<span style="font-size:16px;">🔒</span><span>Fin de jornada — cierre automático</span></div>' +
+      '<div style="margin-bottom:10px;">Estimado(a) <b>' + _esc(nom) + '</b>: tu horario permitido en el Sistema RR.LL ya finalizó ' +
+      '(<b>05:30 a 17:00</b>). Por seguridad, el sistema cerrará tu sesión automáticamente en ' +
+      '<b id="_acCuenta" style="color:#fbbf24;font-size:15px;">5:00</b> y el cierre quedará registrado para Coordinación.<br>' +
+      '<span style="opacity:.85">Guarda lo que estés haciendo. Si necesitas trabajar fuera de horario, solicita un acceso temporal al coordinador Joel Timoteo.</span></div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+      '<button type="button" data-acc="cerrar" style="background:#ef4444;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-weight:800;font-size:12.5px;cursor:pointer;">🚪 Guardar y cerrar ahora</button>' +
+      (!_acExtUsada ? '<button type="button" data-acc="ext" style="background:#334155;color:#f1f5f9;border:none;border-radius:8px;padding:6px 14px;font-weight:800;font-size:12.5px;cursor:pointer;">🕒 Necesito 10 min más (única vez)</button>' : '') +
+      '</div>';
+    wrap.appendChild(_acCard);
+    _acCard.querySelector('[data-acc="cerrar"]').addEventListener('click', acCerrarSesion);
+    var extBtn = _acCard.querySelector('[data-acc="ext"]');
+    if (extBtn) extBtn.addEventListener('click', function () {
+      _acExtUsada = true;
+      _acPosponerHasta = Date.now() + 10 * 60 * 1000;
+      acQuitarCard();
+    });
+    _acCuentaT = setInterval(function () {
+      seg--;
+      var el = document.getElementById('_acCuenta');
+      if (el) el.textContent = Math.floor(seg / 60) + ':' + String(seg % 60).padStart(2, '0');
+      if (seg <= 0) { acQuitarCard(); acCerrarSesion(); }
+    }, 1000);
+  }
+
+  function acVerificar() {
+    if (_acCerrando || _acCard) return;
+    if (Date.now() < _acPosponerHasta) return;
+    if (!acFueraDeHorario()) return;
+    // Respetar accesos temporales otorgados por el administrador (GAS)
+    fetch(AC_GAS, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'verificarAccesoTemporal', usuario: USER.usuario }) })
+      .then(function (r) { return r.json(); })['catch'](function () { return null; })
+      .then(function (d) {
+        if (d && d.success && d.tieneAcceso) { _acPosponerHasta = Date.now() + 30 * 60 * 1000; return; }
+        acMostrarCuentaRegresiva();
+      });
+  }
+  setTimeout(acVerificar, 15000);
+  setInterval(acVerificar, 60000);
+
   function mostrarMensajeAdmin(id, msg) {
     try {
       var wrap = document.getElementById('_rlMsgWrap');
@@ -646,6 +882,7 @@
         'animation:_rlIn .35s ease;font-size:13.5px;line-height:1.5;';
       var de = (msg && msg.de) ? String(msg.de) : 'Coordinación RR.LL.';
       var texto = (msg && msg.texto) ? String(msg.texto) : '';
+      _notifNav('📌 Mensaje de ' + de, texto);
       card.innerHTML =
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:700;color:#7dd3fc;">' +
         '<span style="font-size:16px;">📌</span><span>Mensaje de ' + _esc(de) + '</span></div>' +

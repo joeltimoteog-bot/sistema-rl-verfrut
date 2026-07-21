@@ -157,9 +157,16 @@
       <select id="difuDest" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:9px;margin-bottom:10px;font-size:13px">
         <option value="conectados">Solo conectados ahora</option>
         <option value="todos">Todos los registrados</option>
+        <option value="pendientes">⏰ Solo con documentos por regularizar (en proceso)</option>
         <option value="RAPEL">Empresa RAPEL (incluye AMBAS)</option>
         <option value="VERFRUT">Empresa VERFRUT (incluye AMBAS)</option>
       </select>
+      <div id="difuNotaPend" style="display:none;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:#fbbf24;line-height:1.5">
+        Cada persona recibirá un mensaje <b>personalizado con su detalle</b> de pendientes
+        (informes de visitas vencidos y casos sin informe/reporte).
+        Lo que escribas abajo se agrega al final como nota tuya (opcional).
+        <div id="difuPendCnt" style="margin-top:4px;color:#f1f5f9"></div>
+      </div>
       <textarea id="difuTxt" placeholder="Escribe el aviso para el grupo…"></textarea>
       <button class="send" id="difuEnviar">📢 Enviar difusión</button>
     </div>
@@ -368,30 +375,73 @@ function descargarAsistenciaCSV(){
 }
 
 /* ── Difusión: un aviso para varios usuarios a la vez ── */
+
+/* Detalle de pendientes de un usuario (para el mensaje personalizado) */
+function detallePendTxt(u){
+  const p = pendDe(u); if(!p) return '';
+  const partes = [];
+  p.visitas.forEach(est=>partes.push(est==='plazo_hoy'
+    ? '• Informe de visitas de la semana: el plazo vence HOY.'
+    : '• Informe de visitas de la semana pasada: VENCIDO.'));
+  if(p.casos.length) partes.push('• '+p.casos.length+' caso(s) registrados EN PROCESO, sin informe/reporte subido en Registro de Casos.');
+  return partes.join('\n');
+}
+function msgPendPersonalizado(u, extra){
+  let nom = String(u.nombre||u.usuario||'').trim().split(' ')[0] || 'colega';
+  nom = nom.charAt(0).toUpperCase() + nom.slice(1).toLowerCase();
+  return 'Estimado(a) ' + nom + ':\n\n' +
+    'Tienes documentos por regularizar (en proceso):\n' + detallePendTxt(u) + '\n\n' +
+    (extra ? extra + '\n\n' : 'Por favor regularízalos hoy y confírmame por este medio. Este es un seguimiento de tu gestión.\n\n') +
+    '— ' + (USER.nombre || 'Coordinación RR.LL');
+}
+
 async function enviarDifusion(){
   const txt = $('difuTxt').value.trim();
-  if(!txt){ toast('Escribe el aviso primero', true); return; }
   const dest = $('difuDest').value;
+  const esPend = dest === 'pendientes';
+  if(!txt && !esPend){ toast('Escribe el aviso primero', true); return; }
   const targets = Object.keys(PRES).filter(k=>{
     const u = PRES[k];
     if(MONITOR_ADMINS.includes(String(u.usuario||'').toLowerCase())) return false;
     const emp = String(u.empresa||'').toUpperCase();
     if(dest==='conectados') return estado(u)!=='off';
+    if(dest==='pendientes') return pendCount(u) > 0;
     if(dest==='RAPEL' || dest==='VERFRUT') return emp===dest || emp==='AMBAS';
     return true;
   });
-  if(!targets.length){ toast('No hay destinatarios para ese filtro', true); return; }
+  if(!targets.length){
+    toast(esPend ? '🎉 Nadie tiene documentos por regularizar en este momento' : 'No hay destinatarios para ese filtro', esPend ? false : true);
+    return;
+  }
   const b = $('difuEnviar'); b.disabled = true; b.textContent = 'Enviando…';
-  const rs = await Promise.all(targets.map(k=>
-    fetch(DB_URL+'/mensajes/'+k+'.json',{method:'POST',body:JSON.stringify({
-      texto: txt, de: USER.nombre||USER.usuario, de_usuario: USER.usuario,
+  const rs = await Promise.all(targets.map(k=>{
+    const texto = esPend ? msgPendPersonalizado(PRES[k], txt) : txt;
+    return fetch(DB_URL+'/mensajes/'+k+'.json',{method:'POST',body:JSON.stringify({
+      texto: texto, de: USER.nombre||USER.usuario, de_usuario: USER.usuario,
       ts: {'.sv':'timestamp'}, leido: false
-    })}).then(r=>!!r.ok).catch(()=>false)
-  ));
+    })}).then(r=>!!r.ok).catch(()=>false);
+  }));
   const ok = rs.filter(Boolean).length;
   b.disabled = false; b.textContent = '📢 Enviar difusión';
   $('difuTxt').value = ''; $('difuOverlay').style.display = 'none';
-  toast('📢 Difusión enviada a '+ok+' de '+targets.length+' usuario(s)', ok!==targets.length);
+  toast('📢 '+(esPend?'Recordatorio de regularización enviado':'Difusión enviada')+' a '+ok+' de '+targets.length+' usuario(s)', ok!==targets.length);
+}
+
+/* Nota y contador al elegir el modo "con documentos por regularizar" */
+function actualizarNotaDifu(){
+  const sel = $('difuDest'); if(!sel) return;
+  const nota = $('difuNotaPend');
+  const esPend = sel.value === 'pendientes';
+  if(nota) nota.style.display = esPend ? 'block' : 'none';
+  if(esPend){
+    const n = Object.keys(PRES).filter(k=>{
+      const u = PRES[k];
+      if(MONITOR_ADMINS.includes(String(u.usuario||'').toLowerCase())) return false;
+      return pendCount(u) > 0;
+    }).length;
+    const c = $('difuPendCnt');
+    if(c) c.textContent = n ? ('Destinatarios actuales: ' + n + ' usuario(s) con pendientes.') : 'Ahora mismo nadie tiene pendientes. 🎉';
+  }
 }
 
 /* ── Pendientes automáticos (misma fuente que el banner del dashboard: GAS getCumplimiento) ── */
@@ -551,6 +601,7 @@ function arrancar(){
   const bd = $('btnDifu'); if(bd) bd.addEventListener('click', ()=>{ $('difuOverlay').style.display='flex'; });
   const dc = $('difuCerrar'); if(dc) dc.addEventListener('click', ()=>{ $('difuOverlay').style.display='none'; });
   const de = $('difuEnviar'); if(de) de.addEventListener('click', enviarDifusion);
+  const dd = $('difuDest'); if(dd) dd.addEventListener('change', actualizarNotaDifu);
   cargarPendientes();
   setInterval(cargarPendientes, 10*60*1000);   // refresca pendientes cada 10 min
   actualizarBtnMute();

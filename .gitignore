@@ -10,3 +10,4 @@ dedup_*.py
 Informe*.pdf
 # Carpetas de reglamentos locales
 REGLAMENTO*/
+backend/gas/codigo.gs
