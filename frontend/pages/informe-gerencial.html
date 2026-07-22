@@ -90,6 +90,18 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 // ── Solo administrador ──
 let USER = null;
 try { USER = JSON.parse(sessionStorage.getItem('user') || 'null'); } catch(e) {}
+// Respaldo: sesión persistente de 8 h (localStorage), igual que el portal —
+// permite abrir el informe en una pestaña nueva sin volver a iniciar sesión.
+if (!USER) {
+  try {
+    const s = JSON.parse(localStorage.getItem('rl_session') || 'null');
+    if (s && s.user && s.timestamp && (Date.now() - s.timestamp) <= 8*60*60*1000) {
+      USER = s.user;
+      sessionStorage.setItem('user', JSON.stringify(USER));
+      if (s.token) sessionStorage.setItem('rl_token', s.token);
+    }
+  } catch(e) {}
+}
 const rolOk = USER && (/admin|coordinador|jef/i.test(USER.rol || '') || String(USER.usuario).toLowerCase() === 'jtimoteo');
 if (!USER) location.href = '../../index.html';
 else if (!rolOk) { alert('Este informe es solo para administradores.'); location.href = 'dashboard.html'; }
