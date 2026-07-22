@@ -5294,7 +5294,10 @@ function renderAt(lista) {
   setTimeout(() => {
     tb.innerHTML=lista.map(a=>{
       const esDueno = a.supervisor===(USER.nombre||USER.usuario) || a.supervisor===USER.usuario;
-      const puedeMod = !esSup || esDueno;
+      const puedeModBase = !esSup || esDueno;
+      // Registros de días anteriores: solo el administrador puede editar/eliminar
+      const puedeMod = puedeModBase && (atEsAdminRegistros() || atEsDeHoy(a));
+      const protegido = puedeModBase && !puedeMod;
       return `<tr>
         <td>${a.nro||''}</td>
         <td>${fmtF(a.fecha_atencion)}</td>
@@ -5315,6 +5318,7 @@ function renderAt(lista) {
           <button class="btn-a bv" onclick="verDet('${a.nro}','at')">Ver</button>
           ${puedeMod?`<button class="btn-a be" onclick="editarAt('${a.nro}')">✏️</button>`:''}
           ${puedeMod?`<button class="btn-a bd" onclick="eliminarAt('${a.nro}')">🗑️</button>`:''}
+          ${protegido?`<button class="btn-a" style="background:#e2e8f0;color:#64748b;cursor:pointer;" title="Registro de fecha anterior protegido. Para modificarlo o eliminarlo, comunícate con el coordinador Joel Timoteo." onclick="atAvisoProtegido('modificar')">🔒</button>`:''}
           ${(String(a.estado||'').toUpperCase()==='EN PROCESO'&&a.celular)?`<button class="btn-a" style="background:#25D366;color:#fff;" title="Recordar al trabajador por WhatsApp que tiene documentos por regularizar" onclick="waRegularizar('${a.nro}')">📱</button>`:''}
         </td>
       </tr>`;
@@ -5657,9 +5661,27 @@ function abrirAt() {
   }
 }
 
+// ── Protección de registros de días anteriores (solo el admin puede modificarlos) ──
+function atHoyISO(){
+  const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function atEsDeHoy(a){
+  return String(a && a.fecha_atencion || '').slice(0,10) === atHoyISO();
+}
+function atEsAdminRegistros(){
+  return String(USER.usuario||'').toLowerCase() === 'jtimoteo';
+}
+function atAvisoProtegido(accion){
+  const msg='🔒 Los registros de días anteriores están protegidos y no se pueden '+accion+'.\n\n'+
+    'Si necesitas modificar o eliminar este registro, comunícate con el coordinador Joel Timoteo.';
+  if (typeof appAlert === 'function') appAlert(msg); else alert(msg);
+}
+
 function editarAt(nro) {
   const a=atTodas.find(x=>String(x.nro)===String(nro));
   if(!a)return;
+  if(!atEsAdminRegistros() && !atEsDeHoy(a)){ atAvisoProtegido('editar'); return; }
   modoEdicion=true;
   document.getElementById('mAtTitulo').textContent='Editar Atención N° '+nro;
   sv('at_nro_edit',nro);
@@ -5823,6 +5845,8 @@ async function guardarAt() { if(window._savingAt) return;
 
 async function eliminarAt(nro) {
   console.log('[eliminarAt] iniciando nro:', nro, '| rol:', USER.rol, '| usuario:', USER.usuario);
+  const _aProt=(atTodas||[]).find(x=>String(x.nro)===String(nro));
+  if(_aProt && !atEsAdminRegistros() && !atEsDeHoy(_aProt)){ atAvisoProtegido('eliminar'); return; }
   if(!await appConfirm('¿Eliminar la atención N° '+nro+'? Esta acción no se puede deshacer.'))return;
   try{
     console.log('[eliminarAt] llamando apiPost deleteAtencion...');
