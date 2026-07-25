@@ -144,6 +144,7 @@ tr:hover td{background:#fafbfc}
         <button class="tab on" data-pane="paneNueva" onclick="irTab(this)">📝 Nueva Solicitud</button>
         <button class="tab" data-pane="paneMis" onclick="irTab(this);cargarMis()">📋 Mis Solicitudes</button>
         <button class="tab" data-pane="paneAdmin" id="tabAdmin" onclick="irTab(this);cargarAdmin()" style="display:none">⚙️ Panel Admin</button>
+        <button class="tab" data-pane="paneUnidades" id="tabUnidades" onclick="irTab(this)" style="display:none">🚗 Unidades</button>
         <button class="tab" id="btnFicha" onclick="abrirFicha()" style="flex:0 0 auto;background:#0a7d36;color:#fff;display:none">🪪 Ficha del Conductor</button>
       </div>
 
@@ -246,6 +247,48 @@ tr:hover td{background:#fafbfc}
         </div>
       </div>
 
+      <!-- PANE UNIDADES (solo admin) -->
+      <div class="pane" id="paneUnidades">
+        <div class="fcard">
+          <div class="fcard-h"><h2>🔁 Cambio de unidad de un conductor</h2></div>
+          <div class="fcard-b">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+              <div class="field"><label>DNI del conductor</label><input id="cuDni" maxlength="8" placeholder="8 dígitos"></div>
+              <div class="field" style="align-self:end"><button class="btn-p" onclick="cuBuscar()" id="cuBtnB">🔍 Buscar</button></div>
+            </div>
+            <div id="cuActual" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px"></div>
+            <div id="cuForm" style="display:none">
+              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+                <div class="field"><label>Nueva marca</label><input id="cuMarca"></div>
+                <div class="field"><label>Nuevo modelo</label><input id="cuModelo"></div>
+                <div class="field"><label>Nuevo código interno / placa</label><input id="cuCod"></div>
+                <div class="field"><label>Propiedad</label><select id="cuProp"><option value="PROPIA">Propia</option><option value="ARRENDADA">Arrendada</option></select></div>
+              </div>
+              <button class="btn-p" style="margin-top:12px" onclick="cuGuardar()" id="cuBtnG">💾 Actualizar unidad</button>
+              <div id="cuMsg" style="margin-top:8px;font-size:13px"></div>
+            </div>
+          </div>
+        </div>
+        <div class="fcard">
+          <div class="fcard-h"><h2>➕ Nueva movilidad / nuevo conductor (incluye unidades arrendadas)</h2></div>
+          <div class="fcard-b">
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+              <div class="field"><label>DNI *</label><input id="nmDni" maxlength="8"></div>
+              <div class="field"><label>Nombre completo *</label><input id="nmNombre"></div>
+              <div class="field"><label>Cargo</label><input id="nmCargo"></div>
+              <div class="field"><label>Empresa</label><select id="nmEmp"><option>RAPEL</option><option>VERFRUT</option><option>AMBAS</option></select></div>
+              <div class="field"><label>Marca *</label><input id="nmMarca"></div>
+              <div class="field"><label>Modelo *</label><input id="nmModelo"></div>
+              <div class="field"><label>Código interno / placa *</label><input id="nmCod"></div>
+              <div class="field"><label>Propiedad</label><select id="nmProp"><option value="PROPIA">Propia</option><option value="ARRENDADA">Arrendada</option></select></div>
+              <div class="field"><label>Correo</label><input id="nmCorreo" type="email"></div>
+            </div>
+            <button class="btn-p" style="margin-top:12px" onclick="nmGuardar()" id="nmBtnG">💾 Registrar movilidad</button>
+            <div id="nmMsg" style="margin-top:8px;font-size:13px"></div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -283,7 +326,7 @@ document.getElementById('avR').textContent=USER.cargo||USER.rol||'';
 document.getElementById('av').textContent=(USER.nombre||USER.usuario||'U').charAt(0).toUpperCase();
 document.getElementById('empBadge').textContent=(USER.empresa||'SISTEMA RL').toUpperCase();
 document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-PE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-if(esAdmin||esSuper){document.getElementById('mainWrap').style.display='block';if(esAdmin){document.getElementById('tabAdmin').style.display='block';document.getElementById('btnFicha').style.display='block';}}
+if(esAdmin||esSuper){document.getElementById('mainWrap').style.display='block';if(esAdmin){document.getElementById('tabAdmin').style.display='block';document.getElementById('btnFicha').style.display='block';document.getElementById('tabUnidades').style.display='block';}}
 else{document.getElementById('denyBox').style.display='block';}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
 
@@ -357,6 +400,21 @@ async function enviarSolicitud(){
     if(!res||!res.ok){await appAlert((res&&res.msg)?res.msg:'Error al guardar.');return;}
     document.getElementById('solicitudId').textContent='N° de solicitud: '+(res.id||'—');
     document.getElementById('formMant').style.display='none';document.getElementById('confirmMsg').classList.add('show');
+    // ── Alerta automática al administrador (Monitor RR.LL: suena y queda en el canal) ──
+    try{
+      const ukey=String(USER.usuario||'').toLowerCase().replace(/[.#$/\[\]]/g,'_');
+      fetch('https://sistema-rl-verfrut-default-rtdb.firebaseio.com/mensajes/'+ukey+'.json',{
+        method:'POST',
+        body:JSON.stringify({
+          texto:'🔧 [AUTOMÁTICO] Nueva SOLICITUD DE MANTENIMIENTO '+(res.id?('N° '+res.id):'')+
+            '\n• Unidad: '+(datos.marca||'')+' '+(datos.modelo||'')+' ('+(datos.codInterno||'—')+')'+
+            '\n• Conductor: '+(datos.nombre||'')+' · Km: '+(datos.kilometraje||'')+
+            '\n• Tipo: '+(datos.tipoMantenimiento||''),
+          de:USER.nombre||USER.usuario, de_usuario:USER.usuario,
+          ts:{'.sv':'timestamp'}, leido:false
+        })
+      }).catch(function(){});
+    }catch(eN){}
   }catch(e){btn.disabled=false;btn.textContent='ENVIAR SOLICITUD';await appAlert('Error de conexión al enviar.');console.error('[mant] enviar',e);}
 }
 function nuevaSolicitud(){
@@ -712,6 +770,61 @@ async function guardarProgramacion(){
     doc.save('Conductores_Licencias_'+new Date().toISOString().slice(0,10)+'.pdf');
   }
   </script>
-  <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Solicitud de Mantenimiento"></script>
+  <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Solicitud de Mantenimiento">
+/* ════ GESTIÓN DE UNIDADES (solo admin): cambio de unidad y nueva movilidad ════ */
+let _cuDni=null;
+async function cuBuscar(){
+  const dni=document.getElementById('cuDni').value.trim();
+  const msg=document.getElementById('cuMsg');msg.textContent='';
+  if(!/^\d{8}$/.test(dni)){await appAlert('El DNI debe tener 8 dígitos.');return;}
+  const b=document.getElementById('cuBtnB');b.disabled=true;b.textContent='Buscando...';
+  try{
+    const r=await fetch(API+'?'+new URLSearchParams({action:'buscarResponsableMantenimiento',dni:dni}));
+    const res=await r.json();b.disabled=false;b.textContent='🔍 Buscar';
+    if(!res||!res.ok||!res.data){await appAlert((res&&res.msg)||'DNI no encontrado. Si es un conductor nuevo, usa "Nueva movilidad".');return;}
+    _cuDni=dni;
+    const d=res.data;
+    document.getElementById('cuActual').style.display='block';
+    document.getElementById('cuActual').innerHTML='<b>'+d.nombre+'</b> ('+(d.empresa||'—')+')<br>Unidad actual: <b>'+(d.marca||'—')+' '+(d.modelo||'—')+'</b> · Código: <b>'+(d.codInterno||'—')+'</b>';
+    document.getElementById('cuMarca').value=d.marca||'';
+    document.getElementById('cuModelo').value=d.modelo||'';
+    document.getElementById('cuCod').value=d.codInterno||'';
+    document.getElementById('cuForm').style.display='block';
+  }catch(e){b.disabled=false;b.textContent='🔍 Buscar';await appAlert('Error de conexión.');}
+}
+async function cuGuardar(){
+  if(!_cuDni)return;
+  const marca=document.getElementById('cuMarca').value.trim(),modelo=document.getElementById('cuModelo').value.trim(),cod=document.getElementById('cuCod').value.trim();
+  if(!marca||!modelo||!cod){await appAlert('Completa marca, modelo y código interno de la nueva unidad.');return;}
+  if(!await appConfirm('¿Actualizar la unidad de este conductor a '+marca+' '+modelo+' ('+cod+')?'))return;
+  const b=document.getElementById('cuBtnG');b.disabled=true;b.textContent='Guardando...';
+  try{
+    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'mant_actualizarUnidad',dni:_cuDni,marca:marca,modelo:modelo,
+        codInterno:cod,propiedad:document.getElementById('cuProp').value,admin:USER.usuario})});
+    const res=await r.json();b.disabled=false;b.textContent='💾 Actualizar unidad';
+    const m=document.getElementById('cuMsg');
+    if(res&&res.ok){m.style.color='#16a34a';m.textContent='✅ '+(res.msg||'Unidad actualizada correctamente.');document.getElementById('cuForm').style.display='none';document.getElementById('cuActual').style.display='none';document.getElementById('cuDni').value='';}
+    else{m.style.color='#dc2626';m.textContent='❌ '+((res&&res.msg)||'Error al actualizar. ¿Está instalada la acción mant_actualizarUnidad en el Apps Script?');}
+  }catch(e){b.disabled=false;b.textContent='💾 Actualizar unidad';await appAlert('Error de conexión.');}
+}
+async function nmGuardar(){
+  const g=id=>document.getElementById(id).value.trim();
+  const dni=g('nmDni'),nombre=g('nmNombre'),marca=g('nmMarca'),modelo=g('nmModelo'),cod=g('nmCod');
+  if(!/^\d{8}$/.test(dni)){await appAlert('El DNI debe tener 8 dígitos.');return;}
+  if(!nombre||!marca||!modelo||!cod){await appAlert('Completa: DNI, nombre, marca, modelo y código interno.');return;}
+  const b=document.getElementById('nmBtnG');b.disabled=true;b.textContent='Guardando...';
+  try{
+    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'mant_agregarMovilidad',dni:dni,nombre:nombre,cargo:g('nmCargo'),
+        empresa:document.getElementById('nmEmp').value,marca:marca,modelo:modelo,codInterno:cod,
+        propiedad:document.getElementById('nmProp').value,correo:g('nmCorreo'),admin:USER.usuario})});
+    const res=await r.json();b.disabled=false;b.textContent='💾 Registrar movilidad';
+    const m=document.getElementById('nmMsg');
+    if(res&&res.ok){m.style.color='#16a34a';m.textContent='✅ '+(res.msg||'Movilidad registrada.');['nmDni','nmNombre','nmCargo','nmMarca','nmModelo','nmCod','nmCorreo'].forEach(i=>document.getElementById(i).value='');}
+    else{m.style.color='#dc2626';m.textContent='❌ '+((res&&res.msg)||'Error al registrar. ¿Está instalada la acción mant_agregarMovilidad en el Apps Script?');}
+  }catch(e){b.disabled=false;b.textContent='💾 Registrar movilidad';await appAlert('Error de conexión.');}
+}
+</script>
 </body>
 </html>
