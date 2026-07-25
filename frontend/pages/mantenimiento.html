@@ -240,6 +240,7 @@ tr:hover td{background:#fafbfc}
               <button class="btn btn-az btn-sm" onclick="cargarAdmin()">🔄 Actualizar</button>
             </div>
           </div>
+          <div id="mantInd" style="margin-bottom:14px"></div>
           <div class="tw"><table>
             <thead><tr><th>N°</th><th>Fecha</th><th>Solicitante</th><th>Unidad</th><th>Licencia</th><th>Km</th><th>Tipo</th><th>Estado</th><th>F. Programada</th><th>Acción</th></tr></thead>
             <tbody id="adminBody"><tr><td colspan="10" class="empty">Cargando...</td></tr></tbody>
@@ -432,25 +433,39 @@ function badgeEstado(est){
   if(est==='CERRADO')return '<span class="badge b-cerr">🔒 CERRADO</span>';
   return '<span class="badge b-pend">PENDIENTE</span>';
 }
+function _pintarMis(data){
+  const body=document.getElementById('misBody');
+  if(!data||!data.length){body.innerHTML='<tr><td colspan="8" class="empty">Todavía no tenés solicitudes registradas.</td></tr>';return;}
+  body.innerHTML=data.map(s=>'<tr>'+
+    '<td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'')+'</td><td>'+(s.unidad||'')+'</td>'+
+    '<td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td><td>'+badgeEstado(s.estado)+'</td>'+
+    '<td>'+(s.fechaProgramada?'<b style="color:var(--azul)">'+s.fechaProgramada+'</b>':'<span class="muted">— por definir</span>')+'</td>'+
+    '<td class="muted">'+(s.comentarioAdmin||'—')+'</td></tr>').join('');
+}
 async function cargarMis(){
   const body=document.getElementById('misBody');
-  body.innerHTML='<tr><td colspan="8" class="empty">Cargando tus solicitudes...</td></tr>';
+  // Mostrar al instante la última copia guardada mientras se actualiza en segundo plano
+  let cacheOk=false;
+  try{const c=JSON.parse(sessionStorage.getItem('mant_mis_'+USER.usuario)||'null');
+    if(c&&c.length){_pintarMis(c);cacheOk=true;}}catch(e){}
+  if(!cacheOk)body.innerHTML='<tr><td colspan="8" class="empty">Cargando tus solicitudes...</td></tr>';
   try{
     const r=await fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento',solicitante:USER.usuario}));
     const res=await r.json();
-    if(!res||!res.ok||!res.data||!res.data.length){body.innerHTML='<tr><td colspan="8" class="empty">Todavía no tenés solicitudes registradas.</td></tr>';return;}
-    body.innerHTML=res.data.map(s=>'<tr>'+
-      '<td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'')+'</td><td>'+(s.unidad||'')+'</td>'+
-      '<td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td><td>'+badgeEstado(s.estado)+'</td>'+
-      '<td>'+(s.fechaProgramada?'<b style="color:var(--azul)">'+s.fechaProgramada+'</b>':'<span class="muted">— por definir</span>')+'</td>'+
-      '<td class="muted">'+(s.comentarioAdmin||'—')+'</td></tr>').join('');
-  }catch(e){body.innerHTML='<tr><td colspan="8" class="empty">Error de conexión.</td></tr>';console.error('[mant] mis',e);}
+    const data=(res&&res.ok&&res.data)?res.data:[];
+    try{sessionStorage.setItem('mant_mis_'+USER.usuario,JSON.stringify(data));}catch(e){}
+    _pintarMis(data);
+  }catch(e){if(!cacheOk)body.innerHTML='<tr><td colspan="8" class="empty">Error de conexión.</td></tr>';console.error('[mant] mis',e);}
 }
 
 let _solicitudes=[];
 let _estadosExtra={};
 async function cargarAdmin(){
-  const body=document.getElementById('adminBody');body.innerHTML='<tr><td colspan="9" class="empty">Cargando...</td></tr>';
+  const body=document.getElementById('adminBody');
+  let cacheOk=false;
+  try{const c=JSON.parse(sessionStorage.getItem('mant_admin')||'null');
+    if(c&&c.sol){_solicitudes=c.sol;_estadosExtra=c.est||{};renderAdmin();cacheOk=true;}}catch(e){}
+  if(!cacheOk)body.innerHTML='<tr><td colspan="9" class="empty">Cargando...</td></tr>';
   try{
     const [r,r2]=await Promise.all([
       fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento'})),
@@ -458,10 +473,43 @@ async function cargarAdmin(){
     ]);
     const res=await r.json();_solicitudes=(res&&res.ok&&res.data)?res.data:[];
     try{const res2=r2?await r2.json():null;_estadosExtra=(res2&&res2.ok&&res2.data)?res2.data:{};}catch(e){_estadosExtra={};}
+    try{sessionStorage.setItem('mant_admin',JSON.stringify({sol:_solicitudes,est:_estadosExtra}));}catch(e){}
     renderAdmin();
   }catch(e){body.innerHTML='<tr><td colspan="9" class="empty">Error de conexión.</td></tr>';console.error('[mant] admin',e);}
 }
+function renderIndicadoresMant(){
+  const box=document.getElementById('mantInd');
+  if(!box)return;
+  const S=_solicitudes||[];
+  if(!S.length){box.innerHTML='';return;}
+  const est=s=>(s.estado||'PENDIENTE').toUpperCase();
+  const pend=S.filter(s=>est(s)==='PENDIENTE').length;
+  const prog=S.filter(s=>est(s)==='PROGRAMADO').length;
+  const aten=S.filter(s=>est(s)==='ATENDIDO'||est(s)==='CERRADO').length;
+  const mesAct=new Date().getMonth()+1, anioAct=new Date().getFullYear();
+  const esteMes=S.filter(s=>{const p=String(s.fechaSolicitud||'').split(' ')[0].split('/');return +p[1]===mesAct&&+p[2]===anioAct;}).length;
+  const kpi=(v,l,c)=>'<div style="background:'+(c||'linear-gradient(135deg,#0a2463,#13399b)')+';color:#fff;border-radius:10px;padding:10px 14px;min-width:120px;flex:1"><div style="font-size:20px;font-weight:800">'+v+'</div><div style="font-size:10px;text-transform:uppercase;opacity:.85">'+l+'</div></div>';
+  let html='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'+
+    kpi(S.length,'Total solicitudes')+kpi(esteMes,'Este mes')+
+    kpi(pend,'Pendientes',pend?'linear-gradient(135deg,#b45309,#d97706)':'linear-gradient(135deg,#15803d,#16a34a)')+
+    kpi(prog,'Programadas','linear-gradient(135deg,#1d4ed8,#3b82f6)')+
+    kpi(aten,'Atendidas / cerradas','linear-gradient(135deg,#15803d,#16a34a)')+'</div>';
+  // Por usuario solicitante
+  const por={};
+  S.forEach(s=>{const u=s.solicitante||s.nombre||'—';(por[u]=por[u]||{t:0,p:0}).t++;if(est(s)==='PENDIENTE')por[u].p++;});
+  const us=Object.keys(por).sort((a,b)=>por[b].t-por[a].t);
+  const max=Math.max(1,...us.map(u=>por[u].t));
+  html+='<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px">'+
+    '<div style="font-weight:800;font-size:13px;color:#0a2463;margin-bottom:8px">📈 Solicitudes por usuario</div>'+
+    us.map(u=>'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12.5px">'+
+      '<div style="flex:0 0 200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b>'+u+'</b></div>'+
+      '<div style="flex:1;background:#e2e8f0;border-radius:6px;height:14px;overflow:hidden"><div style="width:'+Math.round(por[u].t/max*100)+'%;height:100%;background:linear-gradient(90deg,#1e3a8a,#3b82f6)"></div></div>'+
+      '<div style="flex:0 0 130px;text-align:right">'+por[u].t+' total'+(por[u].p?' · <b style="color:#d97706">'+por[u].p+' pend.</b>':'')+'</div>'+
+    '</div>').join('')+'</div>';
+  box.innerHTML=html;
+}
 function renderAdmin(){
+  renderIndicadoresMant();
   const body=document.getElementById('adminBody'),filtro=document.getElementById('filtroEstado').value;
   let datos=_solicitudes;if(filtro)datos=datos.filter(s=>(s.estado||'PENDIENTE').toUpperCase()===filtro);
   if(!datos.length){body.innerHTML='<tr><td colspan="10" class="empty">No hay solicitudes'+(filtro?' '+filtro.toLowerCase():'')+'.</td></tr>';return;}
@@ -770,7 +818,8 @@ async function guardarProgramacion(){
     doc.save('Conductores_Licencias_'+new Date().toISOString().slice(0,10)+'.pdf');
   }
   </script>
-  <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Solicitud de Mantenimiento">
+  <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Solicitud de Mantenimiento"></script>
+<script>
 /* ════ GESTIÓN DE UNIDADES (solo admin): cambio de unidad y nueva movilidad ════ */
 let _cuDni=null;
 async function cuBuscar(){
