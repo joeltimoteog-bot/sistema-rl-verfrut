@@ -8041,6 +8041,7 @@ function logout(){
   sessionStorage.removeItem('banner_acceso_temporal');
   sessionStorage.clear();
   localStorage.removeItem('rl_session');
+  localStorage.removeItem('bienestarSocialAuth');   // no heredar Bienestar al siguiente usuario del equipo
   location.href='../../index.html';
 }
 

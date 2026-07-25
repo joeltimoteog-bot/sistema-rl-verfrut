@@ -804,6 +804,7 @@
     setTimeout(function () {
       try { if (typeof window.logout === 'function') { window.logout(); return; } } catch (e) {}
       try { sessionStorage.clear(); } catch (e) {}
+      try { localStorage.removeItem('rl_session'); localStorage.removeItem('bienestarSocialAuth'); } catch (e) {}
       try { location.href = '../../index.html'; } catch (e) {}
     }, 500);
   }

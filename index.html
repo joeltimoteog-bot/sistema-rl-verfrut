@@ -524,21 +524,56 @@ function checkSessionCache() {
       const bloqueo = verificarHorarioLogin(user);
       if (!bloqueo.permitido) { localStorage.removeItem('rl_session'); return; }
     }
-    // Restaurar sesión
-    sessionStorage.setItem('user', JSON.stringify(user));
-    sessionStorage.setItem('api', API);
-    if (s.token) sessionStorage.setItem('rl_token', s.token);
-    if (ROLES_SELECCION.includes(rol)) {
-      // Admin/coordinador → pantalla de módulos
-      document.getElementById('pmNombre').textContent = user.nombre || user.usuario || '';
-      aplicarVisibilidadModulos(user);
-      document.querySelector('.card').style.display = 'none';
-      document.getElementById('pantallaModulo').style.display = 'flex';
-    } else {
-      // Supervisor/otros → ir directo al dashboard
-      window.location.href = 'frontend/pages/dashboard.html';
-    }
+    // Computadoras compartidas: CONFIRMAR antes de reanudar la sesión guardada,
+    // para que nadie entre con el nombre de otro usuario.
+    mostrarReanudarSesion(user, s);
   } catch(e) { localStorage.removeItem('rl_session'); }
+}
+
+function _restaurarSesionCon(user, s) {
+  const rol = (user.rol||'').toLowerCase().trim();
+  sessionStorage.setItem('user', JSON.stringify(user));
+  sessionStorage.setItem('api', API);
+  if (s.token) sessionStorage.setItem('rl_token', s.token);
+  if (ROLES_SELECCION.includes(rol)) {
+    // Admin/coordinador → pantalla de módulos
+    document.getElementById('pmNombre').textContent = user.nombre || user.usuario || '';
+    aplicarVisibilidadModulos(user);
+    document.querySelector('.card').style.display = 'none';
+    document.getElementById('pantallaModulo').style.display = 'flex';
+  } else {
+    // Supervisor/otros → ir directo al dashboard
+    window.location.href = 'frontend/pages/dashboard.html';
+  }
+}
+
+function mostrarReanudarSesion(user, s) {
+  try {
+    const nom = user.nombre || user.usuario || '';
+    const ov = document.createElement('div');
+    ov.id = 'ovReanudar';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:400;background:rgba(2,6,23,.75);display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML =
+      '<div style="background:#0f172a;color:#f1f5f9;border:1px solid #334155;border-radius:16px;max-width:400px;width:100%;padding:22px;box-shadow:0 24px 60px rgba(0,0,0,.5);text-align:center;">' +
+      '<div style="font-size:34px;margin-bottom:6px;">👤</div>' +
+      '<div style="font-weight:800;font-size:16px;margin-bottom:4px;">Hay una sesión activa en este equipo</div>' +
+      '<div style="font-size:13.5px;color:#cbd5e1;margin-bottom:16px;">Sesión abierta de<br><b style="color:#7dd3fc;font-size:15px;">' + nom + '</b></div>' +
+      '<button id="btnReanudarSi" style="width:100%;background:linear-gradient(120deg,#0ea5e9,#0369a1);color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13.5px;cursor:pointer;margin-bottom:8px;">✔ Sí, soy ' + (nom.split(' ')[0]||'') + ' — continuar</button>' +
+      '<button id="btnReanudarNo" style="width:100%;background:#334155;color:#f1f5f9;border:none;border-radius:10px;padding:10px;font-weight:700;font-size:13px;cursor:pointer;">No soy yo — iniciar sesión con MI usuario</button></div>';
+    document.body.appendChild(ov);
+    document.getElementById('btnReanudarSi').addEventListener('click', function () {
+      ov.remove();
+      _restaurarSesionCon(user, s);
+    });
+    document.getElementById('btnReanudarNo').addEventListener('click', function () {
+      // Limpiar TODO rastro del usuario anterior (RR.LL y Bienestar)
+      localStorage.removeItem('rl_session');
+      localStorage.removeItem('bienestarSocialAuth');
+      try { sessionStorage.clear(); } catch (e) {}
+      ov.remove();
+      const u = document.getElementById('usuario'); if (u) u.focus();
+    });
+  } catch (e) { _restaurarSesionCon(user, s); }
 }
 
 // ── Login principal ───────────────────────────────────────────────
