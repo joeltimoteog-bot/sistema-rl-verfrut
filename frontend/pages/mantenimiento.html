@@ -62,6 +62,7 @@ textarea{resize:vertical;min-height:68px}
 .btn-send{background:var(--verde);color:#fff;width:100%;padding:13px;font-size:14px;margin-top:8px}
 .btn-send:hover{background:#15803d} .btn-send:disabled{background:#cbd5e1;cursor:not-allowed}
 .btn-sm{padding:6px 13px;font-size:11px}
+.btn:disabled{background:#cbd5e1;color:#64748b;cursor:not-allowed}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
 .box{display:none}.box.show{display:block;animation:fade .3s}
@@ -255,7 +256,7 @@ tr:hover td{background:#fafbfc}
           <div class="fcard-b">
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
               <div class="field"><label>DNI del conductor</label><input id="cuDni" maxlength="8" placeholder="8 dígitos"></div>
-              <div class="field" style="align-self:end"><button class="btn-p" onclick="cuBuscar()" id="cuBtnB">🔍 Buscar</button></div>
+              <div class="field" style="align-self:end"><button class="btn btn-az" onclick="cuBuscar()" id="cuBtnB">🔍 Buscar</button></div>
             </div>
             <div id="cuActual" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px"></div>
             <div id="cuForm" style="display:none">
@@ -265,7 +266,7 @@ tr:hover td{background:#fafbfc}
                 <div class="field"><label>Nuevo código interno / placa</label><input id="cuCod"></div>
                 <div class="field"><label>Propiedad</label><select id="cuProp"><option value="PROPIA">Propia</option><option value="ARRENDADA">Arrendada</option></select></div>
               </div>
-              <button class="btn-p" style="margin-top:12px" onclick="cuGuardar()" id="cuBtnG">💾 Actualizar unidad</button>
+              <button class="btn btn-vd" style="margin-top:12px" onclick="cuGuardar()" id="cuBtnG">💾 Actualizar unidad</button>
               <div id="cuMsg" style="margin-top:8px;font-size:13px"></div>
             </div>
           </div>
@@ -285,7 +286,7 @@ tr:hover td{background:#fafbfc}
               <div class="field"><label>Propiedad</label><select id="nmProp"><option value="PROPIA">Propia</option><option value="ARRENDADA">Arrendada</option></select></div>
               <div class="field"><label>Correo</label><input id="nmCorreo" type="email"></div>
             </div>
-            <button class="btn-p" style="margin-top:12px" onclick="nmGuardar()" id="nmBtnG">💾 Registrar movilidad</button>
+            <button class="btn btn-vd" style="margin-top:12px" onclick="nmGuardar()" id="nmBtnG">💾 Registrar movilidad</button>
             <div id="nmMsg" style="margin-top:8px;font-size:13px"></div>
           </div>
         </div>
@@ -849,9 +850,10 @@ async function cuGuardar(){
   if(!await appConfirm('¿Actualizar la unidad de este conductor a '+marca+' '+modelo+' ('+cod+')?'))return;
   const b=document.getElementById('cuBtnG');b.disabled=true;b.textContent='Guardando...';
   try{
-    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'mant_actualizarUnidad',dni:_cuDni,marca:marca,modelo:modelo,
-        codInterno:cod,propiedad:document.getElementById('cuProp').value,admin:USER.usuario})});
+    const _cuDatos={action:'mant_actualizarUnidad',dni:_cuDni,marca:marca,modelo:modelo,
+        codInterno:cod,propiedad:document.getElementById('cuProp').value,admin:USER.usuario,usuario:USER.usuario};
+    const r=await fetch(API+'?'+new URLSearchParams(_cuDatos),{method:'POST',
+      headers:{'Content-Type':'text/plain'},body:JSON.stringify(_cuDatos)});
     const res=await r.json();b.disabled=false;b.textContent='💾 Actualizar unidad';
     const m=document.getElementById('cuMsg');
     if(res&&res.ok){m.style.color='#16a34a';m.textContent='✅ '+(res.msg||'Unidad actualizada correctamente.');document.getElementById('cuForm').style.display='none';document.getElementById('cuActual').style.display='none';document.getElementById('cuDni').value='';}
@@ -911,10 +913,11 @@ async function nmGuardar(){
   if(!nombre||!marca||!modelo||!cod){await appAlert('Completa: DNI, nombre, marca, modelo y código interno.');return;}
   const b=document.getElementById('nmBtnG');b.disabled=true;b.textContent='Guardando...';
   try{
-    const r=await fetch(API,{method:'POST',headers:{'Content-Type':'text/plain'},
-      body:JSON.stringify({action:'mant_agregarMovilidad',dni:dni,nombre:nombre,cargo:g('nmCargo'),
+    const _nmDatos={action:'mant_agregarMovilidad',dni:dni,nombre:nombre,cargo:g('nmCargo'),
         empresa:document.getElementById('nmEmp').value,marca:marca,modelo:modelo,codInterno:cod,
-        propiedad:document.getElementById('nmProp').value,correo:g('nmCorreo'),admin:USER.usuario})});
+        propiedad:document.getElementById('nmProp').value,correo:g('nmCorreo'),admin:USER.usuario,usuario:USER.usuario};
+    const r=await fetch(API+'?'+new URLSearchParams(_nmDatos),{method:'POST',
+      headers:{'Content-Type':'text/plain'},body:JSON.stringify(_nmDatos)});
     const res=await r.json();b.disabled=false;b.textContent='💾 Registrar movilidad';
     const m=document.getElementById('nmMsg');
     if(res&&res.ok){m.style.color='#16a34a';m.textContent='✅ '+(res.msg||'Movilidad registrada.');['nmDni','nmNombre','nmCargo','nmMarca','nmModelo','nmCod','nmCorreo'].forEach(i=>document.getElementById(i).value='');_nmInfo(null);}
