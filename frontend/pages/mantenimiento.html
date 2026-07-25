@@ -403,20 +403,19 @@ async function enviarSolicitud(){
     if(!res||!res.ok){await appAlert((res&&res.msg)?res.msg:'Error al guardar.');return;}
     document.getElementById('solicitudId').textContent='N° de solicitud: '+(res.id||'—');
     document.getElementById('formMant').style.display='none';document.getElementById('confirmMsg').classList.add('show');
-    // ── Alerta automática al administrador (Monitor RR.LL: suena y queda en el canal) ──
+    // ── Alerta automática al administrador ──
+    // 1) Al canal del solicitante: el Monitor RR.LL la ve y suena.
+    // 2) Al canal personal de cada admin: le aparece tarjeta + notificación del
+    //    navegador en CUALQUIER página del sistema, aunque esté en otro módulo.
     try{
-      const ukey=String(USER.usuario||'').toLowerCase().replace(/[.#$/\[\]]/g,'_');
-      fetch('https://sistema-rl-verfrut-default-rtdb.firebaseio.com/mensajes/'+ukey+'.json',{
-        method:'POST',
-        body:JSON.stringify({
-          texto:'🔧 [AUTOMÁTICO] Nueva SOLICITUD DE MANTENIMIENTO '+(res.id?('N° '+res.id):'')+
-            '\n• Unidad: '+(datos.marca||'')+' '+(datos.modelo||'')+' ('+(datos.codInterno||'—')+')'+
-            '\n• Conductor: '+(datos.nombre||'')+' · Km: '+(datos.kilometraje||'')+
-            '\n• Tipo: '+(datos.tipoMantenimiento||''),
-          de:USER.nombre||USER.usuario, de_usuario:USER.usuario,
-          ts:{'.sv':'timestamp'}, leido:false
-        })
-      }).catch(function(){});
+      const txtAlerta='🔧 [AUTOMÁTICO] Nueva SOLICITUD DE MANTENIMIENTO '+(res.id?('N° '+res.id):'')+
+        '\n• Unidad: '+(datos.marca||'')+' '+(datos.modelo||'')+' ('+(datos.codInterno||'—')+')'+
+        '\n• Conductor: '+(datos.nombre||'')+' · Km: '+(datos.kilometraje||'')+
+        '\n• Tipo: '+(datos.tipoMantenimiento||'');
+      _mantMsgRTDB(USER.usuario, txtAlerta, USER.nombre||USER.usuario, USER.usuario);
+      MANT_ALERT_ADMINS.forEach(function(adm){
+        if(String(USER.usuario).toLowerCase()!==adm) _mantMsgRTDB(adm, txtAlerta, USER.nombre||USER.usuario, USER.usuario);
+      });
     }catch(eN){}
   }catch(e){btn.disabled=false;btn.textContent='ENVIAR SOLICITUD';await appAlert('Error de conexión al enviar.');console.error('[mant] enviar',e);}
 }
@@ -543,12 +542,38 @@ function _fechasExtra(id){
   if(ex.fechaCierre)t+='<br><span class="muted">🔒 Cerrada: '+ex.fechaCierre+'</span>';
   return t;
 }
+/* ── Mensajería RTDB del módulo: llega como tarjeta + notificación del navegador
+      en cualquier página del sistema donde esté conectado el destinatario ── */
+const MANT_ALERT_ADMINS=['jtimoteo'];
+function _mantMsgRTDB(destUsuario,texto,deNombre,deUsuario){
+  try{
+    if(!destUsuario)return;
+    const ukey=String(destUsuario).toLowerCase().replace(/[.#$/\[\]]/g,'_');
+    fetch('https://sistema-rl-verfrut-default-rtdb.firebaseio.com/mensajes/'+ukey+'.json',{
+      method:'POST',
+      body:JSON.stringify({texto:texto,de:deNombre||'Coordinación RR.LL.',de_usuario:deUsuario||USER.usuario,
+        ts:{'.sv':'timestamp'},leido:false})
+    }).catch(function(){});
+  }catch(e){}
+}
+function _mantAvisarSolicitante(id,texto){
+  try{
+    const s=_solicitudes.find(x=>x.id===id);
+    const dest=(s&&s.solicitante)?String(s.solicitante):'';
+    if(!dest||dest.toLowerCase()===String(USER.usuario).toLowerCase())return;
+    _mantMsgRTDB(dest,texto,'Coordinación RR.LL.',USER.usuario);
+  }catch(e){}
+}
 async function _cambiarEstadoMant(id,estado,msj){
   const ok=await appConfirm(msj);if(!ok)return;
   try{
     const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'actualizarEstadoMantenimiento',id:id,estado:estado,admin:USER.usuario}),headers:{'Content-Type':'text/plain'}});
     const res=await r.json();
     if(!res||!res.ok){await appAlert((res&&res.msg)?res.msg:'No se pudo actualizar.');return;}
+    _mantAvisarSolicitante(id,(estado==='CERRADO'
+      ?'🔒 Tu solicitud de mantenimiento '+id+' fue CERRADA y archivada.'
+      :'✅ Tu solicitud de mantenimiento '+id+' fue marcada como ATENDIDA con fecha de hoy.')+
+      '\nCoordinación de Relaciones Laborales.');
     await cargarAdmin();
   }catch(e){await appAlert('Error de conexión.');console.error('[mant] estado',e);}
 }
@@ -627,6 +652,11 @@ async function guardarProgramacion(){
     const r=await fetch(API,{method:'POST',body:JSON.stringify(datos),headers:{'Content-Type':'text/plain'}});
     const res=await r.json();btn.disabled=false;btn.textContent='Guardar';
     if(!res||!res.ok){await appAlert((res&&res.msg)?res.msg:'Error al guardar.');return;}
+    const _com=document.getElementById('progComentario').value.trim();
+    _mantAvisarSolicitante(_idActual,(datos.estado==='COMPLETADO'
+      ?'✅ Tu solicitud de mantenimiento '+_idActual+' fue COMPLETADA.'
+      :'📅 Tu solicitud de mantenimiento '+_idActual+' fue PROGRAMADA para el '+datos.fechaProgramada+'.')+
+      (_com?('\nIndicaciones: '+_com):'')+'\nCoordinación de Relaciones Laborales.');
     cerrarModal();cargarAdmin();
   }catch(e){btn.disabled=false;btn.textContent='Guardar';await appAlert('Error de conexión.');console.error('[mant] prog',e);}
 }

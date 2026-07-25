@@ -125,6 +125,26 @@
     } catch (e) {}
   }
 
+  // Tono suave de aviso (dos notas) al llegar una tarjeta de mensaje.
+  // Si el navegador bloquea el audio por falta de interacción, falla en silencio.
+  function _beepMsg() {
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      var ctx = _beepMsg._ctx || (_beepMsg._ctx = new AC());
+      if (ctx.state === 'suspended') { try { ctx.resume(); } catch (e) {} }
+      [[880, 0], [1174.7, 0.16]].forEach(function (nota) {
+        var o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = nota[0];
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + nota[1]);
+        g.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + nota[1] + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + nota[1] + 0.35);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(ctx.currentTime + nota[1]); o.stop(ctx.currentTime + nota[1] + 0.4);
+      });
+    } catch (e) {}
+  }
+
   // ── 4) Toast de mensaje del admin ──────────────────────────────────────
   var _mostrados = {};
 
@@ -884,6 +904,7 @@
       var de = (msg && msg.de) ? String(msg.de) : 'Coordinación RR.LL.';
       var texto = (msg && msg.texto) ? String(msg.texto) : '';
       _notifNav('📌 Mensaje de ' + de, texto);
+      _beepMsg();
       card.innerHTML =
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:700;color:#7dd3fc;">' +
         '<span style="font-size:16px;">📌</span><span>Mensaje de ' + _esc(de) + '</span></div>' +
