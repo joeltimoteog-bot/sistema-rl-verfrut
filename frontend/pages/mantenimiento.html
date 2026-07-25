@@ -274,7 +274,8 @@ tr:hover td{background:#fafbfc}
           <div class="fcard-h"><h2>➕ Nueva movilidad / nuevo conductor (incluye unidades arrendadas)</h2></div>
           <div class="fcard-b">
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-              <div class="field"><label>DNI *</label><input id="nmDni" maxlength="8"></div>
+              <div class="field"><label>DNI *</label><input id="nmDni" maxlength="8" inputmode="numeric" autocomplete="off" oninput="nmDniInput(this)" placeholder="Escribe 8 dígitos y se busca solo"></div>
+              <div id="nmDniInfoWrap" style="grid-column:1/-1;display:none"><div id="nmDniInfo" style="font-size:12.5px;padding:6px 10px;border-radius:8px"></div></div>
               <div class="field"><label>Nombre completo *</label><input id="nmNombre"></div>
               <div class="field"><label>Cargo</label><input id="nmCargo"></div>
               <div class="field"><label>Empresa</label><select id="nmEmp"><option>RAPEL</option><option>VERFRUT</option><option>AMBAS</option></select></div>
@@ -857,6 +858,52 @@ async function cuGuardar(){
     else{m.style.color='#dc2626';m.textContent='❌ '+((res&&res.msg)||'Error al actualizar. ¿Está instalada la acción mant_actualizarUnidad en el Apps Script?');}
   }catch(e){b.disabled=false;b.textContent='💾 Actualizar unidad';await appAlert('Error de conexión.');}
 }
+/* ── Autocompletar datos del trabajador por DNI (Nueva movilidad) ── */
+let _nmReq=0,_nmTimer=null;
+function _nmInfo(estilo,html){
+  const w=document.getElementById('nmDniInfoWrap'),d=document.getElementById('nmDniInfo');
+  if(!html){w.style.display='none';return;}
+  const est={
+    busca:'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe',
+    ok:'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
+    aviso:'background:#fffbeb;color:#b45309;border:1px solid #fde68a',
+    error:'background:#fef2f2;color:#b91c1c;border:1px solid #fecaca'
+  };
+  d.style.cssText='font-size:12.5px;padding:6px 10px;border-radius:8px;'+(est[estilo]||est.busca);
+  d.innerHTML=html;w.style.display='block';
+}
+function nmDniInput(inp){
+  inp.value=inp.value.replace(/\D/g,'').slice(0,8);
+  clearTimeout(_nmTimer);
+  if(inp.value.length!==8){_nmInfo(null);return;}
+  _nmTimer=setTimeout(()=>nmBuscarDatos(inp.value),250);
+}
+async function nmBuscarDatos(dni){
+  const miReq=++_nmReq;
+  _nmInfo('busca','🔍 Buscando datos del DNI '+dni+'...');
+  for(let intento=1;intento<=2;intento++){
+    try{
+      const r=await fetch(API+'?'+new URLSearchParams({action:'buscarTrabajador',q:dni,empresa:''}));
+      const res=await r.json();
+      if(miReq!==_nmReq)return; // llegó una búsqueda más nueva, descartar
+      const t=(res&&res.success&&res.data&&res.data.length)?res.data[0]:null;
+      if(t){
+        if(t.nombre)document.getElementById('nmNombre').value=t.nombre;
+        if(t.cargo)document.getElementById('nmCargo').value=t.cargo;
+        const emp=String(t.empresa||'').toUpperCase(),sel=document.getElementById('nmEmp');
+        if(emp.indexOf('VERFRUT')!==-1)sel.value='VERFRUT';else if(emp.indexOf('RAPEL')!==-1)sel.value='RAPEL';
+        _nmInfo('ok','✅ <b>'+(t.nombre||'')+'</b>'+(t.cargo?' · '+t.cargo:'')+(t.empresa?' · '+t.empresa:'')+(t.fundo?' · '+t.fundo:'')+' — datos completados, revísalos y continúa.');
+      }else{
+        _nmInfo('aviso','⚠️ El DNI '+dni+' no figura en la base de trabajadores (RAPEL/VERFRUT). Puedes completar el nombre y los datos manualmente.');
+      }
+      return;
+    }catch(e){
+      if(miReq!==_nmReq)return;
+      if(intento===1){_nmInfo('busca','🔍 Reintentando búsqueda...');continue;}
+      _nmInfo('error','❌ No se pudo consultar la base en este momento. Completa los datos manualmente o vuelve a escribir el DNI para reintentar.');
+    }
+  }
+}
 async function nmGuardar(){
   const g=id=>document.getElementById(id).value.trim();
   const dni=g('nmDni'),nombre=g('nmNombre'),marca=g('nmMarca'),modelo=g('nmModelo'),cod=g('nmCod');
@@ -870,7 +917,7 @@ async function nmGuardar(){
         propiedad:document.getElementById('nmProp').value,correo:g('nmCorreo'),admin:USER.usuario})});
     const res=await r.json();b.disabled=false;b.textContent='💾 Registrar movilidad';
     const m=document.getElementById('nmMsg');
-    if(res&&res.ok){m.style.color='#16a34a';m.textContent='✅ '+(res.msg||'Movilidad registrada.');['nmDni','nmNombre','nmCargo','nmMarca','nmModelo','nmCod','nmCorreo'].forEach(i=>document.getElementById(i).value='');}
+    if(res&&res.ok){m.style.color='#16a34a';m.textContent='✅ '+(res.msg||'Movilidad registrada.');['nmDni','nmNombre','nmCargo','nmMarca','nmModelo','nmCod','nmCorreo'].forEach(i=>document.getElementById(i).value='');_nmInfo(null);}
     else{m.style.color='#dc2626';m.textContent='❌ '+((res&&res.msg)||'Error al registrar. ¿Está instalada la acción mant_agregarMovilidad en el Apps Script?');}
   }catch(e){b.disabled=false;b.textContent='💾 Registrar movilidad';await appAlert('Error de conexión.');}
 }
