@@ -404,7 +404,8 @@ function cargarCacheLS() {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return false;
     const obj = JSON.parse(raw);
-    if (Date.now() - obj.ts > CACHE_TTL) { localStorage.removeItem(CACHE_KEY); return false; }
+    // CARGA RÁPIDA: la copia local nunca se descarta por antigüedad.
+    // Se pinta al instante y el refresco en segundo plano trae lo fresco.
     CACHE.estadisticasAdmin = obj.data;
     return true;
   } catch(e) { return false; }

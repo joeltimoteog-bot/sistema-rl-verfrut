@@ -142,16 +142,36 @@ function limpiarNuevo(){
   _trabajadorActual = null;
 }
 
-/* ─────────── Cargar lista maestra (backend GAS) ─────────── */
+/* ─────────── Cargar lista maestra (backend GAS) ───────────
+   CARGA RÁPIDA: pinta al instante la última copia guardada en el navegador
+   y refresca desde la hoja en segundo plano. */
+const ALM_CACHE_KEY = 'alm_cache_v1';
+function _almCacheGet(){
+  try{ const v = JSON.parse(sessionStorage.getItem(ALM_CACHE_KEY) || 'null'); return Array.isArray(v) && v.length ? v : null; }
+  catch(e){ return null; }
+}
+function _almCacheSet(lista){
+  try{ sessionStorage.setItem(ALM_CACHE_KEY, JSON.stringify(lista)); }catch(e){}
+}
 async function cargarLista(){
   const tbody = document.getElementById('tbody');
-  tbody.innerHTML = '<tr><td colspan="9" class="loading">Cargando lista…</td></tr>';
+  const cache = _almCacheGet();
+  if(cache){
+    colaboradores = cache.map(_normalizar);
+    poblarFiltroComedor();
+    render();                                    // pinta al instante
+  }else{
+    tbody.innerHTML = '<tr><td colspan="9" class="loading">Cargando lista…</td></tr>';
+  }
   try{
     const d = await apiGet({ action:'getAlmuerzos', usuario: USER ? USER.usuario : '' });
     colaboradores = (d && d.colaboradores) ? d.colaboradores.map(_normalizar) : [];
+    _almCacheSet(colaboradores);
   }catch(e){
-    colaboradores = [];
-    tbody.innerHTML = '<tr><td colspan="9" class="empty">No se pudo cargar. Verifica la conexión.</td></tr>';
+    if(!cache){
+      colaboradores = [];
+      tbody.innerHTML = '<tr><td colspan="9" class="empty">No se pudo cargar. Verifica la conexión.</td></tr>';
+    }
     return;
   }
   poblarFiltroComedor();
@@ -186,7 +206,7 @@ async function guardarFila(dni){
       estado: c.estado, observacion: c.observacion,
       usuario: USER ? USER.usuario : ''
     });
-    if(d && d.success){ if(flag){ flag.textContent='✓'; flag.style.color='#16a34a'; setTimeout(()=>{ if(flag) flag.textContent=''; },1400); } }
+    if(d && d.success){ _almCacheSet(colaboradores); if(flag){ flag.textContent='✓'; flag.style.color='#16a34a'; setTimeout(()=>{ if(flag) flag.textContent=''; },1400); } }
     else { if(flag){ flag.textContent='✗'; flag.style.color='#dc2626'; } toast('Error al guardar: '+((d&&d.error)||'desconocido'), true); }
   }catch(e){
     if(flag){ flag.textContent='✗'; flag.style.color='#dc2626'; }
@@ -372,11 +392,16 @@ function _construirTablaHTML(){
   const tdh = 'style="border:1px solid #0a2463;padding:6px 9px;text-align:left"';
   const td  = 'style="border:1px solid #c9c9c9;padding:5px 9px"';
 
+  // Columnas del resumen = encabezados de la base
+  const NCR = 8;
   function filaPersona(c){
     const tipo = (c.tipoComida==='DIETA') ? 'DIETA' : 'ALMUERZO';
     return '<tr>'+
       '<td '+td+'>'+esc(c.dni||'')+'</td>'+
       '<td '+td+'>'+esc(c.nombre||'')+'</td>'+
+      '<td '+td+'>'+esc(c.cargo||'')+'</td>'+
+      '<td '+td+'>'+esc(c.regimen||'')+'</td>'+
+      '<td '+td+'>'+esc(c.comedor||'')+'</td>'+
       '<td '+td+'>'+tipo+'</td>'+
       '<td '+td+'>'+esc(c.empresa||'')+'</td>'+
       '<td '+td+'>'+esc(c.observacion||'')+'</td>'+
@@ -384,7 +409,7 @@ function _construirTablaHTML(){
   }
   function subgrupo(titulo, lista, bg){
     if(!lista.length) return '';
-    let r = '<tr><td colspan="5" style="background:'+bg+';padding:5px 9px;font-weight:bold;font-style:italic">'+titulo+' ('+lista.length+')</td></tr>';
+    let r = '<tr><td colspan="'+NCR+'" style="background:'+bg+';padding:5px 9px;font-weight:bold;font-style:italic">'+titulo+' ('+lista.length+')</td></tr>';
     lista.forEach(c=>{ r += filaPersona(c); });
     return r;
   }
@@ -395,7 +420,7 @@ function _construirTablaHTML(){
     if(!grupo.length) return;
     const enComedor = grupo.filter(c=>!esTaper(c));
     const enTaper   = grupo.filter(c=>esTaper(c));
-    body += '<tr><td colspan="5" style="background:#0a2463;color:#fff;padding:6px 9px;font-weight:bold;font-size:12pt">'+esc(co)+' — '+grupo.length+'</td></tr>';
+    body += '<tr><td colspan="'+NCR+'" style="background:#0a2463;color:#fff;padding:6px 9px;font-weight:bold;font-size:12pt">'+esc(co)+' — '+grupo.length+'</td></tr>';
     body += subgrupo('🍽️ En comedor', enComedor, '#eef2ff');
     body += subgrupo('📦 Recojo en taper', enTaper, '#fff7ed');
   });
@@ -403,12 +428,13 @@ function _construirTablaHTML(){
   return ''+
     '<table style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif;font-size:11pt">'+
       '<thead><tr style="background:#0a2463;color:#ffffff">'+
-        '<th '+tdh+'>DNI</th><th '+tdh+'>Nombre y Apellidos</th><th '+tdh+'>Tipo</th>'+
+        '<th '+tdh+'>DNI</th><th '+tdh+'>Nombre y Apellidos</th><th '+tdh+'>Cargo</th>'+
+        '<th '+tdh+'>Régimen</th><th '+tdh+'>Comedor asignado</th><th '+tdh+'>Tipo comida</th>'+
         '<th '+tdh+'>Empresa</th><th '+tdh+'>Observación</th>'+
       '</tr></thead>'+
       '<tbody>'+body+'</tbody>'+
       '<tfoot><tr style="background:#eef2ff;font-weight:bold">'+
-        '<td colspan="5" style="border:1px solid #c9c9c9;padding:6px 9px">'+
+        '<td colspan="'+NCR+'" style="border:1px solid #c9c9c9;padding:6px 9px">'+
         'Total activos: '+activos.length+'  (Almuerzo: '+totalAlm+' · Dieta: '+totalDie+' · Recojo en taper: '+totalTaper+')</td>'+
       '</tr></tfoot>'+
     '</table>';
@@ -439,22 +465,35 @@ function descargarExcelAlmuerzos(){
   const orden = COMEDORES.slice();
   activos.forEach(c=>{ if(c.comedor && orden.indexOf(c.comedor)<0) orden.push(c.comedor); });
 
+  // TODAS las columnas de la base (A:I de la hoja)
+  const NCOL = 10;
   function filaPersona(c){
+    const activo = esActivo(c);
     const tipo = (c.tipoComida==='DIETA') ? 'DIETA' : 'ALMUERZO';
     return '<tr>'+
       '<td style="mso-number-format:\'\\@\'">'+esc(c.dni||'')+'</td>'+  // DNI como texto
       '<td>'+esc(c.nombre||'')+'</td>'+
+      '<td>'+esc(c.cargo||'')+'</td>'+
+      '<td>'+esc(c.regimen||'')+'</td>'+
+      '<td>'+esc(c.comedor||'')+'</td>'+
       '<td>'+tipo+'</td>'+
-      '<td>'+esc(c.empresa||'')+'</td>'+
+      '<td>'+(activo?'ACTIVO':'INACTIVO')+'</td>'+
+      '<td>'+(activo?'':esc(c.estado||''))+'</td>'+                      // Motivo (si inactivo)
       '<td>'+esc(c.observacion||'')+'</td>'+
+      '<td>'+esc(c.empresa||'')+'</td>'+
     '</tr>';
   }
   function subgrupo(titulo, lista, bg){
     if(!lista.length) return '';
-    let r = '<tr><td colspan="5" style="background:'+bg+';font-weight:bold;font-style:italic">'+titulo+' ('+lista.length+')</td></tr>';
+    let r = '<tr><td colspan="'+NCOL+'" style="background:'+bg+';font-weight:bold;font-style:italic">'+titulo+' ('+lista.length+')</td></tr>';
     lista.forEach(c=>{ r += filaPersona(c); });
     return r;
   }
+  const CABECERA =
+    '<tr style="background:#0a2463;color:#fff;font-weight:bold">'+
+      '<td>DNI</td><td>Nombre y Apellidos</td><td>Cargo</td><td>Régimen</td>'+
+      '<td>Comedor asignado</td><td>Tipo comida</td><td>Estado</td>'+
+      '<td>Motivo (si inactivo)</td><td>Observación</td><td>Empresa</td></tr>';
 
   let body = '';
   orden.forEach(co=>{
@@ -462,18 +501,24 @@ function descargarExcelAlmuerzos(){
     if(!grupo.length) return;
     const enComedor = grupo.filter(c=>!esTaper(c));
     const enTaper   = grupo.filter(c=>esTaper(c));
-    body += '<tr><td colspan="5" style="background:#0a2463;color:#fff;font-weight:bold">'+esc(co)+' - '+grupo.length+'</td></tr>';
+    body += '<tr><td colspan="'+NCOL+'" style="background:#0a2463;color:#fff;font-weight:bold">'+esc(co)+' - '+grupo.length+'</td></tr>';
     body += subgrupo('En comedor', enComedor, '#eef2ff');
     body += subgrupo('Recojo en taper', enTaper, '#fff7ed');
   });
+
+  // Sección final: personal INACTIVO (con su motivo), para tener la base completa
+  const inactivos = colaboradores.filter(c=>!esActivo(c));
+  if(inactivos.length){
+    body += '<tr><td colspan="'+NCOL+'" style="background:#7f1d1d;color:#fff;font-weight:bold">PERSONAL INACTIVO (no programado hoy) - '+inactivos.length+'</td></tr>';
+    inactivos.forEach(c=>{ body += filaPersona(c); });
+  }
 
   const tabla =
     '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'+
     '<head><meta charset="UTF-8"></head><body>'+
     '<table border="1">'+
-      '<tr><td colspan="5" style="font-weight:bold;font-size:14px">Programación de almuerzos - '+esc(hoy)+'</td></tr>'+
-      '<tr style="background:#0a2463;color:#fff;font-weight:bold">'+
-        '<td>DNI</td><td>Nombre y Apellidos</td><td>Tipo</td><td>Empresa</td><td>Observación</td></tr>'+
+      '<tr><td colspan="'+NCOL+'" style="font-weight:bold;font-size:14px">Programación de almuerzos - '+esc(hoy)+'</td></tr>'+
+      CABECERA+
       body+
     '</table></body></html>';
 

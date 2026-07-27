@@ -165,7 +165,27 @@ h3{font-size:16px !important}
     <div class="card">
       <div class="card-h">
         <span class="card-t">Gestión de Usuarios</span>
-        <button class="btn-n" onclick="abrirUs()">+ Nuevo Usuario</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn-n" style="background:#64748b" onclick="refrescarUs()" id="btnRefUs">🔄 Actualizar</button>
+          <button class="btn-n" onclick="abrirUs()">+ Nuevo Usuario</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:12px 16px;border-bottom:1px solid #e2e8f0">
+        <input id="usBuscar" placeholder="🔍 Buscar por usuario, nombre o correo..." oninput="_renderUs()"
+               style="flex:1;min-width:220px;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit">
+        <select id="usFRol" onchange="_renderUs()" style="padding:9px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit">
+          <option value="">Todos los roles</option>
+          <option value="administrador">Administrador</option>
+          <option value="administrador 01">Administrador 01</option>
+          <option value="administrador 02">Administrador 02</option>
+          <option value="supervisor">Supervisor</option>
+        </select>
+        <select id="usFEstado" onchange="_renderUs()" style="padding:9px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:inherit">
+          <option value="">Todos</option>
+          <option value="1">Solo activos</option>
+          <option value="0">Solo inactivos</option>
+        </select>
+        <span id="usContador" style="font-size:12.5px;color:#64748b;font-weight:600;white-space:nowrap"></span>
       </div>
       <div class="tw">
         <table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Empresa</th><th>Correo</th><th>Estado</th><th>Acciones</th></tr></thead>
@@ -229,11 +249,38 @@ async function apiPost(b) {
 document.addEventListener('click', e=>{ if(e.target.classList.contains('ov')) e.target.classList.remove('on'); });
 
 // ── Funciones usuarios ──
-function _renderUs(data) {
+// CARGA RÁPIDA: copia local en el navegador que se pinta al instante
+// y se refresca desde el servidor en segundo plano.
+function _usCacheGet(){
+  try{ const o=JSON.parse(localStorage.getItem(CACHE_KEY)||'null'); return (o&&Array.isArray(o.data))?o.data:null; }
+  catch(e){ return null; }
+}
+function _usCacheSet(lista){
+  try{ localStorage.setItem(CACHE_KEY, JSON.stringify({ts:Date.now(), data:lista})); }catch(e){}
+}
+
+function _renderUs() {
   const tb = document.getElementById('tbUs');
   if(!tb) return;
-  if(!data || !data.length){ tb.innerHTML='<tr><td colspan="7" class="empty">No hay usuarios registrados</td></tr>'; return; }
-  tb.innerHTML = data.map(u=>`<tr>
+  const data = CACHE.usuarios || [];
+  const q   = (v('usBuscar')||'').toLowerCase().trim();
+  const fr  = (v('usFRol')||'').toLowerCase();
+  const fe  = v('usFEstado');
+  const filas = data.filter(u=>{
+    if(fr && String(u.rol||'').toLowerCase()!==fr) return false;
+    if(fe==='1' && !u.activo) return false;
+    if(fe==='0' && u.activo) return false;
+    if(q && ((u.usuario||'')+' '+(u.nombre||'')+' '+(u.correo||'')).toLowerCase().indexOf(q)<0) return false;
+    return true;
+  }).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
+
+  const act = data.filter(u=>u.activo).length;
+  const cont = document.getElementById('usContador');
+  if(cont) cont.textContent = 'Mostrando '+filas.length+' de '+data.length+' · Activos: '+act+' · Inactivos: '+(data.length-act);
+
+  if(!data.length){ tb.innerHTML='<tr><td colspan="7" class="empty">No hay usuarios registrados</td></tr>'; return; }
+  if(!filas.length){ tb.innerHTML='<tr><td colspan="7" class="empty">Sin resultados con esos filtros</td></tr>'; return; }
+  tb.innerHTML = filas.map(u=>`<tr style="${u.activo?'':'opacity:.55'}">
     <td><strong>${u.usuario||''}</strong></td><td>${u.nombre||''}</td>
     <td>${cap(u.rol||'')}</td>
     <td><span class="bg ${empC(u.empresa)}">${u.empresa||''}</span></td>
@@ -243,27 +290,33 @@ function _renderUs(data) {
   </tr>`).join('');
 }
 
-async function cargarUs() {
-  if (CACHE.usuarios) { _renderUs(CACHE.usuarios); return; }
+async function cargarUs(fondo) {
   const tb = document.getElementById('tbUs');
-  if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">⏳ Cargando...</td></tr>';
+  if(!fondo){
+    const cache = _usCacheGet();
+    if(cache){ CACHE.usuarios = cache; _renderUs(); }        // pinta al instante
+    else if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">⏳ Cargando...</td></tr>';
+  }
   const reqParams = {action:'getUsuarios', usuario:USER.usuario, rol:USER.rol};
-  console.log('[usuarios] cargarUs → params:', reqParams);
   try{
     const d=await apiGet(reqParams);
-    console.log('[usuarios] respuesta API:', d);
     if(!d.success){
-      console.warn('[usuarios] API devolvió error:', d.error);
-      if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error: '+(d.error||'No autorizado')+'</td></tr>';
+      if(!CACHE.usuarios && tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error: '+(d.error||'No autorizado')+'</td></tr>';
       return;
     }
-    console.log('[usuarios] registros recibidos:', (d.data||[]).length);
     CACHE.usuarios = d.data || [];
-    _renderUs(CACHE.usuarios);
+    _usCacheSet(CACHE.usuarios);
+    _renderUs();
   }catch(e){
     console.error('[usuarios] excepción en cargarUs:', e);
-    if(tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error de conexión</td></tr>';
+    if(!CACHE.usuarios && tb) tb.innerHTML = '<tr><td colspan="7" class="empty">❌ Error de conexión</td></tr>';
   }
+}
+
+function refrescarUs(){
+  const b=document.getElementById('btnRefUs');
+  if(b){ b.disabled=true; b.textContent='⏳ Actualizando...'; }
+  cargarUs(true).finally(()=>{ if(b){ b.disabled=false; b.textContent='🔄 Actualizar'; } });
 }
 
 function abrirUs(){
@@ -277,14 +330,17 @@ async function guardarUs() {
   if(d.correo && !d.correo.includes('@')){mostrarToast('❌ Correo inválido','error');return;}
   try{
     const r=await apiPost(d);
-    if(r.success){cerrar('mUs');delete CACHE.usuarios;await cargarUs();mostrarToast('✅ Usuario creado: '+d.usuario);}
+    if(r.success){cerrar('mUs');await cargarUs(true);mostrarToast('✅ Usuario creado: '+d.usuario);}
     else mostrarToast('❌ Error al crear usuario','error');
   }catch(e){mostrarToast('❌ Error de conexión','error');}
 }
 
 async function toggleUs(usr,act){
   if(!await appConfirm((act?'Activar':'Desactivar')+' a '+usr+'?'))return;
-  await apiPost({action:'updateUsuario',usuario:usr,activo:act});delete CACHE.usuarios;await cargarUs();
+  await apiPost({action:'updateUsuario',usuario:usr,activo:act});
+  // reflejo inmediato en pantalla + confirmación desde el servidor en segundo plano
+  const u=(CACHE.usuarios||[]).find(x=>x.usuario===usr); if(u){u.activo=act;_usCacheSet(CACHE.usuarios);_renderUs();}
+  cargarUs(true);
 }
 
 // ── Init ──
