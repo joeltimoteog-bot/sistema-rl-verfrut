@@ -663,6 +663,117 @@
   }
   if (ES_ADMIN) iniciarResumenAdmin();
 
+  /* ── 4e) SALUDO DE NUEVAS PROGRAMACIONES (Capacitaciones ETI + Checklist) ──
+     Cuando al usuario le registran una programación nueva en Capacitaciones
+     ETI o en Evaluaciones de Checklist, al iniciar en CUALQUIER módulo se le
+     muestra un saludo personalizado de la Coordinación con sus fechas.
+     Se repite en cada ingreso hasta que pulse "Entendido"; vuelve a aparecer
+     solo cuando le registran fechas nuevas. */
+  function _spKey() { return '_rlSaludoProg_' + String(USER.usuario || '').toLowerCase(); }
+  function _spVistos() { try { return JSON.parse(localStorage.getItem(_spKey()) || '[]'); } catch (e) { return []; } }
+  function _spGuardar(l) { try { localStorage.setItem(_spKey(), JSON.stringify(l.slice(-80))); } catch (e) {} }
+  function _spFirma(tipo, p) {
+    var fechas = (p.fechas && p.fechas.length ? p.fechas.slice().sort().join(',') : String(p.fechaProgramada || ''));
+    return tipo + '|' + String(p.tema || p.sup || '') + '|' + String(p.sector || '') + '|' + fechas;
+  }
+  function iniciarSaludoProgramaciones() {
+    Promise.all([
+      _fsGet('usuarios_eti')['catch'](function () { return []; }),
+      _fsGet('programaciones_eti')['catch'](function () { return []; }),
+      _fsGet('programaciones_eval')['catch'](function () { return []; })
+    ]).then(function (res) {
+      var cuentas = res[0], progsCap = res[1], progsEval = res[2];
+      var miNombre = USER.nombre || USER.usuario;
+      var cta = cuentas.find(function (c) { return String(c.usuario || '').toLowerCase() === String(USER.usuario).toLowerCase(); });
+      var nombreSup = (cta && cta.supervisorNombre) || miNombre;
+      var hoy = _pHoyISO();
+      var caps = [], evals = [], firmas = [];
+      progsCap.forEach(function (p) {
+        if (p.estado === 'ejecutada') return;
+        if (!_pCoincide(p.supervisor || '', nombreSup) && !_pCoincide(p.supervisor || '', miNombre)) return;
+        var fechas = (p.fechas && p.fechas.length ? p.fechas.slice().sort()
+                      : [p.fechaProgramada, p.fechaFin || p.fechaProgramada].filter(Boolean).sort());
+        if (!fechas.length || fechas[fechas.length - 1] < hoy) return;  // vencidas: las cubre la alerta roja
+        firmas.push(_spFirma('cap', p));
+        caps.push({ tema: p.tema || 'Capacitación ETI', sector: p.sector || '',
+                    txt: (fechas[0] === fechas[fechas.length - 1] ? _pFmt(fechas[0])
+                          : _pFmt(fechas[0]) + ' al ' + _pFmt(fechas[fechas.length - 1])) });
+      });
+      progsEval.forEach(function (p) {
+        if (p.estado === 'ejecutada') return;
+        if (!_pCoincide(p.sup || '', miNombre)) return;
+        var ejec = p.fechasEjecutadas || [];
+        var pend = (p.fechas || []).filter(function (f) { return ejec.indexOf(f) < 0 && f >= hoy; }).sort();
+        if (!pend.length) return;
+        firmas.push(_spFirma('eval', p));
+        evals.push({ txt: pend.map(_pFmt).join(' · ') });
+      });
+      if (!caps.length && !evals.length) return;
+      var vistos = _spVistos();
+      var hayNuevas = firmas.some(function (f) { return vistos.indexOf(f) < 0; });
+      if (!hayNuevas) return;
+      _spMostrar(caps, evals, firmas);
+    })['catch'](function () {});
+  }
+  function _spMostrar(caps, evals, firmas) {
+    try {
+      if (document.getElementById('_rlSaludoProg')) return;
+      var primer = String(USER.nombre || USER.usuario).split(' ')[0];
+      primer = primer.charAt(0).toUpperCase() + primer.slice(1).toLowerCase();
+      var ov = document.createElement('div');
+      ov.id = '_rlSaludoProg';
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,20,40,.55);backdrop-filter:blur(3px);' +
+        'z-index:2147483646;display:flex;align-items:center;justify-content:center;padding:16px;font-family:inherit;';
+      var lista = '';
+      if (caps.length) {
+        lista += '<div style="font-weight:800;color:#b45309;margin:10px 0 4px">🎓 Capacitaciones ETI programadas:</div>' +
+          caps.map(function (c) {
+            return '<div style="padding:5px 8px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;margin-bottom:4px;font-size:12.5px;color:#78350f">📅 <b>' +
+              _esc(c.txt) + '</b> — ' + _esc(c.tema) + (c.sector ? ' · ' + _esc(c.sector) : '') + '</div>';
+          }).join('');
+      }
+      if (evals.length) {
+        lista += '<div style="font-weight:800;color:#1d4ed8;margin:10px 0 4px">📝 Evaluaciones de Checklist programadas:</div>' +
+          evals.map(function (e) {
+            return '<div style="padding:5px 8px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;margin-bottom:4px;font-size:12.5px;color:#1e3a8a">📅 <b>' +
+              _esc(e.txt) + '</b></div>';
+          }).join('');
+      }
+      ov.innerHTML =
+        '<div style="background:#fff;border-radius:18px;max-width:520px;width:100%;max-height:88vh;overflow:auto;' +
+        'box-shadow:0 24px 70px rgba(0,0,0,.4);">' +
+        '<div style="background:linear-gradient(135deg,#0a2463,#1e40af);color:#fff;padding:18px 22px;border-radius:18px 18px 0 0">' +
+        '<div style="font-size:20px;font-weight:800">👋 ¡Hola, ' + _esc(primer) + '!</div>' +
+        '<div style="font-size:12.5px;opacity:.85;margin-top:2px">Te saluda <b>Joel Timoteo</b> · Coordinación de Relaciones Laborales</div></div>' +
+        '<div style="padding:16px 22px;color:#0f172a;font-size:13.5px;line-height:1.55">' +
+        'Te hago recordar que <b>ya están registradas las fechas</b> de tu programación de ' +
+        '<b>CAPACITACIONES ETI</b> y <b>EVALUACIONES DE CHECKLIST</b>:' + lista +
+        '<div style="margin-top:10px">Te sugiero darte una vuelta por el <b>módulo de Capacitaciones</b> para que te programes ' +
+        'y te organices con los demás capacitadores de <b>Seguridad y Sostenibilidad</b>. ' +
+        'Recuerda que <b>tú lideras las capacitaciones</b> de tu sector 💪</div>' +
+        '<div style="margin-top:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:9px 12px;font-size:12.5px;color:#14532d">' +
+        '💡 <b>Consejo:</b> agenda estas fechas en tu celular y prepara tus materiales con 2 días de anticipación. ' +
+        'Si alguna fecha se te cruza con otra actividad, comunícamelo con tiempo al <b>960 853 224</b> para reprogramarla sin observaciones.</div>' +
+        '<div style="display:flex;gap:10px;margin-top:14px;flex-wrap:wrap">' +
+        '<button type="button" data-sp="ok" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:10px;' +
+        'padding:11px 14px;font-weight:800;font-size:13px;cursor:pointer">✅ Entendido, me voy a programar</button>' +
+        '<button type="button" data-sp="ir" style="background:#0a2463;color:#fff;border:none;border-radius:10px;' +
+        'padding:11px 14px;font-weight:800;font-size:13px;cursor:pointer">🎓 Ir a Capacitaciones ↗</button>' +
+        '</div></div></div>';
+      document.body.appendChild(ov);
+      ov.querySelector('[data-sp="ok"]').addEventListener('click', function () {
+        var vistos = _spVistos();
+        firmas.forEach(function (f) { if (vistos.indexOf(f) < 0) vistos.push(f); });
+        _spGuardar(vistos);
+        if (ov.parentNode) ov.parentNode.removeChild(ov);
+      });
+      ov.querySelector('[data-sp="ir"]').addEventListener('click', function () {
+        try { window.open('https://joeltimoteog-bot.github.io/sistema-eti/', '_blank'); } catch (e) {}
+      });
+    } catch (e) {}
+  }
+  if (!ES_ADMIN) setTimeout(iniciarSaludoProgramaciones, 3500);
+
   // ── Historial de conexiones: 1 registro por sesión de navegador ─────────
   try {
     if (!sessionStorage.getItem('_rl_hist_ok')) {
