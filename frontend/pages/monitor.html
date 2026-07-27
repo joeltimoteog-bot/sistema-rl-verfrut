@@ -110,6 +110,9 @@
     <div class="pill" style="color:var(--mut)"><span id="cntTot">0</span> registrados</div>
     <button class="btnGhost" id="btnDifu" style="color:#fbbf24">📢 Difusión</button>
     <button class="btnGhost" id="btnAsis" style="color:#7dd3fc">📅 Asistencia</button>
+    <button class="btnGhost" id="btnEvid" style="color:#a5b4fc">📄 Evidencia</button>
+    <button class="btnGhost" id="btnFicha" style="color:#6ee7b7">👤 Ficha 360°</button>
+    <button class="btnGhost" id="btnAcc" style="color:#fda4af">🕐 Accesos</button>
     <button class="btnGhost" id="btnMute" title="Silenciar avisos">🔊</button>
     <button class="btnGhost" onclick="location.href='dashboard.html'">← Dashboard</button>
   </div>
@@ -157,19 +160,58 @@
       <select id="difuDest" style="width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:9px;margin-bottom:10px;font-size:13px">
         <option value="conectados">Solo conectados ahora</option>
         <option value="todos">Todos los registrados</option>
-        <option value="pendientes">⏰ Solo con documentos por regularizar (en proceso)</option>
         <option value="RAPEL">Empresa RAPEL (incluye AMBAS)</option>
         <option value="VERFRUT">Empresa VERFRUT (incluye AMBAS)</option>
       </select>
-      <div id="difuNotaPend" style="display:none;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:10px;padding:8px 10px;margin-bottom:10px;font-size:12px;color:#fbbf24;line-height:1.5">
-        Cada persona recibirá un mensaje <b>personalizado con su detalle</b> de pendientes
-        (informes de visitas vencidos y casos sin informe/reporte).
-        Lo que escribas abajo se agrega al final como nota tuya (opcional).
-        <div id="difuPendCnt" style="margin-top:4px;color:#f1f5f9"></div>
-      </div>
       <textarea id="difuTxt" placeholder="Escribe el aviso para el grupo…"></textarea>
       <button class="send" id="difuEnviar">📢 Enviar difusión</button>
     </div>
+  </div>
+</div>
+
+<!-- Panel EVIDENCIA DE COMUNICACIONES -->
+<div id="evidOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,6,17,.65);z-index:50;align-items:center;justify-content:center">
+  <div class="card" style="width:min(860px,96vw);max-height:86vh;display:flex;flex-direction:column">
+    <div class="hd"><h2>📄 Evidencia de comunicaciones</h2><span class="cnt" id="evidCerrar" style="cursor:pointer;font-size:16px">✕</span></div>
+    <div style="padding:12px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="evidUser" style="background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:8px;font-size:13px;min-width:180px"></select>
+      <input type="date" id="evidDesde" style="background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:7px;font-size:13px">
+      <input type="date" id="evidHasta" style="background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:7px;font-size:13px">
+      <button class="btnGhost" id="evidGenerar">🔍 Ver</button>
+      <span id="evidCnt" style="color:var(--mut);font-size:12px"></span>
+      <button class="btnGhost" id="evidPDF" style="margin-left:auto;color:#a5b4fc">🖨️ Imprimir / PDF</button>
+    </div>
+    <div style="overflow:auto;padding:0 16px 16px" id="evidBody"></div>
+  </div>
+</div>
+
+<!-- Panel FICHA 360° -->
+<div id="fichaOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,6,17,.65);z-index:50;align-items:center;justify-content:center">
+  <div class="card" style="width:min(900px,96vw);max-height:88vh;display:flex;flex-direction:column">
+    <div class="hd"><h2>👤 Ficha 360° del trabajador</h2><span class="cnt" id="fichaCerrar" style="cursor:pointer;font-size:16px">✕</span></div>
+    <div style="padding:12px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="fichaDni" maxlength="8" inputmode="numeric" placeholder="DNI (8 dígitos)" style="background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:8px 12px;font-size:14px;width:170px">
+      <button class="btnGhost" id="fichaBuscar" style="color:#6ee7b7">🔍 Buscar en los 4 sistemas</button>
+      <button class="btnGhost" id="fichaPDF" style="margin-left:auto;color:#a5b4fc;display:none">🖨️ Imprimir ficha</button>
+    </div>
+    <div style="overflow:auto;padding:0 16px 16px" id="fichaBody">
+      <div class="empty">Escribe un DNI y el sistema reunirá todo: atenciones, casos, capacitaciones, evaluaciones y mantenimiento.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Panel REGISTRO DE ACCESOS -->
+<div id="accOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,6,17,.65);z-index:50;align-items:center;justify-content:center">
+  <div class="card" style="width:min(760px,96vw);max-height:86vh;display:flex;flex-direction:column">
+    <div class="hd"><h2>🕐 Registro de accesos</h2><span class="cnt" id="accCerrar" style="cursor:pointer;font-size:16px">✕</span></div>
+    <div style="padding:12px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="accUser" style="background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:8px;font-size:13px;min-width:180px"></select>
+      <input type="date" id="accFecha" style="background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:7px;font-size:13px">
+      <button class="btnGhost" id="accVer">🔍 Ver</button>
+      <span id="accCnt" style="color:var(--mut);font-size:12px"></span>
+      <button class="btnGhost" id="accCSV" style="margin-left:auto">⬇️ CSV</button>
+    </div>
+    <div style="overflow:auto;padding:0 16px 16px" id="accBody"></div>
   </div>
 </div>
 
@@ -375,73 +417,30 @@ function descargarAsistenciaCSV(){
 }
 
 /* ── Difusión: un aviso para varios usuarios a la vez ── */
-
-/* Detalle de pendientes de un usuario (para el mensaje personalizado) */
-function detallePendTxt(u){
-  const p = pendDe(u); if(!p) return '';
-  const partes = [];
-  p.visitas.forEach(est=>partes.push(est==='plazo_hoy'
-    ? '• Informe de visitas de la semana: el plazo vence HOY.'
-    : '• Informe de visitas de la semana pasada: VENCIDO.'));
-  if(p.casos.length) partes.push('• '+p.casos.length+' caso(s) registrados EN PROCESO, sin informe/reporte subido en Registro de Casos.');
-  return partes.join('\n');
-}
-function msgPendPersonalizado(u, extra){
-  let nom = String(u.nombre||u.usuario||'').trim().split(' ')[0] || 'colega';
-  nom = nom.charAt(0).toUpperCase() + nom.slice(1).toLowerCase();
-  return 'Estimado(a) ' + nom + ':\n\n' +
-    'Tienes documentos por regularizar (en proceso):\n' + detallePendTxt(u) + '\n\n' +
-    (extra ? extra + '\n\n' : 'Por favor regularízalos hoy y confírmame por este medio. Este es un seguimiento de tu gestión.\n\n') +
-    '— ' + (USER.nombre || 'Coordinación RR.LL');
-}
-
 async function enviarDifusion(){
   const txt = $('difuTxt').value.trim();
+  if(!txt){ toast('Escribe el aviso primero', true); return; }
   const dest = $('difuDest').value;
-  const esPend = dest === 'pendientes';
-  if(!txt && !esPend){ toast('Escribe el aviso primero', true); return; }
   const targets = Object.keys(PRES).filter(k=>{
     const u = PRES[k];
     if(MONITOR_ADMINS.includes(String(u.usuario||'').toLowerCase())) return false;
     const emp = String(u.empresa||'').toUpperCase();
     if(dest==='conectados') return estado(u)!=='off';
-    if(dest==='pendientes') return pendCount(u) > 0;
     if(dest==='RAPEL' || dest==='VERFRUT') return emp===dest || emp==='AMBAS';
     return true;
   });
-  if(!targets.length){
-    toast(esPend ? '🎉 Nadie tiene documentos por regularizar en este momento' : 'No hay destinatarios para ese filtro', esPend ? false : true);
-    return;
-  }
+  if(!targets.length){ toast('No hay destinatarios para ese filtro', true); return; }
   const b = $('difuEnviar'); b.disabled = true; b.textContent = 'Enviando…';
-  const rs = await Promise.all(targets.map(k=>{
-    const texto = esPend ? msgPendPersonalizado(PRES[k], txt) : txt;
-    return fetch(DB_URL+'/mensajes/'+k+'.json',{method:'POST',body:JSON.stringify({
-      texto: texto, de: USER.nombre||USER.usuario, de_usuario: USER.usuario,
+  const rs = await Promise.all(targets.map(k=>
+    fetch(DB_URL+'/mensajes/'+k+'.json',{method:'POST',body:JSON.stringify({
+      texto: txt, de: USER.nombre||USER.usuario, de_usuario: USER.usuario,
       ts: {'.sv':'timestamp'}, leido: false
-    })}).then(r=>!!r.ok).catch(()=>false);
-  }));
+    })}).then(r=>!!r.ok).catch(()=>false)
+  ));
   const ok = rs.filter(Boolean).length;
   b.disabled = false; b.textContent = '📢 Enviar difusión';
   $('difuTxt').value = ''; $('difuOverlay').style.display = 'none';
-  toast('📢 '+(esPend?'Recordatorio de regularización enviado':'Difusión enviada')+' a '+ok+' de '+targets.length+' usuario(s)', ok!==targets.length);
-}
-
-/* Nota y contador al elegir el modo "con documentos por regularizar" */
-function actualizarNotaDifu(){
-  const sel = $('difuDest'); if(!sel) return;
-  const nota = $('difuNotaPend');
-  const esPend = sel.value === 'pendientes';
-  if(nota) nota.style.display = esPend ? 'block' : 'none';
-  if(esPend){
-    const n = Object.keys(PRES).filter(k=>{
-      const u = PRES[k];
-      if(MONITOR_ADMINS.includes(String(u.usuario||'').toLowerCase())) return false;
-      return pendCount(u) > 0;
-    }).length;
-    const c = $('difuPendCnt');
-    if(c) c.textContent = n ? ('Destinatarios actuales: ' + n + ' usuario(s) con pendientes.') : 'Ahora mismo nadie tiene pendientes. 🎉';
-  }
+  toast('📢 Difusión enviada a '+ok+' de '+targets.length+' usuario(s)', ok!==targets.length);
 }
 
 /* ── Pendientes automáticos (misma fuente que el banner del dashboard: GAS getCumplimiento) ── */
@@ -568,6 +567,213 @@ function pararREST(){
   if(restTimer){ clearInterval(restTimer); restTimer = null; }
 }
 
+/* ════════ 📄 EVIDENCIA DE COMUNICACIONES (exportable a PDF) ════════ */
+function fmtTs(t){ return t?new Date(Number(t)).toLocaleString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—'; }
+function _dirUsuarios(){ return Object.keys(PRES).map(k=>({k,u:PRES[k]})).sort((a,b)=>String(a.u.nombre||'').localeCompare(String(b.u.nombre||''),'es')); }
+function abrirEvidencia(){
+  const sel=$('evidUser');
+  sel.innerHTML='<option value="">— Todos los usuarios —</option>'+_dirUsuarios().map(x=>'<option value="'+esc(x.k)+'">'+esc(x.u.nombre||x.u.usuario)+'</option>').join('');
+  const hoyIso=new Date().toISOString().slice(0,10);
+  if(!$('evidDesde').value)$('evidDesde').value=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+  if(!$('evidHasta').value)$('evidHasta').value=hoyIso;
+  $('evidOverlay').style.display='flex';
+  generarEvidencia();
+}
+function _evidFilas(){
+  const k=$('evidUser').value;
+  const d1=$('evidDesde').value?new Date($('evidDesde').value+'T00:00:00').getTime():0;
+  const d2=$('evidHasta').value?new Date($('evidHasta').value+'T23:59:59').getTime():Infinity;
+  const filas=[];
+  Object.keys(MSGS||{}).forEach(uk=>{
+    if(k && uk!==k) return;
+    const conv=MSGS[uk]||{};
+    const nomU=(PRES[uk]&&(PRES[uk].nombre||PRES[uk].usuario))||uk;
+    Object.keys(conv).forEach(id=>{
+      const m=conv[id]; if(!m) return;
+      const ts=Number(m.ts||0); if(!ts||ts<d1||ts>d2) return;
+      const esResp=esRespuesta(m,uk);
+      filas.push({ts, usuario:nomU,
+        dir: esResp?'↩️ Respuesta del usuario':'📤 Coordinación → usuario',
+        texto:m.texto||'',
+        visto: m.leido ? ('✔️ Visto'+(m.leido_ts?' '+fmtTs(m.leido_ts):'')) : '⏳ Sin confirmación'});
+    });
+  });
+  filas.sort((a,b)=>a.ts-b.ts);
+  return filas;
+}
+function generarEvidencia(){
+  const filas=_evidFilas();
+  $('evidCnt').textContent=filas.length+' mensaje(s)';
+  const box=$('evidBody');
+  if(!filas.length){ box.innerHTML='<div class="empty">No hay mensajes en ese rango.</div>'; return; }
+  box.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12px">'+
+    '<tr style="color:var(--mut);text-align:left"><th style="padding:6px">Fecha y hora</th><th>Usuario</th><th>Tipo</th><th>Mensaje</th><th>Visto</th></tr>'+
+    filas.map(f=>'<tr style="border-top:1px solid var(--line);vertical-align:top">'+
+      '<td style="padding:6px;white-space:nowrap">'+fmtTs(f.ts)+'</td><td style="padding:6px">'+esc(f.usuario)+'</td>'+
+      '<td style="padding:6px;white-space:nowrap">'+f.dir+'</td><td style="padding:6px">'+esc(f.texto)+'</td>'+
+      '<td style="padding:6px;white-space:nowrap">'+esc(f.visto)+'</td></tr>').join('')+'</table>';
+}
+function imprimirEvidencia(){
+  const filas=_evidFilas();
+  if(!filas.length){ toast('No hay mensajes en ese rango', true); return; }
+  const kSel=$('evidUser').value;
+  const quien=kSel?((PRES[kSel]&&(PRES[kSel].nombre||PRES[kSel].usuario))||kSel):'Todos los usuarios';
+  const w=window.open('','_blank');
+  w.document.write('<html><head><meta charset="utf-8"><title>Evidencia de comunicaciones</title>'+
+    '<style>body{font-family:Arial,sans-serif;font-size:12px;color:#0a2540;margin:28px}h1{font-size:17px;margin:0}h2{font-size:12px;color:#475569;font-weight:normal;margin:4px 0 16px}'+
+    'table{width:100%;border-collapse:collapse}th{background:#0a2540;color:#fff;padding:6px 8px;text-align:left;font-size:11px}'+
+    'td{border:1px solid #cbd5e1;padding:5px 8px;vertical-align:top}tr:nth-child(even) td{background:#f8fafc}'+
+    '.pie{margin-top:26px;color:#475569;font-size:11px}.firma{margin-top:56px;border-top:1px solid #0a2540;width:260px;padding-top:5px}</style></head><body>'+
+    '<h1>EVIDENCIA DE COMUNICACIONES — Sistema de Relaciones Laborales</h1>'+
+    '<h2>RAPEL S.A.C / VERFRUT S.A.C (Unifrutti Group) · Usuario: '+esc(quien)+' · Período: '+esc($('evidDesde').value)+' al '+esc($('evidHasta').value)+
+    ' · Generado por: '+esc(USER.nombre||USER.usuario)+' el '+new Date().toLocaleString('es-PE')+'</h2>'+
+    '<table><tr><th>N°</th><th>Fecha y hora</th><th>Usuario</th><th>Tipo</th><th>Mensaje</th><th>Confirmación de lectura</th></tr>'+
+    filas.map((f,i)=>'<tr><td>'+(i+1)+'</td><td>'+fmtTs(f.ts)+'</td><td>'+esc(f.usuario)+'</td><td>'+f.dir.replace(/[^\w\s→áéíóúÁÉÍÓÚñÑ.-]/g,'').trim()+'</td><td>'+esc(f.texto)+'</td><td>'+esc(f.visto.replace(/[✔️⏳]/g,'').trim())+'</td></tr>').join('')+
+    '</table>'+
+    '<div class="pie">Documento generado automáticamente desde el Monitor en Vivo del Sistema RR.LL. Los sellos de tiempo provienen del servidor (Firebase). Total: '+filas.length+' mensaje(s).</div>'+
+    '<div class="firma">'+esc(USER.nombre||USER.usuario)+'<br>Coordinación de Relaciones Laborales</div>'+
+    '</body></html>');
+  w.document.close(); setTimeout(()=>{ try{w.print();}catch(e){} }, 400);
+}
+
+/* ════════ 👤 FICHA 360° DEL TRABAJADOR ════════ */
+const _FS_BASE='https://firestore.googleapis.com/v1/projects/sistema-eti-verfrut/databases/(default)/documents/';
+const _FS_KEY='AIzaSyAv-1VcbT8VCerClNAeVtVXzOxhSffeDpc';
+function _fsVal(v){ if(v==null)return ''; if(v.stringValue!=null)return v.stringValue; if(v.integerValue!=null)return Number(v.integerValue); if(v.doubleValue!=null)return Number(v.doubleValue); if(v.booleanValue!=null)return v.booleanValue; if(v.timestampValue)return v.timestampValue; if(v.arrayValue)return (v.arrayValue.values||[]).map(_fsVal); if(v.mapValue){const o={};Object.keys(v.mapValue.fields||{}).forEach(k=>o[k]=_fsVal(v.mapValue.fields[k]));return o;} return ''; }
+function _fsDoc(d){ const o={}; Object.keys(d.fields||{}).forEach(k=>o[k]=_fsVal(d.fields[k])); return o; }
+function _nomCoincide(a,b){
+  const A=normN(a).split(' ').filter(w=>w.length>2), B=new Set(normN(b).split(' ').filter(w=>w.length>2));
+  const com=A.filter(w=>B.has(w)).length;
+  return com>=3 || (com>=2 && (A.length<=2 || B.size<=2));
+}
+let _fichaData=null;
+async function buscarFicha(){
+  const dni=$('fichaDni').value.replace(/\D/g,'');
+  if(dni.length!==8){ toast('Escribe un DNI de 8 dígitos', true); return; }
+  $('fichaPDF').style.display='none';
+  $('fichaBody').innerHTML='<div class="empty">⏳ Consultando atenciones, casos, ETI y mantenimiento…</div>';
+  const gas=p=>fetch(GAS_API+'?'+new URLSearchParams(p)).then(r=>r.json()).catch(()=>null);
+  const fsGet=c=>fetch(_FS_BASE+c+'?pageSize=300&key='+_FS_KEY).then(r=>r.json()).then(d=>(d.documents||[]).map(_fsDoc)).catch(()=>[]);
+  const [trab,aten,casos,resp,sols,caps,evals]=await Promise.all([
+    gas({action:'buscarTrabajador',q:dni,empresa:''}),
+    gas({action:'consultaDNI',dni:dni}),
+    gas({action:'getCasos',usuario:USER.usuario,rol:USER.rol}),
+    gas({action:'buscarResponsableMantenimiento',dni:dni}),
+    gas({action:'listarSolicitudesMantenimiento'}),
+    fsGet('capacitaciones'),
+    fsGet('evaluaciones_conocimiento')
+  ]);
+  const t=(trab&&trab.success&&trab.data&&trab.data[0])||null;
+  const nombre=(t&&t.nombre)||(aten&&aten.trabajador&&aten.trabajador.nombre)||'';
+  const atenciones=(aten&&aten.success&&aten.data)||[];
+  const misCasos=((casos&&casos.success&&casos.data)||[]).filter(c=>String(c.dni||'').trim()===dni);
+  const conductor=(resp&&resp.ok&&resp.data)||null;
+  const misSols=(((sols&&sols.ok&&sols.data)||[])).filter(s=>String(s.dni||'').trim()===dni);
+  const misCaps=(caps||[]).filter(c=>{ const j=JSON.stringify(c); return j.indexOf(dni)>=0 || (nombre && Object.values(c).some(v=>typeof v==='string'&&v.length>8&&_nomCoincide(v,nombre))); });
+  const misEvals=[];
+  (evals||[]).forEach(ev=>{ (Array.isArray(ev.rutas)?ev.rutas:[]).forEach(r=>{ if(r&&r.nom&&nombre&&_nomCoincide(r.nom,nombre)) misEvals.push({fecha:ev.fecha||'',sup:ev.sup||'',tipo:ev.tipo||'',res:(r.resGrupo!=null?Math.round(r.resGrupo*100)/100:'')}); }); });
+  _fichaData={dni,nombre,t,atenciones,misCasos,conductor,misSols,misCaps,misEvals};
+  _pintarFicha();
+}
+function _fsec(titulo,color,filas,vacio){
+  return '<div style="margin-top:14px"><div style="font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:'+color+'">'+titulo+'</div>'+
+    (filas.length?filas.map(f=>'<div style="padding:5px 0;border-bottom:1px dashed var(--line);font-size:12.5px">'+f+'</div>').join(''):'<div style="color:var(--mut);font-size:12px;padding:4px 0">'+vacio+'</div>')+'</div>';
+}
+function _pintarFicha(){
+  const d=_fichaData; if(!d) return;
+  const t=d.t||{};
+  let h='<div style="background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:4px">'+
+    '<div style="font-size:16px;font-weight:800">'+esc(d.nombre||'(no encontrado en base de trabajadores)')+'</div>'+
+    '<div style="color:var(--mut);font-size:12.5px;margin-top:3px">DNI '+esc(d.dni)+
+    (t.empresa?' · '+esc(t.empresa):'')+(t.cargo?' · '+esc(t.cargo):'')+(t.fundo?' · '+esc(t.fundo):'')+(t.regimen?' · Régimen '+esc(t.regimen):'')+
+    (t.fecha_inicio_periodo?' · Ingreso '+esc(String(t.fecha_inicio_periodo).slice(0,10)):'')+'</div></div>';
+  h+=_fsec('🩺 Atenciones ('+d.atenciones.length+')','#7dd3fc',
+    d.atenciones.slice(0,10).map(a=>esc(a.fecha_atencion||'')+' — '+esc(a.detalle_documento||a.tipo_atencion||a.motivo||'atención')+(a.estado?' · <b>'+esc(a.estado)+'</b>':'')),
+    'Sin atenciones registradas.');
+  if(d.atenciones.length>10)h+='<div style="color:var(--mut);font-size:11.5px">… y '+(d.atenciones.length-10)+' más (se incluyen al imprimir)</div>';
+  h+=_fsec('📁 Casos ('+d.misCasos.length+')','#f87171',
+    d.misCasos.slice(0,10).map(c=>'N° '+esc(c.nro)+' — '+esc(c.motivo||'')+' · '+esc(c.fecha_reg||'')+' · <b>'+esc(c.estado_gestion||c.estado||'')+'</b>'+(c.gravedad?' · '+esc(c.gravedad):'')),
+    'Sin casos registrados.');
+  h+=_fsec('🎓 Capacitaciones ETI ('+d.misCaps.length+')','#fbbf24',
+    d.misCaps.slice(0,10).map(c=>esc(c.fecha||c.fechaCapacitacion||'')+' — '+esc(c.tema||c.capacitacion||c.titulo||'capacitación')+(c.estado?' · '+esc(c.estado):'')),
+    'No figura en capacitaciones.');
+  h+=_fsec('📝 Evaluaciones ETI ('+d.misEvals.length+')','#6ee7b7',
+    d.misEvals.slice(0,10).map(e=>esc(e.fecha)+' — '+esc(e.tipo||'evaluación')+' · Nota grupo: <b>'+esc(e.res)+'</b>'+(e.sup?' · Sup: '+esc(e.sup):'')),
+    'Sin evaluaciones registradas.');
+  const cond=d.conductor;
+  h+=_fsec('🚗 Conductor / Unidad'+(d.misSols.length?' · '+d.misSols.length+' solicitud(es)':''),'#fda4af',
+    (cond?['Unidad: <b>'+esc((cond.marca||'')+' '+(cond.modelo||''))+'</b> · Código '+esc(cond.codInterno||'—')+(cond.numLicencia?' · Licencia '+esc(cond.numLicencia):'')]:[]).concat(
+      d.misSols.slice(0,6).map(s=>esc(s.id||'')+' — '+esc(s.tipo||s.tipoMantenimiento||'')+' · '+esc(s.fechaSolicitud||'')+' · <b>'+esc(s.estado||'PENDIENTE')+'</b>')),
+    'No es conductor registrado.');
+  $('fichaBody').innerHTML=h;
+  $('fichaPDF').style.display='';
+}
+function imprimirFicha(){
+  const d=_fichaData; if(!d) return;
+  const t=d.t||{};
+  const sec=(tit,items,vacio)=>'<h3>'+tit+'</h3>'+(items.length?('<ul>'+items.map(i=>'<li>'+i+'</li>').join('')+'</ul>'):'<p class="v">'+vacio+'</p>');
+  const w=window.open('','_blank');
+  w.document.write('<html><head><meta charset="utf-8"><title>Ficha 360 — '+esc(d.nombre)+'</title>'+
+    '<style>body{font-family:Arial,sans-serif;font-size:12px;color:#0a2540;margin:28px}h1{font-size:17px;margin:0}h2{font-size:12px;color:#475569;font-weight:normal;margin:4px 0 14px}'+
+    'h3{font-size:13px;background:#0a2540;color:#fff;padding:5px 9px;border-radius:5px;margin:16px 0 6px}ul{margin:4px 0 0 18px;padding:0}li{margin-bottom:3px}.v{color:#64748b;margin:2px 0 0 4px}</style></head><body>'+
+    '<h1>FICHA 360° DEL TRABAJADOR — '+esc(d.nombre||'')+'</h1>'+
+    '<h2>DNI '+esc(d.dni)+(t.empresa?' · '+esc(t.empresa):'')+(t.cargo?' · '+esc(t.cargo):'')+(t.fundo?' · '+esc(t.fundo):'')+
+    ' · Generado por '+esc(USER.nombre||USER.usuario)+' el '+new Date().toLocaleString('es-PE')+' · Sistema RR.LL (Unifrutti Group)</h2>'+
+    sec('🩺 Atenciones ('+d.atenciones.length+')',d.atenciones.map(a=>esc(a.fecha_atencion||'')+' — '+esc(a.detalle_documento||a.tipo_atencion||a.motivo||'atención')+(a.estado?' · '+esc(a.estado):'')),'Sin atenciones registradas.')+
+    sec('📁 Casos ('+d.misCasos.length+')',d.misCasos.map(c=>'N° '+esc(c.nro)+' — '+esc(c.motivo||'')+' · '+esc(c.fecha_reg||'')+' · '+esc(c.estado_gestion||c.estado||'')+(c.gravedad?' · Gravedad '+esc(c.gravedad):'')),'Sin casos registrados.')+
+    sec('🎓 Capacitaciones ETI ('+d.misCaps.length+')',d.misCaps.map(c=>esc(c.fecha||c.fechaCapacitacion||'')+' — '+esc(c.tema||c.capacitacion||c.titulo||'capacitación')+(c.estado?' · '+esc(c.estado):'')),'No figura en capacitaciones.')+
+    sec('📝 Evaluaciones ETI ('+d.misEvals.length+')',d.misEvals.map(e=>esc(e.fecha)+' — '+esc(e.tipo||'evaluación')+' · Nota grupo: '+esc(e.res)+(e.sup?' · Supervisor: '+esc(e.sup):'')),'Sin evaluaciones registradas.')+
+    sec('🚗 Mantenimiento / Conductor',(d.conductor?['Unidad: '+esc((d.conductor.marca||'')+' '+(d.conductor.modelo||''))+' · Código '+esc(d.conductor.codInterno||'—')]:[]).concat(d.misSols.map(s=>esc(s.id||'')+' — '+esc(s.tipo||s.tipoMantenimiento||'')+' · '+esc(s.fechaSolicitud||'')+' · '+esc(s.estado||'PENDIENTE'))),'No es conductor registrado.')+
+    '</body></html>');
+  w.document.close(); setTimeout(()=>{ try{w.print();}catch(e){} },400);
+}
+
+/* ════════ 🕐 REGISTRO DE ACCESOS ════════ */
+let _accFilas=[];
+function abrirAccesos(){
+  const sel=$('accUser');
+  sel.innerHTML='<option value="">— Todos los usuarios —</option>'+_dirUsuarios().map(x=>'<option value="'+esc(x.k)+'">'+esc(x.u.nombre||x.u.usuario)+'</option>').join('');
+  if(!$('accFecha').value)$('accFecha').value=new Date().toISOString().slice(0,10);
+  $('accOverlay').style.display='flex';
+  cargarAccesos();
+}
+async function cargarAccesos(){
+  const box=$('accBody');
+  box.innerHTML='<div class="empty">⏳ Cargando registro…</div>';
+  try{
+    const r=await fetch(DB_URL+'/historial.json?nc='+Date.now());
+    const val=r.ok?await r.json():null;
+    const fSel=$('accUser').value, fecha=$('accFecha').value;
+    const d1=fecha?new Date(fecha+'T00:00:00').getTime():0;
+    const d2=fecha?new Date(fecha+'T23:59:59').getTime():Infinity;
+    const filas=[];
+    Object.keys(val||{}).forEach(uk=>{
+      if(fSel&&uk!==fSel)return;
+      const nom=(PRES[uk]&&(PRES[uk].nombre||PRES[uk].usuario))||uk;
+      Object.values(val[uk]||{}).forEach(hh=>{
+        const ts=Number(hh&&hh.ts||0); if(!ts||ts<d1||ts>d2)return;
+        filas.push({ts,nom,evento:(hh.evento==='cierre_automatico'?'🔴 Cierre automático':'🟢 Ingreso'),lugar:hh.modulo||hh.pagina||''});
+      });
+    });
+    filas.sort((a,b)=>b.ts-a.ts);
+    _accFilas=filas;
+    $('accCnt').textContent=filas.length+' registro(s)';
+    if(!filas.length){ box.innerHTML='<div class="empty">Sin registros para ese día/usuario.</div>'; return; }
+    box.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:12.5px">'+
+      '<tr style="color:var(--mut);text-align:left"><th style="padding:6px">Hora</th><th>Usuario</th><th>Evento</th><th>Módulo</th></tr>'+
+      filas.map(f=>'<tr style="border-top:1px solid var(--line)"><td style="padding:6px;white-space:nowrap">'+new Date(f.ts).toLocaleString('es-PE',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</td>'+
+        '<td style="padding:6px">'+esc(f.nom)+'</td><td style="padding:6px;white-space:nowrap">'+f.evento+'</td><td style="padding:6px">'+esc(f.lugar)+'</td></tr>').join('')+'</table>';
+  }catch(e){ box.innerHTML='<div class="empty">No se pudo cargar el registro.</div>'; }
+}
+function descargarAccesosCSV(){
+  if(!_accFilas.length){ toast('No hay registros para exportar', true); return; }
+  const csv='Fecha y hora,Usuario,Evento,Modulo\n'+_accFilas.map(f=>'"'+new Date(f.ts).toLocaleString('es-PE')+'","'+String(f.nom).replace(/"/g,'')+'","'+f.evento.replace(/[🟢🔴]/g,'').trim()+'","'+String(f.lugar).replace(/"/g,'')+'"').join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'}));
+  a.download='Registro_Accesos_'+($('accFecha').value||'todos')+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+}
+
 function arrancar(){
   if(!initFB()){ iniciarREST(); return; }
 
@@ -601,7 +807,6 @@ function arrancar(){
   const bd = $('btnDifu'); if(bd) bd.addEventListener('click', ()=>{ $('difuOverlay').style.display='flex'; });
   const dc = $('difuCerrar'); if(dc) dc.addEventListener('click', ()=>{ $('difuOverlay').style.display='none'; });
   const de = $('difuEnviar'); if(de) de.addEventListener('click', enviarDifusion);
-  const dd = $('difuDest'); if(dd) dd.addEventListener('change', actualizarNotaDifu);
   cargarPendientes();
   setInterval(cargarPendientes, 10*60*1000);   // refresca pendientes cada 10 min
   actualizarBtnMute();
@@ -611,6 +816,20 @@ function arrancar(){
   const ba = $('btnAsis'); if(ba) ba.addEventListener('click', abrirAsistencia);
   const ac = $('asisCerrar'); if(ac) ac.addEventListener('click', ()=>{ $('asisOverlay').style.display='none'; });
   const acsv = $('asisCSV'); if(acsv) acsv.addEventListener('click', descargarAsistenciaCSV);
+  /* 📄 Evidencia · 👤 Ficha 360° · 🕐 Accesos */
+  const be=$('btnEvid'); if(be) be.addEventListener('click', abrirEvidencia);
+  const bec=$('evidCerrar'); if(bec) bec.addEventListener('click', ()=>{ $('evidOverlay').style.display='none'; });
+  const beg=$('evidGenerar'); if(beg) beg.addEventListener('click', generarEvidencia);
+  const bep=$('evidPDF'); if(bep) bep.addEventListener('click', imprimirEvidencia);
+  const bf=$('btnFicha'); if(bf) bf.addEventListener('click', ()=>{ $('fichaOverlay').style.display='flex'; setTimeout(()=>$('fichaDni').focus(),100); });
+  const bfc=$('fichaCerrar'); if(bfc) bfc.addEventListener('click', ()=>{ $('fichaOverlay').style.display='none'; });
+  const bfb=$('fichaBuscar'); if(bfb) bfb.addEventListener('click', buscarFicha);
+  const bfd=$('fichaDni'); if(bfd) bfd.addEventListener('keydown', e=>{ if(e.key==='Enter') buscarFicha(); });
+  const bfp=$('fichaPDF'); if(bfp) bfp.addEventListener('click', imprimirFicha);
+  const bac=$('btnAcc'); if(bac) bac.addEventListener('click', abrirAccesos);
+  const bacc=$('accCerrar'); if(bacc) bacc.addEventListener('click', ()=>{ $('accOverlay').style.display='none'; });
+  const bacv=$('accVer'); if(bacv) bacv.addEventListener('click', cargarAccesos);
+  const baccsv=$('accCSV'); if(baccsv) baccsv.addEventListener('click', descargarAccesosCSV);
   document.querySelectorAll('.seg button').forEach(b=>{
     b.addEventListener('click', ()=>{
       document.querySelectorAll('.seg button').forEach(x=>x.classList.remove('on'));
