@@ -113,6 +113,7 @@
     <button class="btnGhost" id="btnEvid" style="color:#a5b4fc">📄 Evidencia</button>
     <button class="btnGhost" id="btnFicha" style="color:#6ee7b7">👤 Ficha 360°</button>
     <button class="btnGhost" id="btnAcc" style="color:#fda4af">🕐 Accesos</button>
+    <button class="btnGhost" id="btnFer" style="color:#fca5a5">📅 Feriados</button>
     <button class="btnGhost" id="btnMute" title="Silenciar avisos">🔊</button>
     <button class="btnGhost" onclick="location.href='dashboard.html'">← Dashboard</button>
   </div>
@@ -212,6 +213,29 @@
       <button class="btnGhost" id="accCSV" style="margin-left:auto">⬇️ CSV</button>
     </div>
     <div style="overflow:auto;padding:0 16px 16px" id="accBody"></div>
+  </div>
+</div>
+
+<!-- Panel FERIADOS Y CANJES -->
+<div id="ferOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,6,17,.65);z-index:50;align-items:center;justify-content:center">
+  <div class="card" style="width:min(620px,95vw);max-height:88vh;display:flex;flex-direction:column">
+    <div class="hd"><h2>📅 Feriados del año y canjes</h2><span class="cnt" id="ferCerrar" style="cursor:pointer;font-size:16px">✕</span></div>
+    <div style="padding:12px 16px;color:var(--mut);font-size:12px">
+      Los feriados restringen el ingreso de supervisores (igual que un domingo).
+      Marca <b>"Se trabaja"</b> cuando la empresa canjee un feriado, y registra abajo el día de descanso entregado a cambio.
+      El cambio aplica a login y cierre automático en minutos.
+    </div>
+    <div style="overflow:auto;padding:0 16px 16px">
+      <div id="ferLista"></div>
+      <div style="margin-top:14px;font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#7dd3fc">Días de descanso entregados por canje</div>
+      <div style="display:flex;gap:8px;margin-top:6px;align-items:center;flex-wrap:wrap">
+        <input type="date" id="ferNuevoDesc" style="background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:7px;font-size:13px">
+        <button class="btnGhost" id="ferAddDesc">＋ Agregar descanso</button>
+      </div>
+      <div id="ferDescansos" style="margin-top:8px"></div>
+      <button class="send" id="ferGuardar" style="margin-top:14px">💾 Guardar configuración</button>
+      <div id="ferMsg" style="margin-top:8px;font-size:12.5px"></div>
+    </div>
   </div>
 </div>
 
@@ -804,6 +828,75 @@ function descargarAccesosCSV(){
   document.body.appendChild(a);a.click();document.body.removeChild(a);
 }
 
+/* ════════ 📅 FERIADOS Y CANJES (config compartida con login y auto-cierre) ════════ */
+const FER_FIJOS={'01-01':'Año Nuevo','05-01':'Día del Trabajo','06-07':'Batalla de Arica','06-29':'San Pedro y San Pablo','07-23':'Día de la Fuerza Aérea','07-28':'Fiestas Patrias','07-29':'Fiestas Patrias','08-06':'Batalla de Junín','08-30':'Santa Rosa de Lima','10-08':'Combate de Angamos','11-01':'Todos los Santos','12-08':'Inmaculada Concepción','12-09':'Batalla de Ayacucho','12-25':'Navidad'};
+const FER_MOVILES={2026:{'04-02':'Jueves Santo','04-03':'Viernes Santo'},2027:{'03-25':'Jueves Santo','03-26':'Viernes Santo'},2028:{'04-13':'Jueves Santo','04-14':'Viernes Santo'}};
+let _ferCfg={canjeados:[],descansos:[]};
+function _ferDelAnio(anio){
+  const out=[];
+  Object.keys(FER_FIJOS).forEach(md=>out.push({iso:anio+'-'+md,nombre:FER_FIJOS[md]}));
+  Object.keys(FER_MOVILES[anio]||{}).forEach(md=>out.push({iso:anio+'-'+md,nombre:FER_MOVILES[anio][md]}));
+  return out.sort((a,b)=>a.iso.localeCompare(b.iso));
+}
+function _ferFmt(iso){ try{ return new Date(iso+'T12:00:00').toLocaleDateString('es-PE',{weekday:'short',day:'2-digit',month:'short'}); }catch(e){ return iso; } }
+async function abrirFeriados(){
+  $('ferOverlay').style.display='flex';
+  $('ferLista').innerHTML='<div class="empty">⏳ Cargando configuración…</div>';
+  try{
+    const r=await fetch(_FS_BASE+'config_rl/feriados?key='+_FS_KEY);
+    const d=await r.json();
+    const f=(d&&d.fields)||{};
+    const arr=v=>((v&&v.arrayValue&&v.arrayValue.values)||[]).map(x=>x.stringValue||'').filter(Boolean);
+    _ferCfg={canjeados:arr(f.canjeados),descansos:arr(f.descansos)};
+  }catch(e){ _ferCfg={canjeados:[],descansos:[]}; }
+  pintarFeriados();
+}
+function pintarFeriados(){
+  const anio=new Date().getFullYear();
+  $('ferLista').innerHTML='<div style="font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#fca5a5;margin-top:6px">Feriados '+anio+'</div>'+
+    _ferDelAnio(anio).map(fe=>{
+      const canje=_ferCfg.canjeados.indexOf(fe.iso)>=0;
+      const pasado=fe.iso < new Date().toISOString().slice(0,10);
+      return '<label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px dashed var(--line);font-size:13px;'+(pasado?'opacity:.45':'')+'">'+
+        '<span style="flex:1">'+_ferFmt(fe.iso)+' — '+esc(fe.nombre)+'</span>'+
+        '<input type="checkbox" data-fer="'+fe.iso+'" '+(canje?'checked':'')+' style="width:17px;height:17px;accent-color:#22c55e">'+
+        '<span style="font-size:11px;color:'+(canje?'#22c55e':'var(--mut)')+';width:88px;text-align:right">'+(canje?'SE TRABAJA':'restringido')+'</span></label>';
+    }).join('');
+  $('ferLista').querySelectorAll('[data-fer]').forEach(ch=>{
+    ch.addEventListener('change',function(){
+      const iso=this.dataset.fer;
+      if(this.checked){ if(_ferCfg.canjeados.indexOf(iso)<0)_ferCfg.canjeados.push(iso); }
+      else _ferCfg.canjeados=_ferCfg.canjeados.filter(x=>x!==iso);
+      pintarFeriados();
+    });
+  });
+  $('ferDescansos').innerHTML=_ferCfg.descansos.length
+    ? _ferCfg.descansos.sort().map(iso=>'<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(125,211,252,.12);border:1px solid rgba(125,211,252,.35);color:#7dd3fc;border-radius:999px;padding:4px 10px;font-size:12px;margin:3px 4px 0 0">'+_ferFmt(iso)+' <b data-del="'+iso+'" style="cursor:pointer;color:#f87171">✕</b></span>').join('')
+    : '<div style="color:var(--mut);font-size:12px;padding:4px 0">Ninguno registrado.</div>';
+  $('ferDescansos').querySelectorAll('[data-del]').forEach(x=>{
+    x.addEventListener('click',function(){ _ferCfg.descansos=_ferCfg.descansos.filter(i=>i!==this.dataset.del); pintarFeriados(); });
+  });
+}
+async function guardarFeriados(){
+  const b=$('ferGuardar'); b.disabled=true; b.textContent='Guardando…';
+  const m=$('ferMsg');
+  try{
+    const campos={
+      canjeados:{arrayValue:{values:_ferCfg.canjeados.map(v=>({stringValue:v}))}},
+      descansos:{arrayValue:{values:_ferCfg.descansos.map(v=>({stringValue:v}))}},
+      actualizado:{stringValue:new Date().toISOString()+' por '+(USER.usuario||'')}
+    };
+    const r=await fetch(_FS_BASE+'config_rl/feriados?key='+_FS_KEY+'&updateMask.fieldPaths=canjeados&updateMask.fieldPaths=descansos&updateMask.fieldPaths=actualizado',
+      {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:campos})});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    try{ localStorage.setItem('rl_feriados_cfg',JSON.stringify({ts:Date.now(),canjeados:_ferCfg.canjeados,descansos:_ferCfg.descansos})); }catch(e){}
+    m.style.color='#22c55e'; m.textContent='✅ Guardado. Aplica al login y al cierre automático de todos en minutos.';
+  }catch(e){
+    m.style.color='#f87171'; m.textContent='❌ No se pudo guardar ('+e.message+'). Intenta de nuevo.';
+  }
+  b.disabled=false; b.textContent='💾 Guardar configuración';
+}
+
 function arrancar(){
   if(!initFB()){ iniciarREST(); return; }
 
@@ -857,6 +950,15 @@ function arrancar(){
   const bfd=$('fichaDni'); if(bfd) bfd.addEventListener('keydown', e=>{ if(e.key==='Enter') buscarFicha(); });
   const bfp=$('fichaPDF'); if(bfp) bfp.addEventListener('click', imprimirFicha);
   const bac=$('btnAcc'); if(bac) bac.addEventListener('click', abrirAccesos);
+  const bfe=$('btnFer'); if(bfe) bfe.addEventListener('click', abrirFeriados);
+  const bfec=$('ferCerrar'); if(bfec) bfec.addEventListener('click', ()=>{ $('ferOverlay').style.display='none'; });
+  const bfeg=$('ferGuardar'); if(bfeg) bfeg.addEventListener('click', guardarFeriados);
+  const bfea=$('ferAddDesc'); if(bfea) bfea.addEventListener('click', ()=>{
+    const v=$('ferNuevoDesc').value;
+    if(!v){ toast('Elige la fecha del descanso primero', true); return; }
+    if(_ferCfg.descansos.indexOf(v)<0) _ferCfg.descansos.push(v);
+    $('ferNuevoDesc').value=''; pintarFeriados();
+  });
   const bacc=$('accCerrar'); if(bacc) bacc.addEventListener('click', ()=>{ $('accOverlay').style.display='none'; });
   const bacv=$('accVer'); if(bacv) bacv.addEventListener('click', cargarAccesos);
   const baccsv=$('accCSV'); if(baccsv) baccsv.addEventListener('click', descargarAccesosCSV);

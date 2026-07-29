@@ -898,6 +898,34 @@
   var AC_ROLES_EXENTOS = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl', 'jefe_rl'];
   var _acCard = null, _acCuentaT = null, _acExtUsada = false, _acCerrando = false, _acPosponerHasta = 0;
 
+  // ── Feriados del año + canje (misma configuración que el login: Firestore config_rl/feriados) ──
+  var AC_FERIADOS_FIJOS = ['01-01','05-01','06-07','06-29','07-23','07-28','07-29','08-06','08-30','10-08','11-01','12-08','12-09','12-25'];
+  var AC_FERIADOS_MOVILES = { 2026:['04-02','04-03'], 2027:['03-25','03-26'], 2028:['04-13','04-14'] };
+  function acFeriadosRefrescar() {
+    try {
+      fetch(PEND_FS + 'config_rl/feriados?key=' + PEND_FS_KEY)
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var f = (d && d.fields) || {};
+          var arr = function (v) { return ((v && v.arrayValue && v.arrayValue.values) || []).map(function (x) { return x.stringValue || ''; }).filter(Boolean); };
+          localStorage.setItem('rl_feriados_cfg', JSON.stringify({ ts: Date.now(), canjeados: arr(f.canjeados), descansos: arr(f.descansos) }));
+        })['catch'](function () {});
+    } catch (e) {}
+  }
+  acFeriadosRefrescar();
+  function acHoyNoLaborable() {
+    try {
+      var a = new Date();
+      var iso = a.getFullYear() + '-' + ('0' + (a.getMonth() + 1)).slice(-2) + '-' + ('0' + a.getDate()).slice(-2);
+      var md = iso.slice(5);
+      var cfg = { canjeados: [], descansos: [] };
+      try { var c = JSON.parse(localStorage.getItem('rl_feriados_cfg') || 'null'); if (c) cfg = { canjeados: c.canjeados || [], descansos: c.descansos || [] }; } catch (e2) {}
+      if (cfg.descansos.indexOf(iso) >= 0) return true;                          // día entregado por canje
+      var esFeriado = AC_FERIADOS_FIJOS.indexOf(md) >= 0 || (AC_FERIADOS_MOVILES[a.getFullYear()] || []).indexOf(md) >= 0;
+      return esFeriado && cfg.canjeados.indexOf(iso) < 0;                        // feriado no canjeado
+    } catch (e) { return false; }
+  }
+
   function acFueraDeHorario() {
     try {
       var rol = String(USER.rol || '').toLowerCase().trim();
@@ -905,6 +933,7 @@
       if (AC_ROLES_EXENTOS.indexOf(rol) >= 0) return false;
       if (ES_ADMIN) return false;
       if (rol !== 'supervisor') return false;
+      if (acHoyNoLaborable()) return true;   // feriado o descanso por canje
       var a = new Date();
       var mes = a.getMonth() + 1, dia = a.getDate(), dow = a.getDay();
       var h = a.getHours() + a.getMinutes() / 60;

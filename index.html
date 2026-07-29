@@ -411,6 +411,52 @@ function updateDots(){
   if(intentos>0){const t=document.createElement('span');t.className='dot-t';t.textContent=(MAX-intentos)+' intento(s) restante(s)';c.appendChild(t);}
 }
 
+// ── FERIADOS DEL AÑO (Perú) + canje configurable ─────────────────
+// Base: feriados nacionales. El canje se administra desde el Monitor
+// (botón 📅 Feriados) y se guarda en la nube (Firestore config_rl/feriados):
+//   canjeados = feriados que SÍ se trabajan (la empresa canjeó el día)
+//   descansos = días normales que pasan a descanso (el día entregado a cambio)
+const RL_FERIADOS_FIJOS = {
+  '01-01':'Año Nuevo','05-01':'Día del Trabajo','06-07':'Batalla de Arica',
+  '06-29':'San Pedro y San Pablo','07-23':'Día de la Fuerza Aérea',
+  '07-28':'Fiestas Patrias','07-29':'Fiestas Patrias','08-06':'Batalla de Junín',
+  '08-30':'Santa Rosa de Lima','10-08':'Combate de Angamos','11-01':'Todos los Santos',
+  '12-08':'Inmaculada Concepción','12-09':'Batalla de Ayacucho','12-25':'Navidad'
+};
+const RL_FERIADOS_MOVILES = {   // Jueves y Viernes Santo por año
+  2026:{'04-02':'Jueves Santo','04-03':'Viernes Santo'},
+  2027:{'03-25':'Jueves Santo','03-26':'Viernes Santo'},
+  2028:{'04-13':'Jueves Santo','04-14':'Viernes Santo'}
+};
+function rlFeriadoNombre(d) {
+  const md = ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
+  return RL_FERIADOS_FIJOS[md] || (RL_FERIADOS_MOVILES[d.getFullYear()]||{})[md] || null;
+}
+function rlFeriadosCfg() {
+  try { const c = JSON.parse(localStorage.getItem('rl_feriados_cfg')||'null');
+        return { canjeados: (c&&c.canjeados)||[], descansos: (c&&c.descansos)||[] }; }
+  catch(e) { return { canjeados: [], descansos: [] }; }
+}
+function rlFeriadosRefrescar() {   // trae el canje desde la nube (en segundo plano)
+  try {
+    fetch('https://firestore.googleapis.com/v1/projects/sistema-eti-verfrut/databases/(default)/documents/config_rl/feriados?key=AIzaSyAv-1VcbT8VCerClNAeVtVXzOxhSffeDpc')
+      .then(r=>r.json()).then(d=>{
+        const f=(d&&d.fields)||{};
+        const arr=v=>((v&&v.arrayValue&&v.arrayValue.values)||[]).map(x=>x.stringValue||'').filter(Boolean);
+        localStorage.setItem('rl_feriados_cfg', JSON.stringify({ts:Date.now(),canjeados:arr(f.canjeados),descansos:arr(f.descansos)}));
+      }).catch(()=>{});
+  } catch(e) {}
+}
+rlFeriadosRefrescar();
+function rlHoyNoLaborable(d) {   // → {no:true, nombre} si hoy no se trabaja
+  const iso = d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+  const cfg = rlFeriadosCfg();
+  if (cfg.descansos.indexOf(iso) >= 0) return { no:true, nombre:'Descanso por canje de feriado' };
+  const nom = rlFeriadoNombre(d);
+  if (nom && cfg.canjeados.indexOf(iso) < 0) return { no:true, nombre:'Feriado — '+nom };
+  return { no:false };
+}
+
 // ── Verificación de horario para login ────────────────────────────
 function verificarHorarioLogin(user) {
   const rol = (user.rol||'').toLowerCase().trim();
@@ -427,6 +473,10 @@ function verificarHorarioLogin(user) {
 
   // Temporada alta: 27 jun - 31 dic
   const esAlta = mes > 6 || (mes === 6 && dia >= 27);
+
+  // Feriado (o descanso por canje): día no laborable, salvo feriado canjeado
+  const fer = rlHoyNoLaborable(ahora);
+  if (fer.no) return { permitido: false, temporada: esAlta ? 'alta' : 'baja', feriado: fer.nombre };
 
   if (!esAlta) {
     // Temporada baja: Lun-Vie 05:30-17:00
@@ -466,9 +516,11 @@ function mostrarPantallaBloqueo(user, bloqueo) {
 
   document.getElementById('blNombre').textContent = 'Usuario: ' + (user.nombre || user.usuario);
   document.getElementById('blHorario').innerHTML =
+    (bloqueo.feriado ? `🎌 Hoy es <b>${bloqueo.feriado}</b> — día no laborable.<br>` : '') +
     `⏰ Hora actual: <b>${hora}</b><br>` +
     `📅 Temporada ${tempTexto}<br>` +
-    `✅ Horario permitido: ${diasTexto} de <b>05:30</b> a <b>17:00</b>`;
+    `✅ Horario permitido: ${diasTexto} de <b>05:30</b> a <b>17:00</b>` +
+    (bloqueo.feriado ? `<br>Si debes trabajar hoy, envía tu solicitud de acceso aquí abajo.` : '');
 
   document.querySelector('.card').style.display = 'none';
   document.getElementById('blFormSol').style.display = 'block';
