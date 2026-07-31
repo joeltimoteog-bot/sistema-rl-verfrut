@@ -560,14 +560,28 @@ async function enviarCorreo(){
     ? '📋 Tabla copiada — en Outlook pega con Ctrl+V. (También puedes adjuntar el Excel)'
     : '📤 Outlook abierto. Usa el botón Excel para adjuntar el detalle.', !copiado);
 
-  // 3) Registro en bitácora (opcional, no bloquea si el backend no la tiene)
+  // 3) Registro en bitácora BB.ALMUERZOS: guarda el DETALLE del día
+  //    (una fila por colaborador activo; un re-envío del mismo día reemplaza al anterior)
   try{
-    await apiPost({
+    const activosBB = colaboradores.filter(esActivo).map(c=>({
+      dni: c.dni, nombre: c.nombre, comedor: c.comedor,
+      tipo_comida: c.tipoComida, taper: esTaper(c),
+      empresa: c.empresa, observacion: c.observacion
+    }));
+    const rb = await apiPost({
       action:'registrarEnvioAlmuerzos',
       usuario: USER ? USER.usuario : '',
-      remitente_nombre: USER ? (USER.nombre || USER.usuario) : ''
+      remitente_nombre: USER ? (USER.nombre || USER.usuario) : '',
+      colaboradores: activosBB
     });
-  }catch(e){ /* silencioso */ }
+    if(rb && rb.success){
+      toast('🗂️ Bitácora BB.ALMUERZOS: '+(rb.guardados||activosBB.length)+' registro(s) del día guardado(s)');
+    }else{
+      toast('⚠️ El correo salió, pero la bitácora NO se guardó'+((rb&&rb.error)?(': '+rb.error):'')+'. ¿Está instalada la acción registrarEnvioAlmuerzos en el Apps Script?', true);
+    }
+  }catch(e){
+    toast('⚠️ El correo salió, pero no se pudo guardar la bitácora (conexión).', true);
+  }
 }
 
 /* ─────────── Helpers ─────────── */
