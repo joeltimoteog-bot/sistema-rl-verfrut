@@ -243,7 +243,6 @@ h3{font-size:16px !important}
     <button class="ni" id="navSolicitudes" style="display:none" onclick="ir('solicitudes',this)"><span class="ic">🔔</span>Solicitudes <span id="badgeSol" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none">0</span></button>
     <button class="ni" id="navFbAlertas" style="display:none" onclick="togglePanelFbAlertas()"><span class="ic">⚡</span>Alertas Sistema<span id="badgeFbAlertas" style="display:none;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;min-width:17px;height:17px;line-height:17px;text-align:center;padding:0 4px;margin-left:auto;flex-shrink:0"></span></button>
     <button class="ni" id="navMonitor" style="display:none" onclick="location.href='monitor.html'"><span class="ic">🛰️</span>Monitor en Vivo</button>
-    <button class="ni" id="navInforme" style="display:none" onclick="location.href='informe-gerencial.html'"><span class="ic">📊</span>Informe Gerencial</button>
     <button class="ni" id="navUsr" style="display:none" onclick="ir('usuarios',this)"><span class="ic">👥</span>Gestión Usuarios</button>
         <button class="ni" id="navBienestar" style="display:none" onclick="_irBienestar()"><span class="ic">💚</span>Bienestar Social</button>
 <button class="ni" id="navMantenimiento" onclick="location.href='mantenimiento.html'" style="position:relative"><span class="ic">&#128295;</span>Solicitud de Mantenimiento<span id="badgeMant" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none;margin-left:6px">0</span></button>
@@ -457,7 +456,7 @@ h3{font-size:16px !important}
               <option value="">Todos los responsables</option>
               <option>MURIEL MECHATO</option>
               <option>TANIA VERA</option>
-              <option>DANIELA REYNA</option>
+              <option value="DANIELA REYNA">DANIELA REYNA (histórico)</option>
               <option>JAIME SIANCAS</option>
         <option>LEANDRO BILL</option>
               <option>ROSS MERY NAVARRO</option>
@@ -1181,7 +1180,7 @@ h3{font-size:16px !important}
         <option value="">-- Seleccionar --</option>
         <option>MURIEL MECHATO</option>
         <option>ATENCION</option>
-        <option>DANIELA REYNA</option>
+        <!-- DANIELA REYNA anulada temporalmente: sus documentos los recibe JORGE CHAVEZ hasta el nuevo ingreso (VERFRUT) -->
         <option>ELIZBETH DIOSES</option>
         <option>JAIME SIANCAS</option>
         <option>LEANDRO BILL</option>
@@ -5295,10 +5294,7 @@ function renderAt(lista) {
   setTimeout(() => {
     tb.innerHTML=lista.map(a=>{
       const esDueno = a.supervisor===(USER.nombre||USER.usuario) || a.supervisor===USER.usuario;
-      const puedeModBase = !esSup || esDueno;
-      // Registros de días anteriores: solo el administrador puede editar/eliminar
-      const puedeMod = puedeModBase && (atEsAdminRegistros() || atEsDeHoy(a));
-      const protegido = puedeModBase && !puedeMod;
+      const puedeMod = !esSup || esDueno;
       return `<tr>
         <td>${a.nro||''}</td>
         <td>${fmtF(a.fecha_atencion)}</td>
@@ -5319,38 +5315,10 @@ function renderAt(lista) {
           <button class="btn-a bv" onclick="verDet('${a.nro}','at')">Ver</button>
           ${puedeMod?`<button class="btn-a be" onclick="editarAt('${a.nro}')">✏️</button>`:''}
           ${puedeMod?`<button class="btn-a bd" onclick="eliminarAt('${a.nro}')">🗑️</button>`:''}
-          ${protegido?`<button class="btn-a" style="background:#e2e8f0;color:#64748b;cursor:pointer;" title="Registro de fecha anterior protegido. Para modificarlo o eliminarlo, comunícate con el coordinador Joel Timoteo." onclick="atAvisoProtegido('modificar')">🔒</button>`:''}
-          ${(String(a.estado||'').toUpperCase()==='EN PROCESO'&&a.celular)?`<button class="btn-a" style="background:#25D366;color:#fff;" title="Recordar al trabajador por WhatsApp que tiene documentos por regularizar" onclick="waRegularizar('${a.nro}')">📱</button>`:''}
         </td>
       </tr>`;
     }).join('');
   }, 0);
-}
-
-// ── WhatsApp al TRABAJADOR con documentos por regularizar (atención EN PROCESO) ──
-function waNumPeru(cel){
-  var d = String(cel||'').replace(/\D/g,'');
-  if (d.length === 9 && d.charAt(0) === '9') return '51' + d;
-  if (d.length === 11 && d.indexOf('51') === 0 && d.charAt(2) === '9') return d;
-  return null;
-}
-function waRegularizar(nro){
-  try{
-    var fuentes = [].concat(window._atFiltradas||[], atTodas||[], (CACHE&&CACHE.atenciones)||[]);
-    var a = fuentes.find(function(x){ return x && String(x.nro) === String(nro); });
-    if(!a){ alert('No se encontró la atención N.° ' + nro + '.'); return; }
-    var num = waNumPeru(a.celular);
-    if(!num){ alert('El celular registrado no es válido para WhatsApp: "' + (a.celular||'(vacío)') + '".\nCorrige el número en la atención y vuelve a intentar.'); return; }
-    var nom = String(a.nombre||'').trim().split(/\s+/)[0] || '';
-    nom = nom ? (nom.charAt(0).toUpperCase() + nom.slice(1).toLowerCase()) : 'trabajador(a)';
-    var doc = a.detalle_documento ? (' (' + a.detalle_documento + ')') : '';
-    var msg = 'Estimado(a) ' + nom + ', le saluda ' + (USER.nombre||'el área de Relaciones Laborales') +
-      ' de Relaciones Laborales' + (a.empresa ? (' · ' + a.empresa) : '') + '.\n\n' +
-      'Le recordamos que su atención N.° ' + a.nro + ' del ' + fmtF(a.fecha_atencion) +
-      ' se encuentra EN PROCESO: tiene documentos pendientes por regularizar' + doc + '.\n\n' +
-      'Por favor acérquese a la oficina de RR.LL o responda este mensaje para coordinar la regularización. ¡Gracias!';
-    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank', 'noopener');
-  }catch(e){ console.error('waRegularizar:', e); }
 }
 
 function filtrarAt() {
@@ -5662,27 +5630,9 @@ function abrirAt() {
   }
 }
 
-// ── Protección de registros de días anteriores (solo el admin puede modificarlos) ──
-function atHoyISO(){
-  const d=new Date();
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-function atEsDeHoy(a){
-  return String(a && a.fecha_atencion || '').slice(0,10) === atHoyISO();
-}
-function atEsAdminRegistros(){
-  return String(USER.usuario||'').toLowerCase() === 'jtimoteo';
-}
-function atAvisoProtegido(accion){
-  const msg='🔒 Los registros de días anteriores están protegidos y no se pueden '+accion+'.\n\n'+
-    'Si necesitas modificar o eliminar este registro, comunícate con el coordinador Joel Timoteo.';
-  if (typeof appAlert === 'function') appAlert(msg); else alert(msg);
-}
-
 function editarAt(nro) {
   const a=atTodas.find(x=>String(x.nro)===String(nro));
   if(!a)return;
-  if(!atEsAdminRegistros() && !atEsDeHoy(a)){ atAvisoProtegido('editar'); return; }
   modoEdicion=true;
   document.getElementById('mAtTitulo').textContent='Editar Atención N° '+nro;
   sv('at_nro_edit',nro);
@@ -5846,8 +5796,6 @@ async function guardarAt() { if(window._savingAt) return;
 
 async function eliminarAt(nro) {
   console.log('[eliminarAt] iniciando nro:', nro, '| rol:', USER.rol, '| usuario:', USER.usuario);
-  const _aProt=(atTodas||[]).find(x=>String(x.nro)===String(nro));
-  if(_aProt && !atEsAdminRegistros() && !atEsDeHoy(_aProt)){ atAvisoProtegido('eliminar'); return; }
   if(!await appConfirm('¿Eliminar la atención N° '+nro+'? Esta acción no se puede deshacer.'))return;
   try{
     console.log('[eliminarAt] llamando apiPost deleteAtencion...');
@@ -7149,14 +7097,14 @@ const DOC_RESP = {
   '11 CONSTANCIA DE ESTUDIOS - JUSTIFICACION': 'MURIEL MECHATO',
   '12 CONTROL GESTANTE - JUSTIFICACION': 'MURIEL MECHATO',
   '13 DECLARACION SEGUROS DE VIDA LEY': 'JAIRO FERNANDEZ',
-  '14 FORMULARIO DE INTERCONSULTA': 'DANIELA REYNA',
-  '15 HORAS DE LACTANCIA VERFRUT / RAPEL': 'DANIELA REYNA',
+  '14 FORMULARIO DE INTERCONSULTA': 'JORGE CHAVEZ',
+  '15 HORAS DE LACTANCIA VERFRUT / RAPEL': 'JORGE CHAVEZ',
   '16 CONSTANCIA DE HOSPITALIZACION - GENERAR FORMULARIO / JUSTIFICAR': 'MURIEL MECHATO',
   '17 ESSALUD CITA (JUSTIFICACION)': 'MURIEL MECHATO',
   '18 COMPRA DE MEDICINA (JUSTIFICACION)': 'MURIEL MECHATO',
-  '19 LICENCIA POR PATERNIDAD VERFRUT / RAPEL': 'DANIELA REYNA',
-  '20 LICENCIA POR FALLECIMIENTO VERFRUT / RAPEL': 'DANIELA REYNA',
-  '21 LICENCIA POR ENFERMEDAD GRAVE VERFRUT / RAPEL': 'DANIELA REYNA',
+  '19 LICENCIA POR PATERNIDAD VERFRUT / RAPEL': 'JORGE CHAVEZ',
+  '20 LICENCIA POR FALLECIMIENTO VERFRUT / RAPEL': 'JORGE CHAVEZ',
+  '21 LICENCIA POR ENFERMEDAD GRAVE VERFRUT / RAPEL': 'JORGE CHAVEZ',
   '22 RECETA MEDICA (JUSTIFICACION)': 'MURIEL MECHATO',
   '23 REGULARIZAR LICENCIA POR MATERNIDAD - GENERAR FORMULARIO': 'MURIEL MECHATO',
   '24 REGULARIZAR LICENCIA POR PATERNIDAD - GENERAR FORMULARIO': 'MURIEL MECHATO',
@@ -8041,7 +7989,6 @@ function logout(){
   sessionStorage.removeItem('banner_acceso_temporal');
   sessionStorage.clear();
   localStorage.removeItem('rl_session');
-  localStorage.removeItem('bienestarSocialAuth');   // no heredar Bienestar al siguiente usuario del equipo
   location.href='../../index.html';
 }
 
@@ -10444,6 +10391,6 @@ h3{font-size:16px !important}
 </div>
 
 <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Dashboard"></script>
-<script>try{var _u=JSON.parse(sessionStorage.getItem("user")||"null");if(_u&&["jtimoteo"].includes(String(_u.usuario).toLowerCase())){var _b=document.getElementById("navMonitor");if(_b)_b.style.display="";var _bi=document.getElementById("navInforme");if(_bi)_bi.style.display="";}}catch(e){}</script>
+<script>try{var _u=JSON.parse(sessionStorage.getItem("user")||"null");if(_u&&["jtimoteo"].includes(String(_u.usuario).toLowerCase())){var _b=document.getElementById("navMonitor");if(_b)_b.style.display="";}}catch(e){}</script>
 </body>
 </html>
