@@ -324,6 +324,29 @@
     var c = A.filter(function (w) { return Bw.some(function (v) { return igual(w, v); }); }).length;
     return c >= 3 || (c >= 2 && (A.length <= 2 || Bw.length <= 2));
   }
+  // Variante laxa (≥2 palabras en común) — solo para checklist, donde el nombre
+  // del supervisor puede venir escrito distinto entre módulos (SUAREZ/JUAREZ).
+  function _pCoincideLax(a, b) {
+    if (_pCoincide(a, b)) return true;
+    a = _pNorm(a); b = _pNorm(b);
+    if (!a || !b) return false;
+    var A = a.split(' ').filter(function (w) { return w.length > 2; });
+    var Bw = b.split(' ').filter(function (w) { return w.length > 2; });
+    var igual = function (x, y) { return x === y || (x.length >= 4 && y.length >= 4 && (x.indexOf(y) === 0 || y.indexOf(x) === 0)); };
+    return A.filter(function (w) { return Bw.some(function (v) { return igual(w, v); }); }).length >= 2;
+  }
+  // Las programaciones de EVALUACIONES DE CHECKLIST ya no viven en
+  // 'programaciones_eval' (quedó vacía): ahora se registran en la colección de
+  // Capacitaciones ('programaciones_eti') con tema que contiene 'CHECKLIST'.
+  function _pEsChecklist(p) { return /CHECKLIST/i.test(String((p && p.tema) || '')); }
+  function _pChkComoEval(progs) {
+    return (progs || []).filter(_pEsChecklist).map(function (p) {
+      return { sup: p.supervisor || p.sup || '', estado: p.estado,
+               fechas: (p.fechas && p.fechas.length ? p.fechas.slice()
+                        : [p.fechaProgramada, p.fechaFin || p.fechaProgramada].filter(Boolean)).sort(),
+               fechasEjecutadas: p.fechasEjecutadas || [], tema: p.tema, sector: p.sector };
+    });
+  }
   function _fsVal(v) {
     if (!v) return null;
     if (v.stringValue !== undefined) return v.stringValue;
@@ -373,6 +396,7 @@
         var lista = [];
         progs.forEach(function (p) {
           if (p.estado === 'ejecutada') return;
+          if (_pEsChecklist(p)) return;  // las checklist se avisan como Evaluaciones
           if (!_pCoincide(p.supervisor || '', nombreSup) && !_pCoincide(p.supervisor || '', miNombre)) return;
           var fechas = (p.fechas && p.fechas.length ? p.fechas.slice().sort() : [p.fechaProgramada, p.fechaFin || p.fechaProgramada].filter(Boolean).sort());
           if (!fechas.length) return;
@@ -398,12 +422,15 @@
 
   // Evaluaciones de Ética Social programadas pendientes para este usuario
   function _pCargarEvaluaciones() {
-    return _fsGet('programaciones_eval').catch(function () { return []; }).then(function (progs) {
+    return Promise.all([_fsGet('programaciones_eval').catch(function () { return []; }),
+                        _fsGet('programaciones_eti').catch(function () { return []; })])
+      .then(function (res) {
+      var progs = (res[0] || []).concat(_pChkComoEval(res[1]));
       var hoy = _pHoyISO(), lista = [];
       var miNombre = USER.nombre || USER.usuario;
       progs.forEach(function (p) {
         if (p.estado === 'ejecutada') return;
-        if (!_pCoincide(p.sup || '', miNombre)) return;
+        if (!_pCoincideLax(p.sup || '', miNombre)) return;
         var ejec = p.fechasEjecutadas || [];
         var pend = (p.fechas || []).filter(function (f) { return ejec.indexOf(f) < 0; }).sort();
         if (!pend.length) return;
@@ -588,12 +615,13 @@
       var caps = [], evals = [], visitas = [], casos = [];
       (res[0] || []).forEach(function (p) {
         if (p.estado === 'ejecutada') return;
+        if (_pEsChecklist(p)) return;  // las checklist cuentan como Evaluaciones
         var fechas = (p.fechas && p.fechas.length ? p.fechas.slice().sort() : [p.fechaProgramada, p.fechaFin || p.fechaProgramada].filter(Boolean).sort());
         if (!fechas.length) return;
         var fin = fechas[fechas.length - 1];
         if (hoy > fin) caps.push({ sup: p.supervisor || '?', dias: Math.round((new Date(hoy) - new Date(fin)) / 86400000) });
       });
-      (res[1] || []).forEach(function (p) {
+      ((res[1] || []).concat(_pChkComoEval(res[0]))).forEach(function (p) {
         if (p.estado === 'ejecutada') return;
         var ejec = p.fechasEjecutadas || [];
         var pend = (p.fechas || []).filter(function (f) { return ejec.indexOf(f) < 0; }).sort();
@@ -682,7 +710,7 @@
       _fsGet('programaciones_eti')['catch'](function () { return []; }),
       _fsGet('programaciones_eval')['catch'](function () { return []; })
     ]).then(function (res) {
-      var cuentas = res[0], progsCap = res[1], progsEval = res[2];
+      var cuentas = res[0], progsCap = res[1], progsEval = (res[2] || []).concat(_pChkComoEval(res[1]));
       var miNombre = USER.nombre || USER.usuario;
       var cta = cuentas.find(function (c) { return String(c.usuario || '').toLowerCase() === String(USER.usuario).toLowerCase(); });
       var nombreSup = (cta && cta.supervisorNombre) || miNombre;
@@ -690,6 +718,7 @@
       var caps = [], evals = [], firmas = [];
       progsCap.forEach(function (p) {
         if (p.estado === 'ejecutada') return;
+        if (_pEsChecklist(p)) return;  // las checklist se saludan como Evaluaciones
         if (!_pCoincide(p.supervisor || '', nombreSup) && !_pCoincide(p.supervisor || '', miNombre)) return;
         var fechas = (p.fechas && p.fechas.length ? p.fechas.slice().sort()
                       : [p.fechaProgramada, p.fechaFin || p.fechaProgramada].filter(Boolean).sort());
@@ -701,7 +730,7 @@
       });
       progsEval.forEach(function (p) {
         if (p.estado === 'ejecutada') return;
-        if (!_pCoincide(p.sup || '', miNombre)) return;
+        if (!_pCoincideLax(p.sup || '', miNombre)) return;
         var ejec = p.fechasEjecutadas || [];
         var pend = (p.fechas || []).filter(function (f) { return ejec.indexOf(f) < 0 && f >= hoy; }).sort();
         if (!pend.length) return;
