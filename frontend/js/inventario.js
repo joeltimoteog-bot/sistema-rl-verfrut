@@ -15,6 +15,15 @@ const ROLES_PERMITIDOS = [
 
 const DIAS_ALERTA_VENC = 7;
 
+/* ─── Tipos de ítem y motivos (mejora ago-2026) ─── */
+function _tipoNorm(t) { t = String(t || '').toUpperCase(); return t.indexOf('BOL') === 0 ? 'BOLSA' : 'CANASTA'; }
+function _tipoLbl(t)  { return _tipoNorm(t) === 'BOLSA' ? '🛍️ Bolsa' : '🎄 Canasta'; }
+function _tipoPlural(t, n) { return _tipoNorm(t) === 'BOLSA' ? (n === 1 ? 'bolsa' : 'bolsas') : (n === 1 ? 'canasta' : 'canastas'); }
+function toggleMotivoOtro() {
+  const wrap = document.getElementById('entMotivoOtroWrap');
+  if (wrap) wrap.style.display = (v('entMotivo') === 'Otros') ? '' : 'none';
+}
+
 /* ─────────────── ESTADO GLOBAL ─────────────── */
 let USER = null;
 let API  = '';
@@ -203,7 +212,18 @@ function calcular() {
   const totalEntregadas = entregas.reduce((s, e) => s + Number(e.cantidad || 0), 0);
   const disponibles     = Math.max(0, totalArmadas - totalEntregadas);
 
-  CALC = { stockPorProd, vencPorProd, ingPorProd, totalArmadas, maxCanastas, totalEntregadas, disponibles };
+  // Desglose por tipo de ítem (canasta navideña vs bolsa de víveres).
+  // Registros antiguos sin tipo cuentan como CANASTA.
+  const armPorTipo = { CANASTA: 0, BOLSA: 0 }, entPorTipo = { CANASTA: 0, BOLSA: 0 };
+  armadas.forEach(a  => { armPorTipo[_tipoNorm(a.tipo)] += Number(a.cantidad || 0); });
+  entregas.forEach(e => { entPorTipo[_tipoNorm(e.tipo)] += Number(e.cantidad || 0); });
+  const dispPorTipo = {
+    CANASTA: Math.max(0, armPorTipo.CANASTA - entPorTipo.CANASTA),
+    BOLSA:   Math.max(0, armPorTipo.BOLSA   - entPorTipo.BOLSA)
+  };
+
+  CALC = { stockPorProd, vencPorProd, ingPorProd, totalArmadas, maxCanastas, totalEntregadas, disponibles,
+           armPorTipo, entPorTipo, dispPorTipo };
 }
 
 function diasParaVencer(fechaStr) {
@@ -256,6 +276,13 @@ function renderResumen() {
   if (pct >= 100 && pb) pb.style.background = '#16a34a';
 
   sv('cfgMeta', meta || '');
+
+  // Desglose por tipo
+  const f = n => Number(n || 0).toLocaleString('es-PE');
+  setText('stCanDisp', f(CALC.dispPorTipo.CANASTA));
+  setText('stCanDet',  'disponibles · ' + f(CALC.armPorTipo.CANASTA) + ' armadas · ' + f(CALC.entPorTipo.CANASTA) + ' entregadas');
+  setText('stBolDisp', f(CALC.dispPorTipo.BOLSA));
+  setText('stBolDet',  'disponibles · ' + f(CALC.armPorTipo.BOLSA) + ' armadas · ' + f(CALC.entPorTipo.BOLSA) + ' entregadas');
   renderAlertasVenc();
 }
 
@@ -307,7 +334,7 @@ function renderEntregasRecientes() {
   const tb = document.getElementById('tbEntregasRecientes');
   if (!tb) return;
   const ultimas = [...(DATA.entregas || [])].reverse().slice(0, 10);
-  if (!ultimas.length) { tb.innerHTML = '<tr><td colspan="5" class="empty">Sin entregas</td></tr>'; return; }
+  if (!ultimas.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">Sin entregas</td></tr>'; return; }
   tb.innerHTML = ultimas.map(e => {
     const empBadge = e.empresa === 'RAPEL' ? 'badge-rap'
                    : e.empresa === 'VERFRUT' ? 'badge-vrf'
@@ -317,6 +344,8 @@ function renderEntregasRecientes() {
       <td><span class="badge ${empBadge}">${e.empresa || ''}</span></td>
       <td>${e.sector || ''}</td>
       <td style="font-weight:700">${Number(e.cantidad).toLocaleString('es-PE')}</td>
+      <td style="font-size:12px;white-space:nowrap">${_tipoLbl(e.tipo)}</td>
+      <td style="font-size:12px">${e.motivo || '—'}</td>
       <td style="font-size:12px">${e.responsable || ''}</td>
     </tr>`;
   }).join('');
@@ -406,9 +435,11 @@ async function registrarIngreso() {
 /* ─────────────── TAB ARMAR ─────────────── */
 function actualizarArmarPanel() {
   if (!CALC) return;
-  // Tarjeta visual = canastas armadas listas (armadas − entregadas).
+  // Tarjeta visual = unidades armadas listas (armadas − entregadas).
   // La validación interna al armar sigue usando CALC.maxCanastas (materia prima).
   setText('maxCanastas', CALC.disponibles.toLocaleString('es-PE'));
+  setText('panelTipoDetalle', '🎄 Canastas: ' + CALC.dispPorTipo.CANASTA.toLocaleString('es-PE') +
+    '  ·  🛍️ Bolsas: ' + CALC.dispPorTipo.BOLSA.toLocaleString('es-PE'));
   const btn = document.getElementById('btnConfirmarArmado');
   if (btn) btn.disabled = true;
   const prev = document.getElementById('previewArmado');
@@ -420,10 +451,11 @@ function renderArmadosHistorial() {
   if (!tb) return;
   const armadas = DATA.armadas || [];
   const items = [...armadas].reverse().slice(0, 30);
-  if (!items.length) { tb.innerHTML = '<tr><td colspan="4" class="empty">Sin armados</td></tr>'; return; }
+  if (!items.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">Sin armados</td></tr>'; return; }
   tb.innerHTML = items.map(a => `<tr>
     <td>${a.fecha || ''}</td>
     <td style="font-weight:700">${Number(a.cantidad).toLocaleString('es-PE')}</td>
+    <td style="font-size:12px;white-space:nowrap">${_tipoLbl(a.tipo)}</td>
     <td style="font-size:12px">${a.usuario || ''}</td>
     <td style="font-size:12px">${a.sector || '-'}</td>
     <td style="font-size:12px">${a.supervisor || '-'}</td>
@@ -474,23 +506,24 @@ async function confirmarArmado() {
   const fecha  = v('armarFecha');
   const sector = v('armadoSector');
   const resp   = v('armadoResponsable');
+  const tipo   = _tipoNorm(v('armarTipo'));
 
-  if (!cant || cant <= 0)      { mostrarAlerta('alArmar', 'err', 'Ingresa la cantidad de canastas a armar'); return; }
+  if (!cant || cant <= 0)      { mostrarAlerta('alArmar', 'err', 'Ingresa la cantidad a armar'); return; }
   if (cant > CALC.maxCanastas) { mostrarAlerta('alArmar', 'err', `Stock insuficiente. Máximo: ${CALC.maxCanastas}`); return; }
   if (!fecha)                  { mostrarAlerta('alArmar', 'err', 'La fecha es obligatoria'); return; }
   if (!sector)                 { mostrarAlerta('alArmar', 'err', 'Selecciona el sector'); return; }
   if (!resp)                   { mostrarAlerta('alArmar', 'err', 'Selecciona el responsable'); return; }
-  if (!await appConfirm(`¿Confirmar armado de ${cant.toLocaleString('es-PE')} canastas? Esta acción descontará el stock.`)) return;
+  if (!await appConfirm(`¿Confirmar armado de ${cant.toLocaleString('es-PE')} ${_tipoPlural(tipo, cant)}? Esta acción descontará el stock.`)) return;
 
   const btn = document.getElementById('btnConfirmarArmado');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Procesando...';
   try {
     const d = await apiPost({ action: 'invRegistrarArmado',
       fecha, cantidad: cant, usuario: USER.usuario, usuario_nombre: USER.nombre,
-      armado: { fecha, cantidad: cant, responsable: resp, sector, supervisor: '', usuario: USER.usuario }
+      armado: { fecha, cantidad: cant, responsable: resp, sector, supervisor: '', usuario: USER.usuario, tipo }
     });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
-    mostrarAlerta('alArmar', 'ok', `✅ ${cant.toLocaleString('es-PE')} canastas armadas correctamente`);
+    mostrarAlerta('alArmar', 'ok', `✅ ${cant.toLocaleString('es-PE')} ${_tipoPlural(tipo, cant)} armadas correctamente`);
     sv('armarCantidad', '');
     sv('armadoSector', ''); sv('armadoResponsable', '');
     document.getElementById('previewArmado').style.display = 'none';
@@ -527,9 +560,10 @@ function validarCantidadEntrega() {
   const hint = document.getElementById('entCantidadHint');
   if (!hint) return;
   const cant = parseInt(v('entCantidad'));
-  const disp = (CALC && CALC.disponibles) || 0;
+  const tipo = _tipoNorm(v('entTipo'));
+  const disp = (CALC && CALC.dispPorTipo && CALC.dispPorTipo[tipo]) || 0;
   if (cant && cant > disp) {
-    hint.textContent = `❌ No puedes entregar más de ${disp.toLocaleString('es-PE')} canastas`;
+    hint.textContent = `❌ No puedes entregar más de ${disp.toLocaleString('es-PE')} ${_tipoPlural(tipo, disp)}`;
     hint.style.display = '';
   } else {
     hint.style.display = 'none';
@@ -542,6 +576,11 @@ function renderPorSector() {
   if (!tb) return;
   const disp = document.getElementById('dispParaEntregar');
   if (disp) disp.textContent = (CALC?.disponibles || 0).toLocaleString('es-PE');
+  const dtx = document.getElementById('dispTipoTxt');
+  if (dtx && CALC && CALC.dispPorTipo) {
+    dtx.textContent = 'en total  ·  🎄 ' + CALC.dispPorTipo.CANASTA.toLocaleString('es-PE') + ' canastas  ·  🛍️ ' +
+      CALC.dispPorTipo.BOLSA.toLocaleString('es-PE') + ' bolsas de víveres';
+  }
 
   const mapa = {};
   (DATA.entregas || []).forEach(e => {
@@ -570,7 +609,7 @@ function renderEntregasHistorial() {
   const tb = document.getElementById('tbEntregas');
   if (!tb) return;
   const items = [...(DATA.entregas || [])].reverse().slice(0, 30);
-  if (!items.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">Sin entregas</td></tr>'; return; }
+  if (!items.length) { tb.innerHTML = '<tr><td colspan="10" class="empty">Sin entregas</td></tr>'; return; }
   tb.innerHTML = items.map(e => {
     const sec = e.sector || '';
     const secCorto = sec.length > 50 ? sec.substring(0, 47) + '…' : sec;
@@ -580,8 +619,11 @@ function renderEntregasHistorial() {
     return `<tr>
       <td>${e.fecha || ''}</td>
       <td><span class="badge ${empBadge}">${e.empresa || ''}</span></td>
-      <td style="font-size:12px;max-width:240px;word-wrap:break-word" title="${esc(sec)}">${secCorto}</td>
+      <td style="font-size:12px;max-width:200px;word-wrap:break-word" title="${esc(sec)}">${secCorto}</td>
       <td style="font-weight:700">${Number(e.cantidad).toLocaleString('es-PE')}</td>
+      <td style="font-size:12px;white-space:nowrap">${_tipoLbl(e.tipo)}</td>
+      <td style="font-size:12px">${e.motivo || '—'}</td>
+      <td style="font-size:12px">${e.solicitante || '—'}</td>
       <td style="font-size:12px">${e.responsable || ''}</td>
       <td style="font-size:12px">${e.exportadora || '—'}</td>
       <td style="white-space:nowrap">
@@ -601,17 +643,26 @@ async function registrarEntrega() {
   const cant        = parseInt(v('entCantidad'));
   const observaciones = v('entObservaciones').trim();
   const sectoresSel = Array.from(document.querySelectorAll('.ent-sector-check:checked')).map(c => c.value);
+  const tipo        = _tipoNorm(v('entTipo'));
+  const motivoSel   = v('entMotivo');
+  const motivoOtro  = v('entMotivoOtro').trim();
+  const solicitante = v('entSolicitante');
 
   if (!fecha)                   { mostrarAlerta('alEntregar', 'err', 'La fecha es obligatoria'); return; }
   if (!empresa)                 { mostrarAlerta('alEntregar', 'err', 'Selecciona la empresa'); return; }
+  if (!motivoSel)               { mostrarAlerta('alEntregar', 'err', 'Selecciona el motivo de la entrega'); return; }
+  if (motivoSel === 'Otros' && !motivoOtro) { mostrarAlerta('alEntregar', 'err', 'Especifica el motivo en el campo de texto'); return; }
+  if (!solicitante)             { mostrarAlerta('alEntregar', 'err', 'Selecciona quién solicitó/autorizó la entrega'); return; }
   if (!resp)                    { mostrarAlerta('alEntregar', 'err', 'Selecciona el responsable'); return; }
   if (sectoresSel.length === 0) { mostrarAlerta('alEntregar', 'err', 'Marca al menos un sector'); return; }
   if (!cant || cant <= 0)       { mostrarAlerta('alEntregar', 'err', 'La cantidad debe ser mayor a 0'); return; }
-  if (cant > CALC.disponibles) {
-    mostrarAlerta('alEntregar', 'err', `No puedes entregar más de ${CALC.disponibles.toLocaleString('es-PE')} canastas`); return;
+  const dispTipo = (CALC.dispPorTipo && CALC.dispPorTipo[tipo]) || 0;
+  if (cant > dispTipo) {
+    mostrarAlerta('alEntregar', 'err', `No puedes entregar más de ${dispTipo.toLocaleString('es-PE')} ${_tipoPlural(tipo, dispTipo)} (disponibles de ese tipo)`); return;
   }
 
   const sectoresStr = sectoresSel.join(', ');
+  const motivo = motivoSel === 'Otros' ? 'Otros: ' + motivoOtro : motivoSel;
 
   const btn = document.getElementById('btnEntrega');
   btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Registrando...';
@@ -619,13 +670,16 @@ async function registrarEntrega() {
     const d = await apiPost({ action: 'invRegistrarEntrega',
       fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp,
       usuario: USER.usuario, usuario_nombre: USER.nombre,
-      entrega: { fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp, supervisor: '', exportadora, observaciones, usuario: USER.usuario }
+      entrega: { fecha, empresa, sector: sectoresStr, cantidad: cant, responsable: resp, supervisor: '', exportadora, observaciones,
+                 usuario: USER.usuario, motivo, tipo, solicitante }
     });
     if (!d.success) throw new Error(d.error || 'Error al registrar');
-    mostrarAlerta('alEntregar', 'ok', `✅ Entrega registrada: ${cant.toLocaleString('es-PE')} canastas → ${sectoresStr}`);
+    mostrarAlerta('alEntregar', 'ok', `✅ Entrega registrada: ${cant.toLocaleString('es-PE')} ${_tipoPlural(tipo, cant)} (${motivo}) → ${sectoresStr}`);
     sv('entCantidad', '');
     sv('entObservaciones', '');
     sv('entExportadora', '');
+    sv('entMotivo', ''); sv('entMotivoOtro', ''); sv('entSolicitante', '');
+    toggleMotivoOtro();
     document.querySelectorAll('.ent-sector-check').forEach(c => c.checked = false);
     actualizarContadorSectoresEntrega();
     validarCantidadEntrega();
@@ -738,21 +792,45 @@ async function generarPDF() {
 
     if (DATA && CALC) {
       const meta = Number(DATA.meta || 0);
+      const f = n => Number(n || 0).toLocaleString('es-PE');
       doc.autoTable({
         startY: y, margin: { left: mg, right: mg },
-        head: [['Indicador', 'Valor']],
+        head: [['Indicador', 'Total', 'Canastas navideñas', 'Bolsas de víveres']],
         body: [
-          ['Meta total de canastas', meta.toLocaleString('es-PE')],
-          ['Canastas armadas',       CALC.totalArmadas.toLocaleString('es-PE')],
-          ['Canastas entregadas',    CALC.totalEntregadas.toLocaleString('es-PE')],
-          ['Canastas disponibles',   CALC.disponibles.toLocaleString('es-PE')],
-          ['% de avance',           (meta > 0 ? Math.round((CALC.totalArmadas/meta)*100) : 0) + '%']
+          ['Meta total',    f(meta), '', ''],
+          ['Armadas',       f(CALC.totalArmadas),    f(CALC.armPorTipo.CANASTA),  f(CALC.armPorTipo.BOLSA)],
+          ['Entregadas',    f(CALC.totalEntregadas), f(CALC.entPorTipo.CANASTA),  f(CALC.entPorTipo.BOLSA)],
+          ['Disponibles',   f(CALC.disponibles),     f(CALC.dispPorTipo.CANASTA), f(CALC.dispPorTipo.BOLSA)],
+          ['% de avance',  (meta > 0 ? Math.round((CALC.totalArmadas/meta)*100) : 0) + '%', '', '']
         ],
         styles: { fontSize: 8, cellPadding: 2.5 },
         headStyles: { fillColor: [10,36,99], textColor:[255,255,255], fontStyle:'bold' },
         columnStyles: { 0: { fontStyle:'bold' } }
       });
       y = doc.lastAutoTable.finalY + 6;
+
+      // Resumen de entregas por motivo
+      const porMotivo = {};
+      (DATA.entregas || []).forEach(e => {
+        const m = e.motivo || 'Sin motivo registrado';
+        if (!porMotivo[m]) porMotivo[m] = { CANASTA: 0, BOLSA: 0 };
+        porMotivo[m][_tipoNorm(e.tipo)] += Number(e.cantidad || 0);
+      });
+      const filasMot = Object.keys(porMotivo).map(m =>
+        [m, f(porMotivo[m].CANASTA), f(porMotivo[m].BOLSA), f(porMotivo[m].CANASTA + porMotivo[m].BOLSA)]);
+      if (filasMot.length) {
+        doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(10,36,99);
+        doc.text('ENTREGAS POR MOTIVO', mg, y); y += 4;
+        doc.autoTable({
+          startY: y, margin: { left: mg, right: mg },
+          head: [['Motivo','Canastas','Bolsas','Total']],
+          body: filasMot,
+          styles: { fontSize: 8, cellPadding: 2.5 },
+          headStyles: { fillColor: [22,101,52], textColor:[255,255,255], fontStyle:'bold' },
+          columnStyles: { 0: { fontStyle:'bold' } }
+        });
+        y = doc.lastAutoTable.finalY + 6;
+      }
     }
 
     const armadas = DATA.armadas || [];
@@ -777,11 +855,12 @@ async function generarPDF() {
       const rows = filtrar(armadas, null);
       if (rows.length) {
         doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(10,36,99);
-        doc.text('ARMADOS DE CANASTAS', mg, y); y += 4;
+        doc.text('ARMADOS DE CANASTAS / BOLSAS', mg, y); y += 4;
         doc.autoTable({
           startY: y, margin: { left: mg, right: mg },
-          head: [['Fecha','Cantidad armada','Usuario']],
-          body: rows.map(r => [r.fecha||'', Number(r.cantidad).toLocaleString('es-PE'), r.usuario||'']),
+          head: [['Fecha','Cantidad armada','Tipo','Usuario']],
+          body: rows.map(r => [r.fecha||'', Number(r.cantidad).toLocaleString('es-PE'),
+                               _tipoNorm(r.tipo)==='BOLSA'?'Bolsa de víveres':'Canasta navideña', r.usuario||'']),
           styles: { fontSize: 7, cellPadding: 2 },
           headStyles: { fillColor: [30,58,138], textColor:[255,255,255], fontStyle:'bold', fontSize:7 }
         });
@@ -796,8 +875,9 @@ async function generarPDF() {
         doc.text('ENTREGAS POR SECTOR', mg, y); y += 4;
         doc.autoTable({
           startY: y, margin: { left: mg, right: mg },
-          head: [['Fecha','Empresa','Sector','Cantidad','Responsable']],
-          body: rows.map(r => [r.fecha||'', r.empresa||'', r.sector||'', Number(r.cantidad).toLocaleString('es-PE'), r.responsable||'']),
+          head: [['Fecha','Empresa','Sector','Cant.','Tipo','Motivo','Solicitó','Responsable']],
+          body: rows.map(r => [r.fecha||'', r.empresa||'', r.sector||'', Number(r.cantidad).toLocaleString('es-PE'),
+                               _tipoNorm(r.tipo)==='BOLSA'?'Bolsa':'Canasta', r.motivo||'—', r.solicitante||'—', r.responsable||'']),
           styles: { fontSize: 7, cellPadding: 2 },
           headStyles: { fillColor: [30,58,138], textColor:[255,255,255], fontStyle:'bold', fontSize:7 },
           alternateRowStyles: { fillColor: [248,250,252] }
@@ -993,11 +1073,15 @@ function abrirEditarArmado(id) {
 
   const optsSec  = _optsSectoresInv(item.sector);
   const optsResp = _optsResponsables(item.responsable || item.usuario);
+  const tipoArm  = _tipoNorm(item.tipo);
 
   document.getElementById('modalTitle').textContent = '✏️ Editar armado';
   document.getElementById('modalForm').innerHTML = `
     <div class="grid2" style="gap:12px">
       <div class="fg"><label class="lbl">Cantidad</label><input type="number" id="mArmCantidad" value="${item.cantidad}" min="1" step="1"></div>
+      <div class="fg"><label class="lbl">Tipo de ítem</label><select id="mArmTipo">
+        <option value="CANASTA" ${tipoArm==='CANASTA'?'selected':''}>🎄 Canasta navideña</option>
+        <option value="BOLSA" ${tipoArm==='BOLSA'?'selected':''}>🛍️ Bolsa de víveres</option></select></div>
       <div class="fg"><label class="lbl">Fecha</label><input type="date" id="mArmFecha" value="${item.fecha || ''}"></div>
       <div class="fg"><label class="lbl">Sector</label><select id="mArmSector">${optsSec}</select></div>
       <div class="fg"><label class="lbl">Responsable</label><select id="mArmResponsable"><option value="">Seleccionar...</option>${optsResp}</select></div>
@@ -1015,15 +1099,31 @@ function abrirEditarEntrega(id) {
   const optsEmp  = ['RAPEL','VERFRUT','AMBAS'].map(e => `<option value="${e}" ${e===item.empresa?'selected':''}>${e}</option>`).join('');
   const checksSec = _checksSectoresInv(item.sector);
   const optsResp = _optsResponsables(item.responsable);
+  const MOTIVOS = ['Navidad / Cierre de campaña','Fiestas Patrias','Día de la Madre','Día del Padre','Donación','Día festivo'];
+  const motActual = String(item.motivo || '');
+  let optsMot = '<option value="">Seleccionar...</option>';
+  if (motActual && !MOTIVOS.includes(motActual)) optsMot += `<option value="${esc(motActual)}" selected>${motActual}</option>`;
+  optsMot += MOTIVOS.map(m => `<option value="${m}" ${m===motActual?'selected':''}>${m}</option>`).join('');
+  const SOLIC = ['Eduardo Covenas','Olga Vilela Ludeña','Jorge Chávez Córdova','Joel Timoteo Gonza','Daniela Sánchez'];
+  const solActual = String(item.solicitante || '');
+  let optsSol = '<option value="">Seleccionar...</option>';
+  if (solActual && !SOLIC.includes(solActual)) optsSol += `<option value="${esc(solActual)}" selected>${solActual}</option>`;
+  optsSol += SOLIC.map(s => `<option value="${s}" ${s===solActual?'selected':''}>${s}</option>`).join('');
+  const tipoActual = _tipoNorm(item.tipo);
 
   document.getElementById('modalTitle').textContent = '✏️ Editar entrega';
   document.getElementById('modalForm').innerHTML = `
     <div class="grid2" style="gap:12px">
       <div class="fg"><label class="lbl">Empresa</label><select id="mEntEmpresa">${optsEmp}</select></div>
       <div class="fg"><label class="lbl">Cantidad</label><input type="number" id="mEntCantidad" value="${item.cantidad}" min="1" step="1"></div>
+      <div class="fg"><label class="lbl">Tipo de ítem</label><select id="mEntTipo">
+        <option value="CANASTA" ${tipoActual==='CANASTA'?'selected':''}>🎄 Canasta navideña</option>
+        <option value="BOLSA" ${tipoActual==='BOLSA'?'selected':''}>🛍️ Bolsa de víveres</option></select></div>
+      <div class="fg"><label class="lbl">Motivo</label><select id="mEntMotivo">${optsMot}</select></div>
+      <div class="fg"><label class="lbl">Solicitado / Autorizado por</label><select id="mEntSolicitante">${optsSol}</select></div>
       <div class="fg"><label class="lbl">Responsable</label><select id="mEntResponsable">${optsResp}</select></div>
       <div class="fg"><label class="lbl">Fecha</label><input type="date" id="mEntFecha" value="${item.fecha || ''}"></div>
-      <div class="fg full"><label class="lbl">Exportadora</label><input type="text" id="mEntExportadora" value="${esc(item.exportadora || '')}" placeholder="Ej: Camposol, AgroKasma..."></div>
+      <div class="fg"><label class="lbl">Exportadora</label><input type="text" id="mEntExportadora" value="${esc(item.exportadora || '')}" placeholder="Ej: Camposol, AgroKasma..."></div>
     </div>
     <div class="sectores-box" style="margin-top:12px">
       <div class="sectores-box-title">Sectores entregados *</div>
@@ -1070,7 +1170,8 @@ async function confirmarEditar() {
         cantidad:    parseInt(v('mArmCantidad')),
         fecha:       v('mArmFecha'),
         sector:      v('mArmSector'),
-        responsable: v('mArmResponsable')
+        responsable: v('mArmResponsable'),
+        tipo:        _tipoNorm(v('mArmTipo'))
       };
       if (!body.armado.cantidad || body.armado.cantidad <= 0) throw new Error('Cantidad inválida');
     } else if (tipo === 'entrega') {
@@ -1082,7 +1183,10 @@ async function confirmarEditar() {
         cantidad:    parseInt(v('mEntCantidad')),
         responsable: v('mEntResponsable'),
         fecha:       v('mEntFecha'),
-        exportadora: v('mEntExportadora').trim()
+        exportadora: v('mEntExportadora').trim(),
+        tipo:        _tipoNorm(v('mEntTipo')),
+        motivo:      v('mEntMotivo'),
+        solicitante: v('mEntSolicitante')
       };
       if (!body.entrega.empresa || !body.entrega.sector || !body.entrega.cantidad || body.entrega.cantidad <= 0) throw new Error('Empresa, sector(es) y cantidad son obligatorios');
     }
