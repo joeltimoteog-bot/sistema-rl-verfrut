@@ -228,6 +228,20 @@ h3{font-size:16px !important}
     <div class="prog-wrap"><div class="prog-bar" id="progBar" style="width:0%"></div></div>
   </div>
 
+  <!-- Detalle por tipo de ítem -->
+  <div class="grid2" style="margin-bottom:14px">
+    <div class="stat-card" style="border-left-color:#16a34a">
+      <div class="stat-label">🎄 Canastas navideñas</div>
+      <div class="stat-val" id="stCanDisp">—</div>
+      <div class="stat-sub" id="stCanDet">— armadas · — entregadas</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="stat-label">🛍️ Bolsas de víveres</div>
+      <div class="stat-val" id="stBolDisp">—</div>
+      <div class="stat-sub" id="stBolDet">— armadas · — entregadas</div>
+    </div>
+  </div>
+
   <!-- Stock por producto -->
   <div class="card">
     <div class="card-title">🥫 Stock actual por producto</div>
@@ -250,8 +264,8 @@ h3{font-size:16px !important}
     </div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Fecha</th><th>Empresa</th><th>Sector</th><th>Cant.</th><th>Responsable</th></tr></thead>
-        <tbody id="tbEntregasRecientes"><tr><td colspan="5" class="empty">Sin entregas</td></tr></tbody>
+        <thead><tr><th>Fecha</th><th>Empresa</th><th>Sector</th><th>Cant.</th><th>Tipo</th><th>Motivo</th><th>Responsable</th></tr></thead>
+        <tbody id="tbEntregasRecientes"><tr><td colspan="7" class="empty">Sin entregas</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -323,13 +337,21 @@ h3{font-size:16px !important}
   <!-- Panel canastas armadas listas -->
   <div class="panel-max">
     <div class="panel-max-num" id="maxCanastas">0</div>
-    <div class="panel-max-lbl">canastas armadas listas</div>
+    <div class="panel-max-lbl">unidades armadas listas</div>
+    <div id="panelTipoDetalle" style="font-size:13px;font-weight:700;color:#1e40af;margin-top:6px"></div>
   </div>
 
   <div class="card">
-    <div class="card-title">🧺 Armar lote de canastas</div>
+    <div class="card-title">🧺 Armar lote de canastas / bolsas</div>
     <div id="alArmar"></div>
     <div class="grid2">
+      <div class="fg">
+        <label class="lbl">Tipo de ítem *</label>
+        <select id="armarTipo">
+          <option value="CANASTA">🎄 Canasta navideña</option>
+          <option value="BOLSA">🛍️ Bolsa de víveres</option>
+        </select>
+      </div>
       <div class="fg">
         <label class="lbl">Cantidad a armar *</label>
         <input type="number" id="armarCantidad" min="1" step="1" placeholder="0" oninput="actualizarPreview()">
@@ -370,8 +392,8 @@ h3{font-size:16px !important}
     <div class="card-title">📋 Historial de armados</div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Fecha</th><th>Cantidad</th><th>Usuario</th><th>Sector</th><th>Supervisor</th><th></th></tr></thead>
-        <tbody id="tbArmados"><tr><td colspan="6" class="empty">Sin armados</td></tr></tbody>
+        <thead><tr><th>Fecha</th><th>Cantidad</th><th>Tipo</th><th>Usuario</th><th>Sector</th><th>Supervisor</th><th></th></tr></thead>
+        <tbody id="tbArmados"><tr><td colspan="7" class="empty">Sin armados</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -383,7 +405,7 @@ h3{font-size:16px !important}
     <div class="card-title">📦 Registrar entrega del día</div>
 
     <div class="alert alert-info" style="margin-bottom:14px">
-      Disponibles para entregar: <strong id="dispParaEntregar">0</strong> canastas
+      Disponibles para entregar: <strong id="dispParaEntregar">0</strong> <span id="dispTipoTxt"></span>
     </div>
 
     <div id="alEntregar"></div>
@@ -402,11 +424,46 @@ h3{font-size:16px !important}
         </select>
       </div>
       <div class="fg">
+        <label class="lbl">Tipo de ítem *</label>
+        <select id="entTipo" onchange="validarCantidadEntrega()">
+          <option value="CANASTA">🎄 Canasta navideña</option>
+          <option value="BOLSA">🛍️ Bolsa de víveres</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label class="lbl">Motivo de la entrega *</label>
+        <select id="entMotivo" onchange="toggleMotivoOtro()">
+          <option value="">Seleccionar motivo...</option>
+          <option value="Navidad / Cierre de campaña">🎄 Navidad / Cierre de campaña</option>
+          <option value="Fiestas Patrias">🇵🇪 Fiestas Patrias</option>
+          <option value="Día de la Madre">💐 Día de la Madre</option>
+          <option value="Día del Padre">👔 Día del Padre</option>
+          <option value="Donación">🤝 Donación</option>
+          <option value="Día festivo">🎉 Día festivo</option>
+          <option value="Otros">📝 Otros</option>
+        </select>
+      </div>
+      <div class="fg" id="entMotivoOtroWrap" style="display:none">
+        <label class="lbl">Especifica el motivo *</label>
+        <input type="text" id="entMotivoOtro" placeholder="Detalle del motivo...">
+      </div>
+      <div class="fg">
+        <label class="lbl">Solicitado / Autorizado por *</label>
+        <select id="entSolicitante">
+          <option value="">Seleccionar...</option>
+          <option value="Eduardo Covenas">Eduardo Covenas</option>
+          <option value="Olga Vilela Ludeña">Olga Vilela Ludeña</option>
+          <option value="Jorge Chávez Córdova">Jorge Chávez Córdova</option>
+          <option value="Joel Timoteo Gonza">Joel Timoteo Gonza</option>
+          <option value="Daniela Sánchez">Daniela Sánchez</option>
+        </select>
+      </div>
+      <div class="fg">
         <label class="lbl">Exportadora</label>
         <input type="text" id="entExportadora" placeholder="Ej: Camposol, AgroKasma...">
       </div>
       <div class="fg">
-        <label class="lbl">Responsable *</label>
+        <label class="lbl">Responsable (quien entrega) *</label>
         <select id="entResponsable">
           <option value="">Seleccionar...</option>
         </select>
@@ -456,8 +513,8 @@ h3{font-size:16px !important}
     <div class="card-title">📋 Historial de entregas</div>
     <div class="tbl-wrap">
       <table class="tbl">
-        <thead><tr><th>Fecha</th><th>Empresa</th><th style="min-width:200px">Sector</th><th>Cant.</th><th>Responsable</th><th>Exportadora</th><th></th></tr></thead>
-        <tbody id="tbEntregas"><tr><td colspan="7" class="empty">Sin entregas</td></tr></tbody>
+        <thead><tr><th>Fecha</th><th>Empresa</th><th style="min-width:180px">Sector</th><th>Cant.</th><th>Tipo</th><th>Motivo</th><th>Solicitó</th><th>Responsable</th><th>Exportadora</th><th></th></tr></thead>
+        <tbody id="tbEntregas"><tr><td colspan="10" class="empty">Sin entregas</td></tr></tbody>
       </table>
     </div>
   </div>
