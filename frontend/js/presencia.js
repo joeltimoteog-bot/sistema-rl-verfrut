@@ -456,16 +456,17 @@
     return fetch(PEND_GAS + '?' + new URLSearchParams({ action: 'getCumplimiento', usuario: USER.usuario || '' }))
       .then(function (r) { return r.json(); })
       .then(function (res) {
-        if (!res || !res.success) return { visitas: [], casos: 0 };
+        if (!res || !res.success) return { visitas: [], casos: 0, semana: 0, rango: '' };
         var miNombre = USER.nombre || USER.usuario;
         var visitas = (res.pendientesVisitas || [])
           .filter(function (p) { return _pCoincide(p.nombre, miNombre); })
           .map(function (p) { return p.estado || 'vencido'; });
+        var semana = res.semana || 0, rango = res.rangoSemana || '';
         var casos = (res.casosPendientes || [])
           .filter(function (p) { return _pCoincide(p.nombre_mostrar, miNombre); }).length;
-        return { visitas: visitas, casos: casos };
+        return { visitas: visitas, casos: casos, semana: semana, rango: rango };
       })
-      .catch(function () { return { visitas: [], casos: 0 }; });
+      .catch(function () { return { visitas: [], casos: 0, semana: 0, rango: '' }; });
   }
 
   var _pendMin = false, _pendReabrirT = null;
@@ -520,9 +521,11 @@
         '<br><span style="opacity:.85">' + (ev.vencida ? 'Todavía no registras tus evaluaciones en el Sistema de Evaluaciones ETI. Por favor regístralas o coordina tu reprogramación.' : 'Recuerda registrar tus evaluaciones en el Sistema de Evaluaciones ETI en las fechas programadas.') + '</span></div>';
     });
     rrll.visitas.forEach(function (est) {
+      var semTxt = rrll.semana ? 'la semana ' + rrll.semana + (rrll.rango ? ' (' + rrll.rango + ')' : '') : 'la semana pasada';
       items += '<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:9px 11px;margin-top:8px;">' +
         '📋 <b>Informe de visitas ' + (est === 'plazo_hoy' ? '(el plazo vence HOY)' : '(VENCIDO)') + ':</b> ' +
-        (est === 'plazo_hoy' ? 'recuerda que hoy vence el plazo para subir tu informe de visitas.' : 'tienes vencido el informe de visitas de la semana pasada. Por favor regularízalo hoy.') + '</div>';
+        (est === 'plazo_hoy' ? 'hoy vence el plazo para subir tu informe de visitas de ' + semTxt + '.'
+                             : 'tienes pendiente el informe de visitas de ' + semTxt + '. Por favor regularízalo hoy.') + '</div>';
     });
     if (rrll.casos) {
       items += '<div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:9px 11px;margin-top:8px;">' +
@@ -629,13 +632,15 @@
         if (venc.length) evals.push({ sup: p.sup || '?', dias: Math.round((new Date(hoy) - new Date(venc[0])) / 86400000) });
       });
       var c = res[2];
+      var semVis = 0;
       if (c && c.success) {
+        semVis = c.semana || 0;
         (c.pendientesVisitas || []).forEach(function (p) { visitas.push({ nom: p.nombre || '?', est: p.estado || 'vencido' }); });
         var porNom = {};
         (c.casosPendientes || []).forEach(function (p) { var n = p.nombre_mostrar || '?'; porNom[n] = (porNom[n] || 0) + 1; });
         Object.keys(porNom).forEach(function (n) { casos.push({ nom: n, n: porNom[n] }); });
       }
-      return { caps: caps, evals: evals, visitas: visitas, casos: casos };
+      return { caps: caps, evals: evals, visitas: visitas, casos: casos, semVis: semVis };
     });
   }
 
@@ -674,7 +679,7 @@
       '<button type="button" id="_rlResMinB" title="Minimizar" style="background:#334155;color:#f1f5f9;border:none;border-radius:8px;padding:2px 9px;font-weight:800;cursor:pointer;">—</button></div>' +
       sec('🎓 Capacitaciones vencidas', d.caps, function (x) { return _esc(_raNomCorto(x.sup)) + ' (' + x.dias + 'd)'; }) +
       sec('⭐ Evaluaciones vencidas', d.evals, function (x) { return _esc(_raNomCorto(x.sup)) + ' (' + x.dias + 'd)'; }) +
-      sec('📋 Informes de visitas', d.visitas, function (x) { return _esc(_raNomCorto(x.nom)) + (x.est === 'plazo_hoy' ? ' (hoy)' : ' (vencido)'); }) +
+      sec('📋 Informes de visitas' + (d.semVis ? ' — sem. ' + d.semVis : ''), d.visitas, function (x) { return _esc(_raNomCorto(x.nom)) + (x.est === 'plazo_hoy' ? ' (hoy)' : ' (vencido)'); }) +
       sec('📁 Casos sin cerrar', d.casos, function (x) { return _esc(_raNomCorto(x.nom)) + ' (' + x.n + ')'; }) +
       '<div style="margin-top:8px;font-size:11px;opacity:.7;">Se actualiza cada 10 min · Detalle completo en el Monitor.</div>';
     document.body.appendChild(card);
