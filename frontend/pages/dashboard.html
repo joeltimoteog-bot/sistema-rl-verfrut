@@ -3277,10 +3277,14 @@ async function cargarAlertaCumplimiento(){
     const pc = res.casosPendientes   || [];
     if (!pv.length && !pc.length) { banner.style.display = 'none'; return; }
 
+    // Semana pendiente con número y rango de fechas (si el backend ya lo envía)
+    const semTxt = res.semana
+      ? 'la <b>semana ' + res.semana + '</b>' + (res.rangoSemana ? ' (' + res.rangoSemana + ')' : '')
+      : 'la semana pasada';
     let html = '<b>⏰ Cumplimiento pendiente:</b><br>';
     if (res.esAdmin) {
       if (pv.length) {
-        html += '📋 Visitas de Campo — sin informe de la semana pasada (' + pv.length + '): '
+        html += '📋 Visitas de Campo — sin informe de ' + semTxt + ' (' + pv.length + '): '
               + pv.map(function(p){ return p.nombre + (p.estado==='plazo_hoy' ? ' (hoy es el plazo)' : ' (vencido)'); }).join(', ') + '<br>';
       }
       if (pc.length) {
@@ -3288,7 +3292,7 @@ async function cargarAlertaCumplimiento(){
               + pc.map(function(p){ return p.nombre_mostrar; }).join(', ');
       }
     } else {
-      if (pv.length) html += '📋 Aún no registras tu informe de visitas de la semana pasada.<br>';
+      if (pv.length) html += '📋 Aún no registras tu informe de visitas de ' + semTxt + '. Si ya lo enviaste, verifica que las fechas de la visita correspondan a esa semana.<br>';
       if (pc.length) html += '📁 Tienes ' + pc.length + ' caso(s) sin Informe ni Reporte subido.';
     }
     texto.innerHTML = html;
