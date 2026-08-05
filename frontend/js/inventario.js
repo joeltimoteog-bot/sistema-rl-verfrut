@@ -60,49 +60,69 @@ document.addEventListener('DOMContentLoaded', () => {
   sv('repHasta', hoy);
   sv('repDesde', new Date(Date.now() - 30 * 864e5).toISOString().split('T')[0]);
 
-  cargarSectoresInv();
-  cargarSupervisoresInv();
+  // CARGA RÁPIDA: pinta al instante desde la copia local y refresca en fondo
+  try { const s = JSON.parse(localStorage.getItem('inv_sectores_v1') || 'null'); if (Array.isArray(s) && s.length) { window.invSectores = s; _invPintarSectores(); } } catch(e) {}
+  try { const s = JSON.parse(localStorage.getItem('inv_supervisores_v1') || 'null'); if (Array.isArray(s) && s.length) { window.invSupervisores = s; _invPintarSupervisores(); } } catch(e) {}
+  cargarSectoresInv(true);
+  cargarSupervisoresInv(true);
   cargarDatos();
 });
 
-async function cargarSectoresInv() {
+let _secUltCarga = 0, _supUltCarga = 0;
+
+function _invPintarSectores() {
+  document.querySelectorAll(
+    'select[name="sector"], #ingresoSector, #armadoSector'
+  ).forEach(sel => {
+    const valActual = sel.value;
+    sel.innerHTML = '<option value="">Seleccionar sector...</option>' +
+      (window.invSectores || []).map(s => `<option value="${esc(s.nombre)}">${s.nombre}</option>`).join('');
+    if (valActual) sel.value = valActual;
+  });
+  renderSectoresCfg();
+  renderCheckboxesSectoresEntrega();
+}
+
+async function cargarSectoresInv(forzar) {
+  // Evita repetir la llamada al servidor en cada cambio de pestaña (caché 60 s)
+  if (!forzar && (window.invSectores || []).length && (Date.now() - _secUltCarga) < 60000) return;
   try {
     const res = await fetch(`${API}?action=invListarSectores`);
     const data = await res.json();
     if (data && data.success && Array.isArray(data.sectores)) {
       window.invSectores = data.sectores;
-      document.querySelectorAll(
-        'select[name="sector"], #ingresoSector, #armadoSector'
-      ).forEach(sel => {
-        const valActual = sel.value;
-        sel.innerHTML = '<option value="">Seleccionar sector...</option>' +
-          data.sectores.map(s => `<option value="${esc(s.nombre)}">${s.nombre}</option>`).join('');
-        if (valActual) sel.value = valActual;
-      });
-      renderSectoresCfg();
-      renderCheckboxesSectoresEntrega();
+      _secUltCarga = Date.now();
+      try { localStorage.setItem('inv_sectores_v1', JSON.stringify(data.sectores)); } catch(e) {}
+      _invPintarSectores();
     }
   } catch (e) {
     console.error('Error cargando sectores:', e);
   }
 }
 
-async function cargarSupervisoresInv() {
+function _invPintarSupervisores() {
+  document.querySelectorAll(
+    'select[name="supervisor"], #ingresoSupervisor, #armadoSupervisor, #entregaSupervisor'
+  ).forEach(sel => {
+    const valActual = sel.value;
+    sel.innerHTML = '<option value="">Seleccionar supervisor...</option>' +
+      (window.invSupervisores || []).map(s =>
+        `<option value="${esc(s.nombre)}" data-sector="${esc(s.sector || '')}" data-usuario="${esc(s.usuario || '')}">${s.nombre}</option>`
+      ).join('');
+    if (valActual) sel.value = valActual;
+  });
+}
+
+async function cargarSupervisoresInv(forzar) {
+  if (!forzar && (window.invSupervisores || []).length && (Date.now() - _supUltCarga) < 60000) return;
   try {
     const res = await fetch(`${API}?action=invListarSupervisores`);
     const data = await res.json();
     if (data && data.success && Array.isArray(data.supervisores)) {
       window.invSupervisores = data.supervisores;
-      document.querySelectorAll(
-        'select[name="supervisor"], #ingresoSupervisor, #armadoSupervisor, #entregaSupervisor'
-      ).forEach(sel => {
-        const valActual = sel.value;
-        sel.innerHTML = '<option value="">Seleccionar supervisor...</option>' +
-          data.supervisores.map(s =>
-            `<option value="${esc(s.nombre)}" data-sector="${esc(s.sector || '')}" data-usuario="${esc(s.usuario || '')}">${s.nombre}</option>`
-          ).join('');
-        if (valActual) sel.value = valActual;
-      });
+      _supUltCarga = Date.now();
+      try { localStorage.setItem('inv_supervisores_v1', JSON.stringify(data.supervisores)); } catch(e) {}
+      _invPintarSupervisores();
     }
   } catch (e) {
     console.error('Error cargando supervisores:', e);
@@ -122,8 +142,24 @@ function showTab(tab, btn) {
   }
 }
 
-/* ─────────────── CARGAR DATOS ─────────────── */
+/* ─────────────── CARGAR DATOS (con caché local: pinta al instante) ─────────────── */
+const _CACHE_INV_KEY = 'inv_datos_v1';
+let _invPintadoDeCache = false;
+
 async function cargarDatos() {
+  // 1) Pinta AL INSTANTE desde la copia local (si existe)
+  if (!_invPintadoDeCache) {
+    try {
+      const c = JSON.parse(localStorage.getItem(_CACHE_INV_KEY) || 'null');
+      if (c && c.data && typeof c.data === 'object') {
+        DATA = c.data;
+        calcular();
+        renderAll();
+        _invPintadoDeCache = true;
+      }
+    } catch(e) {}
+  }
+  // 2) Refresca desde el servidor en segundo plano y re-pinta
   try {
     const d = await apiGet({ action: 'invGetAll' });
     if (!d.success) throw new Error(d.error || 'Error al cargar datos');
@@ -165,9 +201,13 @@ async function cargarDatos() {
     }));
     calcular();
     renderAll();
+    _invPintadoDeCache = true;
+    // Guardar copia local para que la próxima apertura sea instantánea
+    try { localStorage.setItem(_CACHE_INV_KEY, JSON.stringify({ data: DATA, t: Date.now() })); } catch(e) {}
   } catch(e) {
     console.error('[INV] cargarDatos:', e);
-    mostrarAlerta('alIngreso', 'err', '❌ Error al cargar datos: ' + e.message);
+    // Si ya se pintó desde la copia local, no molestar con el error
+    if (!_invPintadoDeCache) mostrarAlerta('alIngreso', 'err', '❌ Error al cargar datos: ' + e.message);
   }
 }
 
@@ -1226,7 +1266,7 @@ async function agregarSector() {
     const d = await apiPost({ action: 'invAgregarSector', nombre, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error || 'Error al guardar');
     sv('cfgSectorNombre', '');
-    await cargarSectoresInv();
+    await cargarSectoresInv(true);
     mostrarAlerta('alSectores', 'ok', `✅ Sector "${nombre}" agregado`);
   } catch(e) { mostrarAlerta('alSectores', 'err', '❌ ' + e.message); }
 }
@@ -1256,7 +1296,7 @@ async function confirmarEditarSector() {
     if (!d.success) throw new Error(d.error || 'Error al guardar');
     document.getElementById('modalSector').style.display = 'none';
     _sectorEditCtx = null;
-    await cargarSectoresInv();
+    await cargarSectoresInv(true);
   } catch(e) { al.innerHTML = `<div class="alert alert-err">❌ ${e.message}</div>`; }
 }
 
@@ -1265,7 +1305,7 @@ async function eliminarSector(id, nombre) {
   try {
     const d = await apiPost({ action: 'invEliminarSector', id, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error || 'Error al eliminar');
-    await cargarSectoresInv();
+    await cargarSectoresInv(true);
   } catch(e) { await appAlert('❌ ' + e.message); }
 }
 
