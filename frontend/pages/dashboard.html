@@ -3011,8 +3011,12 @@ window.onload = async () => {
   }
   // ⏱️ Acumulación de Horas — acceso básico para usuarios designados (aunque no sean admin).
   // Dentro del módulo, horas.js les muestra SOLO Registrar y Resumen Individual.
+  // v2: watchdog — re-aplica la visibilidad cada 2 s por si otra regla lo oculta después.
   if (['dsanchez','lmorales','jsiancas'].includes((USER.usuario || '').toLowerCase().trim())) {
-    var _nhB = document.getElementById('navHoras'); if (_nhB) _nhB.style.display='';
+    console.log('[horas-basico] v2 activo para', USER.usuario);
+    var _nhMostrar = function(){ var b = document.getElementById('navHoras'); if (b && b.style.display === 'none') b.style.display=''; };
+    _nhMostrar();
+    setInterval(_nhMostrar, 2000);
   }
   // Botón Inicio: visible para admins, coordinador y jefa_rl
   const rolLower = (rol||'').toLowerCase();

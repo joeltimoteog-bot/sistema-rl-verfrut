@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3.8.0-autoupdate';
+const CACHE_VERSION = 'v3.9.0-horas-basico';
 const CACHE_NAME    = 'sistema-rl-' + CACHE_VERSION;
 const BASE          = '/sistema-rl-verfrut';
 // Solo lo mínimo para soporte offline básico — el resto se pide por red
