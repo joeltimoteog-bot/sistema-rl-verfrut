@@ -5,10 +5,15 @@
    SPA — sin recargas entre tabs. Cache en memoria.
    ═══════════════════════════════════════════════════════════════════ */
 
-const USUARIOS_PERMITIDOS = ['jtimoteo', 'ovilela', 'jchavez'];
+const USUARIOS_PERMITIDOS = ['jtimoteo', 'ovilela', 'jchavez', 'dsanchez', 'lmorales', 'jsiancas'];
+// Acceso BÁSICO: solo pueden ver Registrar y Resumen Individual.
+// (Resumen General, Aprobaciones y Config quedan ocultos y bloqueados.)
+const USUARIOS_BASICOS = ['dsanchez', 'lmorales', 'jsiancas'];
+const TABS_SOLO_ADMIN  = ['general', 'aprobaciones', 'config'];
 
 let USER = null;
 let API  = '';
+let ES_BASICO = false;
 
 window.horasCache = window.horasCache || {
   motivos: [],
@@ -35,6 +40,17 @@ document.addEventListener('DOMContentLoaded', () => {
       <a href="dashboard.html" style="margin-top:8px;color:#0a2463;font-weight:700;font-size:14px">← Volver al dashboard</a>
     </div>`;
     return;
+  }
+
+  // Modo básico: ocultar las pestañas de administración (además del bloqueo en showTab)
+  ES_BASICO = USUARIOS_BASICOS.includes(u);
+  if (ES_BASICO) {
+    TABS_SOLO_ADMIN.forEach(t => {
+      const b = document.querySelector('.tab-btn[data-tab="' + t + '"]');
+      if (b) b.style.display = 'none';
+      const tc = document.getElementById('tab-' + t);
+      if (tc) tc.innerHTML = '<div class="empty">🔒 Sección reservada al equipo administrativo.</div>';
+    });
   }
 
   const el = document.getElementById('topNombre');
@@ -121,6 +137,8 @@ function _setupDniAutoSearch(inputId, opts) {
 
 /* ─────────────── TABS (SPA puro) ─────────────── */
 function showTab(tab, btn) {
+  // Los usuarios básicos NO pueden abrir las pestañas de administración
+  if (ES_BASICO && TABS_SOLO_ADMIN.includes(tab)) return;
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('on'));
   document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('on'));
   const tc = document.getElementById('tab-' + tab);
@@ -494,7 +512,7 @@ function renderResumenIndividual(d) {
       const badgeEst = est === 'aprobado' ? '<span class="badge badge-aprob">Aprobado</span>'
                      : est === 'pendiente' ? '<span class="badge badge-pend">Pendiente</span>'
                      : `<span class="badge badge-blue">${r.estado || '-'}</span>`;
-      const btnAprob = est === 'pendiente'
+      const btnAprob = (!ES_BASICO && est === 'pendiente')
         ? `<button class="btn-tbl btn-aprob" onclick="aprobarRegistro('${esc(r.id)}', false)">✅</button>`
         : '';
       return `<tr>
@@ -555,6 +573,7 @@ async function eliminarRegistro(id) {
 }
 
 async function aprobarRegistro(id, recargarAprob) {
+  if (ES_BASICO) { await appAlert('🔒 La aprobación está reservada al equipo administrativo.'); return; }
   try {
     const d = await apiPost({ action: 'horasAprobar', usuario: USER.usuario, id });
     if (!d.success) throw new Error(d.error || 'Error al aprobar');
