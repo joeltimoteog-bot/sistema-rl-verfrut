@@ -1,6 +1,8 @@
 // _MODALES_CUSTOM_V1 (08-jun-2026): migración a appAlert/appConfirm/appPrompt
-// _HORAS_REGISTRADORES_V1 (20-jul-2026): dsanchez/lmorales/jsiancas pueden
-// registrar acumulaciones y solo ven sus propios registros (sin editar/eliminar).
+// _HORAS_REGISTRADORES_V2 (08-ago-2026): dsanchez/lmorales/jsiancas pueden
+// registrar acumulaciones; solo ven SUS registros y el saldo de SUS registros;
+// si consultan un DNI que no registraron, se bloquea y se pide autorizacion.
+// El administrador ve todo, y ademas quien registro cada fila.
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════
    horas.js · Sistema RL v3.0 · Módulo Acumulación de Horas
@@ -285,6 +287,16 @@ function _limpiarResumenIndividual() {
 async function cargarSaldoTrabajador(dni) {
   try {
     const d = await apiPost({ action: 'horasResumenIndividual', dni, usuario: USER.usuario });
+    // _HORAS_REGISTRADORES_V2: DNI sin registros propios -> no se muestra saldo.
+    if (d && d.bloqueado) {
+      document.getElementById('saldoWrap').innerHTML = `
+        <div class="card" style="border-left:4px solid #f59e0b">
+          <div style="font-size:13px;color:#92400e;line-height:1.5">
+            🔒 <b>Saldo no disponible</b><br>${d.mensaje || ''}
+          </div>
+        </div>`;
+      return;
+    }
     if (d && d.success && d.totales) {
       renderSaldoCard(d);
     } else {
@@ -468,6 +480,19 @@ async function cargarResumenIndividual() {
   try {
     const d = await apiPost({ action: 'horasResumenIndividual', dni, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error || 'Error al cargar');
+    // _HORAS_REGISTRADORES_V2: DNI del que este usuario no tiene registros propios.
+    if (d.bloqueado) {
+      window.horasCache.resumenIndividual = null;
+      _limpiarResumenIndividual();
+      document.getElementById('tbIndiv').innerHTML =
+        '<tr><td colspan="9" class="empty">🔒 Sin acceso a este DNI</td></tr>';
+      document.getElementById('indComentario').innerHTML = `
+        <div class="card" style="border-left:4px solid #f59e0b">
+          <div class="card-title">🔒 Necesitas autorización</div>
+          <div style="font-size:13px;color:#475569;line-height:1.6">${d.mensaje || ''}</div>
+        </div>`;
+      return;
+    }
     window.horasCache.resumenIndividual = d;
     renderResumenIndividual(d);
   } catch (e) {
@@ -502,7 +527,10 @@ function renderResumenIndividual(d) {
       <div class="stat-card blue"><div class="stat-label">🔵 Permiso</div><div class="stat-val">${perm.toFixed(2)}</div></div>
       <div class="stat-card red"><div class="stat-label">🔴 Deuda</div><div class="stat-val">${deuda.toFixed(2)}</div></div>
       <div class="stat-card ${saldo < 0 ? 'red' : 'green'}"><div class="stat-label">⚖️ Saldo final</div><div class="stat-val">${saldo.toFixed(2)}</div></div>
-    </div>`;
+    </div>` + (d.parcial ? `
+    <div style="font-size:12px;color:#92400e;background:#fffbeb;border-left:3px solid #f59e0b;padding:8px 10px;border-radius:6px;margin-bottom:14px">
+      ℹ️ Estos totales corresponden <b>solo a los registros que tú ingresaste</b>, no al saldo total del trabajador.
+    </div>` : '');
 
   // Tabla
   const tb = document.getElementById('tbIndiv');
@@ -523,7 +551,7 @@ function renderResumenIndividual(d) {
       const btnDel = ES_BASICO ? ''
         : `<button class="btn-tbl btn-del"  onclick="eliminarRegistro('${esc(r.id)}')">🗑️</button>`;
       return `<tr>
-        <td>${formatFecha(r.fechaEntrada || r.fecha)}</td>
+        <td>${formatFecha(r.fechaEntrada || r.fecha)}${ES_BASICO ? '' : `<div style="font-size:11px;color:#64748b;margin-top:2px">👤 ${esc(String(r.registradoPor || '—'))}</div>`}</td>
         <td>${r.motivo || ''}</td>
         <td>${num(r.horasTrabajadas)}</td>
         <td>${num(r.horasAcum)}</td>
