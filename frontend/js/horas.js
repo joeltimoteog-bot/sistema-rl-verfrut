@@ -1,4 +1,6 @@
 // _MODALES_CUSTOM_V1 (08-jun-2026): migración a appAlert/appConfirm/appPrompt
+// _HORAS_REGISTRADORES_V1 (20-jul-2026): dsanchez/lmorales/jsiancas pueden
+// registrar acumulaciones y solo ven sus propios registros (sin editar/eliminar).
 'use strict';
 /* ═══════════════════════════════════════════════════════════════════
    horas.js · Sistema RL v3.0 · Módulo Acumulación de Horas
@@ -282,7 +284,7 @@ function _limpiarResumenIndividual() {
 
 async function cargarSaldoTrabajador(dni) {
   try {
-    const d = await apiPost({ action: 'horasResumenIndividual', dni });
+    const d = await apiPost({ action: 'horasResumenIndividual', dni, usuario: USER.usuario });
     if (d && d.success && d.totales) {
       renderSaldoCard(d);
     } else {
@@ -464,7 +466,7 @@ async function cargarResumenIndividual() {
   const dni = v('indDni').trim();
   if (!/^\d{8}$/.test(dni)) { mostrarAlerta('alIndiv', 'err', 'DNI inválido'); return; }
   try {
-    const d = await apiPost({ action: 'horasResumenIndividual', dni });
+    const d = await apiPost({ action: 'horasResumenIndividual', dni, usuario: USER.usuario });
     if (!d.success) throw new Error(d.error || 'Error al cargar');
     window.horasCache.resumenIndividual = d;
     renderResumenIndividual(d);
@@ -515,6 +517,11 @@ function renderResumenIndividual(d) {
       const btnAprob = (!ES_BASICO && est === 'pendiente')
         ? `<button class="btn-tbl btn-aprob" onclick="aprobarRegistro('${esc(r.id)}', false)">✅</button>`
         : '';
+      // _HORAS_REGISTRADORES_V1: editar y eliminar quedan solo para administradores.
+      const btnEdit = ES_BASICO ? ''
+        : `<button class="btn-tbl btn-edit" onclick="abrirEditarRegistro('${esc(r.id)}', ${JSON.stringify(r.observaciones || '').replace(/"/g, '&quot;')})">✏️</button>`;
+      const btnDel = ES_BASICO ? ''
+        : `<button class="btn-tbl btn-del"  onclick="eliminarRegistro('${esc(r.id)}')">🗑️</button>`;
       return `<tr>
         <td>${formatFecha(r.fechaEntrada || r.fecha)}</td>
         <td>${r.motivo || ''}</td>
@@ -525,9 +532,9 @@ function renderResumenIndividual(d) {
         <td>${badgeEst}</td>
         <td style="font-size:12px">${r.observaciones || ''}</td>
         <td style="white-space:nowrap">
-          <button class="btn-tbl btn-edit" onclick="abrirEditarRegistro('${esc(r.id)}', ${JSON.stringify(r.observaciones || '').replace(/"/g, '&quot;')})">✏️</button>
+          ${btnEdit}
           ${btnAprob}
-          <button class="btn-tbl btn-del"  onclick="eliminarRegistro('${esc(r.id)}')">🗑️</button>
+          ${btnDel}
         </td>
       </tr>`;
     }).join('');
@@ -657,7 +664,7 @@ async function cargarAprobaciones() {
   const cont = document.getElementById('aprList');
   if (cont) cont.innerHTML = '<div class="empty">⏳ Cargando...</div>';
   try {
-    const d = await apiPost({ action: 'horasListar', estado: 'pendiente' });
+    const d = await apiPost({ action: 'horasListar', estado: 'pendiente', usuario: USER.usuario });
     if (!d.success) throw new Error(d.error || 'Error al cargar');
     window.horasCache.aprobaciones = d.registros || [];
     renderAprobaciones(window.horasCache.aprobaciones);
