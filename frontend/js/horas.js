@@ -1,4 +1,7 @@
 // _MODALES_CUSTOM_V1 (08-jun-2026): migración a appAlert/appConfirm/appPrompt
+// _HORAS_REGISTRADORES_V3 (08-ago-2026): la búsqueda automática de DNI ahora
+// envía 'usuario' (antes no, por eso solo funcionaba con el botón Actualizar)
+// y muestra el aviso de bloqueo sola, con feedback inmediato "Consultando...".
 // _HORAS_REGISTRADORES_V2 (08-ago-2026): dsanchez/lmorales/jsiancas pueden
 // registrar acumulaciones; solo ven SUS registros y el saldo de SUS registros;
 // si consultan un DNI que no registraron, se bloquea y se pide autorizacion.
@@ -73,11 +76,15 @@ document.addEventListener('DOMContentLoaded', () => {
     onNotFound: _limpiarTrabajadorEnForm,
     onClear: _limpiarTrabajadorEnForm
   });
+  // _HORAS_REGISTRADORES_V3: esta búsqueda automática NO enviaba 'usuario'.
+  // Sin ese dato el servidor no sabía quién preguntaba y respondía con el
+  // aviso de sesión, que aquí se tomaba como "no encontrado" -> tabla vacía
+  // y ningún mensaje. Por eso solo funcionaba con el botón Actualizar.
   _setupDniAutoSearch('indDni', {
-    fetch: (dni) => apiPost({ action: 'horasResumenIndividual', dni }),
+    fetch: (dni) => apiPost({ action: 'horasResumenIndividual', dni, usuario: USER.usuario }),
     isFound: (d) => !!(d && d.success && Array.isArray(d.registros)),
     onFound: (d) => { window.horasCache.resumenIndividual = d; renderResumenIndividual(d); },
-    onNotFound: _limpiarResumenIndividual,
+    onNotFound: (d) => _mostrarBloqueoIndividual(d),
     onClear:    _limpiarResumenIndividual
   });
 
@@ -118,6 +125,9 @@ function _setupDniAutoSearch(inputId, opts) {
       return;
     }
 
+    // Aviso inmediato: el usuario ve que ya se está consultando.
+    if (inputId === 'indDni' && typeof _mostrarBuscandoIndividual === 'function') _mostrarBuscandoIndividual();
+
     timer = setTimeout(async () => {
       setLoading(true);
       try {
@@ -129,13 +139,14 @@ function _setupDniAutoSearch(inputId, opts) {
           opts.onFound(data);
         } else {
           setMissing();
-          if (opts.onNotFound) opts.onNotFound();
+          if (opts.onNotFound) opts.onNotFound(data);   // <- ahora recibe la respuesta
         }
       } catch (err) {
         setLoading(false);
         console.error('[HORAS] DNI search:', err);
+        if (opts.onNotFound) opts.onNotFound(null);
       }
-    }, 300);
+    }, 250);
   });
 }
 
@@ -274,6 +285,30 @@ function _limpiarTrabajadorEnForm() {
   document.getElementById('cardDatos').style.display = 'none';
   document.getElementById('cardRegistro').style.display = 'none';
   document.getElementById('saldoWrap').innerHTML = '';
+}
+
+/* _HORAS_REGISTRADORES_V3
+   Muestra el aviso del servidor (sin autorización / sesión antigua) en la
+   búsqueda automática, sin necesidad de pulsar Actualizar. */
+function _mostrarBloqueoIndividual(d) {
+  _limpiarResumenIndividual();
+  const msg = (d && (d.mensaje || d.error)) || 'No se encontraron registros para este DNI.';
+  const bloqueado = !!(d && d.bloqueado);
+  document.getElementById('tbIndiv').innerHTML =
+    `<tr><td colspan="9" class="empty">${bloqueado ? '🔒 Sin acceso a este DNI' : 'Sin registros'}</td></tr>`;
+  document.getElementById('indComentario').innerHTML = `
+    <div class="card" style="border-left:4px solid ${bloqueado ? '#f59e0b' : '#94a3b8'}">
+      <div class="card-title">${bloqueado ? '🔒 Necesitas autorización' : 'ℹ️ Sin resultados'}</div>
+      <div style="font-size:13px;color:#475569;line-height:1.6">${msg}</div>
+    </div>`;
+}
+
+/* Aviso inmediato mientras viaja la consulta, para que no parezca colgado. */
+function _mostrarBuscandoIndividual() {
+  const tb = document.getElementById('tbIndiv');
+  if (tb) tb.innerHTML = '<tr><td colspan="9" class="empty">⏳ Consultando...</td></tr>';
+  const c = document.getElementById('indComentario');
+  if (c) c.innerHTML = '';
 }
 
 function _limpiarResumenIndividual() {
