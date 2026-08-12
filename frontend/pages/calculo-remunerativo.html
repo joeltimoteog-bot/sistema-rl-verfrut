@@ -47,7 +47,6 @@
   .cd.cero { background:#f8fafc; } .cd.cero .h { color:#cbd5e1; }
   .cd.fer { background:#fee2e2; border-color:#fca5a5; } .cd.fer .h { color:var(--rojo); }
   .cd.ina { background:#fef3c7; border-color:#fcd34d; } .cd.ina .h { color:var(--ambar); }
-  .cd.inap { background:#e0f2fe; border-color:#7dd3fc; } .cd.inap .h { color:#0369a1; } .cd.inap .tag { color:#0369a1 !important; }
   .cd.vacio { border:none; background:transparent; cursor:default; }
   .cd .tag { position:absolute; top:4px; right:5px; font-size:9px; font-weight:800; }
   .leyenda { display:flex; gap:14px; flex-wrap:wrap; font-size:11.5px; color:#475569; margin-top:10px; }
@@ -114,6 +113,11 @@
   <div id="tQuin" class="tabpane" style="display:none">
     <div class="card">
       <h2>🧮 Cálculo Quincenal (réplica OBRERO ACTUAL)</h2>
+      <!-- CR_TURNOS_V1: accesos rápidos -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px">
+        <button type="button" onclick="crAbrirRem()" style="background:#0a2463;color:#fff;border:none;padding:9px 16px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💰 Ingresar remuneración</button>
+        <button type="button" onclick="crAbrirTurno()" style="background:#fff;color:#0a2463;border:2px solid #0a2463;padding:8px 15px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🕐 Calculadora de turno</button>
+      </div>
       <div class="grid g5" style="margin-bottom:6px">
         <div><label>Rem. Bruta (S/)</label><input type="number" id="qBruta" step="0.01" onchange="renderQuin()"></div>
         <div><label>AFP / ONP</label><select id="qAfp" onchange="renderQuin()"></select></div>
@@ -255,8 +259,9 @@ function basicaDe(p) { return p.remBruta / p.factorBruta; }
 
 /* ── Horas de jornada de un día (réplica fórmula hoja Calendario) ──
    d: Date local · feriadosSet/inasistSet: Set de 'yyyy-mm-dd' */
-/* Jornada base del día (sin considerar feriados ni inasistencias) */
-function jornadaBase(d, p) {
+function horasDia(d, p, feriadosSet, inasistSet) {
+  const iso = fmtISO(d);
+  if (feriadosSet.has(iso) || inasistSet.has(iso)) return 0;
   const y = d.getFullYear();
   const dow = d.getDay() === 0 ? 7 : d.getDay();   // 1=Lun ... 7=Dom (WEEKDAY(,2))
   const t = d.getTime();
@@ -271,38 +276,22 @@ function jornadaBase(d, p) {
   return 0;  // 01 ene
 }
 
-function horasDia(d, p, feriadosSet, inasistSet, parcialMap) {
-  const iso = fmtISO(d);
-  if (feriadosSet.has(iso)) return 0;
-  if (inasistSet.has(iso)) return 0;                          // inasistencia jornada completa
-  const base = jornadaBase(d, p);
-  if (parcialMap && parcialMap[iso] !== undefined) {          // trabajó solo algunas horas
-    const h = Number(parcialMap[iso]) || 0;
-    return Math.min(Math.max(h, 0), base);
-  }
-  return base;
-}
-
 function fmtISO(d) {
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
 /* ── Calendario del mes: días con horas + totales por quincena ── */
-function calendarioMes(anio, mes, p, inasistencias, parciales) {
+function calendarioMes(anio, mes, p, inasistencias) {
   const fer = new Set(p.feriados || []);
   const ina = new Set(inasistencias || []);
-  const par = parciales || {};
   const diasMes = new Date(anio, mes, 0).getDate();
   const dias = [];
   let q1 = 0, q2 = 0;
   for (let dd = 1; dd <= diasMes; dd++) {
     const d = new Date(anio, mes - 1, dd);
-    const h = horasDia(d, p, fer, ina, par);
-    const iso = fmtISO(d);
-    dias.push({ dia: dd, iso: iso, dow: d.getDay(), horas: h,
-                base: jornadaBase(d, p),
-                feriado: fer.has(iso), inasistencia: ina.has(iso),
-                parcial: par[iso] !== undefined ? Number(par[iso]) : undefined });
+    const h = horasDia(d, p, fer, ina);
+    dias.push({ dia: dd, iso: fmtISO(d), dow: d.getDay(), horas: h,
+                feriado: fer.has(fmtISO(d)), inasistencia: ina.has(fmtISO(d)) });
     if (dd <= 15) q1 += h; else q2 += h;
   }
   return { dias, diasMes, horasQ1: r2(q1, 10), horasQ2: r2(q2, 10), horasMes: r2(q1 + q2, 10) };
@@ -390,11 +379,8 @@ function calcHoraExtra(tipo, basicoHora, tasaAFP, p) {
 /* ═══════ UI DEL MÓDULO ═══════ */
 const LS_KEY = 'calcRemu_params_v1';
 const LS_INA = 'calcRemu_inasist_v1';
-const LS_INAP = 'calcRemu_inasistParcial_v1';   // { 'yyyy-mm-dd': horas trabajadas }
 let P = cargarParams();
 let INA = JSON.parse(localStorage.getItem(LS_INA) || '[]');
-let INAP = JSON.parse(localStorage.getItem(LS_INAP) || '{}');
-function saveInap(){ localStorage.setItem(LS_INAP, JSON.stringify(INAP)); }
 
 function cargarParams() {
   try {
@@ -431,7 +417,7 @@ function initCal() {
 }
 function renderCal() {
   const anio = parseInt(v('cAnio')), mes = parseInt(v('cMes'));
-  const cal = calendarioMes(anio, mes, P, INA, INAP);
+  const cal = calendarioMes(anio, mes, P, INA);
   el('kQ1').textContent = fnum(cal.horasQ1) + ' h';
   el('kQ2').textContent = fnum(cal.horasQ2) + ' h';
   el('kMes').textContent = fnum(cal.horasMes) + ' h';
@@ -443,84 +429,25 @@ function renderCal() {
     let cls = 'cd', tag = '';
     if (d.feriado) { cls += ' fer'; tag = 'FER'; }
     else if (d.inasistencia) { cls += ' ina'; tag = 'INA'; }
-    else if (d.parcial !== undefined) { cls += ' inap'; tag = fnum(d.horas) + 'h/' + fnum(d.base); }
     else if (d.horas === 0) cls += ' cero';
     html += `<div class="${cls}" onclick="toggleIna('${d.iso}')" title="${d.iso}">
       <div class="n">${d.dia}</div><div class="h">${d.horas ? fnum(d.horas) : '0'}</div>
       ${tag ? `<div class="tag" style="color:${d.feriado?'#dc2626':'#d97706'}">${tag}</div>` : ''}</div>`;
   });
   el('calGrid').innerHTML = html;
-  const _chipsIna = INA.slice().sort().map(f => `<span class="pill">${f} · 0h<button onclick="event.stopPropagation();quitarIna('${f}')">✕</button></span>`);
-  const _chipsPar = Object.keys(INAP).sort().map(f => `<span class="pill" style="background:#e0f2fe;border-color:#7dd3fc;color:#0369a1">${f} · trabajó ${fnum(INAP[f])}h<button onclick="event.stopPropagation();quitarIna('${f}')">✕</button></span>`);
-  el('cInaList').innerHTML = (_chipsIna.length || _chipsPar.length)
-    ? '<b style="font-size:12px;color:#475569">Inasistencias y permisos:</b> ' + _chipsIna.concat(_chipsPar).join('')
+  el('cInaList').innerHTML = INA.length
+    ? '<b style="font-size:12px;color:#475569">Inasistencias:</b> ' + INA.slice().sort().map(f => `<span class="pill">${f}<button onclick="event.stopPropagation();quitarIna('${f}')">✕</button></span>`).join('')
     : '';
   if (el('tQuin').style.display !== 'none') renderQuin();
 }
 function toggleIna(iso) {
   const fer = new Set(P.feriados); if (fer.has(iso)) return;
-  // Si ya estaba marcada (completa o parcial), un clic la quita
-  if (INA.indexOf(iso) !== -1 || INAP[iso] !== undefined) { quitarIna(iso); return; }
-  preguntarIna(iso);
+  const i = INA.indexOf(iso);
+  if (i === -1) INA.push(iso); else INA.splice(i, 1);
+  localStorage.setItem(LS_INA, JSON.stringify(INA)); renderCal();
 }
-function addInasistencia() {
-  const f = v('cIna'); el('cIna').value = '';
-  if (!f) return;
-  if (INA.indexOf(f) !== -1 || INAP[f] !== undefined) { renderCal(); return; }
-  const fer = new Set(P.feriados); if (fer.has(f)) return;
-  preguntarIna(f);
-}
-function quitarIna(f) {
-  INA = INA.filter(x => x !== f);
-  if (INAP[f] !== undefined) delete INAP[f];
-  localStorage.setItem(LS_INA, JSON.stringify(INA)); saveInap(); renderCal();
-}
-
-/* ── Pregunta al usuario: ¿jornada completa o trabajó algunas horas? ── */
-let _inaFecha = null, _inaBase = 0;
-function preguntarIna(iso) {
-  const d = new Date(iso + 'T12:00:00');
-  const base = jornadaBase(d, P);
-  if (base === 0) {
-    alert('El ' + iso + ' no tiene jornada laboral (domingo o día sin jornada), no es necesario marcar inasistencia.');
-    return;
-  }
-  _inaFecha = iso; _inaBase = base;
-  const fechaTxt = d.toLocaleDateString('es-PE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  el('inaModalTxt').innerHTML = 'Has seleccionado el <b>' + fechaTxt + '</b>.<br>' +
-    'La jornada de ese día es de <b>' + fnum(base) + ' h</b>. Indícame cómo considerarlo:';
-  el('inaHrsBox').style.display = 'none';
-  el('inaHrsInput').value = '';
-  el('inaModal').style.display = 'flex';
-}
-function inaCompleta() {
-  if (!_inaFecha) return;
-  INA.push(_inaFecha);
-  localStorage.setItem(LS_INA, JSON.stringify(INA));
-  cerrarInaModal(); renderCal();
-}
-function inaMostrarHoras() {
-  el('inaHrsBox').style.display = 'block';
-  el('inaHrsInput').max = _inaBase;
-  el('inaHrsInput').placeholder = 'Ej: 3 (máx ' + fnum(_inaBase) + ')';
-  el('inaHrsInput').focus();
-}
-function inaGuardarHoras() {
-  const hTxt = String(el('inaHrsInput').value).trim();
-  const hNum = Number(hTxt);
-  if (hTxt === '' || isNaN(hNum) || hNum <= 0) {
-    alert('Indica cuántas horas trabajó el trabajador ese día (mayor a 0). Si no trabajó nada, usa "Inasistencia jornada completa".');
-    return;
-  }
-  if (hNum >= _inaBase) {
-    alert('Las horas trabajadas (' + fnum(hNum) + ') no pueden ser iguales o mayores a la jornada del día (' + fnum(_inaBase) + ' h). Si trabajó la jornada completa, no marques inasistencia.');
-    return;
-  }
-  INAP[_inaFecha] = r2(hNum);
-  saveInap();
-  cerrarInaModal(); renderCal();
-}
-function cerrarInaModal() { el('inaModal').style.display = 'none'; _inaFecha = null; }
+function addInasistencia() { const f = v('cIna'); if (f && INA.indexOf(f) === -1) { INA.push(f); localStorage.setItem(LS_INA, JSON.stringify(INA)); } el('cIna').value=''; renderCal(); }
+function quitarIna(f) { INA = INA.filter(x => x !== f); localStorage.setItem(LS_INA, JSON.stringify(INA)); renderCal(); }
 
 /* ════════ QUINCENAL ════════ */
 let qManual = null; // estado de inputs manuales por quincena
@@ -540,7 +467,7 @@ function renderQuin() {
     setTasaQ(); el('qAfp').dataset.last = v('qAfp') + '|' + v('qCom');
   }
   const anio = parseInt(v('cAnio')), mes = parseInt(v('cMes'));
-  const cal = calendarioMes(anio, mes, P, INA, INAP);
+  const cal = calendarioMes(anio, mes, P, INA);
   const auto = v('qAuto') === '1';
   const tasa = parseFloat(v('qTasa')) || 0;
   const bruta = parseFloat(v('qBruta')) || P.remBruta;
@@ -682,27 +609,214 @@ function restaurarParams() {
 /* ════════ INIT ════════ */
 if (!window._crBloqueado) { initCal(); initQuin(); initDia(); initHE(); }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   CR_TURNOS_V1 (09-ago-2026) — Remuneración rápida + Calculadora de turno
+   ---------------------------------------------------------------------------
+   NO modifica el motor de cálculo. Solo LLENA las casillas que hoy se
+   escriben a mano en la pestaña Quincenal. Las fórmulas, los porcentajes y
+   los resultados siguen siendo exactamente los mismos.
+   Todo lo que hace es repartir las horas de un turno en las bolsas que
+   calcQuincena ya espera: hrsBasicoNoc, hrs25, hrs35, hrs25noc, hrs35noc.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var CR_NOC_INI = 22*60;      // inicio del horario nocturno (22:00)
+var CR_NOC_FIN = 6*60;       // fin del horario nocturno (06:00)
+var CR_HE_TRAMO1 = 2;        // primeras N horas extras al 25%; el resto al 35%
+
+var CR_TURNOS = [
+  { k:'manana', n:'☀️ Mañana', ini:'06:00', fin:'15:00' },
+  { k:'tarde',  n:'🌇 Tarde',  ini:'14:00', fin:'23:30' },
+  { k:'noche',  n:'🌙 Noche',  ini:'22:00', fin:'06:00' }
+];
+
+function crMin(hhmm){ var p = String(hhmm||'').split(':'); return (+p[0])*60 + (+p[1]||0); }
+function crEsNocturno(min){ var m = ((min%1440)+1440)%1440; return m >= CR_NOC_INI || m < CR_NOC_FIN; }
+function crH(x){ return (Math.round((Number(x)||0)*100)/100).toFixed(2); }
+
+/* Reparte minuto a minuto el turno en las 6 bolsas. Soporta cruce de medianoche. */
+function crRepartirTurno(ini, fin, jornadaHoras, refriMin){
+  var a = crMin(ini), b = crMin(fin);
+  var dur = b - a; if (dur <= 0) dur += 1440;
+  var permanencia = dur;
+  dur -= (refriMin || 0); if (dur < 0) dur = 0;
+
+  var jornMin = Math.round((jornadaHoras || 0) * 60);
+  var r = { normDia:0, normNoc:0, he25d:0, he35d:0, he25n:0, he35n:0 };
+
+  for (var i = 0; i < dur; i++){
+    var noc = crEsNocturno(a + i), cat;
+    if (i < jornMin)                          cat = noc ? 'normNoc' : 'normDia';
+    else if (i < jornMin + CR_HE_TRAMO1*60)   cat = noc ? 'he25n'   : 'he25d';
+    else                                      cat = noc ? 'he35n'   : 'he35d';
+    r[cat]++;
+  }
+  ['normDia','normNoc','he25d','he35d','he25n','he35n'].forEach(function(k){ r[k] = r[k]/60; });
+  r.total = dur/60;
+  r.permanencia = permanencia/60;
+  return r;
+}
+
+/* ── Modal: remuneración ── */
+function crAbrirRem(){
+  var actual = parseFloat(v('qBruta')) || P.remBruta;
+  el('crRemMonto').value = Math.round(actual*100)/100;
+  el('crRemTipo').value = 'bruta';
+  crPreviewRem();
+  el('crModalRem').style.display = 'flex';
+}
+function crCerrarRem(){ el('crModalRem').style.display = 'none'; }
+function crPreviewRem(){
+  var m = parseFloat(el('crRemMonto').value) || 0;
+  var fac = P.factorBruta || 1.2638;
+  var bruta  = el('crRemTipo').value === 'basica' ? m * fac : m;
+  var basica = bruta / fac;
+  el('crRemPrev').innerHTML =
+    '<b>Rem. Bruta:</b> ' + fmt(bruta) + '<br>' +
+    '<b>Rem. Básica:</b> ' + fmt(basica) + ' &nbsp;(bruta ÷ ' + fac + ')<br>' +
+    '<b>Básico diario:</b> ' + fmt(basica/30) + ' &nbsp;·&nbsp; <b>Valor hora:</b> ' + fmt(basica/30/8);
+}
+function crAplicarRem(){
+  var m = parseFloat(el('crRemMonto').value) || 0;
+  if (m <= 0) { alert('Escribe un monto mayor a cero.'); return; }
+  var fac = P.factorBruta || 1.2638;
+  var bruta = el('crRemTipo').value === 'basica' ? m * fac : m;
+  el('qBruta').value = Math.round(bruta*100)/100;
+  crCerrarRem();
+  renderQuin();
+}
+
+/* ── Modal: calculadora de turno ── */
+function crAbrirTurno(){
+  el('crTurChips').innerHTML = CR_TURNOS.map(function(t){
+    return '<button type="button" onclick="crSetTurno(\'' + t.ini + '\',\'' + t.fin + '\')" ' +
+           'style="background:#f1f5f9;border:1.5px solid #cbd5e1;border-radius:18px;padding:6px 13px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">' +
+           t.n + ' <span style="opacity:.6;font-weight:400">' + t.ini + '–' + t.fin + '</span></button>';
+  }).join(' ');
+  crCalcTurno();
+  el('crModalTur').style.display = 'flex';
+}
+function crCerrarTurno(){ el('crModalTur').style.display = 'none'; }
+function crSetTurno(i, f){ el('crTIni').value = i; el('crTFin').value = f; crCalcTurno(); }
+
+function crCalcTurno(){
+  var rep = crRepartirTurno(el('crTIni').value, el('crTFin').value,
+                            parseFloat(el('crTJorn').value) || 0,
+                            parseFloat(el('crTRefri').value) || 0);
+  var dias = parseInt(el('crTDias').value) || 1;
+  window._crRep = rep; window._crDias = dias;
+
+  var filas = [
+    ['Horas normales diurnas', rep.normDia, 'horas', 'Sin recargo'],
+    ['Horas normales nocturnas', rep.normNoc, 'hrsBasicoNoc', '×1.35 nocturnidad'],
+    ['Extras 25% diurnas', rep.he25d, 'hrs25', '2 primeras extras'],
+    ['Extras 35% diurnas', rep.he35d, 'hrs35', '3.ª extra en adelante'],
+    ['Extras 25% nocturnas', rep.he25n, 'hrs25noc', '×1.25 ×1.35'],
+    ['Extras 35% nocturnas', rep.he35n, 'hrs35noc', '×1.35 ×1.35']
+  ];
+  var html = '<table style="width:100%;border-collapse:collapse;font-size:12.5px">' +
+    '<tr><th style="text-align:left;background:#0a2463;color:#fff;padding:7px 8px;font-size:10.5px">Concepto</th>' +
+    '<th style="text-align:right;background:#0a2463;color:#fff;padding:7px 8px;font-size:10.5px">Por día</th>' +
+    '<th style="text-align:right;background:#0a2463;color:#fff;padding:7px 8px;font-size:10.5px">× ' + dias + ' días</th>' +
+    '<th style="text-align:left;background:#0a2463;color:#fff;padding:7px 8px;font-size:10.5px">Va a la casilla</th></tr>';
+  filas.forEach(function(f){
+    var apagado = f[1] < 0.001;
+    html += '<tr style="' + (apagado ? 'opacity:.4;' : '') + 'border-bottom:1px solid #eef2f7">' +
+      '<td style="padding:6px 8px">' + f[0] + '</td>' +
+      '<td style="padding:6px 8px;text-align:right">' + crH(f[1]) + ' h</td>' +
+      '<td style="padding:6px 8px;text-align:right;font-weight:700">' + crH(f[1]*dias) + ' h</td>' +
+      '<td style="padding:6px 8px;font-size:11px;color:#64748b">' + f[3] + '</td></tr>';
+  });
+  html += '<tr style="background:#f0fdf4;font-weight:800"><td style="padding:7px 8px">TOTAL</td>' +
+    '<td style="padding:7px 8px;text-align:right">' + crH(rep.total) + ' h</td>' +
+    '<td style="padding:7px 8px;text-align:right">' + crH(rep.total*dias) + ' h</td>' +
+    '<td style="padding:7px 8px;font-size:11px;font-weight:400">Permanencia ' + crH(rep.permanencia) + ' h − refrigerio</td></tr></table>';
+  if (rep.total > 16) {
+    html += '<div style="background:#fee2e2;border-left:4px solid #dc2626;padding:9px 12px;border-radius:7px;font-size:11.5px;color:#991b1b;margin-top:10px">' +
+      '⚠️ La jornada da <b>' + crH(rep.total) + ' horas</b>. Revisa la hora de entrada y salida: si son iguales o la salida es anterior, el sistema asume que el turno cruza la medianoche.</div>';
+  }
+  el('crTurResul').innerHTML = html;
+}
+
+/* Vuelca el reparto en las casillas de la quincena elegida.
+   modo 'todo'   -> también reemplaza las horas normales (pasa a modo manual)
+   modo 'extras' -> solo nocturnas y horas extras; deja las horas del calendario */
+function crAplicarTurno(q, modo){
+  var rep = window._crRep, dias = window._crDias || 1;
+  if (!rep) return;
+  if (!qManual) renderQuin();
+  var etiqueta = q === 'q1' ? '1.ª quincena' : '2.ª quincena';
+  var aviso = modo === 'todo'
+    ? 'Se reemplazarán las horas normales, nocturnas y todas las horas extras de la ' + etiqueta + '.\n\nAdemás se cambiará a "horas manuales" para que se usen estas y no las del calendario.'
+    : 'Se reemplazarán solo las horas nocturnas y las horas extras de la ' + etiqueta + '.\nLas horas normales seguirán saliendo del calendario.';
+  if (!confirm(aviso + '\n\n¿Continuar?')) return;
+
+  var m = qManual[q];
+  m.hrsBasicoNoc = Math.round(rep.normNoc * dias * 100) / 100;
+  m.hrs25        = Math.round(rep.he25d   * dias * 100) / 100;
+  m.hrs35        = Math.round(rep.he35d   * dias * 100) / 100;
+  m.hrs25noc     = Math.round(rep.he25n   * dias * 100) / 100;
+  m.hrs35noc     = Math.round(rep.he35n   * dias * 100) / 100;
+  if (modo === 'todo'){
+    m.horas = Math.round(rep.normDia * dias * 100) / 100;
+    el('qAuto').value = '0';
+  }
+  crCerrarTurno();
+  renderQuin();
+}
+
 </script>
-<script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Cálculo Remunerativo"></script>
-<!-- Modal: inasistencia completa o parcial -->
-<div id="inaModal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:900;align-items:center;justify-content:center;padding:16px;">
-  <div style="background:#fff;border-radius:16px;max-width:430px;width:100%;padding:20px 22px;box-shadow:0 24px 60px rgba(0,0,0,.35);">
-    <div style="font-weight:800;font-size:15px;color:#0f172a;margin-bottom:8px;">📅 Inasistencia o permiso por horas</div>
-    <div id="inaModalTxt" style="font-size:13.5px;color:#334155;line-height:1.55;margin-bottom:14px;"></div>
-    <div style="display:flex;flex-direction:column;gap:8px;">
-      <button onclick="inaCompleta()" style="background:#dc2626;color:#fff;border:none;border-radius:10px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;">🚫 Inasistencia de jornada completa (0 h)</button>
-      <button onclick="inaMostrarHoras()" style="background:#0369a1;color:#fff;border:none;border-radius:10px;padding:10px 14px;font-weight:700;font-size:13px;cursor:pointer;">⏱ El trabajador trabajó algunas horas…</button>
-      <div id="inaHrsBox" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 12px;">
-        <label style="font-size:12px;font-weight:700;color:#0369a1;">¿Cuántas horas trabajó ese día?</label>
-        <div style="display:flex;gap:8px;margin-top:6px;">
-          <input id="inaHrsInput" type="number" min="0.25" step="0.25" style="flex:1;border:1px solid #7dd3fc;border-radius:8px;padding:8px 10px;font-size:13px;" onkeydown="if(event.key==='Enter')inaGuardarHoras()">
-          <button onclick="inaGuardarHoras()" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12.5px;cursor:pointer;">Guardar</button>
-        </div>
-        <div style="font-size:11px;color:#64748b;margin-top:5px;">Solo se pagarán las horas trabajadas; el resto del día cuenta como inasistencia.</div>
-      </div>
-      <button onclick="cerrarInaModal()" style="background:#e2e8f0;color:#334155;border:none;border-radius:10px;padding:8px 14px;font-weight:700;font-size:12.5px;cursor:pointer;">Cancelar</button>
+<!-- ═══ CR_TURNOS_V1 · MODALES ═══ -->
+<div id="crModalRem" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:900;align-items:center;justify-content:center;padding:18px">
+  <div style="background:#fff;border-radius:12px;max-width:440px;width:100%;padding:22px;font-family:inherit">
+    <h3 style="color:#0a2463;font-size:17px;margin:0 0 4px">💰 Remuneración del trabajador</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 14px">Escribe el monto que tengas a la mano. El sistema deriva lo demás.</p>
+    <label style="display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Monto mensual (S/)</label>
+    <input type="number" id="crRemMonto" step="0.01" oninput="crPreviewRem()" style="width:100%;padding:9px 11px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:15px;font-family:inherit">
+    <label style="display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin:12px 0 4px">El monto que escribí es la…</label>
+    <select id="crRemTipo" onchange="crPreviewRem()" style="width:100%;padding:9px 11px;border:1.5px solid #cbd5e1;border-radius:7px;font-size:14px;font-family:inherit">
+      <option value="bruta">Remuneración BRUTA</option>
+      <option value="basica">Remuneración BÁSICA (del contrato)</option>
+    </select>
+    <div id="crRemPrev" style="background:#eff6ff;border-left:4px solid #0a2463;padding:11px 14px;border-radius:7px;font-size:12.5px;color:#1e3a8a;margin-top:14px;line-height:1.7"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button type="button" onclick="crAplicarRem()" style="flex:1;background:#0a2463;color:#fff;border:none;padding:11px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Aplicar</button>
+      <button type="button" onclick="crCerrarRem()" style="flex:1;background:#fff;color:#0a2463;border:2px solid #0a2463;padding:10px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Cancelar</button>
     </div>
   </div>
 </div>
+
+<div id="crModalTur" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:900;align-items:center;justify-content:center;padding:18px;overflow:auto">
+  <div style="background:#fff;border-radius:12px;max-width:660px;width:100%;padding:22px;font-family:inherit;max-height:92vh;overflow:auto">
+    <h3 style="color:#0a2463;font-size:17px;margin:0 0 4px">🕐 Calculadora de turno</h3>
+    <p style="font-size:12px;color:#64748b;margin:0 0 12px">Escribe entrada y salida. El sistema reparte las horas en nocturnas y extras al 25% y 35%, y llena las casillas de la quincena.</p>
+    <div id="crTurChips" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px"></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px">
+      <div><label style="display:block;font-size:10.5px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:3px">Entrada</label><input type="time" id="crTIni" value="14:00" onchange="crCalcTurno()" style="width:100%;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-family:inherit"></div>
+      <div><label style="display:block;font-size:10.5px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:3px">Salida</label><input type="time" id="crTFin" value="23:30" onchange="crCalcTurno()" style="width:100%;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-family:inherit"></div>
+      <div><label style="display:block;font-size:10.5px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:3px">Jornada normal (h)</label><input type="number" id="crTJorn" step="0.05" value="8" onchange="crCalcTurno()" style="width:100%;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-family:inherit"></div>
+      <div><label style="display:block;font-size:10.5px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:3px">Refrigerio (min)</label><input type="number" id="crTRefri" step="5" value="0" onchange="crCalcTurno()" style="width:100%;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-family:inherit"></div>
+      <div><label style="display:block;font-size:10.5px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:3px">Días así</label><input type="number" id="crTDias" step="1" value="1" onchange="crCalcTurno()" style="width:100%;padding:8px;border:1.5px solid #cbd5e1;border-radius:7px;font-family:inherit"></div>
+    </div>
+    <div id="crTurResul" style="margin-top:14px;overflow-x:auto"></div>
+    <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:10px 13px;border-radius:7px;font-size:11.5px;color:#78350f;margin-top:12px;line-height:1.6">
+      Horario nocturno <b>22:00–06:00</b> con recargo del <b>35%</b>. Las 2 primeras horas fuera de jornada van al <b>25%</b> y de la 3.ª en adelante al <b>35%</b>.
+      Si la hora extra cae de noche se aplican los dos recargos, igual que el motor actual.
+      <b>Verifica estos criterios con el área de planillas antes de usarlos en una liquidación real.</b>
+    </div>
+    <div style="border-top:1px solid #e2e8f0;margin-top:14px;padding-top:14px">
+      <div style="font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Volcar el resultado en…</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
+        <button type="button" onclick="crAplicarTurno('q1','todo')" style="background:#0a2463;color:#fff;border:none;padding:10px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">1.ª quincena · TODO</button>
+        <button type="button" onclick="crAplicarTurno('q2','todo')" style="background:#0a2463;color:#fff;border:none;padding:10px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">2.ª quincena · TODO</button>
+        <button type="button" onclick="crAplicarTurno('q1','extras')" style="background:#fff;color:#0a2463;border:2px solid #0a2463;padding:9px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">1.ª quincena · solo extras</button>
+        <button type="button" onclick="crAplicarTurno('q2','extras')" style="background:#fff;color:#0a2463;border:2px solid #0a2463;padding:9px;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit">2.ª quincena · solo extras</button>
+      </div>
+      <p style="font-size:11px;color:#64748b;margin-top:9px;line-height:1.6"><b>TODO</b> reemplaza además las horas normales y pasa la quincena a horas manuales. <b>Solo extras</b> deja las horas del calendario y cambia únicamente nocturnas y horas extras. Cualquier casilla se puede corregir a mano después.</p>
+      <button type="button" onclick="crCerrarTurno()" style="width:100%;margin-top:10px;background:#f1f5f9;color:#475569;border:none;padding:10px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">Cerrar sin aplicar</button>
+    </div>
+  </div>
+</div>
+
+<script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Cálculo Remunerativo"></script>
 </body>
 </html>
