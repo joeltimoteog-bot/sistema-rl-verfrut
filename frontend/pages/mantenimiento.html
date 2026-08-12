@@ -62,7 +62,6 @@ textarea{resize:vertical;min-height:68px}
 .btn-send{background:var(--verde);color:#fff;width:100%;padding:13px;font-size:14px;margin-top:8px}
 .btn-send:hover{background:#15803d} .btn-send:disabled{background:#cbd5e1;cursor:not-allowed}
 .btn-sm{padding:6px 13px;font-size:11px}
-.btn:disabled{background:#cbd5e1;color:#64748b;cursor:not-allowed}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:13px}
 .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px}
 .box{display:none}.box.show{display:block;animation:fade .3s}
@@ -145,7 +144,6 @@ tr:hover td{background:#fafbfc}
         <button class="tab on" data-pane="paneNueva" onclick="irTab(this)">📝 Nueva Solicitud</button>
         <button class="tab" data-pane="paneMis" onclick="irTab(this);cargarMis()">📋 Mis Solicitudes</button>
         <button class="tab" data-pane="paneAdmin" id="tabAdmin" onclick="irTab(this);cargarAdmin()" style="display:none">⚙️ Panel Admin</button>
-        <button class="tab" data-pane="paneUnidades" id="tabUnidades" onclick="irTab(this)" style="display:none">🚗 Unidades</button>
         <button class="tab" id="btnFicha" onclick="abrirFicha()" style="flex:0 0 auto;background:#0a7d36;color:#fff;display:none">🪪 Ficha del Conductor</button>
       </div>
 
@@ -241,54 +239,10 @@ tr:hover td{background:#fafbfc}
               <button class="btn btn-az btn-sm" onclick="cargarAdmin()">🔄 Actualizar</button>
             </div>
           </div>
-          <div id="mantInd" style="margin-bottom:14px"></div>
           <div class="tw"><table>
             <thead><tr><th>N°</th><th>Fecha</th><th>Solicitante</th><th>Unidad</th><th>Licencia</th><th>Km</th><th>Tipo</th><th>Estado</th><th>F. Programada</th><th>Acción</th></tr></thead>
             <tbody id="adminBody"><tr><td colspan="10" class="empty">Cargando...</td></tr></tbody>
           </table></div>
-        </div>
-      </div>
-
-      <!-- PANE UNIDADES (solo admin) -->
-      <div class="pane" id="paneUnidades">
-        <div class="fcard">
-          <div class="fcard-h"><h2>🔁 Cambio de unidad de un conductor</h2></div>
-          <div class="fcard-b">
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-              <div class="field"><label>DNI del conductor</label><input id="cuDni" maxlength="8" placeholder="8 dígitos"></div>
-              <div class="field" style="align-self:end"><button class="btn btn-az" onclick="cuBuscar()" id="cuBtnB">🔍 Buscar</button></div>
-            </div>
-            <div id="cuActual" style="display:none;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px"></div>
-            <div id="cuForm" style="display:none">
-              <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-                <div class="field"><label>Nueva marca</label><input id="cuMarca"></div>
-                <div class="field"><label>Nuevo modelo</label><input id="cuModelo"></div>
-                <div class="field"><label>Nuevo código interno / placa</label><input id="cuCod"></div>
-                <div class="field"><label>Propiedad</label><select id="cuProp"><option value="PROPIA">Propia</option><option value="ARRENDADA">Arrendada</option></select></div>
-              </div>
-              <button class="btn btn-vd" style="margin-top:12px" onclick="cuGuardar()" id="cuBtnG">💾 Actualizar unidad</button>
-              <div id="cuMsg" style="margin-top:8px;font-size:13px"></div>
-            </div>
-          </div>
-        </div>
-        <div class="fcard">
-          <div class="fcard-h"><h2>➕ Nueva movilidad / nuevo conductor (incluye unidades arrendadas)</h2></div>
-          <div class="fcard-b">
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
-              <div class="field"><label>DNI *</label><input id="nmDni" maxlength="8" inputmode="numeric" autocomplete="off" oninput="nmDniInput(this)" placeholder="Escribe 8 dígitos y se busca solo"></div>
-              <div id="nmDniInfoWrap" style="grid-column:1/-1;display:none"><div id="nmDniInfo" style="font-size:12.5px;padding:6px 10px;border-radius:8px"></div></div>
-              <div class="field"><label>Nombre completo *</label><input id="nmNombre"></div>
-              <div class="field"><label>Cargo</label><input id="nmCargo"></div>
-              <div class="field"><label>Empresa</label><select id="nmEmp"><option>RAPEL</option><option>VERFRUT</option><option>AMBAS</option></select></div>
-              <div class="field"><label>Marca *</label><input id="nmMarca"></div>
-              <div class="field"><label>Modelo *</label><input id="nmModelo"></div>
-              <div class="field"><label>Código interno / placa *</label><input id="nmCod"></div>
-              <div class="field"><label>Propiedad</label><select id="nmProp"><option value="PROPIA">Propia</option><option value="ARRENDADA">Arrendada</option></select></div>
-              <div class="field"><label>Correo</label><input id="nmCorreo" type="email"></div>
-            </div>
-            <button class="btn btn-vd" style="margin-top:12px" onclick="nmGuardar()" id="nmBtnG">💾 Registrar movilidad</button>
-            <div id="nmMsg" style="margin-top:8px;font-size:13px"></div>
-          </div>
         </div>
       </div>
 
@@ -329,7 +283,7 @@ document.getElementById('avR').textContent=USER.cargo||USER.rol||'';
 document.getElementById('av').textContent=(USER.nombre||USER.usuario||'U').charAt(0).toUpperCase();
 document.getElementById('empBadge').textContent=(USER.empresa||'SISTEMA RL').toUpperCase();
 document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-PE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-if(esAdmin||esSuper){document.getElementById('mainWrap').style.display='block';if(esAdmin){document.getElementById('tabAdmin').style.display='block';document.getElementById('btnFicha').style.display='block';document.getElementById('tabUnidades').style.display='block';}}
+if(esAdmin||esSuper){document.getElementById('mainWrap').style.display='block';if(esAdmin){document.getElementById('tabAdmin').style.display='block';document.getElementById('btnFicha').style.display='block';}}
 else{document.getElementById('denyBox').style.display='block';}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
 
@@ -403,20 +357,6 @@ async function enviarSolicitud(){
     if(!res||!res.ok){await appAlert((res&&res.msg)?res.msg:'Error al guardar.');return;}
     document.getElementById('solicitudId').textContent='N° de solicitud: '+(res.id||'—');
     document.getElementById('formMant').style.display='none';document.getElementById('confirmMsg').classList.add('show');
-    // ── Alerta automática al administrador ──
-    // 1) Al canal del solicitante: el Monitor RR.LL la ve y suena.
-    // 2) Al canal personal de cada admin: le aparece tarjeta + notificación del
-    //    navegador en CUALQUIER página del sistema, aunque esté en otro módulo.
-    try{
-      const txtAlerta='🔧 [AUTOMÁTICO] Nueva SOLICITUD DE MANTENIMIENTO '+(res.id?('N° '+res.id):'')+
-        '\n• Unidad: '+(datos.marca||'')+' '+(datos.modelo||'')+' ('+(datos.codInterno||'—')+')'+
-        '\n• Conductor: '+(datos.nombre||'')+' · Km: '+(datos.kilometraje||'')+
-        '\n• Tipo: '+(datos.tipoMantenimiento||'');
-      _mantMsgRTDB(USER.usuario, txtAlerta, USER.nombre||USER.usuario, USER.usuario);
-      MANT_ALERT_ADMINS.forEach(function(adm){
-        if(String(USER.usuario).toLowerCase()!==adm) _mantMsgRTDB(adm, txtAlerta, USER.nombre||USER.usuario, USER.usuario);
-      });
-    }catch(eN){}
   }catch(e){btn.disabled=false;btn.textContent='ENVIAR SOLICITUD';await appAlert('Error de conexión al enviar.');console.error('[mant] enviar',e);}
 }
 function nuevaSolicitud(){
@@ -434,39 +374,25 @@ function badgeEstado(est){
   if(est==='CERRADO')return '<span class="badge b-cerr">🔒 CERRADO</span>';
   return '<span class="badge b-pend">PENDIENTE</span>';
 }
-function _pintarMis(data){
-  const body=document.getElementById('misBody');
-  if(!data||!data.length){body.innerHTML='<tr><td colspan="8" class="empty">Todavía no tenés solicitudes registradas.</td></tr>';return;}
-  body.innerHTML=data.map(s=>'<tr>'+
-    '<td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'')+'</td><td>'+(s.unidad||'')+'</td>'+
-    '<td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td><td>'+badgeEstado(s.estado)+'</td>'+
-    '<td>'+(s.fechaProgramada?'<b style="color:var(--azul)">'+s.fechaProgramada+'</b>':'<span class="muted">— por definir</span>')+'</td>'+
-    '<td class="muted">'+(s.comentarioAdmin||'—')+'</td></tr>').join('');
-}
 async function cargarMis(){
   const body=document.getElementById('misBody');
-  // Mostrar al instante la última copia guardada mientras se actualiza en segundo plano
-  let cacheOk=false;
-  try{const c=JSON.parse(sessionStorage.getItem('mant_mis_'+USER.usuario)||'null');
-    if(c&&c.length){_pintarMis(c);cacheOk=true;}}catch(e){}
-  if(!cacheOk)body.innerHTML='<tr><td colspan="8" class="empty">Cargando tus solicitudes...</td></tr>';
+  body.innerHTML='<tr><td colspan="8" class="empty">Cargando tus solicitudes...</td></tr>';
   try{
     const r=await fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento',solicitante:USER.usuario}));
     const res=await r.json();
-    const data=(res&&res.ok&&res.data)?res.data:[];
-    try{sessionStorage.setItem('mant_mis_'+USER.usuario,JSON.stringify(data));}catch(e){}
-    _pintarMis(data);
-  }catch(e){if(!cacheOk)body.innerHTML='<tr><td colspan="8" class="empty">Error de conexión.</td></tr>';console.error('[mant] mis',e);}
+    if(!res||!res.ok||!res.data||!res.data.length){body.innerHTML='<tr><td colspan="8" class="empty">Todavía no tenés solicitudes registradas.</td></tr>';return;}
+    body.innerHTML=res.data.map(s=>'<tr>'+
+      '<td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'')+'</td><td>'+(s.unidad||'')+'</td>'+
+      '<td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td><td>'+badgeEstado(s.estado)+'</td>'+
+      '<td>'+(s.fechaProgramada?'<b style="color:var(--azul)">'+s.fechaProgramada+'</b>':'<span class="muted">— por definir</span>')+'</td>'+
+      '<td class="muted">'+(s.comentarioAdmin||'—')+'</td></tr>').join('');
+  }catch(e){body.innerHTML='<tr><td colspan="8" class="empty">Error de conexión.</td></tr>';console.error('[mant] mis',e);}
 }
 
 let _solicitudes=[];
 let _estadosExtra={};
 async function cargarAdmin(){
-  const body=document.getElementById('adminBody');
-  let cacheOk=false;
-  try{const c=JSON.parse(sessionStorage.getItem('mant_admin')||'null');
-    if(c&&c.sol){_solicitudes=c.sol;_estadosExtra=c.est||{};renderAdmin();cacheOk=true;}}catch(e){}
-  if(!cacheOk)body.innerHTML='<tr><td colspan="9" class="empty">Cargando...</td></tr>';
+  const body=document.getElementById('adminBody');body.innerHTML='<tr><td colspan="9" class="empty">Cargando...</td></tr>';
   try{
     const [r,r2]=await Promise.all([
       fetch(API+'?'+new URLSearchParams({action:'listarSolicitudesMantenimiento'})),
@@ -474,43 +400,10 @@ async function cargarAdmin(){
     ]);
     const res=await r.json();_solicitudes=(res&&res.ok&&res.data)?res.data:[];
     try{const res2=r2?await r2.json():null;_estadosExtra=(res2&&res2.ok&&res2.data)?res2.data:{};}catch(e){_estadosExtra={};}
-    try{sessionStorage.setItem('mant_admin',JSON.stringify({sol:_solicitudes,est:_estadosExtra}));}catch(e){}
     renderAdmin();
   }catch(e){body.innerHTML='<tr><td colspan="9" class="empty">Error de conexión.</td></tr>';console.error('[mant] admin',e);}
 }
-function renderIndicadoresMant(){
-  const box=document.getElementById('mantInd');
-  if(!box)return;
-  const S=_solicitudes||[];
-  if(!S.length){box.innerHTML='';return;}
-  const est=s=>(s.estado||'PENDIENTE').toUpperCase();
-  const pend=S.filter(s=>est(s)==='PENDIENTE').length;
-  const prog=S.filter(s=>est(s)==='PROGRAMADO').length;
-  const aten=S.filter(s=>est(s)==='ATENDIDO'||est(s)==='CERRADO').length;
-  const mesAct=new Date().getMonth()+1, anioAct=new Date().getFullYear();
-  const esteMes=S.filter(s=>{const p=String(s.fechaSolicitud||'').split(' ')[0].split('/');return +p[1]===mesAct&&+p[2]===anioAct;}).length;
-  const kpi=(v,l,c)=>'<div style="background:'+(c||'linear-gradient(135deg,#0a2463,#13399b)')+';color:#fff;border-radius:10px;padding:10px 14px;min-width:120px;flex:1"><div style="font-size:20px;font-weight:800">'+v+'</div><div style="font-size:10px;text-transform:uppercase;opacity:.85">'+l+'</div></div>';
-  let html='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">'+
-    kpi(S.length,'Total solicitudes')+kpi(esteMes,'Este mes')+
-    kpi(pend,'Pendientes',pend?'linear-gradient(135deg,#b45309,#d97706)':'linear-gradient(135deg,#15803d,#16a34a)')+
-    kpi(prog,'Programadas','linear-gradient(135deg,#1d4ed8,#3b82f6)')+
-    kpi(aten,'Atendidas / cerradas','linear-gradient(135deg,#15803d,#16a34a)')+'</div>';
-  // Por usuario solicitante
-  const por={};
-  S.forEach(s=>{const u=s.solicitante||s.nombre||'—';(por[u]=por[u]||{t:0,p:0}).t++;if(est(s)==='PENDIENTE')por[u].p++;});
-  const us=Object.keys(por).sort((a,b)=>por[b].t-por[a].t);
-  const max=Math.max(1,...us.map(u=>por[u].t));
-  html+='<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px">'+
-    '<div style="font-weight:800;font-size:13px;color:#0a2463;margin-bottom:8px">📈 Solicitudes por usuario</div>'+
-    us.map(u=>'<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12.5px">'+
-      '<div style="flex:0 0 200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><b>'+u+'</b></div>'+
-      '<div style="flex:1;background:#e2e8f0;border-radius:6px;height:14px;overflow:hidden"><div style="width:'+Math.round(por[u].t/max*100)+'%;height:100%;background:linear-gradient(90deg,#1e3a8a,#3b82f6)"></div></div>'+
-      '<div style="flex:0 0 130px;text-align:right">'+por[u].t+' total'+(por[u].p?' · <b style="color:#d97706">'+por[u].p+' pend.</b>':'')+'</div>'+
-    '</div>').join('')+'</div>';
-  box.innerHTML=html;
-}
 function renderAdmin(){
-  renderIndicadoresMant();
   const body=document.getElementById('adminBody'),filtro=document.getElementById('filtroEstado').value;
   let datos=_solicitudes;if(filtro)datos=datos.filter(s=>(s.estado||'PENDIENTE').toUpperCase()===filtro);
   if(!datos.length){body.innerHTML='<tr><td colspan="10" class="empty">No hay solicitudes'+(filtro?' '+filtro.toLowerCase():'')+'.</td></tr>';return;}
@@ -542,38 +435,12 @@ function _fechasExtra(id){
   if(ex.fechaCierre)t+='<br><span class="muted">🔒 Cerrada: '+ex.fechaCierre+'</span>';
   return t;
 }
-/* ── Mensajería RTDB del módulo: llega como tarjeta + notificación del navegador
-      en cualquier página del sistema donde esté conectado el destinatario ── */
-const MANT_ALERT_ADMINS=['jtimoteo'];
-function _mantMsgRTDB(destUsuario,texto,deNombre,deUsuario){
-  try{
-    if(!destUsuario)return;
-    const ukey=String(destUsuario).toLowerCase().replace(/[.#$/\[\]]/g,'_');
-    fetch('https://sistema-rl-verfrut-default-rtdb.firebaseio.com/mensajes/'+ukey+'.json',{
-      method:'POST',
-      body:JSON.stringify({texto:texto,de:deNombre||'Coordinación RR.LL.',de_usuario:deUsuario||USER.usuario,
-        ts:{'.sv':'timestamp'},leido:false})
-    }).catch(function(){});
-  }catch(e){}
-}
-function _mantAvisarSolicitante(id,texto){
-  try{
-    const s=_solicitudes.find(x=>x.id===id);
-    const dest=(s&&s.solicitante)?String(s.solicitante):'';
-    if(!dest||dest.toLowerCase()===String(USER.usuario).toLowerCase())return;
-    _mantMsgRTDB(dest,texto,'Coordinación RR.LL.',USER.usuario);
-  }catch(e){}
-}
 async function _cambiarEstadoMant(id,estado,msj){
   const ok=await appConfirm(msj);if(!ok)return;
   try{
     const r=await fetch(API,{method:'POST',body:JSON.stringify({action:'actualizarEstadoMantenimiento',id:id,estado:estado,admin:USER.usuario}),headers:{'Content-Type':'text/plain'}});
     const res=await r.json();
     if(!res||!res.ok){await appAlert((res&&res.msg)?res.msg:'No se pudo actualizar.');return;}
-    _mantAvisarSolicitante(id,(estado==='CERRADO'
-      ?'🔒 Tu solicitud de mantenimiento '+id+' fue CERRADA y archivada.'
-      :'✅ Tu solicitud de mantenimiento '+id+' fue marcada como ATENDIDA con fecha de hoy.')+
-      '\nCoordinación de Relaciones Laborales.');
     await cargarAdmin();
   }catch(e){await appAlert('Error de conexión.');console.error('[mant] estado',e);}
 }
@@ -611,6 +478,17 @@ async function verHistorialConductor(dni,nombre){
 function cerrarHistorial(){document.getElementById('histOverlay').classList.remove('show');}
 
 let _idActual=null;
+
+/* MANT_CC_V1 (09-ago-2026)
+   Copia fija para las notificaciones de mantenimiento que envia el admin.
+   Para agregar o quitar a alguien, se edita SOLO esta lista. */
+const MANT_CC_V1 = [
+  'gonzalo.alcas@unifrutti.com',
+  'olga.vilela@unifrutti.com',
+  'eduardo.covenas@unifrutti.com',
+  'jorge.chavez@unifrutti.com'
+];
+
 async function notificarCorreo(id){
   const s=_solicitudes.find(x=>x.id===id);
   if(!s){return;}
@@ -620,9 +498,19 @@ async function notificarCorreo(id){
   cuerpo+='Le informamos que su solicitud de mantenimiento '+s.id+' para la unidad '+(s.unidad||'')+' ';
   if(String(s.estado).toUpperCase()==='COMPLETADO'){cuerpo+='fue COMPLETADA.\n\n';}
   else{cuerpo+='fue PROGRAMADA para el dia '+(s.fechaProgramada||'')+'.\n\n';}
+  // MANT_CC_V1: observaciones que escribio el usuario al pedir el mantenimiento
+  cuerpo+='OBSERVACIONES INDICADAS POR EL SOLICITANTE:\n'+((s.observaciones||'').trim()||'(sin observaciones)')+'\n\n';
+  if(s.tipo||s.tipoMantenimiento){cuerpo+='Tipo de mantenimiento: '+(s.tipo||s.tipoMantenimiento)+'\n';}
+  if(s.km||s.kilometraje){cuerpo+='Kilometraje: '+(s.km||s.kilometraje)+' km\n';}
+  cuerpo+='\n';
   if(s.comentarioAdmin){cuerpo+='Indicaciones: '+s.comentarioAdmin+'\n\n';}
   cuerpo+='Atentamente,\nCoordinacion de Relaciones Laborales\nVerfrut S.A.C / RAPEL S.A.C';
-  window.location.href='mailto:'+encodeURIComponent(s.correo)+'?subject='+encodeURIComponent(asunto)+'&body='+encodeURIComponent(cuerpo);
+  // Las direcciones son ASCII: se unen con coma sin codificar para que Outlook
+  // las reconozca como destinatarios separados.
+  window.location.href='mailto:'+encodeURIComponent(s.correo)+
+    '?cc='+MANT_CC_V1.join(',')+
+    '&subject='+encodeURIComponent(asunto)+
+    '&body='+encodeURIComponent(cuerpo);
 }
 function abrirModal(id){
   _idActual=id;const s=_solicitudes.find(x=>x.id===id);
@@ -652,11 +540,6 @@ async function guardarProgramacion(){
     const r=await fetch(API,{method:'POST',body:JSON.stringify(datos),headers:{'Content-Type':'text/plain'}});
     const res=await r.json();btn.disabled=false;btn.textContent='Guardar';
     if(!res||!res.ok){await appAlert((res&&res.msg)?res.msg:'Error al guardar.');return;}
-    const _com=document.getElementById('progComentario').value.trim();
-    _mantAvisarSolicitante(_idActual,(datos.estado==='COMPLETADO'
-      ?'✅ Tu solicitud de mantenimiento '+_idActual+' fue COMPLETADA.'
-      :'📅 Tu solicitud de mantenimiento '+_idActual+' fue PROGRAMADA para el '+datos.fechaProgramada+'.')+
-      (_com?('\nIndicaciones: '+_com):'')+'\nCoordinación de Relaciones Laborales.');
     cerrarModal();cargarAdmin();
   }catch(e){btn.disabled=false;btn.textContent='Guardar';await appAlert('Error de conexión.');console.error('[mant] prog',e);}
 }
@@ -851,109 +734,5 @@ async function guardarProgramacion(){
   }
   </script>
   <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Solicitud de Mantenimiento"></script>
-<script>
-/* ════ GESTIÓN DE UNIDADES (solo admin): cambio de unidad y nueva movilidad ════ */
-let _cuDni=null;
-async function cuBuscar(){
-  const dni=document.getElementById('cuDni').value.trim();
-  const msg=document.getElementById('cuMsg');msg.textContent='';
-  if(!/^\d{8}$/.test(dni)){await appAlert('El DNI debe tener 8 dígitos.');return;}
-  const b=document.getElementById('cuBtnB');b.disabled=true;b.textContent='Buscando...';
-  try{
-    const r=await fetch(API+'?'+new URLSearchParams({action:'buscarResponsableMantenimiento',dni:dni}));
-    const res=await r.json();b.disabled=false;b.textContent='🔍 Buscar';
-    if(!res||!res.ok||!res.data){await appAlert((res&&res.msg)||'DNI no encontrado. Si es un conductor nuevo, usa "Nueva movilidad".');return;}
-    _cuDni=dni;
-    const d=res.data;
-    document.getElementById('cuActual').style.display='block';
-    document.getElementById('cuActual').innerHTML='<b>'+d.nombre+'</b> ('+(d.empresa||'—')+')<br>Unidad actual: <b>'+(d.marca||'—')+' '+(d.modelo||'—')+'</b> · Código: <b>'+(d.codInterno||'—')+'</b>';
-    document.getElementById('cuMarca').value=d.marca||'';
-    document.getElementById('cuModelo').value=d.modelo||'';
-    document.getElementById('cuCod').value=d.codInterno||'';
-    document.getElementById('cuForm').style.display='block';
-  }catch(e){b.disabled=false;b.textContent='🔍 Buscar';await appAlert('Error de conexión.');}
-}
-async function cuGuardar(){
-  if(!_cuDni)return;
-  const marca=document.getElementById('cuMarca').value.trim(),modelo=document.getElementById('cuModelo').value.trim(),cod=document.getElementById('cuCod').value.trim();
-  if(!marca||!modelo||!cod){await appAlert('Completa marca, modelo y código interno de la nueva unidad.');return;}
-  if(!await appConfirm('¿Actualizar la unidad de este conductor a '+marca+' '+modelo+' ('+cod+')?'))return;
-  const b=document.getElementById('cuBtnG');b.disabled=true;b.textContent='Guardando...';
-  try{
-    const _cuDatos={action:'mant_actualizarUnidad',dni:_cuDni,marca:marca,modelo:modelo,
-        codInterno:cod,propiedad:document.getElementById('cuProp').value,admin:USER.usuario,usuario:USER.usuario};
-    const r=await fetch(API+'?'+new URLSearchParams(_cuDatos),{method:'POST',
-      headers:{'Content-Type':'text/plain'},body:JSON.stringify(_cuDatos)});
-    const res=await r.json();b.disabled=false;b.textContent='💾 Actualizar unidad';
-    const m=document.getElementById('cuMsg');
-    if(res&&res.ok){m.style.color='#16a34a';m.textContent='✅ '+(res.msg||'Unidad actualizada correctamente.');document.getElementById('cuForm').style.display='none';document.getElementById('cuActual').style.display='none';document.getElementById('cuDni').value='';}
-    else{m.style.color='#dc2626';m.textContent='❌ '+((res&&res.msg)||'Error al actualizar. ¿Está instalada la acción mant_actualizarUnidad en el Apps Script?');}
-  }catch(e){b.disabled=false;b.textContent='💾 Actualizar unidad';await appAlert('Error de conexión.');}
-}
-/* ── Autocompletar datos del trabajador por DNI (Nueva movilidad) ── */
-let _nmReq=0,_nmTimer=null;
-function _nmInfo(estilo,html){
-  const w=document.getElementById('nmDniInfoWrap'),d=document.getElementById('nmDniInfo');
-  if(!html){w.style.display='none';return;}
-  const est={
-    busca:'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe',
-    ok:'background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0',
-    aviso:'background:#fffbeb;color:#b45309;border:1px solid #fde68a',
-    error:'background:#fef2f2;color:#b91c1c;border:1px solid #fecaca'
-  };
-  d.style.cssText='font-size:12.5px;padding:6px 10px;border-radius:8px;'+(est[estilo]||est.busca);
-  d.innerHTML=html;w.style.display='block';
-}
-function nmDniInput(inp){
-  inp.value=inp.value.replace(/\D/g,'').slice(0,8);
-  clearTimeout(_nmTimer);
-  if(inp.value.length!==8){_nmInfo(null);return;}
-  _nmTimer=setTimeout(()=>nmBuscarDatos(inp.value),250);
-}
-async function nmBuscarDatos(dni){
-  const miReq=++_nmReq;
-  _nmInfo('busca','🔍 Buscando datos del DNI '+dni+'...');
-  for(let intento=1;intento<=2;intento++){
-    try{
-      const r=await fetch(API+'?'+new URLSearchParams({action:'buscarTrabajador',q:dni,empresa:''}));
-      const res=await r.json();
-      if(miReq!==_nmReq)return; // llegó una búsqueda más nueva, descartar
-      const t=(res&&res.success&&res.data&&res.data.length)?res.data[0]:null;
-      if(t){
-        if(t.nombre)document.getElementById('nmNombre').value=t.nombre;
-        if(t.cargo)document.getElementById('nmCargo').value=t.cargo;
-        const emp=String(t.empresa||'').toUpperCase(),sel=document.getElementById('nmEmp');
-        if(emp.indexOf('VERFRUT')!==-1)sel.value='VERFRUT';else if(emp.indexOf('RAPEL')!==-1)sel.value='RAPEL';
-        _nmInfo('ok','✅ <b>'+(t.nombre||'')+'</b>'+(t.cargo?' · '+t.cargo:'')+(t.empresa?' · '+t.empresa:'')+(t.fundo?' · '+t.fundo:'')+' — datos completados, revísalos y continúa.');
-      }else{
-        _nmInfo('aviso','⚠️ El DNI '+dni+' no figura en la base de trabajadores (RAPEL/VERFRUT). Puedes completar el nombre y los datos manualmente.');
-      }
-      return;
-    }catch(e){
-      if(miReq!==_nmReq)return;
-      if(intento===1){_nmInfo('busca','🔍 Reintentando búsqueda...');continue;}
-      _nmInfo('error','❌ No se pudo consultar la base en este momento. Completa los datos manualmente o vuelve a escribir el DNI para reintentar.');
-    }
-  }
-}
-async function nmGuardar(){
-  const g=id=>document.getElementById(id).value.trim();
-  const dni=g('nmDni'),nombre=g('nmNombre'),marca=g('nmMarca'),modelo=g('nmModelo'),cod=g('nmCod');
-  if(!/^\d{8}$/.test(dni)){await appAlert('El DNI debe tener 8 dígitos.');return;}
-  if(!nombre||!marca||!modelo||!cod){await appAlert('Completa: DNI, nombre, marca, modelo y código interno.');return;}
-  const b=document.getElementById('nmBtnG');b.disabled=true;b.textContent='Guardando...';
-  try{
-    const _nmDatos={action:'mant_agregarMovilidad',dni:dni,nombre:nombre,cargo:g('nmCargo'),
-        empresa:document.getElementById('nmEmp').value,marca:marca,modelo:modelo,codInterno:cod,
-        propiedad:document.getElementById('nmProp').value,correo:g('nmCorreo'),admin:USER.usuario,usuario:USER.usuario};
-    const r=await fetch(API+'?'+new URLSearchParams(_nmDatos),{method:'POST',
-      headers:{'Content-Type':'text/plain'},body:JSON.stringify(_nmDatos)});
-    const res=await r.json();b.disabled=false;b.textContent='💾 Registrar movilidad';
-    const m=document.getElementById('nmMsg');
-    if(res&&res.ok){m.style.color='#16a34a';m.textContent='✅ '+(res.msg||'Movilidad registrada.');['nmDni','nmNombre','nmCargo','nmMarca','nmModelo','nmCod','nmCorreo'].forEach(i=>document.getElementById(i).value='');_nmInfo(null);}
-    else{m.style.color='#dc2626';m.textContent='❌ '+((res&&res.msg)||'Error al registrar. ¿Está instalada la acción mant_agregarMovilidad en el Apps Script?');}
-  }catch(e){b.disabled=false;b.textContent='💾 Registrar movilidad';await appAlert('Error de conexión.');}
-}
-</script>
 </body>
 </html>
