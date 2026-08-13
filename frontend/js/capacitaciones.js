@@ -14,7 +14,7 @@ let asistentes = []; // [{ n, dni, nombre, empresa, cargo, sexo }]
 let _dniCooldown = {}; // { dni: timestamp } — anti-duplicado 3s
 
 const COOLDOWN_MS       = 3000;
-const FILAS_POR_FORMATO = 20;
+const FILAS_POR_FORMATO = 12;   /* _FIRMA_HUELLA_V4: 20 -> 12 filas, para que la celda de firma sea mas alta y el formato siga entrando en UNA hoja */
 
 /* ─── Paso previo + retroactivo ─── */
 let _trabajadoresProgramados = 0;
@@ -1363,14 +1363,14 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 0.5, textColor: C.negro }, /* _FIX_RESPONSABLE_PAG1_V1 */
-      bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 6 },
+      bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 10 },   /* _FIRMA_HUELLA_V4: 6 -> 10 mm de alto de fila */
       columnStyles: {
         /* _FIX_FIRMA_HUELLA_ANCHO_V3: estructura ORIGINAL (6 columnas, sin dividir).
            Solo se amplia la columna combinada FIRMA / HUELLA: 27mm -> 40mm.
            Compensado achicando Nombre y Cargo (tenian espacio de sobra); N°, DNI y OBS quedan igual que el original. */
         0: { cellWidth: 8 }, 1: { cellWidth: 20 },
-        2: { cellWidth: 70, halign: 'left' }, 3: { cellWidth: 32, halign: 'left' },
-        4: { cellWidth: 40 }, 5: { cellWidth: 20, halign: 'left' }
+        2: { cellWidth: 62, halign: 'left' }, 3: { cellWidth: 30, halign: 'left' },   /* _FIRMA_HUELLA_V4: nombres 70->62, cargo 32->30 */
+        4: { cellWidth: 50 }, 5: { cellWidth: 20, halign: 'left' }   /* _FIRMA_HUELLA_V4: FIRMA/HUELLA 40->50 mm. Suma: 8+20+62+30+50+20 = 190 mm = ancho util A4 */
       },
       didParseCell: d => {
         if (d.section === 'body') {
