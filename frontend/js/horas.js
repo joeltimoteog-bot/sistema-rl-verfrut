@@ -1,4 +1,6 @@
 // _MODALES_CUSTOM_V1 (08-jun-2026): migración a appAlert/appConfirm/appPrompt
+// _MOTIVO_DEVOLUCION_V5 (09-ago-2026): el motivo Devolución ahora abre los
+// campos de horario y descuenta horas igual que Permiso.
 // _HORAS_ENCABEZADOS_V4 (09-ago-2026): encabezados de la tabla REGISTROS en
 // texto oscuro (salían en blanco sobre blanco y no se leían).
 // _HORAS_REGISTRADORES_V3 (08-ago-2026): la búsqueda automática de DNI ahora
@@ -220,10 +222,23 @@ function motivoCambia() {
     abrirModalMotivo();
     return;
   }
-  const esPermiso = (sel.value || '').toLowerCase().includes('permiso');
+  const esPermiso = _esMotivoConHorario(sel.value);
   document.getElementById('grpPermInicio').style.display = esPermiso ? '' : 'none';
   document.getElementById('grpPermFin').style.display    = esPermiso ? '' : 'none';
   recalcularHoras();
+}
+
+/* _MOTIVO_DEVOLUCION_V5 (09-ago-2026)
+   Motivos que abren los campos de horario y descuentan horas.
+   Antes esto estaba escrito tres veces como .includes('permiso'), por eso
+   "Devolución" no abría el campo de horas ni enviaba el horario al servidor.
+   Ahora está en UN solo lugar: para sumar otro motivo, se agrega aquí.
+   Se quitan las tildes antes de comparar, así "Devolución" y "Devolucion"
+   funcionan igual. */
+function _esMotivoConHorario(m) {
+  const t = String(m || '').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '');   // quita tildes
+  return t.includes('permiso') || t.includes('devolucion');
 }
 
 function abrirModalMotivo() {
@@ -439,7 +454,7 @@ function recalcularHoras() {
   }
 
   let horasPerm = 0;
-  if (motivo.includes('permiso')) {
+  if (_esMotivoConHorario(motivo)) {   /* _MOTIVO_DEVOLUCION_V5 */
     const pi = v('regHoraPermInicio');
     const pf = v('regHoraPermFin');
     if (pi && pf) {
@@ -493,7 +508,7 @@ async function registrarHoras() {
     detalle:         v('regDetalle'),
     observaciones:   v('regObservaciones')
   };
-  if ((motivo || '').toLowerCase().includes('permiso')) {
+  if (_esMotivoConHorario(motivo)) {   /* _MOTIVO_DEVOLUCION_V5 */
     registro.horaInicioPermiso = v('regHoraPermInicio');
     registro.horaFinPermiso    = v('regHoraPermFin');
   }
