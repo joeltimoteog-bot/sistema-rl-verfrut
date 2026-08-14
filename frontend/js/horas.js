@@ -1,4 +1,6 @@
 // _MODALES_CUSTOM_V1 (08-jun-2026): migración a appAlert/appConfirm/appPrompt
+// _HORAS_ENCABEZADOS_V4 (09-ago-2026): encabezados de la tabla REGISTROS en
+// texto oscuro (salían en blanco sobre blanco y no se leían).
 // _HORAS_REGISTRADORES_V3 (08-ago-2026): la búsqueda automática de DNI ahora
 // envía 'usuario' (antes no, por eso solo funcionaba con el botón Actualizar)
 // y muestra el aviso de bloqueo sola, con feedback inmediato "Consultando...".
@@ -90,7 +92,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Cargar motivos al inicio (cacheado)
   cargarMotivos();
+
+  // _HORAS_ENCABEZADOS_V4: los títulos de la tabla REGISTROS del Resumen
+  // Individual salían en blanco sobre fondo blanco y no se leían.
+  _fijarEncabezadosIndiv();
+  setTimeout(_fijarEncabezadosIndiv, 600);   // por si el tema los repinta después
 });
+
+/* Fuerza texto oscuro en los encabezados de la tabla de registros.
+   Se limita a ESA tabla (la que contiene #tbIndiv): no toca ninguna otra. */
+function _fijarEncabezadosIndiv() {
+  try {
+    const tb = document.getElementById('tbIndiv');
+    if (!tb) return;
+    const tabla = tb.closest ? tb.closest('table') : tb.parentElement;
+    if (!tabla) return;
+    tabla.querySelectorAll('thead th').forEach(th => {
+      th.style.setProperty('color', '#0f172a', 'important');
+      th.style.setProperty('background-color', '#e2e8f0', 'important');
+      th.style.setProperty('font-weight', '700', 'important');
+    });
+  } catch (e) { /* nunca romper la página por un color */ }
+}
 
 /* ─────────────── DNI AUTO-SEARCH (instant + debounce + cache + spinner) ─────────────── */
 function _setupDniAutoSearch(inputId, opts) {
