@@ -378,7 +378,15 @@ function togglePass(){const p=document.getElementById('password');p.type=p.type=
 function aplicarVisibilidadModulos(user){
   const rol = String((user && user.rol) || '').toLowerCase().trim();
   const sector = String((user && user.sector) || '').toUpperCase().trim();
-  const esAdmin = rol === 'administrador';
+  /* _MODULOS_VISIBILIDAD_V1 (15-ago-2026)
+     ANTES: const esAdmin = rol === 'administrador';  -> comparaba contra la
+     palabra EXACTA. Con un rol como 'administrador 01' daba falso y escondia
+     la tarjeta de Capacitaciones ETI a un administrador de verdad.
+     AHORA: acepta toda la familia de roles de administrador y ademas deja
+     pasar por USUARIO a quien este en la lista (mismo criterio del horario). */
+  const usuarioLc = String((user && user.usuario) || '').toLowerCase().trim();
+  const ROLES_ADMIN_MOD = ['administrador','administrador 01','administrador 02','admin','admin01','admin02'];
+  const esAdmin = ROLES_ADMIN_MOD.indexOf(rol) >= 0 || USUARIOS_SIN_HORARIO.indexOf(usuarioLc) >= 0;
   const esBienestar = sector === 'BIENESTAR SOCIAL';
   // Sistema ETI Capacitaciones: solo administrador
   const eti = document.getElementById('modETI');
