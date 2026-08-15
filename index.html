@@ -414,16 +414,38 @@ function aplicarVisibilidadModulos(user){
    - Deja de mostrarse solo despues de AVISO_HASTA: no hay que acordarse de
      quitarlo, se apaga con la fecha.
    - Para cambiar el texto o la fecha, se edita SOLO este bloque. */
-const AVISO_HASTA = '2026-10-31';   // ultimo dia que se muestra (aaaa-mm-dd)
+/* CUANDO SE MUESTRA — campana de 15 dias:
+     · La PRIMERA vez que la persona entra dentro de la ventana, sea el dia que
+       sea. Asi nadie se queda sin verlo por estar de descanso el lunes.
+     · Despues, solo los LUNES, como recordatorio.
+     · Nunca dos veces el mismo dia.
+     · Al cumplirse los 15 dias deja de salir solo: no hay que quitarlo a mano.
+   Para mover la campana se cambia AVISO_DESDE (y AVISO_DIAS si hace falta). */
+const AVISO_DESDE = '2026-08-17';   // primer dia de la campana (aaaa-mm-dd)
+const AVISO_DIAS  = 15;             // cuantos dias dura
+
+function _avisoHasta() {
+  const d = new Date(AVISO_DESDE + 'T00:00:00');
+  d.setDate(d.getDate() + AVISO_DIAS - 1);
+  return d.toISOString().slice(0, 10);
+}
 
 function mostrarAvisoMigracion(user) {
   try {
-    const hoy = new Date().toISOString().slice(0, 10);
-    if (hoy > AVISO_HASTA) return;                       // campana terminada
+    const ahora = new Date();
+    const hoy = ahora.getFullYear() + '-' +
+                String(ahora.getMonth() + 1).padStart(2, '0') + '-' +
+                String(ahora.getDate()).padStart(2, '0');
+    if (hoy < AVISO_DESDE) return;                       // aun no empieza
+    if (hoy > _avisoHasta()) return;                     // campana terminada
 
     const usu = String((user && user.usuario) || 'x').toLowerCase().trim();
     const clave = 'rl_aviso_migracion_' + usu;
-    if (localStorage.getItem(clave) === hoy) return;     // ya lo vio hoy
+    const ultimaVez = localStorage.getItem(clave);
+
+    if (ultimaVez === hoy) return;                       // ya lo vio hoy
+    const esLunes = ahora.getDay() === 1;
+    if (ultimaVez && !esLunes) return;                   // ya lo vio antes: solo lunes
 
     const nombre = String((user && user.nombre) || (user && user.usuario) || '').split(' ')[0];
     const nomFmt = nombre ? (nombre.charAt(0).toUpperCase() + nombre.slice(1).toLowerCase()) : '';
