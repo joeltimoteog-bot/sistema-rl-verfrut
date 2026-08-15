@@ -992,8 +992,24 @@ function listaOrdenada(){
 function render(){
   const arr = listaOrdenada();
   const total = Object.keys(PRES).length;
-  const online = Object.values(PRES).filter(u=>estado(u)!=='off').length;
+  /* _MONITOR_CONECTADOS_V1: antes contaba tambien a los 'idle' (marcados como
+     online pero sin señal hace horas, porque su navegador se cerro de golpe y
+     no alcanzo a avisar). Por eso decia 7 conectados con gente de hace 5 h.
+     Ahora 'conectados' = señal en el ultimo minuto. */
+  const online = Object.values(PRES).filter(u=>estado(u)==='on').length;
+  const inactivos = Object.values(PRES).filter(u=>estado(u)==='idle').length;
   $('cntOn').textContent = online;
+  try {
+    var _pill = $('cntOn').parentElement;
+    var _ina = document.getElementById('cntIdle');
+    if (!_ina && _pill) {
+      _ina = document.createElement('span');
+      _ina.id = 'cntIdle';
+      _ina.style.cssText = 'opacity:.65;margin-left:8px;font-size:12px';
+      _pill.appendChild(_ina);
+    }
+    if (_ina) _ina.textContent = inactivos ? ('· ' + inactivos + ' inactivos') : '';
+  } catch(e) {}
   $('cntTot').textContent = total;
   $('listCnt').textContent = arr.length + (arr.length===1?' usuario':' usuarios');
   const totResp = Object.keys(MSGS).reduce((a,k)=>a+respuestasNoLeidas(k),0);
@@ -1012,7 +1028,7 @@ function render(){
         </div>
         <div class="info">
           <div class="nm">${esc(u.nombre||u.usuario)} ${badgeEmp(u.empresa)} ${respuestasNoLeidas(u.k)?'<span class="badge" style="background:rgba(245,158,11,.2);color:#fbbf24">💬 '+respuestasNoLeidas(u.k)+'</span>':''} ${pendCount(u)?'<span class="badge" style="background:rgba(239,68,68,.15);color:#f87171">⏰ '+pendCount(u)+'</span>':''}</div>
-          <div class="mt">${st==='off'?'Desconectado':'📍 <span class="mod">'+esc(u.modulo||'—')+'</span>'}</div>
+          <div class="mt">${st==='off'?'Desconectado':(st==='idle'?'💤 Inactivo · estuvo en <span class="mod">'+esc(u.modulo||'—')+'</span>':'📍 <span class="mod">'+esc(u.modulo||'—')+'</span>')}</div>
         </div>
         <div class="rt">${haceCuanto(u.ultimo_ping)}</div>
       </div>`;

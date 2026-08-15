@@ -305,7 +305,7 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
           <div class="mx-badge">ACCEDER →</div>
         </div>
       </div>
-      <div id="modETI" class="mx-card" onclick="abrirConSSO('https://joeltimoteog-bot.github.io/sistema-eti/', true)" style="--c1:rgba(14,165,233,.9);--halo:rgba(14,165,233,.13);--grad:linear-gradient(135deg,#0ea5e9,#0369a1);--sombra:rgba(14,165,233,.4);--bbg:rgba(14,165,233,.2);--bbrd:rgba(14,165,233,.45);--btxt:#7dd3fc">
+      <div id="modETI" class="mx-card" onclick="irA('https://joeltimoteog-bot.github.io/sistema-eti/')" style="--c1:rgba(14,165,233,.9);--halo:rgba(14,165,233,.13);--grad:linear-gradient(135deg,#0ea5e9,#0369a1);--sombra:rgba(14,165,233,.4);--bbg:rgba(14,165,233,.2);--bbrd:rgba(14,165,233,.45);--btxt:#7dd3fc">
         <div class="mx-in">
           <div class="mx-ico">🎓</div>
           <div class="mx-t">Sistema ETI</div>
@@ -313,7 +313,7 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
           <div class="mx-badge">ACCEDER →</div>
         </div>
       </div>
-      <div id="modEval" class="mx-card" onclick="abrirConSSO('https://joeltimoteog-bot.github.io/eti-evaluacion-verfrut/', true)" style="--c1:rgba(245,158,11,.9);--halo:rgba(245,158,11,.13);--grad:linear-gradient(135deg,#f59e0b,#b45309);--sombra:rgba(245,158,11,.4);--bbg:rgba(245,158,11,.2);--bbrd:rgba(245,158,11,.45);--btxt:#fcd34d">
+      <div id="modEval" class="mx-card" onclick="window.open('https://joeltimoteog-bot.github.io/eti-evaluacion-verfrut/','_blank','noopener,noreferrer')" style="--c1:rgba(245,158,11,.9);--halo:rgba(245,158,11,.13);--grad:linear-gradient(135deg,#f59e0b,#b45309);--sombra:rgba(245,158,11,.4);--bbg:rgba(245,158,11,.2);--bbrd:rgba(245,158,11,.45);--btxt:#fcd34d">
         <div class="mx-in">
           <div class="mx-ico">⭐</div>
           <div class="mx-t">Sistema de Evaluaciones</div>
@@ -361,25 +361,29 @@ const ROLES_SELECCION = ['administrador','administrador 01','administrador 02','
 // Roles SIN restricción de horario (nunca ven pantalla de bloqueo)
 const ROLES_SIN_HORARIO = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl','jefe_rl'];
 
+/* _HORARIO_SOLO_ADMIN_V1 (15-ago-2026)
+   ANTES: la restricción de horario solo aplicaba al rol exacto 'supervisor',
+   y los roles de ROLES_SIN_HORARIO quedaban exentos. Por eso entraban fuera de
+   hora personas cuyo rol no era literalmente 'supervisor'.
+   AHORA: la excepción es POR USUARIO. Solo quien esté en esta lista puede
+   ingresar fuera del horario; todos los demás deben solicitar acceso temporal.
+   Para dar la excepción a alguien más, se agrega su usuario AQUÍ y en el
+   bloque RL_HORARIO_SESION_V1 de frontend/js/presencia.js (los dos sitios). */
+const USUARIOS_SIN_HORARIO = ['jtimoteo'];
+
 function togglePass(){const p=document.getElementById('password');p.type=p.type==='password'?'text':'password';document.getElementById('eyeBtn').textContent=p.type==='password'?'👁️':'🙈';}
 
 // ── Visibilidad de tarjetas en pantallaModulo según rol ──────────
-// Sistema ETI (Capacitaciones): visible para todos — los supervisores registran
-// ahí sus capacitaciones programadas; dentro del sistema cada rol ve solo lo suyo
-// (supervisor → solo su formulario "Mi Panel"; administrador → todo).
+// Solo administrador ve la tarjeta de Sistema ETI; el resto la oculta.
 function aplicarVisibilidadModulos(user){
   const rol = String((user && user.rol) || '').toLowerCase().trim();
   const sector = String((user && user.sector) || '').toUpperCase().trim();
-  const usu = String((user && user.usuario) || '').toLowerCase().trim();
   const esAdmin = rol === 'administrador';
-  // Usuarios de Bienestar Social: SOLO ven el Sistema RR.LL
-  // (por sector, o por la lista explícita de usuarios de Bienestar)
-  const USUARIOS_BIENESTAR = ['lmorales','rfigueroa','mmechato','nestrada','tvera','cbecerra','dsanchez'];
-  const esBienestar = sector === 'BIENESTAR SOCIAL' || USUARIOS_BIENESTAR.includes(usu);
-  // Sistema ETI Capacitaciones: visible para todos, excepto Bienestar Social (no admin)
+  const esBienestar = sector === 'BIENESTAR SOCIAL';
+  // Sistema ETI Capacitaciones: solo administrador
   const eti = document.getElementById('modETI');
-  if (eti) eti.style.display = (esBienestar && !esAdmin) ? 'none' : '';
-  // Sistema de Evaluaciones: oculto para Bienestar Social (no admin)
+  if (eti) eti.style.display = esAdmin ? '' : 'none';
+  // Sistema de Evaluaciones: oculto para usuarios de sector BIENESTAR SOCIAL (no admin)
   const evalCard = document.getElementById('modEval');
   if (evalCard) evalCard.style.display = (esBienestar && !esAdmin) ? 'none' : '';
 }
@@ -411,59 +415,12 @@ function updateDots(){
   if(intentos>0){const t=document.createElement('span');t.className='dot-t';t.textContent=(MAX-intentos)+' intento(s) restante(s)';c.appendChild(t);}
 }
 
-// ── FERIADOS DEL AÑO (Perú) + canje configurable ─────────────────
-// Base: feriados nacionales. El canje se administra desde el Monitor
-// (botón 📅 Feriados) y se guarda en la nube (Firestore config_rl/feriados):
-//   canjeados = feriados que SÍ se trabajan (la empresa canjeó el día)
-//   descansos = días normales que pasan a descanso (el día entregado a cambio)
-const RL_FERIADOS_FIJOS = {
-  '01-01':'Año Nuevo','05-01':'Día del Trabajo','06-07':'Batalla de Arica',
-  '06-29':'San Pedro y San Pablo','07-23':'Día de la Fuerza Aérea',
-  '07-28':'Fiestas Patrias','07-29':'Fiestas Patrias','08-06':'Batalla de Junín',
-  '08-30':'Santa Rosa de Lima','10-08':'Combate de Angamos','11-01':'Todos los Santos',
-  '12-08':'Inmaculada Concepción','12-09':'Batalla de Ayacucho','12-25':'Navidad'
-};
-const RL_FERIADOS_MOVILES = {   // Jueves y Viernes Santo por año
-  2026:{'04-02':'Jueves Santo','04-03':'Viernes Santo'},
-  2027:{'03-25':'Jueves Santo','03-26':'Viernes Santo'},
-  2028:{'04-13':'Jueves Santo','04-14':'Viernes Santo'}
-};
-function rlFeriadoNombre(d) {
-  const md = ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
-  return RL_FERIADOS_FIJOS[md] || (RL_FERIADOS_MOVILES[d.getFullYear()]||{})[md] || null;
-}
-function rlFeriadosCfg() {
-  try { const c = JSON.parse(localStorage.getItem('rl_feriados_cfg')||'null');
-        return { canjeados: (c&&c.canjeados)||[], descansos: (c&&c.descansos)||[] }; }
-  catch(e) { return { canjeados: [], descansos: [] }; }
-}
-function rlFeriadosRefrescar() {   // trae el canje desde la nube (en segundo plano)
-  try {
-    fetch('https://firestore.googleapis.com/v1/projects/sistema-eti-verfrut/databases/(default)/documents/config_rl/feriados?key=AIzaSyAv-1VcbT8VCerClNAeVtVXzOxhSffeDpc')
-      .then(r=>r.json()).then(d=>{
-        const f=(d&&d.fields)||{};
-        const arr=v=>((v&&v.arrayValue&&v.arrayValue.values)||[]).map(x=>x.stringValue||'').filter(Boolean);
-        localStorage.setItem('rl_feriados_cfg', JSON.stringify({ts:Date.now(),canjeados:arr(f.canjeados),descansos:arr(f.descansos)}));
-      }).catch(()=>{});
-  } catch(e) {}
-}
-rlFeriadosRefrescar();
-function rlHoyNoLaborable(d) {   // → {no:true, nombre} si hoy no se trabaja
-  const iso = d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
-  const cfg = rlFeriadosCfg();
-  if (cfg.descansos.indexOf(iso) >= 0) return { no:true, nombre:'Descanso por canje de feriado' };
-  const nom = rlFeriadoNombre(d);
-  if (nom && cfg.canjeados.indexOf(iso) < 0) return { no:true, nombre:'Feriado — '+nom };
-  return { no:false };
-}
-
 // ── Verificación de horario para login ────────────────────────────
 function verificarHorarioLogin(user) {
-  const rol = (user.rol||'').toLowerCase().trim();
+  /* _HORARIO_SOLO_ADMIN_V1: la excepción es por USUARIO, no por rol. */
+  const usuario = (user.usuario||'').toLowerCase().trim();
+  if (USUARIOS_SIN_HORARIO.includes(usuario)) return { permitido: true };
   if (user.sin_restriccion) return { permitido: true };
-  if (ROLES_SIN_HORARIO.includes(rol)) return { permitido: true };
-  // Solo supervisores tienen restricción
-  if (rol !== 'supervisor') return { permitido: true };
 
   const ahora = new Date();
   const mes   = ahora.getMonth() + 1; // 1-12
@@ -473,10 +430,6 @@ function verificarHorarioLogin(user) {
 
   // Temporada alta: 27 jun - 31 dic
   const esAlta = mes > 6 || (mes === 6 && dia >= 27);
-
-  // Feriado (o descanso por canje): día no laborable, salvo feriado canjeado
-  const fer = rlHoyNoLaborable(ahora);
-  if (fer.no) return { permitido: false, temporada: esAlta ? 'alta' : 'baja', feriado: fer.nombre };
 
   if (!esAlta) {
     // Temporada baja: Lun-Vie 05:30-17:00
@@ -516,11 +469,9 @@ function mostrarPantallaBloqueo(user, bloqueo) {
 
   document.getElementById('blNombre').textContent = 'Usuario: ' + (user.nombre || user.usuario);
   document.getElementById('blHorario').innerHTML =
-    (bloqueo.feriado ? `🎌 Hoy es <b>${bloqueo.feriado}</b> — día no laborable.<br>` : '') +
     `⏰ Hora actual: <b>${hora}</b><br>` +
     `📅 Temporada ${tempTexto}<br>` +
-    `✅ Horario permitido: ${diasTexto} de <b>05:30</b> a <b>17:00</b>` +
-    (bloqueo.feriado ? `<br>Si debes trabajar hoy, envía tu solicitud de acceso aquí abajo.` : '');
+    `✅ Horario permitido: ${diasTexto} de <b>05:30</b> a <b>17:00</b>`;
 
   document.querySelector('.card').style.display = 'none';
   document.getElementById('blFormSol').style.display = 'block';
@@ -571,61 +522,27 @@ function checkSessionCache() {
     if ((Date.now() - s.timestamp) > 8 * 60 * 60 * 1000) { localStorage.removeItem('rl_session'); return; }
     const user = s.user;
     const rol  = (user.rol||'').toLowerCase().trim();
-    // Supervisor fuera de horario → limpiar sesión, pedir login (flujo de acceso temporal)
-    if (!ROLES_SIN_HORARIO.includes(rol) && rol === 'supervisor') {
+    /* _HORARIO_SOLO_ADMIN_V1: se revisa a TODOS (la excepción va por usuario
+       dentro de verificarHorarioLogin), no solo al rol 'supervisor'. */
+    {
       const bloqueo = verificarHorarioLogin(user);
       if (!bloqueo.permitido) { localStorage.removeItem('rl_session'); return; }
     }
-    // Computadoras compartidas: CONFIRMAR antes de reanudar la sesión guardada,
-    // para que nadie entre con el nombre de otro usuario.
-    mostrarReanudarSesion(user, s);
+    // Restaurar sesión
+    sessionStorage.setItem('user', JSON.stringify(user));
+    sessionStorage.setItem('api', API);
+    if (s.token) sessionStorage.setItem('rl_token', s.token);
+    if (ROLES_SELECCION.includes(rol)) {
+      // Admin/coordinador → pantalla de módulos
+      document.getElementById('pmNombre').textContent = user.nombre || user.usuario || '';
+      aplicarVisibilidadModulos(user);
+      document.querySelector('.card').style.display = 'none';
+      document.getElementById('pantallaModulo').style.display = 'flex';
+    } else {
+      // Supervisor/otros → ir directo al dashboard
+      window.location.href = 'frontend/pages/dashboard.html';
+    }
   } catch(e) { localStorage.removeItem('rl_session'); }
-}
-
-function _restaurarSesionCon(user, s) {
-  const rol = (user.rol||'').toLowerCase().trim();
-  sessionStorage.setItem('user', JSON.stringify(user));
-  sessionStorage.setItem('api', API);
-  if (s.token) sessionStorage.setItem('rl_token', s.token);
-  if (ROLES_SELECCION.includes(rol)) {
-    // Admin/coordinador → pantalla de módulos
-    document.getElementById('pmNombre').textContent = user.nombre || user.usuario || '';
-    aplicarVisibilidadModulos(user);
-    document.querySelector('.card').style.display = 'none';
-    document.getElementById('pantallaModulo').style.display = 'flex';
-  } else {
-    // Supervisor/otros → ir directo al dashboard
-    window.location.href = 'frontend/pages/dashboard.html';
-  }
-}
-
-function mostrarReanudarSesion(user, s) {
-  try {
-    const nom = user.nombre || user.usuario || '';
-    const ov = document.createElement('div');
-    ov.id = 'ovReanudar';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:400;background:rgba(2,6,23,.75);display:flex;align-items:center;justify-content:center;padding:16px;';
-    ov.innerHTML =
-      '<div style="background:#0f172a;color:#f1f5f9;border:1px solid #334155;border-radius:16px;max-width:400px;width:100%;padding:22px;box-shadow:0 24px 60px rgba(0,0,0,.5);text-align:center;">' +
-      '<div style="font-size:34px;margin-bottom:6px;">👤</div>' +
-      '<div style="font-weight:800;font-size:16px;margin-bottom:4px;">Hay una sesión activa en este equipo</div>' +
-      '<div style="font-size:13.5px;color:#cbd5e1;margin-bottom:16px;">Sesión abierta de<br><b style="color:#7dd3fc;font-size:15px;">' + nom + '</b></div>' +
-      '<button id="btnReanudarSi" style="width:100%;background:linear-gradient(120deg,#0ea5e9,#0369a1);color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13.5px;cursor:pointer;margin-bottom:8px;">✔ Sí, soy ' + (nom.split(' ')[0]||'') + ' — continuar</button>' +
-      '<button id="btnReanudarNo" style="width:100%;background:#334155;color:#f1f5f9;border:none;border-radius:10px;padding:10px;font-weight:700;font-size:13px;cursor:pointer;">No soy yo — iniciar sesión con MI usuario</button></div>';
-    document.body.appendChild(ov);
-    document.getElementById('btnReanudarSi').addEventListener('click', function () {
-      ov.remove();
-      _restaurarSesionCon(user, s);
-    });
-    document.getElementById('btnReanudarNo').addEventListener('click', function () {
-      // Limpiar TODO rastro del usuario anterior (RR.LL y Bienestar)
-      localStorage.removeItem('rl_session');
-      localStorage.removeItem('bienestarSocialAuth');
-      try { sessionStorage.clear(); } catch (e) {}
-      ov.remove();
-      const u = document.getElementById('usuario'); if (u) u.focus();
-    });
-  } catch (e) { _restaurarSesionCon(user, s); }
 }
 
 // ── Login principal ───────────────────────────────────────────────
@@ -649,33 +566,22 @@ async function doLogin(){
       sessionStorage.setItem('api',API);
       if (d.token) sessionStorage.setItem('rl_token', d.token);
       // ── SSO Bienestar Social: obtener token con las mismas credenciales (no bloquea el login RL) ──
-      // Intento 1: la clave que escribió. Intento 2 (respaldo): <usuario>2026,
-      // por si su clave de Bienestar quedó con la convención inicial.
       try {
-        const BS_SSO_API = 'https://script.google.com/macros/s/AKfycbyJIUtdpApEc35Jj4ZNP-3ONqGe64J1VhaRvkt87vVUNTgSagrOgOS0T99eIt0-w3Yi/exec';
-        const ssoIntento = function (pwd, alFallar) {
-          fetch(BS_SSO_API, {
-            method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'bs_login', usuario: u, password: pwd })
-          }).then(function(rb){ return rb.json(); }).then(function(db){
-            if (db && db.ok && db.user) {
-              localStorage.setItem('bienestarSocialAuth', JSON.stringify({
-                usuario: db.user.usuario, nombre: db.user.nombre, rol: db.user.rol,
-                permisos: db.user.permisos, token: db.user.token,
-                loginAt: new Date().toISOString(), source: 'sistema-rl-verfrut'
-              }));
-              console.log('[login] SSO Bienestar: token obtenido');
-            } else if (alFallar) {
-              alFallar();
-            } else {
-              console.log('[login] SSO Bienestar: sin cuenta en Bienestar (ok)');
-            }
-          }).catch(function(eb){ console.warn('[login] SSO Bienestar fallo:', eb); if (alFallar) alFallar(); });
-        };
-        ssoIntento(p, function () {
-          const alt = String(u).toLowerCase() + '2026';
-          if (alt !== p) ssoIntento(alt, null);
-        });
+        fetch('https://script.google.com/macros/s/AKfycbyJIUtdpApEc35Jj4ZNP-3ONqGe64J1VhaRvkt87vVUNTgSagrOgOS0T99eIt0-w3Yi/exec', {
+          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ action: 'bs_login', usuario: u, password: p })
+        }).then(function(rb){ return rb.json(); }).then(function(db){
+          if (db && db.ok && db.user) {
+            localStorage.setItem('bienestarSocialAuth', JSON.stringify({
+              usuario: db.user.usuario, nombre: db.user.nombre, rol: db.user.rol,
+              permisos: db.user.permisos, token: db.user.token,
+              loginAt: new Date().toISOString(), source: 'sistema-rl-verfrut'
+            }));
+            console.log('[login] SSO Bienestar: token obtenido');
+          } else {
+            console.log('[login] SSO Bienestar: sin cuenta en Bienestar (ok)');
+          }
+        }).catch(function(eb){ console.warn('[login] SSO Bienestar fallo:', eb); });
       } catch(eSso) {}
       const rol=(d.user.rol||'').toLowerCase().trim();
       // Precalentar caché del backend (fire & forget) — medir respuesta
@@ -699,8 +605,8 @@ async function doLogin(){
             document.getElementById('pantallaModulo').style.display='flex';
           });
         };
-        // Supervisor → verificar horario ANTES de mostrar la pantalla de módulos
-        if(rol === 'supervisor'){
+        // _HORARIO_SOLO_ADMIN_V1: verificar horario a TODOS antes de entrar
+        {
           const bloqueo = verificarHorarioLogin(d.user);
           if(!bloqueo.permitido){
             console.log('[LOGIN] Supervisor fuera de horario, verificando acceso temporal...');
@@ -769,27 +675,6 @@ async function doLogin(){
 }
 function irA(url){
   window.location.href=url;
-}
-
-// ── SSO hacia los sistemas ETI: pase de un solo uso (90 s) en la dirección.
-// El sistema destino lo valida, entra directo sin login y borra el pase de la
-// barra de direcciones; una URL copiada a otro monitor llega sin pase.
-const SSO_SAL = 'RL-SSO-VERFRUT-2026';
-async function abrirConSSO(url, mismaPestana) {
-  try {
-    const s = JSON.parse(sessionStorage.getItem('user') || 'null');
-    if (s && s.usuario && window.crypto && crypto.subtle) {
-      const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ u: s.usuario, exp: Date.now() + 90000 }))));
-      const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(payload + '|' + SSO_SAL));
-      const firma = Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join('');
-      const destino = url + '#sso=' + payload + '.' + firma;
-      if (mismaPestana) { window.location.href = destino; }
-      else { window.open(destino, '_blank', 'noopener,noreferrer'); }
-      return;
-    }
-  } catch (e) {}
-  if (mismaPestana) { window.location.href = url; }
-  else { window.open(url, '_blank', 'noopener,noreferrer'); }
 }
 function setLoading(v){
   document.getElementById('spin').style.display=v?'block':'none';
