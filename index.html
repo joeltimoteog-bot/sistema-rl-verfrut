@@ -311,7 +311,7 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
           <div class="mx-badge">ACCEDER →</div>
         </div>
       </div>
-      <div id="modETI" class="mx-card" onclick="irA('https://joeltimoteog-bot.github.io/sistema-eti/')" style="--c1:rgba(14,165,233,.9);--halo:rgba(14,165,233,.13);--grad:linear-gradient(135deg,#0ea5e9,#0369a1);--sombra:rgba(14,165,233,.4);--bbg:rgba(14,165,233,.2);--bbrd:rgba(14,165,233,.45);--btxt:#7dd3fc">
+      <div id="modETI" class="mx-card" onclick="irAConSSO('https://joeltimoteog-bot.github.io/sistema-eti/')" style="--c1:rgba(14,165,233,.9);--halo:rgba(14,165,233,.13);--grad:linear-gradient(135deg,#0ea5e9,#0369a1);--sombra:rgba(14,165,233,.4);--bbg:rgba(14,165,233,.2);--bbrd:rgba(14,165,233,.45);--btxt:#7dd3fc">
         <div class="mx-in">
           <div class="mx-ico">🎓</div>
           <div class="mx-t">Sistema ETI</div>
@@ -319,7 +319,7 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
           <div class="mx-badge">ACCEDER →</div>
         </div>
       </div>
-      <div id="modEval" class="mx-card" onclick="window.open('https://joeltimoteog-bot.github.io/eti-evaluacion-verfrut/','_blank','noopener,noreferrer')" style="--c1:rgba(245,158,11,.9);--halo:rgba(245,158,11,.13);--grad:linear-gradient(135deg,#f59e0b,#b45309);--sombra:rgba(245,158,11,.4);--bbg:rgba(245,158,11,.2);--bbrd:rgba(245,158,11,.45);--btxt:#fcd34d">
+      <div id="modEval" class="mx-card" onclick="irAConSSO('https://joeltimoteog-bot.github.io/eti-evaluacion-verfrut/')" style="--c1:rgba(245,158,11,.9);--halo:rgba(245,158,11,.13);--grad:linear-gradient(135deg,#f59e0b,#b45309);--sombra:rgba(245,158,11,.4);--bbg:rgba(245,158,11,.2);--bbrd:rgba(245,158,11,.45);--btxt:#fcd34d">
         <div class="mx-in">
           <div class="mx-ico">⭐</div>
           <div class="mx-t">Sistema de Evaluaciones</div>
@@ -721,6 +721,35 @@ async function doLogin(){
   }catch(e){setAlert('Error de conexión. Verifica tu internet.');}
   setLoading(false);
 }
+/* _SSO_PASE_V1 (15-ago-2026)
+   Los dos sistemas ETI YA saben recibir un pase de un solo uso en la direccion
+   (#sso=<pase>.<firma>, vigente 90 s) — esta en ssoDesdeRRLL(). Lo que faltaba
+   era que el RR.LL lo EMITIERA: por eso el usuario llegaba sin nada y le salia
+   el aviso "El ingreso ahora es desde el Sistema RR.LL".
+
+   El pase lleva el usuario y su vencimiento, va firmado, y el ETI lo borra de
+   la barra de direcciones al instante. Si alguien copia el enlace y lo pega en
+   otra PC, llega sin pase (o vencido) y le sale el login: justo lo que se quiso.
+
+   Si algo fallara al firmar, se navega igual sin pase: el ETI mostrara su
+   login de siempre. Nunca deja al usuario en blanco. */
+const SSO_SECRETO = 'RL-SSO-VERFRUT-2026';   // debe coincidir con el de los ETI
+
+async function irAConSSO(base){
+  let destino = base;
+  try{
+    const raw = sessionStorage.getItem('user');
+    const usuario = raw ? String(JSON.parse(raw).usuario || '').toLowerCase().trim() : '';
+    if (usuario && window.crypto && window.crypto.subtle) {
+      const pase  = btoa(unescape(encodeURIComponent(JSON.stringify({ u: usuario, exp: Date.now() + 90000 }))));
+      const buf   = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pase + '|' + SSO_SECRETO));
+      const firma = Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2,'0')).join('');
+      destino = base + '#sso=' + pase + '.' + firma;
+    }
+  }catch(e){ destino = base; }
+  window.location.href = destino;
+}
+
 function irA(url){
   window.location.href=url;
 }
