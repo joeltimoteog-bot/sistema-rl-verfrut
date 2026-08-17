@@ -135,6 +135,11 @@
       <div class="hd"><h2>Interacción</h2></div>
       <div class="body" id="detalle">
         <div class="nopick">Seleccioná un usuario de la izquierda para ver su actividad y enviarle un mensaje.</div>
+        <!-- _AVISO_SISTEMA_V3 -->
+        <div id="sisAhoraWrap" style="display:none;margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
+          <div style="font-size:12px;font-weight:800;color:var(--mut);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">🗂️ ¿Quién está en qué sistema?</div>
+          <div id="sisAhoraCols" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px"></div>
+        </div>
         <!-- _AVISO_CONEXION_V1 -->
         <div id="ultConexWrap" style="display:none;margin-top:18px;border-top:1px solid var(--line);padding-top:14px">
           <div style="font-size:12px;font-weight:800;color:var(--mut);letter-spacing:.5px;text-transform:uppercase;margin-bottom:10px">🔔 Últimas conexiones</div>
@@ -399,49 +404,214 @@ window.addEventListener('focus', detenerParpadeo);
    La PRIMERA carga solo toma la foto inicial: si no, al abrir el monitor
    saldrian siete avisos de golpe.
    ══════════════════════════════════════════════════════════════════════════ */
-let _vistosOn = null;                 // null = todavia no hay linea base
-let _ultimasConex = [];               // historial corto para el panel derecho
+/* ══════════════════════════════════════════════════════════════════════════
+   _AVISO_SISTEMA_V3 (17-ago-2026) — Avisar TAMBIEN EN QUE SISTEMA entra
+   --------------------------------------------------------------------------
+   POR QUE HACIA FALTA
+   La version anterior (_AVISO_CONEXION_V1) solo comparaba conectado/desconectado.
+   Los dos sistemas ETI YA reportan presencia al mismo Firebase:
+       sistema-eti/script.js:2546   modulo "Sistema ETI · Capacitaciones"
+       Evaluacion Eti/index.html:1281  modulo "Evaluaciones ETI"
+   pero cuando alguien pasa de RR.LL a un ETI con el pase SSO NUNCA se
+   desconecta: solo cambia el campo modulo. Como el conjunto de conectados no
+   cambiaba, no sonaba nada y el cambio pasaba en silencio.
+
+   AHORA se guarda POR PERSONA el sistema donde esta, y se avisa en dos casos:
+       ingreso      (no estaba conectado)        -> 🟢
+       cambio       (estaba, pero en otro sistema) -> 🔵
+   Si el ingreso ocurre FUERA DEL HORARIO PERMITIDO (05:30-17:00, la misma
+   regla del portal; jtimoteo exento) el aviso sale en ROJO con sonido distinto.
+
+   ANTI-REBOTE: los ETI escriben online = !document.hidden, o sea que cambiar
+   de pestaña marca "desconectado" y volver marca "conectado". Sin freno, la
+   misma persona dispararia el aviso decenas de veces al dia. Por eso no se
+   repite el mismo aviso (persona + sistema) antes de 3 minutos.
+
+   AVISO DE ESCRITORIO: si el monitor esta minimizado o en otra pestaña, se
+   manda una notificacion de Windows. Respeta el boton 🔇 y no molesta cuando
+   ya estas mirando el monitor.
+   ══════════════════════════════════════════════════════════════════════════ */
+var SIS = {
+  rl:  { slug:'rl',  nombre:'Sistema RR.LL',       icono:'🏢', color:'#22c55e' },
+  cap: { slug:'cap', nombre:'Capacitaciones ETI',  icono:'🎓', color:'#a78bfa' },
+  evl: { slug:'evl', nombre:'Evaluaciones ETI',    icono:'📋', color:'#38bdf8' }
+};
+function sisPorSlug(s){ return SIS[s] || SIS.rl; }
+
+/* Clasificacion EXACTA: se compara contra lo que realmente escriben los ETI
+   (campo pagina), no por palabras sueltas — asi un modulo de RR.LL que se
+   llame "Capacitaciones" no se confunde con el sistema ETI. */
+function sistemaDe(u){
+  var p = String((u && u.pagina)  || '').toLowerCase().trim();
+  var m = String((u && u.modulo)  || '').toLowerCase().trim();
+  if (p === 'sistema-eti'      || m === 'sistema eti · capacitaciones') return SIS.cap;
+  if (p === 'evaluaciones-eti' || m === 'evaluaciones eti')             return SIS.evl;
+  return SIS.rl;
+}
+
+/* Misma regla horaria de index.html / presencia.js. NO inventa horarios. */
+function fueraDeHorarioAhora(usuario){
+  try{
+    var u = String(usuario || '').toLowerCase().trim();
+    if (u === 'jtimoteo') return false;
+    var a = new Date(), mes = a.getMonth()+1, dia = a.getDate(), dow = a.getDay();
+    var h = a.getHours() + a.getMinutes()/60;
+    var alta = mes > 6 || (mes === 6 && dia >= 27);
+    if (!alta){ if (dow === 0 || dow === 6) return true; }
+    else       { if (dow === 0) return true; }
+    return (h < 5.5 || h >= 17);
+  }catch(e){ return false; }
+}
+
+var _sisPrev      = null;   // null = todavia no hay linea base
+var _ultimoAviso  = {};     // "usuario|sistema" -> ts del ultimo aviso
+var _ultimasConex = [];
+var ANTIREBOTE_MS = 3 * 60 * 1000;
+
+/* ── Aviso de escritorio (Notification API) ── */
+var _notifPedido = false;
+function pedirPermisoNotif(){
+  try{
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'default' || _notifPedido) return;
+    _notifPedido = true;
+    var r = Notification.requestPermission();
+    if (r && r.catch) r.catch(function(){});
+  }catch(e){}
+}
+document.addEventListener('click', pedirPermisoNotif, { once: true });
+setTimeout(pedirPermisoNotif, 2000);
+
+function notificarEscritorio(titulo, cuerpo){
+  try{
+    if (!_sonidoOn) return;                 // respeta el boton 🔇
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    if (!document.hidden) return;           // si estas mirando el monitor, sobra
+    var n = new Notification(titulo, { body: cuerpo, tag: 'rl-monitor-' + Date.now() });
+    n.onclick = function(){ try{ window.focus(); n.close(); }catch(e){} };
+    setTimeout(function(){ try{ n.close(); }catch(e){} }, 9000);
+  }catch(e){}
+}
+
+/* Sonido de ALERTA (fuera de horario): grave y doble, distinto del aviso normal */
+function sonidoAlerta(){
+  if (!_sonidoOn) return;
+  try{
+    var ctx = new (window.AudioContext||window.webkitAudioContext)();
+    [0, 0.42].forEach(function(t){
+      var o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'square'; o.frequency.value = 320;
+      g.gain.setValueAtTime(0.14, ctx.currentTime + t);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.34);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(ctx.currentTime + t); o.stop(ctx.currentTime + t + 0.34);
+    });
+    setTimeout(function(){ try{ctx.close();}catch(e){} }, 1200);
+  }catch(e){}
+}
 
 function detectarConexionesNuevas(){
   try{
-    const ahoraOn = new Set();
-    Object.keys(PRES).forEach(k => { if (estado(PRES[k]) === 'on') ahoraOn.add(k); });
+    var ahora = {};
+    Object.keys(PRES).forEach(function(k){
+      var u = PRES[k] || {};
+      if (estado(u) !== 'on') return;
+      ahora[k] = { sis: sistemaDe(u).slug, nom: u.nombre || u.usuario || k, usuario: u.usuario || k };
+    });
 
-    if (_vistosOn === null) { _vistosOn = ahoraOn; return; }   // foto inicial
+    if (_sisPrev === null){ _sisPrev = ahora; pintarSistemasAhora(); return; }  // foto inicial
 
-    const nuevos = [];
-    ahoraOn.forEach(k => { if (!_vistosOn.has(k)) nuevos.push(k); });
-    _vistosOn = ahoraOn;
-    if (!nuevos.length) return;
+    var avisos = [];
+    Object.keys(ahora).forEach(function(k){
+      var hoy = ahora[k], antes = _sisPrev[k], tipo = null;
+      if (!antes)                    tipo = 'entra';
+      else if (antes.sis !== hoy.sis) tipo = 'cambia';
+      if (!tipo) return;
+      var clave = k + '|' + hoy.sis;
+      if (Date.now() - Number(_ultimoAviso[clave] || 0) < ANTIREBOTE_MS) return;   // anti-rebote
+      _ultimoAviso[clave] = Date.now();
+      avisos.push({ nom: hoy.nom, usuario: hoy.usuario, sis: hoy.sis, tipo: tipo });
+    });
+    _sisPrev = ahora;
+    pintarSistemasAhora();
+    if (!avisos.length) return;
 
-    nuevos.forEach(k => {
-      const u = PRES[k] || {};
-      const nom = u.nombre || u.usuario || k;
-      _ultimasConex.unshift({ nom: nom, mod: u.modulo || '—', ts: Date.now() });
-      toast('🟢 ' + nom + ' acaba de conectarse');
+    var hayRojo = false;
+    avisos.forEach(function(a){
+      var s = sisPorSlug(a.sis);
+      var fuera = fueraDeHorarioAhora(a.usuario);
+      var accion = (a.tipo === 'entra' ? 'ingresó a ' : 'pasó a ');
+      var donde  = s.icono + ' ' + s.nombre;
+      _ultimasConex.unshift({ nom: a.nom, mod: s.nombre, icono: s.icono, color: s.color,
+                              tipo: a.tipo, fuera: fuera, ts: Date.now() });
+      if (fuera){
+        hayRojo = true;
+        toast('🔴 FUERA DE HORARIO — ' + a.nom + ' ' + accion + donde, true);
+        notificarEscritorio('🔴 Acceso fuera de horario', a.nom + ' ' + accion + s.nombre);
+      } else {
+        toast((a.tipo === 'entra' ? '🟢 ' : '🔵 ') + a.nom + ' ' + accion + donde);
+        notificarEscritorio((a.tipo === 'entra' ? '🟢 Ingreso al sistema' : '🔵 Cambio de sistema'),
+                            a.nom + ' ' + accion + s.nombre);
+      }
     });
     if (_ultimasConex.length > 20) _ultimasConex.length = 20;
 
-    sonidoAviso();
+    if (hayRojo) sonidoAlerta(); else sonidoAviso();
     parpadearTitulo();
     pintarUltimasConexiones();
   }catch(e){ /* un aviso nunca debe romper el monitor */ }
 }
 
+/* Tarjeta "¿quien esta en que sistema?" — se repinta en cada actualizacion */
+function pintarSistemasAhora(){
+  try{
+    var wrap = document.getElementById('sisAhoraWrap');
+    var cols = document.getElementById('sisAhoraCols');
+    if (!wrap || !cols) return;
+
+    var grupos = { rl: [], cap: [], evl: [] };
+    Object.keys(PRES).forEach(function(k){
+      var u = PRES[k] || {};
+      if (estado(u) !== 'on') return;
+      grupos[sistemaDe(u).slug].push(u.nombre || u.usuario || k);
+    });
+
+    if (!(grupos.rl.length + grupos.cap.length + grupos.evl.length)){
+      wrap.style.display = 'none'; return;
+    }
+    wrap.style.display = 'block';
+    cols.innerHTML = ['rl','cap','evl'].map(function(sl){
+      var s = SIS[sl], gente = grupos[sl];
+      return '<div style="background:var(--bg2,#0b1220);border:1px solid var(--line);border-radius:10px;padding:8px 10px">' +
+        '<div style="font-size:11.5px;font-weight:800;color:' + s.color + ';margin-bottom:6px">' +
+          s.icono + ' ' + esc(s.nombre) + ' <span style="color:var(--mut);font-weight:600">(' + gente.length + ')</span></div>' +
+        (gente.length
+          ? gente.map(function(n){ return '<div style="font-size:12px;color:#e2e8f0;padding:2px 0">• ' + esc(n) + '</div>'; }).join('')
+          : '<div style="font-size:11.5px;color:var(--mut)">nadie</div>') +
+      '</div>';
+    }).join('');
+  }catch(e){}
+}
+
 function pintarUltimasConexiones(){
   try{
-    const wrap = document.getElementById('ultConexWrap');
-    const cont = document.getElementById('ultConexLista');
+    var wrap = document.getElementById('ultConexWrap');
+    var cont = document.getElementById('ultConexLista');
     if (!wrap || !cont) return;
     if (!_ultimasConex.length) { wrap.style.display = 'none'; return; }
     wrap.style.display = 'block';
-    cont.innerHTML = _ultimasConex.map(c =>
-      '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">' +
-        '<span style="width:8px;height:8px;border-radius:50%;background:#22c55e;flex:none"></span>' +
-        '<span style="flex:1;color:#e2e8f0">' + esc(c.nom) + '</span>' +
-        '<span style="color:var(--mut);font-size:11px">' + esc(c.mod) + '</span>' +
+    cont.innerHTML = _ultimasConex.map(function(c){
+      var col = c.fuera ? '#ef4444' : (c.color || '#22c55e');
+      return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:' + col + ';flex:none"></span>' +
+        '<span style="flex:1;color:' + (c.fuera ? '#fca5a5' : '#e2e8f0') + '">' + esc(c.nom) +
+          (c.tipo === 'cambia' ? ' <span style="color:var(--mut);font-size:11px">(cambió)</span>' : '') +
+          (c.fuera ? ' <span style="color:#ef4444;font-size:11px;font-weight:800">FUERA DE HORARIO</span>' : '') + '</span>' +
+        '<span style="color:var(--mut);font-size:11px">' + esc((c.icono || '') + ' ' + c.mod) + '</span>' +
         '<span style="color:var(--mut);font-size:11px">' + haceCuanto(c.ts) + '</span>' +
-      '</div>').join('');
+      '</div>';
+    }).join('');
   }catch(e){}
 }
 
