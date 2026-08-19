@@ -947,3 +947,147 @@ async function apiPost(b) {
   const r = await fetch(API, { method: 'POST', body: JSON.stringify(b), headers: { 'Content-Type': 'text/plain' } });
   return r.json();
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _HORAS_PLANILLA_V1 (19-ago-2026) — Trabajadores que YA cobran horas en planilla
+   ---------------------------------------------------------------------------
+   LA TORRE GOMEZ MARCO ANTONIO (DNI 03209092, CHOFER) acumula horas aquí, pero
+   ese mismo día se le pagan 2 horas en su boleta. Si nadie avisa, esas horas se
+   terminan pagando dos veces.
+
+   Esta parte hace DOS cosas, las dos en pantalla:
+     1. Al digitar el DNI, sale un aviso rojo bien visible.
+     2. En el cuadro de cálculo se muestra cuánto se va a acumular DE VERDAD.
+
+   El descuento de verdad lo hace el servidor (horasRegistrarConPlanilla). Esto
+   es para que quien registra vea lo mismo que va a quedar guardado, y no se
+   lleve una sorpresa después.
+
+   Todo va al final del archivo y envuelve a las funciones que ya existían, sin
+   modificarlas: si algo falla, la pantalla sigue funcionando igual que antes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Misma lista que el backend. Si agregas a alguien allá, agrégalo también aquí
+   (allá manda; esto es solo el aviso en pantalla). */
+var HORAS_PLANILLA_FRONT = {
+  '03209092': 2      // LA TORRE GOMEZ MARCO ANTONIO — CHOFER — RAPEL
+};
+
+function _planillaPago(dni) {
+  try {
+    var d = String(dni == null ? '' : dni).trim();
+    if (!d) return 0;
+    if (HORAS_PLANILLA_FRONT[d]) return Number(HORAS_PLANILLA_FRONT[d]) || 0;
+    var sin = d.replace(/^0+/, '');
+    var con = ('00000000' + sin).slice(-8);
+    return Number(HORAS_PLANILLA_FRONT[sin] || HORAS_PLANILLA_FRONT[con] || 0) || 0;
+  } catch (e) { return 0; }
+}
+
+function _planillaQuitarAviso() {
+  var el = document.getElementById('_avisoPlanilla');
+  if (el && el.parentNode) el.parentNode.removeChild(el);
+  var n = document.getElementById('_notaPlanilla');
+  if (n && n.parentNode) n.parentNode.removeChild(n);
+}
+
+function _planillaPintarAviso(t) {
+  _planillaQuitarAviso();
+  if (!t) return;
+  var pago = _planillaPago(t.dni);
+  if (!pago) return;
+
+  var cd = document.getElementById('cardDatos');
+  if (!cd || !cd.parentNode) return;
+
+  var nom = String(t.nombre || '').trim();
+  var div = document.createElement('div');
+  div.id = '_avisoPlanilla';
+  div.style.cssText = 'background:#fef2f2;border:2px solid #dc2626;border-left-width:5px;' +
+    'border-radius:10px;padding:13px 15px;margin:12px 0;font-size:13px;line-height:1.6;color:#7f1d1d;';
+  div.innerHTML =
+    '<div style="font-weight:800;color:#991b1b;margin-bottom:5px">' +
+      '⚠️ ATENCIÓN — este trabajador cobra horas en planilla</div>' +
+    'A <b>' + esc(nom) + '</b> (' + esc(String(t.cargo || '')) + ') se le pagan <b>' +
+    pago.toFixed(2).replace('.00', '') + ' horas por día</b> en su boleta. ' +
+    'El sistema va a descontar esas horas de la acumulación para que no se paguen dos veces. ' +
+    'Solo se le acumula lo que pase de esas horas.';
+
+  cd.parentNode.insertBefore(div, cd.nextSibling);
+}
+
+/* Debajo del cuadro de cálculo, mostrar lo que realmente se va a acumular. */
+function _planillaAjustarCalc() {
+  var n = document.getElementById('_notaPlanilla');
+  if (n && n.parentNode) n.parentNode.removeChild(n);
+
+  var t = window.horasCache && window.horasCache.trabajadorActual;
+  if (!t) return;
+  var pago = _planillaPago(t.dni);
+  if (!pago) return;
+
+  var motivo = String(v('regMotivo') || '').toLowerCase();
+  if (motivo.indexOf('acumulaci') < 0) return;
+
+  var elTrab = document.getElementById('calcTrab');
+  var elJor  = document.getElementById('calcJornada');
+  var elAcum = document.getElementById('calcAcum');
+  if (!elTrab || !elJor || !elAcum) return;
+
+  var trab = parseFloat(String(elTrab.textContent || '0').replace(',', '.')) || 0;
+  var jor  = parseFloat(String(elJor.textContent  || '0').replace(',', '.')) || 0;
+  if (!trab) return;
+
+  var extra = Math.round((trab - jor) * 100) / 100;
+  if (extra < 0) extra = 0;
+  var desc  = Math.min(pago, extra);
+  var queda = Math.round((extra - desc) * 100) / 100;
+  if (queda < 0) queda = 0;
+
+  var caja = elAcum.closest ? (elAcum.closest('.card') || elAcum.parentNode) : elAcum.parentNode;
+  if (!caja) return;
+
+  var d = document.createElement('div');
+  d.id = '_notaPlanilla';
+  d.style.cssText = 'background:#fff7ed;border:1.5px dashed #fb923c;border-radius:9px;' +
+    'padding:11px 13px;margin-top:10px;font-size:12.5px;line-height:1.7;color:#7c2d12;';
+  d.innerHTML =
+    '<b>Cómo queda con el descuento de planilla</b><br>' +
+    'Horas extra del período: <b>' + extra.toFixed(2) + ' h</b><br>' +
+    '− Pagadas en planilla: <b style="color:#b91c1c">' + desc.toFixed(2) + ' h</b><br>' +
+    'Se acumulará: <b style="color:#166534;font-size:14px">' + queda.toFixed(2) + ' h</b>';
+
+  caja.appendChild(d);
+}
+
+/* Enganche: se envuelven las funciones existentes sin reescribirlas. */
+(function () {
+  try {
+    var _apOrig = window._aplicarTrabajadorAlForm;
+    if (typeof _apOrig === 'function') {
+      window._aplicarTrabajadorAlForm = function (t) {
+        var r = _apOrig.apply(this, arguments);
+        try { _planillaPintarAviso(t); _planillaAjustarCalc(); } catch (e) {}
+        return r;
+      };
+    }
+
+    var _limOrig = window._limpiarTrabajadorEnForm;
+    if (typeof _limOrig === 'function') {
+      window._limpiarTrabajadorEnForm = function () {
+        try { _planillaQuitarAviso(); } catch (e) {}
+        return _limOrig.apply(this, arguments);
+      };
+    }
+
+    var _recOrig = window.recalcularHoras;
+    if (typeof _recOrig === 'function') {
+      window.recalcularHoras = function () {
+        var r = _recOrig.apply(this, arguments);
+        try { _planillaAjustarCalc(); } catch (e) {}
+        return r;
+      };
+    }
+  } catch (e) { /* nunca romper la pantalla por el aviso */ }
+})();
