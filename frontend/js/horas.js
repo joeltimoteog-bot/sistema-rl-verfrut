@@ -1091,3 +1091,213 @@ function _planillaAjustarCalc() {
     }
   } catch (e) { /* nunca romper la pantalla por el aviso */ }
 })();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _HORAS_POR_USUARIO_V1 (19-ago-2026) — Ver los registros separados por quién
+   los hizo (pestaña "Por Usuario", solo administradores)
+   ---------------------------------------------------------------------------
+   NO NECESITA NINGÚN CAMBIO EN APPS SCRIPT. La hoja "registros" ya guarda en
+   la columna C quién hizo cada registro (REGISTRADO_POR), y horasListar ya lo
+   devuelve como "registradoPor". Acá solo se agrupa y se muestra.
+
+   La pestaña queda dentro de TABS_SOLO_ADMIN, así que dsanchez, lmorales y
+   jsiancas no la ven ni la pueden abrir escribiendo la dirección.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+try { if (TABS_SOLO_ADMIN.indexOf('usuarios') < 0) TABS_SOLO_ADMIN.push('usuarios'); } catch (e) {}
+
+window.horasCache.porUsuario   = null;
+window.horasCache.usrSeleccion = null;
+
+/* Trae TODOS los registros una sola vez y los deja en memoria. */
+async function cargarPorUsuario(forzar) {
+  const cont = document.getElementById('usrCards');
+  if (!cont) return;
+  if (window.horasCache.porUsuario && !forzar) { renderPorUsuario(); return; }
+
+  cont.innerHTML = '<div class="empty">⏳ Cargando registros...</div>';
+  try {
+    const d = await apiPost({ action: 'horasListar', usuario: USER.usuario });
+    if (!d.success) throw new Error(d.error || 'No se pudieron cargar los registros');
+    window.horasCache.porUsuario = d.registros || [];
+    renderPorUsuario();
+  } catch (e) {
+    cont.innerHTML = '<div class="empty">❌ ' + esc(e.message || 'Error de conexión') + '</div>';
+  }
+}
+
+/* Fecha del registro en formato AAAA-MM-DD (usa la de entrada; si no, la de registro). */
+function _usrFecha(r) {
+  const f = formatFecha(r.fechaEntrada || r.fechaRegistro || '');
+  return String(f || '').substring(0, 10);
+}
+
+function _usrEnPeriodo(r, periodo) {
+  if (periodo === 'todo') return true;
+  const f = _usrFecha(r);
+  if (!f) return false;
+  const hoy = new Date();
+  const yyyy = hoy.getFullYear();
+  const mm   = String(hoy.getMonth() + 1).padStart(2, '0');
+  const dd   = String(hoy.getDate()).padStart(2, '0');
+  if (periodo === 'hoy')  return f === yyyy + '-' + mm + '-' + dd;
+  if (periodo === 'mes')  return f.substring(0, 7) === yyyy + '-' + mm;
+  if (periodo === 'anio') return f.substring(0, 4) === String(yyyy);
+  return true;
+}
+
+function _usrClave(r) {
+  return String(r.registradoPor || '').trim().toLowerCase() || '(sin dato)';
+}
+
+/* Agrupa por usuario y pinta las tarjetas. */
+function renderPorUsuario() {
+  const cont = document.getElementById('usrCards');
+  if (!cont) return;
+  const todos = window.horasCache.porUsuario || [];
+  const periodo = v('usrPeriodo') || 'mes';
+  const lista = todos.filter(r => _usrEnPeriodo(r, periodo));
+
+  if (!lista.length) {
+    cont.innerHTML = '<div class="empty">Sin registros en el período seleccionado.</div>';
+    cerrarDetalleUsuario();
+    return;
+  }
+
+  const grupos = {};
+  lista.forEach(r => {
+    const k = _usrClave(r);
+    if (!grupos[k]) grupos[k] = { usuario: k, n: 0, acum: 0, perm: 0, trab: {}, ultima: '' };
+    const g = grupos[k];
+    g.n++;
+    g.acum += Number(r.horasAcumuladas) || 0;
+    g.perm += Number(r.horasPermiso) || 0;
+    if (r.dni) g.trab[String(r.dni).trim()] = 1;
+    const f = _usrFecha(r);
+    if (f > g.ultima) g.ultima = f;
+  });
+
+  const arr = Object.keys(grupos).map(k => grupos[k]).sort((a, b) => b.n - a.n);
+  const colores = ['#7c3aed', '#0891b2', '#0d9488', '#ca8a04', '#be185d', '#4f46e5', '#64748b'];
+
+  cont.innerHTML =
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:12px">' +
+    arr.map((g, i) => {
+      const col = colores[i % colores.length];
+      const ini = g.usuario.substring(0, 2).toUpperCase();
+      const sel = window.horasCache.usrSeleccion === g.usuario;
+      return '<div onclick="verDetalleUsuario(\'' + esc(g.usuario) + '\')" ' +
+        'style="border:' + (sel ? '2px solid ' + col : '1px solid #e2e8f0') + ';border-radius:12px;' +
+        'padding:13px;background:#fff;cursor:pointer;transition:.15s">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">' +
+          '<span style="width:28px;height:28px;border-radius:50%;background:' + col + ';color:#fff;' +
+          'display:inline-flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:800">' + ini + '</span>' +
+          '<b style="color:#0a2463;font-size:13.5px">' + esc(g.usuario) + '</b></div>' +
+        '<div style="font-size:11px;color:#94a3b8;margin-bottom:9px">último registro: ' + (g.ultima || '—') + '</div>' +
+        _usrLinea('Registros', g.n, '#0a2463') +
+        _usrLinea('Trabajadores distintos', Object.keys(g.trab).length, '#0a2463') +
+        _usrLinea('Horas acumuladas', (Math.round(g.acum * 100) / 100).toFixed(2), '#16a34a') +
+        _usrLinea('Horas de permiso', (Math.round(g.perm * 100) / 100).toFixed(2), '#dc2626') +
+      '</div>';
+    }).join('') + '</div>' +
+    '<div style="margin-top:12px;font-size:12px;color:#64748b">' +
+      'Total del período: <b style="color:#0a2463">' + lista.length + '</b> registros de <b style="color:#0a2463">' +
+      arr.length + '</b> usuario(s).</div>';
+
+  if (window.horasCache.usrSeleccion) verDetalleUsuario(window.horasCache.usrSeleccion);
+}
+
+function _usrLinea(txt, val, color) {
+  return '<div style="display:flex;justify-content:space-between;font-size:12.5px;padding:2.5px 0;color:#334155">' +
+    '<span>' + txt + '</span><b style="color:' + color + '">' + val + '</b></div>';
+}
+
+/* Detalle de un usuario: sus registros del período. */
+function verDetalleUsuario(usuario) {
+  window.horasCache.usrSeleccion = usuario;
+  const card = document.getElementById('usrDetalleCard');
+  const tb   = document.getElementById('tbUsrDetalle');
+  const nom  = document.getElementById('usrDetalleNom');
+  if (!card || !tb) return;
+
+  const periodo = v('usrPeriodo') || 'mes';
+  const lista = (window.horasCache.porUsuario || [])
+    .filter(r => _usrClave(r) === usuario && _usrEnPeriodo(r, periodo))
+    .sort((a, b) => String(_usrFecha(b)).localeCompare(String(_usrFecha(a))));
+
+  if (nom) nom.textContent = usuario + ' (' + lista.length + ' registros)';
+  card.style.display = '';
+
+  tb.innerHTML = lista.length ? lista.map(r => {
+    const acum = Number(r.horasAcumuladas) || 0;
+    const perm = Number(r.horasPermiso) || 0;
+    const est  = String(r.estado || 'aprobado');
+    return '<tr>' +
+      '<td>' + formatFecha(r.fechaEntrada || r.fechaRegistro) + '</td>' +
+      '<td>' + esc(String(r.dni || '')) + '</td>' +
+      '<td><b>' + esc(String(r.nombre || '')) + '</b></td>' +
+      '<td style="font-size:12px">' + esc(String(r.cargo || '')) + '</td>' +
+      '<td style="font-size:12px">' + esc(String(r.motivo || '')) + '</td>' +
+      '<td style="text-align:right;font-weight:700;color:#16a34a">' + acum.toFixed(2) + '</td>' +
+      '<td style="text-align:right;font-weight:700;color:#dc2626">' + perm.toFixed(2) + '</td>' +
+      '<td style="font-size:12px">' + esc(est) + '</td>' +
+    '</tr>';
+  }).join('') : '<tr><td colspan="8" class="empty">Sin registros en este período.</td></tr>';
+
+  try { card.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+}
+
+function cerrarDetalleUsuario() {
+  window.horasCache.usrSeleccion = null;
+  const card = document.getElementById('usrDetalleCard');
+  if (card) card.style.display = 'none';
+  const cont = document.getElementById('usrCards');
+  if (cont && window.horasCache.porUsuario) renderPorUsuario();
+}
+
+function exportarPorUsuarioExcel() {
+  const todos = window.horasCache.porUsuario || [];
+  const periodo = v('usrPeriodo') || 'mes';
+  const lista = todos.filter(r => _usrEnPeriodo(r, periodo));
+  if (!lista.length) { mostrarAlerta('alRegistro', 'err', 'No hay datos para exportar'); return; }
+
+  const data = lista
+    .sort((a, b) => String(_usrClave(a)).localeCompare(String(_usrClave(b))))
+    .map(r => ({
+      'Registrado por': _usrClave(r),
+      Fecha:            formatFecha(r.fechaEntrada || r.fechaRegistro),
+      DNI:              String(r.dni || ''),
+      Trabajador:       String(r.nombre || ''),
+      Empresa:          String(r.empresa || ''),
+      Cargo:            String(r.cargo || ''),
+      Motivo:           String(r.motivo || ''),
+      Acumuladas:       Number(r.horasAcumuladas) || 0,
+      Permiso:          Number(r.horasPermiso) || 0,
+      Estado:           String(r.estado || 'aprobado'),
+      Observaciones:    String(r.observaciones || '')
+    }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(data), 'Por usuario');
+  XLSX.writeFile(wb, 'horas_por_usuario_' + periodo + '.xlsx');
+}
+
+/* Enganche a showTab: carga la pestaña la primera vez que se abre. */
+(function () {
+  try {
+    const _stOrig = window.showTab;
+    if (typeof _stOrig !== 'function') return;
+    window.showTab = function (tab, btn) {
+      const r = _stOrig.apply(this, arguments);
+      try {
+        if (tab === 'usuarios' && !ES_BASICO) {
+          const c = window.horasCache.tabsCargados;
+          if (c && !c.usuarios) { cargarPorUsuario(); c.usuarios = true; }
+          else { renderPorUsuario(); }
+        }
+      } catch (e) {}
+      return r;
+    };
+  } catch (e) {}
+})();

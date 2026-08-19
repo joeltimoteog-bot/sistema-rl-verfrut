@@ -188,6 +188,7 @@ h3{font-size:16px !important}
   <button class="tab-btn"    data-tab="individual"  onclick="showTab('individual', this)">📊 Resumen Individual</button>
   <button class="tab-btn"    data-tab="general"     onclick="showTab('general', this)">🌐 Resumen General</button>
   <button class="tab-btn"    data-tab="aprobaciones" onclick="showTab('aprobaciones', this)">✅ Aprobaciones</button>
+  <button class="tab-btn"    data-tab="usuarios"    onclick="showTab('usuarios', this)">👥 Por Usuario</button>
   <button class="tab-btn"    data-tab="config"      onclick="showTab('config', this)">⚙️ Config</button>
 </div>
 
@@ -332,6 +333,46 @@ h3{font-size:16px !important}
       <button class="btn btn-primary btn-sm" onclick="cargarAprobaciones()">🔄 Actualizar</button>
     </div>
     <div id="aprList"><div class="empty">⏳ Cargando...</div></div>
+  </div>
+</div>
+
+<!-- ══════════ TAB: POR USUARIO ══════════  _HORAS_POR_USUARIO_V1 -->
+<div class="tab-content" id="tab-usuarios" data-tab="usuarios">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+      <div class="card-title" style="margin:0">👥 Registros por usuario</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <select id="usrPeriodo" onchange="renderPorUsuario()"
+                style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:7px;font-family:'Barlow',sans-serif;font-size:12px">
+          <option value="hoy">Hoy</option>
+          <option value="mes" selected>Este mes</option>
+          <option value="anio">Este año</option>
+          <option value="todo">Todo</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="cargarPorUsuario(true)">🔄 Actualizar</button>
+        <button class="btn btn-green btn-sm" onclick="exportarPorUsuarioExcel()">📊 Excel</button>
+      </div>
+    </div>
+    <div class="alert alert-info" style="font-size:12px;margin-bottom:12px">
+      💡 Cada tarjeta es una persona con permiso para registrar. Click en una tarjeta para ver el detalle de sus registros.
+    </div>
+    <div id="usrCards"><div class="empty">⏳ Cargando...</div></div>
+  </div>
+
+  <div class="card" id="usrDetalleCard" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+      <div class="card-title" style="margin:0">Detalle de <span id="usrDetalleNom"></span></div>
+      <button class="btn btn-sm" onclick="cerrarDetalleUsuario()">✕ Cerrar</button>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr>
+          <th>Fecha</th><th>DNI</th><th>Trabajador</th><th>Cargo</th>
+          <th>Motivo</th><th>Acum.</th><th>Permiso</th><th>Estado</th>
+        </tr></thead>
+        <tbody id="tbUsrDetalle"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
