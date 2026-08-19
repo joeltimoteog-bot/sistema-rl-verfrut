@@ -1301,3 +1301,271 @@ function exportarPorUsuarioExcel() {
     };
   } catch (e) {}
 })();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _HORAS_PLANILLA_V3 (19-ago-2026) — Devolución de horas pagadas: aviso,
+   mensaje al usuario y resumen por quincena
+   ---------------------------------------------------------------------------
+   CAMBIO DE ENFOQUE respecto a la versión anterior: la acumulación ya NO se
+   recorta. Se registra COMPLETA (el señor entra 6:15 y sale 22:00, esas son
+   sus horas), y el servidor agrega un segundo registro de "Devolución de
+   horas pagadas" por las 2 h que sí se le pagan en planilla según ley.
+
+   Acá se hacen tres cosas, todas de pantalla:
+     1. El aviso al digitar el DNI, ya con el texto correcto.
+     2. El mensaje explicativo a quien registra, apenas guarda.
+     3. En el Resumen Individual: acumuladas / pagadas / saldo real, y el
+        detalle cortado por quincena para que cuadre con planilla.
+
+   Todo sobreescribe funciones anteriores sin borrarlas y va envuelto en
+   try/catch: si algo falla, la pantalla sigue funcionando igual que antes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ¿Es un registro de devolución de horas PAGADAS? (no un permiso común) */
+function _esDevolucionPagada(r) {
+  try {
+    var m = String((r && r.motivo) || '').toLowerCase()
+              .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (m.indexOf('pagad') >= 0) return true;                       // "devolucion de horas pagadas"
+    var a = String((r && r.alerta) || '').toLowerCase();
+    return a.indexOf('devolucion automatica') >= 0 || a.indexOf('devolución automática') >= 0;
+  } catch (e) { return false; }
+}
+
+/* Quincena a la que pertenece un registro: "2026-08 · 2ª quincena" */
+function _quincenaDe(r) {
+  try {
+    var f = String(formatFecha(r.fechaEntrada || r.fechaRegistro) || '').substring(0, 10);
+    if (f.length < 10) return '';
+    var dia = parseInt(f.substring(8, 10), 10);
+    if (!dia) return '';
+    return f.substring(0, 7) + (dia <= 15 ? ' · 1ª quincena' : ' · 2ª quincena');
+  } catch (e) { return ''; }
+}
+
+/* ── 1) Aviso al digitar el DNI — _SALUDO_DNI_V4: saluda por su nombre ── */
+function _planillaNombreUsuario() {
+  try {
+    var n = String((USER && (USER.nombre || USER.usuario)) || '').trim().split(' ')[0];
+    if (!n) return '';
+    return n.charAt(0).toUpperCase() + n.slice(1).toLowerCase();
+  } catch (e) { return ''; }
+}
+
+_planillaPintarAviso = function (t) {
+  try {
+    _planillaQuitarAviso();
+    if (!t) return;
+    var pago = _planillaPago(t.dni);
+    if (!pago) return;
+    var cd = document.getElementById('cardDatos');
+    if (!cd || !cd.parentNode) return;
+
+    var horas = pago.toFixed(2).replace('.00', '');
+    var quien = _planillaNombreUsuario();
+
+    var div = document.createElement('div');
+    div.id = '_avisoPlanilla';
+    div.style.cssText = 'background:#eff6ff;border:2px solid #1e40af;border-left-width:5px;' +
+      'border-radius:10px;padding:14px 16px;margin:12px 0;font-size:13px;line-height:1.7;color:#1e3a5f;';
+    div.innerHTML =
+      '<div style="font-weight:800;color:#1e40af;font-size:14px;margin-bottom:6px">' +
+        'Hola ' + esc(quien || '') + ' 👋 — ten en cuenta con este trabajador</div>' +
+      '<b>' + esc(String(t.nombre || '')) + '</b> está <b>programado</b>. Por su función ' +
+      '(visitas a caseríos y campo) se le registra la <b>cantidad total de horas</b> que permanece, ' +
+      'pero por ley solo se le pueden pagar <b>' + horas + ' horas extras diarias</b>.<br><br>' +
+      'Registra la acumulación <b>completa</b>, como siempre. El sistema genera solo el registro de ' +
+      '<b>devolución de esas ' + horas + ' h que se le pagan</b> en su boleta, así su saldo queda correcto.<br><br>' +
+      '📊 En el <b>Resumen Individual</b> vas a ver por separado sus <b>horas acumuladas</b> y sus ' +
+      '<b>horas pagadas</b>, con el corte <b>por quincena</b>, y lo puedes exportar cuando lo necesites.';
+    cd.parentNode.insertBefore(div, cd.nextSibling);
+  } catch (e) {}
+};
+
+/* ── 2) Nota bajo el cálculo: cómo va a quedar ── */
+_planillaAjustarCalc = function () {
+  try {
+    var n = document.getElementById('_notaPlanilla');
+    if (n && n.parentNode) n.parentNode.removeChild(n);
+
+    var t = window.horasCache && window.horasCache.trabajadorActual;
+    if (!t) return;
+    var pago = _planillaPago(t.dni);
+    if (!pago) return;
+    if (String(v('regMotivo') || '').toLowerCase().indexOf('acumulaci') < 0) return;
+
+    var elTrab = document.getElementById('calcTrab');
+    var elJor  = document.getElementById('calcJornada');
+    var elAcum = document.getElementById('calcAcum');
+    if (!elTrab || !elJor || !elAcum) return;
+
+    var trab = parseFloat(String(elTrab.textContent || '0').replace(',', '.')) || 0;
+    var jor  = parseFloat(String(elJor.textContent  || '0').replace(',', '.')) || 0;
+    if (!trab) return;
+
+    var acum = Math.round((trab - jor) * 100) / 100; if (acum < 0) acum = 0;
+    var dev  = Math.min(pago, acum);
+    var neto = Math.round((acum - dev) * 100) / 100; if (neto < 0) neto = 0;
+
+    var caja = elAcum.closest ? (elAcum.closest('.card') || elAcum.parentNode) : elAcum.parentNode;
+    if (!caja) return;
+
+    var d = document.createElement('div');
+    d.id = '_notaPlanilla';
+    d.style.cssText = 'background:#f8fafc;border:1.5px dashed #94a3b8;border-radius:9px;' +
+      'padding:11px 13px;margin-top:10px;font-size:12.5px;line-height:1.8;color:#334155;';
+    d.innerHTML =
+      '<b>Así van a quedar los dos registros</b><br>' +
+      '1️⃣ Acumulación (completa): <b style="color:#166534">' + acum.toFixed(2) + ' h</b><br>' +
+      '2️⃣ Devolución de horas pagadas: <b style="color:#b91c1c">' + dev.toFixed(2) + ' h</b><br>' +
+      'Saldo a favor de este día: <b style="color:#0a2463;font-size:14px">' + neto.toFixed(2) + ' h</b>';
+    caja.appendChild(d);
+  } catch (e) {}
+};
+
+/* ── 3) Mensaje al usuario apenas guarda ── */
+function _planillaMostrarMensaje(p) {
+  try {
+    if (!p || !p.mensaje) return;
+    var viejo = document.getElementById('_planillaModal');
+    if (viejo && viejo.parentNode) viejo.parentNode.removeChild(viejo);
+
+    var nombreUsr = String((USER && (USER.nombre || USER.usuario)) || '').trim().split(' ')[0];
+    if (nombreUsr) nombreUsr = nombreUsr.charAt(0).toUpperCase() + nombreUsr.slice(1).toLowerCase();
+
+    var ov = document.createElement('div');
+    ov.id = '_planillaModal';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(2,6,17,.55);z-index:9999;' +
+      'display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML =
+      '<div style="background:#fff;border-radius:14px;max-width:520px;width:100%;padding:20px 22px;' +
+      'box-shadow:0 18px 50px rgba(0,0,0,.3);font-size:13.5px;line-height:1.7;color:#334155">' +
+        '<div style="font-family:\'Barlow Condensed\',sans-serif;font-size:19px;font-weight:800;color:#0a2463;margin-bottom:4px">' +
+          '📌 ' + esc(p.titulo || 'Trabajador programado') + '</div>' +
+        '<div style="margin-bottom:12px;color:#0a2463;font-weight:700">Hola ' + esc(nombreUsr || '') + ' 👋</div>' +
+        '<div style="white-space:pre-line;margin-bottom:14px">' + esc(p.mensaje) + '</div>' +
+        '<div style="background:#f8fafc;border-radius:9px;padding:11px 13px;margin-bottom:16px;font-size:12.5px">' +
+          '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>Acumulación registrada</span><b style="color:#166534">' + Number(p.acumulado || 0).toFixed(2) + ' h</b></div>' +
+          '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>Devolución por horas pagadas</span><b style="color:#b91c1c">' + Number(p.devuelto || 0).toFixed(2) + ' h</b></div>' +
+          '<div style="display:flex;justify-content:space-between;padding:5px 0 0;border-top:1px solid #e2e8f0;margin-top:4px"><span><b>Le queda a favor</b></span><b style="color:#0a2463;font-size:14px">' + Number(p.saldoNeto || 0).toFixed(2) + ' h</b></div>' +
+        '</div>' +
+        '<div style="text-align:right"><button type="button" id="_planillaOk" class="btn btn-primary btn-sm">Entendido</button></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    var b = document.getElementById('_planillaOk');
+    if (b) b.addEventListener('click', function () { if (ov.parentNode) ov.parentNode.removeChild(ov); });
+  } catch (e) {}
+}
+
+/* ── 4) Resumen Individual: tres cifras + corte por quincena ── */
+function _planillaPanelResumen(d) {
+  try {
+    var viejo = document.getElementById('_panelPlanilla');
+    if (viejo && viejo.parentNode) viejo.parentNode.removeChild(viejo);
+
+    var regs = (d && d.registros) || [];
+    if (!regs.length) return;
+
+    var pagadas = 0, acum = 0, permiso = 0, deuda = 0;
+    var quincenas = {};
+    regs.forEach(function (r) {
+      var a = Number(r.horasAcumuladas) || 0;
+      var p = Number(r.horasPermiso)    || 0;
+      var u = Number(r.horasDeuda)      || 0;
+      acum += a; deuda += u;
+      var esPag = _esDevolucionPagada(r);
+      if (esPag) pagadas += p; else permiso += p;
+
+      var q = _quincenaDe(r);
+      if (!q) return;
+      if (!quincenas[q]) quincenas[q] = { acum: 0, pag: 0, perm: 0 };
+      quincenas[q].acum += a;
+      if (esPag) quincenas[q].pag += p; else quincenas[q].perm += p;
+    });
+
+    if (pagadas <= 0) return;                    // trabajador normal: no se muestra nada
+
+    var saldo = Math.round((acum - pagadas - permiso - deuda) * 100) / 100;
+    var cont = document.getElementById('indSaldos');
+    if (!cont) return;
+
+    var claves = Object.keys(quincenas).sort().reverse().slice(0, 8);
+
+    var box = document.createElement('div');
+    box.id = '_panelPlanilla';
+    box.className = 'card';
+    box.style.cssText = 'border-left:4px solid #1e40af;margin-bottom:14px';
+    box.innerHTML =
+      '<div class="card-title" style="margin-bottom:8px">📌 Trabajador programado — horas extras pagadas</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px">' +
+        _planillaCifra('Acumuladas (total)', acum, '#166534') +
+        _planillaCifra('Pagadas en planilla', pagadas, '#b91c1c') +
+        _planillaCifra('Saldo real a favor', saldo, saldo < 0 ? '#b91c1c' : '#0a2463') +
+      '</div>' +
+      '<div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Detalle por quincena</div>' +
+      '<div class="tbl-wrap"><table class="tbl"><thead><tr>' +
+        '<th>Quincena</th><th style="text-align:right">Acumuladas</th>' +
+        '<th style="text-align:right">Pagadas</th><th style="text-align:right">Permiso</th>' +
+        '<th style="text-align:right">Neto</th></tr></thead><tbody>' +
+      claves.map(function (q) {
+        var x = quincenas[q];
+        var neto = Math.round((x.acum - x.pag - x.perm) * 100) / 100;
+        return '<tr><td><b>' + esc(q) + '</b></td>' +
+          '<td style="text-align:right;color:#166534;font-weight:700">' + x.acum.toFixed(2) + '</td>' +
+          '<td style="text-align:right;color:#b91c1c;font-weight:700">' + x.pag.toFixed(2) + '</td>' +
+          '<td style="text-align:right;color:#64748b">' + x.perm.toFixed(2) + '</td>' +
+          '<td style="text-align:right;font-weight:800;color:#0a2463">' + neto.toFixed(2) + '</td></tr>';
+      }).join('') +
+      '</tbody></table></div>' +
+      '<div style="font-size:12px;color:#64748b;margin-top:8px">' +
+        'Las horas <b>pagadas</b> ya se le abonaron en su boleta, por eso no cuentan en el saldo a favor. ' +
+        'Cada una tiene su registro de <i>devolución de horas pagadas</i> en la tabla de abajo.</div>';
+
+    cont.parentNode.insertBefore(box, cont.nextSibling);
+  } catch (e) {}
+}
+
+function _planillaCifra(txt, val, color) {
+  return '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px">' +
+    '<div style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.3px">' + txt + '</div>' +
+    '<div style="font-size:19px;font-weight:800;color:' + color + ';margin-top:2px">' + Number(val || 0).toFixed(2) + '</div></div>';
+}
+
+/* ── 5) Enganches ── */
+(function () {
+  try {
+    var _ultimaPlanilla = null;
+
+    var _apiOrig = window.apiPost;
+    if (typeof _apiOrig === 'function') {
+      window.apiPost = function (b) {
+        return _apiOrig.apply(this, arguments).then(function (res) {
+          try { if (b && b.action === 'horasRegistrar') _ultimaPlanilla = (res && res.planilla) || null; } catch (e) {}
+          return res;
+        });
+      };
+    }
+
+    var _regOrig = window.registrarHoras;
+    if (typeof _regOrig === 'function') {
+      window.registrarHoras = function () {
+        _ultimaPlanilla = null;
+        var p = _regOrig.apply(this, arguments);
+        return Promise.resolve(p).then(function (r) {
+          try { if (_ultimaPlanilla) _planillaMostrarMensaje(_ultimaPlanilla); } catch (e) {}
+          return r;
+        });
+      };
+    }
+
+    var _rriOrig = window.renderResumenIndividual;
+    if (typeof _rriOrig === 'function') {
+      window.renderResumenIndividual = function (d) {
+        var r = _rriOrig.apply(this, arguments);
+        try { _planillaPanelResumen(d); } catch (e) {}
+        return r;
+      };
+    }
+  } catch (e) {}
+})();
