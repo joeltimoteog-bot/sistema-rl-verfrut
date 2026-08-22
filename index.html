@@ -400,12 +400,19 @@ function aplicarVisibilidadModulos(user){
   const esSupervisor = rol === 'supervisor' || rol.indexOf('supervisor') === 0;
   const veETI = esAdmin || esSupervisor;
   const esBienestar = sector === 'BIENESTAR SOCIAL';
+  /* _SOLO_RRLL_V1 (19-ago-2026) — usuarios que SOLO deben ver Sistema RR.LL
+     Pedido de la nueva jefatura: al pasar el area a Remuneraciones, estos
+     usuarios dejan de tener perfil de administrador. No ven Capacitaciones
+     ETI ni Evaluaciones ETI, sin importar el rol que tengan en la hoja
+     Usuarios. Para sacar o agregar a alguien se edita SOLO esta lista. */
+  const USUARIOS_SOLO_RRLL = ['ovilela', 'jchavez', 'dsanchez', 'jsiancas'];
+  const soloRRLL = USUARIOS_SOLO_RRLL.indexOf(usuarioLc) >= 0;
   // Sistema ETI Capacitaciones: solo administrador
   const eti = document.getElementById('modETI');
-  if (eti) eti.style.display = (veETI && !(esBienestar && !esAdmin)) ? '' : 'none';
+  if (eti) eti.style.display = (!soloRRLL && veETI && !(esBienestar && !esAdmin)) ? '' : 'none';
   // Sistema de Evaluaciones: oculto para usuarios de sector BIENESTAR SOCIAL (no admin)
   const evalCard = document.getElementById('modEval');
-  if (evalCard) evalCard.style.display = (esBienestar && !esAdmin) ? 'none' : '';
+  if (evalCard) evalCard.style.display = (soloRRLL || (esBienestar && !esAdmin)) ? 'none' : '';
 }
 
 /* _AVISO_MIGRACION_V1 (15-ago-2026)

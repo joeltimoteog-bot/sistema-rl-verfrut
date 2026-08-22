@@ -19,7 +19,13 @@
 const USUARIOS_PERMITIDOS = ['jtimoteo', 'ovilela', 'jchavez', 'dsanchez', 'lmorales', 'jsiancas'];
 // Acceso BÁSICO: solo pueden ver Registrar y Resumen Individual.
 // (Resumen General, Aprobaciones y Config quedan ocultos y bloqueados.)
-const USUARIOS_BASICOS = ['dsanchez', 'lmorales', 'jsiancas'];
+/* _ACCESOS_REMUNERACIONES_V1 (19-ago-2026)
+   Al pasar el area a Remuneraciones, la nueva jefatura pidio quitarle el
+   perfil de administrador a ovilela y jchavez. Quedan como usuarios comunes,
+   igual que dsanchez: solo ven Registrar y Resumen Individual, y solo sus
+   propios registros. Siguen entrando al modulo de Horas con normalidad.
+   ANTES: ['dsanchez', 'lmorales', 'jsiancas'] */
+const USUARIOS_BASICOS = ['dsanchez', 'lmorales', 'jsiancas', 'ovilela', 'jchavez'];
 const TABS_SOLO_ADMIN  = ['general', 'aprobaciones', 'config'];
 
 let USER = null;
