@@ -3117,6 +3117,51 @@ window.onload = async () => {
       if (_secAdmD) _secAdmD.style.display = 'none';
       console.log('[dsanchez] Sidebar limitado: Buscar Trabajador, Fusiones, Visitas + Bienestar');
     }
+
+    /* _ACCESOS_REMUNERACIONES_V1 (19-ago-2026) — ovilela y jchavez
+       Al pasar el area a Remuneraciones, la nueva jefatura pidio quitarles el
+       perfil de administrador. Se les deja SOLO estos modulos:
+          Mi Dashboard · Mis Atenciones · Buscar Trabajador · Consulta por DNI
+          Consulta Masiva (Excel) · Acumulacion de Horas · Bienestar Social
+          Solicitud de Mantenimiento
+       Es el MISMO patron de lista blanca que ya usan el sector Bienestar
+       Social y dsanchez, unas lineas mas arriba. No cambia nada para los
+       demas usuarios. Para sacar o agregar a alguien se edita SOLO _USR_REMU. */
+    var _USR_REMU = ['ovilela', 'jchavez'];
+    if (_USR_REMU.indexOf(String(USER.usuario || '').toLowerCase().trim()) >= 0) {
+      var _aplicarRemu = function () {
+        try {
+          // Estos tres se muestran a proposito, aunque ya no sean administradores
+          var _nh = document.getElementById('navHoras');
+          if (_nh) _nh.style.display = '';
+          var _nb = document.getElementById('navBienestar');
+          if (_nb) _nb.style.display = '';
+          var _nm = document.getElementById('navMantenimiento');
+          if (_nm) _nm.style.display = '';
+
+          document.querySelectorAll('nav button.ni').forEach(function (btn) {
+            if (btn.id === 'navHoras' || btn.id === 'navBienestar' ||
+                btn.id === 'navMantenimiento' || btn.id === 'navInicio') return;
+            var oc = btn.getAttribute('onclick') || '';
+            var permitido = oc.indexOf("ir('dashboard'")    >= 0 ||
+                            oc.indexOf("ir('atenciones'")   >= 0 ||
+                            oc.indexOf("ir('trabajadores'") >= 0 ||
+                            oc.indexOf("ir('consulta'")     >= 0 ||
+                            oc.indexOf('consulta-masiva.html') >= 0;
+            btn.style.display = permitido ? '' : 'none';
+          });
+
+          var _sa = document.getElementById('navAdmSec');
+          if (_sa) _sa.style.display = 'none';
+        } catch (e) { /* nunca romper el menu por esto */ }
+      };
+      // Se re-aplica unas veces por si otra regla vuelve a mostrar algo despues
+      _aplicarRemu();
+      setTimeout(_aplicarRemu, 800);
+      setTimeout(_aplicarRemu, 2500);
+      setTimeout(_aplicarRemu, 6000);
+      console.log('[remuneraciones] Sidebar limitado para', USER.usuario);
+    }
   } catch (_eBs) {
     console.error('[bienestar] Error en logica de visibilidad:', _eBs);
   }
