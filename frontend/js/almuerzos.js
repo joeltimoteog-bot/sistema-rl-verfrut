@@ -619,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
   USER = JSON.parse(ud);
 
   // ─── Control de acceso: solo administradores + smiranda ───
-  var _permitidos = ['jtimoteo','ovilela','jchavez','smiranda'];
+  var _permitidos = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas', 'smiranda'];   /* _ADMINS_REMUNERACIONES_V1 */
   if(_permitidos.indexOf((USER.usuario||'').toLowerCase().trim()) < 0){
     alert('No tienes acceso a este módulo.');
     location.href = 'dashboard.html';

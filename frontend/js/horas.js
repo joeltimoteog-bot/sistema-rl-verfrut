@@ -16,7 +16,10 @@
    SPA — sin recargas entre tabs. Cache en memoria.
    ═══════════════════════════════════════════════════════════════════ */
 
-const USUARIOS_PERMITIDOS = ['jtimoteo', 'ovilela', 'jchavez', 'dsanchez', 'lmorales', 'jsiancas'];
+/* _ADMINS_REMUNERACIONES_V1 (21-ago-2026): se agregan los tres nuevos
+   administradores de Remuneraciones. ovilela y jchavez se quedan porque
+   conservan el modulo de Horas, pero como usuarios basicos (ver abajo). */
+const USUARIOS_PERMITIDOS = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas', 'ovilela', 'jchavez', 'dsanchez', 'lmorales', 'jsiancas'];
 // Acceso BÁSICO: solo pueden ver Registrar y Resumen Individual.
 // (Resumen General, Aprobaciones y Config quedan ocultos y bloqueados.)
 /* _ACCESOS_REMUNERACIONES_V1 (19-ago-2026)
