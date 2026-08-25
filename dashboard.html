@@ -11027,10 +11027,45 @@ function _azHaceDias(dias) {
   return y + '-' + (m < 10 ? '0' : '') + m + '-' + (x < 10 ? '0' : '') + x;
 }
 
-/* ATENCIONES_RANGO_V1: todas las atenciones desde una fecha, paginando.
-   Devuelve el arreglo, o null si Azure no respondio (ahi entra la hoja). */
+/* ATENCIONES_RANGO_V2 (25-ago-2026) - la V1 demoraba demasiado.
+   DOS MOTIVOS, LOS DOS CORREGIDOS AQUI:
+   1) Pedia las paginas UNA DETRAS DE OTRA. Con 12 paginas eran 12 esperas
+      seguidas. Ahora se pide la 1 (que dice cuantas faltan) y el resto SE
+      PIDEN TODAS JUNTAS.
+   2) Cada evento de Firebase disparaba una recarga completa del ano. Ahora
+      el resultado se guarda 3 minutos y, si ya hay un pedido en camino, se
+      reutiliza en vez de lanzar otro. */
+var AZ_CACHE_MS   = 3 * 60 * 1000;
+var _azRangoCache = {};
+var _azRangoCurso = {};
+
 async function _azAtencionesRango(desde) {
+  var c = _azRangoCache[desde];
+  if (c && (Date.now() - c.t) < AZ_CACHE_MS) {
+    console.log('[_azAtencionesRango] ' + c.datos.length + ' registros desde memoria (sin pedir nada a Azure)');
+    return c.datos;
+  }
+  if (_azRangoCurso[desde]) {
+    console.log('[_azAtencionesRango] ya hay un pedido en camino, se reutiliza');
+    return _azRangoCurso[desde];
+  }
+  var pr = _azRangoPedir(desde).then(function (datos) {
+    delete _azRangoCurso[desde];
+    if (datos) _azRangoCache[desde] = { t: Date.now(), datos: datos };
+    return datos;
+  }, function (e) {
+    delete _azRangoCurso[desde];
+    throw e;
+  });
+  _azRangoCurso[desde] = pr;
+  return pr;
+}
+
+/* Devuelve el arreglo, o null si Azure no respondio (ahi entra la hoja). */
+async function _azRangoPedir(desde) {
+  var t0 = Date.now();
   var params = { fechaDesde: desde };
+
   var j = await _azFetch(_azUrl(params, 1));
   if (!j || !j.success) return null;
 
@@ -11040,14 +11075,20 @@ async function _azAtencionesRango(desde) {
   var truncado = false;
   if (paginas > AZ_MAX_PAG) { paginas = AZ_MAX_PAG; truncado = true; }
 
-  for (var p = 2; p <= paginas; p++) {
-    var jp = await _azFetch(_azUrl(params, p));
-    if (!jp || !jp.success) break;
-    lista = lista.concat(jp.data || []);
+  if (paginas > 1) {
+    var pend = [];
+    for (var p = 2; p <= paginas; p++) {
+      pend.push(_azFetch(_azUrl(params, p)).catch(function () { return null; }));
+    }
+    var res = await Promise.all(pend);          // TODAS JUNTAS, no una tras otra
+    res.forEach(function (jp) {
+      if (jp && jp.success) lista = lista.concat(jp.data || []);
+    });
   }
 
-  console.log('[_azAtencionesRango] desde ' + desde + ': ' + lista.length +
-              ' de ' + total + ' registros' + (truncado ? ' (hay mas, se corto)' : ''));
+  console.log('[_azAtencionesRango] desde ' + desde + ': ' + lista.length + ' de ' +
+              total + ' registros en ' + (Date.now() - t0) + ' ms' +
+              (truncado ? ' (hay mas, se corto)' : ''));
   return lista;
 }
 window._azHaceDias        = _azHaceDias;
