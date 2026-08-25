@@ -5318,20 +5318,24 @@ async function cargarAtenciones(historial=false) {
     try {
       const dias = historial ? 365 : 2;
       const _t0 = Date.now();
-      const resp = await fetch(AZURE_FN_BASE + '/atenciones?dias=' + dias + '&code=' + encodeURIComponent(AZURE_FN_KEY_ATLIST));
-      if (resp.ok) {
-        const json = await resp.json();
-        if (json && json.success && Array.isArray(json.data)) {
-          const _fld = ['fecha_atencion','fecha_inicio_periodo','fecha_termino_periodo','fecha_inicio_doc','fecha_termino_doc','fecha_registro','fecha_creacion'];
-          json.data.forEach(a => _fld.forEach(c => { if (a[c]) a[c] = String(a[c]).slice(0,10); }));
-          CACHE.atenciones = json.data;
-          atTodas = json.data.filter(a => a.fecha_atencion === hoy());
-          renderAt(atTodas);
-          console.log('[cargarAtenciones] Azure (admin):', json.data.length, '| hoy:', atTodas.length, '|', (Date.now() - _t0) + 'ms');
-          return;
-        }
+      /* ATENCIONES_RANGO_V1 (25-ago-2026)
+         ANTES: '/atenciones?dias=' + dias
+         El endpoint de Azure NO conoce el parametro "dias": lo ignoraba y
+         devolvia solo los primeros 100 registros (su tope por defecto). Por eso
+         el historial de 365 dias en realidad mostraba 100 atenciones.
+         AHORA se le manda un rango de fechas real (desde/hasta) y se piden
+         todas las paginas que haga falta. */
+      const _datos = await _azAtencionesRango(_azHaceDias(dias));
+      if (_datos && _datos.length) {
+        const _fld = ['fecha_atencion','fecha_inicio_periodo','fecha_termino_periodo','fecha_inicio_doc','fecha_termino_doc','fecha_registro','fecha_creacion'];
+        _datos.forEach(a => _fld.forEach(c => { if (a[c]) a[c] = String(a[c]).slice(0,10); }));
+        CACHE.atenciones = _datos;
+        atTodas = _datos.filter(a => a.fecha_atencion === hoy());
+        renderAt(atTodas);
+        console.log('[cargarAtenciones] Azure (admin):', _datos.length, '| hoy:', atTodas.length, '|', (Date.now() - _t0) + 'ms');
+        return;
       }
-      console.warn('[cargarAtenciones] Azure status', resp.status, '- fallback a GAS');
+      console.warn('[cargarAtenciones] Azure sin datos - fallback a GAS');
     } catch (e) {
       console.warn('[cargarAtenciones] Azure error:', e.message, '- fallback a GAS');
     }
@@ -5401,7 +5405,30 @@ function filtrarAt() {
     (!emp||String(a.empresa||'').toUpperCase().includes(emp))&&
     (!m||String(a.mes)===m)
   );
-  window._atFiltradas = filtradas;
+  window._atFiltradas = filtradas;   // el export usa TODAS, sin cortar
+  /* ATENCIONES_RANGO_V1: ahora la cache puede traer un ano entero. Dibujar
+     miles de filas de golpe congela el navegador, asi que se muestran las
+     primeras 500 y se avisa. Exportar sigue bajando todo. */
+  if (filtradas.length > 500) {
+    renderAt(filtradas.slice(0, 500));
+    var _av = document.getElementById('_atAviso');
+    if (!_av) {
+      _av = document.createElement('div');
+      _av.id = '_atAviso';
+      _av.style.cssText = 'margin:8px 0;font-size:12.5px;color:#92400e;background:#fffbeb;' +
+        'border:1px solid #fde68a;border-radius:7px;padding:7px 11px';
+      var _tb = document.getElementById('tbAt');
+      var _cont = _tb && _tb.closest ? _tb.closest('table') : null;
+      if (_cont && _cont.parentNode) _cont.parentNode.insertBefore(_av, _cont);
+    }
+    _av.innerHTML = 'Se encontraron <b>' + filtradas.length + '</b> atenciones. ' +
+                    'En pantalla se muestran las primeras 500 para que no se trabe. ' +
+                    'Si exportas, el archivo sale <b>completo</b>.';
+    _av.style.display = '';
+    return;
+  }
+  var _av0 = document.getElementById('_atAviso');
+  if (_av0) _av0.style.display = 'none';
   renderAt(filtradas);
 }
 
@@ -10957,7 +10984,8 @@ var AZ_TIMEOUT  = 25000;  // 25 s y se pasa a la hoja de calculo
 function _azFecha(v) { return v ? String(v).slice(0, 10) : ''; }
 
 function _azNormalizar(a) {
-  ['fecha_atencion', 'fecha_inicio_doc', 'fecha_termino_doc', 'fecha_inicio_periodo', 'fecha_registro']
+  ['fecha_atencion', 'fecha_inicio_doc', 'fecha_termino_doc', 'fecha_inicio_periodo',
+   'fecha_termino_periodo', 'fecha_registro', 'fecha_creacion']
     .forEach(function (c) { if (a[c]) a[c] = _azFecha(a[c]); });
   return a;
 }
@@ -10990,6 +11018,40 @@ function _azFetch(url) {
     })
     .catch(function (e) { clearTimeout(to); throw e; });
 }
+
+/* ATENCIONES_RANGO_V1: fecha de hace N dias, en formato yyyy-mm-dd */
+function _azHaceDias(dias) {
+  var f = new Date();
+  f.setDate(f.getDate() - (Number(dias) || 0));
+  var y = f.getFullYear(), m = f.getMonth() + 1, x = f.getDate();
+  return y + '-' + (m < 10 ? '0' : '') + m + '-' + (x < 10 ? '0' : '') + x;
+}
+
+/* ATENCIONES_RANGO_V1: todas las atenciones desde una fecha, paginando.
+   Devuelve el arreglo, o null si Azure no respondio (ahi entra la hoja). */
+async function _azAtencionesRango(desde) {
+  var params = { fechaDesde: desde };
+  var j = await _azFetch(_azUrl(params, 1));
+  if (!j || !j.success) return null;
+
+  var lista = (j.data || []).slice();
+  var total = Number(j.total || lista.length);
+  var paginas = Math.ceil(total / AZ_LIMITE);
+  var truncado = false;
+  if (paginas > AZ_MAX_PAG) { paginas = AZ_MAX_PAG; truncado = true; }
+
+  for (var p = 2; p <= paginas; p++) {
+    var jp = await _azFetch(_azUrl(params, p));
+    if (!jp || !jp.success) break;
+    lista = lista.concat(jp.data || []);
+  }
+
+  console.log('[_azAtencionesRango] desde ' + desde + ': ' + lista.length +
+              ' de ' + total + ' registros' + (truncado ? ' (hay mas, se corto)' : ''));
+  return lista;
+}
+window._azHaceDias        = _azHaceDias;
+window._azAtencionesRango = _azAtencionesRango;
 
 /* Trae todas las paginas que haga falta */
 async function _consultaAzureFull(params) {
