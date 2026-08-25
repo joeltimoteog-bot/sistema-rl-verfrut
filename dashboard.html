@@ -6254,11 +6254,36 @@ async function consultarDNI() {
        ANTES solo iban las de DNI de 8 digitos del anio en curso; el resto caia
        a la hoja de calculo, que es lo que demoraba 15-20 minutos por rango de
        fechas. Si Azure falla o no devuelve nada, se sigue usando la hoja. */
-    try { d = await _consultaAzureFull(params); }
+    /* CONSULTA_AZURE_V3 (25-ago-2026): si Azure responde SIN resultados ya no se
+       lanza sola la busqueda en la hoja de calculo, que puede demorar varios
+       minutos. Se le muestra el resultado al usuario y el decide. */
+    window._azVacio = false;
+    try { d = window._forzarHoja ? null : await _consultaAzureFull(params); }
     catch (eAz) { console.warn('[consultarDNI] Azure fallo -> hoja de calculo:', eAz.message); d = null; }
+
+    if (!d && window._azVacio && !window._forzarHoja) {
+      document.getElementById('consultaResult').innerHTML =
+        '<div class="empty" style="text-align:left">' +
+        '<div style="font-size:15px;margin-bottom:6px">No se encontraron atenciones con esos filtros.</div>' +
+        '<div style="font-size:12.5px;color:#475569;margin-bottom:12px">' +
+        'La busqueda se hizo en Azure y respondio al instante. Los registros mas antiguos ' +
+        'podrian estar solo en la hoja de calculo.</div>' +
+        '<button class="btn" onclick="window._forzarHoja=true;consultarDNI();">' +
+        'Buscar tambien en la hoja de calculo</button>' +
+        '<div style="font-size:12px;color:#b45309;margin-top:8px">Esa busqueda puede demorar varios minutos.</div>' +
+        '</div>';
+      return;
+    }
+
     if (!d) {
+      if (window._forzarHoja) {
+        document.getElementById('consultaResult').innerHTML =
+          '<div class="empty">Buscando en la hoja de calculo... esto puede demorar varios minutos. No cierres la pagina.</div>';
+      }
+      window._forzarHoja = false;
       d = await apiGet(params);
     }
+    window._forzarHoja = false;
     if (!d.success) {
       document.getElementById('consultaResult').innerHTML = '<div class="empty">❌ ' + d.error + '</div>';
       return;
@@ -11097,6 +11122,7 @@ window._azAtencionesRango = _azAtencionesRango;
 /* Trae todas las paginas que haga falta */
 async function _consultaAzureFull(params) {
   var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+  window._azVacio = false;
 
   var j = await _azFetch(_azUrl(params, 1));
   if (!j || !j.success) throw new Error((j && j.error) || 'respuesta invalida');
@@ -11108,13 +11134,28 @@ async function _consultaAzureFull(params) {
   var truncado = false;
   if (paginas > AZ_MAX_PAG) { paginas = AZ_MAX_PAG; truncado = true; }
 
-  for (var p = 2; p <= paginas; p++) {
-    var jp = await _azFetch(_azUrl(params, p));
-    if (!jp || !jp.success) break;
-    lista = lista.concat(jp.data || []);
+  /* CONSULTA_AZURE_V3 (25-ago-2026): ANTES las paginas se pedian una detras de
+     otra, con un await por vuelta. Con 12 paginas eran 12 esperas seguidas y
+     por eso la consulta demoraba. Ahora se piden TODAS JUNTAS. */
+  if (paginas > 1) {
+    var pend = [];
+    for (var p = 2; p <= paginas; p++) {
+      pend.push(_azFetch(_azUrl(params, p)).catch(function () { return null; }));
+    }
+    var res = await Promise.all(pend);
+    res.forEach(function (jp) { if (jp && jp.success) lista = lista.concat(jp.data || []); });
   }
 
-  if (!lista.length) return null;                    // que responda la hoja de calculo
+  if (!lista.length) {
+    /* CONSULTA_AZURE_V3: Azure SI respondio, solo que sin resultados. Se marca
+       para que la pantalla NO se vaya sola a la hoja de calculo, que demora
+       varios minutos. Que lo decida el usuario. */
+    window._azVacio = true;
+    console.log('[consultarDNI] Azure respondio en ' +
+                Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0) +
+                ' ms sin resultados para ese filtro.');
+    return null;
+  }
 
   lista.forEach(_azNormalizar);
   lista.sort(function (a, b) {
