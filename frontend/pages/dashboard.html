@@ -5732,9 +5732,10 @@ async function guardarAt() { if(window._savingAt) return;
     detalle_documento:v('at_doc'), fecha_inicio_doc:v('at_fid'),
     fecha_termino_doc:v('at_ftd'), dias_transcurridos:v('at_dias'),
     responsable_recepcion:v('at_resp'), observaciones:v('at_obs'),
-    estado:v('at_est'), supervisor:USER.nombre||USER.usuario, usuario_sistema:USER.usuario
+    estado:v('at_est'), supervisor:USER.nombre||USER.usuario, usuario_sistema:USER.usuario,
+    nro_licencia:v('at_nlic')   /* _NRO_LICENCIA_V1 */
   };
-  const _miss=[];if(!/^\d{8}$/.test(String(d.dni||'').trim()))_miss.push(['at_dni','DNI (8 digitos)']);if(!String(d.nombre||'').trim())_miss.push(['at_nom','Nombre']);if(!String(d.detalle_documento||'').trim())_miss.push(['at_doc_txt','Documento']);if(_miss.length){const el=document.getElementById(_miss[0][0]);if(el){el.focus();el.style.borderColor='#ef4444';setTimeout(function(){el.style.borderColor='';},2500);}mostrarToast('Falta completar: '+_miss.map(function(m){return m[1];}).join(', '),'error');return;}
+  const _miss=[];if(!/^\d{8}$/.test(String(d.dni||'').trim()))_miss.push(['at_dni','DNI (8 digitos)']);if(!String(d.nombre||'').trim())_miss.push(['at_nom','Nombre']);if(!String(d.detalle_documento||'').trim())_miss.push(['at_doc_txt','Documento']);if(typeof _licenciaObligatoria==='function'&&_licenciaObligatoria(d.detalle_documento)&&!String(d.nro_licencia||'').trim())_miss.push(['at_nlic','N° de licencia']);if(_miss.length){const el=document.getElementById(_miss[0][0]);if(el){el.focus();el.style.borderColor='#ef4444';setTimeout(function(){el.style.borderColor='';},2500);}mostrarToast('Falta completar: '+_miss.map(function(m){return m[1];}).join(', '),'error');return;}
   if (!modoEdicion && window._atRegularizadas && window._atRegularizadas.length) {
     const _regs = window._atRegularizadas.filter(x => String(x.dni) === String(d.dni||'').trim());
     if (_regs.length) {
@@ -10667,6 +10668,119 @@ if (document.readyState === 'loading') {
 }
 setTimeout(_instalarEnviado, 1200);
 setTimeout(_instalarEnviado, 3500);
+
+})();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _NRO_LICENCIA_V1 (25-ago-2026) — Campo "N° de licencia"
+   ---------------------------------------------------------------------------
+   REGLA (definida por el area): lleva numero de licencia todo lo que sea
+   MATERNIDAD, ENFERMEDAD o ACCIDENTE, y los CITT. El certificado medico
+   particular (CMP) NO lleva numero, asi que ahi el campo ni se muestra.
+
+   El campo aparece SOLO cuando el documento elegido lo requiere, y en ese caso
+   es obligatorio: si falta, sale en el MISMO aviso donde ya salen el DNI, el
+   nombre y el documento, para que el usuario vea de una vez todo lo que le
+   falta completar.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+
+/* Palabras que obligan el numero de licencia */
+var LIC_PALABRAS  = ['CITT', 'MATERNIDAD', 'ENFERMEDAD', 'ACCIDENTE'];
+/* Excepciones: aunque coincidan, estos NO llevan numero */
+var LIC_EXCEPCION = ['CMP', 'CERTIFICADO MEDICO', 'PARTICULAR', 'ODONTOLOG'];
+
+function _norm(s) {
+  return String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function _licenciaObligatoria(doc) {
+  try {
+    var t = _norm(doc);
+    if (!t) return false;
+    for (var i = 0; i < LIC_EXCEPCION.length; i++) {
+      if (t.indexOf(LIC_EXCEPCION[i]) >= 0) return false;
+    }
+    for (var j = 0; j < LIC_PALABRAS.length; j++) {
+      if (t.indexOf(LIC_PALABRAS[j]) >= 0) return true;
+    }
+    return false;
+  } catch (e) { return false; }
+}
+window._licenciaObligatoria = _licenciaObligatoria;
+
+/* Crea el campo una sola vez, justo debajo del buscador de documento */
+function _crearCampoLicencia() {
+  if (document.getElementById('at_nlic')) return;
+  var ref = document.getElementById('at_doc_wrap') || document.getElementById('at_doc_txt');
+  if (!ref) return;
+  var cont = ref.parentNode;
+  if (!cont) return;
+
+  var caja = document.createElement('div');
+  caja.id = 'at_nlic_wrap';
+  caja.className = 'fc';
+  caja.style.cssText = 'display:none;margin-top:10px';
+  caja.innerHTML =
+    '<label>N° de licencia <span style="color:#dc2626">*</span></label>' +
+    '<input type="text" id="at_nlic" placeholder="N° de la licencia / CITT" autocomplete="off">' +
+    '<div id="at_nlic_ayuda" style="font-size:11.5px;color:#7c2d12;background:#fff7ed;' +
+    'border:1px solid #fed7aa;border-radius:7px;padding:6px 9px;margin-top:5px;line-height:1.5">' +
+    '⚠️ Este documento lleva número de licencia. Es obligatorio para poder guardar.</div>';
+  cont.appendChild(caja);
+}
+
+function _refrescarCampoLicencia() {
+  try {
+    _crearCampoLicencia();
+    var caja = document.getElementById('at_nlic_wrap');
+    var inp  = document.getElementById('at_nlic');
+    if (!caja || !inp) return;
+
+    var txt = document.getElementById('at_doc_txt');
+    var ocu = document.getElementById('at_doc');
+    var doc = String((txt && txt.value) || (ocu && ocu.value) || '').trim();
+
+    if (_licenciaObligatoria(doc)) {
+      caja.style.display = '';
+      inp.setAttribute('required', 'required');
+    } else {
+      caja.style.display = 'none';
+      inp.removeAttribute('required');
+      inp.value = '';                 // que no se cuele el numero de otro documento
+    }
+  } catch (e) {}
+}
+window._refrescarCampoLicencia = _refrescarCampoLicencia;
+
+/* Se recalcula cada vez que se toca el documento */
+var _autoOrig2 = window.autoResponsable;
+if (typeof _autoOrig2 === 'function') {
+  window.autoResponsable = function () {
+    var r = _autoOrig2.apply(this, arguments);
+    try { _refrescarCampoLicencia(); } catch (e) {}
+    return r;
+  };
+}
+['input', 'change', 'blur'].forEach(function (ev) {
+  document.addEventListener(ev, function (e) {
+    try {
+      if (e.target && (e.target.id === 'at_doc_txt' || e.target.id === 'at_doc')) _refrescarCampoLicencia();
+    } catch (x) {}
+  }, true);
+});
+
+/* Al abrir el formulario y tras limpiarlo */
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _refrescarCampoLicencia);
+} else {
+  _refrescarCampoLicencia();
+}
+setTimeout(_refrescarCampoLicencia, 1200);
+setTimeout(_refrescarCampoLicencia, 3500);
 
 })();
 </script>
