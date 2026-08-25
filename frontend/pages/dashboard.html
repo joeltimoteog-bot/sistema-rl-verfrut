@@ -5318,20 +5318,24 @@ async function cargarAtenciones(historial=false) {
     try {
       const dias = historial ? 365 : 2;
       const _t0 = Date.now();
-      const resp = await fetch(AZURE_FN_BASE + '/atenciones?dias=' + dias + '&code=' + encodeURIComponent(AZURE_FN_KEY_ATLIST));
-      if (resp.ok) {
-        const json = await resp.json();
-        if (json && json.success && Array.isArray(json.data)) {
-          const _fld = ['fecha_atencion','fecha_inicio_periodo','fecha_termino_periodo','fecha_inicio_doc','fecha_termino_doc','fecha_registro','fecha_creacion'];
-          json.data.forEach(a => _fld.forEach(c => { if (a[c]) a[c] = String(a[c]).slice(0,10); }));
-          CACHE.atenciones = json.data;
-          atTodas = json.data.filter(a => a.fecha_atencion === hoy());
-          renderAt(atTodas);
-          console.log('[cargarAtenciones] Azure (admin):', json.data.length, '| hoy:', atTodas.length, '|', (Date.now() - _t0) + 'ms');
-          return;
-        }
+      /* ATENCIONES_RANGO_V1 (25-ago-2026)
+         ANTES: '/atenciones?dias=' + dias
+         El endpoint de Azure NO conoce el parametro "dias": lo ignoraba y
+         devolvia solo los primeros 100 registros (su tope por defecto). Por eso
+         el historial de 365 dias en realidad mostraba 100 atenciones.
+         AHORA se le manda un rango de fechas real (desde/hasta) y se piden
+         todas las paginas que haga falta. */
+      const _datos = await _azAtencionesRango(_azHaceDias(dias));
+      if (_datos && _datos.length) {
+        const _fld = ['fecha_atencion','fecha_inicio_periodo','fecha_termino_periodo','fecha_inicio_doc','fecha_termino_doc','fecha_registro','fecha_creacion'];
+        _datos.forEach(a => _fld.forEach(c => { if (a[c]) a[c] = String(a[c]).slice(0,10); }));
+        CACHE.atenciones = _datos;
+        atTodas = _datos.filter(a => a.fecha_atencion === hoy());
+        renderAt(atTodas);
+        console.log('[cargarAtenciones] Azure (admin):', _datos.length, '| hoy:', atTodas.length, '|', (Date.now() - _t0) + 'ms');
+        return;
       }
-      console.warn('[cargarAtenciones] Azure status', resp.status, '- fallback a GAS');
+      console.warn('[cargarAtenciones] Azure sin datos - fallback a GAS');
     } catch (e) {
       console.warn('[cargarAtenciones] Azure error:', e.message, '- fallback a GAS');
     }
@@ -5401,7 +5405,30 @@ function filtrarAt() {
     (!emp||String(a.empresa||'').toUpperCase().includes(emp))&&
     (!m||String(a.mes)===m)
   );
-  window._atFiltradas = filtradas;
+  window._atFiltradas = filtradas;   // el export usa TODAS, sin cortar
+  /* ATENCIONES_RANGO_V1: ahora la cache puede traer un ano entero. Dibujar
+     miles de filas de golpe congela el navegador, asi que se muestran las
+     primeras 500 y se avisa. Exportar sigue bajando todo. */
+  if (filtradas.length > 500) {
+    renderAt(filtradas.slice(0, 500));
+    var _av = document.getElementById('_atAviso');
+    if (!_av) {
+      _av = document.createElement('div');
+      _av.id = '_atAviso';
+      _av.style.cssText = 'margin:8px 0;font-size:12.5px;color:#92400e;background:#fffbeb;' +
+        'border:1px solid #fde68a;border-radius:7px;padding:7px 11px';
+      var _tb = document.getElementById('tbAt');
+      var _cont = _tb && _tb.closest ? _tb.closest('table') : null;
+      if (_cont && _cont.parentNode) _cont.parentNode.insertBefore(_av, _cont);
+    }
+    _av.innerHTML = 'Se encontraron <b>' + filtradas.length + '</b> atenciones. ' +
+                    'En pantalla se muestran las primeras 500 para que no se trabe. ' +
+                    'Si exportas, el archivo sale <b>completo</b>.';
+    _av.style.display = '';
+    return;
+  }
+  var _av0 = document.getElementById('_atAviso');
+  if (_av0) _av0.style.display = 'none';
   renderAt(filtradas);
 }
 
@@ -6227,11 +6254,36 @@ async function consultarDNI() {
        ANTES solo iban las de DNI de 8 digitos del anio en curso; el resto caia
        a la hoja de calculo, que es lo que demoraba 15-20 minutos por rango de
        fechas. Si Azure falla o no devuelve nada, se sigue usando la hoja. */
-    try { d = await _consultaAzureFull(params); }
+    /* CONSULTA_AZURE_V3 (25-ago-2026): si Azure responde SIN resultados ya no se
+       lanza sola la busqueda en la hoja de calculo, que puede demorar varios
+       minutos. Se le muestra el resultado al usuario y el decide. */
+    window._azVacio = false;
+    try { d = window._forzarHoja ? null : await _consultaAzureFull(params); }
     catch (eAz) { console.warn('[consultarDNI] Azure fallo -> hoja de calculo:', eAz.message); d = null; }
+
+    if (!d && window._azVacio && !window._forzarHoja) {
+      document.getElementById('consultaResult').innerHTML =
+        '<div class="empty" style="text-align:left">' +
+        '<div style="font-size:15px;margin-bottom:6px">No se encontraron atenciones con esos filtros.</div>' +
+        '<div style="font-size:12.5px;color:#475569;margin-bottom:12px">' +
+        'La busqueda se hizo en Azure y respondio al instante. Los registros mas antiguos ' +
+        'podrian estar solo en la hoja de calculo.</div>' +
+        '<button class="btn" onclick="window._forzarHoja=true;consultarDNI();">' +
+        'Buscar tambien en la hoja de calculo</button>' +
+        '<div style="font-size:12px;color:#b45309;margin-top:8px">Esa busqueda puede demorar varios minutos.</div>' +
+        '</div>';
+      return;
+    }
+
     if (!d) {
+      if (window._forzarHoja) {
+        document.getElementById('consultaResult').innerHTML =
+          '<div class="empty">Buscando en la hoja de calculo... esto puede demorar varios minutos. No cierres la pagina.</div>';
+      }
+      window._forzarHoja = false;
       d = await apiGet(params);
     }
+    window._forzarHoja = false;
     if (!d.success) {
       document.getElementById('consultaResult').innerHTML = '<div class="empty">❌ ' + d.error + '</div>';
       return;
@@ -10957,13 +11009,21 @@ var AZ_TIMEOUT  = 25000;  // 25 s y se pasa a la hoja de calculo
 function _azFecha(v) { return v ? String(v).slice(0, 10) : ''; }
 
 function _azNormalizar(a) {
-  ['fecha_atencion', 'fecha_inicio_doc', 'fecha_termino_doc', 'fecha_inicio_periodo', 'fecha_registro']
+  ['fecha_atencion', 'fecha_inicio_doc', 'fecha_termino_doc', 'fecha_inicio_periodo',
+   'fecha_termino_periodo', 'fecha_registro', 'fecha_creacion']
     .forEach(function (c) { if (a[c]) a[c] = _azFecha(a[c]); });
   return a;
 }
 
 function _azUrl(params, pagina) {
   var u = AZURE_FN_BASE + '/atenciones?limit=' + AZ_LIMITE + '&page=' + pagina;
+  /* CONSULTA_AZURE_V2 (25-ago-2026): el endpoint /atenciones esta protegido con
+     llave de funcion (authLevel: function). Sin este &code= el propio Azure
+     devuelve 401 antes de ejecutar nada. Es la misma llave que ya usa
+     cargarAtenciones para los administradores. */
+  if (typeof AZURE_FN_KEY_ATLIST !== 'undefined' && AZURE_FN_KEY_ATLIST) {
+    u += '&code=' + encodeURIComponent(AZURE_FN_KEY_ATLIST);
+  }
   if (params.dni)        u += '&dni='        + encodeURIComponent(String(params.dni).trim());
   if (params.fechaDesde) u += '&desde='      + encodeURIComponent(params.fechaDesde);
   if (params.fechaHasta) u += '&hasta='      + encodeURIComponent(params.fechaHasta);
@@ -10977,15 +11037,92 @@ function _azFetch(url) {
   return fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
     .then(function (r) {
       clearTimeout(to);
+      if (r.status === 401) throw new Error('HTTP 401 - Azure rechazo la llave de acceso');
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     })
     .catch(function (e) { clearTimeout(to); throw e; });
 }
 
+/* ATENCIONES_RANGO_V1: fecha de hace N dias, en formato yyyy-mm-dd */
+function _azHaceDias(dias) {
+  var f = new Date();
+  f.setDate(f.getDate() - (Number(dias) || 0));
+  var y = f.getFullYear(), m = f.getMonth() + 1, x = f.getDate();
+  return y + '-' + (m < 10 ? '0' : '') + m + '-' + (x < 10 ? '0' : '') + x;
+}
+
+/* ATENCIONES_RANGO_V2 (25-ago-2026) - la V1 demoraba demasiado.
+   DOS MOTIVOS, LOS DOS CORREGIDOS AQUI:
+   1) Pedia las paginas UNA DETRAS DE OTRA. Con 12 paginas eran 12 esperas
+      seguidas. Ahora se pide la 1 (que dice cuantas faltan) y el resto SE
+      PIDEN TODAS JUNTAS.
+   2) Cada evento de Firebase disparaba una recarga completa del ano. Ahora
+      el resultado se guarda 3 minutos y, si ya hay un pedido en camino, se
+      reutiliza en vez de lanzar otro. */
+var AZ_CACHE_MS   = 3 * 60 * 1000;
+var _azRangoCache = {};
+var _azRangoCurso = {};
+
+async function _azAtencionesRango(desde) {
+  var c = _azRangoCache[desde];
+  if (c && (Date.now() - c.t) < AZ_CACHE_MS) {
+    console.log('[_azAtencionesRango] ' + c.datos.length + ' registros desde memoria (sin pedir nada a Azure)');
+    return c.datos;
+  }
+  if (_azRangoCurso[desde]) {
+    console.log('[_azAtencionesRango] ya hay un pedido en camino, se reutiliza');
+    return _azRangoCurso[desde];
+  }
+  var pr = _azRangoPedir(desde).then(function (datos) {
+    delete _azRangoCurso[desde];
+    if (datos) _azRangoCache[desde] = { t: Date.now(), datos: datos };
+    return datos;
+  }, function (e) {
+    delete _azRangoCurso[desde];
+    throw e;
+  });
+  _azRangoCurso[desde] = pr;
+  return pr;
+}
+
+/* Devuelve el arreglo, o null si Azure no respondio (ahi entra la hoja). */
+async function _azRangoPedir(desde) {
+  var t0 = Date.now();
+  var params = { fechaDesde: desde };
+
+  var j = await _azFetch(_azUrl(params, 1));
+  if (!j || !j.success) return null;
+
+  var lista = (j.data || []).slice();
+  var total = Number(j.total || lista.length);
+  var paginas = Math.ceil(total / AZ_LIMITE);
+  var truncado = false;
+  if (paginas > AZ_MAX_PAG) { paginas = AZ_MAX_PAG; truncado = true; }
+
+  if (paginas > 1) {
+    var pend = [];
+    for (var p = 2; p <= paginas; p++) {
+      pend.push(_azFetch(_azUrl(params, p)).catch(function () { return null; }));
+    }
+    var res = await Promise.all(pend);          // TODAS JUNTAS, no una tras otra
+    res.forEach(function (jp) {
+      if (jp && jp.success) lista = lista.concat(jp.data || []);
+    });
+  }
+
+  console.log('[_azAtencionesRango] desde ' + desde + ': ' + lista.length + ' de ' +
+              total + ' registros en ' + (Date.now() - t0) + ' ms' +
+              (truncado ? ' (hay mas, se corto)' : ''));
+  return lista;
+}
+window._azHaceDias        = _azHaceDias;
+window._azAtencionesRango = _azAtencionesRango;
+
 /* Trae todas las paginas que haga falta */
 async function _consultaAzureFull(params) {
   var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+  window._azVacio = false;
 
   var j = await _azFetch(_azUrl(params, 1));
   if (!j || !j.success) throw new Error((j && j.error) || 'respuesta invalida');
@@ -10997,13 +11134,28 @@ async function _consultaAzureFull(params) {
   var truncado = false;
   if (paginas > AZ_MAX_PAG) { paginas = AZ_MAX_PAG; truncado = true; }
 
-  for (var p = 2; p <= paginas; p++) {
-    var jp = await _azFetch(_azUrl(params, p));
-    if (!jp || !jp.success) break;
-    lista = lista.concat(jp.data || []);
+  /* CONSULTA_AZURE_V3 (25-ago-2026): ANTES las paginas se pedian una detras de
+     otra, con un await por vuelta. Con 12 paginas eran 12 esperas seguidas y
+     por eso la consulta demoraba. Ahora se piden TODAS JUNTAS. */
+  if (paginas > 1) {
+    var pend = [];
+    for (var p = 2; p <= paginas; p++) {
+      pend.push(_azFetch(_azUrl(params, p)).catch(function () { return null; }));
+    }
+    var res = await Promise.all(pend);
+    res.forEach(function (jp) { if (jp && jp.success) lista = lista.concat(jp.data || []); });
   }
 
-  if (!lista.length) return null;                    // que responda la hoja de calculo
+  if (!lista.length) {
+    /* CONSULTA_AZURE_V3: Azure SI respondio, solo que sin resultados. Se marca
+       para que la pantalla NO se vaya sola a la hoja de calculo, que demora
+       varios minutos. Que lo decida el usuario. */
+    window._azVacio = true;
+    console.log('[consultarDNI] Azure respondio en ' +
+                Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0) +
+                ' ms sin resultados para ese filtro.');
+    return null;
+  }
 
   lista.forEach(_azNormalizar);
   lista.sort(function (a, b) {
