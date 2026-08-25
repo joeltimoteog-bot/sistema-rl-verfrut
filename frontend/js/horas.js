@@ -457,8 +457,14 @@ function recalcularHoras() {
     const fin = new Date(fS + 'T' + hS + ':00');
     if (!isNaN(ini.getTime()) && !isNaN(fin.getTime()) && fin > ini) {
       const bruto = (fin - ini) / 36e5; // horas
-      // Descontar 45min refrigerio si jornada >= 5h
-      horasTrab = bruto >= 5 ? bruto - 0.75 : bruto;
+      /* _CALCULO_REFRIGERIO_V1 (22-ago-2026) — YA NO se restan los 45 minutos.
+         ANTES:  horasTrab = bruto >= 5 ? bruto - 0.75 : bruto;
+         POR QUE: la jornada esperada que devuelve el backend ya trae el
+         refrigerio adentro (8.75 h de lunes a viernes = 8 h de trabajo + 0.75
+         de refrigerio; 5.75 el sabado). Al restar los 45 min aca ademas, se
+         descontaban DOS VECES y a cada trabajador se le comian 45 minutos de
+         cada acumulacion. Ahora se compara presencia contra presencia. */
+      horasTrab = bruto;
     }
   }
 
@@ -499,8 +505,15 @@ async function registrarHoras() {
   if (!fE || !hE || !fS || !hS) { mostrarAlerta('alRegistro', 'err', 'Completa fecha y hora de entrada y salida'); return; }
   if (!motivo || motivo === '__NUEVO__') { mostrarAlerta('alRegistro', 'err', 'Selecciona un motivo'); return; }
 
-  const horasTrab = Number(v('calcTrab')) || 0;
-  const horasPerm = Number(v('calcPerm')) || 0;
+  /* _CALCULO_REFRIGERIO_V1 — BUG GRAVE CORREGIDO.
+     calcTrab y calcPerm son <div class="stat-val"> (horas.html 252-255), no
+     son campos de formulario. v() lee .value, que en un <div> es undefined,
+     asi que SIEMPRE se mandaba 0 al servidor. Y el servidor, al recibir el
+     permiso en 0, lo reemplazaba por la jornada COMPLETA (codigo.gs 6477):
+     alguien pedia 3 h de permiso y se le cobraban 8.75 h, generandole una
+     deuda que nunca contrajo. Ahora se lee el texto que se ve en pantalla. */
+  const horasTrab = _numCalc('calcTrab');
+  const horasPerm = _numCalc('calcPerm');
 
   const registro = {
     dni:             t.dni,
@@ -929,6 +942,17 @@ async function exportarGeneralExcel() {
 
 /* ─────────────── HELPERS ─────────────── */
 function v(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+/* _CALCULO_REFRIGERIO_V1 — lee un numero de un cuadro de calculo, sirva o no
+   como campo de formulario. Acepta coma decimal y textos como "8.75 h". */
+function _numCalc(id) {
+  const el = document.getElementById(id);
+  if (!el) return 0;
+  let txt = (el.value !== undefined && el.value !== null && el.value !== '')
+            ? el.value : (el.textContent || '');
+  txt = String(txt).replace(',', '.').replace(/[^0-9.\-]/g, '');
+  const n = parseFloat(txt);
+  return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+}
 function sv(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
 function setText(id, txt) { const el = document.getElementById(id); if (el) el.textContent = txt; }
 function esc(s) { return String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
