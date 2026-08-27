@@ -5385,7 +5385,8 @@ function renderAt(lista) {
         <td>
           <button class="btn-a bv" onclick="verDet('${a.nro}','at')">Ver</button>
           ${puedeMod?`<button class="btn-a be" onclick="editarAt('${a.nro}')">✏️</button>`:''}
-          ${puedeMod?`<button class="btn-a bd" onclick="eliminarAt('${a.nro}')">🗑️</button>`:''}
+          ${(String(a.estado||'').toUpperCase()==='EN PROCESO'&&String(a.celular||'').replace(/\D/g,'').length>=9)?`<button class="btn-a" style="background:#25d366;color:#fff;border-color:#25d366" title="Enviar recordatorio por WhatsApp" onclick="recordarWhatsApp('${a.nro}')">📲</button>`:''}
+          <button class="btn-a bd" onclick="eliminarAt('${a.nro}')" title="Eliminar este registro">🗑️</button>
         </td>
       </tr>`;
     }).join('');
@@ -5760,7 +5761,8 @@ async function guardarAt() { if(window._savingAt) return;
     fecha_termino_doc:v('at_ftd'), dias_transcurridos:v('at_dias'),
     responsable_recepcion:v('at_resp'), observaciones:v('at_obs'),
     estado:v('at_est'), supervisor:USER.nombre||USER.usuario, usuario_sistema:USER.usuario,
-    nro_licencia:v('at_nlic')   /* _NRO_LICENCIA_V1 */
+    nro_licencia:v('at_nlic'),      /* _NRO_LICENCIA_V1 */
+    autorizado_por:v('at_autoriz')  /* _ATENCION_V3 */
   };
   const _miss=[];if(!/^\d{8}$/.test(String(d.dni||'').trim()))_miss.push(['at_dni','DNI (8 digitos)']);if(!String(d.nombre||'').trim())_miss.push(['at_nom','Nombre']);if(!String(d.detalle_documento||'').trim())_miss.push(['at_doc_txt','Documento']);if(typeof _licenciaObligatoria==='function'&&_licenciaObligatoria(d.detalle_documento)&&!String(d.nro_licencia||'').trim())_miss.push(['at_nlic','N° de licencia']);if(_miss.length){const el=document.getElementById(_miss[0][0]);if(el){el.focus();el.style.borderColor='#ef4444';setTimeout(function(){el.style.borderColor='';},2500);}mostrarToast('Falta completar: '+_miss.map(function(m){return m[1];}).join(', '),'error');return;}
   if (!modoEdicion && window._atRegularizadas && window._atRegularizadas.length) {
@@ -10741,10 +10743,12 @@ setTimeout(_instalarEnviado, 3500);
 (function () {
 'use strict';
 
-/* Palabras que obligan el numero de licencia */
-var LIC_PALABRAS  = ['CITT', 'MATERNIDAD', 'ENFERMEDAD', 'ACCIDENTE'];
-/* Excepciones: aunque coincidan, estos NO llevan numero */
-var LIC_EXCEPCION = ['CMP', 'CERTIFICADO MEDICO', 'PARTICULAR', 'ODONTOLOG'];
+/* Palabras que obligan el numero de licencia.
+   _ATENCION_V3 (25-ago-2026): por indicacion de Joel, el certificado medico
+   particular (CMP) y el odontologico (COP) TAMBIEN piden numero. Antes estaban
+   como excepcion; la lista de excepciones queda vacia. */
+var LIC_PALABRAS  = ['CITT', 'CMP', 'ODONTOLOG', 'MATERNIDAD', 'ENFERMEDAD', 'ACCIDENTE'];
+var LIC_EXCEPCION = [];
 
 function _norm(s) {
   return String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -11240,5 +11244,337 @@ window.compararFuentes = async function (desde, hasta, dni) {
 
 })();
 </script>
+<script>
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _ATENCION_V3 (25-ago-2026) — Mis Atenciones
+
+   1) Campo "Autorizado por": se llena solo segun el documento.
+      ESSALUD (CITT y descansos medicos) · CMP (certificado medico
+      particular) · COP (odontologico). Se puede corregir a mano.
+   2) Ruteo por empresa extendido a las licencias 19, 20, 21 y 34, que antes
+      tenian responsable fijo. RAPEL -> Tania Vera · VERFRUT -> Leandro Morales.
+   3) Boton de recordatorio por WhatsApp al celular del trabajador, solo en los
+      registros EN PROCESO.
+
+   Nada de esto reescribe funciones del sistema: se agrega al lado.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+
+var RESP_LEANDRO_V3 = 'LEANDRO BILL MORALES YARLEQUE';
+var RESP_TANIA_V3   = 'TANIA ELIZABETH VERA LLAVE';
+
+/* ── 1) Quien autoriza cada documento ───────────────────────────────────── */
+var AUTORIZA_POR = {};
+[ '01 CITT - EMPRESA VERFRUT',
+  '02 CITT - EMPRESA RAPEL',
+  '03 REGULARIZAR CITT - GENERAR FORMULARIO',
+  '16 CONSTANCIA DE HOSPITALIZACION - GENERAR FORMULARIO / JUSTIFICAR',
+  '17 ESSALUD CITA (JUSTIFICACION)',
+  '21 LICENCIA POR ENFERMEDAD GRAVE VERFRUT / RAPEL',
+  '23 REGULARIZAR LICENCIA POR MATERNIDAD - GENERAR FORMULARIO',
+  '26 REGULARIZAR LICENCIA POR ENFERMEDAD GRAVE - GENERAR FORMULARIO',
+  '34 LICENCIA POR MATERNIDAD',
+  '35 DESCANSO MEDICO - ENFERMEDAD',
+  '36 DESCANSO MEDICO - MATERNIDAD',
+  '37 DESCANSO MEDICO - ACCIDENTE DE TRABAJO',
+  '38 DESCANSO MEDICO - ACCIDENTE COMUN',
+  '39 DESCANSO MEDICO - ENFERMEDAD PROFESIONAL',
+  '40 DESCANSO MEDICO - PATERNIDAD',
+  '41 LICENCIA POR ENFERMEDAD GRAVE O TERMINAL'
+].forEach(function (k) { AUTORIZA_POR[k] = 'ESSALUD'; });
+
+[ '04 CMP - EMPRESA VERFRUT / RAPEL',
+  '05 REGULARIZAR CMP - GENERAR FORMULARIO',
+  '14 FORMULARIO DE INTERCONSULTA',
+  '22 RECETA MEDICA (JUSTIFICACION)',
+  '29 CMP - VALIDADO POR SIS',
+  '30 FORMULARIO INTERCONSULTA'
+].forEach(function (k) { AUTORIZA_POR[k] = 'CMP'; });
+
+[ '06 CERTIFICADO ODONTOLOGICO',
+  '07 REGULARIZAR CERTIFICADO ODONTOLOGICO - GENERAR FORMULARIO'
+].forEach(function (k) { AUTORIZA_POR[k] = 'COP'; });
+
+window._AUTORIZA_POR = AUTORIZA_POR;
+
+/* Si el documento no esta en la tabla, se deduce por el texto */
+function _autorizaDe(doc) {
+  var exacto = AUTORIZA_POR[String(doc || '').trim()];
+  if (exacto) return exacto;
+  var t = String(doc || '').toUpperCase()
+            .replace(/[ÁÀÂÄ]/g, 'A').replace(/[ÉÈÊË]/g, 'E').replace(/[ÍÌÎÏ]/g, 'I')
+            .replace(/[ÓÒÔÖ]/g, 'O').replace(/[ÚÙÛÜ]/g, 'U');
+  if (!t) return '';
+  if (t.indexOf('ODONTOLOG') >= 0) return 'COP';
+  if (t.indexOf('CMP') >= 0 || t.indexOf('INTERCONSULTA') >= 0) return 'CMP';
+  if (t.indexOf('CITT') >= 0 || t.indexOf('DESCANSO MEDICO') >= 0 ||
+      t.indexOf('ESSALUD') >= 0 || t.indexOf('MATERNIDAD') >= 0) return 'ESSALUD';
+  return '';
+}
+window._autorizaDe = _autorizaDe;
+
+/* Crea el campo una sola vez, arriba del N° de licencia */
+function _crearCampoAutoriza() {
+  if (document.getElementById('at_autoriz')) return;
+  var ref = document.getElementById('at_doc_wrap') || document.getElementById('at_doc_txt');
+  if (!ref || !ref.parentNode) return;
+
+  var caja = document.createElement('div');
+  caja.id = 'at_autoriz_wrap';
+  caja.className = 'fc';
+  caja.style.cssText = 'margin-top:10px';
+  caja.innerHTML =
+    '<label>Autorizado por</label>' +
+    '<select id="at_autoriz">' +
+      '<option value="">— sin definir —</option>' +
+      '<option value="ESSALUD">ESSALUD</option>' +
+      '<option value="CMP">CMP</option>' +
+      '<option value="COP">COP</option>' +
+      '<option value="OTRO">OTRO</option>' +
+    '</select>' +
+    '<div id="at_autoriz_ayuda" style="font-size:11.5px;color:#334155;background:#f1f5f9;' +
+    'border:1px solid #e2e8f0;border-radius:7px;padding:6px 9px;margin-top:5px;line-height:1.5">' +
+    'Se llena solo segun el documento. Si hace falta, se puede cambiar a mano.</div>';
+
+  var licBox = document.getElementById('at_nlic_wrap');
+  if (licBox && licBox.parentNode === ref.parentNode) {
+    ref.parentNode.insertBefore(caja, licBox);
+  } else {
+    ref.parentNode.appendChild(caja);
+  }
+}
+
+function _refrescarAutoriza() {
+  try {
+    _crearCampoAutoriza();
+    var sel = document.getElementById('at_autoriz');
+    if (!sel) return;
+
+    var txt = document.getElementById('at_doc_txt');
+    var ocu = document.getElementById('at_doc');
+    var doc = String((txt && txt.value) || (ocu && ocu.value) || '').trim();
+
+    var quien = _autorizaDe(doc);
+    /* Si el usuario ya lo cambio a mano para ESTE mismo documento, se respeta */
+    if (sel.dataset && sel.dataset.docManual === doc && sel.value) return;
+    sel.value = quien || '';
+    var ayuda = document.getElementById('at_autoriz_ayuda');
+    if (ayuda) {
+      ayuda.innerHTML = quien
+        ? 'Autorizado por <b>' + quien + '</b>, segun el documento elegido. Se puede cambiar a mano.'
+        : 'Este documento no tiene un autorizador definido. Eligelo si corresponde.';
+    }
+  } catch (e) {}
+}
+window._refrescarAutoriza = _refrescarAutoriza;
+
+/* Marcar cuando el usuario lo cambia a mano, para no pisarselo */
+document.addEventListener('change', function (e) {
+  try {
+    if (e.target && e.target.id === 'at_autoriz') {
+      var txt = document.getElementById('at_doc_txt');
+      var ocu = document.getElementById('at_doc');
+      var doc = String((txt && txt.value) || (ocu && ocu.value) || '').trim();
+      if (e.target.dataset) e.target.dataset.docManual = doc;
+    }
+  } catch (x) {}
+}, true);
+
+['input', 'change', 'blur'].forEach(function (ev) {
+  document.addEventListener(ev, function (e) {
+    try {
+      if (e.target && (e.target.id === 'at_doc_txt' || e.target.id === 'at_doc')) _refrescarAutoriza();
+    } catch (x) {}
+  }, true);
+});
+
+var _autoOrig3 = window.autoResponsable;
+if (typeof _autoOrig3 === 'function') {
+  window.autoResponsable = function () {
+    var r = _autoOrig3.apply(this, arguments);
+    try { _refrescarAutoriza(); } catch (e) {}
+    return r;
+  };
+}
+
+/* ── 2) Ruteo por empresa para las licencias que faltaban ───────────────── */
+try {
+  var mapa = window._DOC_POR_EMPRESA;
+  if (mapa) {
+    [ '19 LICENCIA POR PATERNIDAD VERFRUT / RAPEL',
+      '20 LICENCIA POR FALLECIMIENTO VERFRUT / RAPEL',
+      '21 LICENCIA POR ENFERMEDAD GRAVE VERFRUT / RAPEL',
+      '34 LICENCIA POR MATERNIDAD'
+    ].forEach(function (doc) {
+      mapa[doc] = { RAPEL: RESP_TANIA_V3, VERFRUT: RESP_LEANDRO_V3 };
+    });
+  }
+} catch (e) {}
+
+/* ── 3) Recordatorio por WhatsApp ───────────────────────────────────────── */
+function _atPorNro(nro) {
+  var listas = [window.atTodas, window._atFiltradas,
+                (window.CACHE && window.CACHE.atenciones)];
+  for (var i = 0; i < listas.length; i++) {
+    var L = listas[i];
+    if (!L || !L.length) continue;
+    for (var j = 0; j < L.length; j++) {
+      if (String(L[j].nro) === String(nro)) return L[j];
+    }
+  }
+  return null;
+}
+
+function _celPeru(cel) {
+  var n = String(cel || '').replace(/\D/g, '');
+  if (n.length === 9  && n.charAt(0) === '9') return '51' + n;
+  if (n.length === 11 && n.substring(0, 2) === '51') return n;
+  if (n.length === 8) return '';                 // incompleto
+  return n.length >= 9 ? n : '';
+}
+
+window.recordarWhatsApp = async function (nro) {
+  var a = _atPorNro(nro);
+  if (!a) { mostrarToast('No encuentro ese registro en pantalla', 'error'); return; }
+
+  var tel = _celPeru(a.celular);
+  if (!tel) { mostrarToast('El celular del registro no es valido: ' + (a.celular || '(vacio)'), 'error'); return; }
+
+  var nombre = String(a.nombre || '').trim().split(/\s+/).slice(0, 2).join(' ');
+  var texto =
+    'Hola ' + (nombre || 'estimado(a)') + ', le saluda el area de Relaciones Laborales de ' +
+    (a.empresa || 'la empresa') + '.\n\n' +
+    'Le recordamos que tiene un documento pendiente de regularizar:\n' +
+    '- ' + (a.detalle_documento || 'documento') + '\n' +
+    (a.fecha_atencion ? '- Registrado el ' + String(a.fecha_atencion).substring(0, 10) + '\n' : '') +
+    '\nPor favor acercarse a la oficina de Relaciones Laborales para completarlo. Gracias.';
+
+  var ok = (typeof appConfirm === 'function')
+    ? await appConfirm('Se abrira WhatsApp con este mensaje para ' + (a.nombre || '') +
+                       ' (' + a.celular + '):\n\n' + texto)
+    : confirm('Enviar recordatorio a ' + (a.nombre || '') + '?');
+  if (!ok) return;
+
+  window.open('https://wa.me/' + tel + '?text=' + encodeURIComponent(texto), '_blank');
+  mostrarToast('WhatsApp abierto con el recordatorio listo para enviar');
+};
+
+/* Al abrir el formulario */
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(_refrescarAutoriza, 400); });
+} else {
+  setTimeout(_refrescarAutoriza, 400);
+}
+
+console.log('[_ATENCION_V3] autorizado por, ruteo de licencias y recordatorio WhatsApp listos');
+})();
+
+</script>
+<script>
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _CANDADO_ELIMINAR_V1 (25-ago-2026) — proteger el boton de eliminar
+
+   El boton sigue disponible PARA TODOS, como pidio Joel. Lo que se agrega es
+   que borrar deje de ser un clic distraido:
+
+     1. La confirmacion muestra el registro completo (DNI, trabajador, empresa,
+        documento, estado y quien lo registro), no solo el numero.
+     2. Pide un MOTIVO escrito. Sin motivo no se elimina.
+     3. Antes de borrar, el servidor guarda una copia en la hoja PAPELERA.
+        Si esa copia no se puede guardar, NO se borra nada.
+
+   No se reescribe eliminarAt: se le pone esta capa encima y despues se llama
+   a la de siempre, que es la que hace el trabajo y limpia la pantalla.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+
+var MIN_MOTIVO = 6;
+
+function _buscarAt(nro) {
+  var listas = [window.atTodas, window._atFiltradas,
+                (window.CACHE && window.CACHE.atenciones),
+                (window.CACHE && window.CACHE.historialAtenciones)];
+  for (var i = 0; i < listas.length; i++) {
+    var L = listas[i];
+    if (!L || !L.length) continue;
+    for (var j = 0; j < L.length; j++) {
+      if (String(L[j].nro) === String(nro)) return L[j];
+    }
+  }
+  return null;
+}
+
+/* ── 1) apiPost envuelto: le adjunta el motivo y la copia al deleteAtencion ── */
+var _postOrig = window.apiPost;
+if (typeof _postOrig === 'function') {
+  window.apiPost = function (b) {
+    try {
+      if (b && b.action === 'deleteAtencion' && window._elimContexto &&
+          String(window._elimContexto.nro) === String(b.nro)) {
+        b.motivo        = window._elimContexto.motivo;
+        b.registro      = window._elimContexto.registro;
+        b.eliminado_por = (window.USER && USER.usuario) || '';
+      }
+    } catch (e) {}
+    return _postOrig.apply(this, arguments);
+  };
+}
+
+/* ── 2) eliminarAt envuelto: datos a la vista + motivo obligatorio ── */
+var _elimOrig = window.eliminarAt;
+if (typeof _elimOrig === 'function') {
+  window.eliminarAt = async function (nro) {
+    var a = _buscarAt(nro);
+    if (!a) {
+      mostrarToast('No encuentro ese registro en pantalla. Recarga y vuelve a intentar.', 'error');
+      return;
+    }
+
+    var detalle =
+      'Vas a ELIMINAR esta atencion:\n\n' +
+      'N° de atencion :  ' + (a.nro || '') + '\n' +
+      'Fecha          :  ' + String(a.fecha_atencion || '').substring(0, 10) + '\n' +
+      'DNI            :  ' + (a.dni || '') + '\n' +
+      'Trabajador     :  ' + (a.nombre || '') + '\n' +
+      'Empresa        :  ' + (a.empresa || '') + '\n' +
+      'Documento      :  ' + (a.detalle_documento || '') + '\n' +
+      'Estado         :  ' + (a.estado || '') + '\n' +
+      'Lo registro    :  ' + (a.supervisor || a.usuario_sistema || '') + '\n\n' +
+      'Se guardara una copia en la PAPELERA antes de borrarlo.';
+
+    if (!(await appConfirm(detalle))) return;
+
+    var motivo = await appPrompt('¿Por que se elimina? (obligatorio)');
+    motivo = String(motivo == null ? '' : motivo).trim();
+    if (!motivo) {
+      mostrarToast('No se elimino nada: falta el motivo', 'error');
+      return;
+    }
+    if (motivo.length < MIN_MOTIVO) {
+      mostrarToast('Escribe un motivo mas claro (minimo ' + MIN_MOTIVO + ' letras)', 'error');
+      return;
+    }
+
+    window._elimContexto = { nro: a.nro, motivo: motivo, registro: a };
+    console.log('[candado] eliminando ' + a.nro + ' | motivo: ' + motivo +
+                ' | por: ' + ((window.USER && USER.usuario) || ''));
+    try {
+      return await _elimOrig(nro);
+    } finally {
+      window._elimContexto = null;
+    }
+  };
+}
+
+console.log('[_CANDADO_ELIMINAR_V1] eliminar pide motivo y deja copia en papelera');
+})();
+
+</script>
+
+
 </body>
 </html>
