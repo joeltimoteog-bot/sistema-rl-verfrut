@@ -10692,7 +10692,7 @@ function _instalarEnviado() {
     try {
       sel.value = 'ENVIADO';
       var obs = document.getElementById('dObs');
-      var quien = (window.USER && (USER.nombre || USER.usuario)) || '';
+      var quien = ((typeof USER !== 'undefined' && USER) ? (USER.nombre || USER.usuario) : '') || '';
       var a = new Date();
       var p2 = function (n) { return (n < 10 ? '0' : '') + n; };
       var sello = 'ENVIADO el ' + p2(a.getDate()) + '/' + p2(a.getMonth() + 1) + '/' + a.getFullYear() +
@@ -11224,7 +11224,7 @@ window.compararFuentes = async function (desde, hasta, dni) {
 
   var tG = Date.now(), gas = null, errG = null;
   try {
-    gas = await apiGet(Object.assign({ action: 'consultaDNI', rol: (window.USER && USER.rol) || '' }, params));
+    gas = await apiGet(Object.assign({ action: 'consultaDNI', rol: ((typeof USER !== 'undefined' && USER && USER.rol) || '') }, params));
   } catch (e) { errG = e.message; }
   var msG = Date.now() - tG;
 
@@ -11415,8 +11415,15 @@ try {
 
 /* ── 3) Recordatorio por WhatsApp ───────────────────────────────────────── */
 function _atPorNro(nro) {
-  var listas = [window.atTodas, window._atFiltradas,
-                (window.CACHE && window.CACHE.atenciones)];
+  /* _ALCANCE_V1 (26-ago-2026): atTodas, CACHE y USER estan declarados con "let"
+     en la linea 1290. Un "let" de nivel superior NO se cuelga de window: por eso
+     window.atTodas y window.CACHE salian vacios y no encontraba la fila. Hay que
+     nombrarlos directo. */
+  var listas = [];
+  try { if (typeof atTodas !== 'undefined' && atTodas) listas.push(atTodas); } catch (e) {}
+  try { if (window._atFiltradas) listas.push(window._atFiltradas); } catch (e) {}
+  try { if (typeof CACHE !== 'undefined' && CACHE && CACHE.atenciones) listas.push(CACHE.atenciones); } catch (e) {}
+  try { if (typeof CACHE !== 'undefined' && CACHE && CACHE.historialAtenciones) listas.push(CACHE.historialAtenciones); } catch (e) {}
   for (var i = 0; i < listas.length; i++) {
     var L = listas[i];
     if (!L || !L.length) continue;
@@ -11495,9 +11502,15 @@ console.log('[_ATENCION_V3] autorizado por, ruteo de licencias y recordatorio Wh
 var MIN_MOTIVO = 6;
 
 function _buscarAt(nro) {
-  var listas = [window.atTodas, window._atFiltradas,
-                (window.CACHE && window.CACHE.atenciones),
-                (window.CACHE && window.CACHE.historialAtenciones)];
+  /* _ALCANCE_V1 (26-ago-2026): atTodas, CACHE y USER estan declarados con "let"
+     en la linea 1290. Un "let" de nivel superior NO se cuelga de window: por eso
+     window.atTodas y window.CACHE salian vacios y no encontraba la fila. Hay que
+     nombrarlos directo. */
+  var listas = [];
+  try { if (typeof atTodas !== 'undefined' && atTodas) listas.push(atTodas); } catch (e) {}
+  try { if (window._atFiltradas) listas.push(window._atFiltradas); } catch (e) {}
+  try { if (typeof CACHE !== 'undefined' && CACHE && CACHE.atenciones) listas.push(CACHE.atenciones); } catch (e) {}
+  try { if (typeof CACHE !== 'undefined' && CACHE && CACHE.historialAtenciones) listas.push(CACHE.historialAtenciones); } catch (e) {}
   for (var i = 0; i < listas.length; i++) {
     var L = listas[i];
     if (!L || !L.length) continue;
@@ -11517,7 +11530,7 @@ if (typeof _postOrig === 'function') {
           String(window._elimContexto.nro) === String(b.nro)) {
         b.motivo        = window._elimContexto.motivo;
         b.registro      = window._elimContexto.registro;
-        b.eliminado_por = (window.USER && USER.usuario) || '';
+        b.eliminado_por = ((typeof USER !== 'undefined' && USER && USER.usuario) || '');
       }
     } catch (e) {}
     return _postOrig.apply(this, arguments);
@@ -11561,7 +11574,7 @@ if (typeof _elimOrig === 'function') {
 
     window._elimContexto = { nro: a.nro, motivo: motivo, registro: a };
     console.log('[candado] eliminando ' + a.nro + ' | motivo: ' + motivo +
-                ' | por: ' + ((window.USER && USER.usuario) || ''));
+                ' | por: ' + ((typeof USER !== 'undefined' && USER && USER.usuario) || ''));
     try {
       return await _elimOrig(nro);
     } finally {
