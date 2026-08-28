@@ -34,7 +34,10 @@ const LISTAS_DEFAULT = {
     'CAP-SC-09 / CAP-SC-10 / CAP-SC-13 / PROCEDIMIENTOS Y CÓDIGO DE CONDUCTA',
     'Normativa interna'
   ],
-  area:   ['Cosecha', 'Packing', 'Campo', 'Riego', 'Almacén', 'Administración']
+  area:   ['Cosecha', 'Packing', 'Campo', 'Riego', 'Almacén', 'Administración'],
+  /* _FUNDO_CAP_V1 (27-ago-2026): arranca vacia. Se llena sola con los fundos
+     del usuario que inicio sesion, y se le pueden agregar mas con Gestionar. */
+  fundo:  []
 };
 
 let _listaActiva = null;
@@ -73,12 +76,12 @@ function poblarSelect(tipo) {
 }
 
 function inicializarListasCapacitaciones() {
-  ['tema', 'fuente', 'area'].forEach(t => poblarSelect(t));
+  ['tema', 'fuente', 'area', 'fundo'].forEach(t => poblarSelect(t));
 }
 
 function gestionarLista(tipo) {
   _listaActiva = tipo;
-  const titulos = { tema: 'Temas', fuente: 'Fuentes', area: 'Áreas' };
+  const titulos = { tema: 'Temas', fuente: 'Fuentes', area: 'Áreas', fundo: 'Fundos' };
   const el = document.getElementById('modalListaTitulo');
   if (el) el.textContent = '✏️ Gestionar: ' + (titulos[tipo] || tipo);
   renderizarItemsLista(tipo);
@@ -514,6 +517,7 @@ async function regenerarFormatoCapacitacion(cap) {
     respNombre:  v('capRespNombre'),
     respCargo:   v('capRespCargo'),
     area:        v('capArea'),
+    fundo:       v('capFundo'),   /* _FUNDO_CAP_V1 */
     tipos:       getTipos(),
     asistentes:  asistentes.slice()
   };
@@ -525,6 +529,7 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capTema',        cap.tema);
     sv('capLugar',       cap.lugar);
     sv('capArea', cap.area);
+    if (cap.fundo) sv('capFundo', cap.fundo);   /* _FUNDO_CAP_V1 */
     setTipos(cap.tipo);
     sv('capHoraInicio',  cap.horaInicio);
     sv('capHoraTermino', cap.horaFin);
@@ -550,6 +555,7 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capTema',        backup.tema);
     sv('capLugar',       backup.lugar);
     sv('capArea', backup.area);
+    sv('capFundo', backup.fundo);   /* _FUNDO_CAP_V1 */
     setTipos((backup.tipos || []).join(','));
     sv('capHoraInicio',  backup.horaInicio);
     sv('capHoraTermino', backup.horaTermino);
@@ -679,6 +685,7 @@ function irPaso2() {
   if (!tipos.length) faltan.push('TIPO DE ACTIVIDAD');
   if (!tema)         faltan.push('TEMA');
   if (!lugar)        faltan.push('LUGAR');
+  if (!v('capFundo').trim()) faltan.push('FUNDO');   /* _FUNDO_CAP_V1 */
   if (faltan.length) {
     mostrarFeedback('err', '❌ Faltan estos campos: ' + faltan.join(' · '));
     return;
@@ -1016,6 +1023,7 @@ async function _buildBody() {
     tema:              v('capTema').trim(),
     fuente:            v('capFuente').trim() || '—',
     area:              v('capArea').trim()   || '—',
+    fundo:             v('capFundo').trim(),   /* _FUNDO_CAP_V1 */
     lugar:             v('capLugar').trim(),
     horaInicio:        v('capHoraInicio') || '',
     horaFin:           v('capHoraTermino') || '',
@@ -1043,7 +1051,19 @@ async function _buildBody() {
     console.warn('[_buildBody] Duplicados removidos antes de enviar:',
       asistentes.length - asistentesEnvio.length);
   }
-  return { actividad, asistentesEnvio };
+  /* _FUNDO_CAP_V1: el servidor YA escribe el fundo en la hoja de asistentes
+     —en capGuardar la fila lleva  a.fundo || ''—  pero los asistentes nunca
+     traian ese dato, asi que esa columna salia siempre vacia. Aqui se le pone
+     a cada asistente el fundo de la actividad. Con esto NO hay que tocar el
+     servidor: la columna ya existe y ya se escribe. */
+  const _fundoAct = v('capFundo').trim();
+  const asistentesConFundo = asistentesEnvio.map(function (a) {
+    return Object.assign({}, a, { fundo: a.fundo || _fundoAct });
+  });
+  console.log('[_FUNDO_CAP_V1] fundo "' + _fundoAct + '" aplicado a ' +
+              asistentesConFundo.length + ' asistente(s)');
+
+  return { actividad, asistentesEnvio: asistentesConFundo };
 }
 
 /* ─────────────────────── PDF R-SC-01 ─────────────────────── */
@@ -1794,3 +1814,82 @@ window.guardarYGenerar              = guardarYGenerar;
 window.regenerarFormatoCapacitacion = regenerarFormatoCapacitacion;
 window._mostrarModalBusquedaCapacitaciones = _mostrarModalBusquedaCapacitaciones;
 window._ejecutarBusquedaCapacitaciones = _ejecutarBusquedaCapacitaciones;
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _FUNDO_CAP_V1 (27-ago-2026) — el fundo de quien registra la capacitacion
+
+   QUE PASABA
+   ---------------------------------------------------------------------------
+   El fundo no se guardaba porque NUNCA SE PEDIA: la palabra "fundo" aparecia
+   una sola vez en capacitaciones.html, y era dentro del texto de ejemplo del
+   campo Lugar. No existia el campo.
+
+   DE DONDE SALE AHORA
+   ---------------------------------------------------------------------------
+   Del propio usuario. Al iniciar sesion el sistema ya guarda en la sesion:
+       USER.fundos    -> la lista de fundos de esa persona
+       USER.fundoHoy  -> el que eligio al entrar
+   Es el mismo dato que Mis Atenciones usa para rellenar el fundo solo
+   (dashboard.html, linea 5714). Aqui se hace igual, para que los dos modulos
+   se comporten de la misma forma.
+
+   Si el usuario no tiene fundo asignado (los administradores no lo tienen),
+   el campo queda para elegir a mano, y con Gestionar se pueden agregar mas.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _fundoDelUsuario() {
+  try {
+    var u = USER || JSON.parse(sessionStorage.getItem('user') || '{}');
+    if (u && u.fundoHoy) return String(u.fundoHoy).trim();
+    if (u && Array.isArray(u.fundos) && u.fundos.length === 1) return String(u.fundos[0]).trim();
+    return '';
+  } catch (e) { return ''; }
+}
+
+function _prepararFundo() {
+  try {
+    var sel = document.getElementById('capFundo');
+    if (!sel) return;
+
+    var u = USER || JSON.parse(sessionStorage.getItem('user') || '{}');
+    var guardados = cargarLista('fundo');
+    var suyos = (u && Array.isArray(u.fundos)) ? u.fundos : [];
+
+    var cambio = false;
+    suyos.forEach(function (f) {
+      var t = String(f || '').trim();
+      if (t && guardados.indexOf(t) < 0) { guardados.push(t); cambio = true; }
+    });
+    if (cambio) guardarLista('fundo', guardados);
+
+    poblarSelect('fundo');
+
+    var mio = _fundoDelUsuario();
+    if (mio) {
+      if (guardados.indexOf(mio) < 0) {
+        guardados.push(mio);
+        guardarLista('fundo', guardados);
+        poblarSelect('fundo');
+      }
+      sel.value = mio;
+    } else {
+      sel.value = '';
+    }
+
+    var ayuda = document.getElementById('capFundoAyuda');
+    if (ayuda) {
+      ayuda.textContent = mio
+        ? 'Tomado de tu usuario. Puedes cambiarlo si fue en otro fundo.'
+        : 'Tu usuario no tiene fundo asignado. Eligelo de la lista o agregalo con Gestionar.';
+    }
+
+    console.log('[_FUNDO_CAP_V1] fundo del usuario: ' + (mio || '(ninguno)') +
+                ' | fundos en la lista: ' + guardados.length);
+  } catch (e) {
+    console.warn('[_FUNDO_CAP_V1] no se pudo preparar el fundo: ' + e.message);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  setTimeout(_prepararFundo, 300);
+});
