@@ -35,9 +35,13 @@ const LISTAS_DEFAULT = {
     'Normativa interna'
   ],
   area:   ['Cosecha', 'Packing', 'Campo', 'Riego', 'Almacén', 'Administración'],
-  /* _FUNDO_CAP_V1 (27-ago-2026): arranca vacia. Se llena sola con los fundos
-     del usuario que inicio sesion, y se le pueden agregar mas con Gestionar. */
-  fundo:  []
+  /* _FUNDO_CAP_V2 (28-ago-2026): fundos entregados por Joel el 28-ago.
+     Tal cual me los paso. Si alguno esta mal escrito se corrige aqui o con
+     el boton Gestionar de la pantalla. */
+  fundo:  [
+    'ALGARROBOS', 'APROA', 'EL PAPAYO', 'LIMONES', 'LOS OLIVARES',
+    'OLIVARES BAJO', 'PLANTA RAPEL', 'PUNTA ARENAS', 'SAN VICENTE', 'SANTA ROSA'
+  ]
 };
 
 let _listaActiva = null;
@@ -1837,11 +1841,70 @@ window._ejecutarBusquedaCapacitaciones = _ejecutarBusquedaCapacitaciones;
    Si el usuario no tiene fundo asignado (los administradores no lo tienen),
    el campo queda para elegir a mano, y con Gestionar se pueden agregar mas.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* _FUNDO_CAP_V2 — a que fundo pertenece cada supervisor.
+   Entregado por Joel el 28-ago-2026.
+
+   DOS CORRECCIONES autorizadas por Joel el 28-ago:
+     · "LOS OLVARES"  ->  "LOS OLIVARES"   (le faltaba la i)
+     · "MARTINEZ JAUREZ" -> "MARTINEZ JUAREZ" (como figura en el sistema)
+   LOS OLIVARES y OLIVARES BAJO son DOS fundos distintos.
+
+   Pool Tamayo tiene DOS fundos: a el no se le elige uno, elige el suyo. */
+var SUP_FUNDOS = {
+  'POOL WILFREDO TAMAYO RODRIGUEZ':     ['EL PAPAYO', 'LIMONES'],
+  'ALEXANDER TINEO RAMOS':              ['OLIVARES BAJO'],
+  'FLOR DE LOS MILAGROS PULACHE VIERA': ['LOS OLIVARES'],
+  'ALEX FABIAN ZAPATA JUAREZ':          ['APROA'],
+  'YHANELLY GERALDINE LUZON VENEGAS':   ['SANTA ROSA'],
+  'ALEXANDER MARTINEZ JUAREZ':          ['PUNTA ARENAS'],
+  'SERGIO VIERA GIRON':                 ['ALGARROBOS'],
+  'ELBERTH CASTRO BAYONA':              ['SAN VICENTE'],
+  'ROBERTO MOLERO ABAD':                ['PLANTA RAPEL']
+};
+
+/* Limpia el nombre para poder compararlo: sin tildes, sin dobles espacios */
+function _normNombre(s) {
+  return String(s || '').toUpperCase()
+    .replace(/[ÁÀÂÄ]/g, 'A').replace(/[ÉÈÊË]/g, 'E').replace(/[ÍÌÎÏ]/g, 'I')
+    .replace(/[ÓÒÔÖ]/g, 'O').replace(/[ÚÙÛÜ]/g, 'U').replace(/Ñ/g, 'N')
+    .replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/* Busca al supervisor en la tabla. Primero exacto; si no, por coincidencia de
+   apellidos, porque los nombres se escriben a mano y no siempre igual
+   (por ejemplo MARTINEZ JUAREZ / MARTINEZ JAUREZ). */
+function _fundosDeSupervisor(nombre) {
+  var n = _normNombre(nombre);
+  if (!n) return null;
+
+  if (SUP_FUNDOS[n]) return { fundos: SUP_FUNDOS[n], como: 'exacto' };
+
+  var mios = n.split(' ').filter(function (t) { return t.length >= 4; });
+  var mejor = null, mejorPunt = 0;
+
+  Object.keys(SUP_FUNDOS).forEach(function (k) {
+    var suyos = _normNombre(k).split(' ').filter(function (t) { return t.length >= 4; });
+    var iguales = 0;
+    suyos.forEach(function (t) { if (mios.indexOf(t) >= 0) iguales++; });
+    var punt = suyos.length ? (iguales / suyos.length) : 0;
+    if (iguales >= 2 && punt > mejorPunt) { mejorPunt = punt; mejor = k; }
+  });
+
+  if (mejor && mejorPunt >= 0.6) {
+    return { fundos: SUP_FUNDOS[mejor], como: 'parecido a "' + mejor + '"' };
+  }
+  return null;
+}
+
 function _fundoDelUsuario() {
   try {
     var u = USER || JSON.parse(sessionStorage.getItem('user') || '{}');
     if (u && u.fundoHoy) return String(u.fundoHoy).trim();
     if (u && Array.isArray(u.fundos) && u.fundos.length === 1) return String(u.fundos[0]).trim();
+    /* _FUNDO_CAP_V2: si tiene UN solo fundo en la tabla, se elige solo.
+       Si tiene dos (Pool Tamayo), se deja que el elija. */
+    var t = _fundosDeSupervisor((u && (u.nombre || u.usuario)) || '');
+    if (t && t.fundos.length === 1) return t.fundos[0];
     return '';
   } catch (e) { return ''; }
 }
@@ -1854,6 +1917,14 @@ function _prepararFundo() {
     var u = USER || JSON.parse(sessionStorage.getItem('user') || '{}');
     var guardados = cargarLista('fundo');
     var suyos = (u && Array.isArray(u.fundos)) ? u.fundos : [];
+
+    /* _FUNDO_CAP_V2: si la sesion no trae fundos, se miran los de la tabla */
+    var deTabla = _fundosDeSupervisor((u && (u.nombre || u.usuario)) || '');
+    if (deTabla && !suyos.length) {
+      suyos = deTabla.fundos.slice();
+      console.log('[_FUNDO_CAP_V2] supervisor reconocido (' + deTabla.como +
+                  ') -> ' + suyos.join(' / '));
+    }
 
     var cambio = false;
     suyos.forEach(function (f) {
