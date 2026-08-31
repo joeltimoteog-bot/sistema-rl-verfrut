@@ -114,6 +114,7 @@
     <button class="btnGhost" id="btnFicha" style="color:#6ee7b7">👤 Ficha 360°</button>
     <button class="btnGhost" id="btnAcc" style="color:#fda4af">🕐 Accesos</button>
     <button class="btnGhost" id="btnFer" style="color:#fca5a5">📅 Feriados</button>
+    <button class="btnGhost" id="btnHor" style="color:#fcd34d">🕒 Horarios</button>
     <button class="btnGhost" id="btnMute" title="Silenciar avisos">🔊</button>
     <button class="btnGhost" onclick="location.href='dashboard.html'">← Dashboard</button>
   </div>
@@ -226,6 +227,63 @@
   </div>
 </div>
 
+<!-- Panel HORARIOS DE JORNADA · _HORARIOS_MON_V1 -->
+<div id="horOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,6,17,.65);z-index:50;align-items:center;justify-content:center">
+  <div class="card" style="width:min(940px,96vw);max-height:88vh;display:flex;flex-direction:column">
+    <div class="hd"><h2>🕒 Horarios de jornada</h2><span class="cnt" id="horCerrar" style="cursor:pointer;font-size:16px">✕</span></div>
+    <div style="padding:12px 16px;color:var(--mut);font-size:12px;line-height:1.65">
+      Cada registro de horas se calcula con el horario que regía <b>ese día</b>. Cuando cambie
+      el turno, agrega uno nuevo con la fecha desde la que rige: lo anterior queda intacto y
+      los saldos de la gente no se mueven.
+    </div>
+    <div style="overflow:auto;padding:0 16px 16px">
+      <div id="horAlerta"></div>
+      <div id="horLista" style="margin-bottom:16px">⏳ Cargando…</div>
+
+      <div style="border-top:1px solid var(--line);padding-top:14px">
+        <div id="horFormTitulo" style="font-size:12px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:#fcd34d;margin-bottom:10px">➕ Nuevo horario</div>
+        <input type="hidden" id="horFila" value="">
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <label style="font-size:12px;color:var(--mut)">Rige desde *<br><input type="date" id="horDesde" class="hji"></label>
+          <label style="font-size:12px;color:var(--mut)">Hasta (opcional)<br><input type="date" id="horHasta" class="hji"></label>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+          <label style="font-size:12px;color:var(--mut)">L-V entrada *<br><input type="time" id="horLvEnt" class="hji" value="06:15"></label>
+          <label style="font-size:12px;color:var(--mut)">L-V salida *<br><input type="time" id="horLvSal" class="hji" value="16:36"></label>
+          <label style="font-size:12px;color:var(--mut)">Refrigerio L-V (min)<br><input type="number" id="horLvRef" class="hji" value="45" min="0" max="180"></label>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px">
+          <label style="font-size:12px;color:var(--mut)">Sábado entrada<br><input type="time" id="horSabEnt" class="hji"></label>
+          <label style="font-size:12px;color:var(--mut)">Sábado salida<br><input type="time" id="horSabSal" class="hji"></label>
+          <label style="font-size:12px;color:var(--mut)">Refrigerio sáb. (min)<br><input type="number" id="horSabRef" class="hji" value="0" min="0" max="180"></label>
+        </div>
+        <div style="font-size:11.5px;color:var(--mut);margin-bottom:12px">Si el sábado se descansa, deja las dos horas del sábado en blanco.</div>
+
+        <div id="horPreview" style="border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;margin-bottom:12px"></div>
+
+        <div style="background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.45);border-radius:10px;padding:11px 14px;margin-bottom:12px">
+          <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:12.5px;color:#fcd34d;line-height:1.6">
+            <input type="checkbox" id="horAcceso" style="margin-top:3px;width:15px;height:15px">
+            <span><b>Usar este horario también para limitar la entrada al sistema.</b><br>
+            Fuera de esta franja nadie podrá iniciar sesión. Actívalo solo cuando estés seguro del horario.</span>
+          </label>
+          <label style="font-size:12px;color:var(--mut);display:block;margin-top:10px">Tolerancia (minutos)<br>
+            <input type="number" id="horMargen" class="hji" value="60" min="0" max="240"></label>
+        </div>
+
+        <label style="font-size:12px;color:var(--mut);display:block;margin-bottom:12px">Nota<br>
+          <input type="text" id="horNota" class="hji" style="width:100%;max-width:460px" placeholder="Ej: volvimos al horario largo"></label>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="send" id="horGuardar">💾 Guardar horario</button>
+          <button class="btnGhost" id="horLimpiar">✕ Limpiar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Panel FERIADOS Y CANJES -->
 <div id="ferOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,6,17,.65);z-index:50;align-items:center;justify-content:center">
   <div class="card" style="width:min(620px,95vw);max-height:88vh;display:flex;flex-direction:column">
@@ -251,6 +309,15 @@
 
 <div class="toast" id="toast"></div>
 
+<style>
+/* _HORARIOS_MON_V1 */
+.hji{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:10px;
+     padding:7px 9px;font-size:13px;margin-top:3px;font-family:inherit}
+#horLista table{width:100%;border-collapse:collapse;font-size:12.5px}
+#horLista th{text-align:left;color:var(--mut);font-size:10.5px;letter-spacing:.5px;
+     text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--line)}
+#horLista td{padding:7px 8px;border-bottom:1px solid var(--line)}
+</style>
 <script type="module">
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getDatabase, ref, onValue, push, serverTimestamp }
@@ -454,6 +521,26 @@ function fueraDeHorarioAhora(usuario){
   try{
     var u = String(usuario || '').toLowerCase().trim();
     if (u === 'jtimoteo') return false;
+
+    /* _HORARIOS_MON_V1: si hay un horario cargado en la hoja, MANDA ESE.
+       Asi el aviso del monitor y el calculo de la jornada dicen lo mismo.
+       Si todavia no cargo, se usa la regla de siempre, escrita mas abajo. */
+    var _hv = window._horarioVigente;
+    if (_hv && _hv.lvEntrada && _hv.lvEntrada !== '—') {
+      var _n = new Date(), _dw = _n.getDay();
+      if (_dw === 0) return true;                       // domingo
+      var _m = function (t) {
+        var p = String(t || '').match(/^(\d{1,2}):(\d{2})/);
+        return p ? (+p[1]) * 60 + (+p[2]) : -1;
+      };
+      var _e = (_dw === 6) ? _m(_hv.sabEntrada) : _m(_hv.lvEntrada);
+      var _s = (_dw === 6) ? _m(_hv.sabSalida)  : _m(_hv.lvSalida);
+      if (_e < 0 || _s < 0) return true;                // ese dia no se trabaja
+      var _tol = Number(_hv.accesoMargen); if (isNaN(_tol)) _tol = 60;
+      var _ah = _n.getHours() * 60 + _n.getMinutes();
+      return (_ah < _e - _tol) || (_ah > _s + _tol);
+    }
+
     var a = new Date(), mes = a.getMonth()+1, dia = a.getDate(), dow = a.getDay();
     var h = a.getHours() + a.getMinutes()/60;
     var alta = mes > 6 || (mes === 6 && dia >= 27);
@@ -1433,5 +1520,239 @@ if (!soyAdmin) {
   arrancar();
 }
 </script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _HORARIOS_MON_V1 (31-ago-2026) — administrar los horarios desde el Monitor
+
+   Va aparte del modulo de arriba a proposito: aquel es type="module" y sus
+   variables no salen de ahi. Este es un script normal que solo usa el DOM y
+   la misma direccion del servidor que ya guarda la sesion.
+
+   El horario NO se elige por sesion. Es una regla de la empresa CON FECHA
+   DESDE CUANDO RIGE: se define una vez, vale para todos, y lo anterior queda
+   congelado. Si cada quien eligiera el suyo al entrar, el mismo trabajador
+   saldria con acumulaciones distintas segun quien lo registro.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+
+var API_H = sessionStorage.getItem('api') ||
+  'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+
+var YO = '';
+try { YO = (JSON.parse(sessionStorage.getItem('user') || '{}') || {}).usuario || ''; } catch (e) {}
+
+function $h(id) { return document.getElementById(id); }
+function val(id) { var e = $h(id); return e ? e.value : ''; }
+function sval(id, v) { var e = $h(id); if (e) e.value = v; }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+  });
+}
+
+function post(cuerpo) {
+  return fetch(API_H, { method: 'POST', body: JSON.stringify(cuerpo),
+                        headers: { 'Content-Type': 'text/plain' } })
+    .then(function (r) { return r.json(); })
+    .catch(function () { return { success: false, error: 'Sin conexión con el servidor' }; });
+}
+
+function aviso(tipo, msg) {
+  var el = $h('horAlerta'); if (!el) return;
+  var col = tipo === 'ok' ? ['rgba(34,197,94,.12)', 'rgba(34,197,94,.5)', '#86efac']
+                          : ['rgba(239,68,68,.12)', 'rgba(239,68,68,.5)', '#fca5a5'];
+  el.innerHTML = '<div style="background:' + col[0] + ';border:1px solid ' + col[1] +
+    ';color:' + col[2] + ';border-radius:10px;padding:9px 13px;font-size:12.5px;margin-bottom:12px">' +
+    esc(msg) + '</div>';
+  setTimeout(function () { if (el.firstChild) el.innerHTML = ''; }, 7000);
+}
+
+/* ── Calculo en vivo mientras se escribe ── */
+function minu(hhmm) {
+  var m = String(hhmm || '').match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return -1;
+  var h = +m[1], mi = +m[2];
+  return (h > 23 || mi > 59) ? -1 : h * 60 + mi;
+}
+function netas(ent, sal, ref) {
+  var e = minu(ent), s = minu(sal);
+  if (e < 0 || s < 0 || s <= e) return 0;
+  var n = (s - e - (Number(ref) || 0)) / 60;
+  return n > 0 ? Math.round(n * 100) / 100 : 0;
+}
+
+function preview() {
+  var el = $h('horPreview'); if (!el) return;
+  var lv  = netas(val('horLvEnt'),  val('horLvSal'),  val('horLvRef'));
+  var sab = netas(val('horSabEnt'), val('horSabSal'), val('horSabRef'));
+  var sem = Math.round((lv * 5 + sab) * 100) / 100;
+
+  if (lv <= 0) {
+    el.style.cssText = 'border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;margin-bottom:12px;' +
+      'background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.5);color:#fca5a5';
+    el.textContent = 'Revisa las horas de lunes a viernes: con lo que hay, la jornada queda en cero.';
+    return;
+  }
+  var pasa = sem > 48.001;
+  el.style.cssText = 'border-radius:10px;padding:10px 14px;font-size:13px;font-weight:700;margin-bottom:12px;' +
+    (pasa ? 'background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.5);color:#fcd34d'
+          : 'background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.45);color:#7dd3fc');
+  el.innerHTML = 'Lunes a viernes <b>' + lv.toFixed(2) + ' h</b> · sábado <b>' +
+    (sab > 0 ? sab.toFixed(2) + ' h' : 'descansa') + '</b> · semana <b>' + sem.toFixed(2) + ' h</b>' +
+    (pasa ? ' · ⚠️ pasa de las 48 horas semanales' : '');
+}
+
+/* ── Listar ── */
+var LISTA = [];
+function cargar() {
+  var cont = $h('horLista'); if (!cont) return;
+  cont.innerHTML = '⏳ Cargando…';
+  post({ action: 'horariosListar', usuario: YO }).then(function (d) {
+    if (!d || !d.success) {
+      cont.innerHTML = '<div style="color:#fca5a5;font-size:12.5px">' +
+        esc((d && d.error) || 'No se pudo cargar') +
+        '<br><span style="color:var(--mut)">Si dice "Accion no reconocida", falta agregar las tres líneas al switch en Apps Script.</span></div>';
+      return;
+    }
+    LISTA = d.horarios || [];
+    window._horarioVigente = LISTA.filter(function (x) { return x.vigente; })[0] || null;
+
+    if (!LISTA.length) {
+      cont.innerHTML = '<div style="color:var(--mut);font-size:12.5px">Todavía no hay horarios. Agrega el primero abajo.</div>';
+      return;
+    }
+    cont.innerHTML = '<table><thead><tr>' +
+      '<th>Desde</th><th>Hasta</th><th>Lunes a viernes</th><th>Horas</th>' +
+      '<th>Sábado</th><th>Horas</th><th>Semana</th><th>Acceso</th><th></th>' +
+      '</tr></thead><tbody>' +
+      LISTA.slice().reverse().map(function (x) {
+        var sab = (x.sabEntrada && x.sabEntrada !== '—')
+          ? esc(x.sabEntrada + ' a ' + x.sabSalida)
+          : '<span style="color:var(--mut)">descansa</span>';
+        return '<tr' + (x.vigente ? ' style="background:rgba(34,197,94,.08)"' : '') + '>' +
+          '<td><b>' + esc(x.desde) + '</b>' + (x.vigente
+            ? ' <span style="background:#16a34a;color:#04140a;border-radius:9px;padding:1px 7px;font-size:9.5px;font-weight:900">VIGENTE</span>' : '') + '</td>' +
+          '<td>' + (x.hasta ? esc(x.hasta) : '<span style="color:var(--mut)">—</span>') + '</td>' +
+          '<td>' + esc(x.lvEntrada + ' a ' + x.lvSalida) + '</td>' +
+          '<td style="text-align:center;font-weight:700">' + Number(x.horasLV).toFixed(2) + '</td>' +
+          '<td>' + sab + '</td>' +
+          '<td style="text-align:center;font-weight:700">' + Number(x.horasSab).toFixed(2) + '</td>' +
+          '<td style="text-align:center;font-weight:700">' + Number(x.horasSemana).toFixed(2) + '</td>' +
+          '<td style="text-align:center">' + (x.accesoActivo
+            ? '<span style="color:#fca5a5;font-weight:700">limita entrada</span>'
+            : '<span style="color:var(--mut)">no limita</span>') + '</td>' +
+          '<td style="white-space:nowrap">' +
+            '<button class="btnGhost" data-edit="' + x.fila + '" style="padding:2px 8px;font-size:11px">✏️</button> ' +
+            '<button class="btnGhost" data-del="'  + x.fila + '" style="padding:2px 8px;font-size:11px;color:#fca5a5">🗑️</button>' +
+          '</td></tr>';
+      }).join('') + '</tbody></table>';
+  });
+}
+
+function limpiar() {
+  sval('horFila', ''); sval('horDesde', ''); sval('horHasta', '');
+  sval('horLvEnt', '06:15'); sval('horLvSal', '16:36'); sval('horLvRef', '45');
+  sval('horSabEnt', ''); sval('horSabSal', ''); sval('horSabRef', '0');
+  sval('horNota', ''); sval('horMargen', '60');
+  var c = $h('horAcceso'); if (c) c.checked = false;
+  var t = $h('horFormTitulo'); if (t) t.textContent = '➕ Nuevo horario';
+  preview();
+}
+
+function editar(fila) {
+  var x = LISTA.filter(function (h) { return h.fila === fila; })[0];
+  if (!x) return;
+  sval('horFila', String(fila));
+  sval('horDesde', x.desde); sval('horHasta', x.hasta || '');
+  sval('horLvEnt', x.lvEntrada === '—' ? '' : x.lvEntrada);
+  sval('horLvSal', x.lvSalida === '—' ? '' : x.lvSalida);
+  sval('horLvRef', String(x.lvRefrigMin));
+  sval('horSabEnt', x.sabEntrada === '—' ? '' : x.sabEntrada);
+  sval('horSabSal', x.sabSalida === '—' ? '' : x.sabSalida);
+  sval('horSabRef', String(x.sabRefrigMin));
+  sval('horNota', x.nota || ''); sval('horMargen', String(x.accesoMargen));
+  var c = $h('horAcceso'); if (c) c.checked = !!x.accesoActivo;
+  var t = $h('horFormTitulo'); if (t) t.textContent = '✏️ Editando el horario del ' + x.desde;
+  preview();
+}
+
+function guardar() {
+  var desde = val('horDesde');
+  if (!desde) { aviso('err', 'Indica desde qué día rige este horario.'); return; }
+  if (netas(val('horLvEnt'), val('horLvSal'), val('horLvRef')) <= 0) {
+    aviso('err', 'Revisa las horas de lunes a viernes: la jornada queda en cero.'); return;
+  }
+  var acceso = !!($h('horAcceso') || {}).checked;
+  if (acceso && !confirm(
+      'Vas a activar el control de entrada al sistema con este horario.\n\n' +
+      'Fuera de la franja ' + val('horLvEnt') + ' a ' + val('horLvSal') +
+      ' (mas ' + (val('horMargen') || '60') + ' minutos de tolerancia), NADIE podra iniciar sesion.\n\n' +
+      '¿Estas seguro de que el horario es correcto?')) return;
+
+  var btn = $h('horGuardar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+  post({ action: 'horariosGuardar', usuario: YO, horario: {
+      fila: val('horFila') || 0, desde: desde, hasta: val('horHasta'),
+      lvEntrada: val('horLvEnt'), lvSalida: val('horLvSal'), lvRefrigMin: val('horLvRef'),
+      sabEntrada: val('horSabEnt'), sabSalida: val('horSabSal'), sabRefrigMin: val('horSabRef'),
+      accesoActivo: acceso, accesoMargen: val('horMargen'), nota: val('horNota')
+  }}).then(function (d) {
+    if (btn) { btn.disabled = false; btn.textContent = '💾 Guardar horario'; }
+    if (!d || !d.success) { aviso('err', (d && d.error) || 'No se pudo guardar'); return; }
+    aviso('ok', 'Horario guardado. Lunes a viernes ' + Number(d.horasLV).toFixed(2) + ' h' +
+      (d.horasSab > 0 ? ', sábado ' + Number(d.horasSab).toFixed(2) + ' h' : ', sábado descansa') + '.');
+    limpiar(); cargar();
+  });
+}
+
+function eliminar(fila) {
+  var x = LISTA.filter(function (h) { return h.fila === fila; })[0];
+  if (!x) return;
+  if (!confirm('¿Eliminar el horario que rige desde el ' + x.desde + '?\n\n' +
+               'Los registros ya guardados no cambian, pero los calculos nuevos\n' +
+               'de esas fechas pasaran a usar otro horario.')) return;
+  post({ action: 'horariosEliminar', usuario: YO, fila: fila }).then(function (d) {
+    if (!d || !d.success) { aviso('err', (d && d.error) || 'No se pudo eliminar'); return; }
+    aviso('ok', 'Horario eliminado.'); cargar();
+  });
+}
+
+/* ── Enganches ── */
+document.addEventListener('DOMContentLoaded', function () {
+  var ov = $h('horOverlay');
+  var btn = $h('btnHor');
+  if (btn && ov) {
+    btn.addEventListener('click', function () { ov.style.display = 'flex'; cargar(); preview(); });
+  }
+  var cer = $h('horCerrar');
+  if (cer && ov) cer.addEventListener('click', function () { ov.style.display = 'none'; });
+  if (ov) ov.addEventListener('click', function (e) { if (e.target === ov) ov.style.display = 'none'; });
+
+  var g = $h('horGuardar'); if (g) g.addEventListener('click', guardar);
+  var l = $h('horLimpiar'); if (l) l.addEventListener('click', limpiar);
+
+  ['horLvEnt','horLvSal','horLvRef','horSabEnt','horSabSal','horSabRef'].forEach(function (id) {
+    var e = $h(id); if (e) e.addEventListener('change', preview);
+  });
+
+  var cont = $h('horLista');
+  if (cont) cont.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.getAttribute) return;
+    var ed = t.getAttribute('data-edit'), dl = t.getAttribute('data-del');
+    if (ed) editar(Number(ed));
+    if (dl) eliminar(Number(dl));
+  });
+
+  /* Se carga en segundo plano para que la regla de horario del monitor
+     tenga el dato aunque nadie abra el panel. */
+  setTimeout(cargar, 2500);
+});
+
+console.log('[_HORARIOS_MON_V1] panel de horarios listo');
+})();
+</script>
+
 </body>
 </html>
