@@ -395,6 +395,115 @@ h3{font-size:16px !important}
       </table>
     </div>
   </div>
+
+  <!-- ══════════ _HORARIOS_UI_V1 · HORARIOS DE JORNADA ══════════ -->
+  <div class="card">
+    <div class="card-title">🕒 Horarios de jornada</div>
+    <div style="font-size:12.5px;color:#475569;line-height:1.65;margin-bottom:14px">
+      Cada registro se calcula con el horario que regía <b>ese día</b>. Cuando cambie
+      el turno, agrega un horario nuevo con la fecha desde la que rige: lo anterior
+      queda intacto y los saldos de la gente no se mueven.
+    </div>
+    <div id="alHorarios"></div>
+
+    <div class="tbl-wrap" style="margin-bottom:16px">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Desde</th><th>Hasta</th>
+            <th>Lunes a viernes</th><th>Horas</th>
+            <th>Sábado</th><th>Horas</th>
+            <th>Semana</th><th>Acceso</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="tbHorarios"><tr><td colspan="9" class="empty">⏳ Cargando...</td></tr></tbody>
+      </table>
+    </div>
+
+    <div style="border-top:1px solid #e2e8f0;padding-top:14px">
+      <div style="font-size:13px;font-weight:700;color:#0a2463;margin-bottom:10px" id="hjFormTitulo">
+        ➕ Nuevo horario
+      </div>
+      <input type="hidden" id="hjFila" value="">
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div class="fg" style="min-width:150px">
+          <label class="lbl">Rige desde *</label>
+          <input type="date" id="hjDesde">
+        </div>
+        <div class="fg" style="min-width:150px">
+          <label class="lbl">Hasta (opcional)</label>
+          <input type="date" id="hjHasta">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div class="fg" style="min-width:120px">
+          <label class="lbl">L-V entrada *</label>
+          <input type="time" id="hjLvEnt" value="06:15" onchange="hjPreview()">
+        </div>
+        <div class="fg" style="min-width:120px">
+          <label class="lbl">L-V salida *</label>
+          <input type="time" id="hjLvSal" value="16:36" onchange="hjPreview()">
+        </div>
+        <div class="fg" style="min-width:130px">
+          <label class="lbl">Refrigerio L-V (min)</label>
+          <input type="number" id="hjLvRef" value="45" min="0" max="180" onchange="hjPreview()">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div class="fg" style="min-width:120px">
+          <label class="lbl">Sábado entrada</label>
+          <input type="time" id="hjSabEnt" onchange="hjPreview()">
+        </div>
+        <div class="fg" style="min-width:120px">
+          <label class="lbl">Sábado salida</label>
+          <input type="time" id="hjSabSal" onchange="hjPreview()">
+        </div>
+        <div class="fg" style="min-width:130px">
+          <label class="lbl">Refrigerio sáb. (min)</label>
+          <input type="number" id="hjSabRef" value="0" min="0" max="180" onchange="hjPreview()">
+        </div>
+      </div>
+      <div style="font-size:11.5px;color:#64748b;margin:-4px 0 12px">
+        Si el sábado se descansa, deja las dos horas del sábado en blanco.
+      </div>
+
+      <div id="hjPreview" style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;
+           padding:10px 14px;font-size:13px;color:#1e40af;font-weight:700;margin-bottom:12px"></div>
+
+      <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:8px;padding:11px 14px;margin-bottom:12px">
+        <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:12.5px;color:#92400e">
+          <input type="checkbox" id="hjAccesoActivo" style="margin-top:2px;width:15px;height:15px">
+          <span>
+            <b>Usar este horario también para limitar la entrada al sistema.</b><br>
+            Si lo activas, fuera de esta franja nadie podrá iniciar sesión.
+            Actívalo solo cuando estés seguro de que el horario es correcto.
+          </span>
+        </label>
+        <div style="display:flex;gap:10px;align-items:flex-end;margin-top:10px">
+          <div class="fg" style="min-width:150px">
+            <label class="lbl">Tolerancia (minutos)</label>
+            <input type="number" id="hjAccesoMargen" value="60" min="0" max="240">
+          </div>
+          <div style="font-size:11.5px;color:#92400e;padding-bottom:9px">
+            Se permite entrar desde esa cantidad de minutos antes y después.
+          </div>
+        </div>
+      </div>
+
+      <div class="fg" style="margin-bottom:12px">
+        <label class="lbl">Nota</label>
+        <input type="text" id="hjNota" placeholder="Ej: volvimos al horario largo">
+      </div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-green"   id="hjBtnGuardar" onclick="hjGuardar()">💾 Guardar horario</button>
+        <button class="btn btn-gray"    onclick="hjLimpiarForm()">✕ Limpiar</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ══════════ MODAL: AGREGAR MOTIVO RÁPIDO (desde Tab Registrar) ══════════ -->

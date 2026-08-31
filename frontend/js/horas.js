@@ -1602,3 +1602,196 @@ function _planillaCifra(txt, val, color) {
     }
   } catch (e) {}
 })();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _HORARIOS_UI_V1 (31-ago-2026) — administrar los horarios de jornada
+
+   Vive en la pestaña Config, que ya es solo para administradores.
+
+   POR QUE ASI Y NO ELIGIENDO EL HORARIO AL ENTRAR
+   ---------------------------------------------------------------------------
+   El horario NO se elige en cada sesion. Si dos personas eligieran horarios
+   distintos el mismo dia, el mismo trabajador saldria con acumulaciones
+   diferentes segun quien lo registro. Y al recalcular un registro viejo se
+   usaria el horario de hoy, no el que regia entonces.
+
+   Por eso es una regla de la empresa CON FECHA DESDE CUANDO RIGE. Se define
+   una vez, vale para todos, y lo anterior queda congelado.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function hjMin(hhmm) {
+  var m = String(hhmm || '').match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return -1;
+  var h = parseInt(m[1], 10), mi = parseInt(m[2], 10);
+  if (isNaN(h) || isNaN(mi) || h > 23 || mi > 59) return -1;
+  return h * 60 + mi;
+}
+
+function hjNetasUI(ent, sal, ref) {
+  var e = hjMin(ent), s = hjMin(sal);
+  if (e < 0 || s < 0 || s <= e) return 0;
+  var n = (s - e - (Number(ref) || 0)) / 60;
+  return n > 0 ? Math.round(n * 100) / 100 : 0;
+}
+
+/* Muestra en vivo cuantas horas quedan mientras se escribe */
+function hjPreview() {
+  var el = document.getElementById('hjPreview');
+  if (!el) return;
+  var lv  = hjNetasUI(v('hjLvEnt'),  v('hjLvSal'),  v('hjLvRef'));
+  var sab = hjNetasUI(v('hjSabEnt'), v('hjSabSal'), v('hjSabRef'));
+  var sem = Math.round((lv * 5 + sab) * 100) / 100;
+
+  if (lv <= 0) {
+    el.style.background = '#fef2f2'; el.style.borderColor = '#fecaca'; el.style.color = '#991b1b';
+    el.innerHTML = 'Revisa las horas de lunes a viernes: con lo que hay, la jornada queda en cero.';
+    return;
+  }
+  var aviso = '';
+  if (sem > 48.001) {
+    el.style.background = '#fffbeb'; el.style.borderColor = '#fde68a'; el.style.color = '#92400e';
+    aviso = ' &nbsp;·&nbsp; ⚠️ pasa de las 48 horas semanales';
+  } else {
+    el.style.background = '#eff6ff'; el.style.borderColor = '#bfdbfe'; el.style.color = '#1e40af';
+  }
+  el.innerHTML = 'Lunes a viernes <b>' + lv.toFixed(2) + ' h</b>' +
+                 ' &nbsp;·&nbsp; sábado <b>' + (sab > 0 ? sab.toFixed(2) + ' h' : 'descansa') + '</b>' +
+                 ' &nbsp;·&nbsp; semana <b>' + sem.toFixed(2) + ' h</b>' + aviso;
+}
+
+async function hjCargar() {
+  var tb = document.getElementById('tbHorarios');
+  if (!tb) return;
+  tb.innerHTML = '<tr><td colspan="9" class="empty">⏳ Cargando...</td></tr>';
+  try {
+    var d = await apiPost({ action: 'horariosListar', usuario: USER.usuario });
+    if (!d.success) {
+      tb.innerHTML = '<tr><td colspan="9" class="empty">' + (d.error || 'No se pudo cargar') + '</td></tr>';
+      return;
+    }
+    window._hjLista = d.horarios || [];
+    if (!window._hjLista.length) {
+      tb.innerHTML = '<tr><td colspan="9" class="empty">Todavía no hay horarios cargados. Agrega el primero abajo.</td></tr>';
+      return;
+    }
+    tb.innerHTML = window._hjLista.slice().reverse().map(function (x) {
+      var lvTxt  = x.lvEntrada + ' a ' + x.lvSalida;
+      var sabTxt = (x.sabEntrada && x.sabEntrada !== '—')
+        ? (x.sabEntrada + ' a ' + x.sabSalida) : '<span style="color:#94a3b8">descansa</span>';
+      return '<tr' + (x.vigente ? ' style="background:#f0fdf4"' : '') + '>' +
+        '<td><b>' + x.desde + '</b>' +
+          (x.vigente ? ' <span style="background:#16a34a;color:#fff;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:800">VIGENTE</span>' : '') + '</td>' +
+        '<td>' + (x.hasta || '<span style="color:#94a3b8">—</span>') + '</td>' +
+        '<td>' + lvTxt + '</td><td style="text-align:center;font-weight:700">' + Number(x.horasLV).toFixed(2) + '</td>' +
+        '<td>' + sabTxt + '</td><td style="text-align:center;font-weight:700">' + Number(x.horasSab).toFixed(2) + '</td>' +
+        '<td style="text-align:center;font-weight:700">' + Number(x.horasSemana).toFixed(2) + '</td>' +
+        '<td style="text-align:center">' + (x.accesoActivo
+            ? '<span style="color:#dc2626;font-weight:700">limita entrada</span>'
+            : '<span style="color:#94a3b8">no limita</span>') + '</td>' +
+        '<td style="white-space:nowrap">' +
+          '<button class="btn btn-gray"  style="padding:3px 9px;font-size:11px" onclick="hjEditar(' + x.fila + ')">✏️</button> ' +
+          '<button class="btn btn-red"   style="padding:3px 9px;font-size:11px" onclick="hjEliminar(' + x.fila + ')">🗑️</button>' +
+        '</td></tr>';
+    }).join('');
+  } catch (e) {
+    tb.innerHTML = '<tr><td colspan="9" class="empty">Error de conexión</td></tr>';
+  }
+}
+
+function hjLimpiarForm() {
+  sv('hjFila', ''); sv('hjDesde', ''); sv('hjHasta', '');
+  sv('hjLvEnt', '06:15'); sv('hjLvSal', '16:36'); sv('hjLvRef', '45');
+  sv('hjSabEnt', ''); sv('hjSabSal', ''); sv('hjSabRef', '0');
+  sv('hjNota', ''); sv('hjAccesoMargen', '60');
+  var c = document.getElementById('hjAccesoActivo'); if (c) c.checked = false;
+  var t = document.getElementById('hjFormTitulo'); if (t) t.textContent = '➕ Nuevo horario';
+  hjPreview();
+}
+
+function hjEditar(fila) {
+  var x = (window._hjLista || []).filter(function (h) { return h.fila === fila; })[0];
+  if (!x) return;
+  sv('hjFila', String(fila));
+  sv('hjDesde', x.desde); sv('hjHasta', x.hasta || '');
+  sv('hjLvEnt', x.lvEntrada === '—' ? '' : x.lvEntrada);
+  sv('hjLvSal', x.lvSalida === '—' ? '' : x.lvSalida);
+  sv('hjLvRef', String(x.lvRefrigMin));
+  sv('hjSabEnt', x.sabEntrada === '—' ? '' : x.sabEntrada);
+  sv('hjSabSal', x.sabSalida === '—' ? '' : x.sabSalida);
+  sv('hjSabRef', String(x.sabRefrigMin));
+  sv('hjNota', x.nota || ''); sv('hjAccesoMargen', String(x.accesoMargen));
+  var c = document.getElementById('hjAccesoActivo'); if (c) c.checked = !!x.accesoActivo;
+  var t = document.getElementById('hjFormTitulo'); if (t) t.textContent = '✏️ Editando el horario del ' + x.desde;
+  hjPreview();
+  var card = document.getElementById('hjFormTitulo');
+  if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function hjGuardar() {
+  var desde = v('hjDesde');
+  if (!desde) { mostrarAlerta('alHorarios', 'err', 'Indica desde qué día rige este horario.'); return; }
+
+  var lv = hjNetasUI(v('hjLvEnt'), v('hjLvSal'), v('hjLvRef'));
+  if (lv <= 0) { mostrarAlerta('alHorarios', 'err', 'Revisa las horas de lunes a viernes: la jornada queda en cero.'); return; }
+
+  var acceso = !!(document.getElementById('hjAccesoActivo') || {}).checked;
+  if (acceso) {
+    var ok = await appConfirm(
+      'Vas a activar el control de entrada al sistema con este horario.\n\n' +
+      'Fuera de la franja ' + v('hjLvEnt') + ' a ' + v('hjLvSal') +
+      ' (más ' + (v('hjAccesoMargen') || '60') + ' minutos de tolerancia), NADIE podrá iniciar sesión.\n\n' +
+      '¿Estás seguro de que el horario es correcto?');
+    if (!ok) return;
+  }
+
+  var btn = document.getElementById('hjBtnGuardar');
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Guardando...'; }
+  try {
+    var d = await apiPost({
+      action: 'horariosGuardar', usuario: USER.usuario,
+      horario: {
+        fila: v('hjFila') || 0, desde: desde, hasta: v('hjHasta'),
+        lvEntrada: v('hjLvEnt'), lvSalida: v('hjLvSal'), lvRefrigMin: v('hjLvRef'),
+        sabEntrada: v('hjSabEnt'), sabSalida: v('hjSabSal'), sabRefrigMin: v('hjSabRef'),
+        accesoActivo: acceso, accesoMargen: v('hjAccesoMargen'), nota: v('hjNota')
+      }
+    });
+    if (!d.success) { mostrarAlerta('alHorarios', 'err', d.error || 'No se pudo guardar'); return; }
+    mostrarAlerta('alHorarios', 'ok',
+      'Horario guardado. Lunes a viernes ' + Number(d.horasLV).toFixed(2) + ' h' +
+      (d.horasSab > 0 ? ', sábado ' + Number(d.horasSab).toFixed(2) + ' h' : ', sábado descansa') + '.');
+    hjLimpiarForm();
+    hjCargar();
+  } catch (e) {
+    mostrarAlerta('alHorarios', 'err', 'Error de conexión');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '💾 Guardar horario'; }
+  }
+}
+
+async function hjEliminar(fila) {
+  var x = (window._hjLista || []).filter(function (h) { return h.fila === fila; })[0];
+  if (!x) return;
+  var ok = await appConfirm('¿Eliminar el horario que rige desde el ' + x.desde + '?\n\n' +
+                            'Los registros ya guardados no cambian, pero los cálculos nuevos\n' +
+                            'de esas fechas pasarán a usar otro horario.');
+  if (!ok) return;
+  var d = await apiPost({ action: 'horariosEliminar', usuario: USER.usuario, fila: fila });
+  if (!d.success) { mostrarAlerta('alHorarios', 'err', d.error || 'No se pudo eliminar'); return; }
+  mostrarAlerta('alHorarios', 'ok', 'Horario eliminado.');
+  hjCargar();
+}
+
+/* Se carga al abrir la pestaña Config, junto con los motivos */
+(function () {
+  var _showOrig = window.showTab;
+  if (typeof _showOrig !== 'function') return;
+  window.showTab = function (tab, btn) {
+    var r = _showOrig.apply(this, arguments);
+    try {
+      if (tab === 'config' && !window._hjCargado) { window._hjCargado = true; hjCargar(); hjPreview(); }
+    } catch (e) {}
+    return r;
+  };
+})();
