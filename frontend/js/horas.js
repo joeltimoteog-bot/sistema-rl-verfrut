@@ -1795,3 +1795,140 @@ async function hjEliminar(fila) {
     return r;
   };
 })();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _DEVOLUCION_V6 (31-ago-2026) — la devolución deja de pedir horario
+
+   QUE PASABA
+   ---------------------------------------------------------------------------
+   En agosto agregue "devolucion" a _esMotivoConHorario para que abriera algun
+   campo. Pero el campo que abria era el HORARIO del permiso, y eso no es lo que
+   hace falta: lo que hay que anotar es CUANTAS HORAS se le pagan al trabajador
+   como extras en la planilla.
+
+   Ejemplo real: Marco La Torre hizo 4 horas de mas el 30 de agosto. Por ley
+   solo se le pueden pagar 2 en el dia. El usuario elige Devolucion, escribe 2,
+   y le quedan 2 horas acumuladas.
+
+   COMO QUEDA
+   ---------------------------------------------------------------------------
+   · Permiso  -> sigue pidiendo hora de inicio y fin, como siempre.
+   · Devolucion -> pide UN numero: las horas a pagar. Tope 2 por dia.
+   · Nada se genera solo. La devolucion la decide y la registra una persona.
+
+   El tope de verdad lo hace cumplir el servidor, que es el unico que sabe si
+   ese dia ya se le devolvieron horas. Aca se avisa antes, para no hacer perder
+   el viaje al usuario.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var DEVOL_TOPE_DIA = 2;   // horas maximas a pagar por dia, por ley
+
+/* Ahora SOLO el permiso abre el horario */
+function _esMotivoConHorario(m) {
+  var t = String(m || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return t.indexOf('permiso') >= 0;
+}
+
+function _esMotivoDevolucion(m) {
+  var t = String(m || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  if (t.indexOf('pagadas') >= 0) return false;      // la fila automatica vieja
+  return t.indexOf('devolucion') >= 0;
+}
+
+/* Texto de ayuda: cuanto tiene acumulado y cuanto se le puede pagar hoy */
+function _devolAyuda() {
+  var el = document.getElementById('devolAyuda');
+  if (!el) return;
+  var t = (window.horasCache && window.horasCache.trabajadorActual) || null;
+  var saldo = null;
+  try { saldo = window.horasCache.saldoActual; } catch (e) {}
+
+  var pedido = parseFloat(String(v('regHorasDevol')).replace(',', '.'));
+  if (isNaN(pedido)) pedido = 0;
+
+  var partes = [];
+  partes.push('Por ley solo se pueden pagar <b>' + DEVOL_TOPE_DIA.toFixed(0) +
+              ' horas por día</b>.');
+  if (saldo && typeof saldo.saldo === 'number') {
+    partes.push('Hoy ' + (t ? (t.nombre || '') : 'el trabajador') + ' tiene <b>' +
+                saldo.saldo.toFixed(2) + ' h</b> acumuladas.');
+    if (pedido > 0) {
+      var queda = Math.round((saldo.saldo - pedido) * 100) / 100;
+      partes.push('Si le pagas ' + pedido.toFixed(2) + ' h, le quedarán <b>' +
+                  queda.toFixed(2) + ' h</b>.');
+    }
+  }
+  if (pedido > DEVOL_TOPE_DIA + 0.001) {
+    partes.push('<span style="color:#dc2626">⚠️ ' + pedido.toFixed(2) +
+                ' h pasa del tope. El sistema no lo va a permitir.</span>');
+  }
+  el.innerHTML = partes.join(' ');
+}
+
+/* Mostrar u ocultar el campo segun el motivo */
+(function () {
+  var _orig = window.motivoCambia;
+  if (typeof _orig !== 'function') return;
+  window.motivoCambia = function () {
+    var r = _orig.apply(this, arguments);
+    try {
+      var sel = document.getElementById('regMotivo');
+      var esDev = sel ? _esMotivoDevolucion(sel.value) : false;
+      var g = document.getElementById('grpDevol');
+      if (g) g.style.display = esDev ? '' : 'none';
+      if (!esDev) { var i = document.getElementById('regHorasDevol'); if (i) i.value = ''; }
+      _devolAyuda();
+      if (typeof recalcularHoras === 'function') recalcularHoras();
+    } catch (e) {}
+    return r;
+  };
+})();
+
+/* En el cuadro de calculo, las horas de la devolucion salen donde el permiso */
+(function () {
+  var _orig = window.recalcularHoras;
+  if (typeof _orig !== 'function') return;
+  window.recalcularHoras = function () {
+    var r = _orig.apply(this, arguments);
+    try {
+      var motivo = v('regMotivo') || '';
+      if (_esMotivoDevolucion(motivo)) {
+        var n = parseFloat(String(v('regHorasDevol')).replace(',', '.'));
+        if (isNaN(n) || n < 0) n = 0;
+        setText('calcPerm', n.toFixed(2));
+      }
+      _devolAyuda();
+    } catch (e) {}
+    return r;
+  };
+})();
+
+/* Avisar antes de mandar algo que el servidor va a rechazar */
+(function () {
+  var _orig = window.registrarHoras;
+  if (typeof _orig !== 'function') return;
+  window.registrarHoras = async function () {
+    try {
+      var motivo = v('regMotivo') || '';
+      if (_esMotivoDevolucion(motivo)) {
+        var n = parseFloat(String(v('regHorasDevol')).replace(',', '.'));
+        if (isNaN(n) || n <= 0) {
+          mostrarAlerta('alRegistro', 'err',
+            'Indica cuántas horas se le van a pagar como extras.');
+          var i = document.getElementById('regHorasDevol'); if (i) i.focus();
+          return;
+        }
+        if (n > DEVOL_TOPE_DIA + 0.001) {
+          mostrarAlerta('alRegistro', 'err',
+            'Solo se pueden pagar ' + DEVOL_TOPE_DIA.toFixed(0) +
+            ' horas por día. Escribiste ' + n.toFixed(2) + '.');
+          return;
+        }
+      }
+    } catch (e) {}
+    return _orig.apply(this, arguments);
+  };
+})();
+
+console.log('[_DEVOLUCION_V6] la devolucion pide horas a pagar, no horario');

@@ -237,6 +237,15 @@ h3{font-size:16px !important}
       <div class="fg"><label class="lbl">Hora salida *</label><input type="time" id="regHoraSalida" oninput="recalcularHoras()"></div>
       <div class="fg" id="grpPermInicio" style="display:none"><label class="lbl">Hora inicio permiso</label><input type="time" id="regHoraPermInicio" oninput="recalcularHoras()"></div>
       <div class="fg" id="grpPermFin" style="display:none"><label class="lbl">Hora fin permiso</label><input type="time" id="regHoraPermFin" oninput="recalcularHoras()"></div>
+      <!-- _DEVOLUCION_V6 (31-ago-2026): la devolución NO pide horario.
+           Pide cuántas horas se pagan como extras en planilla, con tope legal. -->
+      <div class="fg" id="grpDevol" style="display:none">
+        <label class="lbl">Horas a pagar como extras *</label>
+        <input type="number" id="regHorasDevol" step="0.25" min="0" max="12"
+               placeholder="Ej: 2" oninput="recalcularHoras()">
+        <div id="devolAyuda" style="font-size:11.5px;color:#92400e;background:#fffbeb;
+             border:1px solid #fde68a;border-radius:7px;padding:6px 9px;margin-top:5px;line-height:1.55"></div>
+      </div>
       <div class="fg">
         <label class="lbl">Motivo *</label>
         <select id="regMotivo" onchange="motivoCambia()">
