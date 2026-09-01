@@ -684,6 +684,7 @@ function showTab(tab, btn) {
   if (btn) btn.classList.add('on');
   if (tab !== 'nueva') detenerScanner();
   if (tab === 'registros') cargarRegistros();
+  if (tab === 'exportar')  capPrepararExportPorUsuario();   /* _CAP_EXPORT_SUP_V1 */
 }
 
 /* ─────────────────────── PASO 1 → 2 ─────────────────────── */
@@ -1708,6 +1709,7 @@ async function exportarCSV() {
       empresa: v('expEmpresa'),
       desde:   v('expDesde'),
       hasta:   v('expHasta'),
+      supervisor: v('expSupervisor'),          /* _CAP_EXPORT_SUP_V1 */
       usuario: USER.usuario,
       rol:     USER.rol
     });
@@ -2148,3 +2150,101 @@ window.capConfirmarDuplicar = capConfirmarDuplicar;
 window.capCerrarDuplicar   = capCerrarDuplicar;
 
 console.log('[_CAP_DUPLICAR_V1] reutilizar nomina listo');
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _CAP_EXPORT_SUP_V1 (02-set-2026) — exportar por el usuario que registro
+   ---------------------------------------------------------------------------
+   EL CASO
+   Un administrador necesita bajar la base de UN supervisor en particular, no
+   la de todos juntos. El backend capExportarV2 ya acepta el parametro
+   "supervisor"; lo que faltaba era donde elegirlo en la pantalla.
+
+   QUE HACE
+   1) Al entrar a la pestana Exportar, si el usuario es administrador, agrega
+      un campo "Registrado por" con la lista de quienes han registrado.
+   2) Llena tambien el selector de supervisores de la pestana Registros, que
+      estaba en el HTML con una sola opcion y nunca se llenaba.
+
+   La lista sale de listarCapacitaciones, que ya devuelve creadaPor y
+   creadaPorNombre, asi que NO hace falta ningun endpoint nuevo.
+
+   A un supervisor no se le muestra el campo: capExportarV2 ya lo limita a sus
+   propios registros del lado del servidor. El campo es una comodidad para el
+   administrador, no el candado.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var _capSupLista   = null;
+var _capSupEsAdmin = false;
+
+async function capCargarSupervisores() {
+  if (_capSupLista) return _capSupLista;
+  try {
+    var d = await apiPost({
+      action:     'listarCapacitaciones',
+      rol:        USER.rol,
+      usuario:    USER.usuario,
+      empresa:    '',
+      desde:      '',
+      hasta:      '',
+      supervisor: ''
+    });
+    _capSupEsAdmin = !!(d && d.esAdmin);
+    var lista = (d && d.capacitaciones) || [];
+    var vistos = {};
+    lista.forEach(function (c) {
+      var u = String(c.creadaPor || '').toLowerCase().trim();
+      if (!u || vistos[u]) return;
+      vistos[u] = c.creadaPorNombre || c.creadaPor;
+    });
+    _capSupLista = Object.keys(vistos).sort().map(function (u) {
+      return { usuario: u, nombre: vistos[u] };
+    });
+  } catch (e) {
+    console.warn('[_CAP_EXPORT_SUP_V1] no se pudo leer la lista de supervisores:', e.message);
+    _capSupLista = [];
+  }
+  return _capSupLista;
+}
+
+function capPintarSelectSup(sel, lista) {
+  if (!sel) return;
+  var actual = sel.value;
+  sel.innerHTML = '<option value="">Todos los supervisores</option>';
+  lista.forEach(function (s) {
+    var o = document.createElement('option');
+    o.value = s.usuario;
+    o.textContent = s.nombre || s.usuario;
+    sel.appendChild(o);
+  });
+  sel.value = actual;
+}
+
+async function capPrepararExportPorUsuario() {
+  await capCargarSupervisores();
+
+  /* el selector que ya existia en Registros y nunca se llenaba */
+  if (_capSupEsAdmin) capPintarSelectSup(document.getElementById('filtroSupCap'), _capSupLista);
+
+  if (!_capSupEsAdmin) return;     /* un supervisor solo exporta lo suyo */
+
+  var ya = document.getElementById('expSupervisor');
+  if (ya) { capPintarSelectSup(ya, _capSupLista); return; }
+
+  var emp = document.getElementById('expEmpresa');
+  if (!emp) return;
+  var celda = (emp.closest ? emp.closest('.fg') : null) || emp.parentNode;
+  if (!celda || !celda.parentNode) return;
+
+  var nueva = document.createElement('div');
+  nueva.className = 'fg';
+  nueva.innerHTML = '<label class="lbl">Registrado por</label>' +
+                    '<select id="expSupervisor"><option value="">Todos los supervisores</option></select>';
+  celda.parentNode.insertBefore(nueva, celda.nextSibling);
+  capPintarSelectSup(document.getElementById('expSupervisor'), _capSupLista);
+}
+
+window.capCargarSupervisores      = capCargarSupervisores;
+window.capPrepararExportPorUsuario = capPrepararExportPorUsuario;
+
+console.log('[_CAP_EXPORT_SUP_V1] exportar por usuario listo');
