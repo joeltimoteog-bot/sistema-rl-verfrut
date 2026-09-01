@@ -388,6 +388,9 @@ async function _ejecutarBusquedaCapacitaciones() {
       html += '<br>⏰ ' + (c.horaInicio || '—') + ' a ' + (c.horaFin || '—') + ' · 👥 <b>' + c.asistentes.length + '</b> asistentes';
       html += '</div>';
       html += '<button class="btn btn-primary" data-idx="' + i + '" style="font-size:13px;padding:8px 14px">📄 Regenerar formato R-SC-01</button>';
+      /* _CAP_DUPLICAR_V1: misma nomina, otro titulo */
+      html += ' <button class="btn btn-gray" data-dup="' + i + '" style="font-size:13px;padding:8px 14px" ' +
+              'title="Crear otro registro con estas mismas personas y otro titulo">📋 Otro título</button>';
       html += '</div>';
     });
 
@@ -399,6 +402,9 @@ async function _ejecutarBusquedaCapacitaciones() {
         const idx = parseInt(btn.dataset.idx);
         regenerarFormatoCapacitacion(window._capacitacionesEncontradas[idx]);
       };
+    });
+    cont.querySelectorAll('button[data-dup]').forEach(btn => {      /* _CAP_DUPLICAR_V1 */
+      btn.onclick = () => capAbrirDuplicarRegen(parseInt(btn.dataset.dup));
     });
   } catch(e) {
     cont.innerHTML = '<div style="color:#dc2626;padding:14px;background:#fef2f2;border-radius:6px">❌ Error: ' + e.message + '</div>';
@@ -425,6 +431,9 @@ function _mostrarListaCapacitacionesAntiguas(capacitaciones, fechaTxt) {
     html += (c.empresa || '—') + ' · ' + (c.lugar || '—') + ' · ' + (c.horaInicio || '—') + '-' + (c.horaFin || '—') + ' · <b>' + c.asistentes.length + '</b> asistentes';
     html += '</div>';
     html += '<button class="btn btn-primary" data-idx="' + i + '" style="font-size:12px;padding:6px 12px">📄 Regenerar formato R-SC-01</button>';
+    /* _CAP_DUPLICAR_V1 */
+    html += ' <button class="btn btn-gray" data-dup="' + i + '" style="font-size:12px;padding:6px 12px" ' +
+            'title="Crear otro registro con estas mismas personas y otro titulo">📋 Otro título</button>';
     html += '</div>';
   });
 
@@ -444,6 +453,9 @@ function _mostrarListaCapacitacionesAntiguas(capacitaciones, fechaTxt) {
       const idx = parseInt(btn.dataset.idx);
       regenerarFormatoCapacitacion(window._capacitacionesEncontradas[idx]);
     };
+  });
+  overlay.querySelectorAll('button[data-dup]').forEach(btn => {      /* _CAP_DUPLICAR_V1 */
+    btn.onclick = () => capAbrirDuplicarRegen(parseInt(btn.dataset.dup));
   });
 }
 
@@ -2030,11 +2042,31 @@ function capCerrarDuplicar() {
   if (o) o.classList.remove('open');
 }
 
+/* Desde la pantalla de Regenerar formato: los objetos vienen con otra forma */
+function capAbrirDuplicarRegen(idx) {
+  var lista = window._capacitacionesEncontradas || [];
+  var c = lista[idx];
+  if (!c) { alert('No encuentro esa capacitación. Vuelve a buscar.'); return; }
+  capAbrirDuplicarObj({
+    idCapacitacion:  c.id,
+    tema:            c.tema,
+    empresa:         c.empresa,
+    fecha:           c.fecha,
+    totalAsistentes: (c.asistentes || []).length,
+    creadaPorNombre: c.creadaPorNombre || '',
+    creadaPor:       c.creadaPor || ''
+  });
+}
+
 function capAbrirDuplicar(idx) {
   var lista = window._capRegistros || [];
   var r = lista[idx];
   if (!r) { mostrarFeedback('err', 'No encuentro ese registro. Actualiza la lista.'); return; }
+  capAbrirDuplicarObj(r);
+}
 
+function capAbrirDuplicarObj(r) {
+  if (!r) return;
   capCrearModalDuplicar();
   window._capDupActual = r;
 
@@ -2105,7 +2137,9 @@ async function capConfirmarDuplicar() {
   }
 }
 
-window.capAbrirDuplicar    = capAbrirDuplicar;
+window.capAbrirDuplicar      = capAbrirDuplicar;
+window.capAbrirDuplicarRegen = capAbrirDuplicarRegen;
+window.capAbrirDuplicarObj   = capAbrirDuplicarObj;
 window.capConfirmarDuplicar = capConfirmarDuplicar;
 window.capCerrarDuplicar   = capCerrarDuplicar;
 
