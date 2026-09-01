@@ -1565,39 +1565,45 @@ async function cargarRegistros() {
 }
 
 function renderizarTablaSupervisor(lista, wrap) {
+  window._capRegistros = lista;          /* _CAP_DUPLICAR_V1 */
   if (!wrap) wrap = document.getElementById('tbRegistrosWrap');
   wrap.innerHTML = `
     <table class="data-table">
       <thead><tr>
         <th>Empresa</th><th>Fecha</th><th>Tipo</th><th>Tema</th>
-        <th style="text-align:center">Asistentes</th>
+        <th style="text-align:center">Asistentes</th><th></th>
       </tr></thead>
-      <tbody>${lista.map(r => `<tr>
+      <tbody>${lista.map((r, i) => `<tr>
         <td><span class="badge-emp ${r.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${r.empresa || ''}</span></td>
         <td>${String(r.fecha||'').substring(0,10)}</td>
         <td style="font-size:11px;color:#475569">${r.tipo || ''}</td>
         <td style="font-size:12px">${(r.tema||'').substring(0,60)}${(r.tema||'').length>60?'…':''}</td>
         <td style="text-align:center;font-weight:700">${r.totalAsistentes || r.total_asistentes || 0}</td>
+        <td><button class="btn btn-gray btn-sm" title="Usar esta misma nomina con otro titulo"
+             onclick="capAbrirDuplicar(${i})">📋 Reutilizar</button></td>
       </tr>`).join('')}</tbody>
     </table>`;
 }
 
 function renderizarTablaAdmin(lista) {
+  window._capRegistros = lista;          /* _CAP_DUPLICAR_V1 */
   const wrap = document.getElementById('tbRegistrosWrap');
   if (!wrap) return;
   wrap.innerHTML = `
     <table class="data-table">
       <thead><tr>
         <th>Empresa</th><th>Fecha</th><th>Tipo</th><th>Tema</th>
-        <th style="text-align:center">Asistentes</th><th>Supervisor</th>
+        <th style="text-align:center">Asistentes</th><th>Supervisor</th><th></th>
       </tr></thead>
-      <tbody>${lista.map(r => `<tr>
+      <tbody>${lista.map((r, i) => `<tr>
         <td><span class="badge-emp ${r.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${r.empresa || ''}</span></td>
         <td>${String(r.fecha||'').substring(0,10)}</td>
         <td style="font-size:11px;color:#475569">${r.tipo || ''}</td>
         <td style="font-size:12px">${(r.tema||'').substring(0,60)}${(r.tema||'').length>60?'…':''}</td>
         <td style="text-align:center;font-weight:700">${r.totalAsistentes || r.total_asistentes || 0}</td>
         <td style="font-size:11px;color:#64748b">${r.creadaPorNombre || r.creadaPor || '—'}</td>
+        <td><button class="btn btn-gray btn-sm" title="Usar esta misma nomina con otro titulo"
+             onclick="capAbrirDuplicar(${i})">📋 Reutilizar</button></td>
       </tr>`).join('')}</tbody>
     </table>`;
 }
@@ -1964,3 +1970,143 @@ function _prepararFundo() {
 document.addEventListener('DOMContentLoaded', function () {
   setTimeout(_prepararFundo, 300);
 });
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _CAP_DUPLICAR_V1 (01-set-2026) — reutilizar la nomina con otro titulo
+
+   EL CASO
+   ---------------------------------------------------------------------------
+   El usuario registra 50 trabajadores de una ruta como "Capacitacion ETI".
+   Ese mismo grupo recibe tambien un comunicado. Hoy tendria que volver a
+   escanear los 50 fotochecks para emitir el segundo formato.
+
+   POR QUE SE DUPLICA Y NO SE EDITA
+   ---------------------------------------------------------------------------
+   Si se editara el titulo del registro original, la capacitacion ETI
+   desapareceria del historial y ante una auditoria no habria evidencia de que
+   se dicto. Duplicando quedan los dos registros, cada uno con su formato y su
+   misma nomina.
+
+   El modal se crea solo, asi que este archivo es el unico que hay que subir:
+   no hace falta tocar capacitaciones.html.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function capCrearModalDuplicar() {
+  if (document.getElementById('modalDupOverlay')) return;
+  var d = document.createElement('div');
+  d.className = 'modal-overlay';
+  d.id = 'modalDupOverlay';
+  d.onclick = function (e) { if (e.target === d) capCerrarDuplicar(); };
+  d.innerHTML =
+    '<div class="modal-lista" onclick="event.stopPropagation()">' +
+      '<h3>📋 Reutilizar la nómina</h3>' +
+      '<div id="dupResumen" style="background:#eff6ff;border:1.5px solid #bfdbfe;border-radius:8px;' +
+        'padding:10px 13px;font-size:12.5px;color:#1e40af;line-height:1.6;margin-bottom:14px"></div>' +
+      '<div class="fg" style="margin-bottom:12px">' +
+        '<label class="lbl">Título del nuevo registro *</label>' +
+        '<input type="text" id="dupTitulo" maxlength="160" placeholder="Ej: Comunicado de seguridad">' +
+      '</div>' +
+      '<div class="fg" style="margin-bottom:12px">' +
+        '<label class="lbl">Fecha</label>' +
+        '<input type="date" id="dupFecha">' +
+      '</div>' +
+      '<div style="font-size:11.5px;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;' +
+        'border-radius:7px;padding:8px 11px;margin-bottom:14px;line-height:1.55">' +
+        'El registro original <b>no se modifica</b>. Se crea uno nuevo con las mismas ' +
+        'personas y el título que escribas, y de ahí sale su propio formato R-SC-01.' +
+      '</div>' +
+      '<div id="dupAlerta"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+        '<button class="btn btn-gray btn-sm" onclick="capCerrarDuplicar()">Cancelar</button>' +
+        '<button class="btn btn-primary btn-sm" id="dupBtn" onclick="capConfirmarDuplicar()">✔ Crear el registro</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(d);
+}
+
+function capCerrarDuplicar() {
+  var o = document.getElementById('modalDupOverlay');
+  if (o) o.classList.remove('open');
+}
+
+function capAbrirDuplicar(idx) {
+  var lista = window._capRegistros || [];
+  var r = lista[idx];
+  if (!r) { mostrarFeedback('err', 'No encuentro ese registro. Actualiza la lista.'); return; }
+
+  capCrearModalDuplicar();
+  window._capDupActual = r;
+
+  var n = r.totalAsistentes || r.total_asistentes || 0;
+  var fecha = String(r.fecha || '').substring(0, 10);
+  var res = document.getElementById('dupResumen');
+  if (res) {
+    res.innerHTML =
+      'Vas a crear un registro nuevo con las mismas <b>' + n + ' personas</b> de:<br>' +
+      '<b>' + (r.tema || '(sin título)') + '</b><br>' +
+      (r.empresa || '') + ' · ' + fecha +
+      (r.creadaPorNombre || r.creadaPor ? ' · registró ' + (r.creadaPorNombre || r.creadaPor) : '');
+  }
+  var t = document.getElementById('dupTitulo'); if (t) t.value = '';
+  var f = document.getElementById('dupFecha');  if (f) f.value = fecha;
+  var a = document.getElementById('dupAlerta'); if (a) a.innerHTML = '';
+
+  document.getElementById('modalDupOverlay').classList.add('open');
+  setTimeout(function () { if (t) t.focus(); }, 120);
+}
+
+async function capConfirmarDuplicar() {
+  var r = window._capDupActual;
+  if (!r) return;
+
+  var titulo = String((document.getElementById('dupTitulo') || {}).value || '').trim();
+  var fecha  = String((document.getElementById('dupFecha')  || {}).value || '').trim();
+  var al = document.getElementById('dupAlerta');
+
+  function aviso(msg, ok) {
+    if (!al) return;
+    al.innerHTML = '<div style="background:' + (ok ? '#dcfce7' : '#fef2f2') +
+      ';border:1.5px solid ' + (ok ? '#86efac' : '#fecaca') + ';color:' + (ok ? '#166534' : '#dc2626') +
+      ';border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:12px">' + msg + '</div>';
+  }
+
+  if (!titulo)            { aviso('Escribe el título del nuevo registro.'); return; }
+  if (titulo.length < 4)  { aviso('El título es muy corto. Escribe algo que se entienda.'); return; }
+  if (titulo.trim().toLowerCase() === String(r.tema || '').trim().toLowerCase()) {
+    aviso('Ese es el mismo título del registro original. Ponle uno distinto.'); return;
+  }
+
+  var btn = document.getElementById('dupBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Creando...'; }
+  try {
+    var d = await apiPost({
+      action: 'duplicarCapacitacion',
+      idCapacitacion: r.idCapacitacion || r.id_capacitacion || r.id,
+      tituloNuevo: titulo,
+      fecha: fecha,
+      usuario: USER.usuario,
+      rol: USER.rol
+    });
+    if (!d || !d.success) { aviso((d && d.error) || 'No se pudo crear el registro'); return; }
+
+    aviso('✔ Registro creado con ' + d.asistentes + ' asistentes.', true);
+    setTimeout(function () {
+      capCerrarDuplicar();
+      mostrarFeedback('ok', '✅ Se creó "' + titulo + '" con la misma nómina (' +
+                            d.asistentes + ' personas). Ya puedes generar su formato.');
+      if (typeof cargarRegistros === 'function') cargarRegistros();
+    }, 900);
+
+  } catch (e) {
+    aviso('Error de conexión: ' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '✔ Crear el registro'; }
+  }
+}
+
+window.capAbrirDuplicar    = capAbrirDuplicar;
+window.capConfirmarDuplicar = capConfirmarDuplicar;
+window.capCerrarDuplicar   = capCerrarDuplicar;
+
+console.log('[_CAP_DUPLICAR_V1] reutilizar nomina listo');
