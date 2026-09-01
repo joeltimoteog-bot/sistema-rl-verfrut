@@ -2009,6 +2009,10 @@ function capCrearModalDuplicar() {
   var d = document.createElement('div');
   d.className = 'modal-overlay';
   d.id = 'modalDupOverlay';
+  /* _CAP_DUPLICAR_V1 (02-set): la ventana de Regenerar formato usa z-index 9999.
+     La clase modal-overlay del CSS tiene 500, asi que sin esto la ventana se abre
+     POR DEBAJO y los clics los atrapa la de arriba: se ve, pero no deja escribir. */
+  d.style.zIndex = '10050';
   d.onclick = function (e) { if (e.target === d) capCerrarDuplicar(); };
   d.innerHTML =
     '<div class="modal-lista" onclick="event.stopPropagation()">' +
