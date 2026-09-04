@@ -364,6 +364,25 @@ let intentos=0,MAX=3;
 
 // Roles que ven la selección de módulo (admins y coordinadores)
 const ROLES_SELECCION = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl','jefe_rl','admin','admin01','admin02','rrhh','supervisor'];
+
+/* _ROLES_ELEGIR_V1 (04-set-2026) - POR QUE SE AGREGA ESTO
+   La lista de arriba se comparaba con includes(), que exige el texto EXACTO.
+   Pero aplicarVisibilidadModulos() (mas abajo) usa indexOf('supervisor')===0,
+   que SI acepta 'supervisor 01' o 'supervisor de campo'.
+   Resultado: a esa gente el sistema le queria mostrar los ETI, pero el filtro
+   de entrada la mandaba directo al dashboard y nunca llegaba a la pantalla
+   donde estan las tarjetas. Es el mismo error que ya se corrigio el 15-ago
+   para 'administrador 01', pero solo se corrigio alla y no aca.
+   Esto NO le da acceso a nadie: quien ve cada tarjeta lo sigue decidiendo
+   aplicarVisibilidadModulos(). Aqui solo se decide quien llega a la pantalla. */
+function puedeElegirSistema(rol){
+  var r = String(rol || '').toLowerCase().trim();
+  if (!r) return false;
+  if (ROLES_SELECCION.indexOf(r) >= 0) return true;
+  var PREFIJOS = ['supervisor','administrador','admin','coordinador','jefa_rl','jefe_rl','rrhh'];
+  for (var i = 0; i < PREFIJOS.length; i++) if (r.indexOf(PREFIJOS[i]) === 0) return true;
+  return false;
+}
 // Roles SIN restricción de horario (nunca ven pantalla de bloqueo)
 const ROLES_SIN_HORARIO = ['administrador','administrador 01','administrador 02','coordinador','jefa_rl','jefe_rl'];
 
@@ -729,7 +748,7 @@ async function doLogin(){
         }).catch(()=>{console.timeEnd('[login] 2-preload-backend');}); } catch(e){}
       setLoading(false);
       console.log('[login] 3-navegacion: '+Math.round(performance.now()-_tLogin0)+'ms desde inicio');
-      if(ROLES_SELECCION.includes(rol)){
+      if(puedeElegirSistema(rol)){          /* _ROLES_ELEGIR_V1 */
         // Helper: bienvenida → pantalla de módulos (con visibilidad por rol)
         const irAPantallaModulo = () => {
           mostrarBienvenida(d.user, function(){
@@ -738,6 +757,16 @@ async function doLogin(){
             try { document.getElementById('pmQuien').textContent = d.user.nombre || d.user.usuario || ''; } catch(e){}
             mostrarAvisoMigracion(d.user);   // _AVISO_MIGRACION_V1
             aplicarVisibilidadModulos(d.user);
+            /* _ROLES_ELEGIR_V1: si esta persona no tiene ningun sistema ETI
+               visible, se entra directo al dashboard igual que antes, para no
+               obligarla a un clic de mas en una pantalla de una sola tarjeta. */
+            try {
+              var _eti  = document.getElementById('modETI');
+              var _evl  = document.getElementById('modEval');
+              var _hayETI = (_eti && _eti.style.display !== 'none') ||
+                            (_evl && _evl.style.display !== 'none');
+              if (!_hayETI) { window.location.href='frontend/pages/dashboard.html'; return; }
+            } catch(e) {}
             document.querySelector('.card').style.display='none';
             document.getElementById('pantallaModulo').style.display='flex';
           });
