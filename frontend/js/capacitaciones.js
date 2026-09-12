@@ -159,9 +159,15 @@ async function eliminarItem(idx) {
 
 /* ─────────────────────── INIT ─────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
+  /* _SESION_V1 (04-set-2026): antes se exigia que sessionStorage trajera
+     TAMBIEN la direccion de la API, y si faltaba se expulsaba al usuario sin
+     ningun aviso. El dashboard (linea 2984) y el monitor nunca lo exigieron:
+     usan una direccion de respaldo. Aqui se hace lo mismo. El candado real
+     sigue siendo el usuario: sin sesion no se entra. */
+  const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
   const ud = sessionStorage.getItem('user');
-  API = sessionStorage.getItem('api') || '';
-  if (!ud || !API) { location.href = '../../index.html'; return; }
+  API = sessionStorage.getItem('api') || API_URL_DEFAULT;
+  if (!ud) { location.href = '../../index.html'; return; }
   USER = JSON.parse(ud);
 
   const el = document.getElementById('topNombre');
@@ -2177,18 +2183,49 @@ console.log('[_CAP_DUPLICAR_V1] reutilizar nomina listo');
 var _capSupLista   = null;
 var _capSupEsAdmin = false;
 
+/* _EXPORT_SUP_V2 (09-set-2026) - ARREGLO DE LENTITUD
+   ---------------------------------------------------------------------------
+   La version anterior pedia listarCapacitaciones con desde:'' y hasta:'', o sea
+   SIN rango: para un administrador eso trae toda la historia con todos los
+   asistentes. Y ademas la pedia para CUALQUIER usuario que abriera la pestana
+   Exportar, porque el rol recien se comprobaba despues de traer los datos.
+   Es el mismo error de la consulta por DNI de agosto: pedir sin limite.
+
+   AHORA: 1) si el usuario no es administrador no se pide nada, porque el
+   selector no se le muestra igual; 2) se pide solo los ultimos 12 meses, que
+   es de sobra para saber quienes han registrado; 3) el resultado se guarda en
+   memoria, asi que se pide una sola vez por sesion. */
+var CAP_MESES_SUP = 12;
+var CAP_ROLES_ADMIN_UI = ['administrador','administrador 01','administrador 02',
+                          'admin','admin01','admin02','coordinador','jefa_rl','jefe_rl'];
+function capPareceAdmin() {
+  var r = String((typeof USER !== 'undefined' && USER && USER.rol) || '').toLowerCase().trim();
+  return CAP_ROLES_ADMIN_UI.indexOf(r) >= 0;
+}
+function capDesdeMeses(n) {
+  var f = new Date();
+  f.setMonth(f.getMonth() - n);
+  return f.toISOString().slice(0, 10);
+}
+
 async function capCargarSupervisores() {
   if (_capSupLista) return _capSupLista;
+  if (!capPareceAdmin()) { _capSupLista = []; _capSupEsAdmin = false; return _capSupLista; }
   try {
+    var _t0 = (window.performance && performance.now()) || Date.now();
     var d = await apiPost({
       action:     'listarCapacitaciones',
       rol:        USER.rol,
       usuario:    USER.usuario,
       empresa:    '',
-      desde:      '',
-      hasta:      '',
+      desde:      capDesdeMeses(CAP_MESES_SUP),
+      hasta:      new Date().toISOString().slice(0, 10),
       supervisor: ''
     });
+    try {
+      var _ms = Math.round((((window.performance && performance.now()) || Date.now())) - _t0);
+      console.log('[_EXPORT_SUP_V2] lista de supervisores en ' + _ms + ' ms');
+    } catch (e) {}
     _capSupEsAdmin = !!(d && d.esAdmin);
     var lista = (d && d.capacitaciones) || [];
     var vistos = {};

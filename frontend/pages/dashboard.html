@@ -11828,5 +11828,390 @@ console.log('[_LIC_EN_PROCESO_V1] el N de licencia no se pide cuando esta EN PRO
 })();
 </script>
 
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _AZURE_RELOJ_V1 (12-set-2026) — que la consulta deje de quedarse colgada
+   ---------------------------------------------------------------------------
+   EL PROBLEMA (medido, no supuesto)
+   Azure se duerme cuando nadie lo usa. Medimos: la primera llamada tarda
+   7 segundos en despertar, las siguientes 335 milisegundos.
+
+   Y de las llamadas a Azure que hay en el dashboard, SOLO UNA tenia reloj:
+   la de consulta por rango (_azFetch, 25 s). Las otras cuatro no tenian
+   ninguno:
+       buscarTrabajadorPorDniAzure   <- Consulta de Trabajador
+       _consultaDNIAzure             <- Mis Atenciones por DNI
+       /atenciones/stats             <- estadisticas por supervisor
+       /atenciones/update            <- marcar como finalizado
+
+   Un fetch sin reloj espera lo que el navegador quiera: 30 segundos, a veces
+   dos minutos. Y RECIEN AHI empieza el respaldo por hoja de calculo, que
+   arrastra sus propios 2 segundos de peaje mas la consulta. Por eso el
+   usuario siente que la pantalla se colgo: no espera su consulta, espera a
+   un servidor dormido sin que nadie le ponga limite.
+
+   QUE HACE ESTE BLOQUE
+   1) Le pone reloj de 6 segundos a TODA llamada a Azure que no traiga el
+      suyo. Al cumplirse, corta y el codigo de siempre se va al respaldo,
+      que es justo lo que ya sabe hacer. No se reescribe ninguna funcion.
+   2) Despierta a Azure al cargar la pagina, sin esperar respuesta. Asi los
+      7 segundos del arranque en frio se los come el sistema mientras el
+      usuario mira la pantalla, y no cuando hace clic en consultar.
+
+   POR QUE ASI Y NO EDITANDO CADA LLAMADA
+   Porque envolver fetch aplica a las cuatro de una vez, respeta la que ya
+   tiene su propio reloj, y sobrevive a futuros cambios del archivo. Para
+   revertir, se borra este bloque.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+
+/* Por que 9 s y no menos: Azure DESPIERTO contesta en 335 ms, pero en FRIO
+   tarda unos 7 s. Si el reloj fuera de 6 s, cada arranque en frio se iria al
+   respaldo por hoja de calculo, que es MAS lento todavia. 9 s deja pasar el
+   frio y aun asi corta de golpe cuando Azure esta caido de verdad — hoy esos
+   casos se quedan colgados 30 segundos o dos minutos. */
+var AZ_RELOJ_MS = 9000;
+var AZ_MARCA    = 'azurewebsites.net/api';
+
+var _fetchPrevio = window.fetch;
+if (typeof _fetchPrevio !== 'function') return;
+
+window.fetch = function (recurso, opciones) {
+  var u = '';
+  try { u = (typeof recurso === 'string') ? recurso : (recurso && recurso.url) || ''; } catch (e) {}
+
+  // no es Azure, o ya trae su propio reloj -> se deja tal cual
+  if (u.indexOf(AZ_MARCA) < 0) return _fetchPrevio.apply(this, arguments);
+  if (opciones && opciones.signal)  return _fetchPrevio.apply(this, arguments);
+  if (typeof AbortController === 'undefined') return _fetchPrevio.apply(this, arguments);
+
+  var ctrl = new AbortController();
+  var t0   = (window.performance && performance.now()) || Date.now();
+  var reloj = setTimeout(function () {
+    try { ctrl.abort(); } catch (e) {}
+    console.warn('[_AZURE_RELOJ_V1] Azure no contesto en ' + AZ_RELOJ_MS +
+                 ' ms, se pasa al respaldo ->', u.split('?')[0]);
+  }, AZ_RELOJ_MS);
+
+  var op = Object.assign({}, opciones || {}, { signal: ctrl.signal });
+  return _fetchPrevio.call(this, recurso, op).then(function (r) {
+    clearTimeout(reloj);
+    try {
+      var ms = Math.round((((window.performance && performance.now()) || Date.now())) - t0);
+      if (ms > 2000) console.warn('[_AZURE_RELOJ_V1] Azure tardo ' + ms + ' ms ->', u.split('?')[0]);
+    } catch (e) {}
+    return r;
+  }, function (err) {
+    clearTimeout(reloj);
+    throw err;
+  });
+};
+
+/* ── Despertador: una llamada suelta al cargar, sin esperar respuesta ── */
+function _despertarAzure() {
+  try {
+    if (typeof AZURE_FN_BASE === 'undefined' || !AZURE_FN_BASE) return;
+    var t0 = (window.performance && performance.now()) || Date.now();
+    _fetchPrevio(AZURE_FN_BASE + '/atenciones/stats', { method: 'GET' })
+      .then(function () {
+        var ms = Math.round((((window.performance && performance.now()) || Date.now())) - t0);
+        console.log('[_AZURE_RELOJ_V1] Azure despierto en ' + ms + ' ms');
+      })
+      .catch(function () { /* da igual el resultado: solo queriamos despertarlo */ });
+  } catch (e) {}
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _despertarAzure);
+} else {
+  _despertarAzure();
+}
+
+console.log('[_AZURE_RELOJ_V1] reloj de ' + AZ_RELOJ_MS + ' ms activo sobre las llamadas a Azure');
+})();
+</script>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _PERMISOS_UI_V1 (13-set-2026) — administrar el acceso a los modulos
+   ---------------------------------------------------------------------------
+   QUE RESUELVE
+   Hoy el acceso a cada modulo se decide con listas de usuarios escritas a
+   mano dentro del codigo. Dar de alta a alguien obliga a editar y publicar.
+   Con esto, el administrador marca casillas y guarda.
+
+   COMO NO ROMPE NADA — leelo, porque es el corazon del asunto
+   El aplicador solo actua sobre usuarios que TIENEN permisos definidos en la
+   hoja. Si un usuario no tiene ninguna fila, no se le toca: el menu le queda
+   exactamente como hoy, con las reglas de siempre. Asi se migra de a uno,
+   empezando por los usuarios nuevos, sin arriesgar a los que ya trabajan.
+
+   Ademas, si la consulta al servidor falla por lo que sea, no se oculta nada.
+   El error nunca deja a nadie sin acceso.
+
+   EL CATALOGO NO ESTA ESCRITO A MANO
+   Los modulos se leen del propio menu al cargar la pagina. Si manana agregas
+   un boton nuevo al menu, aparece solo en la pantalla de permisos.
+
+   POR QUE UN OBSERVADOR Y NO UN INTERVALO
+   En el dashboard hay un setInterval que cada 2 segundos vuelve a encender
+   Acumulacion de Horas para tres usuarios. Si yo aplicara los permisos una
+   sola vez, esa regla los volveria a encender despues. Se usa un observador
+   del menu: cuando algo cambia la visibilidad de un boton, se vuelve a
+   aplicar el permiso. Sin pelear con relojes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+
+var PERM_ROLES_ADMIN = ['administrador', 'administrador 01', 'administrador 02',
+                        'admin', 'admin01', 'admin02'];
+var _permMios   = null;    // permisos del usuario actual (null = no aplicar)
+var _permObs    = null;
+var _permCatalogo = null;
+
+function _permEsAdmin() {
+  try {
+    var r = String((USER && USER.rol) || '').toLowerCase().trim();
+    return PERM_ROLES_ADMIN.indexOf(r) >= 0;
+  } catch (e) { return false; }
+}
+
+/* ── El catalogo sale del menu, no de una lista escrita a mano ── */
+function permCatalogo() {
+  if (_permCatalogo) return _permCatalogo;
+  var out = [];
+  try {
+    document.querySelectorAll('nav button.ni').forEach(function (b) {
+      var oc = b.getAttribute('onclick') || '';
+      var clave = b.id;
+      if (!clave) {
+        var m = oc.match(/ir\('([^']+)'/) || oc.match(/location\.href='([^']+?)(\.html)?'/);
+        clave = m ? ('mod_' + m[1].replace(/[^A-Za-z0-9_-]/g, '')) : '';
+      }
+      if (!clave) return;
+      if (clave === 'navInicio') return;              // volver al hub: no se restringe
+      var texto = (b.textContent || '').replace(/\s+/g, ' ').trim()
+                   .replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ]+/, '').replace(/\d+$/, '').trim();
+      out.push({ clave: clave, etiqueta: texto || clave, boton: b });
+    });
+  } catch (e) { console.warn('[_PERMISOS_UI_V1] catalogo:', e); }
+  _permCatalogo = out;
+  return out;
+}
+
+/* ── Aplicar los permisos del usuario actual al menu ── */
+function permAplicar() {
+  if (!_permMios) return;                    // sin permisos definidos -> no se toca nada
+  permCatalogo().forEach(function (m) {
+    if (!(m.clave in _permMios)) return;     // modulo sin definir -> se respeta lo de hoy
+    var deseado = _permMios[m.clave] ? '' : 'none';
+    if (m.boton.style.display !== deseado) m.boton.style.display = deseado;
+  });
+}
+
+function permObservar() {
+  if (_permObs || !_permMios) return;
+  var nav = document.querySelector('nav');
+  if (!nav || typeof MutationObserver === 'undefined') return;
+  _permObs = new MutationObserver(function () { permAplicar(); });
+  _permObs.observe(nav, { attributes: true, subtree: true, attributeFilter: ['style'] });
+}
+
+/* ── Al iniciar sesion: preguntar por los permisos propios ── */
+async function permCargarMios() {
+  try {
+    if (typeof USER === 'undefined' || !USER || !USER.usuario) return;
+    var d = await apiPost({ action: 'permisosListar', usuario: USER.usuario, rol: USER.rol });
+    if (!d || !d.success || d.vacio) {
+      console.log('[_PERMISOS_UI_V1] sin permisos definidos para ' + USER.usuario +
+                  ' -> el menu queda como siempre');
+      return;
+    }
+    _permMios = d.permisos || null;
+    var n = Object.keys(_permMios || {}).length;
+    console.log('[_PERMISOS_UI_V1] ' + n + ' modulos definidos para ' + USER.usuario);
+    permAplicar();
+    permObservar();
+  } catch (e) {
+    console.warn('[_PERMISOS_UI_V1] no se pudieron leer los permisos, el menu queda como siempre:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PANTALLA DE ADMINISTRACION
+   ═══════════════════════════════════════════════════════════════════════════ */
+function permCrearModal() {
+  if (document.getElementById('permOverlay')) return;
+  var d = document.createElement('div');
+  d.id = 'permOverlay';
+  d.style.cssText = 'position:fixed;inset:0;background:rgba(10,20,40,.62);z-index:10200;' +
+                    'display:none;align-items:center;justify-content:center;padding:20px';
+  d.onclick = function (e) { if (e.target === d) permCerrar(); };
+  d.innerHTML =
+    '<div style="background:#fff;border-radius:14px;width:100%;max-width:620px;max-height:88vh;' +
+      'display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.35)" onclick="event.stopPropagation()">' +
+      '<div style="padding:18px 22px 14px;border-bottom:1px solid #e2e8f0">' +
+        '<div style="font-size:17px;font-weight:800;color:#0a2463">🔐 Acceso a módulos</div>' +
+        '<div style="font-size:12.5px;color:#64748b;margin-top:3px">' +
+          'Marca los módulos a los que esta persona puede entrar. Se guarda al instante y ' +
+          'aplica la próxima vez que inicie sesión.</div>' +
+      '</div>' +
+      '<div style="padding:14px 22px 0">' +
+        '<label style="font-size:12px;font-weight:700;color:#475569">Usuario</label>' +
+        '<select id="permUsuario" style="width:100%;padding:8px 10px;border:1.5px solid #c0ceea;' +
+          'border-radius:8px;font-size:14px;margin-top:4px"><option value="">Cargando…</option></select>' +
+        '<div id="permEstado" style="font-size:12px;margin-top:8px;color:#64748b"></div>' +
+      '</div>' +
+      '<div id="permLista" style="flex:1;overflow-y:auto;padding:12px 22px 4px"></div>' +
+      '<div style="padding:14px 22px;border-top:1px solid #e2e8f0;display:flex;gap:8px;' +
+        'justify-content:space-between;align-items:center">' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="btn btn-sm" style="background:#f1f5f9;border:none;border-radius:7px;' +
+            'padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer" onclick="permTodos(true)">Marcar todos</button>' +
+          '<button class="btn btn-sm" style="background:#f1f5f9;border:none;border-radius:7px;' +
+            'padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer" onclick="permTodos(false)">Ninguno</button>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px">' +
+          '<button class="btn btn-sm" style="background:#f1f5f9;border:none;border-radius:7px;' +
+            'padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer" onclick="permCerrar()">Cerrar</button>' +
+          '<button id="permBtnGuardar" class="btn btn-sm" style="background:#0a2463;color:#fff;border:none;' +
+            'border-radius:7px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer" ' +
+            'onclick="permGuardar()">Guardar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(d);
+}
+
+function permCerrar() {
+  var o = document.getElementById('permOverlay');
+  if (o) o.style.display = 'none';
+}
+
+async function permAbrir() {
+  if (!_permEsAdmin()) { alert('Solo un administrador puede cambiar permisos.'); return; }
+  permCrearModal();
+  document.getElementById('permOverlay').style.display = 'flex';
+  permPintarLista({});
+  var sel = document.getElementById('permUsuario');
+  sel.innerHTML = '<option value="">Cargando…</option>';
+  try {
+    var d = await apiPost({ action: 'permisosUsuarios', usuario: USER.usuario, rol: USER.rol });
+    if (!d || !d.success) throw new Error((d && d.error) || 'No se pudo leer la lista');
+    sel.innerHTML = '<option value="">— elige un usuario —</option>' +
+      d.usuarios.map(function (u) {
+        return '<option value="' + u.usuario + '">' + u.usuario +
+               (u.nombre ? ' · ' + u.nombre : '') + (u.rol ? '  (' + u.rol + ')' : '') + '</option>';
+      }).join('');
+    sel.onchange = permCargarDeUsuario;
+  } catch (e) {
+    sel.innerHTML = '<option value="">Error: ' + e.message + '</option>';
+  }
+}
+
+function permPintarLista(marcados, hayFilas) {
+  var cont = document.getElementById('permLista');
+  if (!cont) return;
+  var cat = permCatalogo();
+  if (!cat.length) { cont.innerHTML = '<div style="color:#b45309">No encontré módulos en el menú.</div>'; return; }
+  cont.innerHTML = cat.map(function (m) {
+    var on = !!marcados[m.clave];
+    return '<label style="display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid #e2e8f0;' +
+      'border-radius:9px;margin-bottom:6px;cursor:pointer;background:' + (on ? '#f0f7ff' : '#fff') + '">' +
+      '<input type="checkbox" data-perm="' + m.clave + '"' + (on ? ' checked' : '') +
+        ' style="width:17px;height:17px;cursor:pointer">' +
+      '<span style="flex:1;font-size:13.5px;color:#0f172a">' + m.etiqueta + '</span>' +
+      '<span style="font-size:10.5px;color:#94a3b8;font-family:monospace">' + m.clave + '</span></label>';
+  }).join('');
+  cont.querySelectorAll('input[data-perm]').forEach(function (c) {
+    c.onchange = function () { c.closest('label').style.background = c.checked ? '#f0f7ff' : '#fff'; };
+  });
+}
+
+async function permCargarDeUsuario() {
+  var u = document.getElementById('permUsuario').value;
+  var est = document.getElementById('permEstado');
+  if (!u) { permPintarLista({}); est.textContent = ''; return; }
+  est.textContent = 'Leyendo permisos…';
+  try {
+    var d = await apiPost({ action: 'permisosListar', usuario: USER.usuario, rol: USER.rol, todos: true });
+    var todos = (d && d.permisos) || {};
+    var mios = todos[u] || null;
+    permPintarLista(mios || {});
+    est.innerHTML = mios
+      ? '<span style="color:#15803d">Este usuario ya tiene permisos definidos: mandan estas casillas.</span>'
+      : '<span style="color:#b45309">Todavía no tiene permisos definidos. Hoy ve el menú según las reglas viejas del código. ' +
+        'En cuanto guardes, mandan estas casillas.</span>';
+  } catch (e) {
+    est.textContent = 'Error: ' + e.message;
+  }
+}
+
+function permTodos(v) {
+  document.querySelectorAll('#permLista input[data-perm]').forEach(function (c) {
+    c.checked = v; c.closest('label').style.background = v ? '#f0f7ff' : '#fff';
+  });
+}
+
+async function permGuardar() {
+  var u = document.getElementById('permUsuario').value;
+  var est = document.getElementById('permEstado');
+  if (!u) { est.innerHTML = '<span style="color:#dc2626">Elige un usuario primero.</span>'; return; }
+
+  var mods = {};
+  document.querySelectorAll('#permLista input[data-perm]').forEach(function (c) {
+    mods[c.getAttribute('data-perm')] = c.checked;
+  });
+
+  var btn = document.getElementById('permBtnGuardar');
+  var txt = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Guardando…';
+  est.textContent = '';
+  try {
+    var d = await apiPost({ action: 'permisosGuardar', usuarioObjetivo: u, modulos: mods,
+                            usuario: USER.usuario, rol: USER.rol });
+    if (!d || !d.success) throw new Error((d && d.error) || 'No se pudo guardar');
+    est.innerHTML = '<span style="color:#15803d">✔ Guardado: ' + d.permitidos + ' de ' +
+                    d.total + ' módulos permitidos para ' + u +
+                    '. Lo verá al volver a iniciar sesión.</span>';
+    if (String(u).toLowerCase() === String(USER.usuario).toLowerCase()) {
+      est.innerHTML += '<br><span style="color:#b45309">Ojo: te cambiaste los permisos a ti mismo.</span>';
+    }
+  } catch (e) {
+    est.innerHTML = '<span style="color:#dc2626">Error: ' + e.message + '</span>';
+  } finally {
+    btn.disabled = false; btn.textContent = txt;
+  }
+}
+
+/* ── Boton en el menu, solo para administradores ── */
+function permAgregarBoton() {
+  try {
+    if (!_permEsAdmin() || document.getElementById('navPermisos')) return;
+    var ref = document.getElementById('navUsr');            // junto a Gestion Usuarios
+    if (!ref || !ref.parentNode) return;
+    var b = document.createElement('button');
+    b.className = 'ni'; b.id = 'navPermisos';
+    b.innerHTML = '<span class="ic">🔐</span>Acceso a Módulos';
+    b.onclick = permAbrir;
+    ref.parentNode.insertBefore(b, ref.nextSibling);
+  } catch (e) { console.warn('[_PERMISOS_UI_V1] boton:', e); }
+}
+
+window.permAbrir = permAbrir;  window.permCerrar = permCerrar;
+window.permGuardar = permGuardar;  window.permTodos = permTodos;
+window.permCatalogo = permCatalogo;
+
+function permIniciar() {
+  setTimeout(function () { permAgregarBoton(); permCargarMios(); }, 1500);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', permIniciar);
+else permIniciar();
+
+console.log('[_PERMISOS_UI_V1] listo');
+})();
+</script>
+
 </body>
 </html>
