@@ -12101,8 +12101,9 @@ async function permAbrir() {
     if (!d || !d.success) throw new Error((d && d.error) || 'No se pudo leer la lista');
     sel.innerHTML = '<option value="">— elige un usuario —</option>' +
       d.usuarios.map(function (u) {
-        return '<option value="' + u.usuario + '">' + u.usuario +
-               (u.nombre ? ' · ' + u.nombre : '') + (u.rol ? '  (' + u.rol + ')' : '') + '</option>';
+        return '<option value="' + u.usuario + '">' + (u.activo ? '' : '⚠ ') + u.usuario +
+               (u.nombre ? ' · ' + u.nombre : '') + (u.rol ? '  (' + u.rol + ')' : '') +
+               (u.activo ? '' : '  — INACTIVO') + '</option>';
       }).join('');
     sel.onchange = permCargarDeUsuario;
   } catch (e) {
@@ -12174,7 +12175,11 @@ async function permGuardar() {
     if (!d || !d.success) throw new Error((d && d.error) || 'No se pudo guardar');
     est.innerHTML = '<span style="color:#15803d">✔ Guardado: ' + d.permitidos + ' de ' +
                     d.total + ' módulos permitidos para ' + u +
-                    '. Lo verá al volver a iniciar sesión.</span>';
+                    '. Lo verá al volver a iniciar sesión.</span>' +
+      '<br><span style="color:#64748b;font-size:11.5px">Los permisos son inmediatos. Si ' +
+      'acabas de crear a esta persona, además tiene que llegar a Azure para poder entrar: ' +
+      'la sincronización corre sola cada hora, o se adelanta ejecutando ' +
+      'syncUsuariosAAzure desde Apps Script.</span>';
     if (String(u).toLowerCase() === String(USER.usuario).toLowerCase()) {
       est.innerHTML += '<br><span style="color:#b45309">Ojo: te cambiaste los permisos a ti mismo.</span>';
     }
