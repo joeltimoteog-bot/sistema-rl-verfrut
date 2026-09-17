@@ -12338,7 +12338,7 @@ console.log('[_PERMISOS_UI_V1] listo');
 </script>
 
 <script>
-/* ══════════════════ _HORARIOS_UI_V1 (17-set-2026) ══════════════════
+/* ══════════════════ _HORARIOS_UI_V2 (17-set-2026) ══════════════════
    Pestana HORARIOS dentro de 🔐 Acceso a modulos.
 
    El administrador elige a la persona, escribe su hora de entrada y de
@@ -12588,21 +12588,52 @@ async function horQuitar() {
   } catch (e) { est.innerHTML = '<span style="color:#dc2626">Error: ' + e.message + '</span>'; }
 }
 
-/* ── Engancharse a permAbrir sin tocarlo ── */
+/* ── Engancharse SIN tocar nada del modulo original ──────────────────────
+   CUIDADO, esto es lo que fallo en la V1: el boton del menu se crea con
+       b.onclick = permAbrir;
+   y eso guarda la referencia a la funcion INTERNA, no a window.permAbrir.
+   Envolver window.permAbrir no servia de nada al hacer clic en el boton:
+   solo funcionaba si uno la llamaba a mano desde la consola.
+   La V2 no depende de eso. Vigila el DOM: cuando aparece #permOverlay,
+   inyecta las pestanas, sin importar quien ni como abrio la ventana. */
+function _horIntentar() {
+  try {
+    if (!_horEsAdmin()) return;
+    if (!document.getElementById('permOverlay')) return;
+    if (_horInyectar()) _horVer('mod');
+  } catch (e) { console.warn('[_HORARIOS_UI_V2] no pude inyectar la pestana:', e); }
+}
+
+/* 1) Observador: reacciona a la creacion del overlay */
+try {
+  new MutationObserver(function () {
+    if (!_horInyectado && document.getElementById('permOverlay')) _horIntentar();
+  }).observe(document.body, { childList: true });
+} catch (e) { console.warn('[_HORARIOS_UI_V2] observador:', e); }
+
+/* 2) Respaldo: clic en el boton del menu (fase de captura, no interfiere) */
+document.addEventListener('click', function (ev) {
+  try {
+    var t = ev.target;
+    var b = t && t.closest ? t.closest('#navPermisos') : null;
+    if (!b) return;
+    setTimeout(_horIntentar, 120);
+    setTimeout(_horIntentar, 600);
+  } catch (e) {}
+}, true);
+
+/* 3) Y si alguien la abre desde la consola, tambien */
 var _permAbrirPrevio = window.permAbrir;
 if (typeof _permAbrirPrevio === 'function') {
   window.permAbrir = async function () {
     var r = await _permAbrirPrevio.apply(this, arguments);
-    try { if (_horEsAdmin() && _horInyectar()) _horVer('mod'); }
-    catch (e) { console.warn('[_HORARIOS_UI_V1] no pude inyectar la pestana:', e); }
+    _horIntentar();
     return r;
   };
-} else {
-  console.warn('[_HORARIOS_UI_V1] no encontre permAbrir: la pestana no se agrega.');
 }
 
 window.horGuardar = horGuardar;  window.horQuitar = horQuitar;
-console.log('[_HORARIOS_UI_V1] listo');
+console.log('[_HORARIOS_UI_V2] listo');
 })();
 </script>
 
