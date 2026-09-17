@@ -1022,5 +1022,82 @@ checkSessionCache();
 })();
 </script>
 <script src="frontend/js/modal-system.js"></script>
+
+<script>
+/* ══════════════════ _ACCESO_HORARIO_V1 (17-set-2026) ══════════════════
+   Horario de acceso POR USUARIO, administrado desde el sistema.
+
+   QUE RESUELVE
+   El horario del sistema es fijo (05:30 a 17:00) y la unica excepcion es una
+   lista escrita a mano — USUARIOS_SIN_HORARIO = ['jtimoteo'] — que ademas hay
+   que repetir en presencia.js. Para darle a rmolero salida a las 23:00 habia
+   que editar y republicar dos archivos.
+
+   COMO FUNCIONA — y por que NO se toca nada mas
+   El login, cuando alguien queda fuera del horario general, ya pregunta si
+   tiene un acceso temporal aprobado (verificarAccesoTemporal) y, si lo tiene,
+   lo deja entrar. Y presencia.js ya respeta ese acceso: mientras este vigente
+   no expulsa a nadie ni muestra el aviso de los 10 minutos.
+   Este bloque se limita a responder esa misma pregunta ANTES, consultando el
+   horario propio de la persona. Por eso:
+     · no se toca presencia.js
+     · no se toca verificarHorarioLogin
+     · no se toca la pantalla de bloqueo
+     · el acceso temporal manual de siempre sigue funcionando igual (si la
+       persona no tiene horario propio, se pregunta al mecanismo original)
+
+   A PRUEBA DE FALLOS
+   Si el servidor no responde, si tarda mas de 8 segundos, o si algo falla,
+   se cae al comportamiento de hoy. Nunca abre el sistema por un error nuestro
+   y nunca deja a nadie fuera que hoy pueda entrar.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  var ESPERA_MS = 8000;
+
+  var _accesoTemporalPrevio = window.verificarAccesoTemporal;
+  if (typeof _accesoTemporalPrevio !== 'function') {
+    console.warn('[_ACCESO_HORARIO_V1] no encontre verificarAccesoTemporal: no hago nada.');
+    return;
+  }
+
+  function _consultarHorarioPropio(usuario) {
+    var ctrl = null, reloj = null;
+    try { ctrl = new AbortController(); } catch (e) {}
+    var opciones = {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario })
+    };
+    if (ctrl) {
+      opciones.signal = ctrl.signal;
+      reloj = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, ESPERA_MS);
+    }
+    return fetch(API, opciones)
+      .then(function (r) { if (reloj) clearTimeout(reloj); return r.json(); })
+      .catch(function (e) { if (reloj) clearTimeout(reloj); throw e; });
+  }
+
+  window.verificarAccesoTemporal = async function (usuario) {
+    try {
+      var d = await _consultarHorarioPropio(usuario);
+      if (d && d.tieneAcceso) {
+        console.log('[_ACCESO_HORARIO_V1] ' + usuario + ' entra por horario propio, hasta ' +
+                    d.hastaHora + ' (' + d.minutosRestantes + ' min)');
+        return d;                      // misma forma que el acceso temporal de siempre
+      }
+      if (d && d.motivo) console.log('[_ACCESO_HORARIO_V1] ' + usuario + ': ' + d.motivo);
+    } catch (e) {
+      console.warn('[_ACCESO_HORARIO_V1] no se pudo leer el horario propio:', e && e.name);
+    }
+    // Sin horario propio, fuera de el, o error: el mecanismo de siempre decide.
+    return _accesoTemporalPrevio.apply(this, arguments);
+  };
+
+  console.log('[_ACCESO_HORARIO_V1] listo');
+})();
+</script>
+
   </body>
 </html>
