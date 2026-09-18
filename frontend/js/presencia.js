@@ -716,3 +716,125 @@
     } catch (e) {}
   })();
 })();
+
+/* ════════════════════════════════════════════════════════════════════════════
+ *  _RL_ACTUALIZACION_V1 (18-set-2026) — Avisar al usuario cuando hay version nueva
+ *  ---------------------------------------------------------------------------
+ *  EL PROBLEMA: cada vez que publicamos una mejora, el navegador de la gente
+ *  sigue mostrando la version vieja hasta que a alguien se le ocurre hacer
+ *  Ctrl+F5. Nadie se entera de que hay algo nuevo, y encima reportan fallas
+ *  que ya estaban corregidas.
+ *
+ *  ESTO LO ARREGLA: el sistema consulta un archivo chico, version.json, cada
+ *  5 minutos y cada vez que el usuario vuelve a la pestana. Si la version
+ *  publicada cambio respecto a la que tiene abierta, aparece un aviso arriba
+ *  a la derecha con un boton "Actualizar ahora" que recarga la pagina forzando
+ *  que el navegador traiga los archivos nuevos.
+ *
+ *  Va en presencia.js porque es el unico archivo que cargan las 9 paginas
+ *  internas: con un solo cambio quedan todas cubiertas.
+ *
+ *  OJO — LA PRIMERA VEZ NO AVISA. Para que alguien reciba el aviso, su
+ *  navegador tiene que haber cargado ya ESTA version de presencia.js. Asi que
+ *  el primer despliegue despues de este es el primero que va a avisar.
+ *
+ *  A PRUEBA DE FALLOS: si version.json no existe, no responde o viene mal,
+ *  no pasa absolutamente nada. Todo dentro de try/catch.
+ * ══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  try {
+    if (window.__RL_ACTUALIZACION_V1__) return;
+    window.__RL_ACTUALIZACION_V1__ = true;
+
+    var URL_VERSION = '/sistema-rl-verfrut/version.json';
+    var CADA_MS     = 5 * 60 * 1000;
+    var REPETIR_MS  = 15 * 60 * 1000;      // si dice "mas tarde", vuelve a los 15 min
+    var CLAVE       = '_rl_version_cargada';
+    var abierto     = false;
+    var pospuesto   = 0;
+
+    function leerVersion() {
+      return fetch(URL_VERSION + '?t=' + Date.now(), { cache: 'no-store' })
+        .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); });
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function contenedor() {
+      var w = document.getElementById('_rlMsgWrap');
+      if (!w) {
+        w = document.createElement('div');
+        w.id = '_rlMsgWrap';
+        w.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;' +
+          'display:flex;flex-direction:column;gap:10px;max-width:340px;font-family:inherit;';
+        document.body.appendChild(w);
+      }
+      return w;
+    }
+
+    function recargar(info) {
+      try { sessionStorage.setItem(CLAVE, String(info.version)); } catch (e) {}
+      try {
+        var u = new URL(location.href);
+        u.searchParams.set('v', String(info.version));   // rompe la cache del navegador
+        location.replace(u.toString());
+      } catch (e) { location.reload(); }
+    }
+
+    function mostrar(info) {
+      if (abierto) return;
+      abierto = true;
+      var card = document.createElement('div');
+      card.id = '_rlAvisoActualizacion';
+      card.style.cssText = 'background:#0f172a;color:#f1f5f9;border-left:4px solid #22c55e;' +
+        'border-radius:12px;padding:14px 16px;box-shadow:0 12px 34px rgba(0,0,0,.35);' +
+        'font-size:13.5px;line-height:1.5;';
+      card.innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:700;color:#86efac;">' +
+          '<span style="font-size:16px;">🔄</span><span>Actualizacion disponible</span></div>' +
+        '<div style="margin-bottom:4px;">' +
+          (info.titulo ? '<b>' + esc(info.titulo) + '</b><br>' : '') +
+          esc(info.notas || 'Se publico una version nueva del sistema.') + '</div>' +
+        '<div style="font-size:11.5px;color:#94a3b8;margin-bottom:10px;">Version ' + esc(info.version) +
+          (info.fecha ? ' · ' + esc(info.fecha) : '') + '</div>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button type="button" data-acc="ya" style="background:#22c55e;color:#052e16;border:none;' +
+            'border-radius:8px;padding:7px 14px;font-weight:700;font-size:12.5px;cursor:pointer">Actualizar ahora</button>' +
+          '<button type="button" data-acc="luego" style="background:#334155;color:#f1f5f9;border:none;' +
+            'border-radius:8px;padding:7px 14px;font-weight:700;font-size:12.5px;cursor:pointer">Mas tarde</button>' +
+        '</div>';
+      card.querySelector('[data-acc="ya"]').addEventListener('click', function () { recargar(info); });
+      card.querySelector('[data-acc="luego"]').addEventListener('click', function () {
+        pospuesto = Date.now();
+        if (card.parentNode) card.parentNode.removeChild(card);
+        abierto = false;
+      });
+      contenedor().appendChild(card);
+    }
+
+    function revisar() {
+      if (abierto) return;
+      if (pospuesto && (Date.now() - pospuesto) < REPETIR_MS) return;
+      leerVersion().then(function (info) {
+        if (!info || !info.version) return;
+        var cargada = null;
+        try { cargada = sessionStorage.getItem(CLAVE); } catch (e) {}
+        if (!cargada) {                                   // primera vez en esta pestana
+          try { sessionStorage.setItem(CLAVE, String(info.version)); } catch (e) {}
+          return;
+        }
+        if (String(cargada) !== String(info.version)) mostrar(info);
+      }).catch(function () { /* sin version.json no pasa nada */ });
+    }
+
+    setTimeout(revisar, 8000);
+    setInterval(revisar, CADA_MS);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) revisar(); });
+
+    window.rlBuscarActualizacion = revisar;     // para probarlo a mano desde la consola
+  } catch (e) { /* jamas romper la pagina por esto */ }
+})();
