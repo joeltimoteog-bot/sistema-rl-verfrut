@@ -1,6 +1,6 @@
 {
-  "version": "3.7.4",
+  "version": "3.7.6",
   "fecha": "2026-09-18",
-  "titulo": "Horario de acceso por usuario",
-  "notas": "El horario de ingreso ahora se define por persona. Si el tuyo cambio, ya no necesitas solicitar acceso temporal: entra normalmente con tu usuario y contrasena."
+  "titulo": "Parentesco en licencias por fallecimiento y enfermedad grave",
+  "notas": "Al elegir una licencia por fallecimiento, defuncion o enfermedad grave o terminal, ahora se pide el parentesco del familiar. Busqueda de Mis Atenciones mas rapida."
 }
