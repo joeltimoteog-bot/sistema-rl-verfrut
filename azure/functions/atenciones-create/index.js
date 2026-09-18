@@ -1,24 +1,23 @@
 const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
-
+ 
 module.exports = async function (context, req) {
   // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
   const authUser = exigirAuth(context, req);
   if (authUser === null) return;
-
+ 
   context.log('atenciones-create triggered');
-
+ 
   try {
     const d = req.body;
+ 
     if (!d || !d.dni || !d.nombre) {
-      context.res = {
-        status: 400,
-        body: { success: false, error: 'Faltan campos requeridos: dni, nombre' }
-      };
+      context.res = { status: 400, body: { success: false, error: 'Faltan campos requeridos: dni, nombre' } };
       return;
     }
-
+ 
     const pool = await getPool();
+ 
     const result = await pool.request()
       .input('nro', sql.Int, d.nro || null)
       .input('fecha_atencion', sql.Date, d.fecha_atencion || null)
@@ -40,6 +39,8 @@ module.exports = async function (context, req) {
       .input('celular', sql.NVarChar(20), d.celular || '')
       .input('supervisor', sql.NVarChar(100), d.supervisor || '')
       .input('detalle_documento', sql.NVarChar(500), d.detalle_documento || '')
+      .input('nro_licencia', sql.NVarChar(40), d.nro_licencia || '')
+      .input('parentesco', sql.NVarChar(40), d.parentesco || '')
       .input('fecha_inicio_doc', sql.Date, d.fecha_inicio_doc || null)
       .input('fecha_termino_doc', sql.Date, d.fecha_termino_doc || null)
       .input('dias_transcurridos', sql.Int, d.dias_transcurridos || 0)
@@ -50,34 +51,24 @@ module.exports = async function (context, req) {
       .query(`
         INSERT INTO Atenciones (
           nro, fecha_atencion, hora_inicio, hora_termino, nro_semana, mes, anio,
-          dni, nombre, sexo, fecha_inicio_periodo, empresa, fundo, cargo, ruta,
-          codigo, fundo_actual, celular, supervisor, detalle_documento,
-          fecha_inicio_doc, fecha_termino_doc, dias_transcurridos,
-          responsable_recepcion, observaciones, estado, usuario_sistema
+          dni, nombre, sexo, fecha_inicio_periodo, empresa, fundo, cargo, ruta, codigo,
+          fundo_actual, celular, supervisor, detalle_documento, nro_licencia, parentesco, fecha_inicio_doc,
+          fecha_termino_doc, dias_transcurridos, responsable_recepcion, observaciones,
+          estado, usuario_sistema
         )
         OUTPUT INSERTED.id
         VALUES (
           @nro, @fecha_atencion, @hora_inicio, @hora_termino, @nro_semana, @mes, @anio,
-          @dni, @nombre, @sexo, @fecha_inicio_periodo, @empresa, @fundo, @cargo, @ruta,
-          @codigo, @fundo_actual, @celular, @supervisor, @detalle_documento,
-          @fecha_inicio_doc, @fecha_termino_doc, @dias_transcurridos,
-          @responsable_recepcion, @observaciones, @estado, @usuario_sistema
+          @dni, @nombre, @sexo, @fecha_inicio_periodo, @empresa, @fundo, @cargo, @ruta, @codigo,
+          @fundo_actual, @celular, @supervisor, @detalle_documento, @nro_licencia, @parentesco, @fecha_inicio_doc,
+          @fecha_termino_doc, @dias_transcurridos, @responsable_recepcion, @observaciones,
+          @estado, @usuario_sistema
         )
       `);
-
-    context.res = {
-      status: 201,
-      body: {
-        success: true,
-        id: result.recordset[0].id,
-        mensaje: 'Atencion creada en Azure SQL'
-      }
-    };
+ 
+    context.res = { status: 201, body: { success: true, id: result.recordset[0].id, mensaje: 'Atencion creada en Azure SQL' } };
   } catch (e) {
     context.log.error('Error en atenciones-create:', e);
-    context.res = {
-      status: 500,
-      body: { success: false, error: e.message }
-    };
+    context.res = { status: 500, body: { success: false, error: e.message } };
   }
 };
