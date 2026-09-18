@@ -1,6 +1,6 @@
 {
-  "version": "3.7.3",
+  "version": "3.7.4",
   "fecha": "2026-09-18",
   "titulo": "Horario de acceso por usuario",
-  "notas": "El administrador ya puede definir el horario de ingreso de cada persona desde Acceso a Modulos, sin tener que solicitar accesos temporales."
+  "notas": "El horario de ingreso ahora se define por persona. Si el tuyo cambio, ya no necesitas solicitar acceso temporal: entra normalmente con tu usuario y contrasena."
 }
