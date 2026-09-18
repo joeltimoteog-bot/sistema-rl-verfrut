@@ -394,8 +394,9 @@ h3{font-size:16px !important}
             <th>N°</th><th>Fecha</th><th>H.Inicio</th><th>H.Fin</th><th>DNI</th><th>Trabajador</th>
             <th>Celular</th><th>Empresa</th><th>Fundo</th><th>Ruta</th><th>Código</th><th>Documento</th>
             <th>F.Inicio Doc</th><th>F.Fin Doc</th><th>Días</th><th>Estado</th>
+            <th>N° Licencia</th><th>Parentesco</th>
             <th>Observación</th><th>Acciones</th>
-          </tr></thead><tbody id="tbAt"><tr><td colspan="18" class="empty">⏳ Cargando...</td></tr></tbody></table>
+          </tr></thead><tbody id="tbAt"><tr><td colspan="20" class="empty">⏳ Cargando...</td></tr></tbody></table>
         </div>
       </div>
     </div>
@@ -5309,7 +5310,7 @@ async function cargarAtenciones(historial=false) {
     return;
   }
   const tb = document.getElementById('tbAt');
-  if (tb) tb.innerHTML = '<tr><td colspan="18" class="empty">Cargando atenciones...</td></tr>';
+  if (tb) tb.innerHTML = '<tr><td colspan="20" class="empty">Cargando atenciones...</td></tr>';
 
   const _esAdminAt = ROLES_VER_TODO.includes(USER.rol);
 
@@ -5350,18 +5351,18 @@ async function cargarAtenciones(historial=false) {
       atTodas = d.data.filter(a => a.fecha_atencion === hoy());
       renderAt(atTodas);
     } else {
-      if (tb) tb.innerHTML = '<tr><td colspan="18" class="empty">' + (d.error||'Error al cargar atenciones') + '</td></tr>';
+      if (tb) tb.innerHTML = '<tr><td colspan="20" class="empty">' + (d.error||'Error al cargar atenciones') + '</td></tr>';
     }
   } catch (e) {
-    if (tb) tb.innerHTML = '<tr><td colspan="18" class="empty">Error de conexion</td></tr>';
+    if (tb) tb.innerHTML = '<tr><td colspan="20" class="empty">Error de conexion</td></tr>';
     console.error('cargarAtenciones (GAS):', e);
   }
 }
 function renderAt(lista) {
   const tb=document.getElementById('tbAt');
-  if(!lista.length){tb.innerHTML='<tr><td colspan="18" class="empty">No hay atenciones registradas</td></tr>';return;}
+  if(!lista.length){tb.innerHTML='<tr><td colspan="20" class="empty">No hay atenciones registradas</td></tr>';return;}
   const esSup = ROLES_SUP.includes(USER.rol);
-  tb.innerHTML = '<tr><td colspan="18" class="empty">⏳ Cargando tabla...</td></tr>';
+  tb.innerHTML = '<tr><td colspan="20" class="empty">⏳ Cargando tabla...</td></tr>';
   setTimeout(() => {
     tb.innerHTML=lista.map(a=>{
       const esDueno = a.supervisor===(USER.nombre||USER.usuario) || a.supervisor===USER.usuario;
@@ -5381,6 +5382,8 @@ function renderAt(lista) {
         <td>${a.fecha_termino_doc||''}</td>
         <td style="text-align:center;font-weight:700">${a.dias_transcurridos||''}</td>
         <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
+        <td>${a.nro_licencia||''}</td>
+        <td>${a.parentesco||''}</td>
         <td style="max-width:200px;font-size:11px;white-space:normal">${a.observaciones||''}</td>
         <td>
           <button class="btn-a bv" onclick="verDet('${a.nro}','at')">Ver</button>
@@ -9655,6 +9658,8 @@ function exportarAtenciones() {
     {key:'dias_transcurridos',label:'Días'},
     {key:'responsable_recepcion',label:'Responsable Recepción'},
     {key:'estado',label:'Estado'},
+    {key:'nro_licencia',label:'N° Licencia'},
+    {key:'parentesco',label:'Parentesco'},
     {key:'observaciones',label:'Observaciones'},
     {key:'usuario_sistema',label:'Usuario Sistema'}
   ], 'Atenciones');
