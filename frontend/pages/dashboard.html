@@ -13062,14 +13062,18 @@ function esAdmin() { try { return ROLES_VER_TODO.includes(USER.rol); } catch (e)
 
 async function pedir() {
   if (typeof AZURE_FN_BASE === 'undefined' || !AZURE_FN_BASE || !_usr()) return null;
-  var u = AZURE_FN_BASE + '/atenciones/stats?_=' + Date.now();
-  if (!esAdmin()) u += '&supervisor=' + encodeURIComponent(USER.nombre || USER.usuario);
-  var r = await fetch(u);
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  var j = await r.json();
+  /* Dos lecturas en paralelo: la del año en curso (contadores, por mes, por estado, por empresa)
+     y la global solo para la tendencia por año. Antes una sola lectura sin filtro hacia que
+     "Finalizados" y "Por estado" sumaran todos los años (57 mil) frente a un total anual de 19 mil. */
+  var sup = esAdmin() ? '' : '&supervisor=' + encodeURIComponent(USER.nombre || USER.usuario);
+  var base = AZURE_FN_BASE + '/atenciones/stats?_=' + Date.now() + sup;
+  var rr = await Promise.all([fetch(base + '&anio=' + new Date().getFullYear()), fetch(base).catch(function () { return null; })]);
+  if (!rr[0].ok) throw new Error('HTTP ' + rr[0].status);
+  var j = await rr[0].json();
   if (!j || !j.success || !j.resumen_global) throw new Error('respuesta sin resumen_global');
+  var jg = null; try { jg = rr[1] && rr[1].ok ? await rr[1].json() : null; } catch (e) {}
   var g = j.resumen_global;
-  agg = { por_mes: j.por_mes || {}, por_anio: j.por_anio || {}, por_estado: j.por_estado || {}, por_empresa: j.por_empresa || {} };
+  agg = { por_mes: j.por_mes || {}, por_anio: (jg && jg.por_anio) || j.por_anio || {}, por_estado: j.por_estado || {}, por_empresa: j.por_empresa || {} };
   return { hoy: g.hoy || 0, mes: g.este_mes || 0, anio: g.este_anio || 0,
            enProceso: g.en_proceso || 0, finalizados: g.finalizados || 0, total: g.total || 0, ts: Date.now() };
 }
