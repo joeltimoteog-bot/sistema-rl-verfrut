@@ -13056,19 +13056,20 @@ console.log('[_PARENTESCO_V1] listo');
 var IDS = ['sH', 'sM', 'sP', 'sF', 'sA'];
 /* USER y CACHE estan declarados con let (no cuelgan de window): se leen por nombre */
 function _usr() { try { return (typeof USER !== 'undefined' && USER && USER.usuario) ? USER : null; } catch (e) { return null; } }
-var ultimo = null, enCurso = null, reloj = null;
+var ultimo = null, agg = null, enCurso = null, reloj = null;
 
 function esAdmin() { try { return ROLES_VER_TODO.includes(USER.rol); } catch (e) { return false; } }
 
 async function pedir() {
   if (typeof AZURE_FN_BASE === 'undefined' || !AZURE_FN_BASE || !_usr()) return null;
-  var u = AZURE_FN_BASE + '/atenciones/stats?anio=' + new Date().getFullYear();
+  var u = AZURE_FN_BASE + '/atenciones/stats?_=' + Date.now();
   if (!esAdmin()) u += '&supervisor=' + encodeURIComponent(USER.nombre || USER.usuario);
   var r = await fetch(u);
   if (!r.ok) throw new Error('HTTP ' + r.status);
   var j = await r.json();
   if (!j || !j.success || !j.resumen_global) throw new Error('respuesta sin resumen_global');
   var g = j.resumen_global;
+  agg = { por_mes: j.por_mes || {}, por_anio: j.por_anio || {}, por_estado: j.por_estado || {}, por_empresa: j.por_empresa || {} };
   return { hoy: g.hoy || 0, mes: g.este_mes || 0, anio: g.este_anio || 0,
            enProceso: g.en_proceso || 0, finalizados: g.finalizados || 0, total: g.total || 0, ts: Date.now() };
 }
@@ -13084,7 +13085,7 @@ async function refrescar(motivo) {
   enCurso = (async function () {
     try {
       var s = await pedir();
-      if (s) { ultimo = s; pintar(s);
+      if (s) { ultimo = s; pintar(s); try { if (!_hayFiltro()) dibujarDesdeAzure(); } catch (e) { console.warn('[_STATS_AZURE_V1] graficos:', e.message); }
         console.log('[_STATS_AZURE_V1] ' + (motivo || '') + ' → hoy ' + s.hoy + ' | mes ' + s.mes + ' | año ' + s.anio + ' | en proceso ' + s.enProceso + (esAdmin() ? ' (global)' : ' (solo ' + (USER.nombre || USER.usuario) + ')'));
         return true; }
     } catch (e) { console.warn('[_STATS_AZURE_V1] Azure no respondió (' + (motivo || '') + '): ' + e.message + ' — se mantiene el cálculo anterior'); }
@@ -13094,6 +13095,56 @@ async function refrescar(motivo) {
 }
 function programar(motivo, ms) { if (reloj) clearTimeout(reloj); reloj = setTimeout(function () { reloj = null; refrescar(motivo); }, ms || 2000); }
 window._refrescarStatsAzure = refrescar;
+
+function _hayFiltro() {
+  var a = document.getElementById('dFiltroAnio'), e = document.getElementById('dFiltroEst');
+  return !!((a && a.value) || (e && e.value));
+}
+/* Graficos y tabla anual de "Mi Dashboard" desde los agregados de Azure
+   (misma respuesta de /atenciones/stats: por_mes, por_estado, por_anio, por_empresa).
+   Antes se dibujaban con la lista local, que para supervisores viene recortada a 100. */
+function dibujarDesdeAzure() {
+  if (!agg || typeof Chart === 'undefined') return;
+  var labels = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var claves = [];
+  for (var i = 5; i >= 0; i--) { var d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); claves.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')); }
+  var lm = claves.map(function (k) { return labels[parseInt(k.split('-')[1], 10) - 1] || k; });
+  var vm = claves.map(function (k) { return Number(agg.por_mes[k] || 0); });
+  _destroyChart('m');
+  var elM = document.getElementById('cM');
+  if (elM) charts.m = new Chart(elM, { type:'bar', data:{ labels: lm, datasets:[{ label:'Atenciones', data: vm, backgroundColor:'#3b82f6', borderRadius:5 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true, ticks:{ maxTicksLimit:8 } } } } });
+  var pend = Number(agg.por_estado['EN PROCESO'] || 0), fin = Number(agg.por_estado['FINALIZADO'] || 0), env = Number(agg.por_estado['ENVIADO'] || 0);
+  _destroyChart('e');
+  var elE = document.getElementById('cE');
+  if (elE) charts.e = new Chart(elE, { type:'doughnut', data:{ labels:['En Proceso','Enviado','Finalizado'], datasets:[{ data:[pend, env, fin], backgroundColor:['#f97316','#3b82f6','#22c55e'] }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ position:'bottom' } } } });
+  var anios = Object.keys(agg.por_anio).filter(function (y) { return /^\d{4}$/.test(y); }).sort();
+  _destroyChart('tendAnual');
+  var elT = document.getElementById('cTendAnual');
+  if (elT && anios.length) charts.tendAnual = new Chart(elT, { type:'line', data:{ labels: anios, datasets:[{ label:'Total anual', data: anios.map(function (y) { return Number(agg.por_anio[y] || 0); }), borderColor:'#0b1e45', backgroundColor:'rgba(11,30,69,0.1)', tension:0.4, fill:true, pointRadius:5 }] },
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } } });
+  var tbody = document.getElementById('tbResAnualBody');
+  if (tbody) {
+    var esteAnio = String(new Date().getFullYear());
+    tbody.innerHTML = anios.length ? anios.slice().reverse().map(function (y) {
+      var actual = (y === esteAnio);
+      var rapel = actual ? (agg.por_empresa['RAPEL'] || 0) : '—', verf = actual ? (agg.por_empresa['VERFRUT'] || 0) : '—';
+      return '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:7px 10px;font-weight:700">' + y + '</td>' +
+        '<td style="padding:7px 10px;text-align:center;font-weight:800;color:#0b1e45">' + Number(agg.por_anio[y] || 0) + '</td>' +
+        '<td style="padding:7px 10px;text-align:center;color:#64748b">' + rapel + '</td><td style="padding:7px 10px;text-align:center;color:#64748b">' + verf + '</td>' +
+        '<td style="padding:7px 10px;text-align:center;color:#f97316">' + (actual ? pend : '—') + '</td><td style="padding:7px 10px;text-align:center;color:#22c55e">' + (actual ? fin : '—') + '</td></tr>';
+    }).join('') : '<tr><td colspan="6" style="text-align:center;padding:10px;color:#64748b">Sin datos</td></tr>';
+  }
+}
+/* 0) dibujarEstadisticasDash: sin filtros y con Azure a mano, dibujar desde Azure; con filtros, lo de siempre */
+var _dibOrig = window.dibujarEstadisticasDash;
+if (typeof _dibOrig === 'function') {
+  window.dibujarEstadisticasDash = function (datos, esFiltro) {
+    if (agg && !esFiltro && !_hayFiltro()) { try { dibujarDesdeAzure(); return; } catch (e) { console.warn('[_STATS_AZURE_V1] graficos:', e.message); } }
+    return _dibOrig.apply(this, arguments);
+  };
+}
 
 /* 1) cargarStats: primero Azure; si falla, lo de siempre */
 var _cargarOrig = window.cargarStats;
