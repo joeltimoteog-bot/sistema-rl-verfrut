@@ -1,6 +1,6 @@
 {
-  "version": "3.7.6",
-  "fecha": "2026-09-18",
-  "titulo": "Parentesco en licencias por fallecimiento y enfermedad grave",
-  "notas": "Al elegir una licencia por fallecimiento, defuncion o enfermedad grave o terminal, ahora se pide el parentesco del familiar. Busqueda de Mis Atenciones mas rapida."
+  "version": "3.7.8",
+  "fecha": "2026-09-19",
+  "titulo": "Atenciones más rápidas e indicadores reales",
+  "notas": "Guardar una atención ahora responde en 1-2 s y la fila aparece sola sin recargar. Se corrigió el guardado (desde el 18-set llegaban incompletas) y las ediciones que no se guardaban. Los indicadores de Mi Dashboard ahora muestran cifras reales: cada supervisor ve solo las suyas."
 }

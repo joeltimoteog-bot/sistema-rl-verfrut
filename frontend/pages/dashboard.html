@@ -13054,12 +13054,14 @@ console.log('[_PARENTESCO_V1] listo');
 (function () {
 'use strict';
 var IDS = ['sH', 'sM', 'sP', 'sF', 'sA'];
+/* USER y CACHE estan declarados con let (no cuelgan de window): se leen por nombre */
+function _usr() { try { return (typeof USER !== 'undefined' && USER && USER.usuario) ? USER : null; } catch (e) { return null; } }
 var ultimo = null, enCurso = null, reloj = null;
 
 function esAdmin() { try { return ROLES_VER_TODO.includes(USER.rol); } catch (e) { return false; } }
 
 async function pedir() {
-  if (typeof AZURE_FN_BASE === 'undefined' || !AZURE_FN_BASE || !window.USER || !USER.usuario) return null;
+  if (typeof AZURE_FN_BASE === 'undefined' || !AZURE_FN_BASE || !_usr()) return null;
   var u = AZURE_FN_BASE + '/atenciones/stats?anio=' + new Date().getFullYear();
   if (!esAdmin()) u += '&supervisor=' + encodeURIComponent(USER.nombre || USER.usuario);
   var r = await fetch(u);
@@ -13137,12 +13139,12 @@ if (typeof _refAtOrig === 'function') {
 
 /* 5) Cada 3 min con la pestaña visible */
 setInterval(function () {
-  try { if (document.visibilityState === 'visible' && window.USER && USER.usuario) refrescar('auto 3min'); } catch (e) {}
+  try { if (document.visibilityState === 'visible' && _usr()) refrescar('auto 3min'); } catch (e) {}
 }, 3 * 60 * 1000);
 
 /* 6) Primera carga: apenas haya usuario en sesión */
 (function esperar(n) {
-  if (window.USER && USER.usuario) { refrescar('inicio'); return; }
+  if (_usr()) { refrescar('inicio'); return; }
   if (n < 40) setTimeout(function () { esperar(n + 1); }, 500);
 })(0);
 
