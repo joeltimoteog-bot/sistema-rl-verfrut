@@ -38,9 +38,11 @@ module.exports = async function (context, req) {
     const resumenResult = await runQuery(`
       SELECT
         COUNT(*) AS total,
-        SUM(CASE WHEN CONVERT(date, fecha_atencion) = CONVERT(date, GETDATE()) THEN 1 ELSE 0 END) AS hoy,
-        SUM(CASE WHEN YEAR(fecha_atencion) = YEAR(GETDATE()) AND MONTH(fecha_atencion) = MONTH(GETDATE()) THEN 1 ELSE 0 END) AS este_mes,
-        SUM(CASE WHEN YEAR(fecha_atencion) = YEAR(GETDATE()) THEN 1 ELSE 0 END) AS este_anio,
+        -- _STATS_LIMA_V1: GETDATE() es UTC en Azure; desde las 19:00 de Lima ya era "manana"
+        -- y "hoy" daba 0. Ahora se compara contra la fecha de Lima (UTC-5).
+        SUM(CASE WHEN CONVERT(date, fecha_atencion) = CONVERT(date, SWITCHOFFSET(SYSDATETIMEOFFSET(), '-05:00')) THEN 1 ELSE 0 END) AS hoy,
+        SUM(CASE WHEN YEAR(fecha_atencion) = YEAR(SWITCHOFFSET(SYSDATETIMEOFFSET(), '-05:00')) AND MONTH(fecha_atencion) = MONTH(SWITCHOFFSET(SYSDATETIMEOFFSET(), '-05:00')) THEN 1 ELSE 0 END) AS este_mes,
+        SUM(CASE WHEN YEAR(fecha_atencion) = YEAR(SWITCHOFFSET(SYSDATETIMEOFFSET(), '-05:00')) THEN 1 ELSE 0 END) AS este_anio,
         SUM(CASE WHEN estado = 'EN PROCESO' THEN 1 ELSE 0 END) AS en_proceso,
         SUM(CASE WHEN estado = 'FINALIZADO' THEN 1 ELSE 0 END) AS finalizados
       FROM Atenciones

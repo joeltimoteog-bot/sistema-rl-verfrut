@@ -3282,12 +3282,38 @@ function confirmarFundo() {
   document.getElementById('tbE').textContent = USER.empresa + ' · ' + fundo;
 }
 
-// API — con manejo de errores de red: si el GAS no responde, devuelve un objeto
-//       de error uniforme y muestra un aviso, en vez de congelar la vista.
-function _redAviso() {
+// API — con manejo de errores de red (_RED_V2, 19-set-2026)
+//   ANTES: cualquier fallo (sin internet, Google respondio HTML de error, timeout)
+//   mostraba el mismo "Sin conexion con el servidor" y no dejaba rastro de que fallo.
+//   AHORA: 1) reloj de 90 s por llamada; 2) las lecturas (GET y POST tipo get*) se
+//   reintentan UNA vez a los 1.5 s; 3) el aviso dice que paso y en que accion;
+//   4) cada fallo queda guardado en localStorage -> window._verErroresRed() en consola;
+//   5) las llamadas de fondo (sync Firebase, papelera, precarga) no molestan al usuario.
+var RED_TIMEOUT_MS   = 90000;
+var RED_SILENCIOSAS  = ['syncFirebaseAtencion', 'papeleraNros', 'getPreloadOptimizado'];
+function _redRegistrar(accion, err) {
+  try {
+    var k = '_rl_errores_red', lista = [];
+    try { lista = JSON.parse(localStorage.getItem(k) || '[]') || []; } catch (e) {}
+    lista.push({ ts: new Date().toISOString(), accion: accion || '?', usuario: (window.USER && USER.usuario) || '',
+                 online: navigator.onLine, motivo: String((err && err.message) || err || '').slice(0, 220) });
+    while (lista.length > 30) lista.shift();
+    localStorage.setItem(k, JSON.stringify(lista));
+  } catch (e) {}
+}
+window._verErroresRed = function () {
+  try { var l = JSON.parse(localStorage.getItem('_rl_errores_red') || '[]'); console.table(l); return l; } catch (e) { return []; }
+};
+function _redAviso(accion, err) {
   try {
     if (window._redAvisoTs && (Date.now() - window._redAvisoTs) < 10000) return; // máx 1 cada 10s
     window._redAvisoTs = Date.now();
+    var msg = String((err && err.message) || '');
+    var texto;
+    if (navigator.onLine === false)            texto = '📡 Sin internet. Revisa tu conexión y vuelve a intentar.';
+    else if (msg.indexOf('no JSON') >= 0)      texto = '⚠️ El servidor de Google respondió con error (' + (accion || '?') + '). Vuelve a intentar en unos segundos.';
+    else if (msg.indexOf('abort') >= 0)        texto = '⏳ El servidor de Google tardó demasiado (' + (accion || '?') + '). Vuelve a intentar.';
+    else                                       texto = '📡 No se pudo contactar al servidor de Google (' + (accion || '?') + '). Se reintentó sin éxito; vuelve a intentar.';
     let t = document.getElementById('redToast');
     if (!t) {
       t = document.createElement('div');
@@ -3295,32 +3321,51 @@ function _redAviso() {
       t.style.cssText = 'position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#dc2626;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:99999;box-shadow:0 4px 14px rgba(0,0,0,.25);display:none';
       document.body.appendChild(t);
     }
-    t.textContent = '📡 Sin conexión con el servidor. Verifica tu internet y vuelve a intentar.';
+    t.textContent = texto;
     t.style.display = 'block';
-    setTimeout(function(){ t.style.display = 'none'; }, 5000);
+    setTimeout(function(){ t.style.display = 'none'; }, 6000);
   } catch(e) {}
+}
+async function _redLlamar(hacer, accion, reintentar) {
+  var intento = 0, ultimo = null;
+  while (true) {
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, RED_TIMEOUT_MS);
+    try {
+      var r = await hacer(ctrl ? ctrl.signal : undefined);
+      var txt = await r.text();
+      clearTimeout(reloj);
+      try { return JSON.parse(txt); }
+      catch (ej) {
+        ultimo = new Error('respuesta no JSON (HTTP ' + r.status + '): ' + txt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160));
+      }
+    } catch (e) { clearTimeout(reloj); ultimo = e; }
+    if (intento++ < (reintentar ? 1 : 0)) {
+      console.warn('[api] fallo en', accion, '->', ultimo && ultimo.message, '| reintentando en 1.5 s');
+      await new Promise(function (res) { setTimeout(res, 1500); });
+      continue;
+    }
+    console.warn('[api] error de red:', accion, ultimo && ultimo.message);
+    _redRegistrar(accion, ultimo);
+    if (RED_SILENCIOSAS.indexOf(accion) === -1) _redAviso(accion, ultimo);
+    return { success:false, ok:false, error:'Sin conexión con el servidor', detalle: String(ultimo && ultimo.message || ''), data:[], _redError:true };
+  }
 }
 async function apiGet(p) {
   if (!API || API.trim() === '') API = API_URL_DEFAULT;
-  try {
-    const r = await fetch(API+'?'+new URLSearchParams(p));
-    return await r.json();
-  } catch(e) {
-    console.warn('[apiGet] error de red:', p && p.action, e.message);
-    _redAviso();
-    return { success:false, ok:false, error:'Sin conexión con el servidor', data:[], _redError:true };
-  }
+  var accion = p && p.action;
+  return _redLlamar(function (signal) { return fetch(API + '?' + new URLSearchParams(p), signal ? { signal: signal } : undefined); }, accion, true);
 }
 async function apiPost(b) {
   if (!API || API.trim() === '') API = API_URL_DEFAULT;
-  try {
-    const r = await fetch(API,{method:'POST',body:JSON.stringify(b),headers:{'Content-Type':'text/plain'}});
-    return await r.json();
-  } catch(e) {
-    console.warn('[apiPost] error de red:', b && b.action, e.message);
-    _redAviso();
-    return { success:false, ok:false, error:'Sin conexión con el servidor', data:[], _redError:true };
-  }
+  var accion = b && b.action;
+  // Solo se reintentan las lecturas: un save/update/delete repetido podria duplicar.
+  var esLectura = /^(get|listar|consultar|buscar|papelera)/i.test(String(accion || ''));
+  return _redLlamar(function (signal) {
+    var op = { method:'POST', body:JSON.stringify(b), headers:{'Content-Type':'text/plain'} };
+    if (signal) op.signal = signal;
+    return fetch(API, op);
+  }, accion, esLectura);
 }
 
 
@@ -5358,6 +5403,110 @@ async function cargarAtenciones(historial=false) {
     console.error('cargarAtenciones (GAS):', e);
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   REFRESCO_AT_V1 (19-set-2026) — refresco LIVIANO de "Mis Atenciones"
+
+   POR QUE EXISTE
+   · cargarAtenciones() sin argumentos NO vuelve a pedir nada si ya hay cache:
+     re-dibuja lo que tenia en memoria y listo. Por eso "llamarla despues de
+     guardar" no traia lo nuevo.
+   · cargarAtenciones(true) (la que dispara Firebase) pide 365 dias a Azure y
+     ademas Azure guarda esa respuesta 3 minutos: durante ese tiempo devuelve
+     lo mismo aunque ya haya registros nuevos.
+
+   QUE HACE
+   · Pide SOLO los ultimos 2 dias (admin -> Azure sin cache; supervisor -> hoja)
+     y los FUSIONA con lo que ya hay en memoria (por N°), sin borrar los
+     registros locales que el servidor todavia no confirmo.
+   · Re-dibuja la tabla respetando los filtros que tenga puestos el usuario.
+   · Nunca pisa la tabla con "Cargando..." ni muestra errores: si falla, se
+     queda como estaba y lo intenta en la siguiente vuelta.
+   ══════════════════════════════════════════════════════════════════════════ */
+var _refAtEnCurso = null;
+async function refrescarAtencionesHoy(motivo) {
+  if (_refAtEnCurso) return _refAtEnCurso;
+  _refAtEnCurso = (async function () {
+    var t0 = Date.now();
+    var esAdmin = ROLES_VER_TODO.includes(USER.rol);
+    var frescos = null;
+    try {
+      if (esAdmin && typeof window._azAtencionesRango === 'function') {
+        try { if (window._azLimpiarCache) window._azLimpiarCache(); } catch (e) {}
+        frescos = await window._azAtencionesRango(_azHaceDias(2));
+        if (frescos && frescos.length) {
+          var _fld = ['fecha_atencion','fecha_inicio_periodo','fecha_termino_periodo','fecha_inicio_doc','fecha_termino_doc','fecha_registro','fecha_creacion'];
+          frescos.forEach(function (a) { _fld.forEach(function (c) { if (a[c]) a[c] = String(a[c]).slice(0, 10); }); });
+        }
+      }
+      if (!frescos || !frescos.length) {
+        var _emp = esAdmin ? '' : (USER.empresa || '');
+        var d = await apiGet({ action:'getAtencionesOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa:_emp });
+        if (d && d.success && Array.isArray(d.data)) frescos = d.data;
+      }
+    } catch (e) {
+      console.warn('[refrescarAtencionesHoy] sin datos frescos (' + (motivo||'') + '):', e && e.message);
+    }
+    if (!frescos || !frescos.length) return false;
+
+    // Fusionar por N°: lo del servidor manda; lo local que aun no llego se conserva.
+    var base = Array.isArray(CACHE.atenciones) ? CACHE.atenciones : [];
+    var porNro = {};
+    base.forEach(function (a) { if (a && a.nro != null) porNro[String(a.nro)] = a; });
+    var nuevos = 0, actualizados = 0;
+    frescos.forEach(function (f) {
+      if (!f || f.nro == null) return;
+      var k = String(f.nro);
+      if (porNro[k]) {
+        // Completar sin borrar: si el servidor trae vacio un campo que ya teniamos, se conserva.
+        Object.keys(f).forEach(function (c) {
+          var v = f[c];
+          if (v !== null && v !== undefined && String(v) !== '') porNro[k][c] = v;
+        });
+        actualizados++;
+      } else {
+        porNro[k] = f; base.push(f); nuevos++;
+      }
+    });
+    CACHE.atenciones = base;
+    CACHE_TS = Date.now();
+    try { guardarCacheLS(); } catch (e) {}
+
+    atTodas = base.filter(function (a) { return a.fecha_atencion === hoy(); });
+    var sec = document.getElementById('sec-atenciones');
+    if (sec && sec.classList.contains('on')) {
+      try { filtrarAt(); } catch (e) { renderAt(atTodas); }
+    }
+    console.log('[refrescarAtencionesHoy] ' + (motivo||'') + ' → ' + nuevos + ' nuevo(s), ' +
+                actualizados + ' actualizado(s), hoy: ' + atTodas.length + ' | ' + (Date.now() - t0) + 'ms');
+    return true;
+  })().finally(function () { _refAtEnCurso = null; });
+  return _refAtEnCurso;
+}
+window.refrescarAtencionesHoy = refrescarAtencionesHoy;
+
+/* Despues de guardar: el servidor tarda unos segundos en dejar el registro en
+   Azure/hoja, asi que se reintenta en 3 tandas. Si en la primera ya vino, las
+   siguientes solo confirman. */
+function _programarRefrescoTrasGuardar() {
+  [2500, 7000, 15000].forEach(function (ms) {
+    setTimeout(function () { refrescarAtencionesHoy('post-guardado ' + ms + 'ms'); }, ms);
+  });
+}
+
+/* Red de seguridad: mientras la pestaña este visible y se este viendo
+   "Mis Atenciones", se refresca solo cada 90 s (Firebase sigue siendo el
+   disparador principal; esto cubre cuando Firebase no avisa). */
+setInterval(function () {
+  try {
+    if (document.visibilityState !== 'visible') return;
+    var sec = document.getElementById('sec-atenciones');
+    if (!sec || !sec.classList.contains('on')) return;
+    if (!USER || !USER.usuario) return;
+    refrescarAtencionesHoy('auto 90s');
+  } catch (e) {}
+}, 90 * 1000);
+
 function renderAt(lista) {
   const tb=document.getElementById('tbAt');
   if(!lista.length){tb.innerHTML='<tr><td colspan="20" class="empty">No hay atenciones registradas</td></tr>';return;}
@@ -5815,9 +5964,11 @@ async function guardarAt() { if(window._savingAt) return;
         }
         // Sincronizar en background
         setTimeout(() => refrescarEnBackground(), 500);
+        // REFRESCO_AT_V1: traer la version confirmada por el servidor (reintentos)
+        _programarRefrescoTrasGuardar();
       } else {
         // Nuevo registro: agregar al cache local SIN llamar a la API
-        console.log('[guardarAt] Guardado en hoja:', r.hoja, '— N°', r.nro); apiPost({action:'syncFirebaseAtencion', ...d}).catch(function(){});
+        console.log('[guardarAt] Guardado en hoja:', r.hoja, '— N°', r.nro); apiPost({action:'syncFirebaseAtencion', ...d, nro:r.nro, fecha_atencion:d.fecha_atencion||hoy()}) /* _RAPIDO_V1: sube Azure en 2do plano */.catch(function(){});
         const hoyStr = hoy();
         const newRec = {
           nro:                  r.nro,
@@ -5849,7 +6000,12 @@ async function guardarAt() { if(window._savingAt) return;
           estado:               d.estado               || 'EN PROCESO',
           supervisor:           d.supervisor           || '',
           usuario_sistema:      d.usuario_sistema      || '',
-          usuario_registro:     d.usuario_sistema      || ''
+          usuario_registro:     d.usuario_sistema      || '',
+          /* REFRESCO_AT_V1: estos campos viajan al servidor pero no se veian en la
+             fila optimista hasta recargar la pagina. */
+          nro_licencia:         d.nro_licencia         || '',
+          parentesco:           ((document.getElementById('at_parentesco')||{}).value || d.parentesco || ''),
+          autorizado_por:       d.autorizado_por       || ''
         };
 
         // Agregar al cache en memoria
@@ -5888,6 +6044,8 @@ async function guardarAt() { if(window._savingAt) return;
 
         // Sincronizar con servidor en background y recalcular stats con datos confirmados
         setTimeout(() => refrescarEnBackground().then(fbFresco => { if(!fbFresco) cargarStats(); }), 1000);
+        // REFRESCO_AT_V1: completar la fila con lo que confirme el servidor (reintentos)
+        _programarRefrescoTrasGuardar();
       }
     }else mostrarToast('❌ Error: '+(r.error||'Desconocido'),'error');
   }catch(e){mostrarToast('❌ Error de conexión','error');}
@@ -7573,9 +7731,13 @@ function _fbAplicarEstadisticasFirebase(fbData) {
       if (window._fbRefreshAtTimer) clearTimeout(window._fbRefreshAtTimer);
       window._fbRefreshAtTimer = setTimeout(function () {
         try {
-          console.log('[FB-refresh-at] disparando cargarAtenciones(true) por evento Firebase');
-          cargarAtenciones(true);
-        } catch (e) { console.warn('[FB-refresh-at] cargarAtenciones fallo:', e); }
+          /* REFRESCO_AT_V1: antes llamaba cargarAtenciones(true) = 365 dias a
+             Azure y encima Azure devolvia lo cacheado 3 min. Ahora: solo los
+             ultimos 2 dias, sin cache, fusionados con lo que ya hay. */
+          console.log('[FB-refresh-at] evento Firebase → refrescarAtencionesHoy');
+          if (typeof refrescarAtencionesHoy === 'function') refrescarAtencionesHoy('firebase');
+          else cargarAtenciones(true);
+        } catch (e) { console.warn('[FB-refresh-at] refresco fallo:', e); }
       }, 1500);
     }
   } catch (e) { /* no romper el flujo si falla */ }
@@ -12868,6 +13030,123 @@ setTimeout(_parRefrescar, 1200);
 setTimeout(_parRefrescar, 3500);
 
 console.log('[_PARENTESCO_V1] listo');
+})();
+</script>
+
+<script>
+/* ══════════════════ _STATS_AZURE_V1 (19-set-2026) ══════════════════
+   Indicadores de "Mi Dashboard" (Hoy / Este mes / En proceso / Finalizados /
+   Total año) con UNA sola fuente de verdad: Azure SQL (/atenciones/stats).
+
+   POR QUE: los contadores venian de Firebase (resumen_global), que se
+   actualiza por incrementos y se desfasa (mostraba 47 cuando la base tenia
+   127). Los supervisores ademas pedian sus stats a Azure sin la llave (401)
+   y caian a numeros globales o en blanco.
+
+   AHORA: · admin/coordinador → Azure sin filtro (todo el año en curso)
+          · cualquier otro rol → Azure filtrado por su nombre de supervisor
+          · Firebase sigue alimentando ranking/tendencia, pero YA NO pisa
+            estos 5 contadores.
+          · Se refresca al cargar, tras cada guardado/refresco de atenciones,
+            cuando Firebase avisa de un cambio y cada 3 min si la pestaña
+            esta visible. Si Azure no responde, se usa el calculo anterior.
+   ══════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+var IDS = ['sH', 'sM', 'sP', 'sF', 'sA'];
+var ultimo = null, enCurso = null, reloj = null;
+
+function esAdmin() { try { return ROLES_VER_TODO.includes(USER.rol); } catch (e) { return false; } }
+
+async function pedir() {
+  if (typeof AZURE_FN_BASE === 'undefined' || !AZURE_FN_BASE || !window.USER || !USER.usuario) return null;
+  var u = AZURE_FN_BASE + '/atenciones/stats?anio=' + new Date().getFullYear();
+  if (!esAdmin()) u += '&supervisor=' + encodeURIComponent(USER.nombre || USER.usuario);
+  var r = await fetch(u);
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  var j = await r.json();
+  if (!j || !j.success || !j.resumen_global) throw new Error('respuesta sin resumen_global');
+  var g = j.resumen_global;
+  return { hoy: g.hoy || 0, mes: g.este_mes || 0, anio: g.este_anio || 0,
+           enProceso: g.en_proceso || 0, finalizados: g.finalizados || 0, total: g.total || 0, ts: Date.now() };
+}
+
+function pintar(s) {
+  var m = { sH: s.hoy, sM: s.mes, sP: s.enProceso, sF: s.finalizados, sA: s.anio };
+  Object.keys(m).forEach(function (id) { var el = document.getElementById(id); if (el) el.textContent = m[id] || 0; });
+  try { CACHE.stats = Object.assign(CACHE.stats || {}, { hoy: s.hoy, mes: s.mes, anio: s.anio, enProceso: s.enProceso, finalizados: s.finalizados }); } catch (e) {}
+}
+
+async function refrescar(motivo) {
+  if (enCurso) return enCurso;
+  enCurso = (async function () {
+    try {
+      var s = await pedir();
+      if (s) { ultimo = s; pintar(s);
+        console.log('[_STATS_AZURE_V1] ' + (motivo || '') + ' → hoy ' + s.hoy + ' | mes ' + s.mes + ' | año ' + s.anio + ' | en proceso ' + s.enProceso + (esAdmin() ? ' (global)' : ' (solo ' + (USER.nombre || USER.usuario) + ')'));
+        return true; }
+    } catch (e) { console.warn('[_STATS_AZURE_V1] Azure no respondió (' + (motivo || '') + '): ' + e.message + ' — se mantiene el cálculo anterior'); }
+    return false;
+  })().finally(function () { enCurso = null; });
+  return enCurso;
+}
+function programar(motivo, ms) { if (reloj) clearTimeout(reloj); reloj = setTimeout(function () { reloj = null; refrescar(motivo); }, ms || 2000); }
+window._refrescarStatsAzure = refrescar;
+
+/* 1) cargarStats: primero Azure; si falla, lo de siempre */
+var _cargarOrig = window.cargarStats;
+if (typeof _cargarOrig === 'function') {
+  window.cargarStats = async function () {
+    var ok = await refrescar('cargarStats');
+    if (ok) { try { if (typeof dibujar === 'function' && ultimo) dibujar(ultimo); } catch (e) {} return; }
+    return _cargarOrig.apply(this, arguments);
+  };
+}
+
+/* 2) _aplicarStats: si ya hay cifras de Azure, mandan ellas */
+var _aplicarOrig = window._aplicarStats;
+if (typeof _aplicarOrig === 'function') {
+  window._aplicarStats = function (s) {
+    if (ultimo) { pintar(ultimo); return; }
+    return _aplicarOrig.apply(this, arguments);
+  };
+}
+
+/* 3) Firebase: que no pise los 5 contadores; y como un evento = algo cambio, se repide a Azure */
+var _fbOrig = window._fbAplicarEstadisticasFirebase;
+if (typeof _fbOrig === 'function') {
+  window._fbAplicarEstadisticasFirebase = function () {
+    var args = arguments, self = this;
+    if (!ultimo) return _fbOrig.apply(self, args);
+    var cu = window.countUp;
+    if (typeof cu === 'function') {
+      window.countUp = function (id) { if (IDS.indexOf(id) >= 0) return; return cu.apply(this, arguments); };
+    }
+    try { return _fbOrig.apply(self, args); }
+    finally { if (typeof cu === 'function') window.countUp = cu; programar('firebase', 3000); }
+  };
+}
+
+/* 4) Tras refrescar atenciones (post-guardado, auto 90 s), refrescar cifras */
+var _refAtOrig = window.refrescarAtencionesHoy;
+if (typeof _refAtOrig === 'function') {
+  window.refrescarAtencionesHoy = function () {
+    return Promise.resolve(_refAtOrig.apply(this, arguments)).then(function (r) { programar('atenciones', 1500); return r; });
+  };
+}
+
+/* 5) Cada 3 min con la pestaña visible */
+setInterval(function () {
+  try { if (document.visibilityState === 'visible' && window.USER && USER.usuario) refrescar('auto 3min'); } catch (e) {}
+}, 3 * 60 * 1000);
+
+/* 6) Primera carga: apenas haya usuario en sesión */
+(function esperar(n) {
+  if (window.USER && USER.usuario) { refrescar('inicio'); return; }
+  if (n < 40) setTimeout(function () { esperar(n + 1); }, 500);
+})(0);
+
+console.log('[_STATS_AZURE_V1] listo');
 })();
 </script>
 
