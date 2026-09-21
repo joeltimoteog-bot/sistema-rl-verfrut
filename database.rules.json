@@ -48,6 +48,24 @@
       }
     },
 
+    "trafico": {
+      ".read": true,
+      "$id": {
+        ".write": "!data.exists() || !newData.exists()",
+        ".validate": "newData.hasChildren(['ts','u','sis','accion','destino'])",
+        "ts":      { ".validate": "newData.isNumber()" },
+        "u":       { ".validate": "newData.isString() && newData.val().length < 60" },
+        "n":       { ".validate": "newData.isString() && newData.val().length < 120" },
+        "rol":     { ".validate": "newData.isString() && newData.val().length < 40" },
+        "sis":     { ".validate": "newData.isString() && newData.val().length < 40" },
+        "accion":  { ".validate": "newData.isString() && newData.val().length < 80" },
+        "destino": { ".validate": "newData.isString() && newData.val().length < 40" },
+        "detalle": { ".validate": "newData.isString() && newData.val().length < 160" },
+        "tipo":    { ".validate": "newData.isString() && newData.val().length < 12" },
+        "$otros":  { ".validate": false }
+      }
+    },
+
     "historial": {
       ".read": true,
       "$uid": {

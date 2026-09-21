@@ -1754,5 +1754,139 @@ console.log('[_HORARIOS_MON_V1] panel de horarios listo');
 })();
 </script>
 
+<!-- ══════ _TRAFICO_MON_V1 (20-set-2026) — Mapa de tráfico en vivo ══════ -->
+<style>
+#trfWrap{display:none;position:fixed;inset:0;background:rgba(6,10,20,.92);z-index:9500;padding:14px;overflow:auto;font-family:inherit;color:var(--tx)}
+#trfWrap.on{display:block}
+#trfCard{background:var(--panel);border:1px solid var(--line);border-radius:16px;max-width:1380px;margin:0 auto;padding:14px 16px 12px;min-height:calc(100vh - 28px);display:flex;flex-direction:column;gap:10px}
+#trfHd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#trfHd h2{margin:0;font-size:18px}
+#trfHd .k{background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;color:var(--mut)}
+#trfHd .k b{color:var(--tx);font-variant-numeric:tabular-nums}
+#trfHd button{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:9px;padding:6px 11px;font-size:12px;cursor:pointer}
+#trfHd button.on{border-color:var(--acc);color:var(--acc)}
+#trfCv{width:100%;height:520px;background:radial-gradient(ellipse at 50% 40%,#101c36 0%,#0b1220 70%);border:1px solid var(--line);border-radius:14px;display:block}
+#trfLog{max-height:190px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel2);font-size:12px}
+#trfLog div{padding:6px 10px;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center;font-variant-numeric:tabular-nums}
+#trfLog .t{color:var(--mut);width:64px;flex:none}#trfLog .s{flex:none;padding:1px 7px;border-radius:999px;font-size:10.5px;font-weight:700}
+#trfLog .d{color:var(--mut)}
+@media(max-width:700px){#trfCv{height:380px}}
+</style>
+<div id="trfWrap" role="dialog" aria-label="Tráfico en vivo">
+  <div id="trfCard">
+    <div id="trfHd">
+      <h2>🛰️ Tráfico en vivo</h2>
+      <span class="k">RR.LL <b id="trfC1">0</b></span><span class="k">Capacitaciones ETI <b id="trfC2">0</b></span><span class="k">Evaluaciones ETI <b id="trfC3">0</b></span><span class="k">últimos 30 min · <b id="trfCu">0</b> usuarios</span>
+      <span class="grow" style="flex:1"></span>
+      <button id="trfVivo" class="on">● En vivo</button><button id="trfRep">▶ Reproducir última hora</button><button id="trfCerrar">✕ Cerrar</button>
+    </div>
+    <canvas id="trfCv"></canvas>
+    <div id="trfLog"><div><span class="d">Esperando eventos… Cada acción de negocio (guardar, registrar, subir informe, entrar por SSO) aparecerá aquí y en el mapa.</span></div></div>
+  </div>
+</div>
+<script>
+(function(){
+'use strict';
+var DB='https://sistema-rl-verfrut-default-rtdb.firebaseio.com';
+var SIS=[{k:'RR.LL',n:'Sistema RR.LL',c:'#38bdf8'},{k:'CAP',n:'Capacitaciones ETI',c:'#a78bfa'},{k:'EVAL',n:'Evaluaciones ETI',c:'#f472b6'}];
+var DEST=[{k:'Google Sheets',c:'#34d399'},{k:'Azure SQL',c:'#60a5fa'},{k:'Firebase',c:'#fbbf24'},{k:'Azure Blob',c:'#fb923c'},{k:'Correo',c:'#f87171'}];
+var eventos=[], vistos={}, paquetes=[], usuarios={}, vivo=true, ultimoTs=0, cv, cx, W, H, DPR=1, replayTimer=null;
+function $(id){return document.getElementById(id);}
+function sisDe(s){s=String(s||'').toUpperCase();if(s.indexOf('CAP')>=0)return SIS[1];if(s.indexOf('EVAL')>=0)return SIS[2];return SIS[0];}
+function destDe(d){d=String(d||'');for(var i=0;i<DEST.length;i++)if(d.toLowerCase().indexOf(DEST[i].k.toLowerCase().split(' ')[0])>=0)return DEST[i];return DEST[0];}
+function hora(ts){var d=new Date(ts);return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)+':'+('0'+d.getSeconds()).slice(-2);}
+function ini(){ if(!$('trfCv'))return; cv=$('trfCv');cx=cv.getContext('2d');DPR=window.devicePixelRatio||1;
+  function rs(){var r=cv.getBoundingClientRect();W=r.width;H=r.height;cv.width=W*DPR;cv.height=H*DPR;cx.setTransform(DPR,0,0,DPR,0,0);}
+  rs();window.addEventListener('resize',rs);requestAnimationFrame(dibujar);
+  $('trfCerrar').onclick=function(){$('trfWrap').classList.remove('on');};
+  $('trfVivo').onclick=function(){vivo=true;$('trfVivo').classList.add('on');$('trfRep').classList.remove('on');if(replayTimer){clearInterval(replayTimer);replayTimer=null;}};
+  $('trfRep').onclick=replay;
+  setInterval(poll,3000);poll();
+}
+async function poll(){
+  if(!vivo)return;
+  try{
+    var desde=Date.now()-30*60*1000;
+    var r=await fetch(DB+'/trafico.json?orderBy="$key"&startAt="'+desde+'"',{cache:'no-store'});
+    var j=await r.json(); if(!j)return;
+    var nuevos=[];
+    Object.keys(j).sort().forEach(function(k){var e=j[k];if(!e||!e.ts||vistos[k])return;vistos[k]=1;e._k=k;eventos.push(e);nuevos.push(e);});
+    eventos=eventos.filter(function(e){return e.ts>=desde;});
+    nuevos.slice(-25).forEach(function(e,i){setTimeout(function(){lanzar(e,true);},i*250);});
+    contadores();
+  }catch(e){}
+  // limpieza: eventos con más de 24 h (solo los borra un admin desde el monitor)
+  try{ if(!window._trfLimpio){window._trfLimpio=1; var lim=Date.now()-24*3600*1000; var r2=await fetch(DB+'/trafico.json?orderBy="$key"&endAt="'+lim+'"&limitToFirst=200',{cache:'no-store'}); var j2=await r2.json(); if(j2)Object.keys(j2).forEach(function(k){fetch(DB+'/trafico/'+k+'.json',{method:'DELETE'}).catch(function(){});}); } }catch(e){}
+}
+function contadores(){var c={RR:0,CAP:0,EVAL:0},us={};eventos.forEach(function(e){var s=sisDe(e.sis).k;c[s==='RR.LL'?'RR':s]++;us[e.u]=1;});$('trfC1').textContent=c.RR;$('trfC2').textContent=c.CAP;$('trfC3').textContent=c.EVAL;$('trfCu').textContent=Object.keys(us).length;}
+function lanzar(e,log){
+  var u=usuarios[e.u]||(usuarios[e.u]={u:e.u,n:e.n||e.u,ult:0,cnt:0});u.ult=Date.now();u.cnt++;u.n=e.n||u.n;
+  var s=sisDe(e.sis),d=destDe(e.destino);
+  paquetes.push({e:e,u:e.u,s:s,d:d,t0:performance.now(),color:e.tipo==='error'?'#f87171':e.tipo==='consulta'?'#60a5fa':s.c});
+  if(log){var L=$('trfLog');if(L.children.length&&L.children[0].querySelector('.d')&&!L.children[0].querySelector('.t'))L.innerHTML='';
+    var row=document.createElement('div');row.innerHTML='<span class="t">'+hora(e.ts)+'</span><span class="s" style="background:'+s.c+'22;color:'+s.c+'">'+s.n+'</span><b>'+esc(e.n||e.u)+'</b><span>'+esc(e.accion)+'</span>'+(e.detalle?'<span class="d">'+esc(e.detalle)+'</span>':'')+'<span class="d">→ '+esc(e.destino||'')+'</span>';
+    L.insertBefore(row,L.firstChild);while(L.children.length>120)L.removeChild(L.lastChild);}
+}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function replay(){
+  vivo=false;$('trfVivo').classList.remove('on');$('trfRep').classList.add('on');
+  fetch(DB+'/trafico.json?orderBy="$key"&startAt="'+(Date.now()-60*60*1000)+'"',{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+    var lista=Object.keys(j||{}).sort().map(function(k){return j[k];}).filter(Boolean);if(!lista.length){vivo=true;$('trfVivo').classList.add('on');$('trfRep').classList.remove('on');return;}
+    $('trfLog').innerHTML='';var i=0;if(replayTimer)clearInterval(replayTimer);
+    replayTimer=setInterval(function(){if(i>=lista.length){clearInterval(replayTimer);replayTimer=null;return;}lanzar(lista[i++],true);},350);
+  }).catch(function(){vivo=true;});
+}
+function nodos(){
+  var ahora=Date.now();
+  var lista=Object.keys(usuarios).map(function(k){return usuarios[k];}).filter(function(u){return ahora-u.ult<30*60*1000;}).sort(function(a,b){return b.ult-a.ult;}).slice(0,14);
+  var pos={us:{},sis:{},dest:{}};
+  var xU=110,xS=W/2,xD=W-120;
+  lista.forEach(function(u,i){pos.us[u.u]={x:xU,y:40+i*((H-60)/Math.max(lista.length,1))+((H-60)/Math.max(lista.length,1))/2,u:u};});
+  SIS.forEach(function(s,i){pos.sis[s.k]={x:xS,y:H*(0.25+i*0.25),s:s};});
+  DEST.forEach(function(d,i){pos.dest[d.k]={x:xD,y:40+i*((H-60)/DEST.length)+((H-60)/DEST.length)/2,d:d};});
+  return pos;
+}
+function dibujar(){
+  if(!cx){return;}
+  var p=nodos(),now=performance.now();
+  cx.clearRect(0,0,W,H);
+  // lineas guia
+  cx.lineWidth=1;cx.strokeStyle='rgba(142,163,196,.12)';
+  Object.keys(p.us).forEach(function(k){var a=p.us[k];SIS.forEach(function(s){var b=p.sis[s.k];curva(a,b);});});
+  SIS.forEach(function(s){var a=p.sis[s.k];DEST.forEach(function(d){var b=p.dest[d.k];curva(a,b);});});
+  // paquetes
+  paquetes=paquetes.filter(function(q){return now-q.t0<2600;});
+  paquetes.forEach(function(q){
+    var t=(now-q.t0)/2600;var a=p.us[q.u]||{x:40,y:H/2},b=p.sis[q.s.k],c=p.dest[q.d.k];
+    var pt;if(t<0.5){pt=puntoCurva(a,b,t/0.5);}else{pt=puntoCurva(b,c,(t-0.5)/0.5);}
+    cx.beginPath();cx.arc(pt.x,pt.y,5,0,6.28);cx.fillStyle=q.color;cx.shadowColor=q.color;cx.shadowBlur=14;cx.fill();cx.shadowBlur=0;
+    // estela
+    for(var k=1;k<=4;k++){var tt=Math.max(0,t-k*0.03);var pp=tt<0.5?puntoCurva(a,b,tt/0.5):puntoCurva(b,c,(tt-0.5)/0.5);cx.beginPath();cx.arc(pp.x,pp.y,4-k*0.7,0,6.28);cx.fillStyle=q.color;cx.globalAlpha=0.35-k*0.07;cx.fill();cx.globalAlpha=1;}
+    if(t<0.35){cx.font='600 11px Barlow,sans-serif';cx.fillStyle='#e5eefc';cx.fillText(q.e.accion,a.x+34,a.y-14);}
+  });
+  // nodos usuarios
+  Object.keys(p.us).forEach(function(k){var n=p.us[k];var activo=Date.now()-n.u.ult<4000;
+    cx.beginPath();cx.arc(n.x,n.y,16,0,6.28);cx.fillStyle=activo?'#1d4ed8':'#1e2b45';cx.fill();cx.lineWidth=2;cx.strokeStyle=activo?'#60a5fa':'#2e3f63';cx.stroke();
+    cx.fillStyle='#fff';cx.font='800 13px Barlow,sans-serif';cx.textAlign='center';cx.fillText(String(n.u.n||n.u.u).charAt(0).toUpperCase(),n.x,n.y+5);
+    cx.textAlign='left';cx.fillStyle='#e5eefc';cx.font='600 12px Barlow,sans-serif';cx.fillText(String(n.u.n||n.u.u).split(' ').slice(0,2).join(' '),n.x-96,n.y+4);
+    cx.fillStyle='#8ea3c4';cx.font='11px Barlow,sans-serif';cx.fillText(n.u.cnt+' evento(s)',n.x+24,n.y+4);});
+  // nodos sistemas
+  SIS.forEach(function(s){var n=p.sis[s.k];cx.beginPath();roundRect(n.x-78,n.y-24,156,48,12);cx.fillStyle='#0f1728';cx.fill();cx.lineWidth=2;cx.strokeStyle=s.c;cx.stroke();
+    cx.fillStyle=s.c;cx.font='800 13px Barlow,sans-serif';cx.textAlign='center';cx.fillText(s.n,n.x,n.y-3);cx.fillStyle='#8ea3c4';cx.font='11px Barlow,sans-serif';cx.fillText((s.k==='RR.LL'?$('trfC1'):s.k==='CAP'?$('trfC2'):$('trfC3')).textContent+' eventos · 30 min',n.x,n.y+14);cx.textAlign='left';});
+  // nodos destinos
+  DEST.forEach(function(d){var n=p.dest[d.k];cx.beginPath();cx.arc(n.x,n.y,14,0,6.28);cx.fillStyle='#0f1728';cx.fill();cx.lineWidth=2;cx.strokeStyle=d.c;cx.stroke();
+    cx.fillStyle=d.c;cx.font='700 12px Barlow,sans-serif';cx.textAlign='left';cx.fillText(d.k,n.x+22,n.y+4);});
+  if(!Object.keys(p.us).length){cx.fillStyle='#8ea3c4';cx.font='13px Barlow,sans-serif';cx.textAlign='center';cx.fillText('Sin actividad en los últimos 30 minutos. Los paquetes aparecerán aquí cuando alguien registre, guarde o entre a un módulo.',W/2,H-18);cx.textAlign='left';}
+  requestAnimationFrame(dibujar);
+}
+function curva(a,b){cx.beginPath();cx.moveTo(a.x,a.y);cx.bezierCurveTo(a.x+(b.x-a.x)/2,a.y,a.x+(b.x-a.x)/2,b.y,b.x,b.y);cx.stroke();}
+function puntoCurva(a,b,t){var c1={x:a.x+(b.x-a.x)/2,y:a.y},c2={x:a.x+(b.x-a.x)/2,y:b.y};var mt=1-t;return {x:mt*mt*mt*a.x+3*mt*mt*t*c1.x+3*mt*t*t*c2.x+t*t*t*b.x,y:mt*mt*mt*a.y+3*mt*mt*t*c1.y+3*mt*t*t*c2.y+t*t*t*b.y};}
+function roundRect(x,y,w,h,r){cx.moveTo(x+r,y);cx.arcTo(x+w,y,x+w,y+h,r);cx.arcTo(x+w,y+h,x,y+h,r);cx.arcTo(x,y+h,x,y,r);cx.arcTo(x,y,x+w,y,r);cx.closePath();}
+window._abrirTrafico=function(){$('trfWrap').classList.add('on');if(!cx)ini();};
+// boton en la barra del monitor
+(function btn(){var ref=document.getElementById('btnDifu');if(!ref){setTimeout(btn,400);return;}var b=document.createElement('button');b.className='btnGhost';b.style.color='#7dd3fc';b.textContent='🛰️ Tráfico';b.onclick=window._abrirTrafico;ref.parentNode.insertBefore(b,ref);})();
+})();
+</script>
+
 </body>
 </html>

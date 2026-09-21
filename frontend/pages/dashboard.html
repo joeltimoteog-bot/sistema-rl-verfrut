@@ -13639,5 +13639,32 @@ console.log('[_CUMPL_UI_V1] listo');
 })();
 </script>
 
+<script src="../js/trafico.js?v=1"></script>
+<script>
+/* ══════ _TRAFICO_V1 (20-set-2026) — acciones de negocio del RR.LL al mapa de tráfico ══════ */
+(function(){
+'use strict';
+var MAPA={saveAtencion:['Guardó atención','Google Sheets'],updateAtencion:['Actualizó atención','Google Sheets'],deleteAtencion:['Eliminó atención','Google Sheets'],
+  saveCaso:['Registró caso','Google Sheets'],updateCaso:['Actualizó caso','Google Sheets'],deleteCaso:['Eliminó caso','Google Sheets'],
+  saveVisita:['Registró visita de campo','Google Sheets'],syncFirebaseAtencion:['Sincronizó atención','Azure SQL'],
+  cumplJustificar:['Justificó incumplimiento','Google Sheets'],cumplConfigGuardar:['Cambió plazos de cumplimiento','Google Sheets'],cumplRestriccionLevantar:['Levantó restricción','Google Sheets']};
+var prev=window.apiPost;
+if(typeof prev==='function'){
+  window.apiPost=async function(b){var r=await prev.apply(this,arguments);
+    try{ if(b&&MAPA[b.action]&&r&&r.success&&window.RLTrafico){var m=MAPA[b.action],det='';
+      if(b.action==='updateCaso'&&b.estado_gestion&&/CERRADO|CONCLUIDO|FINALIZADO|RESUELTO/i.test(b.estado_gestion)){m=['Cerró caso','Google Sheets'];}
+      else if(b.action==='updateCaso'&&(b.enlace_informe||b.enlace_reporte)){m=['Subió documentos del caso','Azure Blob'];}
+      if(b.nro||r.nro)det='N° '+(b.nro||r.nro)+(b.nombre?' · '+String(b.nombre).split(' ').slice(0,2).join(' '):'');
+      RLTrafico.emit({accion:m[0],destino:m[1],detalle:det});}
+      else if(b&&MAPA[b.action]&&r&&!r.success&&window.RLTrafico){RLTrafico.emit({accion:'Error al '+MAPA[b.action][0].toLowerCase(),destino:MAPA[b.action][1],detalle:String(r.error||'').slice(0,80),tipo:'error'});}
+    }catch(e){}
+    return r;};
+}
+try{ if(!sessionStorage.getItem('_trf_in')){sessionStorage.setItem('_trf_in','1');setTimeout(function(){try{RLTrafico.emit({accion:'Entró al dashboard',destino:'Firebase'});}catch(e){}},1500);} }catch(e){}
+var _lo=window.logout; if(typeof _lo==='function'){window.logout=function(){try{RLTrafico.emit({accion:'Cerró sesión',destino:'Firebase'});}catch(e){}return _lo.apply(this,arguments);};}
+console.log('[_TRAFICO_V1] listo');
+})();
+</script>
+
 </body>
 </html>

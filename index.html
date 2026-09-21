@@ -332,6 +332,7 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
   </div>
 </div>
 
+<script src="frontend/js/trafico.js?v=1"></script>
 <script>
 // ── Modo producción: silenciar logs de debug (activar con localStorage.setItem('rl_debug','1')) ──
 (function(){
@@ -717,6 +718,7 @@ async function doLogin(){
       // Guardar sesión en localStorage (válida 8 horas)
       try { localStorage.setItem('rl_session', JSON.stringify({user: d.user, token: d.token || null, timestamp: Date.now()})); } catch(e){}
       sessionStorage.setItem('user',JSON.stringify(d.user));
+      try{ RLTrafico.emit({accion:'Inició sesión',destino:'Azure SQL',user:{u:d.user.usuario,n:d.user.nombre||d.user.usuario,rol:d.user.rol||''}}); }catch(e){} /* _TRAFICO_V1 */
       sessionStorage.setItem('api',API);
       if (d.token) sessionStorage.setItem('rl_token', d.token);
       // ── SSO Bienestar Social: obtener token con las mismas credenciales (no bloquea el login RL) ──
@@ -855,6 +857,7 @@ const SSO_SECRETO = 'RL-SSO-VERFRUT-2026';   // debe coincidir con el de los ETI
 
 async function irAConSSO(base){
   let destino = base;
+  try{ RLTrafico.emit({accion: base.indexOf('sistema-eti')>=0 ? 'Fue a Capacitaciones ETI' : 'Fue a Evaluaciones ETI', destino:'Firebase'}); }catch(e){} /* _TRAFICO_V1 */
   try{
     const raw = sessionStorage.getItem('user');
     const usuario = raw ? String(JSON.parse(raw).usuario || '').toLowerCase().trim() : '';
