@@ -13861,13 +13861,16 @@ function nombre(){ try{var u=(typeof USER!=='undefined'&&USER)||JSON.parse(sessi
 
 function menu(limpiar){
   if(limpiar)body.innerHTML='';
+  try{ if(typeof window._rlAsisAdminHome==='function'&&window._rlAsisAdminHome()) return; }catch(e){}
+  menuModulos();
+}
+function menuModulos(){
   mods=misModulos();
   var n=nombre();
   bot((n?'Hola '+n+' 👋. ':'Hola 👋. ')+'Soy el asistente del Sistema RR.LL. Te ayudo con dudas de los módulos que tienes asignados ('+mods.length+'). ¿Sobre cuál quieres consultar?');
   var l=mods.map(function(m){return {t:m.t,f:function(){modulo(m);}};});
   l.push({t:GENERAL.t,c:'sec',f:function(){modulo(GENERAL);}});
   l.push({t:'👤 Hablar con Joel',c:'sec',f:contacto});
-  try{ if(typeof window._rlAsisAdminMenu==='function') l=window._rlAsisAdminMenu(l); }catch(e){}
   opts(l);
 }
 function modulo(m){
@@ -13933,7 +13936,7 @@ function init(){
   // presencia.js crea 💬 después: lo recogemos cuando aparezca
   var n=0, iv=setInterval(function(){ acomodar(); if(++n>40||document.getElementById('_rlChatBtn'))clearInterval(iv); },500);
   try{ new MutationObserver(function(){ var b=document.getElementById('_rlChatBtn'); if(b&&b.parentNode&&b.parentNode.id!=='rlFabCol')acomodar(); }).observe(document.body,{childList:true}); }catch(e){}
-  window._rlAsis={bot:bot,usr:usr,opts:opts,menu:menu,respuesta:respuesta,contacto:contacto,misModulos:misModulos,getBody:function(){return body;}};
+  window._rlAsis={bot:bot,usr:usr,opts:opts,menu:menu,menuModulos:menuModulos,respuesta:respuesta,contacto:contacto,misModulos:misModulos,getBody:function(){return body;}};
   console.log('[_ASISTENTE_RL_V1] listo');
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init); else init();
@@ -14099,6 +14102,16 @@ function difusion(lista){
 }
 
 /* ── Ganchos con el asistente ─────────────────────────────────────────── */
+window._rlAsisAdminHome=function(){
+  if(!esAdmin())return false;
+  var a=A();
+  a.bot('Hola '+primer((USER&&USER.nombre)||'')+' 👋 — modo ADMINISTRADOR. Aquí ves cómo van todos los usuarios del sistema (RR.LL. + Capacitaciones ETI + Evaluaciones ETI) y puedes enviarles avisos desde este chat.');
+  var extra=[{t:'👤 Consultar un supervisor',f:async function(){ try{var d=await cargar(false);}catch(e){a.bot('No pude leer los datos: '+e.message);a.opts([menuBtn()]);return;} a.bot('¿De quién quieres ver el detalle?'); a.opts(d.sups.map(function(s){return {t:s.sem+' '+primer(s.nombre),f:function(){detalle(s);}};}).concat([menuBtn()])); }},
+    {t:'📚 Ayuda de módulos (vista de usuario)',c:'sec',f:function(){a.menuModulos();}}];
+  a.opts(window._rlAsisAdminMenu(extra));
+  resumen(false);
+  return true;
+};
 window._rlAsisAdminMenu=function(l){
   if(!esAdmin())return l;
   return [
