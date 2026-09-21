@@ -942,6 +942,29 @@ function mostrarToastActualizacion(newWorker) {
 }
 // Verificar sesión cacheada al cargar la página
 checkSessionCache();
+/* _VOLVER_SIN_LOGIN_V1 (20-set-2026)
+   Al volver desde Capacitaciones ETI, Evaluaciones ETI o desde el boton "Inicio"
+   del dashboard, esta pagina pedia la clave otra vez. La sesion vive en
+   sessionStorage (solo esta pestana; se borra al cerrarla o al Cerrar Sesion), y
+   los tres sistemas estan en el mismo origen, asi que aqui se puede reconocer y
+   mostrar directo la pantalla de modulos. NO usa localStorage: en una pestana
+   nueva o en otra PC se sigue pidiendo la contrasena (_SESION_PIDE_CLAVE_V1). */
+(function volverSinLogin(){
+  try {
+    var raw = sessionStorage.getItem('user'); if (!raw) return;
+    var user = JSON.parse(raw); if (!user || !user.usuario) return;
+    var bloqueo = verificarHorarioLogin(user);
+    if (!bloqueo.permitido && !sessionStorage.getItem('banner_acceso_temporal')) { sessionStorage.removeItem('user'); return; }
+    var pm = document.getElementById('pmNombre'); if (pm) pm.textContent = user.nombre || user.usuario || '';
+    aplicarVisibilidadModulos(user);
+    var _eti = document.getElementById('modETI'), _evl = document.getElementById('modEval');
+    var hayETI = (_eti && _eti.style.display !== 'none') || (_evl && _evl.style.display !== 'none');
+    if (!hayETI) { window.location.href = 'frontend/pages/dashboard.html'; return; }
+    var card = document.querySelector('.card'); if (card) card.style.display = 'none';
+    document.getElementById('pantallaModulo').style.display = 'flex';
+    console.log('[_VOLVER_SIN_LOGIN_V1] sesion de la pestana reconocida:', user.usuario);
+  } catch (e) { console.warn('[_VOLVER_SIN_LOGIN_V1]', e); }
+})();
 </script>
 
   
