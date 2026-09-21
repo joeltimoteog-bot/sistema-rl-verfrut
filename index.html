@@ -859,7 +859,10 @@ async function irAConSSO(base){
     const raw = sessionStorage.getItem('user');
     const usuario = raw ? String(JSON.parse(raw).usuario || '').toLowerCase().trim() : '';
     if (usuario && window.crypto && window.crypto.subtle) {
-      const pase  = btoa(unescape(encodeURIComponent(JSON.stringify({ u: usuario, exp: Date.now() + 90000 }))));
+      /* _SSO_PASE_V2 (20-set-2026): el pase lleva ademas nombre y rol, para que los
+         ETI puedan dar de alta al usuario al vuelo si aun no lo tienen registrado. */
+      const _uObj = raw ? JSON.parse(raw) : {};
+      const pase  = btoa(unescape(encodeURIComponent(JSON.stringify({ u: usuario, n: String(_uObj.nombre || '').trim(), r: String(_uObj.rol || '').toLowerCase().trim(), exp: Date.now() + 90000 }))));
       const buf   = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pase + '|' + SSO_SECRETO));
       const firma = Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2,'0')).join('');
       destino = base + '#sso=' + pase + '.' + firma;
