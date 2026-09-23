@@ -12211,6 +12211,15 @@ async function permCargarMios() {
   try {
     if (typeof USER === 'undefined' || !USER || !USER.usuario) return;
     var d = await apiPost({ action: 'permisosListar', usuario: USER.usuario, rol: USER.rol });
+    if (d && d.success && d.porDefecto) {   /* _PERM_DEFECTO_V1: usuario nuevo sin permisos asignados */
+      var _ok = d.permitidos || [];
+      _permMios = {};
+      permCatalogo().forEach(function (m) { _permMios[m.clave] = _ok.indexOf(m.clave) >= 0; });
+      console.log('[_PERMISOS_UI_V1] ' + USER.usuario + ' es nuevo y aun no tiene modulos asignados: solo ' + _ok.join(', '));
+      permAplicar();
+      permObservar();
+      return;
+    }
     if (!d || !d.success || d.vacio) {
       console.log('[_PERMISOS_UI_V1] sin permisos definidos para ' + USER.usuario +
                   ' -> el menu queda como siempre');
@@ -12330,7 +12339,7 @@ async function permCargarDeUsuario() {
     permPintarLista(mios || {});
     est.innerHTML = mios
       ? '<span style="color:#15803d">Este usuario ya tiene permisos definidos: mandan estas casillas.</span>'
-      : '<span style="color:#b45309">Todavía no tiene permisos definidos. Hoy ve el menú según las reglas viejas del código. ' +
+      : '<span style="color:#b45309">Todavía no tiene permisos definidos. Si es un usuario antiguo, ve el menú de siempre; si es NUEVO, solo ve Mi Dashboard, Mis Atenciones y Mis Estadísticas. ' +
         'En cuanto guardes, mandan estas casillas.</span>';
   } catch (e) {
     est.textContent = 'Error: ' + e.message;

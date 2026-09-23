@@ -710,8 +710,23 @@ async function doLogin(){
   const _tLogin0=performance.now();
   console.time('[login] 1-credenciales');
   try{
-    const r=await fetch(AZURE_LOGIN_URL,{method:'POST',body:JSON.stringify({usuario:u,password:p}),headers:{'Content-Type':'application/json'}});
-    const d=await r.json();
+    /* _LOGIN_RESPALDO_V1 (23-set-2026): primero Azure (12 s max). Si Azure no
+       responde, o no conoce al usuario (p.ej. recien creado y aun no
+       sincronizado), se valida contra la hoja Usuarios de Google. */
+    const _conReloj=(url,op,ms)=>{const c=(typeof AbortController!=='undefined')?new AbortController():null;const t=setTimeout(()=>{try{c&&c.abort();}catch(e){}},ms);if(c)op.signal=c.signal;return fetch(url,op).finally(()=>clearTimeout(t));};
+    let d=null;
+    try{
+      const r=await _conReloj(AZURE_LOGIN_URL,{method:'POST',body:JSON.stringify({usuario:u,password:p}),headers:{'Content-Type':'application/json'}},12000);
+      d=await r.json();
+    }catch(eAz){ console.warn('[login] Azure no respondio:', eAz&&eAz.name); }
+    if(!d||!d.success){
+      try{
+        const rg=await _conReloj(API,{method:'POST',body:JSON.stringify({action:'login',usuario:u,password:p}),headers:{'Content-Type':'text/plain'}},25000);
+        const dg=await rg.json();
+        if(dg&&dg.success&&dg.user){ console.log('[login] ingreso validado por Google (respaldo)'); d=dg; }
+        else if(!d) d=dg||{success:false};
+      }catch(eG){ console.warn('[login] respaldo Google fallo:', eG&&eG.name); if(!d) throw eG; }
+    }
     console.timeEnd('[login] 1-credenciales');
     console.log('[login] credenciales: '+Math.round(performance.now()-_tLogin0)+'ms');
     if(d.success){
