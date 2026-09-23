@@ -14468,7 +14468,9 @@ var LS = 'rl_sup_visitas_v1';
 var S = { lista: null, cargando: null };
 try { var c = JSON.parse(localStorage.getItem(LS) || 'null'); if (c && Array.isArray(c.lista)) S.lista = c.lista.filter(function (x) { return x.gestionado; }); } catch (e) {}
 
-function esAdm() { try { return ['administrador','administrador 01','administrador 02','coordinador','jefa_rl'].indexOf(String(USER.rol || '').toLowerCase().trim()) >= 0; } catch (e) { return false; } }
+/* Solo estos usuarios ven y usan el boton "Supervisores". Para dar acceso a otro, agregarlo aqui y en SUP_ADMIN_USUARIOS del servidor. */
+var SUP_ADMIN_USUARIOS = ['jtimoteo'];
+function esAdm() { try { return SUP_ADMIN_USUARIOS.indexOf(String(USER.usuario || '').toLowerCase().trim()) >= 0; } catch (e) { return false; } }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); }
 

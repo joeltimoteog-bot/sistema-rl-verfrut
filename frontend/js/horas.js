@@ -1932,3 +1932,81 @@ function _devolAyuda() {
 })();
 
 console.log('[_DEVOLUCION_V6] la devolucion pide horas a pagar, no horario');
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _FASE3_UI_23SET (23-set-2026) — la vista previa calcula igual que el servidor
+   · La jornada esperada sale de la hoja de horarios (la misma que usa el
+     servidor). Si no carga, queda el calculo de siempre.
+   · Turno que cruza la medianoche (menos de 24 h): una sola jornada.
+   · "Horas acumuladas" muestra lo que de verdad se acumula (trabajado menos
+     jornada); en "Trabajo en día libre", todo lo trabajado.
+   Solo cambia lo que se VE antes de guardar; el calculo que vale es el del
+   servidor, que ya aplica estas mismas reglas.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  var HOR = null;
+  function iso(f) {
+    if (f instanceof Date) { var m = f.getMonth() + 1, d = f.getDate(); return f.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d; }
+    return String(f || '').substring(0, 10);
+  }
+  function norm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  try {
+    apiPost({ action: 'horariosListar', usuario: (typeof USER !== 'undefined' && USER && USER.usuario) || '' }).then(function (d) {
+      if (d && d.success && Array.isArray(d.horarios)) { HOR = d.horarios.slice().sort(function (a, b) { return a.desde < b.desde ? 1 : -1; }); try { window.recalcularHoras(); } catch (e) {} }
+    }).catch(function () {});
+  } catch (e) {}
+
+  var _unDiaOrig = window.horasCalcularJornadaUnDia;
+  if (typeof _unDiaOrig === 'function') {
+    window.horasCalcularJornadaUnDia = function (fecha) {
+      try {
+        if (HOR && HOR.length) {
+          var i = iso(fecha); var p = i.split('-');
+          if (p.length === 3) {
+            var dia = new Date(+p[0], +p[1] - 1, +p[2]).getDay();
+            if (dia === 0) return 0;
+            for (var k = 0; k < HOR.length; k++) {
+              var h = HOR[k]; if (i < h.desde) continue; if (h.hasta && i > h.hasta) continue;
+              return dia === 6 ? (Number(h.horasSab) || 0) : (Number(h.horasLV) || 0);
+            }
+          }
+        }
+      } catch (e) {}
+      return _unDiaOrig.apply(this, arguments);
+    };
+  }
+
+  var _totalOrig = window.horasCalcularJornadaTotal;
+  if (typeof _totalOrig === 'function') {
+    window.horasCalcularJornadaTotal = function (fIni, fFin) {
+      try {
+        if (fIni && fFin && iso(fIni) !== iso(fFin) && iso(fIni) === v('regFechaEntrada') && iso(fFin) === v('regFechaSalida')) {
+          var he = v('regHoraEntrada'), hs = v('regHoraSalida');
+          if (he && hs) {
+            var hrs = (new Date(iso(fFin) + 'T' + hs + ':00') - new Date(iso(fIni) + 'T' + he + ':00')) / 36e5;
+            if (hrs > 0 && hrs < 24) return Math.round(window.horasCalcularJornadaUnDia(fIni) * 100) / 100;
+          }
+        }
+      } catch (e) {}
+      return _totalOrig.apply(this, arguments);
+    };
+  }
+
+  var _recOrig = window.recalcularHoras;
+  if (typeof _recOrig === 'function') {
+    window.recalcularHoras = function () {
+      var r = _recOrig.apply(this, arguments);
+      try {
+        var m = norm(v('regMotivo'));
+        var trab = parseFloat(String((document.getElementById('calcTrab') || {}).textContent || '0').replace(',', '.')) || 0;
+        var jor  = parseFloat(String((document.getElementById('calcJornada') || {}).textContent || '0').replace(',', '.')) || 0;
+        if (m.indexOf('acumulaci') >= 0) setText('calcAcum', Math.max(0, Math.round((trab - jor) * 100) / 100).toFixed(2));
+        else if (m.indexOf('dia libre') >= 0) setText('calcAcum', trab.toFixed(2));
+      } catch (e) {}
+      return r;
+    };
+  }
+  console.log('[_FASE3_UI_23SET] vista previa alineada con el servidor');
+})();
