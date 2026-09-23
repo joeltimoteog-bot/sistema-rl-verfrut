@@ -2873,7 +2873,12 @@ async function buscarTrabajadorPorDniAzure(dni, empresa = '') {
     url.searchParams.set('dni', String(dni).trim());
     if (empresa) url.searchParams.set('empresa', empresa);
     const t0 = performance.now();
-    const resp = await fetch(url.toString(), { method: 'GET' });
+    /* _DNI_RESPALDO_V1 (23-set): reloj propio de 12 s (Azure en frio tarda ~7-10 s) */
+    const _ctrlDni = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const _relojDni = setTimeout(function () { try { _ctrlDni && _ctrlDni.abort(); } catch (e) {} }, 12000);
+    let resp;
+    try { resp = await fetch(url.toString(), _ctrlDni ? { method: 'GET', signal: _ctrlDni.signal } : { method: 'GET' }); }
+    finally { clearTimeout(_relojDni); }
     const t1 = performance.now();
     if (resp.status === 404) {
       console.log('[Trabajador] DNI ' + dni + ' no encontrado (' + Math.round(t1-t0) + 'ms)');
@@ -2889,7 +2894,22 @@ async function buscarTrabajadorPorDniAzure(dni, empresa = '') {
     return null;
   } catch (e) {
     console.error('[Trabajador] Error:', e);
-    throw e;
+    /* _DNI_RESPALDO_V1 (23-set): si Azure no responde, se busca en Google Sheets
+       (misma base de trabajadores). Se devuelve con los nombres de campo de Azure
+       para que _mapTrabajadorAzureALegado y todos los que llaman sigan igual. */
+    try {
+      const g = await apiGet({ action: 'buscarTrabajador', q: String(dni).trim(), empresa: empresa || 'AMBAS' });
+      if (g && g.success) {
+        const d = String(dni).trim();
+        const x = (g.data || []).find(function (w) { return String(w.dni || '').trim() === d || ('0' + String(w.dni || '').trim()) === d; });
+        console.log('[Trabajador] respaldo Google Sheets: ' + (x ? 'encontrado' : 'no encontrado') + ' DNI ' + d);
+        if (!x) return null;
+        return { dni: x.dni || d, nombre_completo: x.nombre || '', empresa: x.empresa || '', sexo: x.sexo || '',
+                 oficio: x.cargo || '', zona_labor: x.fundo || '', ruta: x.ruta || '', cod: x.codigo || '',
+                 fecha_inicio: x.fecha_inicio_periodo || '', fecha_termino: x.fecha_termino_periodo || '', _fuente: 'SHEETS' };
+      }
+    } catch (e2) { console.error('[Trabajador] respaldo Sheets fallo:', e2); }
+    throw new Error('El servidor está lento en este momento. Vuelve a intentar en unos segundos.');
   }
 }
 
@@ -3340,9 +3360,10 @@ async function _redLlamar(hacer, accion, reintentar) {
         ultimo = new Error('respuesta no JSON (HTTP ' + r.status + '): ' + txt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160));
       }
     } catch (e) { clearTimeout(reloj); ultimo = e; }
-    if (intento++ < (reintentar ? 1 : 0)) {
-      console.warn('[api] fallo en', accion, '->', ultimo && ultimo.message, '| reintentando en 1.5 s');
-      await new Promise(function (res) { setTimeout(res, 1500); });
+    if (intento++ < (reintentar ? 2 : 0)) {   /* _ESTAB_V1 (23-set): lecturas 2 reintentos, 1.5 s y 4 s */
+      var _espera = intento === 1 ? 1500 : 4000;
+      console.warn('[api] fallo en', accion, '->', ultimo && ultimo.message, '| reintento ' + intento + ' en ' + (_espera / 1000) + ' s');
+      await new Promise(function (res) { setTimeout(res, _espera); });
       continue;
     }
     console.warn('[api] error de red:', accion, ultimo && ultimo.message);
