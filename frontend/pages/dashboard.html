@@ -13877,11 +13877,12 @@ var MODS=[
   ['¿Para qué sirve la campana 🔔?','La campana muestra tus pendientes con plazo y cuántos días faltan o llevan vencidos. Haz clic en un pendiente para ir directo al registro y regularizarlo.'],
   ['Los números no coinciden con mis registros','Verifica el año seleccionado y que no tengas filtros activos. Si aún así difiere, presiona Ctrl+F5 para recargar. Si persiste, escríbele a Joel por el botón 💬 con el N° de registro que falta.']]},
  {k:'atenciones',t:'📋 Mis Atenciones',nav:'navAt',kw:'atencion atenciones registrar guardar licencia parentesco recordatorio whatsapp trabajador dni estado proceso finalizado',q:[
-  ['¿Cómo registro una atención?','1) Entra a Mis Atenciones y pulsa el botón de nueva atención. 2) Escribe el DNI: el sistema completa nombre, empresa y sector. 3) Elige tipo, motivo, estado y describe la atención. 4) Guardar. El registro aparece al instante en tu lista.'],
+  ['¿Cómo registro una atención?','1) En Mis Atenciones pulsa ➕ Nueva atención. 2) Escribe el DNI (8 dígitos): el sistema completa nombre, empresa, fundo, cargo y ruta. 3) Elige el Documento/trámite; si lo pide, completa N° de licencia, parentesco y fechas del documento. 4) Revisa fecha y horas de atención, responsable de recepción, observaciones y estado. 5) 💾 Guardar. El botón se bloquea mientras guarda, así no se duplica.'],
   ['¿Cuándo pongo N° de licencia o parentesco?','Solo cuando el motivo lo pide (licencias, permisos por familiar, fallecimiento, etc.) aparecen los campos N° de licencia y Parentesco. Si no los ves, ese motivo no los requiere.'],
   ['¿Qué diferencia hay entre EN PROCESO y FINALIZADO?','EN PROCESO = la atención sigue abierta (requiere seguimiento). FINALIZADO = ya se resolvió. Puedes cambiar el estado editando la atención; el sistema guarda quién y cuándo lo cambió.'],
   ['¿Cómo envío el recordatorio por WhatsApp 📲?','En atenciones EN PROCESO con celular registrado aparece el botón 📲. Al pulsarlo se abre WhatsApp con el mensaje listo; solo confirmas el envío desde tu teléfono o WhatsApp Web.'],
-  ['Guardé y no aparece en la lista','La lista se refresca sola al guardar y cada 90 s. Si no aparece, cambia el filtro de fecha/estado o pulsa Ctrl+F5. Si el aviso fue "Sin conexión", vuelve a intentar en unos segundos: el registro NO se duplica.']]},
+  ['Guardé y no aparece en la lista','La lista se refresca sola al guardar y cada 90 s. Si no aparece, revisa el filtro de fecha/estado. Si salió "Sin conexión", NO la registres de nuevo: queda guardada en tu equipo (aviso naranja ⏳ abajo a la izquierda) y se envía sola apenas vuelve internet.'],
+  ['¿Qué es el aviso naranja ⏳ "atención pendiente de envío"?','Aparece cuando guardaste sin conexión. Tu atención está a salvo en tu equipo y se envía sola cada 45 s o apenas vuelve internet; al enviarse verás ✅ con su N°. Puedes hacer clic en el aviso para reintentar ya. No cierres sesión en otro equipo esperando verla: se envía desde este.']]},
  {k:'trabajadores',t:'👷 Buscar Trabajador / Consulta por DNI',nav:'trabajadores',kw:'buscar trabajador consulta dni nombre masiva excel datos personal',q:[
   ['¿Cómo busco a un trabajador?','En Buscar Trabajador escribe nombre, apellido o DNI (mínimo 3 caracteres). En Consulta por DNI ingresas solo el número y ves su ficha completa con historial de atenciones.'],
   ['¿Cómo consulto varios DNI a la vez?','Usa Consulta Masiva (Excel): sube un archivo con una columna de DNI y el sistema devuelve un Excel con los datos y atenciones de cada uno.'],
@@ -13936,7 +13937,10 @@ var MODS=[
 ];
 // Temas siempre disponibles (no dependen de permisos)
 var GENERAL={k:'general',t:'🧭 Uso general del sistema',kw:'sesion clave contraseña ingresar salir cerrar sin conexion error lento recargar celular movil',q:[
-  ['Me sale "Sin conexión con el servidor"','Suele ser una caída momentánea de red. Espera unos segundos y reintenta; los guardados no se duplican. Si se repite, prueba Ctrl+F5 o cambia de red y avisa a Joel por 💬.'],
+  ['Me sale "Sin conexión con el servidor"','Suele ser una caída momentánea. Las consultas se reintentan solas; espera unos segundos. Si fue al guardar una atención, no la repitas: queda en tu equipo (aviso ⏳) y se envía sola. Si se repite seguido, usa 🆘 Reportar para que Joel lo vea con el detalle técnico.'],
+  ['¿Cómo reporto un problema del sistema?','Usa la pestaña roja 🆘 Reportar en el borde derecho de la pantalla. Escribe qué pasó y envía: llega a Joel con tu usuario, el módulo y los últimos errores de tu equipo, sin que tengas que explicar lo técnico.'],
+  ['Me salió "Hay una versión nueva del sistema"','Significa que se publicó una mejora. Termina y guarda lo que estás haciendo y pulsa Actualizar. Si eliges Después, te vuelve a avisar en 30 min.'],
+  ['¿Qué datos míos puedo consultar aquí?','Pulsa 📊 Mis datos en el menú o escribe, por ejemplo, "mis pendientes", "cuántas atenciones llevo" o "mi índice": te muestro tus atenciones del día/mes/año, tu índice de cumplimiento y lo que tienes por vencer o vencido.'],
   ['¿Cómo cambio mi contraseña?','Pídela a Coordinación por 💬 o WhatsApp; Joel la actualiza en Gestión Usuarios y te la confirma.'],
   ['¿Puedo usar el sistema desde el celular?','Sí. Abre la misma dirección en el navegador del celular; el menú se despliega con ☰. Para subir documentos de casos es más cómodo hacerlo desde la PC.'],
   ['¿Cómo vuelvo a la pantalla de módulos (ETI)?','Usa el botón 🏠 Inicio al final del menú: vuelves a la pantalla de los 3 módulos sin volver a escribir tu clave mientras la pestaña siga abierta.']]};
@@ -13993,6 +13997,7 @@ function menuModulos(){
   var n=nombre();
   bot((n?'Hola '+n+' 👋. ':'Hola 👋. ')+'Soy el asistente del Sistema RR.LL. Te ayudo con dudas de los módulos que tienes asignados ('+mods.length+'). ¿Sobre cuál quieres consultar?');
   var l=mods.map(function(m){return {t:m.t,f:function(){modulo(m);}};});
+  if(typeof window._rlAsisMisDatos==='function') l.unshift({t:'📊 Mis datos',c:'go',f:function(){window._rlAsisMisDatos();}});   /* _ASISTENTE_DATOS_V1 */
   l.push({t:GENERAL.t,c:'sec',f:function(){modulo(GENERAL);}});
   l.push({t:'👤 Hablar con Joel',c:'sec',f:contacto});
   opts(l);
@@ -14021,6 +14026,7 @@ function contacto(){
   bot('Puedes escribirle a Joel Timoteo (Coordinación RR.LL.) por dos vías:');
   opts([
     {t:'💬 Mensaje interno (queda registrado)',f:function(){ var b=document.getElementById('_rlChatBtn'); if(b){b.click();bot('Abrí el cuadro de mensaje a Coordinación, escríbele ahí 👇');} else bot('El mensaje interno aún no está disponible; usa WhatsApp.'); }},
+    {t:'🆘 Reportar una falla del sistema',f:function(){ if(typeof window.rlReportar==='function'){window.rlReportar();bot('Abrí el formulario de reporte 👉 cuéntame qué pasó y envíalo.');} else bot('El formulario de reporte no está disponible; usa 💬 o WhatsApp.'); }},
     {t:'📱 WhatsApp',f:function(){ var a=document.querySelector('#rlFabCol a[href^="https://wa.me/"]'); if(a)window.open(a.href,'_blank'); bot('Abrí WhatsApp con el mensaje listo para Joel.'); }},
     {t:'🏠 Menú',c:'sec',f:function(){menu(false);}}
   ]);
@@ -14030,13 +14036,14 @@ function norm(s){return String(s||'').toLowerCase().normalize('NFD').replace(/[�
 function enviar(){
   var t=(inp.value||'').trim(); if(!t)return; inp.value=''; usr(t);
   try{ if(typeof window._rlAsisAdminTexto==='function'&&window._rlAsisAdminTexto(t)) return; }catch(e){}
+  try{ if(typeof window._rlAsisDatosTexto==='function'&&window._rlAsisDatosTexto(t)) return; }catch(e){}   /* _ASISTENTE_DATOS_V1 */
   var pal=norm(t).split(/\s+/).filter(function(w){return w.length>2&&['como','para','que','del','los','las','una','uno','con','por','puedo','hago','donde','esta','este','tengo','sale','hay'].indexOf(w)<0;});
   var cand=[]; var pool=misModulos().concat([GENERAL]);
   pool.forEach(function(m){ m.q.forEach(function(q){ var txt=norm(m.t+' '+m.kw+' '+q[0]+' '+q[1]); var sc=0; pal.forEach(function(w){ if(txt.indexOf(w)>=0)sc+= (norm(q[0]).indexOf(w)>=0?3:1); }); if(sc>0)cand.push({sc:sc,m:m,q:q}); }); });
   cand.sort(function(a,b){return b.sc-a.sc;});
   if(!cand.length||!pal.length){
-    bot('No encontré una respuesta para eso 🤔. Elige un módulo del menú o escríbele directamente a Joel.');
-    opts([{t:'🏠 Menú',c:'sec',f:function(){menu(false);}},{t:'👤 Hablar con Joel',c:'sec',f:contacto}]);
+    bot('No encontré una respuesta para eso 🤔. Prueba con otras palabras, elige un módulo del menú o, si es una falla del sistema, repórtala con 🆘.');
+    opts([{t:'🏠 Menú',c:'sec',f:function(){menu(false);}},{t:'🆘 Reportar un problema',c:'sec',f:function(){ if(typeof window.rlReportar==='function'){window.rlReportar();} else contacto(); }},{t:'👤 Hablar con Joel',c:'sec',f:contacto}]);
     return;
   }
   if(cand.length===1||cand[0].sc>=cand[1].sc+3){ bot('Creo que esto te ayuda ('+cand[0].m.t+'):'); respuesta(cand[0].m,cand[0].q); return; }
@@ -15087,6 +15094,140 @@ function mostrar(u) {
   }
   if (n < 80) setTimeout(function () { esperar(n + 1); }, 250);
 })(0);
+})();
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _ASISTENTE_DATOS_V1 (24-set-2026) — el asistente 🤖 responde con TUS datos
+   ---------------------------------------------------------------------------
+   · Opcion "📊 Mis datos" en el menu del asistente y preguntas libres como
+     "mis pendientes", "cuantas atenciones llevo", "mi indice", "estoy restringido".
+   · Atenciones: Azure /atenciones/stats?supervisor=<tu nombre> (rapido).
+   · Cumplimiento: cumplPendientes (misma fuente que la campana 🔔, con cache).
+   · Cada usuario ve SOLO lo suyo. Solo lectura: no guarda ni cambia nada.
+   Para revertir: borrar este bloque (el asistente vuelve a funcionar igual).
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+var SEM = { EN_PLAZO: '🟢', PROXIMO: '🟡', VENCE_HOY: '🟠', VENCIDO: '🔴', CRITICO: '⚫' };
+var TXT = { EN_PLAZO: 'en plazo', PROXIMO: 'próximo a vencer', VENCE_HOY: 'vence hoy', VENCIDO: 'vencido', CRITICO: 'crítico' };
+
+function A() { return window._rlAsis || null; }
+function u() { try { return (typeof USER !== 'undefined' && USER && USER.usuario) ? USER : JSON.parse(sessionStorage.getItem('user') || 'null'); } catch (e) { return null; } }
+function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function fmt(iso) { iso = String(iso || ''); return iso.length >= 10 ? iso.slice(8, 10) + '/' + iso.slice(5, 7) : iso; }
+function primer(n) { n = String(n || '').trim().split(' ')[0] || ''; return n.charAt(0).toUpperCase() + n.slice(1).toLowerCase(); }
+function menuBtn() { return { t: '🏠 Menú', c: 'sec', f: function () { A().menu(false); } }; }
+
+async function stats(us) {
+  try {
+    if (typeof AZURE_FN_BASE === 'undefined') return null;
+    var r = await fetch(AZURE_FN_BASE + '/atenciones/stats?supervisor=' + encodeURIComponent(us.nombre || us.usuario));
+    if (!r.ok) return null;
+    var j = await r.json();
+    return (j && j.success && j.resumen_global) ? j.resumen_global : null;
+  } catch (e) { return null; }
+}
+async function cumpl(us) {
+  try {
+    var r = await apiPost({ action: 'cumplPendientes', usuario: us.usuario, rol: us.rol });
+    return (r && r.success) ? r : null;
+  } catch (e) { return null; }
+}
+
+/* foco: 'todo' | 'atenciones' | 'pendientes' | 'indice' */
+async function misDatos(foco) {
+  var a = A(); if (!a) return;
+  var us = u();
+  if (!us || !us.usuario) { a.bot('No pude identificar tu sesión. Recarga la página e intenta de nuevo.'); return; }
+  foco = foco || 'todo';
+  a.bot('Reviso tus datos, ' + primer(us.nombre || us.usuario) + '… ⏳');
+  var res = await Promise.all([
+    (foco === 'todo' || foco === 'atenciones') ? stats(us) : Promise.resolve(null),
+    (foco !== 'atenciones') ? cumpl(us) : Promise.resolve(null)
+  ]);
+  var st = res[0], c = res[1], partes = [], botones = [];
+
+  if (foco === 'todo' || foco === 'atenciones') {
+    if (st) {
+      partes.push('📋 Tus atenciones\n' +
+        '• Hoy: ' + (st.hoy || 0) + '   • Este mes: ' + (st.este_mes || 0) + '   • Este año: ' + (st.este_anio || 0) + '\n' +
+        '• En proceso: ' + (st.en_proceso || 0) + '   • Finalizadas: ' + (st.finalizados || 0));
+      if ((st.en_proceso || 0) > 0) partes.push('💡 Tienes ' + st.en_proceso + ' atención(es) EN PROCESO: revisa si ya puedes finalizarlas.');
+    } else if (foco === 'atenciones') {
+      partes.push('📋 No pude leer tus atenciones en este momento. Intenta en unos segundos.');
+    }
+    var nav = document.getElementById('navAt');
+    if (nav) botones.push({ t: '➡️ Ir a Mis Atenciones', c: 'go', f: function () { nav.click(); a.bot('Listo, te llevé a Mis Atenciones.'); a.opts([menuBtn()]); } });
+  }
+
+  if (foco !== 'atenciones') {
+    if (!c) {
+      partes.push('✅ No pude leer tu cumplimiento ahora (el servidor está ocupado). Intenta en un minuto o revisa la campana 🔔.');
+    } else {
+      var acts = c.actividades || [];
+      if (c.esAdmin) {
+        acts = acts.filter(function (x) {
+          var r = norm(x.responsable);
+          return r && (r === norm(us.nombre) || r === norm(us.usuario));
+        });
+      }
+      if ((foco === 'todo' || foco === 'indice') && c.indice) {
+        var i = c.indice, ic = i.nivel === 'EXCELENTE' ? '🟢' : i.nivel === 'REGULAR' ? '🟡' : '🔴';
+        partes.push('📈 Tu índice de cumplimiento (' + (i.mes || 'este mes') + '): ' + ic + ' ' + i.porcentaje + '% — ' + i.nivel + '\n' +
+          '• Visitas: ' + (i.visitas_realizadas || 0) + ' de ' + (i.visitas_programadas || 0) + ' realizadas' +
+          ((i.visitas_pendientes || 0) ? ' (' + i.visitas_pendientes + ' pendiente/s)' : '') + '\n' +
+          '• Casos abiertos: ' + (i.casos_abiertos || 0) + (i.casos_vencidos ? '  · vencidos: ' + i.casos_vencidos : '') +
+          (i.documentos_pendientes ? '  · documentos por subir: ' + i.documentos_pendientes : ''));
+      }
+      if (foco === 'todo' || foco === 'pendientes') {
+        var urg = acts.filter(function (x) { return x.estado !== 'EN_PLAZO'; });
+        if (!acts.length) {
+          partes.push('🎉 No tienes pendientes con plazo. ¡Todo al día!');
+        } else {
+          var cnt = {}; acts.forEach(function (x) { cnt[x.estado] = (cnt[x.estado] || 0) + 1; });
+          var res2 = ['CRITICO', 'VENCIDO', 'VENCE_HOY', 'PROXIMO', 'EN_PLAZO'].filter(function (k) { return cnt[k]; })
+                       .map(function (k) { return SEM[k] + ' ' + cnt[k] + ' ' + TXT[k]; }).join('  ·  ');
+          var lista = (urg.length ? urg : acts).slice(0, 5).map(function (x) {
+            var que = x.tipo === 'VISITA' ? ('Informe de visita' + (x.semana ? ' (sem. ' + x.semana + ')' : '')) : ('Caso N° ' + x.caso + (x.trabajador ? ' · ' + primer(x.trabajador) : '') + ' — ' + (x.accion || x.actividad || ''));
+            var cuando = x.dias_retraso > 0 ? (x.dias_retraso + ' día(s) de atraso') : (x.dias_restantes === 0 ? 'vence hoy' : (x.fecha_limite ? 'vence ' + fmt(x.fecha_limite) : ''));
+            return SEM[x.estado] + ' ' + que + (cuando ? ' · ' + cuando : '');
+          }).join('\n');
+          partes.push('🔔 Tus pendientes: ' + res2 + '\n' + lista + (acts.length > 5 && urg.length > 5 ? '\n… y ' + (urg.length - 5) + ' más en la campana 🔔.' : ''));
+          (urg.length ? urg : acts).slice(0, 3).forEach(function (x) {
+            if (typeof window._cumplIrA !== 'function') return;
+            botones.push({ t: '➡️ ' + (x.tipo === 'VISITA' ? 'Registrar visita' : 'Abrir caso N° ' + x.caso), c: 'go',
+                           f: function () { window._cumplIrA(x.tipo, x.caso); a.bot('Listo, te llevé ahí para regularizarlo.'); a.opts([menuBtn()]); } });
+          });
+        }
+        if (c.restriccion && c.restriccion.activa) {
+          partes.push('⛔ Tienes restricción por cumplimiento' + (c.restriccion.modulos && c.restriccion.modulos.length ? ' en: ' + c.restriccion.modulos.join(', ') : '') +
+                      '. Se levanta sola al regularizar lo crítico. Registrar y editar NUNCA se bloquea.');
+        }
+      }
+    }
+  }
+
+  a.bot(partes.join('\n\n') || 'No encontré datos para mostrarte.');
+  if (foco !== 'todo') botones.push({ t: '📊 Ver todos mis datos', f: function () { misDatos('todo'); } });
+  botones.push(menuBtn());
+  a.opts(botones);
+}
+
+window._rlAsisMisDatos = function () { return misDatos('todo'); };
+
+/* Preguntas libres sobre los propios datos */
+window._rlAsisDatosTexto = function (t) {
+  var n = norm(t);
+  var propio = /\b(mi|mis|mio|mias|tengo|llevo|estoy|debo)\b|cuant|me falta/.test(n);
+  if (/\bmis datos\b|\bmi resumen\b|\bcomo voy\b|\bcomo estoy\b/.test(n)) { misDatos('todo'); return true; }
+  if (!propio) return false;
+  if (/indice|porcentaje|cumplimiento|nota|calificacion/.test(n)) { misDatos('indice'); return true; }
+  if (/pendiente|vencid|vence|atras|retras|plazo|restring|restriccion|bloque|campana|visita|caso/.test(n)) { misDatos('pendientes'); return true; }
+  if (/atencion|registr|finaliz|proceso|hoy|mes|ano|anio/.test(n)) { misDatos('atenciones'); return true; }
+  return false;
+};
+console.log('[_ASISTENTE_DATOS_V1] listo');
 })();
 </script>
 </body>
