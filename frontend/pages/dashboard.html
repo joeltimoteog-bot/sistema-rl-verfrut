@@ -3313,7 +3313,7 @@ function confirmarFundo() {
 //   4) cada fallo queda guardado en localStorage -> window._verErroresRed() en consola;
 //   5) las llamadas de fondo (sync Firebase, papelera, precarga) no molestan al usuario.
 var RED_TIMEOUT_MS   = 90000;
-var RED_SILENCIOSAS  = ['syncFirebaseAtencion', 'papeleraNros', 'getPreloadOptimizado'];
+var RED_SILENCIOSAS  = ['syncFirebaseAtencion', 'papeleraNros', 'getPreloadOptimizado', 'cumplPendientes', 'permisosListar', 'accesoHorarioDeUsuario'];   /* _LECTURAS_V1 (24-set): cargas de fondo, sin aviso rojo */
 function _redRegistrar(accion, err) {
   try {
     var k = '_rl_errores_red', lista = [];
@@ -3384,7 +3384,8 @@ async function apiPost(b) {
   if (!API || API.trim() === '') API = API_URL_DEFAULT;
   var accion = b && b.action;
   // Solo se reintentan las lecturas: un save/update/delete repetido podria duplicar.
-  var esLectura = /^(get|listar|consultar|buscar|papelera)/i.test(String(accion || ''));
+  var esLectura = /^(get|listar|consultar|buscar|papelera)/i.test(String(accion || ''))
+      || /^(cumpl(Pendientes|Panel|ConfigListar|Historial|Justificaciones)|permisos(Listar|Usuarios)|accesoHorario(DeUsuario|Listar)|horariosListar|horas(Listar|ListarMotivos|Resumen\w*|BuscarTrabajador)|inv(Listar\w*|GetAll|DatosReporte)|resumenEjecutivo|verificarAccesoTemporal|ping)$/.test(String(accion || ''));   /* _LECTURAS_V1 (24-set): tambien son lecturas -> 2 reintentos */
   return _redLlamar(function (signal) {
     var op = { method:'POST', body:JSON.stringify(b), headers:{'Content-Type':'text/plain'} };
     if (signal) op.signal = signal;
