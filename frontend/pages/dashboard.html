@@ -16,6 +16,7 @@
 <script src="../lib/xlsx.full.min.js"></script>
 <script src="../lib/html2pdf.bundle.min.js"></script>
 <script src="../js/modal-system.js"></script>
+<script src="../js/salud.js"></script>  <!-- _SALUD_V1 (23-set): registro de errores, mensajes en espanol, aviso de version nueva -->
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
@@ -1710,7 +1711,7 @@ async function cargarEstadisticasAdmin() {
     CACHE.estadisticasAdmin = d.data;
     renderEstadisticasAdmin(d.data);
   } catch(e) {
-    if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error de conexión: ' + e.message + '</td></tr>';
+    if(tb) tb.innerHTML = '<tr><td colspan="10" class="empty">❌ Error de conexión: ' + (window.rlMsgError?rlMsgError(e):e.message) + '</td></tr>';
   }
 }
 
@@ -6403,7 +6404,7 @@ async function buscarDniBtn() {
     console.timeEnd('[buscarDniBtn] API');
     console.error('[buscarDniBtn] Error:',e);
     r.style.display='block';
-    r.textContent='❌ Error de conexión: '+e.message;
+    r.textContent='❌ Error de conexión: '+(window.rlMsgError?rlMsgError(e):e.message);
   }finally{
     // Restaurar estilo del campo DNI
     inp.style.borderColor='';
@@ -6562,7 +6563,7 @@ async function consultarDNI() {
         </div>
       </div>`;
   } catch(e) {
-    document.getElementById('consultaResult').innerHTML = '<div class="empty">❌ Error de conexión: ' + e.message + '</div>';
+    document.getElementById('consultaResult').innerHTML = '<div class="empty">❌ Error de conexión: ' + (window.rlMsgError?rlMsgError(e):e.message) + '</div>';
   }
 }
 
@@ -6851,7 +6852,7 @@ async function generarCorreo() {
     // AUTO: enviar reporte sin esperar otro click
     setTimeout(() => _enviarReporteAuto(), 400);
   }catch(e){
-    document.getElementById('correoPreview').innerHTML=`<div class="empty">❌ Error de conexión: ${e.message}<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>`;
+    document.getElementById('correoPreview').innerHTML=`<div class="empty">❌ Error de conexión: ${(window.rlMsgError?rlMsgError(e):e.message)}<br><button class="btn-n" onclick="nuevaBusquedaCorreo()" style="margin-top:10px;padding:8px 18px;font-size:12px">🔄 Nueva búsqueda</button></div>`;
   }finally{
     // BUG2: siempre rehabilitar el botón al terminar
     const _b=document.getElementById('btnGenerarCorreo');
@@ -14777,5 +14778,96 @@ console.log('[_SUP_ADMIN_V1] listo');
 })();
 </script>
 
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _ANTIDOBLE_V1 (23-set-2026) — evitar registros duplicados por doble clic
+   ---------------------------------------------------------------------------
+   Cuando el servidor va lento, el usuario vuelve a hacer clic en "Guardar" y se
+   crean dos registros. Este bloque envuelve el apiPost FINAL (despues de todos
+   los envoltorios anteriores) y solo actua en ESCRITURAS:
+     a) si ya hay en curso un envio con el mismo contenido, devuelve ese mismo
+        resultado en vez de mandar otro (y 3 s despues de terminar);
+     b) desactiva el boton que se presiono mientras se guarda (maximo 30 s).
+   Las lecturas pasan tal cual. Ademas conecta el registro local de errores de
+   red (_redRegistrar) con la hoja LOG_ERRORES (_SALUD_V1).
+   Para revertir: borrar este bloque.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+/* misma regla de escritura que el servidor (ESTAB_ESCRITURA_RE_) */
+var ESCRITURA = /^(save|update|delete|eliminar|add|resolver|registrar|aprobar|subir|guardar|programar|actualizar|cumplJustificar|cumplConfigGuardar|cumplRestriccionLevantar|horasRegistrar|horasEditar|horasEliminar|horasAprobar|inv(Agregar|Editar|Eliminar|Registrar|Guardar)|mant_|permisosGuardar|accesoHorario(Guardar|Eliminar)|horarios(Guardar|Eliminar)|duplicar)/i;
+var enCurso = {};
+var ultimoBoton = null;
+
+document.addEventListener('click', function (ev) {
+  try {
+    var b = ev.target && ev.target.closest && ev.target.closest('button, input[type=submit], input[type=button]');
+    if (b) ultimoBoton = { el: b, t: Date.now() };
+  } catch (e) {}
+}, true);
+
+function bloquear() {
+  try {
+    if (!ultimoBoton || (Date.now() - ultimoBoton.t) > 1500) return null;
+    var el = ultimoBoton.el;
+    if (!el || el.disabled) return null;
+    el.disabled = true;
+    el.setAttribute('data-rl-ocupado', '1');
+    var op = el.style.opacity; el.style.opacity = '0.6';
+    var suelta = function () {
+      try {
+        if (el.getAttribute('data-rl-ocupado') === '1') {
+          el.removeAttribute('data-rl-ocupado'); el.disabled = false; el.style.opacity = op;
+        }
+      } catch (e) {}
+    };
+    setTimeout(suelta, 30000);   /* seguro: nunca queda bloqueado mas de 30 s */
+    return suelta;
+  } catch (e) { return null; }
+}
+
+function envolver() {
+  var prev = window.apiPost;
+  if (typeof prev !== 'function' || prev._antiDoble) return;
+  var w = function (b) {
+    var accion = b && b.action;
+    if (!ESCRITURA.test(String(accion || ''))) return prev.apply(this, arguments);
+    var clave;
+    try { clave = JSON.stringify(b); } catch (e) { return prev.apply(this, arguments); }
+    if (enCurso[clave]) {
+      console.warn('[_ANTIDOBLE_V1] envio repetido ignorado:', accion);
+      return enCurso[clave];
+    }
+    var suelta = bloquear();
+    var p = Promise.resolve().then(function () { return prev.call(window, b); });
+    enCurso[clave] = p;
+    p.then(function () {}, function () {}).then(function () {
+      if (suelta) suelta();
+      setTimeout(function () { if (enCurso[clave] === p) delete enCurso[clave]; }, 3000);
+    });
+    return p;
+  };
+  w._antiDoble = true;
+  window.apiPost = w;
+  try { apiPost = w; } catch (e) {}
+}
+envolver();
+window.addEventListener('load', envolver);
+
+/* errores de red ya detectados por _redLlamar -> tambien a LOG_ERRORES */
+try {
+  var _regPrevio = window._redRegistrar;
+  if (typeof _regPrevio === 'function' && !_regPrevio._salud) {
+    var r2 = function (accion, err) {
+      try { if (window.rlSalud) rlSalud.registrar('google_error', accion, null, (err && err.message) || String(err || '')); } catch (e) {}
+      return _regPrevio.apply(this, arguments);
+    };
+    r2._salud = true;
+    window._redRegistrar = r2;
+  }
+} catch (e) {}
+console.log('[_ANTIDOBLE_V1] activo');
+})();
+</script>
 </body>
 </html>
