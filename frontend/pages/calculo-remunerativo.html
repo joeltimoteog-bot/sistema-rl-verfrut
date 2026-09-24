@@ -174,8 +174,11 @@
   <div id="tPar" class="tabpane" style="display:none">
     <div class="card">
       <h2>⚙️ Parámetros del Cálculo <span style="font-size:11px;color:#64748b;font-weight:600">(se guardan en este navegador)</span></h2>
+      <div id="pOficial" style="margin:4px 0 12px"></div>
       <div class="grid g5">
         <div><label>Rem. Bruta base (S/)</label><input type="number" id="pBruta" step="0.01"></div>
+        <div><label>RMV vigente (S/)</label><input type="number" id="pRmv" step="0.01"></div>
+        <div><label>Base de BETA y Asig. Fam.</label><select id="pBase"><option value="rmv">RMV (Ley 31110 / Ley 25129)</option><option value="basica">Rem. Básica (criterio anterior)</option></select></div>
         <div><label>Factor Bruta→Básica</label><input type="number" id="pFactor" step="0.0001"></div>
         <div><label>% CTS Agraria</label><input type="number" id="pCts" step="0.0001"></div>
         <div><label>% Gratif. Agraria</label><input type="number" id="pGrat" step="0.0001"></div>
@@ -194,6 +197,7 @@
         <div><label>Agregar feriado</label><input type="date" id="pFerNew" onchange="addFeriado()"></div>
       </div>
       <div id="pFerList"></div>
+      <div id="pFerAviso" style="margin-top:8px"></div>
       <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn" onclick="guardarParams()">💾 Guardar parámetros</button>
         <button class="btn sec" onclick="restaurarParams()">↩️ Restaurar valores 2026</button>
@@ -231,6 +235,8 @@ window._crBloqueado = false;
 
 const PARAMS_DEFAULT = {
   remBruta: 1428.09,          // Rem. Bruta mensual (BB.DD- SUELDOS)
+  rmv: 1130,                  // _CALC_LEGAL_V1: Remuneración Mínima Vital vigente (verificar con planillas)
+  baseBetaAF: 'rmv',          // _CALC_LEGAL_V1: 'rmv' (Ley 31110 / Ley 25129) o 'basica' (criterio anterior hoja Excel)
   factorBruta: 1.2638,        // Bruta = Básica × (1 + CTS 9.72% + Gratif 16.66%)
   pctCTS: 0.0972,
   pctGratif: 0.1666,
@@ -257,6 +263,39 @@ const PARAMS_DEFAULT = {
 
 function basicaDe(p) { return p.remBruta / p.factorBruta; }
 
+/* ── _CALC_LEGAL_V1 (24-set-2026) ──
+   BETA (Ley 31110: 30% de la RMV) y Asignación Familiar (Ley 25129: 10% de la RMV)
+   se calculan sobre la RMV. Antes se calculaban sobre la básica del trabajador, lo que
+   solo coincidía cuando ganaba el mínimo. baseBetaAF='basica' conserva el criterio anterior. */
+function baseBetaAF(p, basica) {
+  if (p.baseBetaAF === 'basica') return (basica != null ? basica : basicaDe(p));
+  return Number(p.rmv) || 1130;
+}
+
+/* ── _FERIADOS_V1 (24-set-2026): feriados nacionales por año ──
+   Si en Parámetros hay feriados guardados para ese año, se usan esos (lista de la empresa).
+   Si no hay ninguno, se calculan los feriados nacionales (incluye Jueves y Viernes Santo). */
+function pascua(y) {
+  var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4,
+      f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30,
+      i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451),
+      mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(y, mes - 1, dia);
+}
+function feriadosOficiales(y) {
+  var out = ['01-01','05-01','06-07','06-29','07-23','07-28','07-29','08-06','08-30','10-08','11-01','12-08','12-09','12-25']
+              .map(function (md) { return y + '-' + md; });
+  var ps = pascua(y), js = new Date(ps), vs = new Date(ps);
+  js.setDate(ps.getDate() - 3); vs.setDate(ps.getDate() - 2);
+  out.push(fmtISO(js), fmtISO(vs));
+  return out.sort();
+}
+function feriadosAnio(p, y) {
+  var pref = y + '-';
+  var g = (p.feriados || []).filter(function (f) { return String(f).indexOf(pref) === 0; });
+  return g.length ? g : feriadosOficiales(y);
+}
+
 /* ── Horas de jornada de un día (réplica fórmula hoja Calendario) ──
    d: Date local · feriadosSet/inasistSet: Set de 'yyyy-mm-dd' */
 function horasDia(d, p, feriadosSet, inasistSet) {
@@ -282,7 +321,7 @@ function fmtISO(d) {
 
 /* ── Calendario del mes: días con horas + totales por quincena ── */
 function calendarioMes(anio, mes, p, inasistencias) {
-  const fer = new Set(p.feriados || []);
+  const fer = new Set(feriadosAnio(p, anio));   /* _FERIADOS_V1 */
   const ina = new Set(inasistencias || []);
   const diasMes = new Date(anio, mes, 0).getDate();
   const dias = [];
@@ -306,8 +345,8 @@ function calcQuincena(inp, p) {
   const basica = basicaDe(p);
   const basicoDiario = basica / 30;
   const basicoHora = basicoDiario / 8;
-  const afMensual = basica * p.pctAF;
-  const betaMensual = basica * p.pctBETA;
+  const afMensual = baseBetaAF(p, basica) * p.pctAF;      /* _CALC_LEGAL_V1 */
+  const betaMensual = baseBetaAF(p, basica) * p.pctBETA;  /* _CALC_LEGAL_V1 */
 
   const basico    = (inp.horas || 0) * basicoHora;
   const basicoNoc = (inp.hrsBasicoNoc || 0) * basicoHora * 1.35;
@@ -347,11 +386,11 @@ function calcQuincena(inp, p) {
 function calcDiario(horas, basica, tasaAFP, p) {
   const remDiaria = (basica / 30 / 8) * horas;
   const descSem   = (basica / 30) / 6;
-  const afDiaria  = (basica * p.pctAF) / 30;
+  const afDiaria  = (baseBetaAF(p, basica) * p.pctAF) / 30;   /* _CALC_LEGAL_V1 */
   const cts    = (remDiaria + descSem) * p.pctCTS;
   const gratif = (remDiaria + descSem) * p.pctGratif;
   const bonif  = gratif * p.pctBonif;
-  const beta   = (basica * p.pctBETA) / 30;
+  const beta   = (baseBetaAF(p, basica) * p.pctBETA) / 30;   /* _CALC_LEGAL_V1 */
   const total  = remDiaria + descSem + afDiaria + cts + gratif + bonif + beta;
   const afp    = (remDiaria + descSem + afDiaria) * tasaAFP;
   const netoConAF = total - afp;
@@ -441,7 +480,7 @@ function renderCal() {
   if (el('tQuin').style.display !== 'none') renderQuin();
 }
 function toggleIna(iso) {
-  const fer = new Set(P.feriados); if (fer.has(iso)) return;
+  const fer = new Set(feriadosAnio(P, parseInt(iso, 10))); if (fer.has(iso)) return;   /* _FERIADOS_V1 */
   const i = INA.indexOf(iso);
   if (i === -1) INA.push(iso); else INA.splice(i, 1);
   localStorage.setItem(LS_INA, JSON.stringify(INA)); renderCal();
@@ -481,6 +520,7 @@ function renderQuin() {
   };
   el('qInfo').innerHTML = `Mes en cálculo: <b>${MESES[mes-1]} ${anio}</b> (${diasMes} días) · Horas del calendario — Q1: <b>${fnum(cal.horasQ1)}</b> h · Q2: <b>${fnum(cal.horasQ2)}</b> h. Edita días/horas en cada quincena si lo necesitas.`;
 
+  el('qInfo').innerHTML += ' · BETA y Asig. Fam. sobre <b>' + (P.baseBetaAF === 'basica' ? 'la Rem. Básica' : 'RMV S/ ' + fnum(P.rmv || 1130)) + '</b>';   /* _CALC_LEGAL_V1 */
   const cols = [['q1','1° QUINCENA (días 1–15)', cal.horasQ1], ['q2','2° QUINCENA (días 16–'+diasMes+')', cal.horasQ2]];
   let netoMes = 0, netoMesSin = 0;
   el('qCols').innerHTML = cols.map(([k, titulo, hCal]) => {
@@ -577,6 +617,7 @@ function renderHE() {
 /* ════════ PARÁMETROS ════════ */
 function renderPar() {
   el('pBruta').value = P.remBruta; el('pFactor').value = P.factorBruta;
+  el('pRmv').value = P.rmv || 1130; el('pBase').value = P.baseBetaAF || 'rmv';   /* _CALC_LEGAL_V1 */
   el('pCts').value = P.pctCTS; el('pGrat').value = P.pctGratif; el('pBon').value = P.pctBonif;
   el('pAf').value = P.pctAF; el('pBeta').value = P.pctBETA; el('pBonoAp').value = P.tarifaBonoAplicacion;
   el('pJA').value = P.jornadaAltaLV; el('pJB').value = P.jornadaBajaLV; el('pJS').value = P.jornadaBajaSab;
@@ -585,22 +626,28 @@ function renderPar() {
       <td class="num"><input style="width:100px;text-align:right;padding:4px 6px" type="number" step="0.0001" value="${a.flujo}" onchange="P.afps[${i}].flujo=parseFloat(this.value)||0"></td>
       <td class="num"><input style="width:100px;text-align:right;padding:4px 6px" type="number" step="0.0001" value="${a.mixta}" onchange="P.afps[${i}].mixta=parseFloat(this.value)||0"></td></tr>`).join('');
   el('pFerList').innerHTML = P.feriados.slice().sort().map(f => `<span class="pill">${f}<button onclick="quitarFeriado('${f}')">✕</button></span>`).join('');
+  try { renderFerAviso(); renderOficial(); } catch (e) {}
 }
 function addFeriado() { const f = v('pFerNew'); if (f && P.feriados.indexOf(f) === -1) P.feriados.push(f); el('pFerNew').value=''; renderPar(); }
 function quitarFeriado(f) { P.feriados = P.feriados.filter(x => x !== f); renderPar(); }
 function guardarParams() {
+  leerParamsUI(); P._modLocal = true;
+  localStorage.setItem(LS_KEY, JSON.stringify(P));
+  el('qBruta').value = P.remBruta; el('hBruta').value = P.remBruta;
+  el('dBasica').value = Math.round(basicaDe(P) * 100) / 100;
+  renderCal(); renderPar(); alert('✅ Parámetros guardados en este equipo');
+}
+function leerParamsUI() {
   P.remBruta = parseFloat(v('pBruta')) || P.remBruta;
+  P.rmv = parseFloat(v('pRmv')) || P.rmv || 1130; P.baseBetaAF = v('pBase') || 'rmv';   /* _CALC_LEGAL_V1 */
   P.factorBruta = parseFloat(v('pFactor')) || P.factorBruta;
   P.pctCTS = parseFloat(v('pCts')); P.pctGratif = parseFloat(v('pGrat')); P.pctBonif = parseFloat(v('pBon'));
   P.pctAF = parseFloat(v('pAf')); P.pctBETA = parseFloat(v('pBeta'));
   P.tarifaBonoAplicacion = parseFloat(v('pBonoAp'));
   P.jornadaAltaLV = parseFloat(v('pJA')); P.jornadaBajaLV = parseFloat(v('pJB')); P.jornadaBajaSab = parseFloat(v('pJS'));
-  localStorage.setItem(LS_KEY, JSON.stringify(P));
-  el('qBruta').value = P.remBruta; el('hBruta').value = P.remBruta;
-  el('dBasica').value = Math.round(basicaDe(P) * 100) / 100;
-  renderCal(); alert('✅ Parámetros guardados');
 }
 function restaurarParams() {
+  if (typeof OFICIAL !== 'undefined' && OFICIAL && OFICIAL.params) { if (confirm('¿Volver a los parámetros OFICIALES publicados por el administrador?')) volverOficiales(); return; }   /* _CALC_PARAMS_V1 */
   if (!confirm('¿Restaurar todos los parámetros a los valores 2026 del Excel oficial?')) return;
   localStorage.removeItem(LS_KEY); P = JSON.parse(JSON.stringify(PARAMS_DEFAULT));
   initQuin(); initDia(); initHE(); renderPar(); renderCal(); alert('✅ Valores restaurados');
@@ -764,6 +811,96 @@ function crAplicarTurno(q, modo){
   renderQuin();
 }
 
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _CALC_PARAMS_V1 (24-set-2026) — parámetros OFICIALES para todos
+   ---------------------------------------------------------------------------
+   Al abrir el módulo se leen los parámetros publicados por el administrador
+   (hoja CALCULO_PARAMETROS). Si hay una versión nueva, reemplaza la de este
+   equipo. Cualquiera puede modificar y "Guardar" para simular; se avisa que
+   está usando valores propios y puede "Volver a los oficiales".
+   Solo un administrador ve "📢 Publicar como oficiales".
+   ═══════════════════════════════════════════════════════════════════════════ */
+var CALC_GAS = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+var OFICIAL = null;
+function _crUser() { try { return JSON.parse(sessionStorage.getItem('user') || 'null') || {}; } catch (e) { return {}; } }
+function _crEsAdmin() { return /admin/i.test(String(_crUser().rol || '')); }
+function _crLimpio(o) { var c = JSON.parse(JSON.stringify(o)); delete c._oficialVersion; delete c._modLocal; return c; }
+function _crRefrescar() {
+  try { initQuin(); initDia(); initHE(); renderCal(); if (el('tPar').style.display !== 'none') renderPar(); } catch (e) {}
+}
+function _crAplicarOficial(j) {
+  P = Object.assign(JSON.parse(JSON.stringify(PARAMS_DEFAULT)), j.params, { _oficialVersion: j.version, _modLocal: false });
+  try { localStorage.setItem(LS_KEY, JSON.stringify(P)); } catch (e) {}
+}
+function cargarOficiales() {
+  fetch(CALC_GAS + '?action=calcParamsLeer').then(function (r) { return r.json(); }).then(function (j) {
+    if (j && j.success && j.params) {
+      OFICIAL = j;
+      if (P._oficialVersion !== j.version) { _crAplicarOficial(j); _crRefrescar(); }
+    }
+    renderOficial();
+  }).catch(function () { renderOficial(); });
+}
+function volverOficiales() {
+  if (!OFICIAL) return;
+  _crAplicarOficial(OFICIAL); _crRefrescar(); renderPar();
+}
+function renderOficial() {
+  var d = el('pOficial'); if (!d) return;
+  var box = function (bg, bd, txt) { return '<div style="background:' + bg + ';border-left:4px solid ' + bd + ';padding:9px 12px;border-radius:7px;font-size:12.5px;line-height:1.6">' + txt + '</div>'; };
+  var html;
+  if (OFICIAL && !P._modLocal) html = box('#f0fdf4', '#16a34a', '✅ Usando los <b>parámetros oficiales</b> publicados el ' + OFICIAL.fecha + ' por ' + OFICIAL.por + '.');
+  else if (OFICIAL) html = box('#fffbeb', '#f59e0b', '⚠️ Estás usando parámetros <b>modificados en este equipo</b> (sirven para simular). ' +
+                               '<button type="button" onclick="volverOficiales()" style="margin-left:6px;background:#0a2463;color:#fff;border:0;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">Volver a los oficiales</button>');
+  else html = box('#eff6ff', '#0a2463', 'ℹ️ Aún no hay parámetros oficiales publicados: se usan los guardados en este equipo.');
+  if (_crEsAdmin()) html += '<button type="button" onclick="publicarOficiales()" style="margin-top:8px;background:#16a34a;color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:700;font-family:inherit">📢 Publicar estos parámetros como oficiales para todos</button>';
+  d.innerHTML = html;
+}
+function publicarOficiales() {
+  leerParamsUI();
+  var u = _crUser();
+  if (!confirm('Se publicarán estos parámetros (RMV S/ ' + fnum(P.rmv) + ', Rem. Bruta S/ ' + fnum(P.remBruta) + ', tasas AFP, jornadas y feriados) como OFICIALES.\n\nTodos los usuarios los usarán al abrir el módulo.\n\n¿Continuar?')) return;
+  fetch(CALC_GAS, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify({ action: 'guardarCalcParams', usuario: u.usuario, rol: u.rol, params: _crLimpio(P) }) })
+    .then(function (r) { return r.json(); }).then(function (j) {
+      if (!j || !j.success) { alert('❌ ' + ((j && j.error) || 'No se pudo publicar.')); return; }
+      OFICIAL = { params: _crLimpio(P), version: j.version, fecha: 'hace un momento', por: u.usuario };
+      P._oficialVersion = j.version; P._modLocal = false;
+      try { localStorage.setItem(LS_KEY, JSON.stringify(P)); } catch (e) {}
+      renderPar(); alert('✅ Parámetros publicados como oficiales (' + j.version + ').');
+    }).catch(function () { alert('📡 Sin conexión: no se pudo publicar. Intenta nuevamente.'); });
+}
+
+/* ── _FERIADOS_V1: aviso de diferencias con los feriados nacionales ── */
+function renderFerAviso() {
+  var d = el('pFerAviso'); if (!d) return;
+  var y = parseInt(v('cAnio'), 10) || new Date().getFullYear();
+  var pref = y + '-';
+  var guard = (P.feriados || []).filter(function (f) { return String(f).indexOf(pref) === 0; });
+  var ofi = feriadosOficiales(y);
+  var dm = function (f) { return f.slice(8, 10) + '/' + f.slice(5, 7); };
+  if (!guard.length) {
+    d.innerHTML = '<div style="font-size:12px;color:#475569">ℹ️ Para <b>' + y + '</b> no hay feriados guardados: se usan los <b>' + ofi.length + ' feriados nacionales</b> calculados automáticamente (' + ofi.map(dm).join(', ') + ').</div>';
+    return;
+  }
+  var faltan = ofi.filter(function (f) { return guard.indexOf(f) < 0; });
+  var sobran = guard.filter(function (f) { return ofi.indexOf(f) < 0; });
+  if (!faltan.length && !sobran.length) { d.innerHTML = '<div style="font-size:12px;color:#15803d">✅ Los feriados de ' + y + ' coinciden con los feriados nacionales.</div>'; return; }
+  d.innerHTML = '<div style="background:#fef2f2;border-left:4px solid #dc2626;padding:9px 12px;border-radius:7px;font-size:12.5px;line-height:1.6">' +
+    '⚠️ <b>Revisa los feriados de ' + y + ':</b>' +
+    (faltan.length ? '<br>• Faltan feriados nacionales: <b>' + faltan.map(dm).join(', ') + '</b>' : '') +
+    (sobran.length ? '<br>• Días guardados que no son feriado nacional: <b>' + sobran.map(dm).join(', ') + '</b> (déjalos solo si son días no laborables de la empresa)' : '') +
+    '<br><button type="button" onclick="usarFeriadosOficiales(' + y + ')" style="margin-top:6px;background:#0a2463;color:#fff;border:0;border-radius:6px;padding:5px 11px;cursor:pointer;font-weight:700">Usar los feriados nacionales de ' + y + '</button>' +
+    ' <span style="font-size:11px;color:#64748b">(luego pulsa 💾 Guardar parámetros)</span></div>';
+}
+function usarFeriadosOficiales(y) {
+  var pref = y + '-';
+  P.feriados = (P.feriados || []).filter(function (f) { return String(f).indexOf(pref) !== 0; }).concat(feriadosOficiales(y));
+  renderPar(); renderCal();
+}
+
+if (!window._crBloqueado) cargarOficiales();
 </script>
 <!-- ═══ CR_TURNOS_V1 · MODALES ═══ -->
 <div id="crModalRem" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:900;align-items:center;justify-content:center;padding:18px">
@@ -817,6 +954,7 @@ function crAplicarTurno(q, modo){
   </div>
 </div>
 
+<script src="../js/salud.js"></script>  <!-- _SALUD_V1: registro de errores + 🆘 Reportar -->
 <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Cálculo Remunerativo"></script>
 </body>
 </html>
