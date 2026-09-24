@@ -117,3 +117,23 @@ clasp versions
 ---
 
 *Costo: $0 (clasp + Apps Script + GitHub Pages son gratis). Lo único de pago es Azure, aparte.*
+
+---
+
+## 6) ✅ REGLA OBLIGATORIA: prueba automática ANTES de cada `git push` (24-set-2026)
+
+**Por qué existe:** el 24-set los guardados del Dashboard se colgaron porque dos protecciones
+(`_ANTIDOBLE_V1` y `_ATGUARDA_V1`) se envolvieron dos veces al cargar la página (ciclo de promesas).
+Las pruebas "por pieza" pasaban; la página completa no. Esta prueba abre la página COMPLETA.
+
+**Qué hace `tools/prueba_sistema.py`:** abre Dashboard, Horas, Inventario, Cálculo Remunerativo y
+Login en Chromium real con la red SIMULADA (Google/Azure/Firebase responden datos falsos: nunca
+escribe nada real) y verifica: 13 tipos de guardado + 5 lecturas del Dashboard, búsqueda por DNI y
+por nombre, el flujo del botón 💾 Guardar de Nueva Atención, doble clic = 1 solo envío, Horas,
+Inventario y cero errores de JavaScript. Tiene que decir `✅ TODO OK`. Si dice `❌`, NO se publica.
+
+**Reglas de diseño que evitan que se repita:**
+- Todo envoltorio de `apiPost`/`apiGet`/`fetch` se instala **UNA sola vez** (bandera global
+  `window._rlXxxOk`). Nunca re-envolver en el evento `load` sin esa bandera.
+- `salud.js` instala el vigía `_VIGIA_V1`: ninguna llamada queda colgada más de 120 s (300 s subidas).
+- Cada cambio lleva su `.bak` y se prueba con la página completa, no solo el bloque.

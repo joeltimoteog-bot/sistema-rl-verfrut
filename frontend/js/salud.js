@@ -302,5 +302,40 @@ function pestanaReporte() {
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pestanaReporte); else pestanaReporte();
 window.rlReportar = abrirReporte;
 
+/* ── _VIGIA_V1 (24-set-2026): NINGUNA llamada al servidor puede quedar colgada ──
+   Envuelve UNA sola vez (al terminar de cargar la pagina, despues de todos los demas)
+   apiPost y apiGet. Si la respuesta no llega en 120 s (300 s para subir archivos),
+   devuelve un error claro para que el boton se libere y la pantalla no quede
+   "Guardando..." para siempre. Los errores normales se dejan pasar igual que antes. */
+function vigia(nombre) {
+  var prev = window[nombre];
+  if (typeof prev !== 'function' || prev._rlVigia) return;
+  var w = function (b) {
+    var acc = (b && b.action) || '', ms = /^subir/i.test(acc) ? 300000 : 120000, timer;
+    var p;
+    try { p = Promise.resolve(prev.apply(this, arguments)); } catch (e) { p = Promise.reject(e); }
+    var limite = new Promise(function (res) {
+      timer = setTimeout(function () {
+        registrar('colgado', acc, ms, 'sin respuesta en ' + (ms / 1000) + ' s (vigia)');
+        res({ success: false, ok: false, _vigia: true, data: [],
+              error: 'El servidor tardó demasiado en responder. Revisa tu conexión e intenta nuevamente (no se duplicará).' });
+      }, ms);
+    });
+    return Promise.race([
+      p.then(function (r) { clearTimeout(timer); return r; },
+             function (e) { clearTimeout(timer); registrar('api_excepcion', acc, null, String((e && e.message) || e)); throw e; }),
+      limite
+    ]);
+  };
+  w._rlVigia = true;
+  window[nombre] = w;
+}
+function instalarVigia() {
+  if (window._rlVigiaOk) return;
+  window._rlVigiaOk = true;
+  setTimeout(function () { vigia('apiPost'); vigia('apiGet'); }, 0);
+}
+if (document.readyState === 'complete') instalarVigia(); else window.addEventListener('load', instalarVigia);
+
 window.rlSalud = { registrar: registrar, enviar: enviar, cola: leerCola };
 })();
