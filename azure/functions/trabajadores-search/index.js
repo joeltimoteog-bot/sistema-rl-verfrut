@@ -1,4 +1,4 @@
-﻿const { sql, getPool } = require('../shared/db');
+const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
 
 module.exports = async function (context, req) {
@@ -12,6 +12,24 @@ module.exports = async function (context, req) {
   try {
     const dni = (req.query.dni || '').toString().trim();
     const empresa = (req.query.empresa || '').toString().trim().toUpperCase();
+
+    /* _BUSCAR_NOMBRE_V1 (23-set-2026): busqueda por NOMBRE (?q=juan perez).
+       Cada palabra debe aparecer en el nombre completo. Maximo 30 resultados.
+       La busqueda por DNI de siempre no cambia. */
+    const q = (req.query.q || '').toString().trim();
+    if (!dni && q.length >= 3) {
+      const palabras = q.split(/\s+/).filter(function (w) { return w.length >= 2; }).slice(0, 5);
+      const poolQ = await getPool();
+      const rq = poolQ.request();
+      const conds = palabras.map(function (w, i) { rq.input('w' + i, sql.NVarChar(120), '%' + w + '%'); return 'nombre_completo LIKE @w' + i; }).join(' AND ') || '1=0';
+      const partes = [];
+      if (empresa !== 'VERFRUT') partes.push(`SELECT TOP 30 *, 'RAPEL' AS empresa_origen FROM dbo.Trabajadores_RAPEL WHERE ${conds}`);
+      if (empresa !== 'RAPEL')   partes.push(`SELECT TOP 30 *, 'VERFRUT' AS empresa_origen FROM dbo.Trabajadores_VERFRUT WHERE ${conds}`);
+      const rs = await rq.query(partes.map(function (x) { return '(' + x + ')'; }).join(' UNION ALL '));
+      const lista = (rs.recordset || []).slice(0, 30);
+      context.res = { status: 200, body: { success: true, encontrados: lista.length, trabajadores: lista, elapsed_ms: Date.now() - startTime, fuente: 'AZURE_SQL' } };
+      return;
+    }
 
     if (!dni) {
       context.res = {
