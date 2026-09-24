@@ -12135,7 +12135,7 @@ function _despertarAzure() {
   try {
     if (typeof AZURE_FN_BASE === 'undefined' || !AZURE_FN_BASE) return;
     var t0 = (window.performance && performance.now()) || Date.now();
-    _fetchPrevio(AZURE_FN_BASE + '/atenciones/stats', { method: 'GET' })
+    _fetchPrevio(AZURE_FN_BASE + '/trabajadores/buscar?dni=00000000', { method: 'GET' })   /* _DESPERTAR_LIVIANO (24-set): antes /atenciones/stats = 7 recorridos de la tabla en cada carga */
       .then(function () {
         var ms = Math.round((((window.performance && performance.now()) || Date.now())) - t0);
         console.log('[_AZURE_RELOJ_V1] Azure despierto en ' + ms + ' ms');
@@ -13210,6 +13210,8 @@ function pintar(s) {
 
 async function refrescar(motivo) {
   if (enCurso) return enCurso;
+  /* _STATS_FRENO_V1 (24-set): max 1 refresco por minuto por pantalla (salvo guardado propio) */
+  if (ultimo && (Date.now() - ultimo.ts) < 60000 && !/guard/i.test(String(motivo || ''))) return Promise.resolve(true);
   enCurso = (async function () {
     try {
       var s = await pedir();
