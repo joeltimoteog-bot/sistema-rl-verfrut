@@ -892,22 +892,47 @@ async function irAConSSO(base){
      un pase firmado ALLA (el secreto no esta en esta pagina) y lo agrega como
      &sso2=. Evaluaciones ETI lo usa primero; Capacitaciones ETI lo ignora.
      Si el servidor no responde en 4 s o falla, se navega igual que antes. */
+  /* _SSO_RAPIDO_V1: el pase del servidor ya se pidio por adelantado (ver
+     _ssoPrefetch); aqui NO se espera al servidor → el clic es instantaneo. */
   try{
-    const tk = sessionStorage.getItem('rl_token');
-    if (tk && window.AbortController) {
-      const _raw = sessionStorage.getItem('user');
-      const _nom = _raw ? String(JSON.parse(_raw).nombre || '').trim() : '';
-      const ctl = new AbortController(); const _t = setTimeout(() => ctl.abort(), 4000);
-      const r = await fetch(SSO_SERVIDOR_URL, { method:'POST', signal: ctl.signal,
-        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tk },
-        body: JSON.stringify({ accion:'emitir', nombre:_nom }) });
-      clearTimeout(_t);
-      const j = await r.json();
-      if (j && j.success && j.pase) destino += (destino.indexOf('#') >= 0 ? '&' : '#') + 'sso2=' + j.pase;
-    }
+    const c = window._ssoCache;
+    if (c && c.pase && (Date.now() - c.t) < 70000)
+      destino += (destino.indexOf('#') >= 0 ? '&' : '#') + 'sso2=' + c.pase;
   }catch(e){ /* sin pase del servidor: se usa el de siempre */ }
   window.location.href = destino;
 }
+
+/* _SSO_RAPIDO_V1 (24-set-2026): pide el pase del servidor EN SEGUNDO PLANO
+   mientras la pantalla de modulos esta abierta (y al pasar el mouse/tocar una
+   tarjeta ETI). Se renueva cada ~55 s (el pase vale 90 s). Nunca bloquea nada. */
+window._ssoCache = null;
+let _ssoPidiendo = false;
+async function _ssoPrefetch(){
+  if (_ssoPidiendo) return;
+  const tk = sessionStorage.getItem('rl_token');
+  if (!tk || !window.AbortController) return;
+  if (window._ssoCache && (Date.now() - window._ssoCache.t) < 55000) return;
+  _ssoPidiendo = true;
+  try{
+    const _raw = sessionStorage.getItem('user');
+    const _nom = _raw ? String(JSON.parse(_raw).nombre || '').trim() : '';
+    const ctl = new AbortController(); const _t = setTimeout(() => ctl.abort(), 10000);
+    const r = await fetch(SSO_SERVIDOR_URL, { method:'POST', signal: ctl.signal,
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tk },
+      body: JSON.stringify({ accion:'emitir', nombre:_nom }) });
+    clearTimeout(_t);
+    const j = await r.json();
+    if (j && j.success && j.pase) window._ssoCache = { pase: j.pase, t: Date.now() };
+  }catch(e){ /* silencioso */ }
+  _ssoPidiendo = false;
+}
+setInterval(() => {
+  try{ const pm = document.getElementById('pantallaModulo');
+       if (pm && pm.style.display !== 'none') _ssoPrefetch(); }catch(e){}
+}, 5000);
+['pointerover','touchstart'].forEach(ev => document.addEventListener(ev, e => {
+  try{ if (e.target && e.target.closest && e.target.closest('#modEval,#modETI')) _ssoPrefetch(); }catch(_){}
+}, { passive: true }));
 
 function irA(url){
   window.location.href=url;
