@@ -5258,6 +5258,10 @@ async function cargarStats() {
     }
     // Fallback CACHE.stats (datos del preload — puede tener hoy stale)
     const s = CACHE.stats;
+    if (s && _esSup) {   /* _STATS_SUP_V1: sin atenciones propias = ceros, nunca el total global guardado */
+      _aplicarStats({ hoy: 0, mes: 0, anio: 0, enProceso: 0, finalizados: 0 });
+      return;
+    }
     if (s) {
       // BUG 2a: recalcular hoy desde atenciones si hay alguna disponible
       _aplicarStats(s);
@@ -12158,6 +12162,54 @@ var _permMios   = null;    // permisos del usuario actual (null = no aplicar)
 var _permObs    = null;
 var _permCatalogo = null;
 
+/* _PERM_VELO_V1 (23-set-2026): el menu y el contenido quedan tapados hasta saber
+   que modulos tiene el usuario (maximo 8 s). Si ya se conocen de la vez anterior
+   (memoria del navegador) se aplican al instante, sin esperar al servidor. */
+var _PERM_LS = null, _permVeloT = null;
+function _permQuitarVelo() { try { var v = document.getElementById('permVelo'); if (v) v.remove(); if (_permVeloT) { clearTimeout(_permVeloT); _permVeloT = null; } } catch (e) {} }
+(function () {
+  try {
+    var u = JSON.parse(sessionStorage.getItem('user') || 'null');
+    if (!u || !u.usuario) return;
+    var r = String(u.rol || '').toLowerCase().trim();
+    if (['administrador','administrador 01','administrador 02','coordinador','jefa_rl','admin','admin01','admin02'].indexOf(r) >= 0) return;
+    _PERM_LS = 'rl_perm_' + String(u.usuario).toLowerCase().trim();
+    var prev = null; try { prev = localStorage.getItem(_PERM_LS); } catch (e) {}
+    if (prev === '"__vacio__"') return;   // usuario antiguo sin permisos: menu de siempre, sin velo
+    var st = document.createElement('style'); st.id = 'permVelo';
+    st.textContent = '#sb .nav, .content{visibility:hidden !important}';
+    (document.head || document.documentElement).appendChild(st);
+    _permVeloT = setTimeout(_permQuitarVelo, 8000);
+    var c = null; try { c = JSON.parse(prev || 'null'); } catch (e) {}
+    if (c && typeof c === 'object') {
+      var aplicarYa = function () { _permMios = c; permAplicar(); permObservar(); _permQuitarVelo(); };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', aplicarYa); else aplicarYa();
+    }
+  } catch (e) { _permQuitarVelo(); }
+})();
+function _permGuardarLS(m) { try { if (_PERM_LS) { localStorage.setItem(_PERM_LS, JSON.stringify(m || '__vacio__')); } } catch (e) {} }
+/* Si "Mi Dashboard" no esta permitido: se oculta y se abre el primer modulo permitido */
+function _permIrPermitido() {
+  try {
+    if (!_permMios || _permMios['mod_dashboard'] !== false) return;
+    var sec = document.getElementById('sec-dashboard');
+    var enDash = sec && sec.classList.contains('on');
+    if (!enDash) return;
+    var cat = permCatalogo(), destino = null;
+    for (var i = 0; i < cat.length; i++) {
+      if (_permMios[cat[i].clave] && /ir\('/.test(cat[i].boton.getAttribute('onclick') || '')) { destino = cat[i].boton; break; }
+    }
+    if (destino) { destino.click(); return; }
+    sec.classList.remove('on');
+    var msg = document.getElementById('permSinDash');
+    if (!msg) {
+      msg = document.createElement('div'); msg.id = 'permSinDash'; msg.className = 'sec on';
+      msg.innerHTML = '<div style="padding:40px;text-align:center;color:#475569;font-size:14px">Elige un módulo en el menú de la izquierda.</div>';
+      sec.parentNode.insertBefore(msg, sec);
+    }
+  } catch (e) {}
+}
+
 function _permEsAdmin() {
   try {
     var r = String((USER && USER.rol) || '').toLowerCase().trim();
@@ -12196,6 +12248,7 @@ function permAplicar() {
     var deseado = _permMios[m.clave] ? '' : 'none';
     if (m.boton.style.display !== deseado) m.boton.style.display = deseado;
   });
+  _permIrPermitido();   /* _PERM_VELO_V1 */
 }
 
 function permObservar() {
@@ -12218,11 +12271,14 @@ async function permCargarMios() {
       console.log('[_PERMISOS_UI_V1] ' + USER.usuario + ' es nuevo y aun no tiene modulos asignados: solo ' + _ok.join(', '));
       permAplicar();
       permObservar();
+      _permGuardarLS(_permMios); _permQuitarVelo();
       return;
     }
     if (!d || !d.success || d.vacio) {
       console.log('[_PERMISOS_UI_V1] sin permisos definidos para ' + USER.usuario +
                   ' -> el menu queda como siempre');
+      if (d && d.success && d.vacio) _permGuardarLS(null);
+      _permQuitarVelo();
       return;
     }
     _permMios = d.permisos || null;
@@ -12230,8 +12286,10 @@ async function permCargarMios() {
     console.log('[_PERMISOS_UI_V1] ' + n + ' modulos definidos para ' + USER.usuario);
     permAplicar();
     permObservar();
+    _permGuardarLS(_permMios); _permQuitarVelo();
   } catch (e) {
     console.warn('[_PERMISOS_UI_V1] no se pudieron leer los permisos, el menu queda como siempre:', e);
+    _permQuitarVelo();
   }
 }
 
@@ -12406,7 +12464,13 @@ window.permGuardar = permGuardar;  window.permTodos = permTodos;
 window.permCatalogo = permCatalogo;
 
 function permIniciar() {
-  setTimeout(function () { permAgregarBoton(); permCargarMios(); }, 1500);
+  /* _PERM_VELO_V1: se pregunta apenas exista la sesion (USER se arma en window.onload) */
+  (function esperar(n) {
+    var listo = false; try { listo = typeof USER !== 'undefined' && USER && USER.usuario; } catch (e) {}
+    if (listo) { permCargarMios(); return; }
+    if (n < 60) setTimeout(function () { esperar(n + 1); }, 150); else _permQuitarVelo();
+  })(0);
+  setTimeout(function () { permAgregarBoton(); }, 1500);
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', permIniciar);
 else permIniciar();

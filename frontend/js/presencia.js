@@ -61,12 +61,38 @@
       } catch (e) { return true; }                    // ante la duda, NO expulsar
     }
 
+    /* _AH_PRESENCIA_V1 (23-set-2026): antes de avisar o cerrar la sesion se
+       consulta el HORARIO PROPIO que el administrador le asigno (hoja ACCESO
+       HORARIOS). Si esta dentro de su horario, se guarda como acceso vigente
+       hasta su hora de fin y NO se cierra la sesion. Antes solo se miraba al
+       iniciar sesion fuera de 05:30-17:00, y quien entraba antes de las 17:00
+       era expulsado a las 17:00 aunque su horario llegara a las 23:00. */
+    var AH_API = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+    var _ahEnCurso = null, _ahUltimo = 0, _ahRes = null;
+    function horarioPropio(usuario) {
+      if (_ahEnCurso) return _ahEnCurso;
+      if (Date.now() - _ahUltimo < 60000) return Promise.resolve(_ahRes);   // max 1 consulta por minuto: se reusa la ultima respuesta
+      _ahUltimo = Date.now();
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var t = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 20000);
+      var op = { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
+      if (ctrl) op.signal = ctrl.signal;
+      _ahEnCurso = fetch(AH_API, op).then(function (r) { return r.json(); }).then(function (d) {
+        if (d && d.tieneAcceso && d.expiraEn) {
+          try { sessionStorage.setItem('accesoTemporal', JSON.stringify({ hastaHora: d.hastaHora || d.hasta || '', expiraEn: d.expiraEn, minutosRestantes: d.minutosRestantes || 0, activo: true, fuente: 'horario_propio' })); } catch (e) {}
+          return true;
+        }
+        return false;
+      }).catch(function () { return null; }).then(function (v) { _ahRes = v; return v; }).finally(function () { clearTimeout(t); _ahEnCurso = null; });
+      return _ahEnCurso;
+    }
+
     function minutosParaElCierre() {
       var a = new Date();
       return Math.round((HORA_FIN - (a.getHours() + a.getMinutes() / 60)) * 60);
     }
 
-    function revisar() {
+    async function revisar() {
       try {
         var raw = sessionStorage.getItem('user');
         if (!raw) return;
@@ -76,7 +102,7 @@
         var _usr = String((user && user.usuario) || '').toLowerCase().trim();
         if (USUARIOS_SIN_HORARIO.indexOf(_usr) < 0 && !user.sin_restriccion && !avisado) {
           var m = minutosParaElCierre();
-          if (m > 0 && m <= 10 && !accesoTemporalVigente()) {
+          if (m > 0 && m <= 10 && !accesoTemporalVigente() && !(await horarioPropio(_usr))) {
             avisado = true;
             try {
               alert('Tu horario de acceso termina en ' + m + ' minuto(s), a las 17:00.\n\n' +
@@ -87,6 +113,8 @@
 
         if (!fueraDeHorario(user)) return;
         if (accesoTemporalVigente()) return;
+        var _ah = await horarioPropio(_usr);
+        if (_ah === true || _ah === null) return;   // dentro de su horario, o no se pudo consultar: NO se expulsa
 
         try { sessionStorage.clear(); } catch (e2) {}
         try { localStorage.removeItem('rl_session'); } catch (e3) {}

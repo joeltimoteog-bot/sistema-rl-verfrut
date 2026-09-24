@@ -1098,7 +1098,7 @@ checkSessionCache();
 (function () {
   'use strict';
 
-  var ESPERA_MS = 8000;
+  var ESPERA_MS = 20000;   /* _AH_PRESENCIA_V1: 8 s era poco cuando Google tarda en responder */
 
   var _accesoTemporalPrevio = window.verificarAccesoTemporal;
   if (typeof _accesoTemporalPrevio !== 'function') {
