@@ -43,7 +43,8 @@ function bloquear() {
 
 function envolver() {
   var prev = window.apiPost;
-  if (typeof prev !== 'function' || prev._antiDoble) return;
+  if (typeof prev !== 'function' || prev._antiDoble || window._rlAntiDobleOk) return;   /* _FIX_CICLO_24SET */
+  window._rlAntiDobleOk = true;
   var w = function (b) {
     var accion = b && b.action;
     if (!ESCRITURA.test(String(accion || ''))) return prev.apply(this, arguments);

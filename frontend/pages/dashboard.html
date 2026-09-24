@@ -14836,7 +14836,8 @@ function bloquear() {
 
 function envolver() {
   var prev = window.apiPost;
-  if (typeof prev !== 'function' || prev._antiDoble) return;
+  if (typeof prev !== 'function' || prev._antiDoble || window._rlAntiDobleOk) return;   /* _FIX_CICLO_24SET: instalar UNA sola vez */
+  window._rlAntiDobleOk = true;
   var w = function (b) {
     var accion = b && b.action;
     if (!ESCRITURA.test(String(accion || ''))) return prev.apply(this, arguments);
@@ -14930,7 +14931,8 @@ function encolar(b) {
 /* ── 1) Envoltorio de apiPost (solo saveAtencion) ── */
 function envolver() {
   var prev = window.apiPost;
-  if (typeof prev !== 'function' || prev._atGuarda) return;
+  if (typeof prev !== 'function' || prev._atGuarda || window._rlAtGuardaOk) return;   /* _FIX_CICLO_24SET: instalar UNA sola vez */
+  window._rlAtGuardaOk = true;
   var w = function (b) {
     if (!b || b.action !== 'saveAtencion') return prev.apply(this, arguments);
     try { if (!b.client_id) b.client_id = huella(b); } catch (e) {}
