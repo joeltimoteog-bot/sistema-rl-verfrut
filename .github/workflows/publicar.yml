@@ -1,0 +1,60 @@
+# ═══════════════════════════════════════════════════════════════════════════
+#  CANDADO DE PUBLICACION (24-set-2026)
+#  Cada git push a main: 1) corre la prueba automatica del sistema en un
+#  navegador real (red simulada, no escribe datos reales); 2) SOLO si sale
+#  "TODO OK" publica en GitHub Pages. Si falla, NO publica: los usuarios siguen
+#  con la version anterior y GitHub te envia un correo con el detalle.
+#  Requisito (una vez): Settings -> Pages -> Source: "GitHub Actions".
+# ═══════════════════════════════════════════════════════════════════════════
+name: Probar y publicar
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  probar:
+    name: Prueba automatica del sistema
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Instalar navegador de prueba
+        run: |
+          pip install playwright==1.47.0
+          python -m playwright install --with-deps chromium
+      - name: Correr prueba (Dashboard, Horas, Inventario, Calculo, Login)
+        run: python tools/prueba_sistema.py .
+
+  publicar:
+    name: Publicar en GitHub Pages
+    needs: probar
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Armar el sitio (mismos archivos que publicaba GitHub Pages)
+        run: |
+          mkdir _site
+          rsync -a --exclude='.*' --exclude='_*' --exclude='node_modules' ./ _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
