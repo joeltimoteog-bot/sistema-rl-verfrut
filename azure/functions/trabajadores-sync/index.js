@@ -1,4 +1,4 @@
-﻿const { sql, getPool } = require('../shared/db');
+const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
 
 // Helper: parsea fechas que pueden venir como Date, string ISO, o número serial de Sheets
@@ -30,77 +30,102 @@ function toInt(v) {
   return isNaN(n) ? null : n;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   _SYNC_INCREMENTAL_V1 (24-set-2026)
+   ANTES: DELETE de TODA la tabla + recarga completa en una transaccion larga ->
+          la base (S1) se saturaba varios minutos y el login, la busqueda por DNI
+          y los guardados se ponian lentos o fallaban para todos.
+   AHORA: 1) lo recibido se carga en una tabla TEMPORAL (#stage);
+          2) se comparan filas completas: solo se borran las que cambiaron o ya no
+             estan y se insertan las nuevas o cambiadas. Lo que no cambio NO se toca;
+          3) FRENO: si llegan menos de la mitad de los trabajadores que ya hay, se
+             aborta sin tocar nada (proteccion ante una lectura incompleta);
+          4) si algo falla -> rollback: la tabla real queda intacta.
+   Mismas columnas, misma entrada y mismas claves de respuesta que antes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const COLS = [
+  ['dni', 'NVARCHAR(20) NOT NULL', () => sql.NVarChar(20)],
+  ['ap_paterno', 'NVARCHAR(100) NULL', () => sql.NVarChar(100)],
+  ['ap_materno', 'NVARCHAR(100) NULL', () => sql.NVarChar(100)],
+  ['nombres', 'NVARCHAR(150) NULL', () => sql.NVarChar(150)],
+  ['codigo_trab', 'NVARCHAR(50) NULL', () => sql.NVarChar(50)],
+  ['fecha_inicio', 'DATE NULL', () => sql.Date],
+  ['sexo', 'NCHAR(1) NULL', () => sql.NChar(1)],
+  ['oficio', 'NVARCHAR(150) NULL', () => sql.NVarChar(150)],
+  ['tipo_regimen', 'NVARCHAR(50) NULL', () => sql.NVarChar(50)],
+  ['id_empresa', 'NVARCHAR(50) NULL', () => sql.NVarChar(50)],
+  ['zona_labor', 'NVARCHAR(150) NULL', () => sql.NVarChar(150)],
+  ['direccion', 'NVARCHAR(255) NULL', () => sql.NVarChar(255)],
+  ['total', 'INT NULL', () => sql.Int],
+  ['empresa', 'NVARCHAR(20) NULL', () => sql.NVarChar(20)],
+  ['nombre_completo', 'NVARCHAR(300) NULL', () => sql.NVarChar(300)],
+  ['ruta', 'NVARCHAR(100) NULL', () => sql.NVarChar(100)],
+  ['cod', 'NVARCHAR(50) NULL', () => sql.NVarChar(50)],
+  ['fecha_termino', 'DATE NULL', () => sql.Date],
+  ['fecha_nacimiento', 'DATE NULL', () => sql.Date]
+];
+const LISTA = COLS.map(c => c[0]).join(', ');
+const ST = COLS.map(c => 's.' + c[0]).join(', ');
+const TT = COLS.map(c => 't.' + c[0]).join(', ');
+
+function filaDe(row) {
+  const dni = s(row.dni, 20);
+  if (!dni) return null;
+  return [dni, s(row.ap_paterno, 100), s(row.ap_materno, 100), s(row.nombres, 150), s(row.codigo_trab, 50),
+          parseDate(row.fecha_inicio), s(row.sexo, 1), s(row.oficio, 150), s(row.tipo_regimen, 50), s(row.id_empresa, 50),
+          s(row.zona_labor, 150), s(row.direccion, 255), toInt(row.total), s(row.empresa, 20), s(row.nombre_completo, 300),
+          s(row.ruta, 100), s(row.cod, 50), parseDate(row.fecha_termino), parseDate(row.fecha_nacimiento)];
+}
+
 async function syncTabla(pool, tableName, rows) {
   if (!rows || rows.length === 0) return { inserted: 0, total_recibidos: 0 };
+  if (!/^Trabajadores_(RAPEL|VERFRUT)$/.test(tableName)) throw new Error('Tabla no permitida: ' + tableName);
+
+  const filas = []; let descartados = 0;
+  for (const row of rows) { const f = filaDe(row); if (f) filas.push(f); else descartados++; }
 
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
-
   try {
-    // 1. Vaciar la tabla
-    await transaction.request().query(`DELETE FROM dbo.${tableName}`);
+    const q = (txt) => transaction.request().query(txt);
+    await q('SET DEADLOCK_PRIORITY LOW; SET LOCK_TIMEOUT 20000;');
 
-    // 2. Bulk insert
-    const table = new sql.Table(tableName);
-    table.create = false;
-    table.columns.add('dni',              sql.NVarChar(20),  { nullable: false });
-    table.columns.add('ap_paterno',       sql.NVarChar(100), { nullable: true  });
-    table.columns.add('ap_materno',       sql.NVarChar(100), { nullable: true  });
-    table.columns.add('nombres',          sql.NVarChar(150), { nullable: true  });
-    table.columns.add('codigo_trab',      sql.NVarChar(50),  { nullable: true  });
-    table.columns.add('fecha_inicio',     sql.Date,          { nullable: true  });
-    table.columns.add('sexo',             sql.NChar(1),      { nullable: true  });
-    table.columns.add('oficio',           sql.NVarChar(150), { nullable: true  });
-    table.columns.add('tipo_regimen',     sql.NVarChar(50),  { nullable: true  });
-    table.columns.add('id_empresa',       sql.NVarChar(50),  { nullable: true  });
-    table.columns.add('zona_labor',       sql.NVarChar(150), { nullable: true  });
-    table.columns.add('direccion',        sql.NVarChar(255), { nullable: true  });
-    table.columns.add('total',            sql.Int,           { nullable: true  });
-    table.columns.add('empresa',          sql.NVarChar(20),  { nullable: true  });
-    table.columns.add('nombre_completo',  sql.NVarChar(300), { nullable: true  });
-    table.columns.add('ruta',             sql.NVarChar(100), { nullable: true  });
-    table.columns.add('cod',              sql.NVarChar(50),  { nullable: true  });
-    table.columns.add('fecha_termino',    sql.Date,          { nullable: true  });
-    table.columns.add('fecha_nacimiento', sql.Date,          { nullable: true  });
-
-    let descartados = 0;
-    for (const row of rows) {
-      const dni = s(row.dni, 20);
-      if (!dni) { descartados++; continue; } // sin DNI no se inserta
-
-      table.rows.add(
-        dni,
-        s(row.ap_paterno, 100),
-        s(row.ap_materno, 100),
-        s(row.nombres, 150),
-        s(row.codigo_trab, 50),
-        parseDate(row.fecha_inicio),
-        s(row.sexo, 1),
-        s(row.oficio, 150),
-        s(row.tipo_regimen, 50),
-        s(row.id_empresa, 50),
-        s(row.zona_labor, 150),
-        s(row.direccion, 255),
-        toInt(row.total),
-        s(row.empresa, 20),
-        s(row.nombre_completo, 300),
-        s(row.ruta, 100),
-        s(row.cod, 50),
-        parseDate(row.fecha_termino),
-        parseDate(row.fecha_nacimiento)
-      );
+    /* FRENO: nunca vaciar la tabla por una lectura incompleta */
+    const actual = (await q(`SELECT COUNT(*) AS n FROM dbo.${tableName}`)).recordset[0].n;
+    if (actual > 100 && filas.length < actual * 0.5) {
+      await transaction.rollback();
+      return { total_recibidos: rows.length, inserted: 0, eliminados: 0, sin_cambios: actual,
+               descartados_sin_dni: descartados, abortado: true,
+               motivo: 'Llegaron ' + filas.length + ' filas y la tabla tiene ' + actual + ': posible lectura incompleta, no se toco nada' };
     }
 
-    const bulkResult = await transaction.request().bulk(table);
+    /* 1) tabla temporal con lo recibido */
+    await q('CREATE TABLE #stage (' + COLS.map(c => c[0] + ' ' + c[1]).join(', ') + ')');
+    const tabla = new sql.Table('#stage');
+    tabla.create = false;
+    COLS.forEach(c => tabla.columns.add(c[0], c[2](), { nullable: c[0] !== 'dni' }));
+    filas.forEach(f => tabla.rows.add.apply(tabla.rows, f));
+    await transaction.request().bulk(tabla);
+    await q('CREATE INDEX ix_stage_dni ON #stage (dni)');
+
+    /* 2) borrar filas que cambiaron o ya no estan (comparacion de fila completa; INTERSECT trata NULL = NULL) */
+    const del = await q(`DELETE t FROM dbo.${tableName} t
+      WHERE NOT EXISTS (SELECT 1 FROM #stage s WHERE s.dni = t.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
+
+    /* 3) insertar filas nuevas o cambiadas */
+    const ins = await q(`INSERT INTO dbo.${tableName} (${LISTA})
+      SELECT ${ST} FROM #stage s
+      WHERE NOT EXISTS (SELECT 1 FROM dbo.${tableName} t WHERE t.dni = s.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
+
+    await q('DROP TABLE #stage');
     await transaction.commit();
 
-    return {
-      total_recibidos: rows.length,
-      inserted: bulkResult.rowsAffected,
-      descartados_sin_dni: descartados
-    };
+    const eliminados = (del.rowsAffected && del.rowsAffected[0]) || 0;
+    const insertados = (ins.rowsAffected && ins.rowsAffected[0]) || 0;
+    return { total_recibidos: rows.length, inserted: insertados, eliminados: eliminados,
+             sin_cambios: Math.max(0, actual - eliminados), descartados_sin_dni: descartados, modo: 'incremental' };
   } catch (err) {
-    await transaction.rollback();
+    try { await transaction.rollback(); } catch (e2) {}
     throw err;
   }
 }
