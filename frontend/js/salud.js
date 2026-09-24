@@ -58,12 +58,14 @@ function guardarCola(c) {
   try { while (c.length > MAX_COLA) c.shift(); localStorage.setItem(COLA_KEY, JSON.stringify(c)); } catch (e) {}
 }
 var _vistos = {};
+var _recientes = [];
 function registrar(tipo, accion, ms, detalle) {
   try {
     var clave = tipo + '|' + accion + '|' + String(detalle || '').slice(0, 60);
     var t = Date.now();
     if (_vistos[clave] && (t - _vistos[clave]) < 60000) return;   // mismo error en 60 s = 1 registro
     _vistos[clave] = t;
+    try { _recientes.push({ h: new Date().toTimeString().slice(0, 8), t: tipo, a: String(accion || '').slice(0, 60), d: String(detalle || '').slice(0, 150) }); while (_recientes.length > 8) _recientes.shift(); } catch (e) {}
     var c = leerCola();
     c.push({ f: new Date().toISOString(), u: usuario(), p: PAGINA, t: tipo,
              a: String(accion || '').slice(0, 60), ms: (ms == null ? '' : Math.round(ms)),
@@ -208,7 +210,7 @@ function avisoVersion() {
   if (document.getElementById('rlAvisoVersion')) return;
   var d = document.createElement('div');
   d.id = 'rlAvisoVersion';
-  d.style.cssText = 'position:fixed;right:16px;bottom:16px;max-width:340px;background:#1e3a5f;color:#fff;padding:12px 14px;border-radius:12px;font:600 13px system-ui,sans-serif;z-index:99998;box-shadow:0 6px 20px rgba(0,0,0,.3)';
+  d.style.cssText = 'position:fixed;right:16px;bottom:64px;max-width:340px;background:#1e3a5f;color:#fff;padding:12px 14px;border-radius:12px;font:600 13px system-ui,sans-serif;z-index:99998;box-shadow:0 6px 20px rgba(0,0,0,.3)';
   d.innerHTML = '🆕 Hay una versión nueva del sistema.<br><span style="font-weight:400;font-size:12px">Guarda lo que estés haciendo y actualiza.</span>' +
     '<div style="margin-top:8px;display:flex;gap:8px;justify-content:flex-end">' +
     '<button type="button" id="rlVerLuego" style="background:transparent;color:#fff;border:1px solid #fff8;border-radius:8px;padding:5px 10px;cursor:pointer">Después</button>' +
@@ -219,6 +221,86 @@ function avisoVersion() {
 }
 setTimeout(revisarVersion, 3000);
 setInterval(revisarVersion, 5 * 60000);
+
+/* ── _REPORTE_V1: pestana "🆘 Reportar" + formulario ─────────────────────── */
+function moduloActual() {
+  try {
+    var sec = document.querySelector('.sec.on');
+    if (sec) {
+      var h = sec.querySelector('h1,h2,h3,.sec-title');
+      return (h && h.textContent.trim().slice(0, 60)) || sec.id;
+    }
+    return (document.title || PAGINA).slice(0, 60);
+  } catch (e) { return PAGINA; }
+}
+function abrirReporte() {
+  if (document.getElementById('rlRepOv')) return;
+  var ov = document.createElement('div');
+  ov.id = 'rlRepOv';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML =
+    '<div style="background:#fff;color:#0f172a;max-width:440px;width:100%;border-radius:14px;padding:18px 18px 14px;font:14px system-ui,sans-serif;box-shadow:0 12px 40px rgba(0,0,0,.35)">' +
+    '<div style="font-size:17px;font-weight:800;margin-bottom:4px">🆘 Reportar un problema</div>' +
+    '<div style="font-size:12px;color:#475569;margin-bottom:10px">Cuéntanos qué pasó. Se envía automáticamente con tu usuario, el módulo (<b id="rlRepMod"></b>) y los últimos errores de tu equipo.</div>' +
+    '<textarea id="rlRepTxt" rows="5" maxlength="1000" placeholder="Ej.: Al guardar la atención de un trabajador se quedó cargando y no guardó." style="width:100%;box-sizing:border-box;border:1px solid #cbd5e1;border-radius:10px;padding:9px;font:14px system-ui,sans-serif;resize:vertical"></textarea>' +
+    '<div id="rlRepMsg" style="font-size:12px;min-height:16px;margin:6px 0"></div>' +
+    '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+    '<button type="button" id="rlRepNo" style="background:#e2e8f0;color:#0f172a;border:0;border-radius:9px;padding:8px 14px;cursor:pointer;font-weight:600">Cancelar</button>' +
+    '<button type="button" id="rlRepSi" style="background:#dc2626;color:#fff;border:0;border-radius:9px;padding:8px 16px;cursor:pointer;font-weight:700">Enviar reporte</button></div></div>';
+  document.body.appendChild(ov);
+  var mod = moduloActual();
+  document.getElementById('rlRepMod').textContent = mod;
+  var txt = document.getElementById('rlRepTxt'), msg = document.getElementById('rlRepMsg'), si = document.getElementById('rlRepSi');
+  var cerrar = function () { try { ov.remove(); } catch (e) {} };
+  document.getElementById('rlRepNo').onclick = cerrar;
+  ov.addEventListener('click', function (ev) { if (ev.target === ov) cerrar(); });
+  setTimeout(function () { try { txt.focus(); } catch (e) {} }, 50);
+  si.onclick = function () {
+    var d = String(txt.value || '').trim();
+    if (d.length < 5) { msg.style.color = '#dc2626'; msg.textContent = 'Escribe brevemente qué pasó.'; return; }
+    si.disabled = true; si.textContent = 'Enviando...'; msg.textContent = '';
+    var body = { action: 'saludReporte', usuario: usuario(), pagina: PAGINA, modulo: mod, descripcion: d,
+                 errores: _recientes.slice(), nav: navegador(), pantalla: (window.innerWidth + 'x' + window.innerHeight),
+                 online: navigator.onLine !== false };
+    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 30000);
+    var op = { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) };
+    if (ctrl) op.signal = ctrl.signal;
+    _f.call(window, GAS_URL, op).then(function (r) { return r.text(); }).then(function (t) {
+      clearTimeout(reloj);
+      var r = {}; try { r = JSON.parse(t); } catch (e) {}
+      if (r.ok) {
+        msg.style.color = '#16a34a'; msg.textContent = '✅ Gracias. Tu reporte N° ' + r.nro + ' fue enviado al administrador.';
+        si.style.display = 'none'; document.getElementById('rlRepNo').textContent = 'Cerrar';
+      } else {
+        msg.style.color = '#dc2626'; msg.textContent = r.error || 'No se pudo enviar. Intenta nuevamente.';
+        si.disabled = false; si.textContent = 'Enviar reporte';
+      }
+    }).catch(function () {
+      clearTimeout(reloj);
+      registrar('reporte_usuario', mod, null, d);   /* se envia con el lote de errores cuando vuelva la conexion */
+      msg.style.color = '#b45309'; msg.textContent = '📡 Sin conexión: tu reporte quedó guardado y se enviará automáticamente.';
+      si.style.display = 'none'; document.getElementById('rlRepNo').textContent = 'Cerrar';
+    });
+  };
+}
+function pestanaReporte() {
+  try {
+    if (document.getElementById('rlRepTab') || !document.body) return;
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.id = 'rlRepTab';
+    b.textContent = '🆘 Reportar';
+    b.title = 'Reportar un problema del sistema';
+    b.style.cssText = 'position:fixed;right:0;top:55%;transform:rotate(-90deg) translate(50%,0);transform-origin:right bottom;background:#dc2626;color:#fff;border:0;border-radius:8px 8px 0 0;padding:5px 11px;font:700 12px system-ui,sans-serif;z-index:99990;cursor:pointer;opacity:.85;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+    b.onmouseenter = function () { b.style.opacity = '1'; };
+    b.onmouseleave = function () { b.style.opacity = '.85'; };
+    b.onclick = abrirReporte;
+    document.body.appendChild(b);
+  } catch (e) {}
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pestanaReporte); else pestanaReporte();
+window.rlReportar = abrirReporte;
 
 window.rlSalud = { registrar: registrar, enviar: enviar, cola: leerCola };
 })();
