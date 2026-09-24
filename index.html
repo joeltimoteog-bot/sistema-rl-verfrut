@@ -870,6 +870,7 @@ async function doLogin(){
    Si algo fallara al firmar, se navega igual sin pase: el ETI mostrara su
    login de siempre. Nunca deja al usuario en blanco. */
 const SSO_SECRETO = 'RL-SSO-VERFRUT-2026';   // debe coincidir con el de los ETI
+const SSO_SERVIDOR_URL = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/auth/sso'; // _SSO_SERVIDOR_V1
 
 async function irAConSSO(base){
   let destino = base;
@@ -887,6 +888,24 @@ async function irAConSSO(base){
       destino = base + '#sso=' + pase + '.' + firma;
     }
   }catch(e){ destino = base; }
+  /* _SSO_SERVIDOR_V1 (24-set-2026): ademas del pase de siempre, pide al servidor
+     un pase firmado ALLA (el secreto no esta en esta pagina) y lo agrega como
+     &sso2=. Evaluaciones ETI lo usa primero; Capacitaciones ETI lo ignora.
+     Si el servidor no responde en 4 s o falla, se navega igual que antes. */
+  try{
+    const tk = sessionStorage.getItem('rl_token');
+    if (tk && window.AbortController) {
+      const _raw = sessionStorage.getItem('user');
+      const _nom = _raw ? String(JSON.parse(_raw).nombre || '').trim() : '';
+      const ctl = new AbortController(); const _t = setTimeout(() => ctl.abort(), 4000);
+      const r = await fetch(SSO_SERVIDOR_URL, { method:'POST', signal: ctl.signal,
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tk },
+        body: JSON.stringify({ accion:'emitir', nombre:_nom }) });
+      clearTimeout(_t);
+      const j = await r.json();
+      if (j && j.success && j.pase) destino += (destino.indexOf('#') >= 0 ? '&' : '#') + 'sso2=' + j.pase;
+    }
+  }catch(e){ /* sin pase del servidor: se usa el de siempre */ }
   window.location.href = destino;
 }
 
