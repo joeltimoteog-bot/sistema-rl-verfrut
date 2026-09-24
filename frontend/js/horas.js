@@ -83,7 +83,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Búsqueda instantánea de DNI con debounce + cache + spinner inline
   _setupDniAutoSearch('regDni', {
-    fetch: (dni) => apiPost({ action: 'horasBuscarTrabajador', dni }),
+    fetch: (dni) => _horasBuscarAzure(dni),   /* _BUSCAR_AZURE_V1: Azure primero, Google de respaldo */
     isFound: (d) => !!(d && d.success && d.trabajador),
     onFound: (d) => { _aplicarTrabajadorAlForm(d.trabajador); cargarSaldoTrabajador(d.trabajador.dni); },
     onNotFound: _limpiarTrabajadorEnForm,
@@ -2010,3 +2010,38 @@ console.log('[_DEVOLUCION_V6] la devolucion pide horas a pagar, no horario');
   }
   console.log('[_FASE3_UI_23SET] vista previa alineada con el servidor');
 })();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _BUSCAR_AZURE_V1 (23-set-2026) — busqueda del trabajador por DNI en Azure
+   (milisegundos) con la misma respuesta que horasBuscarTrabajador. Si Azure
+   no responde o no lo encuentra, se pregunta a Google como siempre.
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function _horasBuscarAzure(dni) {
+  var d = String(dni || '').replace(/\D/g, '');
+  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/trabajadores/buscar?dni=';
+  async function uno(x) {
+    var c = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var t = setTimeout(function () { try { c && c.abort(); } catch (e) {} }, 10000);
+    try {
+      var r = await fetch(BASE + encodeURIComponent(x), c ? { signal: c.signal } : {});
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      var j = await r.json();
+      return (j && j.success && j.trabajadores && j.trabajadores[0]) || null;
+    } finally { clearTimeout(t); }
+  }
+  try {
+    var a = await uno(d);
+    if (!a && d.length === 8 && d.charAt(0) === '0') a = await uno(d.substring(1));
+    if (!a && d.length === 7) a = await uno('0' + d);
+    if (a) {
+      var nombre = a.nombre_completo || [a.ap_paterno, a.ap_materno, a.nombres].filter(Boolean).join(' ');
+      while (d.length < 8) d = '0' + d;
+      return { success: true, fuente: 'AZURE', trabajador: {
+        dni: d, nombre: String(nombre || '').trim(), cargo: a.oficio || '', regimen: a.tipo_regimen || '',
+        fechaInicio: a.fecha_inicio ? String(a.fecha_inicio).slice(0, 10) : '', empresa: a.empresa || a.empresa_origen || '' } };
+    }
+  } catch (e) { console.warn('[_BUSCAR_AZURE_V1] Azure no respondio, se usa Google:', e && e.message); }
+  return apiPost({ action: 'horasBuscarTrabajador', dni: dni });
+}

@@ -248,7 +248,7 @@ h3{font-size:16px !important}
 <button class="ni" id="navMantenimiento" onclick="location.href='mantenimiento.html'" style="position:relative"><span class="ic">&#128295;</span>Solicitud de Mantenimiento<span id="badgeMant" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none;margin-left:6px">0</span></button>
   </div>
   <div class="sb-ft">
-    <button class="ni" id="navInicio" style="display:none;margin-bottom:6px;background:rgba(255,255,255,.08);border-radius:8px" onclick="window.location.href='../../index.html'"><span class="ic">🏠</span>Inicio</button>
+    <button class="ni" id="navInicio" style="display:none;margin-bottom:6px;background:rgba(255,255,255,.08);border-radius:8px" onclick="window.location.href='../../index.html?hub=1'"><span class="ic">🏠</span>Inicio</button>
     <button class="logout" onclick="logout()"><span>🚪</span>Cerrar Sesión</button>
   </div>
 </nav>
@@ -2925,7 +2925,7 @@ function _mapTrabajadorAzureALegado(a) {
   return {
     dni:                    a.dni || '',
     nombre:                 nombre,
-    empresa:                a.empresa || '',
+    empresa:                a.empresa || a.empresa_origen || '',
     sexo:                   a.sexo || '',
     cargo:                  a.oficio || '',
     fundo:                  a.zona_labor || '',
@@ -2935,6 +2935,8 @@ function _mapTrabajadorAzureALegado(a) {
     celular:                '',
     fecha_inicio_periodo:   a.fecha_inicio || '',
     fecha_termino_periodo:  a.fecha_termino || '',
+    cumpleanos:             a.fecha_nacimiento ? String(a.fecha_nacimiento).slice(0, 10) : '',   /* _BUSCAR_AZURE_V1 */
+    regimen:                a.tipo_regimen || '',
     _azure_raw:             a
   };
 }
@@ -5898,7 +5900,7 @@ function abrirAt() {
   // Warm-up del backend: pre-calentar caché de buscarTrabajador (solo primera vez por sesión)
   if (!window._busqWarmupHecho) {
     window._busqWarmupHecho = true;
-    apiGet({action:'buscarTrabajador', q:'a', empresa:'AMBAS'}).catch(()=>{});
+    /* _BUSCAR_AZURE_V1: ya no hace falta calentar Google (la busqueda va a Azure y keepwarm lo mantiene despierto) */
   }
 }
 
@@ -6203,6 +6205,32 @@ function _formatCumpleanos(v) {
 // BUSCAR TRABAJADOR
 const _busqQueryCache = new Map(); // cache por query text → resultados API
 
+/* _BUSCAR_AZURE_V1 (23-set-2026): "Buscar Trabajador" consulta Azure (rapido).
+   DNI -> /trabajadores/buscar?dni= ; nombre -> /trabajadores/buscar?q=
+   Si Azure no responde, se usa Google Sheets como siempre. Devuelve la misma
+   forma que apiGet({action:'buscarTrabajador'}) para no tocar lo demas. */
+async function _buscarTrabApi(q, emp) {
+  q = String(q || '').trim(); emp = emp || 'AMBAS';
+  try {
+    if (/^\d{7,8}$/.test(q)) {
+      const r = await buscarTrabajadorPorDniAzure(q.length === 7 ? '0' + q : q, '');
+      const t = _mapTrabajadorAzureALegado(r);
+      return { success: true, data: t ? [t] : [], fuente: (r && r._fuente) || 'AZURE' };
+    }
+    if (!/^\d+$/.test(q) && q.length >= 3) {
+      const url = new URL(AZURE_FN_BASE + '/trabajadores/buscar');
+      url.searchParams.set('q', q);
+      if (emp && emp !== 'AMBAS') url.searchParams.set('empresa', emp);
+      const c = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      const t0 = setTimeout(function () { try { c && c.abort(); } catch (e) {} }, 12000);
+      let j = null;
+      try { const resp = await fetch(url.toString(), c ? { signal: c.signal } : {}); if (resp.ok) j = await resp.json(); } finally { clearTimeout(t0); }
+      if (j && j.success && Array.isArray(j.trabajadores)) return { success: true, data: j.trabajadores.map(_mapTrabajadorAzureALegado), fuente: 'AZURE' };
+    }
+  } catch (e) { console.warn('[_BUSCAR_AZURE_V1] Azure no respondio, se usa Google:', e && e.message); }
+  return apiGet({ action: 'buscarTrabajador', q: q, empresa: emp });
+}
+
 async function buscarTrab() {
   const q=v('fTQ').trim(), emp=v('fTE');
   if(q.length<2){mostrarToast('❌ Ingresa al menos 2 caracteres','error');return;}
@@ -6225,7 +6253,7 @@ async function buscarTrab() {
     tb.innerHTML = _renderTrabRows(locales);
     // Refinar en background con API si la búsqueda es por nombre (puede haber más)
     if (!/^\d+$/.test(q)) {
-      apiGet({action:'buscarTrabajador',q:q.trim(),empresa:emp||'AMBAS'}).then(d => {
+      _buscarTrabApi(q.trim(), emp||'AMBAS').then(d => {
         if (d.success && d.data && d.data.length) {
           if (!window._trabajadoresCache) window._trabajadoresCache = {};
           d.data.forEach(t => { if (t.dni) { window._trabajadoresCache[String(t.dni).trim()] = t; window._indiceTrabs = window._indiceTrabs||{}; window._indiceTrabs[String(t.dni).trim()] = t; } });
@@ -6246,7 +6274,7 @@ async function buscarTrab() {
   tb.innerHTML='<tr><td colspan="14" class="empty">🔍 Buscando...</td></tr>';
   console.log('[buscarTrab] sin cache local — API q:', q, '| empresa:', emp||'AMBAS');
   try{
-    const d=await apiGet({action:'buscarTrabajador',q:q.trim(),empresa:emp||'AMBAS'});
+    const d=await _buscarTrabApi(q.trim(), emp||'AMBAS');
     if(!d.success||!d.data||!d.data.length){tb.innerHTML='<tr><td colspan="14" class="empty">⚠️ No se encontraron trabajadores</td></tr>';return;}
     if(!window._trabajadoresCache) window._trabajadoresCache={};
     if(!window._indiceTrabs) window._indiceTrabs={};
@@ -14732,6 +14760,20 @@ window._supAdminAbrir = abrirAdmin;
   if (n < 40) setTimeout(function () { esperar(n + 1); }, 500);
 })(0);
 console.log('[_SUP_ADMIN_V1] listo');
+})();
+</script>
+
+<script>
+/* ══════ _INICIO_TODOS_V1 (23-set-2026) — el boton "Inicio" (volver a la pantalla de
+   sistemas) lo ven TODOS los usuarios, no solo administradores. No depende de
+   Acceso a Modulos ni de las restricciones del menu. ══════ */
+(function () {
+  function mostrar() { var b = document.getElementById('navInicio'); if (b && b.style.display === 'none') b.style.display = ''; }
+  (function esperar(n) {
+    var ok = false; try { ok = typeof USER !== 'undefined' && USER && USER.usuario; } catch (e) {}
+    if (ok) { mostrar(); setTimeout(mostrar, 1500); setTimeout(mostrar, 5000); return; }
+    if (n < 60) setTimeout(function () { esperar(n + 1); }, 250);
+  })(0);
 })();
 </script>
 

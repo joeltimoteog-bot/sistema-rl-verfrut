@@ -977,7 +977,8 @@ checkSessionCache();
     aplicarVisibilidadModulos(user);
     var _eti = document.getElementById('modETI'), _evl = document.getElementById('modEval');
     var hayETI = (_eti && _eti.style.display !== 'none') || (_evl && _evl.style.display !== 'none');
-    if (!hayETI) { window.location.href = 'frontend/pages/dashboard.html'; return; }
+    /* _INICIO_TODOS_V1: si viene del boton Inicio (?hub=1) se muestra la pantalla de sistemas aunque solo tenga RR.LL. */
+    if (!hayETI && !/[?&]hub=1/.test(location.search)) { window.location.href = 'frontend/pages/dashboard.html'; return; }
     var card = document.querySelector('.card'); if (card) card.style.display = 'none';
     document.getElementById('pantallaModulo').style.display = 'flex';
     console.log('[_VOLVER_SIN_LOGIN_V1] sesion de la pestana reconocida:', user.usuario);
