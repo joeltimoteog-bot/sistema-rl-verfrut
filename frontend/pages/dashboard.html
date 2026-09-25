@@ -4890,9 +4890,13 @@ async function preloadData() {
   const esAdmin = ROLES_VER_TODO.includes(USER.rol);
   const empresa = esAdmin ? '' : (USER.empresa || '');
 
+  /* _PRELOAD_LIVIANO_V1 (25-set-2026): el supervisor trae sus atenciones de Azure
+     (en paralelo) y la hoja ya no las lee en el login, que era lo mas lento. */
+  const _atAzPre = String(USER.rol || '') === 'supervisor' && typeof window._azAtencionesSup === 'function';
+  const _promAtAz = _atAzPre ? window._azAtencionesSup(30).catch(function () { return null; }) : null;
   try {
     console.time('[preload] getPreload-API');
-    const d = await apiGet({action:'getPreloadOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
+    const d = await apiGet(Object.assign({action:'getPreloadOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa}, _atAzPre ? {atAzure:'1'} : {}));
     console.timeEnd('[preload] getPreload-API');
     console.log('[preload] API: '+Math.round(performance.now()-_tPL0)+'ms | fromCache:'+(d.data&&d.data.fromCache||false)+' | atenciones:'+(d.data&&d.data.atenciones&&d.data.atenciones.length||0)+' | fuente_stats:'+(d.data&&d.data.fuente_atenciones||'?')+' | stats_ms:'+(d.data&&d.data.tiempo_atenciones_ms||0));
     if (d.success && d.data) {
@@ -4903,6 +4907,17 @@ async function preloadData() {
       CACHE.fusiones   = data.fusiones   || [];
       // Admins: atenciones vacías (lazy al abrir módulo); supervisores: cargadas aquí
       CACHE.atenciones = data.atenciones || [];
+      if (_atAzPre) {   /* _PRELOAD_LIVIANO_V1 */
+        let _atAz = await _promAtAz;
+        if (!_atAz) {
+          try {
+            const _g = await apiGet({action:'getAtencionesOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
+            if (_g && _g.success && Array.isArray(_g.data)) _atAz = _g.data;
+          } catch (_eG) {}
+        }
+        if (_atAz) CACHE.atenciones = _atAz;
+        console.log('[preload] atenciones del supervisor:', (CACHE.atenciones || []).length, _atAz ? '' : '(sin datos)');
+      }
       if (data.solicitudes) CACHE.solicitudes  = data.solicitudes;
       if (data.usuarios)    CACHE.usuarios     = data.usuarios;
       if (data.supervisores) CACHE.supervisores = data.supervisores;
@@ -5001,7 +5016,8 @@ async function refrescarEnBackground() {
   const rol     = USER.rol;
   const empresa = (ROLES_ADMIN.includes(rol) || ROLES_ADMIN2.includes(rol)) ? '' : (USER.empresa || '');
   try {
-    const d = await apiGet({ action:'getPreloadOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol, empresa });
+    const _atAzBg = String(rol || '') === 'supervisor' && typeof window._azAtencionesSup === 'function';   /* _PRELOAD_LIVIANO_V1 */
+    const d = await apiGet(Object.assign({ action:'getPreloadOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol, empresa }, _atAzBg ? {atAzure:'1'} : {}));
     if (d.success) {
       // Preservar registros guardados en memoria que aún no llegaron al servidor
       const _prevAts = Array.isArray(CACHE.atenciones) ? [...CACHE.atenciones] : [];
@@ -5478,6 +5494,7 @@ async function refrescarAtencionesHoy(motivo) {
       if (esAdmin && typeof window._azAtencionesRango === 'function') {
         try { if (window._azLimpiarCache) window._azLimpiarCache(); } catch (e) {}
         frescos = await window._azAtencionesRango(_azHaceDias(2));
+        if (Array.isArray(frescos) && !frescos.length) return false;   /* _REFRESCO_AZURE_V2: Azure respondio, no hay nada nuevo */
         if (frescos && frescos.length) {
           var _fld = ['fecha_atencion','fecha_inicio_periodo','fecha_termino_periodo','fecha_inicio_doc','fecha_termino_doc','fecha_registro','fecha_creacion'];
           frescos.forEach(function (a) { _fld.forEach(function (c) { if (a[c]) a[c] = String(a[c]).slice(0, 10); }); });
@@ -5666,9 +5683,12 @@ async function _chequearHistorialDNI(dni) {
     }
   })();
 
-  // Promesa 2 — GAS / Google Sheets (lento ~3s, pero siempre fresco)
+  // Promesa 2 — GAS / Google Sheets: _DNI_SOLO_AZURE_V1 (25-set-2026) ahora SOLO si
+  // Azure falla. Antes se leia la hoja completa en cada DNI tecleado (45 s de promedio
+  // en horas pico) aunque Azure ya hubiera respondido; las ediciones ya llegan a Azure.
   const promGas = (async () => {
     try {
+      if (await promAzure) return null;   /* _DNI_SOLO_AZURE_V1 */
       const anio = new Date().getFullYear().toString();
       const r = await apiGet({ action: 'consultaDNI', dni: dni, rol: (USER && USER.rol) || 'administrador', anio: anio });
       if (!r || !r.success || !Array.isArray(r.data)) return null;
@@ -11895,7 +11915,10 @@ function _filtrar(lista) {
   if (!lista || !lista.length) return lista;
   if (!Object.keys(_elim).length) return lista;
   var antes = lista.length;
-  var out = lista.filter(function (a) { return !_elim[String(a && a.nro).trim()]; });
+  var out = lista.filter(function (a) {
+    var n = String(a && a.nro).trim();
+    return !(_elim[n] || _elim[n + '|' + String((a && a.dni) || '').trim()]);   /* _PAPELERA_PAR_V1 */
+  });
   if (out.length !== antes) {
     console.log('[_ELIMINADAS_V1] se ocultaron ' + (antes - out.length) +
                 ' registro(s) ya eliminados que Azure sigue devolviendo');
@@ -11947,7 +11970,16 @@ async function _sincronizarPapelera() {
     var r = await apiGet({ action: 'papeleraNros' });
     if (!r || !r.success || !Array.isArray(r.data)) return;
     var nuevos = 0;
-    r.data.forEach(function (nro) {
+    if (Array.isArray(r.pares) && r.pares.length) {
+      /* _PAPELERA_PAR_V1 (25-set-2026): el servidor manda N° + DNI. Se oculta solo esa
+         atencion; si otra comparte el N° (registros antiguos), ya no desaparece. */
+      r.pares.forEach(function (par) {
+        var k = String(par || '').trim(), n = k.split('|')[0];
+        if (!k) return;
+        if (_elim[n]) { delete _elim[n]; nuevos++; }
+        if (!_elim[k]) { _elim[k] = Date.now(); nuevos++; }
+      });
+    } else r.data.forEach(function (nro) {
       var k = String(nro || '').trim();
       if (k && !_elim[k]) { _elim[k] = Date.now(); nuevos++; }
     });
@@ -15383,10 +15415,11 @@ window._azAtencionesSup = async function (dias, sinCache) {
         if (!a) return;
         ['fecha_atencion', 'fecha_inicio_periodo', 'fecha_termino_periodo', 'fecha_inicio_doc', 'fecha_termino_doc', 'fecha_registro', 'fecha_creacion']
           .forEach(function (f) { if (a[f]) a[f] = String(a[f]).slice(0, 10); });
-        var key = a.nro != null ? 'n' + a.nro : 'i' + a.id;
+        var key = a.nro != null ? 'n' + a.nro + '|' + String(a.dni || '') : 'i' + a.id;   /* _NRO_UNICO_V1: N° repetidos */
         if (porNro[key]) return; porNro[key] = 1; out.push(a);
       });
       out.sort(function (a, b) { return String(b.fecha_atencion).localeCompare(String(a.fecha_atencion)) || (Number(b.nro) - Number(a.nro)); });
+      try { if (typeof window._filtrarEliminadas === 'function') out = window._filtrarEliminadas(out) || out; } catch (eF) {}   /* _PAPELERA_PAR_V1: tampoco al supervisor */
       cache[k] = { t: Date.now(), d: out };
       return out;
     } catch (e) {
@@ -15397,6 +15430,37 @@ window._azAtencionesSup = async function (dias, sinCache) {
   return enCurso[k];
 };
 console.log('[_AT_SUP_AZURE_V1] listo');
+})();
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _EDIT_AZURE_V1 (25-set-2026) — al editar una atencion, Azure se actualiza
+   en segundo plano (accion 'syncAtencionAzure'). El usuario no espera nada:
+   la edicion ya quedo en la hoja. Si falla, el servidor lo reintenta solo.
+   Se instala UNA sola vez (bandera global) para no encadenar envoltorios.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+if (window._rlEditAzOk) return;
+window._rlEditAzOk = true;
+try { if (typeof RED_SILENCIOSAS !== 'undefined' && RED_SILENCIOSAS.indexOf('syncAtencionAzure') < 0) RED_SILENCIOSAS.push('syncAtencionAzure'); } catch (e) {}
+var previo = window.apiPost;
+if (typeof previo !== 'function') return;
+window.apiPost = function (b) {
+  var pr = previo.apply(this, arguments);
+  try {
+    if (b && b.action === 'updateAtencion' && b.nro) {
+      var nro = b.nro;
+      Promise.resolve(pr).then(function (r) {
+        if (r && r.success) setTimeout(function () {
+          try { Promise.resolve(previo.call(window, { action: 'syncAtencionAzure', nro: nro })).catch(function () {}); } catch (e) {}
+        }, 300);
+      }, function () {});
+    }
+  } catch (e) {}
+  return pr;
+};
+console.log('[_EDIT_AZURE_V1] listo');
 })();
 </script>
 </body>

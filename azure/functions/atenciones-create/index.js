@@ -48,25 +48,42 @@ module.exports = async function (context, req) {
       .input('observaciones', sql.NVarChar(sql.MAX), d.observaciones || '')
       .input('estado', sql.NVarChar(30), d.estado || 'EN PROCESO')
       .input('usuario_sistema', sql.NVarChar(50), d.usuario_sistema || '')
+      /* _UPSERT_V1 (25-set-2026): si ya existe la atencion (mismo N°, año y DNI) se
+         ACTUALIZA en vez de crear otra. Asi las ediciones hechas en la hoja llegan a
+         Azure y un envio repetido ya no duplica el registro. Sin N° -> se crea como antes. */
       .query(`
-        INSERT INTO Atenciones (
+        SET NOCOUNT ON;
+        DECLARE @id INT = NULL, @accion NVARCHAR(10) = N'creado';
+        DECLARE @t TABLE (id INT);
+        IF @nro IS NOT NULL
+          SELECT TOP 1 @id = id FROM Atenciones WHERE nro = @nro AND anio = @anio AND dni = @dni ORDER BY id DESC;
+        IF @id IS NOT NULL
+        BEGIN
+          UPDATE Atenciones SET fecha_atencion = @fecha_atencion, hora_inicio = @hora_inicio, hora_termino = @hora_termino, nro_semana = @nro_semana, mes = @mes, nombre = @nombre, sexo = @sexo, fecha_inicio_periodo = @fecha_inicio_periodo, empresa = @empresa, fundo = @fundo, cargo = @cargo, ruta = @ruta, codigo = @codigo, fundo_actual = @fundo_actual, celular = @celular, supervisor = @supervisor, detalle_documento = @detalle_documento, nro_licencia = @nro_licencia, parentesco = @parentesco, fecha_inicio_doc = @fecha_inicio_doc, fecha_termino_doc = @fecha_termino_doc, dias_transcurridos = @dias_transcurridos, responsable_recepcion = @responsable_recepcion, observaciones = @observaciones, estado = @estado, usuario_sistema = @usuario_sistema
+          WHERE nro = @nro AND anio = @anio AND dni = @dni;
+          SET @accion = N'actualizado';
+        END
+        ELSE
+        BEGIN
+          INSERT INTO Atenciones (
           nro, fecha_atencion, hora_inicio, hora_termino, nro_semana, mes, anio,
           dni, nombre, sexo, fecha_inicio_periodo, empresa, fundo, cargo, ruta, codigo,
           fundo_actual, celular, supervisor, detalle_documento, nro_licencia, parentesco, fecha_inicio_doc,
           fecha_termino_doc, dias_transcurridos, responsable_recepcion, observaciones,
           estado, usuario_sistema
-        )
-        OUTPUT INSERTED.id
-        VALUES (
-          @nro, @fecha_atencion, @hora_inicio, @hora_termino, @nro_semana, @mes, @anio,
-          @dni, @nombre, @sexo, @fecha_inicio_periodo, @empresa, @fundo, @cargo, @ruta, @codigo,
-          @fundo_actual, @celular, @supervisor, @detalle_documento, @nro_licencia, @parentesco, @fecha_inicio_doc,
-          @fecha_termino_doc, @dias_transcurridos, @responsable_recepcion, @observaciones,
-          @estado, @usuario_sistema
-        )
+          )
+          OUTPUT INSERTED.id INTO @t
+          VALUES (
+          @nro, @fecha_atencion, @hora_inicio, @hora_termino, @nro_semana, @mes, @anio, @dni, @nombre, @sexo, @fecha_inicio_periodo, @empresa, @fundo, @cargo, @ruta, @codigo, @fundo_actual, @celular, @supervisor, @detalle_documento, @nro_licencia, @parentesco, @fecha_inicio_doc, @fecha_termino_doc, @dias_transcurridos, @responsable_recepcion, @observaciones, @estado, @usuario_sistema
+          );
+          SELECT TOP 1 @id = id FROM @t;
+        END
+        SELECT @id AS id, @accion AS accion;
       `);
  
-    context.res = { status: 201, body: { success: true, id: result.recordset[0].id, mensaje: 'Atencion creada en Azure SQL' } };
+    const fila = result.recordset[0] || {};
+    context.res = { status: 201, body: { success: true, id: fila.id, accion: fila.accion,
+                    mensaje: fila.accion === 'actualizado' ? 'Atencion actualizada en Azure SQL' : 'Atencion creada en Azure SQL' } };
   } catch (e) {
     context.log.error('Error en atenciones-create:', e);
     context.res = { status: 500, body: { success: false, error: e.message } };

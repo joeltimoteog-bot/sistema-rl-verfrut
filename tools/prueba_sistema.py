@@ -12,7 +12,8 @@ from playwright.sync_api import sync_playwright
 RAIZ = pathlib.Path(sys.argv[1])
 DASH_ALT = sys.argv[2] if len(sys.argv) > 2 else None
 BASE = 'https://joeltimoteog-bot.github.io/sistema-rl-verfrut/'
-RED = {'google': [], 'azure': []}
+RED = {'google': [], 'azure': [], 'gurl': []}
+AZ_CAIDO = {'si': False}
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -25,12 +26,18 @@ def accion_de(req):
 def resp_google(a):
     if a == 'ping': return {'ok': True}
     if a == 'getPreloadOptimizado':
-        return {'success': True, 'atenciones': [], 'stats': {'hoy': 1, 'mes': 2, 'anio': 3}, 'usuarios': [], 'casos': [], 'visitas': []}
+        return {'success': True, 'data': {'atenciones': [], 'stats': {'hoy': 1, 'mes': 2, 'anio': 3}, 'usuarios': [], 'casos': [], 'visitas': [], 'fusiones': [], 'supervisores': []}}
+    if a == 'getSupervisores':
+        return {'success': True, 'data': [
+            {'nombre': 'JOHN STEVE HERNANDEZ BORRERO', 'activo': True, 'gestionado': True},
+            {'nombre': 'SERGIO VIERA GIRON', 'activo': False, 'gestionado': True},
+            {'nombre': 'JOEL ANGEL TIMOTEO GONZA', 'activo': True, 'gestionado': True}]}
     if a == 'cumplPanel': return {'success': True, 'supervisores': [], 'actividades': [], 'resumen': {}}
     if a in ('cumplPendientes',):
         return {'success': True, 'esAdmin': True, 'actividades': [], 'resumen': {}, 'restriccion': {'activa': False}, 'indice': None}
     if a == 'permisosListar': return {'success': True, 'porDefecto': False, 'permitidos': [], 'esAdmin': True}
     if a in ('saludLog', 'saludReporte'): return {'ok': True, 'nro': 1, 'guardados': 1}
+    if a == 'papeleraNros': return {'success': True, 'data': ['500'], 'pares': ['500|11111111']}
     if a == 'calcParamsLeer': return {'success': True, 'params': None}
     if a == 'accesoHorarioDeUsuario': return {'success': True, 'dentro': True, 'tieneHorario': False}
     # escrituras y lecturas genericas
@@ -40,6 +47,13 @@ def resp_azure(url):
     if '/trabajadores/buscar' in url:
         return {'success': True, 'trabajadores': [{'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'}], 'data': {'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'},
                 'resultados': [{'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'}]}
+    if '/atenciones/by-dni' in url:
+        return {'success': True, 'en_proceso': [], 'finalizadas_recientes': []}
+    if re.search(r'/api/atenciones\?', url):
+        hoy = time.strftime('%Y-%m-%d')
+        return {'success': True, 'total': 2, 'data': [
+            {'id': 1, 'nro': 500, 'dni': '11111111', 'nombre': 'A', 'fecha_atencion': hoy, 'supervisor': 'SUPERVISOR PRUEBA', 'estado': 'EN PROCESO'},
+            {'id': 2, 'nro': 500, 'dni': '22222222', 'nombre': 'B', 'fecha_atencion': hoy, 'supervisor': 'SUPERVISOR PRUEBA', 'estado': 'EN PROCESO'}]}
     if '/atenciones/stats' in url:
         return {'success': True, 'resumen_global': {'hoy': 1, 'este_mes': 2, 'este_anio': 3, 'en_proceso': 1, 'finalizados': 2, 'total': 3}}
     return {'success': True, 'data': []}
@@ -61,10 +75,13 @@ def enrutar(route):
     if 'script.google.com' in url:
         a = accion_de(req)
         RED['google'].append(a)
+        RED['gurl'].append(url + ' ' + (req.post_data or ''))
         time.sleep(0.15)
         return route.fulfill(status=200, body=json.dumps(resp_google(a)), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
     if 'azurewebsites.net' in url:
         RED['azure'].append(urllib.parse.urlparse(url).path)
+        if AZ_CAIDO['si'] and req.method != 'OPTIONS':
+            return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
         return route.fulfill(status=200, body=json.dumps(resp_azure(url)), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
@@ -130,8 +147,62 @@ with sync_playwright() as pw:
       return {fin, ms: Math.round(performance.now()-t0), boton: btn ? btn.textContent.trim() : '?', libre: btn ? !btn.disabled : null, pregunto, modales, redGuardo: 0};
     }""")
     ok('Dashboard pantalla Nueva Atencion (boton Guardar)', r['fin'] == 'TERMINO' and r['libre'], json.dumps(r, ensure_ascii=False))
+    # Registro de Casos: lista de supervisores desde la hoja
+    r = pag.evaluate("""async () => {
+      if (typeof _casosSupLlenar !== 'function') return {x:'SIN BLOQUE'};
+      await _casosSupLlenar(); const sel=document.getElementById('cSupervisor');
+      const ops=[...sel.options]; const john=ops.find(o=>o.value==='JOHN STEVE HERNANDEZ BORRERO'); const sergio=ops.find(o=>o.value==='SERGIO VIERA GIRON');
+      return {total: ops.length, john: !!john && !john.disabled, sergioBloqueado: !!sergio && sergio.disabled, conservaFijos: ops.some(o=>o.value==='ROBERTO MOLERO ABAD')};
+    }""")
+    ok('Casos: supervisor nuevo aparece / retirado bloqueado / fijos se conservan', r.get('john') and r.get('sergioBloqueado') and r.get('conservaFijos'), json.dumps(r))
     ok('Dashboard sin errores de JavaScript', not errores, '; '.join(errores[:4]))
     pag.close()
+
+    # ───────── SUPERVISOR (atenciones desde Azure, login liviano) ─────────
+    ctxS = nav.new_context(service_workers='block')
+    SUP = {'usuario': 'sprueba', 'nombre': 'SUPERVISOR PRUEBA', 'rol': 'supervisor', 'sector': '', 'empresa': 'RAPEL'}
+    ctxS.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(SUP)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
+                         'try{localStorage.setItem("rl_nov_2026-09-23_sprueba","1")}catch(e){}')
+    ctxS.route('**/*', enrutar)
+    RED['google'].clear(); RED['gurl'].clear(); RED['azure'].clear()
+    pag = ctxS.new_page(); errores = []
+    pag.on('pageerror', lambda e: errores.append((str(e)+' @ '+(e.stack or '').split('\n')[1:3].__str__())[:400]))
+    pag.goto(BASE + 'frontend/pages/dashboard.html', wait_until='load')
+    pag.wait_for_timeout(6000)
+    pre = [u for u in RED['gurl'] if 'getPreloadOptimizado' in u]
+    ok('Supervisor: login pide preload liviano (atAzure=1)', pre and all('atAzure=1' in u for u in pre), str(len(pre)) + ' pedidos')
+    ok('Supervisor: no lee atenciones de la hoja al entrar', 'getAtencionesOptimizado' not in RED['google'], ','.join(sorted(set(RED['google']))))
+    n = pag.evaluate("(typeof CACHE!=='undefined' && Array.isArray(CACHE.atenciones)) ? CACHE.atenciones.length : -1")
+    ok('Supervisor: atenciones cargadas desde Azure al entrar', n >= 1, str(n) + ' registros')
+    r = pag.evaluate("""async () => { await _sincronizarPapelera(); const x = await window._azAtencionesSup(30, true);
+      return (x||[]).map(a => a.nro + '|' + a.dni).join(','); }""")
+    ok('Supervisor: eliminada se oculta y la otra con el mismo N° sigue visible', r == '500|22222222', r)
+    RED['google'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'updateAtencion', 'nro': 500, 'estado': 'FINALIZADO', 'usuario': 'sprueba', 'rol': 'supervisor'})
+    pag.wait_for_timeout(1500)
+    ok('Supervisor: editar -> guarda y sube a Azure en 2do plano', r['r'] == 'OK' and 'syncAtencionAzure' in RED['google'], r['r'] + ' | red: ' + ','.join(RED['google']))
+    RED['google'].clear()
+    r = pag.evaluate("""async () => { if (typeof _chequearHistorialDNI!=='function') return 'SIN FUNCION';
+      await Promise.race([_chequearHistorialDNI('12345678'), new Promise(z=>setTimeout(z,8000))]); return 'OK'; }""")
+    ok('Supervisor: historial por DNI solo en Azure (no lee la hoja)', r == 'OK' and 'consultaDNI' not in RED['google'], r + ' | red: ' + ','.join(RED['google']))
+    ok('Supervisor: dashboard sin errores de JavaScript', not errores, '; '.join(errores[:4]))
+    pag.close(); ctxS.close()
+    # Azure caido: el supervisor igual ve sus atenciones (respaldo: la hoja). Sesion limpia.
+    ctxS = nav.new_context(service_workers='block')
+    ctxS.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(SUP)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
+                         'try{localStorage.setItem("rl_nov_2026-09-23_sprueba","1")}catch(e){}')
+    ctxS.route('**/*', enrutar)
+    AZ_CAIDO['si'] = True; RED['google'].clear()
+    pag = ctxS.new_page(); errores = []
+    pag.on('pageerror', lambda e: errores.append(str(e)[:300]))
+    pag.goto(BASE + 'frontend/pages/dashboard.html', wait_until='load'); pag.wait_for_timeout(6000)
+    ok('Supervisor con Azure caido: usa la hoja de respaldo', 'getAtencionesOptimizado' in RED['google'], ','.join(sorted(set(RED['google']))))
+    RED['google'].clear()
+    r = pag.evaluate("""async () => { await Promise.race([_chequearHistorialDNI('12345678'), new Promise(z=>setTimeout(z,8000))]); return 'OK'; }""")
+    ok('Supervisor con Azure caido: historial DNI usa la hoja', 'consultaDNI' in RED['google'], ','.join(RED['google']))
+    ok('Supervisor con Azure caido: sin errores de JavaScript', not errores, '; '.join(errores[:4]))
+    AZ_CAIDO['si'] = False
+    pag.close(); ctxS.close()
 
     # ───────── HORAS ─────────
     pag = ctx.new_page(); errores = []
