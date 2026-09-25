@@ -35,7 +35,7 @@ function toInt(v) {
    ANTES: DELETE de TODA la tabla + recarga completa en una transaccion larga ->
           la base (S1) se saturaba varios minutos y el login, la busqueda por DNI
           y los guardados se ponian lentos o fallaban para todos.
-   AHORA: 1) lo recibido se carga en una tabla TEMPORAL (#stage);
+   AHORA: 1) lo recibido se carga en la tabla de trabajo dbo.<tabla>_stage (ver _STAGE_PERM_V1);
           2) se comparan filas completas: solo se borran las que cambiaron o ya no
              estan y se insertan las nuevas o cambiadas. Lo que no cambio NO se toca;
           3) FRENO: si llegan menos de la mitad de los trabajadores que ya hay, se
@@ -77,20 +77,50 @@ function filaDe(row) {
           s(row.ruta, 100), s(row.cod, 50), parseDate(row.fecha_termino), parseDate(row.fecha_nacimiento)];
 }
 
-async function syncTabla(pool, tableName, rows) {
-  if (!rows || rows.length === 0) return { inserted: 0, total_recibidos: 0 };
-  if (!/^Trabajadores_(RAPEL|VERFRUT)$/.test(tableName)) throw new Error('Tabla no permitida: ' + tableName);
+/* _STAGE_PERM_V1 (24-set-2026): la carga a tabla temporal fallo en Azure SQL
+   (EREQUEST sin mensaje). Ahora se usa una tabla de trabajo PERMANENTE dbo.<tabla>_stage,
+   cargada con el mismo metodo (bulk a tabla existente) que siempre funciono.
+   Cada paso tiene nombre para que un error diga exactamente donde fallo.
+   Si el modo incremental falla, se usa el metodo ANTIGUO (probado) como respaldo. */
+function detalleError(e) {
+  const partes = [];
+  if (e && e.message) partes.push(e.message);
+  if (e && e.originalError && e.originalError.message) partes.push(e.originalError.message);
+  if (e && e.originalError && e.originalError.info && e.originalError.info.message) partes.push(e.originalError.info.message);
+  if (e && Array.isArray(e.precedingErrors)) e.precedingErrors.forEach(x => x && x.message && partes.push(x.message));
+  const unico = partes.filter((v, i, a) => v && a.indexOf(v) === i);
+  return unico.join(' | ') || String(e);
+}
 
-  const filas = []; let descartados = 0;
-  for (const row of rows) { const f = filaDe(row); if (f) filas.push(f); else descartados++; }
+function tablaBulk(nombre, filas) {
+  const tabla = new sql.Table(nombre);
+  tabla.create = false;
+  COLS.forEach(c => tabla.columns.add(c[0], c[2](), { nullable: c[0] !== 'dni' }));
+  filas.forEach(f => tabla.rows.add.apply(tabla.rows, f));
+  return tabla;
+}
+
+async function syncIncremental(pool, tableName, filas, rows, descartados) {
+  const STG = tableName + '_stage';
+  let paso = 'crear_stage';
+  try {
+    /* 0) tabla de trabajo (fuera de la transaccion; solo se crea la primera vez) */
+    await pool.request().query(`IF OBJECT_ID('dbo.${STG}', 'U') IS NULL
+      CREATE TABLE dbo.${STG} (${COLS.map(c => c[0] + ' ' + c[1]).join(', ')})`);
+    paso = 'vaciar_stage';
+    await pool.request().query(`DELETE FROM dbo.${STG}`);
+    paso = 'cargar_stage';
+    await pool.request().bulk(tablaBulk(STG, filas));
+  } catch (e) { e._paso = paso; throw e; }
 
   const transaction = new sql.Transaction(pool);
+  paso = 'iniciar_transaccion';
   await transaction.begin();
   try {
     const q = (txt) => transaction.request().query(txt);
-    await q('SET DEADLOCK_PRIORITY LOW; SET LOCK_TIMEOUT 20000;');
+    paso = 'config'; await q('SET DEADLOCK_PRIORITY LOW; SET LOCK_TIMEOUT 20000;');
 
-    /* FRENO: nunca vaciar la tabla por una lectura incompleta */
+    paso = 'contar';
     const actual = (await q(`SELECT COUNT(*) AS n FROM dbo.${tableName}`)).recordset[0].n;
     if (actual > 100 && filas.length < actual * 0.5) {
       await transaction.rollback();
@@ -99,25 +129,16 @@ async function syncTabla(pool, tableName, rows) {
                motivo: 'Llegaron ' + filas.length + ' filas y la tabla tiene ' + actual + ': posible lectura incompleta, no se toco nada' };
     }
 
-    /* 1) tabla temporal con lo recibido */
-    await q('CREATE TABLE #stage (' + COLS.map(c => c[0] + ' ' + c[1]).join(', ') + ')');
-    const tabla = new sql.Table('#stage');
-    tabla.create = false;
-    COLS.forEach(c => tabla.columns.add(c[0], c[2](), { nullable: c[0] !== 'dni' }));
-    filas.forEach(f => tabla.rows.add.apply(tabla.rows, f));
-    await transaction.request().bulk(tabla);
-    await q('CREATE INDEX ix_stage_dni ON #stage (dni)');
-
-    /* 2) borrar filas que cambiaron o ya no estan (comparacion de fila completa; INTERSECT trata NULL = NULL) */
+    paso = 'borrar_cambiados';
     const del = await q(`DELETE t FROM dbo.${tableName} t
-      WHERE NOT EXISTS (SELECT 1 FROM #stage s WHERE s.dni = t.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
+      WHERE NOT EXISTS (SELECT 1 FROM dbo.${STG} s WHERE s.dni = t.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
 
-    /* 3) insertar filas nuevas o cambiadas */
+    paso = 'insertar_nuevos';
     const ins = await q(`INSERT INTO dbo.${tableName} (${LISTA})
-      SELECT ${ST} FROM #stage s
+      SELECT ${ST} FROM dbo.${STG} s
       WHERE NOT EXISTS (SELECT 1 FROM dbo.${tableName} t WHERE t.dni = s.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
 
-    await q('DROP TABLE #stage');
+    paso = 'confirmar';
     await transaction.commit();
 
     const eliminados = (del.rowsAffected && del.rowsAffected[0]) || 0;
@@ -126,7 +147,48 @@ async function syncTabla(pool, tableName, rows) {
              sin_cambios: Math.max(0, actual - eliminados), descartados_sin_dni: descartados, modo: 'incremental' };
   } catch (err) {
     try { await transaction.rollback(); } catch (e2) {}
+    err._paso = paso;
     throw err;
+  }
+}
+
+/* Metodo ANTIGUO (el que funciono siempre): vaciar + recargar, en una transaccion. */
+async function syncCompleto(pool, tableName, filas, rows, descartados) {
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  try {
+    await transaction.request().query(`DELETE FROM dbo.${tableName}`);
+    const r = await transaction.request().bulk(tablaBulk(tableName, filas));
+    await transaction.commit();
+    return { total_recibidos: rows.length, inserted: r.rowsAffected, descartados_sin_dni: descartados, modo: 'completo' };
+  } catch (err) {
+    try { await transaction.rollback(); } catch (e2) {}
+    err._paso = 'completo';
+    throw err;
+  }
+}
+
+async function syncTabla(pool, tableName, rows, log) {
+  if (!rows || rows.length === 0) return { inserted: 0, total_recibidos: 0 };
+  if (!/^Trabajadores_(RAPEL|VERFRUT)$/.test(tableName)) throw new Error('Tabla no permitida: ' + tableName);
+
+  const filas = []; let descartados = 0;
+  for (const row of rows) { const f = filaDe(row); if (f) filas.push(f); else descartados++; }
+
+  try {
+    return await syncIncremental(pool, tableName, filas, rows, descartados);
+  } catch (e) {
+    const motivo = 'paso ' + (e._paso || '?') + ': ' + detalleError(e);
+    if (log) log.warn('Incremental fallo en ' + tableName + ' (' + motivo + ') -> uso metodo completo');
+    /* FRENO tambien en el respaldo: nunca vaciar por una lectura incompleta */
+    const actual = (await pool.request().query(`SELECT COUNT(*) AS n FROM dbo.${tableName}`)).recordset[0].n;
+    if (actual > 100 && filas.length < actual * 0.5) {
+      return { total_recibidos: rows.length, inserted: 0, abortado: true, incremental_error: motivo,
+               motivo: 'Llegaron ' + filas.length + ' filas y la tabla tiene ' + actual + ': no se toco nada' };
+    }
+    const r = await syncCompleto(pool, tableName, filas, rows, descartados);
+    r.incremental_error = motivo;
+    return r;
   }
 }
 
@@ -157,8 +219,8 @@ module.exports = async function (context, req) {
     const pool = await getPool();
     const results = {};
 
-    if (rapel)   results.rapel   = await syncTabla(pool, 'Trabajadores_RAPEL', rapel);
-    if (verfrut) results.verfrut = await syncTabla(pool, 'Trabajadores_VERFRUT', verfrut);
+    if (rapel)   results.rapel   = await syncTabla(pool, 'Trabajadores_RAPEL', rapel, context.log);
+    if (verfrut) results.verfrut = await syncTabla(pool, 'Trabajadores_VERFRUT', verfrut, context.log);
 
     const elapsed = Date.now() - startTime;
     context.log('Sync completado en', elapsed, 'ms');
@@ -178,7 +240,8 @@ module.exports = async function (context, req) {
       status: 500,
       body: {
         success: false,
-        error: e.message,
+        error: detalleError(e),
+        paso: e._paso || null,
         code: e.code,
         name: e.name
       }
