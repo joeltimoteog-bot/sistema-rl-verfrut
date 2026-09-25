@@ -3385,7 +3385,8 @@ async function apiPost(b) {
   var accion = b && b.action;
   // Solo se reintentan las lecturas: un save/update/delete repetido podria duplicar.
   var esLectura = /^(get|listar|consultar|buscar|papelera)/i.test(String(accion || ''))
-      || /^(cumpl(Pendientes|Panel|ConfigListar|Historial|Justificaciones)|permisos(Listar|Usuarios)|accesoHorario(DeUsuario|Listar)|horariosListar|horas(Listar|ListarMotivos|Resumen\w*|BuscarTrabajador)|inv(Listar\w*|GetAll|DatosReporte)|resumenEjecutivo|verificarAccesoTemporal|ping)$/.test(String(accion || ''));   /* _LECTURAS_V1 (24-set): tambien son lecturas -> 2 reintentos */
+      || /^(cumpl(Pendientes|Panel|ConfigListar|Historial|Justificaciones)|permisos(Listar|Usuarios)|accesoHorario(DeUsuario|Listar)|horariosListar|horas(Listar|ListarMotivos|Resumen\w*|BuscarTrabajador)|inv(Listar\w*|GetAll|DatosReporte)|resumenEjecutivo|verificarAccesoTemporal|ping)$/.test(String(accion || ''))   /* _LECTURAS_V1 (24-set): tambien son lecturas -> 2 reintentos */
+      || /^(accesoHorarioGuardar|permisosGuardar|cumplConfigGuardar|syncAtencionAzure)$/.test(String(accion || ''));   /* _REINTENTO_SEGURO_V1 (25-set): escrituras que al repetirse NO duplican (sobrescriben lo mismo): si Google falla un instante, se reintentan solas */
   return _redLlamar(function (signal) {
     var op = { method:'POST', body:JSON.stringify(b), headers:{'Content-Type':'text/plain'} };
     if (signal) op.signal = signal;

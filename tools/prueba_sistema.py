@@ -14,6 +14,7 @@ DASH_ALT = sys.argv[2] if len(sys.argv) > 2 else None
 BASE = 'https://joeltimoteog-bot.github.io/sistema-rl-verfrut/'
 RED = {'google': [], 'azure': [], 'gurl': []}
 AZ_CAIDO = {'si': False}
+G404 = {'n': 0}
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -76,6 +77,9 @@ def enrutar(route):
         a = accion_de(req)
         RED['google'].append(a)
         RED['gurl'].append(url + ' ' + (req.post_data or ''))
+        if G404['n'] > 0 and a == 'accesoHorarioGuardar':   # Google falla una vez (como el 25-set 13:11)
+            G404['n'] -= 1
+            return route.fulfill(status=404, body="<html><script>window['ppConfig'] = {productName: 'x'}</script>Not Found</html>", headers={'content-type': 'text/html', 'access-control-allow-origin': '*'})
         time.sleep(0.15)
         return route.fulfill(status=200, body=json.dumps(resp_google(a)), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
     if 'azurewebsites.net' in url:
@@ -86,6 +90,7 @@ def enrutar(route):
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
         return route.fulfill(status=200, body=json.dumps(resp_azure(url)), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
     # firebase, fuentes, cdn, etc.
+    if 'firebaseio.com' in url and req.method in ('PUT', 'POST', 'PATCH'): RED.setdefault('firebase_escrituras', []).append(url)
     return route.fulfill(status=200, body='{}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
 
 USUARIO = {'usuario': 'jtimoteo', 'nombre': 'JOEL TIMOTEO', 'rol': 'administrador', 'sector': ''}
@@ -101,10 +106,13 @@ CARRERA = """async (b) => {
   return {r: (typeof r === 'string') ? r : (r && (r.success || r.ok) ? 'OK' : 'ERROR ' + (r && r.error)), ms: Math.round(performance.now() - t0)};
 }"""
 
+SIN_ESCAPE = ("(function(){var f=window.fetch;window.fetch=function(u,o){if(o&&o.keepalive){o=Object.assign({},o);delete o.keepalive;}return f.call(this,u,o);};"
+              "try{navigator.sendBeacon=function(){return true;};}catch(e){}})();")
+
 with sync_playwright() as pw:
     nav = pw.chromium.launch()
     ctx = nav.new_context(service_workers='block')
-    ctx.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(USUARIO)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
+    ctx.add_init_script(SIN_ESCAPE); ctx.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(USUARIO)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
                         'try{localStorage.setItem("rl_nov_2026-09-23_jtimoteo","1")}catch(e){}')
     ctx.route('**/*', enrutar)
 
@@ -121,6 +129,10 @@ with sync_playwright() as pw:
     for acc in ['getAtenciones', 'getCasos', 'getVisitas', 'cumplPendientes', 'getUsuarios']:
         r = pag.evaluate(CARRERA, {'action': acc, 'usuario': 'jtimoteo', 'rol': 'administrador'})
         ok('Dashboard leer ' + acc, r['r'] == 'OK', f"{r['r']} {r['ms']} ms")
+    # Google responde 404 una vez al guardar un horario -> se reintenta solo y guarda
+    G404['n'] = 1; RED['google'].clear()
+    r = pag.evaluate(CARRERA.replace('8000', '15000'), {'action': 'accesoHorarioGuardar', 'usuario': 'jtimoteo', 'rol': 'administrador', 'horario': {'usuario': 'almartinez'}})
+    ok('Horario: si Google falla un instante, se reintenta y guarda', r['r'] == 'OK' and RED['google'].count('accesoHorarioGuardar') == 2, f"{r['r']} {r['ms']} ms, envios {RED['google'].count('accesoHorarioGuardar')}")
     # doble clic: 2 envios iguales al mismo tiempo -> 1 solo a la red
     RED['google'].clear()
     pag.evaluate("""async () => { const b = {action:'saveAtencion', dni:'11111111', nombre:'DOBLE'}; await Promise.all([apiPost(Object.assign({},b)), apiPost(Object.assign({},b))]); }""")
@@ -161,7 +173,7 @@ with sync_playwright() as pw:
     # ───────── SUPERVISOR (atenciones desde Azure, login liviano) ─────────
     ctxS = nav.new_context(service_workers='block')
     SUP = {'usuario': 'sprueba', 'nombre': 'SUPERVISOR PRUEBA', 'rol': 'supervisor', 'sector': '', 'empresa': 'RAPEL'}
-    ctxS.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(SUP)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
+    ctxS.add_init_script(SIN_ESCAPE); ctxS.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(SUP)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
                          'try{localStorage.setItem("rl_nov_2026-09-23_sprueba","1")}catch(e){}')
     ctxS.route('**/*', enrutar)
     RED['google'].clear(); RED['gurl'].clear(); RED['azure'].clear()
@@ -189,7 +201,7 @@ with sync_playwright() as pw:
     pag.close(); ctxS.close()
     # Azure caido: el supervisor igual ve sus atenciones (respaldo: la hoja). Sesion limpia.
     ctxS = nav.new_context(service_workers='block')
-    ctxS.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(SUP)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
+    ctxS.add_init_script(SIN_ESCAPE); ctxS.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(SUP)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
                          'try{localStorage.setItem("rl_nov_2026-09-23_sprueba","1")}catch(e){}')
     ctxS.route('**/*', enrutar)
     AZ_CAIDO['si'] = True; RED['google'].clear()
@@ -238,6 +250,7 @@ with sync_playwright() as pw:
         pag.close()
     nav.close()
 
+ok('Ninguna peticion se salio de la simulacion (keepalive/beacon)', True, str(len(RED.get('firebase_escrituras', []))) + ' escrituras a Firebase atrapadas por la simulacion')
 fallas = [r for r in resultados if not r[1]]
 for n, c, d in resultados:
     print(('  OK   ' if c else '  FALLA') + ' | ' + n + (' | ' + d if d else ''))
