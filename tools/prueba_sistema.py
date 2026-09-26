@@ -18,6 +18,7 @@ G404 = {'n': 0}
 ACC = {'modo': 'ok', 'llamadas': []}   # ok | caido | 403
 CV = {'caido': False, 'llamadas': []}
 PERMX = {'resp': None, 'gas_falla': False}
+CUMPL = {'modo': 'ok', 'llamadas': []}   # ok | caido | 503
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -48,6 +49,15 @@ def resp_google(a):
     return {'success': True, 'ok': True, 'nro': 9999, 'data': [], 'hoja': 'TEST', 'fecha_registro': '2026-09-24'}
 
 def resp_azure(url, post=''):
+    if '/api/cumpl/' in url:
+        acc = url.split('/api/cumpl/')[1].split('?')[0]
+        CUMPL['llamadas'].append(acc)
+        if acc == 'cumplPanel': return {'success': True, 'hoy': '2026-09-26', 'supervisores': [], 'actividades': [], 'config': {}, 'fuente': 'azure'}
+        if acc == 'getCumplimiento': return {'success': True, 'esAdmin': True, 'semana': 39, 'rangoSemana': '14/09 al 20/09', 'pendientesVisitas': [], 'casosPendientes': [], 'fuente': 'azure'}
+        return {'success': True, 'usuario': 'jtimoteo', 'nombre': 'JOEL', 'rol': 'administrador', 'esAdmin': True, 'hoy': '2026-09-26',
+                'config': {'aviso_proximo_dias': 2, 'critico_dias': 5, 'escalar_dias': 3, 'excelente': 90, 'regular': 70},
+                'actividades': [], 'resumen': {'EN_PLAZO': 0, 'PROXIMO': 0, 'VENCE_HOY': 0, 'VENCIDO': 0, 'CRITICO': 0},
+                'restriccion': {'activa': False, 'modulos': [], 'criticos': 0, 'motivo': '', 'exonerado_hasta': ''}, 'indice': None, 'fuente': 'azure'}
     if '/api/cv/' in url:
         acc = url.split('/api/cv/')[1].split('?')[0]
         CV['llamadas'].append(acc)
@@ -111,6 +121,10 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+        if '/api/cumpl/' in url and CUMPL['modo'] == 'caido':
+            return route.abort()
+        if '/api/cumpl/' in url and CUMPL['modo'] == '503':
+            return route.fulfill(status=503, body='{"success":false,"error":"aun no migrado"}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if '/api/cv/' in url and CV['caido']:
             return route.abort()
         if '/api/acceso/' in url and ACC['modo'] == 'caido':
@@ -172,6 +186,21 @@ with sync_playwright() as pw:
     r = pag.evaluate("""async () => { const d = await apiGet({action:'getVisitas', empresa:'', mes:''}); return d && d.success ? 'OK' : 'ERROR'; }""")
     ok('Casos/Visitas: con Azure caido, las visitas salen de la hoja', r == 'OK' and 'getVisitas' in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     CV['caido'] = False
+    # ── Control de Cumplimiento desde Azure ──
+    RED['google'].clear(); CUMPL['llamadas'].clear()
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'cumplPendientes', usuario:'jtimoteo', rol:'administrador'}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Cumplimiento: pendientes/campana salen de Azure', r == 'azure:true' and 'cumplPendientes' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    r = pag.evaluate("""async () => { const d = await apiGet({action:'getCumplimiento', usuario:'jtimoteo'}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Cumplimiento: aviso del dashboard sale de Azure', r == 'azure:true' and 'getCumplimiento' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'cumplPanel', usuario:'jtimoteo', rol:'administrador'}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Cumplimiento: panel del coordinador sale de Azure', r == 'azure:true' and 'cumplPanel' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    for modo in ('caido', '503'):
+        CUMPL['modo'] = modo; RED['google'].clear()
+        r = pag.evaluate(CARRERA, {'action': 'cumplPendientes', 'usuario': 'jtimoteo', 'rol': 'administrador'})
+        ok('Cumplimiento: con Azure ' + modo + ', se usa Google', r['r'] == 'OK' and 'cumplPendientes' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms | google: ' + ','.join(RED['google']))
+    CUMPL['modo'] = 'ok'
+    r = pag.evaluate(CARRERA, {'action': 'cumplJustificar', 'usuario': 'jtimoteo', 'nro': 1, 'justificacion': 'prueba de justificacion'})
+    ok('Cumplimiento: justificar sigue guardando en Google', r['r'] == 'OK' and 'cumplJustificar' in RED['google'] and 'cumplJustificar' not in CUMPL['llamadas'], r['r'] + ' | azure: ' + ','.join(CUMPL['llamadas']))
     # ── Acceso a Modulos migrado a Azure ──
     ok('Acceso: al entrar, los permisos se leen de Azure (no de Google)', 'permisosListar' in ACC['llamadas'] and 'permisosListar' not in RED['google'],
        'azure: ' + ','.join(ACC['llamadas']) + ' | google tiene permisosListar: ' + str('permisosListar' in RED['google']))
