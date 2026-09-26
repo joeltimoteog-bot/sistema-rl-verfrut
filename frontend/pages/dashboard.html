@@ -4897,7 +4897,9 @@ async function preloadData() {
   const _promAtAz = _atAzPre ? window._azAtencionesSup(30).catch(function () { return null; }) : null;
   try {
     console.time('[preload] getPreload-API');
-    const d = await apiGet(Object.assign({action:'getPreloadOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa}, _atAzPre ? {atAzure:'1'} : {}));
+    const _cvAzPre = typeof window._cvCompletar === 'function';   /* _CV_AZURE_V1 */
+    const d = await apiGet(Object.assign({action:'getPreloadOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa}, _atAzPre ? {atAzure:'1'} : {}, _cvAzPre ? {cvAzure:'1'} : {}));
+    if (_cvAzPre && d && d.success && d.data) await window._cvCompletar(d.data, {usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa});
     console.timeEnd('[preload] getPreload-API');
     console.log('[preload] API: '+Math.round(performance.now()-_tPL0)+'ms | fromCache:'+(d.data&&d.data.fromCache||false)+' | atenciones:'+(d.data&&d.data.atenciones&&d.data.atenciones.length||0)+' | fuente_stats:'+(d.data&&d.data.fuente_atenciones||'?')+' | stats_ms:'+(d.data&&d.data.tiempo_atenciones_ms||0));
     if (d.success && d.data) {
@@ -5018,7 +5020,9 @@ async function refrescarEnBackground() {
   const empresa = (ROLES_ADMIN.includes(rol) || ROLES_ADMIN2.includes(rol)) ? '' : (USER.empresa || '');
   try {
     const _atAzBg = String(rol || '') === 'supervisor' && typeof window._azAtencionesSup === 'function';   /* _PRELOAD_LIVIANO_V1 */
-    const d = await apiGet(Object.assign({ action:'getPreloadOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol, empresa }, _atAzBg ? {atAzure:'1'} : {}));
+    const _cvAzBg = typeof window._cvCompletar === 'function';   /* _CV_AZURE_V1 */
+    const d = await apiGet(Object.assign({ action:'getPreloadOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol, empresa }, _atAzBg ? {atAzure:'1'} : {}, _cvAzBg ? {cvAzure:'1'} : {}));
+    if (_cvAzBg && d && d.success && d.data) await window._cvCompletar(d.data, {usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol, empresa});
     if (d.success) {
       // Preservar registros guardados en memoria que aún no llegaron al servidor
       const _prevAts = Array.isArray(CACHE.atenciones) ? [...CACHE.atenciones] : [];
@@ -15516,6 +15520,66 @@ window.apiPost = function (b) {
   })();
 };
 console.log('[_ACCESO_AZURE_V1] listo: Acceso a Modulos desde Azure');
+})();
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _CV_AZURE_V1 (26-set-2026) — REGISTRO DE CASOS y VISITAS DE CAMPO desde Azure
+   ---------------------------------------------------------------------------
+   · getCasos / getVisitas se piden a Azure (POST /api/cv/<accion>) con los
+     MISMOS parametros de siempre; Azure responde lo mismo que la hoja.
+   · La carga al entrar (preload) ya no lee esas hojas: trae casos y visitas
+     de Azure (_cvCompletar).
+   · Si Azure no responde (o tarda > 8 s) -> la hoja, como antes.
+   · Los guardados NO cambian: siguen por Google, que actualiza Azure en el acto.
+   INTERRUPTOR: CV_AZURE_ACTIVO = false -> todo vuelve a la hoja al instante.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+var CV_AZURE_ACTIVO = true;
+if (window._rlCvAzOk || !CV_AZURE_ACTIVO) return;
+window._rlCvAzOk = true;
+var ACCIONES = { getCasos: 1, getVisitas: 1 };
+var previo = window.apiGet;
+if (typeof previo !== 'function' || typeof AZURE_FN_BASE === 'undefined') return;
+
+function azure(p) {
+  var cuerpo = {};
+  try { new URLSearchParams(p).forEach(function (v, k) { if (k !== 'action') cuerpo[k] = v; }); } catch (e) {}   // mismos valores (texto) que recibe Google
+  var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 8000);
+  var op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) };
+  if (ctrl) op.signal = ctrl.signal;
+  return fetch(AZURE_FN_BASE + '/cv/' + p.action, op).then(function (r) {
+    return r.json().then(function (j) { clearTimeout(reloj); return { status: r.status, j: j }; });
+  }, function (e) { clearTimeout(reloj); throw e; });
+}
+
+window.apiGet = function (p) {
+  if (!p || !ACCIONES[p.action]) return previo.apply(this, arguments);
+  var self = this, args = arguments;
+  return (async function () {
+    var r = null;
+    try { r = await azure(p); } catch (e) { r = null; }
+    if (r && r.status === 200 && r.j && r.j.success && Array.isArray(r.j.data)) return r.j;
+    console.warn('[_CV_AZURE_V1] ' + p.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se usa la hoja (respaldo)');
+    return previo.apply(self, args);
+  })();
+};
+
+/* completa la respuesta del preload con casos y visitas (Azure, o la hoja si falla) */
+window._cvCompletar = async function (data, p) {
+  try {
+    var base = { usuario: p.usuario, nombre: p.nombre, rol: p.rol, empresa: p.empresa || '' };
+    var r = await Promise.all([
+      window.apiGet(Object.assign({ action: 'getCasos' }, base)).catch(function () { return null; }),
+      window.apiGet(Object.assign({ action: 'getVisitas' }, base)).catch(function () { return null; })
+    ]);
+    data.casos   = (r[0] && r[0].success && Array.isArray(r[0].data)) ? r[0].data : (data.casos || []);
+    data.visitas = (r[1] && r[1].success && Array.isArray(r[1].data)) ? r[1].data : (data.visitas || []);
+  } catch (e) { console.warn('[_CV_AZURE_V1] no se pudieron completar casos/visitas:', e && e.message); }
+};
+console.log('[_CV_AZURE_V1] listo: Casos y Visitas desde Azure');
 })();
 </script>
 </body>

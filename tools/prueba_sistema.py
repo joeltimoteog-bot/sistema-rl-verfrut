@@ -16,6 +16,7 @@ RED = {'google': [], 'azure': [], 'gurl': []}
 AZ_CAIDO = {'si': False}
 G404 = {'n': 0}
 ACC = {'modo': 'ok', 'llamadas': []}   # ok | caido | 403
+CV = {'caido': False, 'llamadas': []}
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -46,6 +47,12 @@ def resp_google(a):
     return {'success': True, 'ok': True, 'nro': 9999, 'data': [], 'hoja': 'TEST', 'fecha_registro': '2026-09-24'}
 
 def resp_azure(url, post=''):
+    if '/api/cv/' in url:
+        acc = url.split('/api/cv/')[1].split('?')[0]
+        CV['llamadas'].append(acc)
+        if acc == 'getCasos':
+            return {'success': True, 'fuente': 'azure', 'data': [{'nro': 1, 'nombre': 'CASO AZURE', 'supervisor': 'X', 'estado': 'ABIERTO', 'fecha_reg': '2026-09-01'}, {'nro': 2, 'nombre': 'CASO AZURE 2', 'supervisor': 'X', 'estado': 'CERRADO', 'fecha_reg': '2026-09-02'}]}
+        return {'success': True, 'fuente': 'azure', 'data': [{'nro': 7, 'supervisor': 'X', 'empresa': 'RAPEL', 'fecha_reg': '2026-09-01 10:00', 'fotos_urls': []}]}
     if '/api/acceso/' in url:
         acc = url.split('/api/acceso/')[1].split('?')[0]
         ACC['llamadas'].append(acc)
@@ -99,6 +106,8 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+        if '/api/cv/' in url and CV['caido']:
+            return route.abort()
         if '/api/acceso/' in url and ACC['modo'] == 'caido':
             return route.abort()
         if '/api/acceso/' in url and ACC['modo'] == '403':
@@ -145,6 +154,19 @@ with sync_playwright() as pw:
     for acc in ['getAtenciones', 'getCasos', 'getVisitas', 'cumplPendientes', 'getUsuarios']:
         r = pag.evaluate(CARRERA, {'action': acc, 'usuario': 'jtimoteo', 'rol': 'administrador'})
         ok('Dashboard leer ' + acc, r['r'] == 'OK', f"{r['r']} {r['ms']} ms")
+    # ── Casos y Visitas desde Azure ──
+    pre = [u for u in RED['gurl'] if 'getPreloadOptimizado' in u]
+    nC = pag.evaluate("(typeof CACHE!=='undefined' && Array.isArray(CACHE.casos)) ? CACHE.casos.length : -1")
+    nV = pag.evaluate("(typeof CACHE!=='undefined' && Array.isArray(CACHE.visitas)) ? CACHE.visitas.length : -1")
+    ok('Casos/Visitas: al entrar se traen de Azure (la hoja no los lee)', pre and all('cvAzure=1' in u for u in pre) and nC == 2 and nV == 1 and 'getCasos' in CV['llamadas'],
+       'preload con cvAzure: ' + str(bool(pre) and all('cvAzure=1' in u for u in pre)) + ' | casos ' + str(nC) + ' | visitas ' + str(nV) + ' | azure: ' + ','.join(CV['llamadas']))
+    RED['google'].clear(); CV['llamadas'].clear()
+    r = pag.evaluate("""async () => { const d = await apiGet({action:'getCasos', empresa:'', motivo:'', usuario:'jtimoteo', rol:'administrador'}); return (d && d.fuente) + ':' + (d && d.data ? d.data.length : -1); }""")
+    ok('Casos/Visitas: la lista de casos sale de Azure', r == 'azure:2' and 'getCasos' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    CV['caido'] = True; RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiGet({action:'getVisitas', empresa:'', mes:''}); return d && d.success ? 'OK' : 'ERROR'; }""")
+    ok('Casos/Visitas: con Azure caido, las visitas salen de la hoja', r == 'OK' and 'getVisitas' in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    CV['caido'] = False
     # ── Acceso a Modulos migrado a Azure ──
     ok('Acceso: al entrar, los permisos se leen de Azure (no de Google)', 'permisosListar' in ACC['llamadas'] and 'permisosListar' not in RED['google'],
        'azure: ' + ','.join(ACC['llamadas']) + ' | google tiene permisosListar: ' + str('permisosListar' in RED['google']))
