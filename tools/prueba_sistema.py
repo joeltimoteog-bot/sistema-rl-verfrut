@@ -19,6 +19,7 @@ ACC = {'modo': 'ok', 'llamadas': []}   # ok | caido | 403
 CV = {'caido': False, 'llamadas': []}
 PERMX = {'resp': None, 'gas_falla': False}
 CUMPL = {'modo': 'ok', 'llamadas': []}   # ok | caido | 503
+AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -49,6 +50,9 @@ def resp_google(a):
     return {'success': True, 'ok': True, 'nro': 9999, 'data': [], 'hoja': 'TEST', 'fecha_registro': '2026-09-24'}
 
 def resp_azure(url, post=''):
+    if '/api/atenciones/guardar' in url:
+        AZG['llamadas'].append('guardar'); AZG['cuerpos'].append(post)
+        return {'success': True, 'nro': 777, 'hoja': 'BB. DE REGISTROS 2026', 'fuente': 'azure', 'fecha_atencion': '2026-09-26', 'hora_inicio': '08:00', 'estado': 'EN PROCESO', 'parentesco': '', 'nro_licencia': ''}
     if '/api/cumpl/' in url:
         acc = url.split('/api/cumpl/')[1].split('?')[0]
         CUMPL['llamadas'].append(acc)
@@ -121,6 +125,12 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+        if '/api/atenciones/guardar' in url and AZG['modo'] == 'caido':
+            AZG['llamadas'].append('caido')
+            return route.abort()
+        if '/api/atenciones/guardar' in url and AZG['modo'] == '503':
+            AZG['llamadas'].append('503')
+            return route.fulfill(status=503, body='{"success":false,"apagado":true}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if '/api/cumpl/' in url and CUMPL['modo'] == 'caido':
             return route.abort()
         if '/api/cumpl/' in url and CUMPL['modo'] == '503':
@@ -186,6 +196,26 @@ with sync_playwright() as pw:
     r = pag.evaluate("""async () => { const d = await apiGet({action:'getVisitas', empresa:'', mes:''}); return d && d.success ? 'OK' : 'ERROR'; }""")
     ok('Casos/Visitas: con Azure caido, las visitas salen de la hoja', r == 'OK' and 'getVisitas' in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     CV['caido'] = False
+    # ── Nueva Atencion: primero en Azure ──
+    AT = {'action': 'saveAtencion', 'dni': '87654321', 'nombre': 'PRUEBA AZURE', 'empresa': 'RAPEL', 'detalle_documento': 'X', 'usuario_sistema': 'jtimoteo'}
+    RED['google'].clear(); RED['gurl'].clear(); AZG['llamadas'].clear(); AZG['cuerpos'].clear()
+    r = pag.evaluate("""async (b) => { const d = await apiPost(Object.assign({}, b)); await new Promise(z => setTimeout(z, 600)); return (d && d.fuente) + ':' + (d && d.nro); }""", AT)
+    hoja = [u for u in RED['gurl'] if 'saveAtencionDesdeAzure' in u]
+    ok('Atencion nueva: se guarda en Azure (N° de Azure) y NO pasa por Google', r == 'azure:777' and 'saveAtencion' not in RED['google'] and AZG['llamadas'] == ['guardar'], r + ' | google: ' + ','.join(RED['google']))
+    ok('Atencion nueva: la hoja se escribe en 2do plano con el MISMO N°', len(hoja) == 1 and '"nro":777' in hoja[0], str(len(hoja)) + ' ' + (hoja[0][-160:] if hoja else ''))
+    ok('Atencion nueva: Azure recibe la huella (client_id)', AZG['cuerpos'] and '"client_id":"at-' in AZG['cuerpos'][0], (AZG['cuerpos'][0][:120] if AZG['cuerpos'] else ''))
+    AZG['llamadas'].clear(); RED['google'].clear()
+    r = pag.evaluate("""async (b) => { const x = await Promise.all([apiPost(Object.assign({}, b)), apiPost(Object.assign({}, b))]); return x.map(d => d && d.nro).join(','); }""", dict(AT, nombre='DOBLE CLIC'))
+    ok('Atencion nueva: doble clic -> 1 solo envio a Azure', AZG['llamadas'] == ['guardar'] and r == '777,777', r + ' | azure: ' + ','.join(AZG['llamadas']))
+    AZG['modo'] = 'caido'; AZG['llamadas'].clear(); RED['google'].clear(); RED['gurl'].clear()
+    r = pag.evaluate(CARRERA, dict(AT, nombre='AZURE CAIDO'))
+    g = [u for u in RED['gurl'] if '"saveAtencion"' in u]
+    ok('Atencion nueva: Azure caido -> 2 intentos y se guarda por Google con la misma huella', r['r'] == 'OK' and AZG['llamadas'].count('caido') == 2 and len(g) == 1 and '"client_id":"at-' in g[0], r['r'] + ' ' + str(r['ms']) + ' ms | azure: ' + ','.join(AZG['llamadas']))
+    AZG['modo'] = '503'; AZG['llamadas'].clear(); RED['google'].clear()
+    r = pag.evaluate(CARRERA, dict(AT, nombre='APAGADO 1'))
+    r2 = pag.evaluate(CARRERA, dict(AT, nombre='APAGADO 2'))
+    ok('Atencion nueva: apagado (503) -> Google, y no vuelve a preguntar a Azure por 5 min', r['r'] == 'OK' and r2['r'] == 'OK' and AZG['llamadas'] == ['503'] and RED['google'].count('saveAtencion') == 2, 'azure: ' + ','.join(AZG['llamadas']) + ' | google saveAtencion x' + str(RED['google'].count('saveAtencion')))
+    AZG['modo'] = 'ok'
     # ── Control de Cumplimiento desde Azure ──
     RED['google'].clear(); CUMPL['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiPost({action:'cumplPendientes', usuario:'jtimoteo', rol:'administrador'}); return (d && d.fuente) + ':' + (d && d.success); }""")
