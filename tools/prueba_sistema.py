@@ -15,6 +15,7 @@ BASE = 'https://joeltimoteog-bot.github.io/sistema-rl-verfrut/'
 RED = {'google': [], 'azure': [], 'gurl': []}
 AZ_CAIDO = {'si': False}
 G404 = {'n': 0}
+ACC = {'modo': 'ok', 'llamadas': []}   # ok | caido | 403
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -44,7 +45,17 @@ def resp_google(a):
     # escrituras y lecturas genericas
     return {'success': True, 'ok': True, 'nro': 9999, 'data': [], 'hoja': 'TEST', 'fecha_registro': '2026-09-24'}
 
-def resp_azure(url):
+def resp_azure(url, post=''):
+    if '/api/acceso/' in url:
+        acc = url.split('/api/acceso/')[1].split('?')[0]
+        ACC['llamadas'].append(acc)
+        if acc == 'permisosListar':
+            return {'success': True, 'permisos': {'navAt': True}, 'vacio': False, 'usuario': 'x', 'fuente': 'azure'}
+        if acc == 'accesoHorarioListar':
+            return {'success': True, 'horarios': [], 'total': 0, 'fuente': 'azure'}
+        if acc == 'accesoHorarioGuardar':
+            return {'success': True, 'horario': '05:30 a 17:00', 'cruzaMedianoche': False, 'aviso': 'ok', 'fuente': 'azure'}
+        return {'success': True, 'fuente': 'azure'}
     if '/trabajadores/buscar' in url:
         return {'success': True, 'trabajadores': [{'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'}], 'data': {'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'},
                 'resultados': [{'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'}]}
@@ -88,7 +99,12 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
-        return route.fulfill(status=200, body=json.dumps(resp_azure(url)), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
+        if '/api/acceso/' in url and ACC['modo'] == 'caido':
+            return route.abort()
+        if '/api/acceso/' in url and ACC['modo'] == '403':
+            ACC['llamadas'].append('403')
+            return route.fulfill(status=403, body='{"success":false,"requiereToken":true}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
+        return route.fulfill(status=200, body=json.dumps(resp_azure(url, req.post_data or '')), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
     # firebase, fuentes, cdn, etc.
     if 'firebaseio.com' in url and req.method in ('PUT', 'POST', 'PATCH'): RED.setdefault('firebase_escrituras', []).append(url)
     return route.fulfill(status=200, body='{}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
@@ -129,9 +145,27 @@ with sync_playwright() as pw:
     for acc in ['getAtenciones', 'getCasos', 'getVisitas', 'cumplPendientes', 'getUsuarios']:
         r = pag.evaluate(CARRERA, {'action': acc, 'usuario': 'jtimoteo', 'rol': 'administrador'})
         ok('Dashboard leer ' + acc, r['r'] == 'OK', f"{r['r']} {r['ms']} ms")
+    # ── Acceso a Modulos migrado a Azure ──
+    ok('Acceso: al entrar, los permisos se leen de Azure (no de Google)', 'permisosListar' in ACC['llamadas'] and 'permisosListar' not in RED['google'],
+       'azure: ' + ','.join(ACC['llamadas']) + ' | google tiene permisosListar: ' + str('permisosListar' in RED['google']))
+    ACC['llamadas'].clear(); RED['google'].clear(); RED['gurl'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'accesoHorarioGuardar', 'usuario': 'jtimoteo', 'rol': 'administrador', 'horario': {'usuario': 'almartinez', 'horaInicio': '05:30', 'horaFin': '17:00'}})
+    pag.wait_for_timeout(800)
+    copia = [u for u in RED['gurl'] if 'accesoHorarioGuardar' in u]
+    ok('Acceso: guardar horario va a Azure y deja copia en la hoja', r['r'] == 'OK' and 'accesoHorarioGuardar' in ACC['llamadas'] and copia and '_desdeAzure' in copia[0],
+       r['r'] + ' | azure: ' + ','.join(ACC['llamadas']) + ' | copia hoja: ' + str(len(copia)))
+    ACC['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'permisosListar', 'usuario': 'jtimoteo', 'rol': 'administrador'})
+    ok('Acceso: con Azure caido, los permisos salen de la hoja', r['r'] == 'OK' and 'permisosListar' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms')
+    ACC['modo'] = '403'; RED['google'].clear(); RED['gurl'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'permisosGuardar', 'usuario': 'jtimoteo', 'rol': 'administrador', 'usuarioObjetivo': 'x', 'modulos': {'navAt': True}})
+    g = [u for u in RED['gurl'] if 'permisosGuardar' in u]
+    ok('Acceso: sin sesion firmada, el guardado va a la hoja (y Google lo sube a Azure)', r['r'] == 'OK' and g and '_desdeAzure' not in g[0], r['r'] + ' | hoja: ' + str(len(g)))
+    ACC['modo'] = 'ok'
     # Google responde 404 una vez al guardar un horario -> se reintenta solo y guarda
-    G404['n'] = 1; RED['google'].clear()
+    G404['n'] = 1; RED['google'].clear(); ACC['modo'] = 'caido'   # ruta de respaldo (Google)
     r = pag.evaluate(CARRERA.replace('8000', '15000'), {'action': 'accesoHorarioGuardar', 'usuario': 'jtimoteo', 'rol': 'administrador', 'horario': {'usuario': 'almartinez'}})
+    ACC['modo'] = 'ok'
     ok('Horario: si Google falla un instante, se reintenta y guarda', r['r'] == 'OK' and RED['google'].count('accesoHorarioGuardar') == 2, f"{r['r']} {r['ms']} ms, envios {RED['google'].count('accesoHorarioGuardar')}")
     # doble clic: 2 envios iguales al mismo tiempo -> 1 solo a la red
     RED['google'].clear()
