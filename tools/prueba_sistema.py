@@ -17,6 +17,7 @@ AZ_CAIDO = {'si': False}
 G404 = {'n': 0}
 ACC = {'modo': 'ok', 'llamadas': []}   # ok | caido | 403
 CV = {'caido': False, 'llamadas': []}
+PERMX = {'resp': None, 'gas_falla': False}
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -56,6 +57,8 @@ def resp_azure(url, post=''):
     if '/api/acceso/' in url:
         acc = url.split('/api/acceso/')[1].split('?')[0]
         ACC['llamadas'].append(acc)
+        if acc == 'permisosListar' and PERMX['resp'] is not None:
+            return PERMX['resp']
         if acc == 'permisosListar':
             return {'success': True, 'permisos': {'navAt': True}, 'vacio': False, 'usuario': 'x', 'fuente': 'azure'}
         if acc == 'accesoHorarioListar':
@@ -95,6 +98,8 @@ def enrutar(route):
         a = accion_de(req)
         RED['google'].append(a)
         RED['gurl'].append(url + ' ' + (req.post_data or ''))
+        if PERMX['gas_falla'] and a == 'permisosListar':
+            return route.fulfill(status=500, body='error', headers={'content-type': 'text/html', 'access-control-allow-origin': '*'})
         if G404['n'] > 0 and a == 'accesoHorarioGuardar':   # Google falla una vez (como el 25-set 13:11)
             G404['n'] -= 1
             return route.fulfill(status=404, body="<html><script>window['ppConfig'] = {productName: 'x'}</script>Not Found</html>", headers={'content-type': 'text/html', 'access-control-allow-origin': '*'})
@@ -271,6 +276,47 @@ with sync_playwright() as pw:
     ok('Supervisor con Azure caido: sin errores de JavaScript', not errores, '; '.join(errores[:4]))
     AZ_CAIDO['si'] = False
     pag.close(); ctxS.close()
+
+    # ───────── PERMISOS BLINDADOS (supervisor real: fpulache) ─────────
+    PF = {"mod_dashboard": True, "navAt": True, "navCasos": True, "navVisitas": True, "navMisEstadisticas": True, "navFusiones": False, "navMonitor": False, "navHoras": False, "mod_trabajadores": True}
+    def sesion_perm(usuario, ls_perm=None):
+        c = nav.new_context(service_workers='block')
+        U = {'usuario': usuario, 'nombre': usuario.upper(), 'rol': 'supervisor', 'sector': '', 'empresa': 'VERFRUT'}
+        c.add_init_script(SIN_ESCAPE)
+        c.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(U)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
+                          + 'try{localStorage.setItem("rl_nov_2026-09-23_' + usuario + '","1")}catch(e){}'
+                          + ('try{localStorage.setItem("rl_perm_' + usuario + '", ' + json.dumps(json.dumps(ls_perm)) + ')}catch(e){}' if ls_perm is not None else ''))
+        c.route('**/*', enrutar)
+        pg = c.new_page(); errs = []
+        pg.on('pageerror', lambda e: errs.append(str(e)[:200]))
+        pg.goto(BASE + 'frontend/pages/dashboard.html', wait_until='load'); pg.wait_for_timeout(9500)
+        return c, pg, errs
+    VIS = """() => { const v=id=>{const b=document.getElementById(id); return b? getComputedStyle(b).display!=='none' : null}; return {fusiones:v('navFusiones'), casos:v('navCasos'), atenciones:v('navAt'), horas:v('navHoras')}; }"""
+    ABRIR = """(id) => { ir(id, null); return new Promise(z=>setTimeout(()=>{ const s=document.getElementById('sec-'+id); z(!!(s && s.classList.contains('on'))); }, 400)); }"""
+    # 1) permisos normales desde Azure
+    PERMX['resp'] = {'success': True, 'permisos': PF, 'vacio': False, 'usuario': 'fpulache', 'fuente': 'azure'}
+    c, pg, errs = sesion_perm('fpulache')
+    m = pg.evaluate(VIS); f = pg.evaluate(ABRIR, 'fusiones'); cs = pg.evaluate(ABRIR, 'casos')
+    ok('Permisos: supervisor ve solo lo suyo y Fusiones no se abre por ningun camino', m['fusiones'] is False and m['casos'] and f is False and cs is True, json.dumps(m) + ' | abre fusiones: ' + str(f) + ' | abre casos: ' + str(cs))
+    ok('Permisos: sin errores de JavaScript', not errs, '; '.join(errs[:3])); c.close()
+    # 2) Azure y Google fallan, sin permisos previos -> solo lo basico
+    ACC['modo'] = 'caido'; PERMX['gas_falla'] = True
+    c, pg, errs = sesion_perm('fpulache')
+    m = pg.evaluate(VIS); cs = pg.evaluate(ABRIR, 'casos')
+    ok('Permisos: si fallan los servidores y no hay datos previos -> solo lo basico (nunca menu completo)', m['atenciones'] and m['fusiones'] is False and m['casos'] is False and cs is False, json.dumps(m) + ' | abre casos: ' + str(cs))
+    c.close()
+    # 3) fallan, pero hay permisos previos en el equipo -> se usan esos
+    c, pg, errs = sesion_perm('fpulache', PF)
+    m = pg.evaluate(VIS)
+    ok('Permisos: si fallan los servidores se usan los ultimos permisos conocidos', m['casos'] and m['fusiones'] is False, json.dumps(m))
+    c.close()
+    ACC['modo'] = 'ok'; PERMX['gas_falla'] = False
+    # 4) usuario antiguo sin permisos guardados -> menu de siempre
+    PERMX['resp'] = {'success': True, 'permisos': {}, 'vacio': True, 'usuario': 'ovilela', 'fuente': 'azure'}
+    c, pg, errs = sesion_perm('ovilela')
+    m = pg.evaluate(VIS)
+    ok('Permisos: usuario antiguo sin permisos guardados conserva su menu', m['atenciones'] is not False, json.dumps(m))
+    c.close(); PERMX['resp'] = None
 
     # ───────── HORAS ─────────
     pag = ctx.new_page(); errores = []

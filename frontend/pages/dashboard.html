@@ -12265,7 +12265,9 @@ function _permQuitarVelo() { try { var v = document.getElementById('permVelo'); 
     var st = document.createElement('style'); st.id = 'permVelo';
     st.textContent = '#sb .nav, .content{visibility:hidden !important}';
     (document.head || document.documentElement).appendChild(st);
-    _permVeloT = setTimeout(_permQuitarVelo, 8000);
+    _permVeloT = setTimeout(function () {   /* _PERM_BLINDAJE_V1: si tarda, NO se abre el menu completo */
+      if (typeof window._permFallo === 'function' && !_permMios) window._permFallo('lento'); else _permQuitarVelo();
+    }, 8000);
     var c = null; try { c = JSON.parse(prev || 'null'); } catch (e) {}
     if (c && typeof c === 'object') {
       var aplicarYa = function () { _permMios = c; permAplicar(); permObservar(); _permQuitarVelo(); };
@@ -12360,7 +12362,9 @@ async function permCargarMios() {
       _permGuardarLS(_permMios); _permQuitarVelo();
       return;
     }
+    if ((!d || !d.success) && typeof window._permFallo === 'function') { window._permFallo('error'); return; }   /* _PERM_BLINDAJE_V1 */
     if (!d || !d.success || d.vacio) {
+      if (typeof window._permRestaurar === 'function') window._permRestaurar();   /* _PERM_BLINDAJE_V1 */
       console.log('[_PERMISOS_UI_V1] sin permisos definidos para ' + USER.usuario +
                   ' -> el menu queda como siempre');
       if (d && d.success && d.vacio) _permGuardarLS(null);
@@ -12374,8 +12378,8 @@ async function permCargarMios() {
     permObservar();
     _permGuardarLS(_permMios); _permQuitarVelo();
   } catch (e) {
-    console.warn('[_PERMISOS_UI_V1] no se pudieron leer los permisos, el menu queda como siempre:', e);
-    _permQuitarVelo();
+    console.warn('[_PERMISOS_UI_V1] no se pudieron leer los permisos:', e);
+    if (typeof window._permFallo === 'function') window._permFallo('error'); else _permQuitarVelo();   /* _PERM_BLINDAJE_V1 */
   }
 }
 
@@ -12560,6 +12564,75 @@ function permIniciar() {
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', permIniciar);
 else permIniciar();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _PERM_BLINDAJE_V1 (26-set-2026) — los permisos de modulos ya no se "abren"
+   ANTES: si la consulta de permisos fallaba o tardaba (Google lento), el menu
+   quedaba COMPLETO y cualquiera podia entrar a cualquier modulo; y ocultar el
+   boton no impedia abrir el modulo por otro camino.
+   AHORA: 1) si falla o tarda -> ultimos permisos conocidos de esa persona; si no
+   hay, solo lo basico (Mi Dashboard, Mis Atenciones, Mis Estadisticas) y se
+   reintenta cada 15 s;  2) candado en ir(): un modulo no permitido no se abre.
+   Administradores y usuarios antiguos sin permisos guardados: sin cambios.
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _PERM_BASICOS = ['mod_dashboard', 'navAt', 'navMisEstadisticas'];
+var _permTemporal = null, _permReint = 0;
+window._permFallo = function (motivo) {
+  try {
+    if (typeof USER === 'undefined' || !USER || _permEsAdmin()) { _permQuitarVelo(); return; }
+    var cache = null;
+    try { cache = JSON.parse(localStorage.getItem(_PERM_LS) || 'null'); } catch (e) {}
+    if (cache === '__vacio__') { _permQuitarVelo(); return; }          // usuario antiguo sin permisos: menu de siempre
+    if (cache && typeof cache === 'object') {
+      _permMios = cache;
+      console.warn('[_PERM_BLINDAJE_V1] permisos no disponibles (' + motivo + '): se usan los ultimos conocidos');
+    } else if (!_permMios) {
+      var tmp = {}, ocultos = [];
+      permCatalogo().forEach(function (m) {
+        tmp[m.clave] = _PERM_BASICOS.indexOf(m.clave) >= 0;
+        if (!tmp[m.clave] && m.boton.style.display !== 'none') ocultos.push(m.boton);
+      });
+      _permTemporal = ocultos;
+      _permMios = tmp;
+      console.warn('[_PERM_BLINDAJE_V1] permisos no disponibles (' + motivo + '): solo modulos basicos hasta leerlos');
+    }
+    permAplicar(); permObservar(); _permQuitarVelo();
+    if (motivo !== 'lento' && ++_permReint <= 8) setTimeout(function () { try { permCargarMios(); } catch (e) {} }, 15000);
+  } catch (e) { try { _permQuitarVelo(); } catch (e2) {} }
+};
+/* llego "vacio" (usuario antiguo) despues de haber puesto solo lo basico: se devuelve su menu */
+window._permRestaurar = function () {
+  try {
+    if (!_permTemporal) return;
+    _permMios = null;
+    if (_permObs) { _permObs.disconnect(); _permObs = null; }
+    _permTemporal.forEach(function (b) { b.style.display = ''; });
+    _permTemporal = null;
+  } catch (e) {}
+};
+/* candado: un modulo no permitido no se abre por ningun camino */
+(function () {
+  if (window._rlPermCandadoOk) return;
+  var irPrevio = window.ir;
+  if (typeof irPrevio !== 'function') return;
+  window._rlPermCandadoOk = true;
+  window.ir = function (id) {
+    try {
+      if (_permMios) {
+        var cat = permCatalogo();
+        for (var i = 0; i < cat.length; i++) {
+          var oc = cat[i].boton.getAttribute('onclick') || '';
+          if (oc.indexOf("ir('" + id + "'") >= 0 && _permMios[cat[i].clave] === false) {
+            try { mostrarToast('🔒 No tienes acceso a este módulo. Si lo necesitas, pídelo a Coordinación.', 'error'); } catch (e) {}
+            console.warn('[_PERM_BLINDAJE_V1] bloqueado: ' + id);
+            return;
+          }
+        }
+      }
+    } catch (e) {}
+    return irPrevio.apply(this, arguments);
+  };
+})();
 
 console.log('[_PERMISOS_UI_V1] listo');
 })();
