@@ -45,8 +45,7 @@
       var h = a.getHours() + a.getMinutes() / 60;
       var esAlta = mes > 6 || (mes === 6 && dia >= 27);
 
-      if (!esAlta) { if (dow === 0 || dow === 6) return true; }   // baja: Lun-Vie
-      else         { if (dow === 0) return true; }                // alta: Lun-Sab
+      if (dow === 0 || dow === 6) return true;   // _LUNVIE_V1 (26-set-2026): Lun-Vie en toda temporada
       return (h < HORA_INI || h >= HORA_FIN);
     }
 

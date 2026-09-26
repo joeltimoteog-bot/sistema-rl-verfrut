@@ -570,15 +570,13 @@ function verificarHorarioLogin(user) {
   // Temporada alta: 27 jun - 31 dic
   const esAlta = mes > 6 || (mes === 6 && dia >= 27);
 
-  if (!esAlta) {
-    // Temporada baja: Lun-Vie 05:30-17:00
-    if (dow === 0 || dow === 6) return { permitido: false, temporada: 'baja' };
-    if (h < 5.5 || h >= 17)    return { permitido: false, temporada: 'baja' };
-  } else {
-    // Temporada alta: Lun-Sáb 05:30-17:00
-    if (dow === 0)           return { permitido: false, temporada: 'alta' };
-    if (h < 5.5 || h >= 17) return { permitido: false, temporada: 'alta' };
-  }
+  /* _LUNVIE_V1 (26-set-2026): pedido de Joel — TODO usuario ingresa solo de
+     LUNES a VIERNES, 05:30-17:00, en cualquier temporada (antes, en temporada
+     alta, se permitia el sabado). Para entrar un sabado/domingo: horario propio
+     asignado en Acceso a Modulos o acceso temporal aprobado. */
+  const temporada = esAlta ? 'alta' : 'baja';
+  if (dow === 0 || dow === 6) return { permitido: false, temporada: temporada };
+  if (h < 5.5 || h >= 17)    return { permitido: false, temporada: temporada };
   return { permitido: true };
 }
 
@@ -603,7 +601,7 @@ function mostrarPantallaBloqueo(user, bloqueo) {
   const ahora  = new Date();
   const hora   = ahora.toLocaleTimeString('es-PE', {hour:'2-digit', minute:'2-digit'});
   const esAlta = bloqueo.temporada === 'alta';
-  const diasTexto  = esAlta ? 'Lunes a Sábado' : 'Lunes a Viernes';
+  const diasTexto  = 'Lunes a Viernes';   /* _LUNVIE_V1 */
   const tempTexto  = esAlta ? 'Alta (27 jun – 31 dic)' : 'Baja (1 ene – 26 jun)';
 
   document.getElementById('blNombre').textContent = 'Usuario: ' + (user.nombre || user.usuario);
