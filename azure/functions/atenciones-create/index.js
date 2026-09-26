@@ -16,6 +16,31 @@ module.exports = async function (context, req) {
       return;
     }
  
+    /* _LIMPIEZA_V1 (26-set-2026): antes, un celular largo ("987654321 / 912345678")
+       o una fecha de documento mal escrita (año 20266, 0202...) hacia fallar TODO el
+       guardado en Azure y la atencion quedaba solo en la hoja (54 casos encontrados).
+       Ahora los textos se recortan al largo de su columna y las fechas imposibles
+       quedan vacias. El DNI NO se recorta: si es invalido se rechaza con mensaje claro. */
+    const _txt = { hora_inicio: 10, hora_termino: 10, nombre: 200, sexo: 10, empresa: 50, fundo: 100, cargo: 150, ruta: 50,
+      codigo: 50, fundo_actual: 100, celular: 20, supervisor: 100, detalle_documento: 500, nro_licencia: 40, parentesco: 40,
+      responsable_recepcion: 150, estado: 30, usuario_sistema: 50 };
+    Object.keys(_txt).forEach(k => { if (d[k] != null && d[k] !== '') d[k] = String(d[k]).slice(0, _txt[k]); });
+    const _fecha = (v) => {
+      if (!v) return null;
+      const s = String(v).slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+      const y = +s.slice(0, 4);
+      if (y < 1900 || y > 2100) return null;
+      const f = new Date(s + 'T00:00:00Z');
+      return (isNaN(f.getTime()) || f.toISOString().slice(0, 10) !== s) ? null : s;
+    };
+    ['fecha_atencion', 'fecha_inicio_periodo', 'fecha_inicio_doc', 'fecha_termino_doc'].forEach(k => { d[k] = _fecha(d[k]); });
+    d.dni = String(d.dni).trim();
+    if (d.dni.length > 15) {
+      context.res = { status: 400, body: { success: false, error: 'DNI invalido (mas de 15 caracteres): ' + d.dni } };
+      return;
+    }
+
     const pool = await getPool();
  
     const result = await pool.request()
