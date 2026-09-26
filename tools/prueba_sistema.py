@@ -20,6 +20,7 @@ CV = {'caido': False, 'llamadas': []}
 PERMX = {'resp': None, 'gas_falla': False}
 CUMPL = {'modo': 'ok', 'llamadas': []}   # ok | caido | 503
 AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
+MODX = {'modo': 'ok', 'llamadas': []}
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -50,6 +51,18 @@ def resp_google(a):
     return {'success': True, 'ok': True, 'nro': 9999, 'data': [], 'hoja': 'TEST', 'fecha_registro': '2026-09-24'}
 
 def resp_azure(url, post=''):
+    if '/api/mod/' in url:
+        partes = url.split('/api/mod/')[1].split('?')[0].split('/')
+        MODX['llamadas'].append('/'.join(partes))
+        acc = partes[1] if len(partes) > 1 else ''
+        base = {'success': True, 'fuente': 'azure'}
+        if acc == 'horasListar': base['registros'] = []
+        if acc == 'horasResumenIndividual': base.update({'registros': [], 'totales': {'acum': 0, 'perm': 0, 'deuda': 0, 'saldo': 0}, 'bloqueado': False, 'comentario': 'Sin saldo pendiente'})
+        if acc == 'horasResumenGeneral': base['resumen'] = []
+        if acc == 'horasListarMotivos': base['motivos'] = ['A']
+        if acc == 'listarCapacitaciones': base.update({'capacitaciones': [], 'total': 0, 'esAdmin': True})
+        if acc == 'estadisticasCapacitaciones': base.update({'esAdmin': True, 'stats': {}})
+        return base
     if '/api/atenciones/guardar' in url:
         AZG['llamadas'].append('guardar'); AZG['cuerpos'].append(post)
         return {'success': True, 'nro': 777, 'hoja': 'BB. DE REGISTROS 2026', 'fuente': 'azure', 'fecha_atencion': '2026-09-26', 'hora_inicio': '08:00', 'estado': 'EN PROCESO', 'parentesco': '', 'nro_licencia': ''}
@@ -125,6 +138,9 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+        if '/api/mod/' in url and MODX['modo'] == 'caido':
+            MODX['llamadas'].append('caido')
+            return route.abort()
         if '/api/atenciones/guardar' in url and AZG['modo'] == 'caido':
             AZG['llamadas'].append('caido')
             return route.abort()
@@ -389,7 +405,38 @@ with sync_playwright() as pw:
     try: pag.evaluate("""async () => { const b={action:'horasRegistrar', dni:'22222222', h:1}; await Promise.all([apiPost(Object.assign({},b)), apiPost(Object.assign({},b))]); }""")
     except Exception as e: pass
     ok('Horas doble clic -> 1 solo registro', RED['google'].count('horasRegistrar') == 1, f"{RED['google'].count('horasRegistrar')} envios")
+    RED['google'].clear(); MODX['llamadas'].clear()
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'horasListar', usuario:'jtimoteo'}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Horas: el listado sale de Azure (no de Google)', r == 'azure:true' and 'horasListar' not in RED['google'] and 'horas/horasListar' in MODX['llamadas'], r + ' | google: ' + ','.join(RED['google']))
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'horasResumenIndividual', usuario:'jtimoteo', dni:'12345678'}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Horas: saldo por DNI sale de Azure', r == 'azure:true' and 'horasResumenIndividual' not in RED['google'], r)
+    RED['google'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'horasRegistrar', 'dni': '33333333', 'x': 'reg'})
+    ok('Horas: registrar sigue guardando en Google', r['r'] == 'OK' and 'horasRegistrar' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
+    MODX['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'horasListar', 'usuario': 'jtimoteo'})
+    ok('Horas: con Azure caido, el listado sale de Google', r['r'] == 'OK' and 'horasListar' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms')
+    MODX['modo'] = 'ok'
     ok('Horas sin errores de JavaScript', not errores, '; '.join(errores[:4]))
+    pag.close()
+
+    # ───────── CAPACITACIONES ─────────
+    pag = ctx.new_page(); errores = []
+    pag.on('pageerror', lambda e: errores.append((str(e)+' @ '+(e.stack or '').split('\n')[1:3].__str__())[:400]))
+    pag.goto(BASE + 'frontend/pages/capacitaciones.html', wait_until='load'); pag.wait_for_timeout(3000)
+    RED['google'].clear(); MODX['llamadas'].clear()
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'listarCapacitaciones', rol:'administrador', usuario:'jtimoteo'}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Capacitaciones: el listado sale de Azure', r == 'azure:true' and 'listarCapacitaciones' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'estadisticasCapacitaciones', rol:'administrador', usuario:'jtimoteo'}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Capacitaciones: estadisticas salen de Azure', r == 'azure:true' and 'estadisticasCapacitaciones' not in RED['google'], r)
+    RED['google'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'exportarCapacitaciones', 'desde': '2026-09-01', 'hasta': '2026-09-30', 'rol': 'administrador'})
+    ok('Capacitaciones: el export sigue por Google', r['r'] == 'OK' and 'exportarCapacitaciones' in RED['google'], r['r'])
+    MODX['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'listarCapacitaciones', 'rol': 'administrador'})
+    ok('Capacitaciones: con Azure caido, sale de Google', r['r'] == 'OK' and 'listarCapacitaciones' in RED['google'], r['r'])
+    MODX['modo'] = 'ok'
+    ok('Capacitaciones sin errores de JavaScript', not errores, '; '.join(errores[:4]))
     pag.close()
 
     # ───────── INVENTARIO ─────────
