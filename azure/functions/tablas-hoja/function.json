@@ -1,0 +1,7 @@
+{
+  "bindings": [
+    { "authLevel": "function", "type": "httpTrigger", "direction": "in", "name": "req",
+      "methods": ["get", "post"], "route": "mantenimiento/hoja/{clave}/{accion}" },
+    { "type": "http", "direction": "out", "name": "res" }
+  ]
+}

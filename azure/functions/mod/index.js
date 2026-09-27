@@ -8,6 +8,36 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 const { sql, getPool } = require('../shared/db');
 const M = require('../shared/mod-db');
+const TH = require('../shared/tablas-hoja');   /* _TABLAS_HC_V1: Horas y Capacitaciones desde sus tablas reales */
+const TABLAS = { horas: ['horas_registros', 'horas_motivos'], cap: ['cap_cabeceras', 'cap_asistentes'] };
+const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
+const J = v => esD(v) ? v.$d : v;
+const N = v => esD(v) ? new Date(v.$d).getTime() : Number(v);
+function normDni(x) { let s = String(x == null ? '' : x).replace(/\D/g, ''); if (!s) return ''; while (s.length < 8) s = '0' + s; return s; }   /* = horasNormDni */
+/* igual que _modDatos_('horas') del Apps Script */
+function registroHoras(r) {
+  return { id: J(r[0]), fechaRegistro: J(r[1]), registradoPor: J(r[2]), dni: normDni(esD(r[3]) ? r[3].$s : r[3]),
+    nombre: J(r[4]), empresa: J(r[5]), cargo: J(r[6]), fechaEntrada: J(r[7]), horaEntrada: J(r[8]), fechaSalida: J(r[9]), horaSalida: J(r[10]),
+    horasTrabajadas: N(r[11]) || 0, jornadaEsperada: N(r[12]) || 0, horasAcumuladas: N(r[13]) || 0, horasAcum: N(r[13]) || 0,
+    horasPermiso: N(r[14]) || 0, horasDeuda: N(r[15]) || 0, motivo: J(r[16]), detalle: J(r[17]), observaciones: J(r[18]), alerta: J(r[19]),
+    estado: J(r[20]) || 'aprobado', aprobadoPor: J(r[21]), aprobadoEn: J(r[22]), _conId: !!J(r[0]), _estadoCrudo: J(r[20]) };
+}
+async function desdeTablas(pool, modulo, D) {
+  if (modulo === 'horas') {
+    const reg = await TH.leer(pool, 'horas_registros'), mot = await TH.leer(pool, 'horas_motivos');
+    if (!reg || !mot) return false;
+    D.registros = reg.filas.map(r => registroHoras(Array.from({ length: 23 }, (_, i) => r[i] === undefined ? '' : r[i])));
+    D.motivos = mot.filas.map(r => String(esD(r[0]) ? r[0].$s : (r[0] || '')).trim()).filter(m => m).sort((a, b) => a.localeCompare(b));
+    return true;
+  }
+  if (modulo === 'cap') {
+    const h = await TH.leer(pool, 'cap_cabeceras'), b = await TH.leer(pool, 'cap_asistentes');
+    if (!h || !b) return false;
+    D.hdr = [h.encabezado].concat(h.filas); D.bbdd = [b.encabezado].concat(b.filas);
+    return true;
+  }
+  return false;
+}
 const HANDLERS = {
   horas: { crear: require('../shared/mod-horas').crear, acciones: { horasListar: 'horasListar', horasResumenIndividual: 'horasResumenIndividual', horasResumenGeneral: 'horasResumenGeneral', horasListarMotivos: 'horasListarMotivos' } },
   cap:   { crear: require('../shared/mod-cap').crear,   acciones: { listarCapacitaciones: 'capListar', estadisticasCapacitaciones: 'capEstadisticas' } },
@@ -27,11 +57,13 @@ async function datos(modulo) {
   const pool = await getPool(); await M.asegurarTablas(pool);
   const v = await pool.request().input('m', sql.NVarChar(40), modulo)
     .query("SELECT CONVERT(VARCHAR(30), MAX(actualizado), 126) AS v, COUNT(*) AS n FROM dbo.MOD_Datos WHERE modulo = @m");
-  const ver = (v.recordset[0].v || '') + '#' + v.recordset[0].n;
+  let ver = (v.recordset[0].v || '') + '#' + v.recordset[0].n;
+  if (TABLAS[modulo]) ver += '#' + (await TH.marcas(pool, TABLAS[modulo]));   /* _TABLAS_HC_V1 */
   const c = cache[modulo];
   if (c && c.ver === ver) return c.m;
   const r = await pool.request().input('m', sql.NVarChar(40), modulo).query('SELECT clave, datos FROM dbo.MOD_Datos WHERE modulo = @m');
   const D = {}; r.recordset.forEach(x => { D[x.clave] = JSON.parse(x.datos); });
+  if (TABLAS[modulo]) { try { D._tablas = await desdeTablas(pool, modulo, D); } catch (e) { D._tablas = false; } }   /* si las tablas no estan listas, sigue el bloque anterior */
   if ((M.CLAVES[modulo] || []).some(k => D[k] === undefined)) return null;
   const m = HANDLERS[modulo].crear(D);
   cache[modulo] = { ver, m };
