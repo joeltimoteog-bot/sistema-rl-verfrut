@@ -10,5 +10,6 @@ function asegurarTablas(pool) {
   return listo;
 }
 /* claves obligatorias de cada modulo (si falta alguna -> 503 y la pantalla usa Google) */
-const CLAVES = { horas: ['registros', 'motivos', 'config'], cap: ['hdr', 'bbdd'] };
+const CLAVES = { horas: ['registros', 'motivos', 'config'], cap: ['hdr', 'bbdd'],
+  fus: ['getFusiones'], sol: ['getSolicitudes'], casosaux: ['getMotivosCasos'], inv: ['invGetAll'] };   /* _MOD_SIMPLES_V1 */
 module.exports = { asegurarTablas, CLAVES };

@@ -62,6 +62,8 @@ def resp_azure(url, post=''):
         if acc == 'horasListarMotivos': base['motivos'] = ['A']
         if acc == 'listarCapacitaciones': base.update({'capacitaciones': [], 'total': 0, 'esAdmin': True})
         if acc == 'estadisticasCapacitaciones': base.update({'esAdmin': True, 'stats': {}})
+        if acc in ('getFusiones', 'getSolicitudes', 'getMotivosCasos'): base['data'] = []
+        if acc == 'invGetAll': base.update({'productos': [], 'ingresos': [], 'entregas': []})
         return base
     if '/api/atenciones/guardar' in url:
         AZG['llamadas'].append('guardar'); AZG['cuerpos'].append(post)
@@ -212,6 +214,17 @@ with sync_playwright() as pw:
     r = pag.evaluate("""async () => { const d = await apiGet({action:'getVisitas', empresa:'', mes:''}); return d && d.success ? 'OK' : 'ERROR'; }""")
     ok('Casos/Visitas: con Azure caido, las visitas salen de la hoja', r == 'OK' and 'getVisitas' in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     CV['caido'] = False
+    # ── Consultas simples desde Azure ──
+    RED['google'].clear(); MODX['llamadas'].clear()
+    r = pag.evaluate("""async () => { const x = await Promise.all([apiGet({action:'getFusiones', usuario:'TODOS'}), apiGet({action:'getSolicitudes', estado:'PENDIENTE'}), apiGet({action:'getMotivosCasos'})]); return x.map(d => d && d.fuente).join(','); }""")
+    ok('Fusiones, Solicitudes y Motivos salen de Azure (no de Google)', r == 'azure,azure,azure' and not any(a in RED['google'] for a in ['getFusiones', 'getSolicitudes', 'getMotivosCasos']), r + ' | google: ' + ','.join(RED['google']))
+    MODX['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiGet({action:'getFusiones', usuario:'TODOS'}); return d && d.success ? 'OK' : 'ERROR'; }""")
+    ok('Fusiones: con Azure caido, sale de Google', r == 'OK' and 'getFusiones' in RED['google'], r)
+    MODX['modo'] = 'ok'
+    RED['google'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'saveFusion', 'x': 1})
+    ok('Fusiones: guardar sigue por Google', r['r'] == 'OK' and 'saveFusion' in RED['google'], r['r'])
     # ── Nueva Atencion: primero en Azure ──
     AT = {'action': 'saveAtencion', 'dni': '87654321', 'nombre': 'PRUEBA AZURE', 'empresa': 'RAPEL', 'detalle_documento': 'X', 'usuario_sistema': 'jtimoteo'}
     RED['google'].clear(); RED['gurl'].clear(); AZG['llamadas'].clear(); AZG['cuerpos'].clear()
@@ -446,6 +459,9 @@ with sync_playwright() as pw:
     for acc in ['invGetAll', 'invRegistrarIngreso', 'invRegistrarEntrega', 'invEliminarIngreso']:
         r = pag.evaluate(CARRERA, {'action': acc, 'x': acc})
         ok('Inventario ' + acc, r['r'] == 'OK', f"{r['r']} {r['ms']} ms")
+    RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiGet({action:'invGetAll'}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Inventario: la carga sale de Azure', r == 'azure:true' and 'invGetAll' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     ok('Inventario sin errores de JavaScript', not errores, '; '.join(errores[:4]))
     pag.close()
 

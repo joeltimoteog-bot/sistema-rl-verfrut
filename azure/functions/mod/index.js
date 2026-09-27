@@ -2,6 +2,7 @@
    mod (_MOD_AZURE_V1, 26-set-2026) — lecturas de modulos desde Azure
    POST /api/mod/horas/{horasListar|horasResumenIndividual|horasResumenGeneral|horasListarMotivos}
    POST /api/mod/cap/{listarCapacitaciones|estadisticasCapacitaciones}
+   POST /api/mod/fus/getFusiones · sol/getSolicitudes · casosaux/getMotivosCasos · inv/invGetAll
    Mismo calculo que el Apps Script (shared/mod-*.js) sobre los datos que manda
    mod-importar. Sin datos -> 503 y la pantalla usa Google como siempre.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -9,7 +10,12 @@ const { sql, getPool } = require('../shared/db');
 const M = require('../shared/mod-db');
 const HANDLERS = {
   horas: { crear: require('../shared/mod-horas').crear, acciones: { horasListar: 'horasListar', horasResumenIndividual: 'horasResumenIndividual', horasResumenGeneral: 'horasResumenGeneral', horasListarMotivos: 'horasListarMotivos' } },
-  cap:   { crear: require('../shared/mod-cap').crear,   acciones: { listarCapacitaciones: 'capListar', estadisticasCapacitaciones: 'capEstadisticas' } }
+  cap:   { crear: require('../shared/mod-cap').crear,   acciones: { listarCapacitaciones: 'capListar', estadisticasCapacitaciones: 'capEstadisticas' } },
+  /* _MOD_SIMPLES_V1: consultas sin calculo — Azure guarda la respuesta de Google tal cual */
+  fus:      { crear: require('../shared/mod-snap').crear, acciones: { getFusiones: 'getFusiones' } },
+  sol:      { crear: require('../shared/mod-snap').crear, acciones: { getSolicitudes: 'getSolicitudes' } },
+  casosaux: { crear: require('../shared/mod-snap').crear, acciones: { getMotivosCasos: 'getMotivosCasos' } },
+  inv:      { crear: require('../shared/mod-snap').crear, acciones: { invGetAll: 'invGetAll' } }
 };
 /* memoria por version: cada consulta pregunta solo la hora de la ultima carga (consulta
    minima); si no cambio, reutiliza lo ya leido. Asi, apenas Google sube un cambio
