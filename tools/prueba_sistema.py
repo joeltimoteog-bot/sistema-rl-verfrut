@@ -23,6 +23,7 @@ AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
 MODX = {'modo': 'ok', 'llamadas': []}
 CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
 CAPG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _CAP_AZURE_PRIMERO_V1
+SOLG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _SOL_AZURE_V1  ok | caido
 FUSG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _FUS_AZURE_V1  ok | caido | 503
 HORASG = {'modo': 'ok', 'llamadas': [], 'auth': [], 'cuerpos': []}   # _HORAS_AZURE_PRIMERO_V1  ok | rechazo | caido | 503
 
@@ -82,6 +83,9 @@ def resp_azure(url, post=''):
                 'config': {'aviso_proximo_dias': 2, 'critico_dias': 5, 'escalar_dias': 3, 'excelente': 90, 'regular': 70},
                 'actividades': [], 'resumen': {'EN_PLAZO': 0, 'PROXIMO': 0, 'VENCE_HOY': 0, 'VENCIDO': 0, 'CRITICO': 0},
                 'restriccion': {'activa': False, 'modulos': [], 'criticos': 0, 'motivo': '', 'exonerado_hasta': ''}, 'indice': None, 'fuente': 'azure'}
+    if '/api/sol/guardar/' in url:
+        SOLG['llamadas'].append(url.split('/api/sol/guardar/')[1].split('?')[0])
+        return {'success': True, 'fuente': 'azure'}
     if '/api/fus/guardar/' in url:
         acc = url.split('/api/fus/guardar/')[1].split('?')[0]
         FUSG['llamadas'].append(acc)
@@ -166,6 +170,11 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+        if '/api/sol/guardar/' in url:
+            SOLG['auth'].append(req.headers.get('authorization', ''))
+            if SOLG['modo'] == 'caido':
+                SOLG['llamadas'].append('caido')
+                return route.abort()
         if '/api/fus/guardar/' in url:
             FUSG['auth'].append(req.headers.get('authorization', ''))
             if FUSG['modo'] == 'caido':
@@ -289,6 +298,15 @@ with sync_playwright() as pw:
     r = pag.evaluate(CARRERA, {'action': 'saveFusion', 'x': 1})
     ok('Fusiones: con Azure caido, guardar va por Google', r['r'] == 'OK' and 'saveFusion' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
     FUSG['modo'] = 'ok'
+    # ── Solicitudes: aprobar/rechazar primero en Azure (_SOL_AZURE_V1) ──
+    pag.wait_for_timeout(500); SOLG['llamadas'].clear(); SOLG['auth'].clear(); RED['google'].clear()
+    r = pag.evaluate("""async () => { const b = {action:'resolverSolicitud', fila:3, decision:'APROBADA', estado:'APROBADA', motivo_rechazo:'', resuelto_por:'JOEL'}; const x = await Promise.all([apiPost(Object.assign({}, b)), apiPost(Object.assign({}, b))]); await new Promise(z => setTimeout(z, 500)); return x.map(d => (d && d.fuente) + ':' + (d && d.success)).join(','); }""")
+    ok('Solicitud aprobada: va a Azure (una sola vez con doble clic) y NO por Google', r == 'azure:true,azure:true' and SOLG['llamadas'] == ['resolverSolicitud'] and 'resolverSolicitud' not in RED['google'], r + ' | azure: ' + ','.join(SOLG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    ok('Solicitud: va con el token y Google copia a la hoja en 2do plano', SOLG['auth'] and SOLG['auth'][0].startswith('Bearer ') and 'cvAplicarDesdeAzure' in RED['google'], str(SOLG['auth'][:1]) + ' | ' + ','.join(RED['google']))
+    pag.wait_for_timeout(500); SOLG['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'resolverSolicitud', 'fila': 4, 'estado': 'RECHAZADA'})
+    ok('Solicitudes: con Azure caido, resolver va por Google', r['r'] == 'OK' and 'resolverSolicitud' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
+    SOLG['modo'] = 'ok'
     # ── Casos y Visitas: primero en Azure (_CV_AZURE_PRIMERO_V1) ──
     RED['google'].clear(); CVG['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiPost({action:'saveCaso', dni:'70000001', nombre:'PRUEBA CV', motivo:'Hurto'}); await new Promise(z => setTimeout(z, 600)); return (d && d.fuente) + ':' + (d && d.nro); }""")

@@ -33,6 +33,11 @@ const ESQ = {
     ['ruta1', 't400'], ['codigo1', 'n'], ['personal1', 'n'], ['ruta2', 't400'], ['codigo2', 'n'], ['personal2', 'n'],
     ['ruta3', 't400'], ['codigo3', 'n'], ['personal3', 'n'], ['motivo', 't1000'], ['observaciones', 't2000'],
     ['foto1', 't1000'], ['foto2', 't1000'], ['foto3', 't1000'], ['estado', 't30']] },
+  /* _SOL_AZURE_V1 (27-set): Solicitudes de edicion de visitas */
+  sol_edicion: { tabla: 'dbo.Solicitudes_Edicion', cols: [
+    ['nro', 'n'], ['fecha_solicitud', 'f'], ['nro_visita', 'n'], ['supervisor', 't200'], ['empresa', 't20'], ['fundo', 't100'], ['semana', 'n'],
+    ['fecha_informe', 'f'], ['motivo', 't2000'], ['solicitado_por', 't200'], ['estado', 't30'], ['resuelto_por', 't200'], ['fecha_resolucion', 'f'],
+    ['motivo_rechazo', 't2000']] },
   horas_auditoria: { tabla: 'dbo.Horas_Auditoria', cols: [
     ['fecha', 'f'], ['usuario', 't60'], ['accion', 't40'], ['registro_id', 't40'], ['detalle', 't4000']] },
   cap_cabeceras: { tabla: 'dbo.Cap_Cabeceras', cols: [

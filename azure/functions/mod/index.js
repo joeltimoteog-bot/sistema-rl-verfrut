@@ -9,8 +9,9 @@
 const { sql, getPool } = require('../shared/db');
 const M = require('../shared/mod-db');
 const TH = require('../shared/tablas-hoja');   /* _TABLAS_HC_V1: Horas y Capacitaciones desde sus tablas reales */
-const TABLAS = { horas: ['horas_registros', 'horas_motivos'], cap: ['cap_cabeceras', 'cap_asistentes'], fus: ['fus_buses'] };   /* _FUS_AZURE_V1: + fus */
+const TABLAS = { horas: ['horas_registros', 'horas_motivos'], cap: ['cap_cabeceras', 'cap_asistentes'], fus: ['fus_buses'], sol: ['sol_edicion'] };   /* _FUS_AZURE_V1: + fus · _SOL_AZURE_V1: + sol */
 const FUSG = require('../shared/fus-guardar');
+const SOLG = require('../shared/sol-guardar');
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
 const J = v => esD(v) ? v.$d : v;
 const N = v => esD(v) ? new Date(v.$d).getTime() : Number(v);
@@ -41,6 +42,12 @@ async function desdeTablas(pool, modulo, D) {
     const t = await TH.leer(pool, 'fus_buses');
     if (!t) return false;
     D.getFusiones = FUSG.getFusiones(t);
+    return true;
+  }
+  if (modulo === 'sol') {   /* _SOL_AZURE_V1: Solicitudes desde su tabla real (= getSolicitudes del Apps Script; el filtro por estado lo aplica mod-snap) */
+    const t = await TH.leer(pool, 'sol_edicion');
+    if (!t) return false;
+    D.getSolicitudes = SOLG.getSolicitudes(t, {});
     return true;
   }
   return false;
