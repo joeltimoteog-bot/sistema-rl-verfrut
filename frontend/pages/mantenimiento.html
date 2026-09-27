@@ -109,6 +109,73 @@ tr:hover td{background:#fafbfc}
 <link rel="stylesheet" href="../css/rl-theme.css">
 <script>(function(){if(localStorage.getItem('rl_theme')!=='classic' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
 <script src="/sistema-rl-verfrut/frontend/js/progreso.js"></script>  <!-- _PROGRESO_V1 (27-set): "Guardando… / Eliminando…" y ✓ en todos los modulos -->
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _MANT_AZURE_V1 (27-set-2026) — MANTENIMIENTO se guarda primero en Azure
+   · Nueva solicitud, Programar, Atendida y Cerrar van directo a la tabla de Azure
+     (N° de solicitud al instante, sin repetir). Luego Google copia a la hoja y envia
+     los mismos correos; la pantalla espera esa copia (max 15 s) para que la lista
+     recargada ya lo muestre.
+   · Huella del envio (client_id): doble clic o reintento no duplican.
+   · Azure apagado (503), sin sesion (401) o sin respuesta -> Google, como siempre.
+   INTERRUPTOR: MANT_AZURE_PRIMERO = false  (o mantAzurePrimeroApagar() en el Apps Script).
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  var MANT_AZURE_PRIMERO = true;
+  if (!MANT_AZURE_PRIMERO || window._rlMantAzOk || typeof window.fetch !== 'function') return;
+  window._rlMantAzOk = true;
+  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mant/guardar/';
+  var ACCIONES = { guardarSolicitudMantenimiento: 1, programarMantenimiento: 1, actualizarEstadoMantenimiento: 1 };
+  function h32(s, seed) { var h = seed >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
+  function huella(s) { return 'mant-' + h32(s, 2166136261) + h32(s, 5381) + '-' + Date.now().toString(36); }
+  function respuesta(j) { return new Response(JSON.stringify(j), { status: 200, headers: { 'Content-Type': 'application/json' } }); }
+  var previo = window.fetch, enCurso = {}, apagadoHasta = 0;
+  window.fetch = function (url, init) {
+    var self = this, args = arguments, b = null, tk = null;
+    try {
+      if (/script\.google\.com/.test(String(url && url.url ? url.url : url)) && init && String(init.method || '').toUpperCase() === 'POST' && typeof init.body === 'string') b = JSON.parse(init.body);
+      tk = sessionStorage.getItem('rl_token');
+    } catch (e) { b = null; }
+    if (!b || !ACCIONES[b.action] || !tk || Date.now() < apagadoHasta) return previo.apply(self, args);
+    var igual = init.body;
+    if (enCurso[igual]) return enCurso[igual].then(function (j) { return j ? respuesta(j) : previo.apply(self, args); });
+    var clave = huella(igual);
+    var p = (async function () {
+      var cuerpo = {}; Object.keys(b).forEach(function (k) { if (k !== 'action') cuerpo[k] = b[k]; });
+      cuerpo.client_id = clave;
+      var r = null;
+      for (var intento = 1; intento <= 2; intento++) {
+        var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 20000);
+        try {
+          var op = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk }, body: JSON.stringify(cuerpo) };
+          if (ctrl) op.signal = ctrl.signal;
+          var resp = await previo.call(window, BASE + b.action, op);
+          r = { status: resp.status, j: await resp.json().catch(function () { return null; }) };
+        } catch (e) { r = null; }
+        clearTimeout(reloj);
+        if (r && r.status === 200 && r.j) break;
+        if (r && [400, 401, 403, 404, 409, 503].indexOf(r.status) >= 0) break;
+        if (intento < 2) await new Promise(function (z) { setTimeout(z, 1500); });
+      }
+      if (r && r.status === 200 && r.j) {
+        if (r.j.ok) {   /* esperar la copia a la hoja (y los correos), max 15 s: la lista se recarga de Google */
+          try { await Promise.race([previo.call(window, url, { method: 'POST', body: JSON.stringify({ action: 'cvAplicarDesdeAzure' }), headers: { 'Content-Type': 'text/plain' } }).catch(function () {}), new Promise(function (z) { setTimeout(z, 15000); })]); } catch (e) {}
+        }
+        console.log('[_MANT_AZURE_V1] ' + b.action + ' en Azure: ' + (r.j.ok ? 'guardado ' + (r.j.id || b.id || '') : 'rechazado (' + r.j.msg + ')') + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : ''));
+        return r.j;
+      }
+      if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
+      console.warn('[_MANT_AZURE_V1] ' + b.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
+      return null;
+    })();
+    enCurso[igual] = p;
+    p.then(function () { setTimeout(function () { delete enCurso[igual]; }, 3000); }, function () { delete enCurso[igual]; });
+    return p.then(function (j) { return j ? respuesta(j) : previo.apply(self, args); });
+  };
+  console.log('[_MANT_AZURE_V1] listo: Mantenimiento se guarda primero en Azure');
+})();
+</script>
 </head>
 <body>
 <aside class="sb">

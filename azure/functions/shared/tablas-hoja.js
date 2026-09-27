@@ -54,6 +54,12 @@ const ESQ = {
     ['nro', 'n'], ['fecha_solicitud', 'f'], ['nro_visita', 'n'], ['supervisor', 't200'], ['empresa', 't20'], ['fundo', 't100'], ['semana', 'n'],
     ['fecha_informe', 'f'], ['motivo', 't2000'], ['solicitado_por', 't200'], ['estado', 't30'], ['resuelto_por', 't200'], ['fecha_resolucion', 'f'],
     ['motivo_rechazo', 't2000']] },
+  /* _MANT_AZURE_V1 (27-set): Registro de Mantenimiento (A-S de guardarSolicitud + 4 de Atendida/Cerrar) */
+  mant_registro: { tabla: 'dbo.Mant_Registro', cols: [
+    ['id_solicitud', 't20'], ['fecha_solicitud', 'f'], ['dni', 'n'], ['nombre', 't200'], ['empresa', 't20'], ['cod_interno', 't40'],
+    ['unidad', 't200'], ['n_licencia', 't40'], ['tipo_licencia', 't20'], ['revalidacion', 'f'], ['estado_licencia', 't40'], ['kilometraje', 'n'],
+    ['tipo_mantenimiento', 't100'], ['observaciones', 't2000'], ['estado', 't30'], ['fecha_programada', 'f'], ['comentario_admin', 't2000'],
+    ['fecha_respuesta', 'f'], ['usuario_solicitante', 't100'], ['fecha_atencion', 'f'], ['atendido_por', 't100'], ['fecha_cierre', 'f'], ['cerrado_por', 't100']] },
   horas_auditoria: { tabla: 'dbo.Horas_Auditoria', cols: [
     ['fecha', 'f'], ['usuario', 't60'], ['accion', 't40'], ['registro_id', 't40'], ['detalle', 't4000']] },
   cap_cabeceras: { tabla: 'dbo.Cap_Cabeceras', cols: [

@@ -11,6 +11,7 @@
    POST mantenimiento/cv/sol{Encender|Apagar|Simular}   (_SOL_AZURE_V1)
    POST mantenimiento/cv/cumpl{Encender|Apagar|Simular|Motor}   (_CUMPL_W_V1)
    POST mantenimiento/cv/usr{Encender|Apagar|Simular|Usuarios}   (_USR_AZURE_V1)
+   POST mantenimiento/cv/mant{Encender|Apagar|Simular}   (_MANT_AZURE_V1)
    ═══════════════════════════════════════════════════════════════════════════ */
 const { sql, getPool } = require('../shared/db');
 const G = require('../shared/cv-guardar');
@@ -20,6 +21,7 @@ const FUS = require('../shared/fus-guardar');   /* _FUS_AZURE_V1 */
 const SOL = require('../shared/sol-guardar');   /* _SOL_AZURE_V1 */
 const CUW = require('../shared/cumpl-guardar');   /* _CUMPL_W_V1 */
 const USR = require('../shared/usr-guardar');   /* _USR_AZURE_V1 */
+const MANT = require('../shared/mant-guardar');   /* _MANT_AZURE_V1 */
 
 async function ponerEstado(pool, clave, valor) {
   await pool.request().input('k', sql.NVarChar(40), clave).input('v', sql.NVarChar(400), valor)
@@ -74,6 +76,9 @@ module.exports = async function (context, req) {
     if (accion === 'capApagar') { await ponerEstado(pool, 'cap_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
     if (accion === 'capSimular') { const r = await CAP.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', b.rol || 'administrador', true); return res(r.status, r.body); }
     /* _USR_AZURE_V1 */
+    if (accion === 'mantEncender') { await ponerEstado(pool, 'mant_azure_primero', '1'); return res(200, { success: true, encendido: true }); }   /* _MANT_AZURE_V1 */
+    if (accion === 'mantApagar') { await ponerEstado(pool, 'mant_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
+    if (accion === 'mantSimular') { const r = await MANT.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true, b.ahora); return res(r.status, Object.assign({ success: !!r.body.ok }, r.body)); }
     if (accion === 'usrEncender') { await ponerEstado(pool, 'usr_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
     if (accion === 'usrApagar') { await ponerEstado(pool, 'usr_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
     if (accion === 'usrSimular') { const r = await USR.ejecutar(pool, b.accion, b.datos || {}, b.operador || 'jtimoteo', true, b.ahora); return res(r.status, r.body); }

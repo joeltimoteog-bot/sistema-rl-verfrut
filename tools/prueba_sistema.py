@@ -27,6 +27,7 @@ USRG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _USR_AZURE_V1  ok | cai
 CUMPLW = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _CUMPL_W_V1  ok | caido
 SOLG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _SOL_AZURE_V1  ok | caido
 FUSG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _FUS_AZURE_V1  ok | caido | 503
+MANTG = {'modo': 'ok', 'llamadas': [], 'auth': [], 'cuerpos': []}   # _MANT_AZURE_V1  ok | rechazo | caido | 503
 HORASG = {'modo': 'ok', 'llamadas': [], 'auth': [], 'cuerpos': []}   # _HORAS_AZURE_PRIMERO_V1  ok | rechazo | caido | 503
 
 def accion_de(req):
@@ -100,6 +101,13 @@ def resp_azure(url, post=''):
         acc = url.split('/api/fus/guardar/')[1].split('?')[0]
         FUSG['llamadas'].append(acc)
         return {'success': True, 'fuente': 'azure', 'id': 'FUS-0013'} if acc == 'saveFusion' else {'success': True, 'fuente': 'azure', 'message': 'Fusión actualizada'}
+    if '/api/mant/guardar/' in url:
+        acc = url.split('/api/mant/guardar/')[1].split('?')[0]
+        MANTG['llamadas'].append(acc); MANTG['cuerpos'].append(post)
+        if MANTG['modo'] == 'rechazo': return {'ok': False, 'msg': 'No se encontró la solicitud SOL-999'}
+        if acc == 'guardarSolicitudMantenimiento': return {'ok': True, 'id': 'SOL-018', 'fuente': 'azure'}
+        if acc == 'actualizarEstadoMantenimiento': return {'ok': True, 'id': 'SOL-001', 'estado': 'ATENDIDO', 'fecha': '27/09/2026', 'fuente': 'azure'}
+        return {'ok': True, 'fuente': 'azure'}
     if '/api/horas/guardar/' in url:
         acc = url.split('/api/horas/guardar/')[1].split('?')[0]
         HORASG['llamadas'].append(acc); HORASG['cuerpos'].append(post)
@@ -196,6 +204,14 @@ def enrutar(route):
             if FUSG['modo'] == 'caido':
                 FUSG['llamadas'].append('caido')
                 return route.abort()
+        if '/api/mant/guardar/' in url:
+            MANTG['auth'].append(req.headers.get('authorization', ''))
+            if MANTG['modo'] == 'caido':
+                MANTG['llamadas'].append('caido')
+                return route.abort()
+            if MANTG['modo'] == '503':
+                MANTG['llamadas'].append('503')
+                return route.fulfill(status=503, body='{"ok":false,"apagado":true}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if '/api/horas/guardar/' in url:
             HORASG['auth'].append(req.headers.get('authorization', ''))
             if HORASG['modo'] == 'caido':
@@ -665,6 +681,51 @@ with sync_playwright() as pw:
     ok('Pagina Estadisticas: con Azure caido, sale de Google', r == 'OK' and 'getEstadisticasAdmin' in RED['google'], r)
     MODX['modo'] = 'ok'
     ok('Pagina Estadisticas sin errores de JavaScript', not errores, '; '.join(errores[:4]))
+    pag.close()
+
+    # ───────── MANTENIMIENTO (_MANT_AZURE_V1) ─────────
+    pag = ctx.new_page(); errores = []
+    pag.on('pageerror', lambda e: errores.append((str(e)+' @ '+(e.stack or '').split('\n')[1:3].__str__())[:400]))
+    pag.goto(BASE + 'frontend/pages/mantenimiento.html', wait_until='load'); pag.wait_for_timeout(3000)
+    MPOST = """async (b) => { const r = await fetch(API, {method:'POST', body: JSON.stringify(b), headers:{'Content-Type':'text/plain'}}); return await r.json(); }"""
+    MANTG['llamadas'].clear(); MANTG['auth'].clear(); MANTG['cuerpos'].clear(); RED['google'].clear()
+    r = pag.evaluate("""async () => { const b = {action:'guardarSolicitudMantenimiento', dni:'73332618', nombre:'TINEO', kilometraje:'995', tipoMantenimiento:'Preventivo', solicitante:'jtimoteo'};
+        const f = () => fetch(API, {method:'POST', body: JSON.stringify(b), headers:{'Content-Type':'text/plain'}}).then(r => r.json());
+        const x = await Promise.all([f(), f()]); return x.map(d => (d && d.fuente) + ':' + (d && d.ok) + ':' + (d && d.id)).join(','); }""")
+    ok('Mantenimiento: solicitud nueva se guarda en Azure (N° de Azure, una sola vez con doble clic) y NO por Google', r == 'azure:true:SOL-018,azure:true:SOL-018' and MANTG['llamadas'] == ['guardarSolicitudMantenimiento'] and 'guardarSolicitudMantenimiento' not in RED['google'], r + ' | azure: ' + ','.join(MANTG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    ok('Mantenimiento: va con el token y la huella, y espera que Google copie a la hoja (y mande el correo)', MANTG['auth'] and MANTG['cuerpos'] and MANTG['auth'][0].startswith('Bearer ') and '"client_id":"mant-' in MANTG['cuerpos'][0] and '"action"' not in MANTG['cuerpos'][0] and 'cvAplicarDesdeAzure' in RED['google'], str(MANTG['auth'][:1]) + ' | ' + (MANTG['cuerpos'][0][:120] if MANTG['cuerpos'] else 'Azure no recibio nada') + ' | google: ' + ','.join(RED['google']))
+    MANTG['llamadas'].clear(); RED['google'].clear()
+    pag.evaluate("""async () => { nuevaSolicitud(); for (const [id, v] of [['dni','73332618'],['nombre','TINEO'],['kilometraje','995']]) document.getElementById(id).value = v;
+        document.getElementById('tipoMant').value = document.getElementById('tipoMant').options[1].value; document.getElementById('tipoLicencia').value = document.getElementById('tipoLicencia').options[1].value; await enviarSolicitud(); }""")
+    pag.wait_for_timeout(600)
+    t = pag.evaluate("() => document.getElementById('solicitudId').textContent + ' | visible=' + document.getElementById('confirmMsg').classList.contains('show')")
+    ok('Mantenimiento (pantalla): ENVIAR SOLICITUD muestra el N° que dio Azure', 'SOL-018' in t and 'visible=True' in t.replace('true', 'True') and MANTG['llamadas'] == ['guardarSolicitudMantenimiento'] and 'guardarSolicitudMantenimiento' not in RED['google'], t + ' | azure: ' + ','.join(MANTG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    MANTG['llamadas'].clear(); RED['google'].clear()
+    pag.evaluate("""async () => { _idActual = 'SOL-001'; document.getElementById('progFecha').value = '2026-09-30'; document.getElementById('progComentario').value = 'Traer 8:00'; await guardarProgramacion(); }""")
+    pag.wait_for_timeout(600)
+    cu = MANTG['cuerpos'][-1] if MANTG['cuerpos'] else ''
+    ok('Mantenimiento (pantalla): Programar va a Azure con la fecha dd/mm/aaaa y NO por Google; luego recarga la lista de Google', MANTG['llamadas'] == ['programarMantenimiento'] and '"fechaProgramada":"30/09/2026"' in cu and 'programarMantenimiento' not in RED['google'] and 'listarSolicitudesMantenimiento' in RED['google'], cu[:160] + ' | google: ' + ','.join(RED['google']))
+    MANTG['llamadas'].clear(); RED['google'].clear()
+    r = pag.evaluate(MPOST, {'action': 'actualizarEstadoMantenimiento', 'id': 'SOL-001', 'estado': 'ATENDIDO', 'admin': 'jtimoteo'})
+    ok('Mantenimiento: Atendida/Cerrar va a Azure y NO por Google', r.get('ok') is True and r.get('fuente') == 'azure' and 'actualizarEstadoMantenimiento' not in RED['google'], json.dumps(r) + ' | google: ' + ','.join(RED['google']))
+    pag.wait_for_timeout(1500)
+    MANTG['modo'] = 'rechazo'; RED['google'].clear()
+    pag.evaluate("() => { window._vistos = []; const t = setInterval(() => { const c = document.getElementById('rlProg'); if (c && c.style.display === 'flex') { const v = (c.classList.contains('fin-no') ? 'NO ' : c.classList.contains('fin-ok') ? 'OK ' : 'GIRA ') + c.querySelector('.t').textContent + ' ' + c.querySelector('.d').textContent; if (window._vistos[window._vistos.length-1] !== v) window._vistos.push(v); } }, 60); setTimeout(() => clearInterval(t), 3000); }")
+    r = pag.evaluate(MPOST, {'action': 'programarMantenimiento', 'id': 'SOL-999', 'fechaProgramada': '30/09/2026'})
+    pag.wait_for_timeout(2500)
+    v = pag.evaluate("() => window._vistos")
+    ok('Mantenimiento: si Azure dice que no, ese es el mensaje y NO se reintenta por Google', r.get('ok') is False and r.get('msg') == 'No se encontró la solicitud SOL-999' and 'programarMantenimiento' not in RED['google'] and 'cvAplicarDesdeAzure' not in RED['google'], json.dumps(r) + ' | google: ' + ','.join(RED['google']))
+    ok('Mantenimiento: el indicador muestra ✗ con el motivo cuando la respuesta es {ok:false}', any(x.startswith('NO No se pudo') and 'SOL-999' in x for x in v), str(v))
+    MANTG['modo'] = 'caido'; RED['google'].clear(); MANTG['llamadas'].clear()
+    r = pag.evaluate(MPOST, {'action': 'guardarSolicitudMantenimiento', 'dni': '1', 'x': 'caido'})
+    ok('Mantenimiento: con Azure caido, se guarda por Google', r.get('ok') is True and 'guardarSolicitudMantenimiento' in RED['google'] and MANTG['llamadas'].count('caido') == 2, json.dumps(r) + ' | azure: ' + ','.join(MANTG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    MANTG['modo'] = '503'; RED['google'].clear(); MANTG['llamadas'].clear()
+    pag.evaluate(MPOST, {'action': 'programarMantenimiento', 'id': 'SOL-002', 'x': 1}); pag.evaluate(MPOST, {'action': 'programarMantenimiento', 'id': 'SOL-003', 'x': 2})
+    ok('Mantenimiento: apagado (503) -> Google, y no vuelve a preguntar a Azure por 5 min', MANTG['llamadas'] == ['503'] and RED['google'].count('programarMantenimiento') == 2, 'azure: ' + ','.join(MANTG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    MANTG['modo'] = 'ok'; RED['google'].clear()
+    r = pag.evaluate("""async () => { const r = await fetch(API + '?' + new URLSearchParams({action:'listarSolicitudesMantenimiento'})); const d = await r.json(); return d && d.ok; }""")
+    ok('Mantenimiento: las consultas (listar) siguen por Google', r is True and 'listarSolicitudesMantenimiento' in RED['google'], ','.join(RED['google']))
+    ok('Mantenimiento sin errores de JavaScript', not errores, '; '.join(errores[:4]))
     pag.close()
 
     # ───────── CALCULO REMUNERATIVO y LOGIN ─────────

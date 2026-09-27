@@ -112,7 +112,7 @@
       if (!resp.ok) { fin(false, 'HTTP ' + resp.status, definitivo); return; }
       resp.clone().text().then(function (t) {
         var j = null; try { j = JSON.parse(t); } catch (e) {}
-        if (j && (j.success === false || j.error)) fin(false, j.error || 'No se completo', definitivo);
+        if (j && (j.success === false || j.ok === false || j.error)) fin(false, j.error || j.msg || j.mensaje || 'No se completo', definitivo);   /* Mantenimiento responde {ok, msg} */
         else fin(true);
       }, function () { fin(true); });
     }, function (e) { fin(false, 'Sin conexion', !c.azure); });
