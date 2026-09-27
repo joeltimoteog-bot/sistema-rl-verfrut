@@ -64,6 +64,7 @@ def resp_azure(url, post=''):
         if acc == 'estadisticasCapacitaciones': base.update({'esAdmin': True, 'stats': {}})
         if acc in ('getFusiones', 'getSolicitudes', 'getMotivosCasos'): base['data'] = []
         if acc == 'invGetAll': base.update({'productos': [], 'ingresos': [], 'entregas': []})
+        if acc == 'getEstadisticasAdmin': base['data'] = {'stats': {'atenciones': {'total': 5, 'enProceso': 1, 'finalizados': 4, 'esteMes': 2}, 'visitas': {'total': 0, 'enPlazo': 0, 'retrasadas': 0, 'esteMes': 0}, 'casos': {'total': 0, 'enPlazo': 0, 'retrasados': 0, 'esteMes': 0}, 'fusiones': {'total': 0, 'pendientes': 0, 'validados': 0, 'trabajadores': 0, 'esteMes': 0}}, 'porSupervisor': {}, 'tendencia': [], 'filtros': {'anio': '', 'mes': ''}}
         return base
     if '/api/atenciones/guardar' in url:
         AZG['llamadas'].append('guardar'); AZG['cuerpos'].append(post)
@@ -221,6 +222,13 @@ with sync_playwright() as pw:
     MODX['modo'] = 'caido'; RED['google'].clear()
     r = pag.evaluate("""async () => { const d = await apiGet({action:'getFusiones', usuario:'TODOS'}); return d && d.success ? 'OK' : 'ERROR'; }""")
     ok('Fusiones: con Azure caido, sale de Google', r == 'OK' and 'getFusiones' in RED['google'], r)
+    # ── Estadisticas Admin desde Azure (_ESTADM_AZURE_V1) ──
+    MODX['modo'] = 'ok'; RED['google'].clear(); MODX['llamadas'].clear()
+    r = pag.evaluate("""async () => { const d = await apiGet({action:'getEstadisticasAdmin', empresa:'', mes:'', supervisor:'', rol:'administrador'}); return (d && d.fuente) + ':' + (d && d.data && d.data.stats.atenciones.total); }""")
+    ok('Estadisticas Admin (dashboard) salen de Azure', r == 'azure:5' and 'getEstadisticasAdmin' not in RED['google'] and 'estadm/getEstadisticasAdmin' in MODX['llamadas'], r + ' | google: ' + ','.join(RED['google']))
+    MODX['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiGet({action:'getEstadisticasAdmin', empresa:'', mes:'', supervisor:''}); return d && d.success ? 'OK' : 'ERROR'; }""")
+    ok('Estadisticas Admin: con Azure caido, sale de Google', r == 'OK' and 'getEstadisticasAdmin' in RED['google'], r)
     MODX['modo'] = 'ok'
     RED['google'].clear()
     r = pag.evaluate(CARRERA, {'action': 'saveFusion', 'x': 1})
@@ -463,6 +471,20 @@ with sync_playwright() as pw:
     r = pag.evaluate("""async () => { const d = await apiGet({action:'invGetAll'}); return (d && d.fuente) + ':' + (d && d.success); }""")
     ok('Inventario: la carga sale de Azure', r == 'azure:true' and 'invGetAll' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     ok('Inventario sin errores de JavaScript', not errores, '; '.join(errores[:4]))
+    pag.close()
+
+    # ───────── ESTADISTICAS ADMIN (_ESTADM_AZURE_V1) ─────────
+    pag = ctx.new_page(); errores = []
+    pag.on('pageerror', lambda e: errores.append((str(e)+' @ '+(e.stack or '').split('\n')[1:3].__str__())[:400]))
+    RED['google'].clear(); MODX['llamadas'].clear()
+    pag.goto(BASE + 'frontend/pages/estadisticas.html', wait_until='load'); pag.wait_for_timeout(3500)
+    r = pag.evaluate("""async () => { const d = await apiGet({action:'getEstadisticasAdmin', empresa:'RAPEL', mes:'', supervisor:'', anio:'2025'}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Pagina Estadisticas: los datos salen de Azure', r == 'azure:true' and 'getEstadisticasAdmin' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    MODX['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiGet({action:'getEstadisticasAdmin', empresa:'', anio:'2025'}); return d && d.success ? 'OK' : 'ERROR'; }""")
+    ok('Pagina Estadisticas: con Azure caido, sale de Google', r == 'OK' and 'getEstadisticasAdmin' in RED['google'], r)
+    MODX['modo'] = 'ok'
+    ok('Pagina Estadisticas sin errores de JavaScript', not errores, '; '.join(errores[:4]))
     pag.close()
 
     # ───────── CALCULO REMUNERATIVO y LOGIN ─────────

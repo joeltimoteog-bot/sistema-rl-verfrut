@@ -15,7 +15,9 @@ const HANDLERS = {
   fus:      { crear: require('../shared/mod-snap').crear, acciones: { getFusiones: 'getFusiones' } },
   sol:      { crear: require('../shared/mod-snap').crear, acciones: { getSolicitudes: 'getSolicitudes' } },
   casosaux: { crear: require('../shared/mod-snap').crear, acciones: { getMotivosCasos: 'getMotivosCasos' } },
-  inv:      { crear: require('../shared/mod-snap').crear, acciones: { invGetAll: 'invGetAll' } }
+  inv:      { crear: require('../shared/mod-snap').crear, acciones: { invGetAll: 'invGetAll' } },
+  /* _ESTADM_AZURE_V1: Estadisticas Admin (atenciones directo de SQL) */
+  estadm:   { crear: require('../shared/mod-estadm').crear, acciones: { getEstadisticasAdmin: 'getEstadisticasAdmin' } }
 };
 /* memoria por version: cada consulta pregunta solo la hora de la ultima carga (consulta
    minima); si no cambio, reutiliza lo ya leido. Asi, apenas Google sube un cambio
@@ -42,7 +44,7 @@ module.exports = async function (context, req) {
   try {
     const m = await datos(modulo);
     if (!m) { context.res = { status: 503, body: { success: false, error: 'Modulo aun no migrado a Azure' } }; return; }
-    const out = m[fn](req.body || {});
+    const out = await m[fn](req.body || {});   /* _ESTADM_AZURE_V1: admite calculos async */
     out.fuente = 'azure';
     context.res = { status: 200, body: out };
   } catch (e) {
