@@ -21,6 +21,7 @@ PERMX = {'resp': None, 'gas_falla': False}
 CUMPL = {'modo': 'ok', 'llamadas': []}   # ok | caido | 503
 AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
 MODX = {'modo': 'ok', 'llamadas': []}
+CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -78,6 +79,14 @@ def resp_azure(url, post=''):
                 'config': {'aviso_proximo_dias': 2, 'critico_dias': 5, 'escalar_dias': 3, 'excelente': 90, 'regular': 70},
                 'actividades': [], 'resumen': {'EN_PLAZO': 0, 'PROXIMO': 0, 'VENCE_HOY': 0, 'VENCIDO': 0, 'CRITICO': 0},
                 'restriccion': {'activa': False, 'modulos': [], 'criticos': 0, 'motivo': '', 'exonerado_hasta': ''}, 'indice': None, 'fuente': 'azure'}
+    if '/api/cv/guardar/' in url:
+        acc = url.split('/api/cv/guardar/')[1].split('?')[0]
+        CVG['llamadas'].append(acc)
+        r = {'success': True, 'fuente': 'azure'}
+        if acc in ('saveCaso', 'saveVisita'): r['nro'] = 555
+        if acc == 'saveVisita': r.update({'estado': 'EN PLAZO', 'fotos_count': 0, 'enlace_informe': ''})
+        if acc.startswith('eliminar'): r.update({'mensaje': 'archivado', 'eliminado_por': 'jtimoteo'})
+        return r
     if '/api/cv/' in url:
         acc = url.split('/api/cv/')[1].split('?')[0]
         CV['llamadas'].append(acc)
@@ -141,6 +150,9 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+        if '/api/cv/guardar/' in url and CVG['modo'] == 'caido':
+            CVG['llamadas'].append('caido')
+            return route.abort()
         if '/api/mod/' in url and MODX['modo'] == 'caido':
             MODX['llamadas'].append('caido')
             return route.abort()
@@ -233,6 +245,21 @@ with sync_playwright() as pw:
     RED['google'].clear()
     r = pag.evaluate(CARRERA, {'action': 'saveFusion', 'x': 1})
     ok('Fusiones: guardar sigue por Google', r['r'] == 'OK' and 'saveFusion' in RED['google'], r['r'])
+    # ── Casos y Visitas: primero en Azure (_CV_AZURE_PRIMERO_V1) ──
+    RED['google'].clear(); CVG['llamadas'].clear()
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'saveCaso', dni:'70000001', nombre:'PRUEBA CV', motivo:'Hurto'}); await new Promise(z => setTimeout(z, 600)); return (d && d.fuente) + ':' + (d && d.nro); }""")
+    ok('Caso nuevo: se guarda en Azure (N° de Azure) y NO pasa por Google', r == 'azure:555' and 'saveCaso' not in RED['google'] and CVG['llamadas'] == ['saveCaso'], r + ' | google: ' + ','.join(RED['google']))
+    ok('Caso nuevo: Google copia a la hoja en 2do plano (cvAplicarDesdeAzure)', 'cvAplicarDesdeAzure' in RED['google'], ','.join(RED['google']))
+    RED['google'].clear(); CVG['llamadas'].clear()
+    r = pag.evaluate("""async () => { const x = await Promise.all([apiPost({action:'updateCaso', nro:5, estado_gestion:'CERRADO'}), apiPost({action:'updateCaso', nro:5, estado_gestion:'CERRADO'})]); return x.map(d => d && d.fuente).join(','); }""")
+    ok('Caso: doble clic en editar = una sola operacion en Azure', r == 'azure,azure' and CVG['llamadas'] == ['updateCaso'], r + ' | azure: ' + ','.join(CVG['llamadas']))
+    RED['google'].clear(); CVG['llamadas'].clear()
+    r = pag.evaluate("""async () => { const x = await Promise.all([apiPost({action:'saveVisita', empresa:'RAPEL', asunto:'x'}), apiPost({action:'eliminarVisita', nro:9, usuario:'jtimoteo'}), apiPost({action:'eliminarCaso', nro:9, usuario:'jtimoteo', motivo:'motivo de prueba largo'})]); return x.map(d => (d && d.fuente) + ':' + (d && d.success)).join(','); }""")
+    ok('Visita nueva y eliminar visita/caso van a Azure', r == 'azure:true,azure:true,azure:true' and not any(a in RED['google'] for a in ['saveVisita', 'eliminarVisita', 'eliminarCaso']), r + ' | google: ' + ','.join(RED['google']))
+    CVG['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'saveVisita', empresa:'RAPEL', asunto:'respaldo'}); return d && d.success ? 'OK' : 'ERROR'; }""")
+    ok('Visita: con Azure caido, se guarda por Google', r == 'OK' and 'saveVisita' in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    CVG['modo'] = 'ok'
     # ── Nueva Atencion: primero en Azure ──
     AT = {'action': 'saveAtencion', 'dni': '87654321', 'nombre': 'PRUEBA AZURE', 'empresa': 'RAPEL', 'detalle_documento': 'X', 'usuario_sistema': 'jtimoteo'}
     RED['google'].clear(); RED['gurl'].clear(); AZG['llamadas'].clear(); AZG['cuerpos'].clear()
