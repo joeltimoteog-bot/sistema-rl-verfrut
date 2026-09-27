@@ -23,6 +23,7 @@ AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
 MODX = {'modo': 'ok', 'llamadas': []}
 CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
 CAPG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _CAP_AZURE_PRIMERO_V1
+CUMPLW = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _CUMPL_W_V1  ok | caido
 SOLG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _SOL_AZURE_V1  ok | caido
 FUSG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _FUS_AZURE_V1  ok | caido | 503
 HORASG = {'modo': 'ok', 'llamadas': [], 'auth': [], 'cuerpos': []}   # _HORAS_AZURE_PRIMERO_V1  ok | rechazo | caido | 503
@@ -74,6 +75,10 @@ def resp_azure(url, post=''):
     if '/api/atenciones/guardar' in url:
         AZG['llamadas'].append('guardar'); AZG['cuerpos'].append(post)
         return {'success': True, 'nro': 777, 'hoja': 'BB. DE REGISTROS 2026', 'fuente': 'azure', 'fecha_atencion': '2026-09-26', 'hora_inicio': '08:00', 'estado': 'EN PROCESO', 'parentesco': '', 'nro_licencia': ''}
+    if '/api/cumpl/guardar/' in url:
+        acc = url.split('/api/cumpl/guardar/')[1].split('?')[0]
+        CUMPLW['llamadas'].append(acc); CUMPLW['cuerpos'].append(post)
+        return {'success': True, 'fuente': 'azure', 'hasta': '2026-10-04', 'cambios': 1, 'config': {}}
     if '/api/cumpl/' in url:
         acc = url.split('/api/cumpl/')[1].split('?')[0]
         CUMPL['llamadas'].append(acc)
@@ -170,6 +175,9 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+        if '/api/cumpl/guardar/' in url and CUMPLW['modo'] == 'caido':
+            CUMPLW['llamadas'].append('caido')
+            return route.abort()
         if '/api/sol/guardar/' in url:
             SOLG['auth'].append(req.headers.get('authorization', ''))
             if SOLG['modo'] == 'caido':
@@ -307,6 +315,28 @@ with sync_playwright() as pw:
     r = pag.evaluate(CARRERA, {'action': 'resolverSolicitud', 'fila': 4, 'estado': 'RECHAZADA'})
     ok('Solicitudes: con Azure caido, resolver va por Google', r['r'] == 'OK' and 'resolverSolicitud' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
     SOLG['modo'] = 'ok'
+    # ── Cumplimiento: escrituras primero en Azure (_CUMPL_W_V1) y justificacion al cerrar fuera de plazo (_CUMPL_JUST_FIX_V1) ──
+    pag.wait_for_timeout(500); CUMPLW['llamadas'].clear(); RED['google'].clear()
+    r = pag.evaluate("""async () => { const x = await Promise.all([apiPost({action:'cumplConfigGuardar', usuario:'jtimoteo', rol:'administrador', config:{critico_dias:6}}), apiPost({action:'cumplRestriccionLevantar', usuario:'jtimoteo', rol:'administrador', objetivo:'ptamayo', dias:7, motivo:'x'})]); await new Promise(z => setTimeout(z, 500)); return x.map(d => (d && d.fuente) + ':' + (d && d.success)).join(','); }""")
+    ok('Cumplimiento: cambiar plazos y levantar restriccion van a Azure y NO por Google', r == 'azure:true,azure:true' and sorted(CUMPLW['llamadas']) == ['cumplConfigGuardar', 'cumplRestriccionLevantar'] and not any(a in RED['google'] for a in ['cumplConfigGuardar', 'cumplRestriccionLevantar']), r + ' | azure: ' + ','.join(CUMPLW['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    pag.wait_for_timeout(500); CUMPLW['llamadas'].clear(); CUMPLW['cuerpos'].clear(); CVG['llamadas'].clear(); RED['google'].clear()
+    pag.evaluate("""() => { window._rj = null; apiPost({action:'updateCaso', nro: 5, estado_gestion: 'CERRADO', fecha_limite: '2026-09-01', usuario: 'jtimoteo'}).then(r => window._rj = r); }""")
+    pag.wait_for_timeout(1500)
+    modal = pag.evaluate("() => !!document.getElementById('cumplJustTxt')")
+    ok('Cerrar un caso FUERA de plazo (Casos en Azure): pide la justificacion ANTES de guardar', modal and CVG['llamadas'] == [], 'ventana: ' + str(modal) + ' | azure casos: ' + ','.join(CVG['llamadas']))
+    if modal:
+        pag.fill('#cumplJustTxt', 'Demora por falta de documentos del trabajador'); pag.evaluate("() => document.getElementById('cumplJO').click()"); pag.wait_for_timeout(2500)
+    cuerpo = ''.join(CUMPLW['cuerpos'])
+    ok('... y con el motivo: cierra el caso en Azure y registra la justificacion en Azure', CVG['llamadas'] == ['updateCaso'] and CUMPLW['llamadas'] == ['cumplJustificar'] and 'Demora por falta' in cuerpo and 'cumplJustificar' not in RED['google'], 'casos: ' + ','.join(CVG['llamadas']) + ' | cumpl: ' + ','.join(CUMPLW['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    CVG['llamadas'].clear()
+    pag.evaluate("""() => { window._rj2 = null; apiPost({action:'updateCaso', nro: 6, estado_gestion: 'CERRADO', fecha_limite: '2026-09-01', usuario: 'jtimoteo'}).then(r => window._rj2 = r); }""")
+    pag.wait_for_timeout(1200); pag.evaluate("() => { const b = document.getElementById('cumplJC'); if (b) b.click(); }"); pag.wait_for_timeout(600)
+    r = pag.evaluate("() => JSON.stringify(window._rj2)")
+    ok('... y si cancela la justificacion, el caso NO se cierra', CVG['llamadas'] == [] and 'Debes registrar el motivo' in (r or ''), (r or '') + ' | casos: ' + ','.join(CVG['llamadas']))
+    CUMPLW['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'cumplRestriccionLevantar', 'usuario': 'jtimoteo', 'rol': 'administrador', 'objetivo': 'ptamayo'})
+    ok('Cumplimiento: con Azure caido, se guarda por Google', r['r'] == 'OK' and 'cumplRestriccionLevantar' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
+    CUMPLW['modo'] = 'ok'
     # ── Casos y Visitas: primero en Azure (_CV_AZURE_PRIMERO_V1) ──
     RED['google'].clear(); CVG['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiPost({action:'saveCaso', dni:'70000001', nombre:'PRUEBA CV', motivo:'Hurto'}); await new Promise(z => setTimeout(z, 600)); return (d && d.fuente) + ':' + (d && d.nro); }""")
@@ -355,8 +385,9 @@ with sync_playwright() as pw:
         r = pag.evaluate(CARRERA, {'action': 'cumplPendientes', 'usuario': 'jtimoteo', 'rol': 'administrador'})
         ok('Cumplimiento: con Azure ' + modo + ', se usa Google', r['r'] == 'OK' and 'cumplPendientes' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms | google: ' + ','.join(RED['google']))
     CUMPL['modo'] = 'ok'
+    CUMPLW['llamadas'].clear(); RED['google'].clear()
     r = pag.evaluate(CARRERA, {'action': 'cumplJustificar', 'usuario': 'jtimoteo', 'nro': 1, 'justificacion': 'prueba de justificacion'})
-    ok('Cumplimiento: justificar sigue guardando en Google', r['r'] == 'OK' and 'cumplJustificar' in RED['google'] and 'cumplJustificar' not in CUMPL['llamadas'], r['r'] + ' | azure: ' + ','.join(CUMPL['llamadas']))
+    ok('Cumplimiento: justificar se guarda en Azure (_CUMPL_W_V1) y NO por Google', r['r'] == 'OK' and CUMPLW['llamadas'] == ['cumplJustificar'] and 'cumplJustificar' not in RED['google'], r['r'] + ' | azure: ' + ','.join(CUMPLW['llamadas']) + ' | google: ' + ','.join(RED['google']))
     # ── Acceso a Modulos migrado a Azure ──
     ok('Acceso: al entrar, los permisos se leen de Azure (no de Google)', 'permisosListar' in ACC['llamadas'] and 'permisosListar' not in RED['google'],
        'azure: ' + ','.join(ACC['llamadas']) + ' | google tiene permisosListar: ' + str('permisosListar' in RED['google']))

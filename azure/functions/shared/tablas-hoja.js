@@ -33,6 +33,18 @@ const ESQ = {
     ['ruta1', 't400'], ['codigo1', 'n'], ['personal1', 'n'], ['ruta2', 't400'], ['codigo2', 'n'], ['personal2', 'n'],
     ['ruta3', 't400'], ['codigo3', 'n'], ['personal3', 'n'], ['motivo', 't1000'], ['observaciones', 't2000'],
     ['foto1', 't1000'], ['foto2', 't1000'], ['foto3', 't1000'], ['estado', 't30']] },
+  /* _CUMPL_W_V1 (27-set): hojas de Cumplimiento (JUSTIF, RESTRICC y CONFIG las escribe Azure; HISTORIAL la sigue escribiendo Google) */
+  cumpl_justif: { tabla: 'dbo.Cumpl_Justif', cols: [
+    ['fecha', 'f'], ['hora', 'f'], ['usuario', 't100'], ['nombre', 't200'], ['caso', 'n'], ['actividad', 't300'], ['fecha_limite', 'f'],
+    ['dias_retraso', 'n'], ['justificacion', 't4000'], ['fecha_regularizacion', 'f']] },
+  cumpl_restricc: { tabla: 'dbo.Cumpl_Restricc', cols: [
+    ['fecha', 'f'], ['hora', 'f'], ['usuario', 't100'], ['tipo', 't30'], ['motivo', 't2000'], ['por', 't100'], ['vigente_hasta', 'f']] },
+  cumpl_config: { tabla: 'dbo.Cumpl_Config', cols: [
+    ['clave', 't100'], ['valor', 't1000'], ['descripcion', 't1000'], ['actualizado_hoja', 'f'], ['por', 't100']] },   /* 'actualizado' ya lo usa la tabla */
+  cumpl_historial: { tabla: 'dbo.Cumpl_Historial', cols: [
+    ['fecha', 'f'], ['hora', 'f'], ['usuario', 't100'], ['actividad', 't300'], ['caso', 'n'], ['estado_anterior', 't100'], ['estado_nuevo', 't100'],
+    ['documentos', 't1000'], ['fecha_limite', 'f'], ['fecha_cumplimiento', 'f'], ['dias_retraso', 'n'], ['justificacion', 't4000'],
+    ['modificado_por', 't100'], ['detalle', 't1000']] },
   /* _SOL_AZURE_V1 (27-set): Solicitudes de edicion de visitas */
   sol_edicion: { tabla: 'dbo.Solicitudes_Edicion', cols: [
     ['nro', 'n'], ['fecha_solicitud', 'f'], ['nro_visita', 'n'], ['supervisor', 't200'], ['empresa', 't20'], ['fundo', 't100'], ['semana', 'n'],

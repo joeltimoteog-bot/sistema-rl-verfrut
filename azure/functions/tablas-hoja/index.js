@@ -34,7 +34,7 @@ module.exports = async function (context, req) {
       const tx = new sql.Transaction(pool); await tx.begin();
       try {
         /* _HORAS_AZURE_PRIMERO_V1: si Azure guardo algo despues de que Google leyo la hoja, esa foto ya esta vieja: no se cambia */
-        const tipoOp = clave.indexOf('horas_') === 0 ? 'horas' : (clave.indexOf('cap_') === 0 ? 'cap' : (clave.indexOf('fus_') === 0 ? 'fus' : (clave.indexOf('sol_') === 0 ? 'sol' : '')));   /* _FUS_AZURE_V1: + fus · _SOL_AZURE_V1: + sol */
+        const tipoOp = clave.indexOf('horas_') === 0 ? 'horas' : (clave.indexOf('cap_') === 0 ? 'cap' : (clave.indexOf('fus_') === 0 ? 'fus' : (clave.indexOf('sol_') === 0 ? 'sol' : (clave.indexOf('cumpl_') === 0 && clave !== 'cumpl_historial' ? 'cumpl' : ''))));   /* _CUMPL_W_V1: + cumpl (el historial lo escribe Google) */   /* _FUS_AZURE_V1: + fus · _SOL_AZURE_V1: + sol */
         if (tipoOp && b.leidoMs) {
           await new sql.Request(tx).query(`EXEC sp_getapplock @Resource = '${tipoOp}_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;`);
           const nOps = (await new sql.Request(tx).input('t', sql.NVarChar(20), tipoOp).input('l', sql.DateTime2(0), new Date(+b.leidoMs - 2000))

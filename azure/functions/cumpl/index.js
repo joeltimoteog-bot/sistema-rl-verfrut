@@ -13,6 +13,8 @@ const cumplDb = require('../shared/cumpl-db');
 const cvDb = require('../shared/cv-db');
 const { crearMotor } = require('../shared/cumpl-motor');
 const TC = require('../shared/tablas-cv');   /* _TABLAS_CV_V2 */
+const CUW = require('../shared/cumpl-guardar');   /* _CUMPL_W_V1: config y restricciones desde sus tablas reales */
+const TH = require('../shared/tablas-hoja');
 
 function token(req) {
   const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
@@ -24,8 +26,12 @@ function token(req) {
 let cache = { t: 0, D: null, recientes: null };
 const CACHE_MS = 30000;
 async function datos() {
-  if (cache.D && Date.now() - cache.t < CACHE_MS) return cache;
-  const pool = await getPool(); await cumplDb.asegurarTablas(pool); await cvDb.asegurarTablas(pool);
+  const pool = await getPool();
+  /* _CUMPL_W_V1: si cambio la config o una restriccion (guardado en Azure), no esperar los 30 s */
+  let marcaW = null;
+  try { marcaW = await TH.marcas(pool, ['cumpl_config', 'cumpl_restricc']); } catch (e) {}
+  if (cache.D && Date.now() - cache.t < CACHE_MS && cache.marcaW === marcaW) return cache;
+  await cumplDb.asegurarTablas(pool); await cvDb.asegurarTablas(pool);
   const r = await pool.request().query('SELECT clave, datos FROM dbo.CUMPL_Datos');
   const D = {};
   r.recordset.forEach(f => { D[f.clave] = JSON.parse(f.datos); });
@@ -39,7 +45,8 @@ async function datos() {
     const c = await pool.request().query('SELECT datos FROM dbo.CV_Casos WHERE reciente = 1 ORDER BY orden');
     recientes = c.recordset.map(x => JSON.parse(x.datos)).filter(x => x.nro !== '' && x.nro !== null && x.nro !== undefined);
   }
-  cache = { t: Date.now(), D, recientes };
+  if (marcaW) { try { const w = await CUW.paraMotor(pool); if (w) { D.config = w.config; D.restricc = w.restricc; } } catch (e) {} }   /* _CUMPL_W_V1 */
+  cache = { t: Date.now(), D, recientes, marcaW };
   return cache;
 }
 
