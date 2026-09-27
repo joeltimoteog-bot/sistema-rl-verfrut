@@ -438,7 +438,7 @@ function hoy(){return new Date().toISOString().split('T')[0];}
 function fmtF(f){if(!f)return '';return String(f).split('T')[0];}
 function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[String(e||'').toUpperCase()]||'bam';}
 function estC(e){const s=String(e||'').toUpperCase();return s==='EN PROCESO'?'bpr':s==='FINALIZADO'?'brs':'bp';}
-function abrir(id){document.getElementById(id).classList.add('on');}
+function abrir(id){const el=document.getElementById(id);window._rlZ=(window._rlZ||300)+1;el.style.zIndex=window._rlZ;el.classList.add('on');}   /* _CAPAS_V1 (27-set): el ultimo abierto queda encima */
 function cerrar(id){document.getElementById(id).classList.remove('on');}
 function _destroyChart(key){ if(charts[key]){ charts[key].destroy(); delete charts[key]; } }
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}

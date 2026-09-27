@@ -153,6 +153,7 @@ h3{font-size:16px !important}
 </style>
 <link rel="stylesheet" href="../css/rl-theme.css">
 <script>(function(){if(localStorage.getItem('rl_theme')!=='classic' && localStorage.getItem('rl_dark')!=='1'){document.documentElement.classList.add('theme-glass');}})();</script>
+<script src="/sistema-rl-verfrut/frontend/js/progreso.js"></script>  <!-- _PROGRESO_V1 (27-set): "Guardando… / Eliminando…" y ✓ en todos los modulos -->
 </head>
 <body>
 
@@ -616,7 +617,7 @@ function actualizarPeriodo(){
   const el = document.getElementById('eval_periodo_display');
   if (el) el.value = f ? periodoLabel(periodoDe(f)) : '';
 }
-function abrir(id){document.getElementById(id).classList.add('on');}
+function abrir(id){const el=document.getElementById(id);window._rlZ=(window._rlZ||300)+1;el.style.zIndex=window._rlZ;el.classList.add('on');}   /* _CAPAS_V1 (27-set): el ultimo abierto queda encima */
 function cerrar(id){document.getElementById(id).classList.remove('on');}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
 function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[String(e||'').toUpperCase()]||'bam';}

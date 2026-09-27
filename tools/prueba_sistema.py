@@ -357,6 +357,16 @@ with sync_playwright() as pw:
     r = pag.evaluate(CARRERA, {'action': 'updateUsuario', 'usuario': 'ptamayo', 'activo': True})
     ok('Usuarios: con Azure caido, va por Google', r['r'] == 'OK' and 'updateUsuario' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
     USRG['modo'] = 'ok'
+    # ── _CAPAS_V1: 'Eliminar caso' se abre ENCIMA del formulario del caso · _PROGRESO_V1: circulo y ✓ ──
+    pag.evaluate("() => { const n = document.getElementById('rlNovOv'); if (n) n.remove(); }")
+    pag.wait_for_function("() => { const c = document.getElementById('rlProg'); return !c || c.style.display !== 'flex'; }", timeout=8000)
+    r = pag.evaluate("""() => { _editandoCasoNro = 5; abrir('mCaso'); abrirModalEliminarCaso(); const m = document.getElementById('mEliminarCaso').getBoundingClientRect();
+        const e = document.elementFromPoint(m.left + m.width/2, m.top + m.height/2); const ok = !!(e && e.closest('#mEliminarCaso')); const q = e ? (e.id || '') + '.' + String(e.className || '').slice(0,40) + ' en ' + ((e.closest('[id]') || {}).id || '') + ' z=' + getComputedStyle(e.closest('.ov') || e).zIndex : 'nada'; const zE = document.getElementById('mEliminarCaso').style.zIndex; cerrar('mEliminarCaso'); cerrar('mCaso'); return ok ? true : ('tapa: ' + q + ' | z eliminar=' + zE + ' | rect=' + JSON.stringify([m.left, m.top, m.width, m.height])); }""")
+    ok('Eliminar caso: el formulario del motivo se abre ENCIMA del caso (no detras)', r is True, str(r))
+    pag.evaluate("() => { window._vistos = []; const t = setInterval(() => { const c = document.getElementById('rlProg'); if (c && c.style.display === 'flex') { const v = (c.classList.contains('fin-ok') ? 'OK ' : 'GIRA ') + c.querySelector('.t').textContent; if (window._vistos[window._vistos.length-1] !== v) window._vistos.push(v); } }, 60); setTimeout(() => clearInterval(t), 4000); apiPost({action:'updateCaso', nro: 5, estado_gestion: 'EN PROCESO'}); }")
+    pag.wait_for_timeout(4200)
+    v = pag.evaluate("() => window._vistos")
+    ok('Al guardar aparece el circulo "Actualizando…" y luego ✓ "Actualizado"', 'OK Actualizado' in v, str(v))
     # ── Casos y Visitas: primero en Azure (_CV_AZURE_PRIMERO_V1) ──
     RED['google'].clear(); CVG['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiPost({action:'saveCaso', dni:'70000001', nombre:'PRUEBA CV', motivo:'Hurto'}); await new Promise(z => setTimeout(z, 600)); return (d && d.fuente) + ':' + (d && d.nro); }""")
