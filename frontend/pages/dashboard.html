@@ -3812,7 +3812,11 @@ if (!_editandoCasoNro) { mostrarToast('No hay caso en edición'); return; }
     });if (r && r.success) {
       mostrarToast('✅ ' + (r.mensaje || 'Caso archivado'));
       cerrar('mEliminarCaso');cerrar('mCaso');
+      /* _ELIM_CASO_LISTA_V1: quitar el caso de la lista guardada en el navegador (antes seguia visible hasta recargar) */
+      try { const _nroE = String(_editandoCasoNro); if (Array.isArray(CACHE.casos)) CACHE.casos = CACHE.casos.filter(c => String(c.nro) !== _nroE); guardarCacheLS(); } catch (eL) {}
+      _editandoCasoNro = null;
       if (typeof cargarCasos === 'function') cargarCasos();
+      if (typeof cargarCasosSilencioso === 'function') setTimeout(cargarCasosSilencioso, 800);
     } else { mostrarToast('❌ ' + ((r && r.error) || 'Error al eliminar'));
       btn.disabled = false;btn.textContent = '🗑️ Eliminar caso';
     }} catch(e) {
