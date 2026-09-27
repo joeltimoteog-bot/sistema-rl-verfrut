@@ -12,6 +12,7 @@ const { getPool } = require('../shared/db');
 const cumplDb = require('../shared/cumpl-db');
 const cvDb = require('../shared/cv-db');
 const { crearMotor } = require('../shared/cumpl-motor');
+const TC = require('../shared/tablas-cv');   /* _TABLAS_CV_V2 */
 
 function token(req) {
   const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
@@ -29,10 +30,15 @@ async function datos() {
   const D = {};
   r.recordset.forEach(f => { D[f.clave] = JSON.parse(f.datos); });
   if (cumplDb.CLAVES.some(k => D[k] === undefined)) return null;
-  const v = await pool.request().query('SELECT datos FROM dbo.CV_Visitas ORDER BY orden');
-  D.visitas = v.recordset.map(x => JSON.parse(x.datos));
-  const c = await pool.request().query('SELECT datos FROM dbo.CV_Casos WHERE reciente = 1 ORDER BY orden');
-  const recientes = c.recordset.map(x => JSON.parse(x.datos)).filter(x => x.nro !== '' && x.nro !== null && x.nro !== undefined);
+  let recientes;
+  const T = await TC.leerCV(pool);   /* _TABLAS_CV_V2: tablas reales dbo.Casos / dbo.Visitas */
+  if (T) { D.visitas = JSON.parse(JSON.stringify(T.visitas)); recientes = JSON.parse(JSON.stringify(T.recientes)); }   /* copia: el motor no toca la memoria compartida */
+  else {
+    const v = await pool.request().query('SELECT datos FROM dbo.CV_Visitas ORDER BY orden');
+    D.visitas = v.recordset.map(x => JSON.parse(x.datos));
+    const c = await pool.request().query('SELECT datos FROM dbo.CV_Casos WHERE reciente = 1 ORDER BY orden');
+    recientes = c.recordset.map(x => JSON.parse(x.datos)).filter(x => x.nro !== '' && x.nro !== null && x.nro !== undefined);
+  }
   cache = { t: Date.now(), D, recientes };
   return cache;
 }

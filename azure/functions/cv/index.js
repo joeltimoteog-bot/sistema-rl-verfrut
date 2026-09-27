@@ -9,6 +9,7 @@
 const jwt = require('jsonwebtoken');
 const { sql, getPool } = require('../shared/db');
 const { asegurarTablas } = require('../shared/cv-db');
+const TC = require('../shared/tablas-cv');   /* _TABLAS_CV_V2: tablas reales dbo.Casos / dbo.Visitas */
 
 const ROLES_ADMIN_CASOS = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'];
 
@@ -33,10 +34,15 @@ function nombreMatch(a, b) {
 
 async function getCasos(p, t) {
   const pool = await getPool(); await asegurarTablas(pool);
-  const r = await pool.request().input('h', sql.Bit, p.historial ? 1 : 0)
-    .query('SELECT datos FROM dbo.CV_Casos WHERE (@h = 1 OR reciente = 1) ORDER BY orden');
-  let data = r.recordset.map(x => JSON.parse(x.datos));
-  if (!p.historial) data = data.filter(c => c.nro !== '' && c.nro !== null && c.nro !== undefined);
+  let data;
+  const T = await TC.leerCV(pool);   /* _TABLAS_CV_V2 */
+  if (T) data = p.historial ? T.casos : T.recientes;
+  else {
+    const r = await pool.request().input('h', sql.Bit, p.historial ? 1 : 0)
+      .query('SELECT datos FROM dbo.CV_Casos WHERE (@h = 1 OR reciente = 1) ORDER BY orden');
+    data = r.recordset.map(x => JSON.parse(x.datos));
+    if (!p.historial) data = data.filter(c => c.nro !== '' && c.nro !== null && c.nro !== undefined);
+  }
   const rolNorm = String((t && t.rol) || p.rol || '').trim().toLowerCase();
   const esAdmin = ROLES_ADMIN_CASOS.indexOf(rolNorm) >= 0;
   if (!esAdmin) {
@@ -60,8 +66,10 @@ async function getCasos(p, t) {
 
 async function getVisitas(p) {
   const pool = await getPool(); await asegurarTablas(pool);
-  const r = await pool.request().query('SELECT datos FROM dbo.CV_Visitas ORDER BY orden');
-  let data = r.recordset.map(x => JSON.parse(x.datos));
+  const T = await TC.leerCV(pool);   /* _TABLAS_CV_V2 */
+  let data;
+  if (T) data = T.visitas;
+  else data = (await pool.request().query('SELECT datos FROM dbo.CV_Visitas ORDER BY orden')).recordset.map(x => JSON.parse(x.datos));
   if (p.empresa && p.empresa !== 'AMBAS') data = data.filter(v => v.empresa === p.empresa);
   if (p.mes) data = data.filter(v => v.fecha_reg && new Date(v.fecha_reg).getMonth() + 1 == p.mes);
   if (p.supervisor) {
@@ -80,7 +88,7 @@ module.exports = async function (context, req) {
     /* sin datos cargados todavia -> 503 para que la pantalla use la hoja */
     const pool = await getPool(); await asegurarTablas(pool);
     const e = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'ultima_carga'");
-    if (!e.recordset.length) { context.res = { status: 503, body: { success: false, error: 'Casos/visitas aun no migrados a Azure' } }; return; }
+    if (!e.recordset.length && !(await TC.leerCV(pool))) { context.res = { status: 503, body: { success: false, error: 'Casos/visitas aun no migrados a Azure' } }; return; }
     context.res = { status: 200, body: await fn(req.body || {}, token(req)) };
   } catch (err) {
     context.log.error('[cv] ' + accion + ': ' + err.message);

@@ -159,4 +159,21 @@ function esReciente(r, total) {
   return new Date(r.fecha_reg.getTime() - LIMA).getUTCFullYear() >= new Date(Date.now() - LIMA).getUTCFullYear() - 1;
 }
 
-module.exports = { COLS, TABLA, asegurarTablas, armarCarga, casoDeFila, visitaDeFila, esReciente };
+/* _TABLAS_CV_V2: lectura para las pantallas y cumplimiento. Solo relee las tablas cuando
+   cambia la marca de carga (CV_Estado 'tablas_casos' / 'tablas_visitas'); si aun no hay
+   marca devuelve null y quien llama usa el camino anterior. */
+let memoria = { ver: null, d: null };
+async function leerCV(pool) {
+  const e = await pool.request().query("SELECT clave, valor FROM dbo.CV_Estado WHERE clave IN ('tablas_casos', 'tablas_visitas') ORDER BY clave");
+  if (e.recordset.length < 2) return null;
+  const ver = e.recordset.map(x => x.valor).join('|');
+  if (memoria.ver === ver) return memoria.d;
+  const c = (await pool.request().query('SELECT * FROM dbo.Casos ORDER BY fila')).recordset;
+  const v = (await pool.request().query('SELECT * FROM dbo.Visitas ORDER BY fila')).recordset;
+  const d = { casos: c.map(casoDeFila), recientes: c.filter(f => esReciente(f, c.length)).map(casoDeFila),
+              visitas: v.filter(f => f.nro !== null).map(visitaDeFila) };
+  memoria = { ver, d };
+  return d;
+}
+
+module.exports = { COLS, TABLA, asegurarTablas, armarCarga, casoDeFila, visitaDeFila, esReciente, leerCV };

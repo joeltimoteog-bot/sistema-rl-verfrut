@@ -10,14 +10,13 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 const { sql, getPool } = require('../shared/db');
 const TC = require('../shared/tablas-cv');
-const cvDb = require('../shared/cv-db');   /* _TABLAS_CV_V2: CV_Estado guarda la marca de carga */
 
 module.exports = async function (context, req) {
   const tipo = context.bindingData.tipo, accion = context.bindingData.accion;
   const res = (status, body) => { context.res = { status, body }; };
   if (!TC.TABLA[tipo]) return res(404, { success: false, error: 'Tipo desconocido: ' + tipo });
   try {
-    const pool = await getPool(); await cvDb.asegurarTablas(pool); await TC.asegurarTablas(pool, tipo);
+    const pool = await getPool(); await TC.asegurarTablas(pool, tipo);
     const T = TC.TABLA[tipo];
     if (accion === 'estado') {
       const r = await pool.request().query(`SELECT COUNT(*) AS registros, MAX(fila) AS filas,
@@ -42,10 +41,6 @@ module.exports = async function (context, req) {
       try {
         await new sql.Request(tx).query(`DELETE FROM ${T}`);
         if (filas.length) await new sql.Request(tx).bulk(carga);
-        await new sql.Request(tx).input('k', sql.NVarChar(40), 'tablas_' + tipo).input('v', sql.NVarChar(400), String(Date.now()))
-          .query(`MERGE dbo.CV_Estado AS x USING (SELECT @k AS clave) AS s ON x.clave = s.clave
-                  WHEN MATCHED THEN UPDATE SET valor = @v, actualizado = SYSUTCDATETIME()
-                  WHEN NOT MATCHED THEN INSERT (clave, valor) VALUES (@k, @v);`);   /* _TABLAS_CV_V2 */
         await tx.commit();
       } catch (e) { try { await tx.rollback(); } catch (e2) {} throw e; }
       return res(200, { success: true, tabla: T, cargados: filas.length });
