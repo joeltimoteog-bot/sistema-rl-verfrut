@@ -236,6 +236,15 @@ async function ejecutar(pool, accion, b, usuario, prueba) {
       const fila = f.recordset[0];
       if (!fila) {
         await tx.rollback();
+        if (accion === 'eliminarCaso' || accion === 'eliminarVisita') {   /* _CV_YA_ELIMINADO_V1: si ya se archivo antes, no es un error */
+          const ya = await pool.request().input('n', sql.NVarChar(40), String(d.nro))
+            .query(`SELECT TOP 1 eliminado_por, fecha_eliminacion FROM ${ELIM[tipo]} WHERE CAST(nro AS NVARCHAR(40)) = @n ORDER BY id DESC`);
+          if (ya.recordset.length) {
+            const y = ya.recordset[0];
+            return { status: 200, body: { success: true, yaEliminado: true, fuente: 'azure', eliminado_por: y.eliminado_por, fecha: y.fecha_eliminacion,
+              mensaje: (tipo === 'casos' ? 'Caso N° ' : 'Visita N° ') + d.nro + ' ya estaba archivad' + (tipo === 'casos' ? 'o' : 'a') + ' (por ' + y.eliminado_por + ')' } };
+          }
+        }
         return { status: 404, body: { success: false, error: accion === 'eliminarCaso' ? 'Caso N° ' + d.nro + ' no encontrado' : accion === 'eliminarVisita' ? 'Visita N° ' + d.nro + ' no encontrada' : (tipo === 'casos' ? 'Caso no encontrado.' : 'Visita no encontrada.') } };
       }
       if (accion === 'updateCaso' || accion === 'updateVisita') {
