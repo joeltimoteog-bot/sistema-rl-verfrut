@@ -26,6 +26,13 @@ const ESQ = {
   horas_pagadas: { tabla: 'dbo.Horas_Pagadas', cols: [
     ['fecha_registro', 'f'], ['registrado_por', 't60'], ['fecha_del_dia', 'f'], ['dni', 'n'], ['trabajador', 't200'], ['empresa', 't20'],
     ['cargo', 't150'], ['horas_pagadas', 'n'], ['acumulado_antes', 'n'], ['acumulado_despues', 'n'], ['id_registro', 't40'], ['observaciones', 't2000']] },
+  /* _FUS_AZURE_V1 (27-set): Fusiones_Buses en el orden REAL de los datos (la cabecera de la hoja esta desfasada) */
+  fus_buses: { tabla: 'dbo.Fusiones_Buses', cols: [
+    ['id', 't20'], ['fecha', 'f'], ['hora', 't20'], ['usuario', 't100'], ['sector', 't100'], ['supervisor', 't200'], ['reemplazo', 't10'],
+    ['reemplazante', 't200'], ['reemplazado', 't200'], ['cant_buses', 't20'], ['ruta_origen', 't400'], ['cod_origen', 'n'], ['total_trab', 'n'],
+    ['ruta1', 't400'], ['codigo1', 'n'], ['personal1', 'n'], ['ruta2', 't400'], ['codigo2', 'n'], ['personal2', 'n'],
+    ['ruta3', 't400'], ['codigo3', 'n'], ['personal3', 'n'], ['motivo', 't1000'], ['observaciones', 't2000'],
+    ['foto1', 't1000'], ['foto2', 't1000'], ['foto3', 't1000'], ['estado', 't30']] },
   horas_auditoria: { tabla: 'dbo.Horas_Auditoria', cols: [
     ['fecha', 'f'], ['usuario', 't60'], ['accion', 't40'], ['registro_id', 't40'], ['detalle', 't4000']] },
   cap_cabeceras: { tabla: 'dbo.Cap_Cabeceras', cols: [

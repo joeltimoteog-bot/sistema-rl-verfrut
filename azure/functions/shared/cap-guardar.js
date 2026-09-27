@@ -30,6 +30,11 @@ function comoHoja(v) {
   let m;
   if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) return celdaFecha(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 5)));
   if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/))) return celdaFecha(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] + 5, +m[5], +(m[6] || 0))));
+  if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) {   /* _FUS_AZURE_V1: la hoja esta en es_MX: dia/mes/año pasa a fecha (si es una fecha valida) */
+    const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], 5));
+    if (d.getUTCDate() === +m[1] && d.getUTCMonth() === +m[2] - 1) return celdaFecha(d);
+    return s;
+  }
   if ((m = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/)) && +m[1] < 24) return celdaFecha(new Date(Date.UTC(1899, 11, 30, +m[1], +m[2], +(m[3] || 0)) + LMT));
   if (/^-?\d+(\.\d+)?$/.test(t) && t.replace(/[-.]/g, '').length <= 15) return Number(t);
   return s;

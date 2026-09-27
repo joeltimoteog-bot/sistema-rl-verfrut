@@ -7,11 +7,13 @@
    POST mantenimiento/cv/marcar    {ids:[..]} | {id, error}
    POST mantenimiento/cv/simular   {accion, datos, usuario}   hace todo y DESHACE
    POST mantenimiento/cv/horas{Encender|Apagar|Estado|Simular}   (_HORAS_AZURE_PRIMERO_V1)
+   POST mantenimiento/cv/fus{Encender|Apagar|Simular}   (_FUS_AZURE_V1)
    ═══════════════════════════════════════════════════════════════════════════ */
 const { sql, getPool } = require('../shared/db');
 const G = require('../shared/cv-guardar');
 const CAP = require('../shared/cap-guardar');   /* _CAP_AZURE_PRIMERO_V1 */
 const HOR = require('../shared/horas-guardar');   /* _HORAS_AZURE_PRIMERO_V1 */
+const FUS = require('../shared/fus-guardar');   /* _FUS_AZURE_V1 */
 
 async function ponerEstado(pool, clave, valor) {
   await pool.request().input('k', sql.NVarChar(40), clave).input('v', sql.NVarChar(400), valor)
@@ -65,6 +67,10 @@ module.exports = async function (context, req) {
     if (accion === 'capEncender') { await ponerEstado(pool, 'cap_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
     if (accion === 'capApagar') { await ponerEstado(pool, 'cap_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
     if (accion === 'capSimular') { const r = await CAP.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', b.rol || 'administrador', true); return res(r.status, r.body); }
+    /* _FUS_AZURE_V1 */
+    if (accion === 'fusEncender') { await ponerEstado(pool, 'fus_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
+    if (accion === 'fusApagar') { await ponerEstado(pool, 'fus_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
+    if (accion === 'fusSimular') { const r = await FUS.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true); return res(r.status, r.body); }
     /* _HORAS_AZURE_PRIMERO_V1 */
     if (accion === 'horasEncender') { await ponerEstado(pool, 'horas_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
     if (accion === 'horasApagar') { await ponerEstado(pool, 'horas_azure_primero', '0'); return res(200, { success: true, encendido: false }); }

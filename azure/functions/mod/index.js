@@ -9,7 +9,8 @@
 const { sql, getPool } = require('../shared/db');
 const M = require('../shared/mod-db');
 const TH = require('../shared/tablas-hoja');   /* _TABLAS_HC_V1: Horas y Capacitaciones desde sus tablas reales */
-const TABLAS = { horas: ['horas_registros', 'horas_motivos'], cap: ['cap_cabeceras', 'cap_asistentes'] };
+const TABLAS = { horas: ['horas_registros', 'horas_motivos'], cap: ['cap_cabeceras', 'cap_asistentes'], fus: ['fus_buses'] };   /* _FUS_AZURE_V1: + fus */
+const FUSG = require('../shared/fus-guardar');
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
 const J = v => esD(v) ? v.$d : v;
 const N = v => esD(v) ? new Date(v.$d).getTime() : Number(v);
@@ -34,6 +35,12 @@ async function desdeTablas(pool, modulo, D) {
     const h = await TH.leer(pool, 'cap_cabeceras'), b = await TH.leer(pool, 'cap_asistentes');
     if (!h || !b) return false;
     D.hdr = [h.encabezado].concat(h.filas); D.bbdd = [b.encabezado].concat(b.filas);
+    return true;
+  }
+  if (modulo === 'fus') {   /* _FUS_AZURE_V1: Fusiones desde su tabla real (= getFusiones del Apps Script) */
+    const t = await TH.leer(pool, 'fus_buses');
+    if (!t) return false;
+    D.getFusiones = FUSG.getFusiones(t);
     return true;
   }
   return false;
