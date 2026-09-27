@@ -33,6 +33,14 @@ module.exports = async function (context, req) {
       const cols = ['fila'].concat(E.cols.map(c => c[0]), ['otros']).join(', ');
       const tx = new sql.Transaction(pool); await tx.begin();
       try {
+        /* _HORAS_AZURE_PRIMERO_V1: si Azure guardo algo despues de que Google leyo la hoja, esa foto ya esta vieja: no se cambia */
+        const tipoOp = clave.indexOf('horas_') === 0 ? 'horas' : (clave.indexOf('cap_') === 0 ? 'cap' : '');
+        if (tipoOp && b.leidoMs) {
+          await new sql.Request(tx).query(`EXEC sp_getapplock @Resource = '${tipoOp}_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;`);
+          const nOps = (await new sql.Request(tx).input('t', sql.NVarChar(20), tipoOp).input('l', sql.DateTime2(0), new Date(+b.leidoMs - 2000))
+            .query("SELECT COUNT(*) AS n FROM dbo.CV_Ops WHERE tipo = @t AND (en_hoja = 0 OR creado >= @l)")).recordset[0].n;
+          if (nOps) { await tx.rollback(); return res(409, { success: false, error: nOps + ' guardado(s) de Azure aun no estan en la hoja leida: no se cambio nada (se reintenta luego)' }); }
+        }
         await new sql.Request(tx).query(`DELETE FROM ${E.tabla}; INSERT INTO ${E.tabla} (${cols}) SELECT ${cols} FROM ${E.tabla}__carga ORDER BY fila;`);
         await new sql.Request(tx).input('k', sql.NVarChar(40), clave).input('e', sql.NVarChar(sql.MAX), JSON.stringify(b.encabezado || []))
           .input('a', sql.Int, parseInt(b.ancho, 10) || E.cols.length).input('m', sql.NVarChar(40), String(Date.now())).input('n', sql.Int, total)

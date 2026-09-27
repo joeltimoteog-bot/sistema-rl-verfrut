@@ -19,6 +19,15 @@ const ESQ = {
     ['motivo', 't150'], ['detalle', 't1000'], ['observaciones', 't2000'], ['alerta', 't2000'], ['estado', 't30'],
     ['aprobado_por', 't60'], ['aprobado_en', 'f']] },
   horas_motivos: { tabla: 'dbo.Horas_Motivos', cols: [['motivo', 't200']] },
+  /* _HORAS_AZURE_PRIMERO_V1 (27-set): horarios (los sigue editando la hoja), pagadas en planilla y bitacora */
+  horas_horarios: { tabla: 'dbo.Horas_Horarios', cols: [
+    ['desde', 'f'], ['hasta', 'f'], ['lv_entrada', 'f'], ['lv_salida', 'f'], ['lv_refrig_min', 'n'], ['sab_entrada', 'f'],
+    ['sab_salida', 'f'], ['sab_refrig_min', 'n'], ['acceso_activo', 't10'], ['acceso_margen_min', 'n'], ['nota', 't1000']] },
+  horas_pagadas: { tabla: 'dbo.Horas_Pagadas', cols: [
+    ['fecha_registro', 'f'], ['registrado_por', 't60'], ['fecha_del_dia', 'f'], ['dni', 'n'], ['trabajador', 't200'], ['empresa', 't20'],
+    ['cargo', 't150'], ['horas_pagadas', 'n'], ['acumulado_antes', 'n'], ['acumulado_despues', 'n'], ['id_registro', 't40'], ['observaciones', 't2000']] },
+  horas_auditoria: { tabla: 'dbo.Horas_Auditoria', cols: [
+    ['fecha', 'f'], ['usuario', 't60'], ['accion', 't40'], ['registro_id', 't40'], ['detalle', 't4000']] },
   cap_cabeceras: { tabla: 'dbo.Cap_Cabeceras', cols: [
     ['id_capacitacion', 't40'], ['fecha_registro', 'f'], ['empresa', 't20'], ['tipo', 't60'], ['tema', 't400'], ['fuente', 't400'],
     ['area', 't100'], ['lugar', 't200'], ['fecha', 'f'], ['hora_inicio', 'f'], ['hora_fin', 'f'], ['total_horas', 'n'],
@@ -82,7 +91,7 @@ function aFila(clave, celdas) {
 /* registro de la tabla → celdas exactamente como las entrega Google (fechas como {$d,$s}) */
 function aCeldas(clave, r, ancho) {
   const E = ESQ[clave], o = r.otros ? JSON.parse(r.otros) : {}, out = [];
-  const n = Math.max(ancho || 0, E.cols.length);
+  const n = ancho || E.cols.length;   /* _HORAS_AZURE_PRIMERO_V1: mismo ancho que la hoja (HORARIOS JORNADA tiene menos columnas que la tabla) */
   for (let i = 0; i < n; i++) {
     if (i in o) { out.push(o[i]); continue; }
     const c = E.cols[i];

@@ -6,10 +6,12 @@
    GET  mantenimiento/cv/pendientes                 operaciones que faltan copiar a la hoja
    POST mantenimiento/cv/marcar    {ids:[..]} | {id, error}
    POST mantenimiento/cv/simular   {accion, datos, usuario}   hace todo y DESHACE
+   POST mantenimiento/cv/horas{Encender|Apagar|Estado|Simular}   (_HORAS_AZURE_PRIMERO_V1)
    ═══════════════════════════════════════════════════════════════════════════ */
 const { sql, getPool } = require('../shared/db');
 const G = require('../shared/cv-guardar');
 const CAP = require('../shared/cap-guardar');   /* _CAP_AZURE_PRIMERO_V1 */
+const HOR = require('../shared/horas-guardar');   /* _HORAS_AZURE_PRIMERO_V1 */
 
 async function ponerEstado(pool, clave, valor) {
   await pool.request().input('k', sql.NVarChar(40), clave).input('v', sql.NVarChar(400), valor)
@@ -63,6 +65,15 @@ module.exports = async function (context, req) {
     if (accion === 'capEncender') { await ponerEstado(pool, 'cap_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
     if (accion === 'capApagar') { await ponerEstado(pool, 'cap_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
     if (accion === 'capSimular') { const r = await CAP.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', b.rol || 'administrador', true); return res(r.status, r.body); }
+    /* _HORAS_AZURE_PRIMERO_V1 */
+    if (accion === 'horasEncender') { await ponerEstado(pool, 'horas_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
+    if (accion === 'horasApagar') { await ponerEstado(pool, 'horas_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
+    if (accion === 'horasEstado') {
+      const r = await pool.request().query(`SELECT (SELECT valor FROM dbo.CV_Estado WHERE clave = 'horas_azure_primero') AS horas_azure_primero,
+        (SELECT COUNT(*) FROM dbo.CV_Ops WHERE tipo = 'horas' AND en_hoja = 0) AS pendientes, (SELECT COUNT(*) FROM dbo.CV_Ops WHERE tipo = 'horas') AS operaciones`);
+      return res(200, Object.assign({ success: true }, r.recordset[0]));
+    }
+    if (accion === 'horasSimular') { const r = await HOR.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true, b.ahora); return res(r.status, r.body); }
     if (accion === 'simular') {
       const r = await G.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true);
       return res(r.status, r.body);

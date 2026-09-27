@@ -23,6 +23,7 @@ AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
 MODX = {'modo': 'ok', 'llamadas': []}
 CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
 CAPG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _CAP_AZURE_PRIMERO_V1
+HORASG = {'modo': 'ok', 'llamadas': [], 'auth': [], 'cuerpos': []}   # _HORAS_AZURE_PRIMERO_V1  ok | rechazo | caido | 503
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -80,6 +81,11 @@ def resp_azure(url, post=''):
                 'config': {'aviso_proximo_dias': 2, 'critico_dias': 5, 'escalar_dias': 3, 'excelente': 90, 'regular': 70},
                 'actividades': [], 'resumen': {'EN_PLAZO': 0, 'PROXIMO': 0, 'VENCE_HOY': 0, 'VENCIDO': 0, 'CRITICO': 0},
                 'restriccion': {'activa': False, 'modulos': [], 'criticos': 0, 'motivo': '', 'exonerado_hasta': ''}, 'indice': None, 'fuente': 'azure'}
+    if '/api/horas/guardar/' in url:
+        acc = url.split('/api/horas/guardar/')[1].split('?')[0]
+        HORASG['llamadas'].append(acc); HORASG['cuerpos'].append(post)
+        if HORASG['modo'] == 'rechazo': return {'success': False, 'error': 'Solo administradores pueden registrar'}
+        return {'success': True, 'fuente': 'azure', 'id': 'H1790000000000'}
     if '/api/cap/guardar/' in url:
         acc = url.split('/api/cap/guardar/')[1].split('?')[0]
         CAPG['llamadas'].append(acc)
@@ -155,6 +161,14 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+        if '/api/horas/guardar/' in url:
+            HORASG['auth'].append(req.headers.get('authorization', ''))
+            if HORASG['modo'] == 'caido':
+                HORASG['llamadas'].append('caido')
+                return route.abort()
+            if HORASG['modo'] == '503':
+                HORASG['llamadas'].append('503')
+                return route.fulfill(status=503, body='{"success":false,"apagado":true}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if '/api/cap/guardar/' in url:
             CAPG['auth'].append(req.headers.get('authorization', ''))
             if CAPG['modo'] == 'caido':
@@ -460,17 +474,38 @@ with sync_playwright() as pw:
         ok('Horas ' + acc, r['r'] == 'OK', f"{r['r']} {r['ms']} ms")
     RED['google'].clear()
     ok('Horas pagina cargada (apiPost existe)', pag.evaluate("typeof window.apiPost") == 'function', pag.url + ' | apiPost=' + pag.evaluate("typeof window.apiPost"))
-    try: pag.evaluate("""async () => { const b={action:'horasRegistrar', dni:'22222222', h:1}; await Promise.all([apiPost(Object.assign({},b)), apiPost(Object.assign({},b))]); }""")
+    HORASG['llamadas'].clear(); HORASG['auth'].clear()
+    try: pag.evaluate("""async () => { const b={action:'horasRegistrar', dni:'22222222', h:1}; await Promise.all([apiPost(Object.assign({},b)), apiPost(Object.assign({},b))]); await new Promise(z => setTimeout(z, 400)); }""")
     except Exception as e: pass
-    ok('Horas doble clic -> 1 solo registro', RED['google'].count('horasRegistrar') == 1, f"{RED['google'].count('horasRegistrar')} envios")
+    ok('Horas doble clic -> 1 solo registro (en Azure, nada por Google)', HORASG['llamadas'] == ['horasRegistrar'] and 'horasRegistrar' not in RED['google'], ','.join(HORASG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    ok('Horas: va con el token del login y Google copia a la hoja en 2do plano', HORASG['auth'] and HORASG['auth'][0].startswith('Bearer ') and 'cvAplicarDesdeAzure' in RED['google'], str(HORASG['auth'][:1]) + ' | ' + ','.join(RED['google']))
     RED['google'].clear(); MODX['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiPost({action:'horasListar', usuario:'jtimoteo'}); return (d && d.fuente) + ':' + (d && d.success); }""")
     ok('Horas: el listado sale de Azure (no de Google)', r == 'azure:true' and 'horasListar' not in RED['google'] and 'horas/horasListar' in MODX['llamadas'], r + ' | google: ' + ','.join(RED['google']))
     r = pag.evaluate("""async () => { const d = await apiPost({action:'horasResumenIndividual', usuario:'jtimoteo', dni:'12345678'}); return (d && d.fuente) + ':' + (d && d.success); }""")
     ok('Horas: saldo por DNI sale de Azure', r == 'azure:true' and 'horasResumenIndividual' not in RED['google'], r)
     RED['google'].clear()
+    # ── Horas: guardar primero en Azure (_HORAS_AZURE_PRIMERO_V1) ──
+    HORASG['llamadas'].clear()
+    for acc in ['horasRegistrar', 'horasEditar', 'horasEliminar', 'horasAprobar', 'horasAgregarMotivo', 'horasEliminarMotivo']:
+        r = pag.evaluate("""async (b) => { const d = await apiPost(b); return (d && d.fuente) + ':' + (d && d.success); }""", {'action': acc, 'usuario': 'jtimoteo', 'id': 'H1', 'nombre': 'M ' + acc})
+        ok('Horas ' + acc + ': se guarda en Azure y NO por Google', r == 'azure:true' and acc not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    ok('Horas: las 6 escrituras llegaron a Azure', HORASG['llamadas'] == ['horasRegistrar', 'horasEditar', 'horasEliminar', 'horasAprobar', 'horasAgregarMotivo', 'horasEliminarMotivo'], ','.join(HORASG['llamadas']))
+    ok('Horas: el cuerpo lleva la huella (client_id)', all('"client_id":"hr-' in c for c in HORASG['cuerpos'][-6:]), HORASG['cuerpos'][-1][:160])
+    HORASG['llamadas'].clear(); RED['google'].clear()
+    r = pag.evaluate("""async () => { const b = {action:'horasRegistrar', usuario:'jtimoteo', registro:{dni:'44444444', motivo:'Permiso'}}; await apiPost(Object.assign({}, b)); await new Promise(z => setTimeout(z, 3300)); await apiPost(Object.assign({}, b)); return 'ok'; }""")
+    ok('Horas: dos registros iguales hechos a proposito (no doble clic) se guardan los dos', HORASG['llamadas'] == ['horasRegistrar', 'horasRegistrar'] and len(set(c.split('"client_id":')[1] for c in HORASG['cuerpos'][-2:])) == 2, ','.join(HORASG['llamadas']))
+    pag.wait_for_timeout(800); HORASG['modo'] = 'rechazo'; RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'horasRegistrar', usuario:'x', registro:{dni:'5', motivo:'P'}}); await new Promise(z => setTimeout(z, 300)); return (d && d.success) + ':' + (d && d.error); }""")
+    ok('Horas: si Azure dice que no (p. ej. sin permiso), esa es la respuesta y NO se reintenta por Google', r == 'false:Solo administradores pueden registrar' and 'horasRegistrar' not in RED['google'] and 'cvAplicarDesdeAzure' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    HORASG['modo'] = 'caido'; RED['google'].clear()
     r = pag.evaluate(CARRERA, {'action': 'horasRegistrar', 'dni': '33333333', 'x': 'reg'})
-    ok('Horas: registrar sigue guardando en Google', r['r'] == 'OK' and 'horasRegistrar' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
+    ok('Horas: con Azure caido, registrar se guarda por Google', r['r'] == 'OK' and 'horasRegistrar' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms | google: ' + ','.join(RED['google']))
+    HORASG['modo'] = '503'; RED['google'].clear(); HORASG['llamadas'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'horasAprobar', 'id': 'H9', 'x': 'a1'})
+    r2 = pag.evaluate(CARRERA, {'action': 'horasAprobar', 'id': 'H8', 'x': 'a2'})
+    ok('Horas: con el guardado en Azure apagado (503) va a Google y no insiste por 5 min', r['r'] == 'OK' and r2['r'] == 'OK' and RED['google'].count('horasAprobar') == 2 and HORASG['llamadas'] == ['503'], ','.join(HORASG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    HORASG['modo'] = 'ok'
     MODX['modo'] = 'caido'; RED['google'].clear()
     r = pag.evaluate(CARRERA, {'action': 'horasListar', 'usuario': 'jtimoteo'})
     ok('Horas: con Azure caido, el listado sale de Google', r['r'] == 'OK' and 'horasListar' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms')

@@ -138,4 +138,4 @@ async function ejecutar(pool, accion, b, usuario, rol, prueba) {
   }
   return { status: 200, body: resp };
 }
-module.exports = { ejecutar, encendido, comoHoja, capFecha };
+module.exports = { ejecutar, encendido, comoHoja, capFecha, agregarFilas, tocarMarcas };   /* _HORAS_AZURE_PRIMERO_V1: agregarFilas y tocarMarcas tambien los usa horas-guardar */
