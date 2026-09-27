@@ -6474,6 +6474,17 @@ function regAt(dni,nom,emp,fundo,cargo,sexo,ruta,cod,fac,cel,fip,ftp){
 }
 
 // CONSULTA POR DNI
+/* _COLUMNAS_AT_V1: una celda de la tabla de Consulta por DNI (texto escapado) */
+function _celdaConsultaDNI(a, k) {
+  var v = a[k]; if (v === null || v === undefined) v = '';
+  if (k.indexOf('fecha') === 0 || k === 'cumpleanos') v = fmtF(v);
+  var t = String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  if (k === 'empresa') return '<td><span class="bg ' + empC(v) + '">' + t + '</span></td>';
+  if (k === 'estado') return '<td><span class="bg ' + estC(v) + '">' + t + '</span></td>';
+  if (k === 'dias_transcurridos') return '<td style="text-align:center;font-weight:700">' + t + '</td>';
+  if (k === 'nombre' || k === 'observaciones' || k === 'detalle_documento') return '<td style="min-width:160px">' + t + '</td>';
+  return '<td style="white-space:nowrap">' + t + '</td>';
+}
 async function consultarDNI() {
   const dni = v('cDNI').trim();
   const fDesde = v('cFechaDesde');
@@ -6589,26 +6600,8 @@ async function consultarDNI() {
       <div class="dni-result">
         ${cabecera}
         <div class="tw">
-          <table><thead><tr>
-            <th>N°</th><th>Fecha</th><th>DNI</th><th>Nombre</th><th>Empresa</th><th>Fundo/Sector</th>
-            <th>Documento</th><th>F. Inicio Doc.</th><th>F. Fin Doc.</th>
-            <th>Días</th><th>Supervisor</th><th>Estado</th><th>Observaciones</th>
-          </tr></thead>
-          <tbody>${d.data.map(a=>`<tr>
-            <td>${a.nro||''}</td>
-            <td>${fmtF(a.fecha_atencion)}</td>
-            <td>${a.dni||''}</td>
-            <td>${a.nombre||''}</td>
-            <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
-            <td>${a.fundo||''}</td>
-            <td>${a.detalle_documento||''}</td>
-            <td>${a.fecha_inicio_doc||''}</td>
-            <td>${a.fecha_termino_doc||''}</td>
-            <td style="text-align:center;font-weight:700">${a.dias_transcurridos||''}</td>
-            <td>${a.supervisor||''}</td>
-            <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
-            <td>${a.observaciones||''}</td>
-          </tr>`).join('')}</tbody>
+          <table><thead><tr>${COLS_CONSULTA_DNI.map(c => `<th style="white-space:nowrap">${c.label}</th>`).join('')}</tr></thead>   <!-- _COLUMNAS_AT_V1: todas las columnas -->
+          <tbody>${d.data.map(a => `<tr>${COLS_CONSULTA_DNI.map(c => _celdaConsultaDNI(a, c.key)).join('')}</tr>`).join('')}</tbody>
           </table>
         </div>
       </div>`;
@@ -9874,6 +9867,21 @@ function _aFechaExcel(v) {
   return s;                                                        // no es fecha: se deja igual
 }
 
+/* _COLUMNAS_AT_V1 (27-set-2026): TODAS las columnas de una atencion, en el orden de la hoja
+   "BB. DE REGISTROS". Las usan el Excel de Mis Atenciones y la Consulta por DNI (tabla y Excel). */
+var COLS_AT_TODAS = [
+  {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha Atención'},{key:'hora_inicio',label:'H. Inicio'},{key:'hora_termino',label:'H. Término'},
+  {key:'nro_semana',label:'Semana'},{key:'mes',label:'Mes'},{key:'anio',label:'Año'},
+  {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},{key:'sexo',label:'Sexo'},{key:'fecha_inicio_periodo',label:'F. Inicio Periodo'},
+  {key:'empresa',label:'Empresa'},{key:'fundo',label:'Fundo/Sector'},{key:'cargo',label:'Cargo'},{key:'ruta',label:'Ruta'},{key:'codigo',label:'Código'},
+  {key:'fundo_actual',label:'Fundo Actual'},{key:'celular',label:'Celular'},{key:'supervisor',label:'Supervisor'},
+  {key:'detalle_documento',label:'Documento'},{key:'fecha_inicio_doc',label:'F. Inicio Doc.'},{key:'fecha_termino_doc',label:'F. Fin Doc.'},
+  {key:'dias_transcurridos',label:'Días'},{key:'responsable_recepcion',label:'Responsable Recepción'},{key:'observaciones',label:'Observaciones'},
+  {key:'estado',label:'Estado'},{key:'fecha_registro',label:'Fecha Registro'},{key:'usuario_sistema',label:'Usuario Sistema'},
+  {key:'nro_licencia',label:'N° Licencia'},{key:'parentesco',label:'Parentesco'}
+];
+var COLS_CONSULTA_DNI = COLS_AT_TODAS.slice(0, 16).concat([{key:'cumpleanos',label:'Cumpleaños'}], COLS_AT_TODAS.slice(16));
+
 function exportarExcelGen(datos, columnas, nombreArchivo) {
   if(!datos || !datos.length) { mostrarToast('❌ No hay datos para exportar.', 'error'); return; }
   const filas = datos.map(row => {
@@ -9899,36 +9907,9 @@ function exportarExcelGen(datos, columnas, nombreArchivo) {
                  { cellDates: true });
 }
 
-function exportarAtenciones() {
+function exportarAtenciones() {   /* _COLUMNAS_AT_V1: todas las columnas */
   const datos = window._atFiltradas || CACHE.atenciones || [];
-  exportarExcelGen(datos, [
-    {key:'nro',label:'N°'},
-    {key:'fecha_atencion',label:'Fecha'},
-    {key:'hora_inicio',label:'H. Inicio'},
-    {key:'hora_termino',label:'H. Fin'},
-    {key:'dni',label:'DNI'},
-    {key:'nombre',label:'Nombre'},
-    {key:'sexo',label:'Sexo'},
-    {key:'celular',label:'Celular'},
-    {key:'empresa',label:'Empresa'},
-    {key:'fundo',label:'Fundo'},
-    {key:'fundo_actual',label:'Fundo Actual'},
-    {key:'cargo',label:'Cargo'},
-    {key:'ruta',label:'Ruta'},
-    {key:'codigo',label:'Código'},
-    {key:'fecha_inicio_periodo',label:'F. Inicio Periodo'},
-    {key:'supervisor',label:'Supervisor'},
-    {key:'detalle_documento',label:'Documento'},
-    {key:'fecha_inicio_doc',label:'F. Inicio Doc.'},
-    {key:'fecha_termino_doc',label:'F. Fin Doc.'},
-    {key:'dias_transcurridos',label:'Días'},
-    {key:'responsable_recepcion',label:'Responsable Recepción'},
-    {key:'estado',label:'Estado'},
-    {key:'nro_licencia',label:'N° Licencia'},
-    {key:'parentesco',label:'Parentesco'},
-    {key:'observaciones',label:'Observaciones'},
-    {key:'usuario_sistema',label:'Usuario Sistema'}
-  ], 'Atenciones');
+  exportarExcelGen(datos, COLS_AT_TODAS, 'Atenciones');
 }
 
 function exportarResumen() {
@@ -9952,21 +9933,9 @@ function exportarVisitas() {
   ], 'Visitas');
 }
 
-function exportarConsultaDNI() {
+function exportarConsultaDNI() {   /* _COLUMNAS_AT_V1: todas las columnas (igual que la tabla) */
   const datos = window._consultaDNIResultados || [];
-  exportarExcelGen(datos, [
-    {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha'},
-    {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},
-    {key:'empresa',label:'Empresa'},{key:'fundo',label:'Fundo/Sector'},
-    {key:'ruta',label:'Ruta'},{key:'codigo',label:'Código'},{key:'cumpleanos',label:'Cumpleaños'},
-    {key:'detalle_documento',label:'Documento'},
-    {key:'fecha_inicio_doc',label:'F. Inicio Doc.'},
-    {key:'fecha_termino_doc',label:'F. Fin Doc.'},
-    {key:'dias_transcurridos',label:'Días'},
-    {key:'supervisor',label:'Supervisor'},
-    {key:'responsable_recepcion',label:'Resp. Recepción'},
-    {key:'estado',label:'Estado'},{key:'observaciones',label:'Observaciones'}
-  ], 'ConsultaDNI');
+  exportarExcelGen(datos, COLS_CONSULTA_DNI, 'ConsultaDNI');
 }
 
 function exportarFusiones() {

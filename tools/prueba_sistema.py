@@ -388,6 +388,16 @@ with sync_playwright() as pw:
     r = pag.evaluate(CARRERA, {'action': 'updateUsuario', 'usuario': 'ptamayo', 'activo': True})
     ok('Usuarios: con Azure caido, va por Google', r['r'] == 'OK' and 'updateUsuario' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
     USRG['modo'] = 'ok'
+    # ── _COLUMNAS_AT_V1: Mis Atenciones (Excel) y Consulta por DNI (tabla y Excel) con TODAS las columnas ──
+    r = pag.evaluate("""async () => { const cap = []; const orig = window.exportarExcelGen; window.exportarExcelGen = (d, cols, n) => cap.push(n + ':' + cols.length + ':' + cols.map(c => c.key).join('|'));
+        window._atFiltradas = [{nro: 1, dni: '11111111'}]; exportarAtenciones(); window._consultaDNIResultados = [{nro: 1}]; exportarConsultaDNI(); window.exportarExcelGen = orig; return cap; }""")
+    at = r[0] if r else ''; cd = r[1] if len(r) > 1 else ''
+    faltan = [k for k in ['nro','fecha_atencion','hora_inicio','hora_termino','nro_semana','mes','anio','dni','nombre','sexo','fecha_inicio_periodo','empresa','fundo','cargo','ruta','codigo','fundo_actual','celular','supervisor','detalle_documento','fecha_inicio_doc','fecha_termino_doc','dias_transcurridos','responsable_recepcion','observaciones','estado','fecha_registro','usuario_sistema','nro_licencia','parentesco'] if k not in at.split(':')[-1].split('|') or k not in cd.split(':')[-1].split('|')]
+    ok('Excel de Mis Atenciones y de Consulta por DNI llevan TODAS las columnas (30 / 31 con cumpleaños)', at.startswith('Atenciones:30:') and cd.startswith('ConsultaDNI:31:') and not faltan, at[:40] + ' | ' + cd[:40] + ' | faltan: ' + ','.join(faltan))
+    pag.evaluate("() => { document.getElementById('cDNI').value = '11111111'; }")
+    pag.evaluate("async () => { await consultarDNI(); }"); pag.wait_for_timeout(800)
+    r = pag.evaluate("() => { const t = document.querySelector('#consultaResult table'); if (!t) return 'sin tabla: ' + document.getElementById('consultaResult').innerText.slice(0, 120); return t.querySelectorAll('thead th').length + ':' + t.querySelectorAll('tbody tr').length + ':' + (t.querySelector('tbody tr') ? t.querySelector('tbody tr').children.length : 0) + ':' + Array.from(t.querySelectorAll('thead th')).map(x => x.textContent).slice(0, 6).join('|'); }")
+    ok('Consulta por DNI: la tabla muestra TODAS las columnas (31) en cada fila', re.match(r'^31:[1-9]\d*:31:', str(r)) is not None, str(r))
     # ── _CAPAS_V1: 'Eliminar caso' se abre ENCIMA del formulario del caso · _PROGRESO_V1: circulo y ✓ ──
     pag.evaluate("() => { const n = document.getElementById('rlNovOv'); if (n) n.remove(); }")
     pag.wait_for_function("() => { const c = document.getElementById('rlProg'); return !c || c.style.display !== 'flex'; }", timeout=8000)
