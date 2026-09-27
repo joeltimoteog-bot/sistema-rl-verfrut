@@ -22,6 +22,7 @@ CUMPL = {'modo': 'ok', 'llamadas': []}   # ok | caido | 503
 AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
 MODX = {'modo': 'ok', 'llamadas': []}
 CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
+CAPG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _CAP_AZURE_PRIMERO_V1
 
 def accion_de(req):
     q = urllib.parse.urlparse(req.url).query
@@ -79,6 +80,10 @@ def resp_azure(url, post=''):
                 'config': {'aviso_proximo_dias': 2, 'critico_dias': 5, 'escalar_dias': 3, 'excelente': 90, 'regular': 70},
                 'actividades': [], 'resumen': {'EN_PLAZO': 0, 'PROXIMO': 0, 'VENCE_HOY': 0, 'VENCIDO': 0, 'CRITICO': 0},
                 'restriccion': {'activa': False, 'modulos': [], 'criticos': 0, 'motivo': '', 'exonerado_hasta': ''}, 'indice': None, 'fuente': 'azure'}
+    if '/api/cap/guardar/' in url:
+        acc = url.split('/api/cap/guardar/')[1].split('?')[0]
+        CAPG['llamadas'].append(acc)
+        return {'success': True, 'fuente': 'azure', 'idCapacitacion': 'CAP-AZ-1', 'registrosGuardados': 2, 'asistentes': 2}
     if '/api/cv/guardar/' in url:
         acc = url.split('/api/cv/guardar/')[1].split('?')[0]
         CVG['llamadas'].append(acc)
@@ -150,6 +155,11 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+        if '/api/cap/guardar/' in url:
+            CAPG['auth'].append(req.headers.get('authorization', ''))
+            if CAPG['modo'] == 'caido':
+                CAPG['llamadas'].append('caido')
+                return route.abort()
         if '/api/cv/guardar/' in url and CVG['modo'] == 'caido':
             CVG['llamadas'].append('caido')
             return route.abort()
@@ -484,6 +494,15 @@ with sync_playwright() as pw:
     r = pag.evaluate(CARRERA, {'action': 'listarCapacitaciones', 'rol': 'administrador'})
     ok('Capacitaciones: con Azure caido, sale de Google', r['r'] == 'OK' and 'listarCapacitaciones' in RED['google'], r['r'])
     MODX['modo'] = 'ok'
+    # ── Capacitaciones: guardar primero en Azure (_CAP_AZURE_PRIMERO_V1) ──
+    RED['google'].clear(); CAPG['llamadas'].clear(); CAPG['auth'].clear()
+    r = pag.evaluate("""async () => { const b = {action:'guardarCapacitacion', actividad:{idCapacitacion:'CAP-1', tema:'X'}, asistentes:[{dni:'1'}]}; const x = await Promise.all([apiPost(b), apiPost(b)]); await new Promise(z => setTimeout(z, 500)); return x.map(d => (d && d.fuente) + ':' + (d && d.idCapacitacion)).join(','); }""")
+    ok('Capacitacion nueva: se guarda en Azure (una sola vez con doble clic) y NO pasa por Google', r == 'azure:CAP-AZ-1,azure:CAP-AZ-1' and CAPG['llamadas'] == ['guardarCapacitacion'] and 'guardarCapacitacion' not in RED['google'], r + ' | azure: ' + ','.join(CAPG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    ok('Capacitacion nueva: va con el token del login y Google copia a la hoja en 2do plano', CAPG['auth'] and CAPG['auth'][0].startswith('Bearer ') and 'cvAplicarDesdeAzure' in RED['google'], str(CAPG['auth'][:1]) + ' | ' + ','.join(RED['google']))
+    CAPG['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'duplicarCapacitacion', idCapacitacion:'CAP-1', tituloNuevo:'Otro titulo'}); return d && d.success ? 'OK' : 'ERROR'; }""")
+    ok('Duplicar capacitacion: con Azure caido, se hace por Google', r == 'OK' and 'duplicarCapacitacion' in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    CAPG['modo'] = 'ok'
     ok('Capacitaciones sin errores de JavaScript', not errores, '; '.join(errores[:4]))
     pag.close()
 

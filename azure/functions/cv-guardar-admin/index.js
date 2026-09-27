@@ -9,6 +9,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 const { sql, getPool } = require('../shared/db');
 const G = require('../shared/cv-guardar');
+const CAP = require('../shared/cap-guardar');   /* _CAP_AZURE_PRIMERO_V1 */
 
 async function ponerEstado(pool, clave, valor) {
   await pool.request().input('k', sql.NVarChar(40), clave).input('v', sql.NVarChar(400), valor)
@@ -58,6 +59,10 @@ module.exports = async function (context, req) {
       if (b.id && b.error) await pool.request().input('id', sql.Int, b.id).input('e', sql.NVarChar(500), String(b.error).slice(0, 500)).query('UPDATE dbo.CV_Ops SET error = @e WHERE id = @id');
       return res(200, { success: true });
     }
+    /* _CAP_AZURE_PRIMERO_V1 */
+    if (accion === 'capEncender') { await ponerEstado(pool, 'cap_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
+    if (accion === 'capApagar') { await ponerEstado(pool, 'cap_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
+    if (accion === 'capSimular') { const r = await CAP.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', b.rol || 'administrador', true); return res(r.status, r.body); }
     if (accion === 'simular') {
       const r = await G.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true);
       return res(r.status, r.body);
