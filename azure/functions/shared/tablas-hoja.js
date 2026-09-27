@@ -33,6 +33,10 @@ const ESQ = {
     ['ruta1', 't400'], ['codigo1', 'n'], ['personal1', 'n'], ['ruta2', 't400'], ['codigo2', 'n'], ['personal2', 'n'],
     ['ruta3', 't400'], ['codigo3', 'n'], ['personal3', 'n'], ['motivo', 't1000'], ['observaciones', 't2000'],
     ['foto1', 't1000'], ['foto2', 't1000'], ['foto3', 't1000'], ['estado', 't30']] },
+  /* _USR_AZURE_V1 (27-set): Solicitudes de acceso temporal (fuera de horario) */
+  acc_solicitudes: { tabla: 'dbo.Acceso_Solicitudes', cols: [
+    ['nro', 'n'], ['fecha', 'f'], ['usuario', 't100'], ['nombre', 't200'], ['motivo', 't2000'], ['horas', 'n'], ['estado', 't30'],
+    ['aprobado_por', 't100'], ['hora_inicio', 'f'], ['hora_fin', 'f'], ['fecha_resolucion', 'f'], ['expira_ms', 'n']] },
   /* _CUMPL_W_V1 (27-set): hojas de Cumplimiento (JUSTIF, RESTRICC y CONFIG las escribe Azure; HISTORIAL la sigue escribiendo Google) */
   cumpl_justif: { tabla: 'dbo.Cumpl_Justif', cols: [
     ['fecha', 'f'], ['hora', 'f'], ['usuario', 't100'], ['nombre', 't200'], ['caso', 'n'], ['actividad', 't300'], ['fecha_limite', 'f'],

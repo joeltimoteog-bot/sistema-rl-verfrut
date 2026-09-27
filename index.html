@@ -622,6 +622,27 @@ async function enviarSolicitudAcceso() {
   const horas  = document.getElementById('blHoras').value;
   if (!motivo) { await appAlert('Ingresa el motivo de tu solicitud.'); return; }
   const user = _bloqueoUser;
+  /* _USR_AZURE_V1 (27-set-2026): primero Azure (con el login firmado; respeta las horas pedidas). Si no, Google. */
+  try {
+    const tk = sessionStorage.getItem('rl_token');
+    if (tk) {
+      const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      const reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 15000);
+      const op = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk },
+        body: JSON.stringify({ usuario: user.usuario, nombre: user.nombre || user.usuario, motivo: motivo, horas_solicitadas: horas, client_id: 'acc-' + Date.now().toString(36) }) };
+      if (ctrl) op.signal = ctrl.signal;
+      const r = await fetch(AZURE_LOGIN_URL.replace('/auth/login', '/usr/guardar/saveSolicitudAcceso'), op);
+      clearTimeout(reloj);
+      const j = await r.json().catch(function () { return null; });
+      if (r.status === 200 && j && j.success) {
+        try { fetch(API, { method: 'POST', body: JSON.stringify({ action: 'cvAplicarDesdeAzure' }), headers: { 'Content-Type': 'text/plain' } }).catch(function () {}); } catch (e) {}
+        console.log('[_USR_AZURE_V1] solicitud de acceso guardada en Azure N° ' + j.nro);
+        document.getElementById('blFormSol').style.display = 'none';
+        document.getElementById('blConfirmacion').style.display = 'block';
+        return;
+      }
+    }
+  } catch (eAz) { console.warn('[_USR_AZURE_V1] solicitud de acceso: Azure no respondio -> Google'); }
   try {
     await fetch(API, {
       method: 'POST',

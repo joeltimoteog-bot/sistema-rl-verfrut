@@ -82,6 +82,17 @@ module.exports = async function (context, req) {
     const validos = usuarios.filter(function (u) { return u && u.id_sistema && u.usuario && u.password && u.nombre; });
     usuarios.forEach(function (u) { if (!(u && u.id_sistema && u.usuario && u.password && u.nombre)) { failed++; errors.push({ id: (u && u.id_sistema) || '(sin id)', error: 'Faltan campos obligatorios' }); } });
     const fechaOk = function (f) { if (!f) return null; const t = Date.parse(String(f).replace(' ', 'T')); return isNaN(t) ? null : String(f).replace(' ', 'T'); };
+    /* _USR_HASH_V1 (27-set-2026): si en Azure la contraseña ya esta cifrada (bcrypt) y la hoja trae la misma
+       en texto plano, se conserva la cifrada (antes cada sincronizacion la volvia a dejar legible). */
+    try {
+      const bcrypt = require('bcryptjs');
+      const act = await pool.request().query("SELECT id_sistema, password FROM dbo.usuarios WHERE password LIKE '$2%'");
+      const hashDe = {}; act.recordset.forEach(function (x) { hashDe[String(x.id_sistema)] = String(x.password || ''); });
+      for (const u of validos) {
+        const h = hashDe[String(u.id_sistema)], p = String(u.password || '');
+        if (h && p && p.indexOf('$2') !== 0 && await bcrypt.compare(p, h)) u.password = h;
+      }
+    } catch (eHash) { context.log.warn('[_USR_HASH_V1] ' + eHash.message); }
     let loteOk = false;
     try {
       const json = JSON.stringify(validos.map(function (u) { return {

@@ -23,6 +23,7 @@ AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
 MODX = {'modo': 'ok', 'llamadas': []}
 CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
 CAPG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _CAP_AZURE_PRIMERO_V1
+USRG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _USR_AZURE_V1  ok | caido
 CUMPLW = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _CUMPL_W_V1  ok | caido
 SOLG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _SOL_AZURE_V1  ok | caido
 FUSG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _FUS_AZURE_V1  ok | caido | 503
@@ -75,6 +76,10 @@ def resp_azure(url, post=''):
     if '/api/atenciones/guardar' in url:
         AZG['llamadas'].append('guardar'); AZG['cuerpos'].append(post)
         return {'success': True, 'nro': 777, 'hoja': 'BB. DE REGISTROS 2026', 'fuente': 'azure', 'fecha_atencion': '2026-09-26', 'hora_inicio': '08:00', 'estado': 'EN PROCESO', 'parentesco': '', 'nro_licencia': ''}
+    if '/api/usr/guardar/' in url:
+        acc = url.split('/api/usr/guardar/')[1].split('?')[0]
+        USRG['llamadas'].append(acc); USRG['cuerpos'].append(post)
+        return {'success': True, 'fuente': 'azure', 'nro': 7, 'hastaHora': '18:00'}
     if '/api/cumpl/guardar/' in url:
         acc = url.split('/api/cumpl/guardar/')[1].split('?')[0]
         CUMPLW['llamadas'].append(acc); CUMPLW['cuerpos'].append(post)
@@ -175,6 +180,9 @@ def enrutar(route):
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
             return route.fulfill(status=204, headers={'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*'})
+        if '/api/usr/guardar/' in url and USRG['modo'] == 'caido':
+            USRG['llamadas'].append('caido')
+            return route.abort()
         if '/api/cumpl/guardar/' in url and CUMPLW['modo'] == 'caido':
             CUMPLW['llamadas'].append('caido')
             return route.abort()
@@ -337,6 +345,18 @@ with sync_playwright() as pw:
     r = pag.evaluate(CARRERA, {'action': 'cumplRestriccionLevantar', 'usuario': 'jtimoteo', 'rol': 'administrador', 'objetivo': 'ptamayo'})
     ok('Cumplimiento: con Azure caido, se guarda por Google', r['r'] == 'OK' and 'cumplRestriccionLevantar' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
     CUMPLW['modo'] = 'ok'
+    # ── Usuarios y accesos temporales primero en Azure (_USR_AZURE_V1) ──
+    pag.wait_for_timeout(500); USRG['llamadas'].clear(); RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'saveUsuario', usuario:'nuevo', password:'Clave123', nombre:'N', rol:'supervisor', empresa:'RAPEL', correo:''}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Usuario nuevo: se crea en Azure, NO por Google, y espera la copia a la hoja antes de responder', r == 'azure:true' and USRG['llamadas'] == ['saveUsuario'] and 'saveUsuario' not in RED['google'] and 'cvAplicarDesdeAzure' in RED['google'], r + ' | azure: ' + ','.join(USRG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    RED['google'].clear()
+    r = pag.evaluate("""async () => { const x = await Promise.all([apiPost({action:'updateUsuario', usuario:'ptamayo', activo:false}), apiPost({action:'resolverAccesoTemporal', fila:3, usuario:'ptamayo', decision:'APROBADO', aprobado_por:'jtimoteo'})]); return x.map(d => (d && d.fuente) + ':' + (d && d.success)).join(','); }""")
+    ok('Activar/desactivar usuario y aprobar acceso temporal van a Azure y NO por Google', r == 'azure:true,azure:true' and not any(a in RED['google'] for a in ['updateUsuario', 'resolverAccesoTemporal']), r + ' | azure: ' + ','.join(USRG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    ok('... y la contraseña viaja solo a Azure (con el token)', any('Clave123' in c for c in USRG['cuerpos']) and not any('Clave123' in g for g in RED['gurl']), 'ok')
+    pag.wait_for_timeout(500); USRG['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'updateUsuario', 'usuario': 'ptamayo', 'activo': True})
+    ok('Usuarios: con Azure caido, va por Google', r['r'] == 'OK' and 'updateUsuario' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
+    USRG['modo'] = 'ok'
     # ── Casos y Visitas: primero en Azure (_CV_AZURE_PRIMERO_V1) ──
     RED['google'].clear(); CVG['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiPost({action:'saveCaso', dni:'70000001', nombre:'PRUEBA CV', motivo:'Hurto'}); await new Promise(z => setTimeout(z, 600)); return (d && d.fuente) + ':' + (d && d.nro); }""")
@@ -638,6 +658,22 @@ with sync_playwright() as pw:
     pag.close()
 
     # ───────── CALCULO REMUNERATIVO y LOGIN ─────────
+    # ── Login: pedir acceso temporal fuera de horario va a Azure con las horas pedidas (_USR_AZURE_V1) ──
+    pag = ctx.new_page(); errores = []
+    pag.on('pageerror', lambda e: errores.append(str(e)[:300]))
+    pag.goto(BASE + 'index.html', wait_until='load'); pag.wait_for_timeout(2500)
+    USRG['llamadas'].clear(); USRG['cuerpos'].clear(); RED['google'].clear()
+    pag.evaluate("""async () => { _bloqueoUser = {usuario:'ptamayo', nombre:'Pool'}; document.getElementById('blMotivo').value = 'Cierre de planilla'; const h = document.getElementById('blHoras'); if (h) { if (!Array.from(h.options || []).some(o => o.value === '3')) { const o = document.createElement('option'); o.value = '3'; h.appendChild(o); } h.value = '3'; } await enviarSolicitudAcceso(); }""")
+    pag.wait_for_timeout(800)
+    cu = ''.join(USRG['cuerpos'])
+    ok('Login: pedir acceso temporal va a Azure con las horas pedidas y NO por Google', USRG['llamadas'] == ['saveSolicitudAcceso'] and '"horas_solicitadas":"3"' in cu and 'saveSolicitudAcceso' not in RED['google'] and pag.evaluate("() => document.getElementById('blConfirmacion').style.display") == 'block', ','.join(USRG['llamadas']) + ' | ' + cu[:160] + ' | google: ' + ','.join(RED['google']))
+    USRG['modo'] = 'caido'; USRG['llamadas'].clear(); RED['google'].clear()
+    pag.evaluate("""async () => { document.getElementById('blMotivo').value = 'otra'; await enviarSolicitudAcceso(); }""")
+    pag.wait_for_timeout(800)
+    ok('Login: con Azure caido, pedir acceso va por Google', 'saveSolicitudAcceso' in RED['google'], ','.join(RED['google']))
+    USRG['modo'] = 'ok'
+    ok('Login (index) sin errores de JavaScript en la solicitud de acceso', not errores, '; '.join(errores[:3]))
+    pag.close()
     for nombre, ruta in [('Calculo Remunerativo', 'frontend/pages/calculo-remunerativo.html'), ('Login (index)', 'index.html')]:
         pag = ctx.new_page(); errores = []
         pag.on('pageerror', lambda e: errores.append((str(e)+' @ '+(e.stack or '').split('\n')[1:3].__str__())[:400]))

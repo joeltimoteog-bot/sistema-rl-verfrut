@@ -10,6 +10,7 @@
    POST mantenimiento/cv/fus{Encender|Apagar|Simular}   (_FUS_AZURE_V1)
    POST mantenimiento/cv/sol{Encender|Apagar|Simular}   (_SOL_AZURE_V1)
    POST mantenimiento/cv/cumpl{Encender|Apagar|Simular|Motor}   (_CUMPL_W_V1)
+   POST mantenimiento/cv/usr{Encender|Apagar|Simular|Usuarios}   (_USR_AZURE_V1)
    ═══════════════════════════════════════════════════════════════════════════ */
 const { sql, getPool } = require('../shared/db');
 const G = require('../shared/cv-guardar');
@@ -18,6 +19,7 @@ const HOR = require('../shared/horas-guardar');   /* _HORAS_AZURE_PRIMERO_V1 */
 const FUS = require('../shared/fus-guardar');   /* _FUS_AZURE_V1 */
 const SOL = require('../shared/sol-guardar');   /* _SOL_AZURE_V1 */
 const CUW = require('../shared/cumpl-guardar');   /* _CUMPL_W_V1 */
+const USR = require('../shared/usr-guardar');   /* _USR_AZURE_V1 */
 
 async function ponerEstado(pool, clave, valor) {
   await pool.request().input('k', sql.NVarChar(40), clave).input('v', sql.NVarChar(400), valor)
@@ -71,6 +73,14 @@ module.exports = async function (context, req) {
     if (accion === 'capEncender') { await ponerEstado(pool, 'cap_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
     if (accion === 'capApagar') { await ponerEstado(pool, 'cap_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
     if (accion === 'capSimular') { const r = await CAP.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', b.rol || 'administrador', true); return res(r.status, r.body); }
+    /* _USR_AZURE_V1 */
+    if (accion === 'usrEncender') { await ponerEstado(pool, 'usr_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
+    if (accion === 'usrApagar') { await ponerEstado(pool, 'usr_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
+    if (accion === 'usrSimular') { const r = await USR.ejecutar(pool, b.accion, b.datos || {}, b.operador || 'jtimoteo', true, b.ahora); return res(r.status, r.body); }
+    if (accion === 'usrUsuarios') {   /* para comparar con la hoja: SIN contraseñas (solo si esta cifrada o no) */
+      const r = await pool.request().query("SELECT id_sistema, usuario, nombre, rol, empresa, activo, correo, CASE WHEN password LIKE '$2%' THEN 1 ELSE 0 END AS cifrada FROM dbo.usuarios ORDER BY id_sistema");
+      return res(200, { success: true, usuarios: r.recordset });
+    }
     /* _CUMPL_W_V1 */
     if (accion === 'cumplEncender') { await ponerEstado(pool, 'cumpl_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
     if (accion === 'cumplApagar') { await ponerEstado(pool, 'cumpl_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
