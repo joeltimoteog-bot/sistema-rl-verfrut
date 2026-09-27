@@ -29,6 +29,7 @@ function comoHoja(v) {
   const s = String(v), t = s.trim();
   let m;
   if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) return celdaFecha(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 5)));
+  if ((m = t.match(/^(\d{4})-(\d{1,2})$/)) && +m[2] >= 1 && +m[2] <= 12) return celdaFecha(new Date(Date.UTC(+m[1], +m[2] - 1, 1, 5)));   /* _E360_AZURE_V1: '2026-06' la hoja lo vuelve 01/06/2026 (censo 27-set) */
   if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/))) return celdaFecha(new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] + 5, +m[5], +(m[6] || 0))));
   if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) {   /* _FUS_AZURE_V1: la hoja esta en es_MX: dia/mes/año pasa a fecha (si es una fecha valida) */
     const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], 5));

@@ -27,6 +27,7 @@ USRG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _USR_AZURE_V1  ok | cai
 CUMPLW = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _CUMPL_W_V1  ok | caido
 SOLG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _SOL_AZURE_V1  ok | caido
 FUSG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _FUS_AZURE_V1  ok | caido | 503
+E360G = {'modo': 'ok', 'llamadas': [], 'auth': [], 'cuerpos': []}   # _E360_AZURE_V1  ok | rechazo | caido | 503
 MANTG = {'modo': 'ok', 'llamadas': [], 'auth': [], 'cuerpos': []}   # _MANT_AZURE_V1  ok | rechazo | caido | 503
 HORASG = {'modo': 'ok', 'llamadas': [], 'auth': [], 'cuerpos': []}   # _HORAS_AZURE_PRIMERO_V1  ok | rechazo | caido | 503
 
@@ -101,6 +102,12 @@ def resp_azure(url, post=''):
         acc = url.split('/api/fus/guardar/')[1].split('?')[0]
         FUSG['llamadas'].append(acc)
         return {'success': True, 'fuente': 'azure', 'id': 'FUS-0013'} if acc == 'saveFusion' else {'success': True, 'fuente': 'azure', 'message': 'Fusión actualizada'}
+    if '/api/e360/guardar/' in url:
+        acc = url.split('/api/e360/guardar/')[1].split('?')[0]
+        E360G['llamadas'].append(acc); E360G['cuerpos'].append(post)
+        if E360G['modo'] == 'rechazo': return {'success': False, 'error': 'Sin permisos: solo administradores pueden eliminar evaluaciones'}
+        if acc == 'saveEvaluacion360': return {'success': True, 'id': 'EVA-1', 'accion': 'creada', 'periodo': '2026-09', 'fuente': 'azure'}
+        return {'success': True, 'mensaje': 'Evaluación archivada correctamente', 'fuente': 'azure'}
     if '/api/mant/guardar/' in url:
         acc = url.split('/api/mant/guardar/')[1].split('?')[0]
         MANTG['llamadas'].append(acc); MANTG['cuerpos'].append(post)
@@ -204,6 +211,14 @@ def enrutar(route):
             if FUSG['modo'] == 'caido':
                 FUSG['llamadas'].append('caido')
                 return route.abort()
+        if '/api/e360/guardar/' in url:
+            E360G['auth'].append(req.headers.get('authorization', ''))
+            if E360G['modo'] == 'caido':
+                E360G['llamadas'].append('caido')
+                return route.abort()
+            if E360G['modo'] == '503':
+                E360G['llamadas'].append('503')
+                return route.fulfill(status=503, body='{"success":false,"apagado":true}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if '/api/mant/guardar/' in url:
             MANTG['auth'].append(req.headers.get('authorization', ''))
             if MANTG['modo'] == 'caido':
@@ -726,6 +741,34 @@ with sync_playwright() as pw:
     r = pag.evaluate("""async () => { const r = await fetch(API + '?' + new URLSearchParams({action:'listarSolicitudesMantenimiento'})); const d = await r.json(); return d && d.ok; }""")
     ok('Mantenimiento: las consultas (listar) siguen por Google', r is True and 'listarSolicitudesMantenimiento' in RED['google'], ','.join(RED['google']))
     ok('Mantenimiento sin errores de JavaScript', not errores, '; '.join(errores[:4]))
+    pag.close()
+
+    # ───────── EVALUACION 360 (_E360_AZURE_V1) ─────────
+    pag = ctx.new_page(); errores = []
+    pag.on('pageerror', lambda e: errores.append((str(e)+' @ '+(e.stack or '').split('\n')[1:3].__str__())[:400]))
+    pag.goto(BASE + 'frontend/pages/evaluacion360.html', wait_until='load'); pag.wait_for_timeout(3000)
+    ok('Evaluacion 360: la pagina carga (apiPost existe)', pag.evaluate("typeof apiPost") == 'function', pag.url)
+    E360G['llamadas'].clear(); E360G['auth'].clear(); E360G['cuerpos'].clear(); RED['google'].clear()
+    r = pag.evaluate("""async () => { const b = {action:'saveEvaluacion360', id:'EVA-1', supervisor:'Pool Tamayo Rodríguez', empresa:'RAPEL', fecha:'2026-09-27', periodo:'2026-09', competencias:[{nombre:'Liderazgo', promedio:4, respuestas:[{valor:4}]}], porcentaje:80, clasificacion:'Bueno', evaluadorUser:'JOEL'};
+        const x = await Promise.all([apiPost(Object.assign({}, b)), apiPost(Object.assign({}, b))]); return x.map(d => (d && d.fuente) + ':' + (d && d.success) + ':' + (d && d.accion)).join(','); }""")
+    ok('Evaluacion 360: guardar va a Azure (una sola vez con doble clic) y NO por Google', r == 'azure:true:creada,azure:true:creada' and E360G['llamadas'] == ['saveEvaluacion360'] and 'saveEvaluacion360' not in RED['google'], r + ' | azure: ' + ','.join(E360G['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    ok('Evaluacion 360: va con el token y la huella, y espera que Google copie a la hoja', E360G['cuerpos'] and E360G['auth'][0].startswith('Bearer ') and '"client_id":"e360-' in E360G['cuerpos'][0] and '"periodo":"2026-09"' in E360G['cuerpos'][0] and 'cvAplicarDesdeAzure' in RED['google'], str(E360G['auth'][:1]) + ' | ' + (E360G['cuerpos'][0][:140] if E360G['cuerpos'] else 'Azure no recibio nada') + ' | google: ' + ','.join(RED['google']))
+    E360G['llamadas'].clear(); RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'deleteEvaluacion360', id:'EVA-1', usuario:'jtimoteo'}); return (d && d.fuente) + ':' + (d && d.success); }""")
+    ok('Evaluacion 360: eliminar va a Azure y NO por Google', r == 'azure:true' and E360G['llamadas'] == ['deleteEvaluacion360'] and 'deleteEvaluacion360' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    pag.wait_for_timeout(800); E360G['modo'] = 'rechazo'; RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiPost({action:'deleteEvaluacion360', id:'EVA-2', usuario:'jtimoteo'}); await new Promise(z => setTimeout(z, 300)); return (d && d.success) + ':' + (d && d.error); }""")
+    ok('Evaluacion 360: si Azure dice que no (sin permiso), ese es el mensaje y NO se reintenta por Google', r == 'false:Sin permisos: solo administradores pueden eliminar evaluaciones' and 'deleteEvaluacion360' not in RED['google'] and 'cvAplicarDesdeAzure' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    E360G['modo'] = 'caido'; RED['google'].clear(); E360G['llamadas'].clear()
+    r = pag.evaluate(CARRERA, {'action': 'saveEvaluacion360', 'supervisor': 'X', 'x': 'caido'})
+    ok('Evaluacion 360: con Azure caido, se guarda por Google', r['r'] == 'OK' and 'saveEvaluacion360' in RED['google'] and E360G['llamadas'].count('caido') == 2, r['r'] + ' | azure: ' + ','.join(E360G['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    E360G['modo'] = '503'; RED['google'].clear(); E360G['llamadas'].clear()
+    pag.evaluate(CARRERA, {'action': 'saveEvaluacion360', 'supervisor': 'Y', 'x': 1}); pag.evaluate(CARRERA, {'action': 'saveEvaluacion360', 'supervisor': 'Z', 'x': 2})
+    ok('Evaluacion 360: apagado (503) -> Google, y no vuelve a preguntar a Azure por 5 min', E360G['llamadas'] == ['503'] and RED['google'].count('saveEvaluacion360') == 2, 'azure: ' + ','.join(E360G['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    E360G['modo'] = 'ok'; RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiGet({action:'getEvaluaciones360', empresa:'AMBAS'}); return d && d.success; }""")
+    ok('Evaluacion 360: la lista sigue saliendo de Google', r is True and 'getEvaluaciones360' in RED['google'], ','.join(RED['google']))
+    ok('Evaluacion 360 sin errores de JavaScript', not errores, '; '.join(errores[:4]))
     pag.close()
 
     # ───────── CALCULO REMUNERATIVO y LOGIN ─────────

@@ -54,6 +54,12 @@ const ESQ = {
     ['nro', 'n'], ['fecha_solicitud', 'f'], ['nro_visita', 'n'], ['supervisor', 't200'], ['empresa', 't20'], ['fundo', 't100'], ['semana', 'n'],
     ['fecha_informe', 'f'], ['motivo', 't2000'], ['solicitado_por', 't200'], ['estado', 't30'], ['resuelto_por', 't200'], ['fecha_resolucion', 'f'],
     ['motivo_rechazo', 't2000']] },
+  /* _E360_AZURE_V1 (27-set): BB.DD-EVALUACIONES (Evaluacion 360) ya reparada: 21 columnas; Periodo como TEXTO yyyy-MM */
+  e360_evaluaciones: { tabla: 'dbo.E360_Evaluaciones', cols: [
+    ['id', 't40'], ['fecha', 'f'], ['evaluador', 't200'], ['supervisor', 't200'], ['empresa', 't20'], ['sector', 't100'],
+    ['p_liderazgo', 'n'], ['p_comunicacion', 'n'], ['p_cumplimiento', 'n'], ['p_gestion', 'n'], ['p_resolucion', 'n'], ['p_planificacion', 'n'],
+    ['total', 'n'], ['porcentaje', 'n'], ['nivel', 't30'], ['observaciones', 't2000'], ['recomendaciones', 't2000'], ['usuario_registro', 't200'],
+    ['fecha_registro', 'f'], ['periodo', 't10'], ['detalle', 't4000']] },
   /* _MANT_AZURE_V1 (27-set): Registro de Mantenimiento (A-S de guardarSolicitud + 4 de Atendida/Cerrar) */
   mant_registro: { tabla: 'dbo.Mant_Registro', cols: [
     ['id_solicitud', 't20'], ['fecha_solicitud', 'f'], ['dni', 'n'], ['nombre', 't200'], ['empresa', 't20'], ['cod_interno', 't40'],
