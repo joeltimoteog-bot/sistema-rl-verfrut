@@ -21,7 +21,8 @@ const COLS = {
     ['motivo_retraso', 18, 't2000'], ['redaccion', 19, 'tmax'], ['nombre_informe', 20, 't500'], ['enlace_informe', 21, 't1000'],
     ['nombre_reporte', 22, 't500'], ['enlace_reporte', 23, 't1000'], ['registrado_por', 24, 't150'], ['gravedad', 25, 't20'],
     ['estado_gestion', 26, 't30'], ['tipo_sancion', 27, 't100'], ['sancion_fecha_inicio', 28, 'fecha'], ['sancion_fecha_fin', 29, 'fecha'],
-    ['sancion_dias', 30, 'num'], ['ultima_alerta', 31, 'tfecha100']
+    ['sancion_dias', 30, 'num'], ['ultima_alerta', 31, 'tfecha100'],
+    ['fecha_cierre', 32, 'fechaflex']   /* _COL_CIERRE_V1: la fecha de cierre ya no comparte columna con las alertas */
   ],
   visitas: [
     ['nro', 0, 'int'], ['fecha_reg', 1, 'fecha'], ['empresa', 2, 't20'], ['supervisor', 3, 't150'], ['dni', 4, 'dni'],
@@ -38,7 +39,7 @@ const TABLA = { casos: 'dbo.Casos', visitas: 'dbo.Visitas' };
 function tipoSql(t) {
   if (t === 'int') return 'INT NULL';
   if (t === 'num') return 'FLOAT NULL';
-  if (t === 'fecha') return 'DATETIME2(3) NULL';
+  if (t === 'fecha' || t === 'fechaflex') return 'DATETIME2(3) NULL';
   if (t === 'dni') return 'NVARCHAR(15) NULL';
   if (t === 'fotos') return 'NVARCHAR(MAX) NULL, fotos_n FLOAT NULL';
   if (t === 'tmax') return 'NVARCHAR(MAX) NULL';
@@ -55,6 +56,7 @@ function ddl(tipo) {
       creado DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(),
       actualizado DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());
   IF COL_LENGTH('${t}', 'fila') IS NULL THROW 50001, 'Ya existe ${t} con otra estructura: no se toca', 1;
+  ${COLS[tipo].filter(c => c[2] !== 'fotos').map(c => `IF COL_LENGTH('${t}', '${c[0]}') IS NULL ALTER TABLE ${t} ADD ${c[0]} ${tipoSql(c[2])};`).join('\n  ')}
   IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_${tipo}_nro') CREATE INDEX IX_${tipo}_nro ON ${t}(nro);
   IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_${tipo}_sup') CREATE INDEX IX_${tipo}_sup ON ${t}(supervisor);`;
 }
@@ -72,6 +74,11 @@ function convertir(x, t, col, problemas, fila) {
   if (t === 'int') return (typeof x === 'number' && x % 1 === 0) ? x : mal('se esperaba numero entero, hay ' + JSON.stringify(x).slice(0, 40));
   if (t === 'num') return typeof x === 'number' ? x : mal('se esperaba numero, hay ' + JSON.stringify(x).slice(0, 40));
   if (t === 'fecha') { if (!esFecha(x) || !x.$d) return mal('se esperaba fecha, hay ' + JSON.stringify(x).slice(0, 40)); return new Date(x.$d); }
+  if (t === 'fechaflex') {   /* fecha, o texto yyyy-MM-dd (dia de Lima) */
+    if (esFecha(x) && x.$d) return new Date(x.$d);
+    const m = String(x).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], 5)) : mal('se esperaba fecha de cierre, hay ' + JSON.stringify(x).slice(0, 40));
+  }
   if (t === 'dni') { const s = String(x); return s.length <= 15 ? s : mal('DNI de ' + s.length + ' caracteres'); }
   if (t === 'fotos') return typeof x === 'number' ? [null, x] : [String(x), null];
   if (t === 'tfecha100') return esFecha(x) ? x.$d : String(x).slice(0, 100);
@@ -83,7 +90,7 @@ function convertir(x, t, col, problemas, fila) {
 function tipoMssql(t) {
   if (t === 'int') return sql.Int;
   if (t === 'num') return sql.Float;
-  if (t === 'fecha') return sql.DateTime2(3);
+  if (t === 'fecha' || t === 'fechaflex') return sql.DateTime2(3);
   if (t === 'dni') return sql.NVarChar(15);
   if (t === 'tmax') return sql.NVarChar(sql.MAX);
   if (t === 'tfecha100') return sql.NVarChar(100);
