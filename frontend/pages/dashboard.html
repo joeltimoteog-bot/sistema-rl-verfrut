@@ -13574,7 +13574,8 @@ function pintarCampana() {
 function itemHtml(a) {
   var e = EST[a.estado], esCaso = a.tipo === 'CASO';
   var titulo = esCaso ? 'Caso N° ' + a.caso + ' — ' + esc(a.trabajador) : esc(a.actividad) + ' (' + esc(a.caso) + ')';
-  var sub = esc(a.actividad) + ' · Límite ' + dmy(a.fecha_limite) + ' · ' + plazoTxt(a) + (a.documentos_pendientes && a.documentos_pendientes.length ? '<br>Pendiente: ' + esc(a.documentos_pendientes.join(', ')) : '') + (D.data.esAdmin ? '<br>Responsable: ' + esc(a.responsable) : '');
+  var sub = esc(a.actividad) + ' · Límite ' + dmy(a.fecha_limite) + ' · ' + plazoTxt(a) + (a.documentos_pendientes && a.documentos_pendientes.length ? '<br>Pendiente: ' + esc(a.documentos_pendientes.join(', ')) : '') + (D.data.esAdmin ? '<br>Responsable: ' + esc(a.responsable) : '') +
+    (a.cubre_a ? '<br><span style="color:#5b21b6">🔄 ' + (D.data.esAdmin ? 'Cubre a ' : 'Cubres a ') + esc(a.cubre_a) + (a.ausencia_hasta ? ' hasta el ' + dmy(a.ausencia_hasta) : ' mientras dure su ausencia') + '</span>' : '');   /* _AUSENCIAS_V1 */
   var btn = a.dias_retraso > 0 ? '<button class="cumpl-btn rojo" onclick="_cumplIrA(\'' + a.tipo + '\',\'' + esc(a.caso) + '\')">REGULARIZAR AHORA</button>' : '<button class="cumpl-btn" onclick="_cumplIrA(\'' + a.tipo + '\',\'' + esc(a.caso) + '\')">' + (esCaso ? 'REVISAR CASO' : 'REGISTRAR VISITA') + '</button>';
   return '<div class="cumpl-it"><div style="font-size:18px">' + e.ico + '</div><div style="flex:1"><div class="t">' + titulo + '</div><div class="s">' + sub + '</div>' + btn + '</div></div>';
 }
@@ -13798,6 +13799,13 @@ function crearNavAdmin() {
   D.tab = 'tabla';
 }
 window._cumplPanelAdmin = cargarPanelAdmin;
+/* _AUSENCIAS_V1: insignias de ausencia / reemplazo en la tabla del coordinador */
+function _ausInsignias(s) {
+  var T = { 'VACACIONES': '🏖️ Vacaciones', 'DESCANSO MEDICO': '🏥 Descanso médico', 'ACCIDENTE': '🚑 Accidente', 'LICENCIA': '📄 Licencia', 'OTRO': '📌 Ausente' }, h = '';
+  if (s.ausencia) h += '<br><span class="cumpl-bd" style="background:#fef3c7;color:#92400e;display:inline-block;margin-top:3px">' + (T[s.ausencia.tipo] || '📌 Ausente') + (s.ausencia.hasta ? ' hasta ' + dmy(s.ausencia.hasta) : '') + '</span>' + (s.ausencia.reemplazo ? '<br><span style="font-size:10.5px;color:#64748b">lo cubre ' + esc(s.ausencia.reemplazo) + '</span>' : '');
+  (s.cubriendo || []).forEach(function (c) { h += '<br><span class="cumpl-bd" style="background:#ede9fe;color:#5b21b6;display:inline-block;margin-top:3px">🔄 Cubre a ' + esc(c.nombre) + (c.hasta ? ' hasta ' + dmy(c.hasta) : '') + '</span>'; });
+  return h;
+}
 async function cargarPanelAdmin(forzar) {
   if (!esAdmin()) return;
   if (D.panel && !forzar && (Date.now() - D.panelTs) < 120000) { pintarAdmin(); return; }
@@ -13827,7 +13835,7 @@ function pintarAdmin() {
       '<div style="overflow:auto"><table class="cumpl-tb"><thead><tr><th>Supervisor</th><th>Sector</th><th style="text-align:right">Visitas pend.</th><th style="text-align:right">Casos</th><th style="text-align:right">En plazo</th><th style="text-align:right">Por vencer</th><th style="text-align:right">Vencidos</th><th style="text-align:right">% Cumplimiento</th><th>Restricción</th></tr></thead><tbody>' +
       (filas.length ? filas.map(function (s) {
         var col = s.nivel === 'EXCELENTE' ? '#16a34a' : s.nivel === 'REGULAR' ? '#d97706' : '#dc2626';
-        return '<tr><td><b>' + esc(s.nombre) + '</b><br><span style="color:#64748b;font-size:10.5px">' + esc(s.empresa) + '</span></td><td>' + esc(s.sector) + '</td><td style="text-align:right">' + s.visitas_pendientes + '</td><td style="text-align:right">' + s.casos_abiertos + '</td><td style="text-align:right;color:#16a34a;font-weight:700">' + s.en_plazo + '</td><td style="text-align:right;color:#d97706;font-weight:700">' + s.por_vencer + '</td><td style="text-align:right;color:#dc2626;font-weight:800">' + s.vencidos + (s.criticos ? ' <span title="críticos">⚫' + s.criticos + '</span>' : '') + '</td>' +
+        return '<tr><td><b>' + esc(s.nombre) + '</b><br><span style="color:#64748b;font-size:10.5px">' + esc(s.empresa) + '</span>' + _ausInsignias(s) + '</td><td>' + esc(s.sector) + '</td><td style="text-align:right">' + s.visitas_pendientes + '</td><td style="text-align:right">' + s.casos_abiertos + '</td><td style="text-align:right;color:#16a34a;font-weight:700">' + s.en_plazo + '</td><td style="text-align:right;color:#d97706;font-weight:700">' + s.por_vencer + '</td><td style="text-align:right;color:#dc2626;font-weight:800">' + s.vencidos + (s.criticos ? ' <span title="críticos">⚫' + s.criticos + '</span>' : '') + '</td>' +
           '<td style="text-align:right"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div style="width:70px;height:7px;background:#eef2f6;border-radius:5px;overflow:hidden"><div style="height:100%;width:' + s.porcentaje + '%;background:' + col + '"></div></div><b style="color:' + col + '">' + s.porcentaje + '%</b></div></td>' +
           '<td>' + (s.restriccion ? '<span class="cumpl-bd" style="background:#fee2e2;color:#7f1d1d">⛔ ACTIVA</span> <button class="cumpl-btn gris" style="margin:0;padding:3px 8px" onclick="_cumplLevantar(\'' + esc(s.usuario) + '\',\'' + esc(s.nombre) + '\')">Levantar</button>' : s.exonerado_hasta ? '<span style="font-size:10.5px;color:#64748b">levantada hasta ' + dmy(s.exonerado_hasta) + '</span>' : '—') + '</td></tr>';
       }).join('') : '<tr><td colspan="9" style="text-align:center;color:#64748b;padding:14px">Sin supervisores para ese filtro</td></tr>') + '</tbody></table></div>';
@@ -13843,7 +13851,7 @@ function pintarAdmin() {
       '<select class="cumpl-sel" id="cgMes"><option value="">Todos los meses</option>' + Object.keys(meses).sort().reverse().map(function (m) { return '<option' + (g.mes === m ? ' selected' : '') + '>' + m + '</option>'; }).join('') + '</select>' +
       '<span style="align-self:center;font-size:12px;color:#64748b">' + acts.length + ' actividad(es)</span></div>' +
       '<div style="overflow:auto"><table class="cumpl-tb"><thead><tr><th>Estado</th><th>Responsable</th><th>Caso</th><th>Actividad</th><th>Registro</th><th>Límite</th><th>Días</th><th>Pendiente</th><th></th></tr></thead><tbody>' +
-      (acts.length ? acts.map(function (a) { return '<tr><td>' + badge(a.estado) + '</td><td>' + esc(a.responsable) + '</td><td><b>' + esc(a.caso) + '</b>' + (a.trabajador ? '<br><span style="color:#64748b;font-size:10.5px">' + esc(a.trabajador) + '</span>' : '') + '</td><td>' + esc(a.actividad) + (a.motivo ? '<br><span style="color:#64748b;font-size:10.5px">' + esc(a.motivo) + '</span>' : '') + '</td><td>' + dmy(a.fecha_registro) + '</td><td>' + dmy(a.fecha_limite) + '</td><td style="font-weight:700;color:' + (a.dias_retraso > 0 ? '#dc2626' : '#16a34a') + '">' + (a.dias_retraso > 0 ? '+' + a.dias_retraso : a.dias_restantes) + '</td><td style="font-size:11px">' + esc((a.documentos_pendientes || []).join(', ')) + '</td><td>' + (a.tipo === 'CASO' ? '<button class="cumpl-btn" style="margin:0;padding:3px 8px" onclick="_cumplIrA(\'CASO\',\'' + esc(a.caso) + '\')">Abrir</button>' : '') + '</td></tr>'; }).join('') : '<tr><td colspan="9" style="text-align:center;color:#64748b;padding:14px">Sin actividades</td></tr>') + '</tbody></table></div>';
+      (acts.length ? acts.map(function (a) { return '<tr><td>' + badge(a.estado) + '</td><td>' + esc(a.responsable) + (a.cubre_a ? '<br><span style="color:#5b21b6;font-size:10.5px">🔄 cubre a ' + esc(a.cubre_a) + '</span>' : '') + '</td><td><b>' + esc(a.caso) + '</b>' + (a.trabajador ? '<br><span style="color:#64748b;font-size:10.5px">' + esc(a.trabajador) + '</span>' : '') + '</td><td>' + esc(a.actividad) + (a.motivo ? '<br><span style="color:#64748b;font-size:10.5px">' + esc(a.motivo) + '</span>' : '') + '</td><td>' + dmy(a.fecha_registro) + '</td><td>' + dmy(a.fecha_limite) + '</td><td style="font-weight:700;color:' + (a.dias_retraso > 0 ? '#dc2626' : '#16a34a') + '">' + (a.dias_retraso > 0 ? '+' + a.dias_retraso : a.dias_restantes) + '</td><td style="font-size:11px">' + esc((a.documentos_pendientes || []).join(', ')) + '</td><td>' + (a.tipo === 'CASO' ? '<button class="cumpl-btn" style="margin:0;padding:3px 8px" onclick="_cumplIrA(\'CASO\',\'' + esc(a.caso) + '\')">Abrir</button>' : '') + '</td></tr>'; }).join('') : '<tr><td colspan="9" style="text-align:center;color:#64748b;padding:14px">Sin actividades</td></tr>') + '</tbody></table></div>';
     ['cgTipo', 'cgEst', 'cgSup', 'cgMes'].forEach(function (id) { var el = document.getElementById(id); if (el) el.onchange = function () { D.g = { tipo: document.getElementById('cgTipo').value, est: document.getElementById('cgEst').value, sup: document.getElementById('cgSup').value, mes: document.getElementById('cgMes').value }; pintarAdmin(); }; });
   } else if (t === 'just') {
     body.innerHTML = '<p style="color:#64748b">Cargando…</p>';
@@ -13865,7 +13873,7 @@ function pintarAdmin() {
       if (!r || !r.success) { body.innerHTML = '<p style="color:#dc2626">' + esc((r && r.error) || 'Error') + '</p>'; return; }
       body.innerHTML = '<p style="margin:0 0 10px;font-size:12.5px;color:#334155">Los plazos se cuentan en <b>días hábiles</b> según el <b>calendario laboral</b> (días laborables y feriados, al final de la tabla): se aplica a casos, visitas, alertas y cumplimiento. Los cambios aplican de inmediato y quedan en el historial.</p>' +
         '<table class="cumpl-tb"><thead><tr><th>Parámetro</th><th>Valor</th><th>Descripción</th><th>Actualizado</th></tr></thead><tbody>' +
-        r.filas.map(function (f) {
+        r.filas.filter(function (f) { return f.clave !== 'ausencias'; }).map(function (f) {   /* _AUSENCIAS_V1: se gestionan en Gestion Usuarios */
           var celda;   /* _CALENDARIO_V1: dias con casillas y feriados en un cuadro */
           if (f.clave === 'dias_laborables') {
             var sel = String(f.valor || '').toUpperCase();

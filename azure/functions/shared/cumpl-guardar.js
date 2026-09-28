@@ -17,15 +17,17 @@ const TH = require('./tablas-hoja');
 const CG = require('./cv-guardar');
 const CAP = require('./cap-guardar');
 
-const ACCIONES = ['cumplJustificar', 'cumplConfigGuardar', 'cumplRestriccionLevantar'];
+const ACCIONES = ['cumplJustificar', 'cumplConfigGuardar', 'cumplRestriccionLevantar', 'cumplAusencia'];   /* _AUSENCIAS_V1: + cumplAusencia */
+const AUS_DUENOS = ['jtimoteo'];   /* _AUSENCIAS_V1: decision de Joel (27-set): solo el administrador del sistema */
 const CLAVES = ['cumpl_justif', 'cumpl_restricc', 'cumpl_config', 'cumpl_historial'];
 const ADMIN = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'];   /* = cumplEsAdmin_ */
 const DEFAULTS = [['plazo_registro_caso', 1], ['plazo_investigacion', 5], ['plazo_documentos', 7], ['plazo_cierre', 10], ['plazo_visita_dias', 1],
   ['aviso_proximo_dias', 2], ['critico_dias', 5], ['escalar_coordinador_dias', 3], ['restricciones_activas', 'SI'],
   ['modulos_restringidos', 'correo,fusiones,calculo,mantenimiento,almuerzos,exportar'], ['correo_coordinador', ''],
   ['indice_excelente_pct', 90], ['indice_regular_pct', 70],
-  ['dias_laborables', 'LUN,MAR,MIE,JUE,VIE'], ['feriados', '2026-01-01,2026-04-02,2026-04-03,2026-05-01,2026-06-07,2026-06-29,2026-07-23,2026-07-28,2026-07-29,2026-08-06,2026-08-30,2026-10-08,2026-11-01,2026-12-08,2026-12-09,2026-12-25,2027-01-01,2027-03-25,2027-03-26,2027-05-01,2027-06-07,2027-06-29,2027-07-23,2027-07-28,2027-07-29,2027-08-06,2027-08-30,2027-10-08,2027-11-01,2027-12-08,2027-12-09,2027-12-25']];   /* = CUMPL_DEFAULTS · _CALENDARIO_V1: + calendario */
+  ['dias_laborables', 'LUN,MAR,MIE,JUE,VIE'], ['feriados', '2026-01-01,2026-04-02,2026-04-03,2026-05-01,2026-06-07,2026-06-29,2026-07-23,2026-07-28,2026-07-29,2026-08-06,2026-08-30,2026-10-08,2026-11-01,2026-12-08,2026-12-09,2026-12-25,2027-01-01,2027-03-25,2027-03-26,2027-05-01,2027-06-07,2027-06-29,2027-07-23,2027-07-28,2027-07-29,2027-08-06,2027-08-30,2027-10-08,2027-11-01,2027-12-08,2027-12-09,2027-12-25'], ['ausencias', '[]']];   /* = CUMPL_DEFAULTS · _CALENDARIO_V1: + calendario · _AUSENCIAS_V1: + ausencias */
 const MOTOR = require('./cumpl-motor');
+const AUS_DESC = 'AUSENCIAS / REEMPLAZOS (vacaciones, descanso medico...). Se editan SOLO desde Gestion Usuarios (no a mano)';   /* _AUSENCIAS_V1 */
 
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
 const S = v => esD(v) ? v.$s : String(v == null ? '' : v);
@@ -168,6 +170,7 @@ async function ejecutar(pool, accion, b, usuario, rol, prueba, ahoraMs) {
       const DESC = { dias_laborables: 'CALENDARIO: dias que se trabajan (LUN,MAR,MIE,JUE,VIE,SAB,DOM). Los demas NO cuentan en ningun plazo (casos, visitas, cumplimiento)',
         feriados: 'CALENDARIO: feriados que NO cuentan en ningun plazo (aaaa-mm-dd, separados por coma)' };
       for (const k of Object.keys(cambios)) {
+        if (k === 'ausencias') continue;   /* _AUSENCIAS_V1: solo por cumplAusencia (jtimoteo) */
         let i = filas.findIndex(r => S(r[0] === undefined ? '' : r[0]).trim() === k);
         if (i < 0 && DESC[k]) {   /* _CALENDARIO_V1: clave nueva que la tabla aun no tiene: se agrega (Google la crea igual) */
           const d0 = DEFAULTS.find(d => d[0] === k), nuevaF = [k, d0 ? d0[1] : '', DESC[k], ahora, 'sistema'].map(CAP.comoHoja);
@@ -185,6 +188,33 @@ async function ejecutar(pool, accion, b, usuario, rol, prueba, ahoraMs) {
       if (hechos.length) tocar.push('cumpl_config');
       cuerpo.config = hechos; cuerpo.por = u; cuerpo.fecha = ahora.toISOString(); log = logs;
       resp = { success: true, cambios: hechos.length, config: configDe({ filas }).raw };
+
+    } else if (accion === 'cumplAusencia') {   /* _AUSENCIAS_V1 */
+      const u = usr(usuario);
+      if (AUS_DUENOS.indexOf(u) < 0) { await tx.rollback(); return rechazo('Solo el administrador del sistema puede registrar ausencias y reemplazos.'); }
+      const T = await TH.leer(pool, 'cumpl_config');
+      if (!T) { await tx.rollback(); return { status: 503, body: { success: false, error: 'Tabla de configuracion aun no cargada' } }; }
+      /* lectura DIRECTA dentro del bloqueo (no la memoria por marca): dos registros seguidos nunca se pisan */
+      const rr = await tx.request().query(`SELECT * FROM ${TH.ESQ.cumpl_config.tabla} ORDER BY fila`);
+      const filas = rr.recordset.map(x => TH.aCeldas('cumpl_config', x));
+      let i = filas.findIndex(r => S(r[0] === undefined ? '' : r[0]).trim() === 'ausencias');
+      if (i < 0) {
+        const nuevaF = ['ausencias', '[]', AUS_DESC, ahora, 'sistema'].map(CAP.comoHoja);
+        await CAP.agregarFilas(tx, 'cumpl_config', [nuevaF]); filas.push(nuevaF); i = filas.length - 1;
+      }
+      const ub = await pool.request().query("SELECT datos FROM dbo.CUMPL_Datos WHERE clave = 'usuarios'");
+      const lista = ub.recordset.length ? JSON.parse(ub.recordset[0].datos) : [];
+      const p = limaPartes(ms);
+      const r = MOTOR.ausAplicar(MOTOR.ausParse(S(filas[i][1] === undefined ? '' : filas[i][1])), Object.assign({}, b, { id_nuevo: clave || String(ms) }), lista, hoyYmd(ms), hoyYmd(ms) + ' ' + p2(p.h) + ':' + p2(p.mi), u);
+      if (r.error) { await tx.rollback(); return rechazo(r.error); }
+      const json = JSON.stringify(r.lista);
+      const nueva = filas[i].slice(); while (nueva.length < 5) nueva.push('');
+      nueva[1] = CAP.comoHoja(json); nueva[3] = CAP.comoHoja(ahora); nueva[4] = CAP.comoHoja(u);
+      await cambiarFila(tx, 'cumpl_config', i + 1, nueva); tocar.push('cumpl_config');
+      cuerpo.config = [{ clave: 'ausencias', valor: json }]; cuerpo.por = u; cuerpo.fecha = ahora.toISOString();
+      log = filaLog(ms, r.log[0], 'AUSENCIA', '', '', r.log[1], '', r.a.hasta || '', '', '', '', u, r.log[2]);
+      resp = { success: true, id: r.id, ausencias: r.lista };
+      celdasPrueba = nueva;
 
     } else {   /* cumplRestriccionLevantar */
       if (ADMIN.indexOf(String(rol || '').trim().toLowerCase()) < 0) { await tx.rollback(); return rechazo('Solo un administrador o coordinador puede levantar restricciones.'); }

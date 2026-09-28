@@ -10,6 +10,27 @@ const jwt = require('jsonwebtoken');
 const { sql, getPool } = require('../shared/db');
 const { asegurarTablas } = require('../shared/cv-db');
 const TC = require('../shared/tablas-cv');   /* _TABLAS_CV_V2: tablas reales dbo.Casos / dbo.Visitas */
+const MOTOR = require('../shared/cumpl-motor');   /* _AUSENCIAS_V1 */
+
+/* _AUSENCIAS_V1 (27-set-2026): a quien cubre HOY un usuario (titulares ausentes de los que es reemplazo).
+   Asi el reemplazo ve y puede trabajar los casos del titular mientras dure la ausencia. Cache 30 s. */
+let ausCache = { t: 0, v: null };
+async function cubiertos(pool, usuarioNorm) {
+  if (!ausCache.v || Date.now() - ausCache.t > 30000) {
+    let raw = {}, usuarios = [];
+    try {
+      const r = await pool.request().query("SELECT clave, datos FROM dbo.CUMPL_Datos WHERE clave IN ('usuarios', 'config')");
+      r.recordset.forEach(f => { const d = JSON.parse(f.datos); if (f.clave === 'usuarios') usuarios = d; else raw = (d && d.raw) || {}; });
+      const TH = require('../shared/tablas-hoja'), T = await TH.leer(pool, 'cumpl_config');   /* la config real manda si ya esta en su tabla */
+      if (T) { const CUW = require('../shared/cumpl-guardar'); raw = CUW.configDe(T).raw; }
+    } catch (e) {}
+    ausCache = { t: Date.now(), v: { raw, usuarios } };
+  }
+  const { raw, usuarios } = ausCache.v, hoy = MOTOR._t.ymd(MOTOR._t.hoyLima());
+  const A = MOTOR.crearAus(raw, usuarios, () => false, () => true);
+  const yo = usuarios.filter(x => x.usuario === usuarioNorm)[0];
+  return yo ? A.coberturas(yo, hoy).map(a => { const t = A.titular(a); return [t.usuario, String(t.nombre || '').trim().toLowerCase()]; }) : [];
+}
 
 const ROLES_ADMIN_CASOS = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'];
 
@@ -48,14 +69,17 @@ async function getCasos(p, t) {
   if (!esAdmin) {
     const usuarioNorm = String((t && t.usuario) || p.usuario || '').trim().toLowerCase();
     const nombreNorm = String(p.nombre || '').trim().toLowerCase();
+    let quienes = [[usuarioNorm, nombreNorm]];
+    try { quienes = quienes.concat(await cubiertos(pool, usuarioNorm)); } catch (e) {}   /* _AUSENCIAS_V1 */
     data = data.filter(c => {
       const sup = String(c.supervisor || '').trim().toLowerCase();
       const reg = String(c.registrado_por || '').trim().toLowerCase();
       if (!sup && !reg) return false;
-      return reg === usuarioNorm || reg === nombreNorm || sup === usuarioNorm || sup === nombreNorm
-        || (sup && usuarioNorm && sup.indexOf(usuarioNorm) >= 0)
-        || (sup && nombreNorm && sup.indexOf(nombreNorm) >= 0)
-        || nombreMatch(sup, nombreNorm);
+      return quienes.some(q => { const un = q[0], nn = q[1];
+        return reg === un || reg === nn || sup === un || sup === nn
+          || (sup && un && sup.indexOf(un) >= 0)
+          || (sup && nn && sup.indexOf(nn) >= 0)
+          || nombreMatch(sup, nn); });
     });
   }
   if (p.empresa) data = data.filter(c => c.empresa === p.empresa);

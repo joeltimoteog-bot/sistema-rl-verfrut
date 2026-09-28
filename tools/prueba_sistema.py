@@ -25,6 +25,7 @@ CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
 CAPG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _CAP_AZURE_PRIMERO_V1
 USRG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _USR_AZURE_V1  ok | caido
 CUMPLW = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _CUMPL_W_V1  ok | caido
+AUS_LISTA = [{'id': 'AUS-1', 'usuario': 'ptamayo', 'nombre': 'TAMAYO RODRIGUEZ POOL', 'tipo': 'DESCANSO MEDICO', 'desde': '2026-09-15', 'hasta': '', 'reemplazo': 'nuevo', 'reemplazo_nombre': 'Usuario Nuevo Prueba', 'obs': 'accidente'}]   # _AUSENCIAS_V1
 SOLG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _SOL_AZURE_V1  ok | caido
 FUSG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _FUS_AZURE_V1  ok | caido | 503
 E360G = {'modo': 'ok', 'llamadas': [], 'auth': [], 'cuerpos': []}   # _E360_AZURE_V1  ok | rechazo | caido | 503
@@ -58,13 +59,16 @@ def resp_google(a):
     if a == 'cumplConfigListar': return {'success': True, 'filas': [
         {'clave': 'plazo_investigacion', 'valor': 5, 'descripcion': 'Dias habiles', 'actualizado': '', 'por': ''},
         {'clave': 'dias_laborables', 'valor': 'LUN,MAR,MIE,JUE,VIE', 'descripcion': 'CALENDARIO', 'actualizado': '', 'por': ''},
-        {'clave': 'feriados', 'valor': '2026-10-08,2026-12-25', 'descripcion': 'CALENDARIO', 'actualizado': '', 'por': ''}]}
+        {'clave': 'feriados', 'valor': '2026-10-08,2026-12-25', 'descripcion': 'CALENDARIO', 'actualizado': '', 'por': ''},
+        {'clave': 'ausencias', 'valor': '[{"id":"AUS-1"}]', 'descripcion': 'AUSENCIAS', 'actualizado': '', 'por': ''}]}
     if a == 'getUsuarios': return {'success': True, 'data': [
         {'usuario': 'ptamayo', 'nombre': 'TAMAYO RODRIGUEZ POOL', 'rol': 'supervisor', 'empresa': 'RAPEL', 'activo': True},
         {'usuario': 'jtimoteo', 'nombre': 'JOEL ANGEL TIMOTEO GONZA', 'rol': 'administrador', 'empresa': 'AMBAS', 'activo': True},
         {'usuario': 'nuevo', 'nombre': 'Usuario Nuevo Prueba', 'rol': 'supervisor', 'empresa': 'VERFRUT', 'activo': True},
         {'usuario': 'baja', 'nombre': 'Usuario Dado De Baja', 'rol': 'supervisor', 'empresa': 'RAPEL', 'activo': False}]}
     if a == 'accesoHorarioDeUsuario': return {'success': True, 'dentro': True, 'tieneHorario': False}
+    if a == 'cumplAusencias': return {'success': True, 'hoy': '2026-09-27', 'ausencias': AUS_LISTA}
+    if a == 'cumplAusencia': return {'success': True, 'id': 'AUS-g', 'ausencias': AUS_LISTA}
     # escrituras y lecturas genericas
     return {'success': True, 'ok': True, 'nro': 9999, 'data': [], 'hoja': 'TEST', 'fecha_registro': '2026-09-24'}
 
@@ -94,10 +98,22 @@ def resp_azure(url, post=''):
     if '/api/cumpl/guardar/' in url:
         acc = url.split('/api/cumpl/guardar/')[1].split('?')[0]
         CUMPLW['llamadas'].append(acc); CUMPLW['cuerpos'].append(post)
+        if acc == 'cumplAusencia':
+            if CUMPLW.get('rechazo'): return {'success': False, 'error': 'Ya tiene una ausencia registrada que se cruza (15/09/2026 en adelante).'}
+            return {'success': True, 'fuente': 'azure', 'id': 'AUS-2', 'ausencias': AUS_LISTA + [{'id': 'AUS-2', 'usuario': 'baja2', 'nombre': 'X', 'tipo': 'VACACIONES', 'desde': '2026-10-01', 'hasta': '2026-10-15', 'reemplazo': 'jtimoteo', 'reemplazo_nombre': 'JOEL'}]}
         return {'success': True, 'fuente': 'azure', 'hasta': '2026-10-04', 'cambios': 1, 'config': {}}
     if '/api/cumpl/' in url:
         acc = url.split('/api/cumpl/')[1].split('?')[0]
         CUMPL['llamadas'].append(acc)
+        if acc == 'cumplAusencias': return {'success': True, 'hoy': '2026-09-27', 'ausencias': AUS_LISTA, 'fuente': 'azure'}
+        if acc == 'cumplPanel' and CUMPL.get('aus'):
+            idx = {'porcentaje': 100, 'nivel': 'EXCELENTE'}
+            return {'success': True, 'hoy': '2026-09-28', 'fuente': 'azure', 'config': {}, 'supervisores': [
+                {'usuario': 'ptamayo', 'nombre': 'TAMAYO RODRIGUEZ POOL', 'empresa': 'RAPEL', 'sector': 'A', 'visitas_pendientes': 0, 'casos_abiertos': 0, 'en_plazo': 0, 'por_vencer': 0, 'vencidos': 0, 'criticos': 0, 'porcentaje': 100, 'nivel': 'EXCELENTE', 'restriccion': False, 'exonerado_hasta': '', 'indice': idx,
+                 'ausencia': {'tipo': 'DESCANSO MEDICO', 'desde': '2026-09-15', 'hasta': '2026-10-10', 'reemplazo': 'Usuario Nuevo Prueba'}},
+                {'usuario': 'nuevo', 'nombre': 'Usuario Nuevo Prueba', 'empresa': 'VERFRUT', 'sector': '', 'visitas_pendientes': 1, 'casos_abiertos': 1, 'en_plazo': 0, 'por_vencer': 0, 'vencidos': 1, 'criticos': 1, 'porcentaje': 0, 'nivel': 'BAJO', 'restriccion': False, 'exonerado_hasta': '', 'indice': idx,
+                 'cubriendo': [{'nombre': 'TAMAYO RODRIGUEZ POOL', 'tipo': 'DESCANSO MEDICO', 'desde': '2026-09-15', 'hasta': '2026-10-10'}]}],
+              'actividades': [{'tipo': 'CASO', 'clave': 'caso_5', 'caso': 5, 'actividad': 'Investigación e informe', 'trabajador': 'JUAN', 'responsable': 'Usuario Nuevo Prueba', 'cubre_a': 'TAMAYO RODRIGUEZ POOL', 'ausencia_hasta': '2026-10-10', 'fecha_registro': '2026-09-10', 'fecha_limite': '2026-09-17', 'dias_retraso': 7, 'dias_restantes': -7, 'estado': 'CRITICO', 'documentos_pendientes': ['Informe'], 'usuario': 'nuevo'}]}
         if acc == 'cumplPanel': return {'success': True, 'hoy': '2026-09-26', 'supervisores': [], 'actividades': [], 'config': {}, 'fuente': 'azure'}
         if acc == 'cumplPendientes' and CUMPL.get('venc'): return {'success': True, 'usuario': 'ptamayo', 'nombre': 'POOL TAMAYO', 'rol': 'supervisor', 'esAdmin': False, 'hoy': '2026-09-28',
                 'config': {'aviso_proximo_dias': 2, 'critico_dias': 5, 'escalar_dias': 3, 'excelente': 90, 'regular': 70},
@@ -427,6 +443,16 @@ with sync_playwright() as pw:
     ok('Configuracion: al guardar envia el calendario ordenado (LUN..SAB y feriados aaaa-mm-dd)', 'cumplConfigGuardar' in CUMPLW['llamadas'] and '"dias_laborables":"LUN,MAR,MIE,JUE,VIE,SAB"' in cu and '"feriados":"2026-10-08,2026-12-08,2026-12-25"' in cu, ','.join(CUMPLW['llamadas']) + ' | ' + cu[:300])
     pag.evaluate("() => { const t = document.querySelector('[data-tipo=\\'feriados\\']'); if (t) { t.value = '31/02/2026'; document.getElementById('cumplCfgGuardar').click(); } }"); pag.wait_for_timeout(600)
     ok('Configuracion: una fecha de feriado no valida se rechaza (no se guarda)', CUMPLW['llamadas'].count('cumplConfigGuardar') == 1, ','.join(CUMPLW['llamadas']))
+    ok('Configuracion: las ausencias NO aparecen como parametro editable (se gestionan en Usuarios)', pag.evaluate("() => !document.querySelector('[data-k=\"ausencias\"]') && !!document.getElementById('cumplCfgGuardar')"), 'ok')
+    # ── _AUSENCIAS_V1: insignias en la tabla del coordinador ──
+    CUMPL['aus'] = True
+    pag.evaluate("async () => { const t = document.querySelector('.cumpl-tabs button[data-t=\\'tabla\\']'); if (t) t.click(); await window._cumplPanelAdmin(true); }"); pag.wait_for_timeout(900)
+    r = pag.evaluate("() => (document.getElementById('cumplAdminBody') || {}).innerText || ''")
+    ok('Panel: el ausente muestra su motivo y quien lo cubre; el reemplazo muestra a quien cubre', 'Descanso médico hasta 10/10/2026' in r and 'lo cubre Usuario Nuevo Prueba' in r and 'Cubre a TAMAYO RODRIGUEZ POOL' in r, r[:400].replace('\n', ' | '))
+    pag.evaluate("() => { const t = document.querySelector('.cumpl-tabs button[data-t=\\'acts\\']'); if (t) t.click(); }"); pag.wait_for_timeout(600)
+    r = pag.evaluate("() => (document.getElementById('cumplAdminBody') || {}).innerText || ''")
+    ok('Panel: en actividades, el caso heredado dice "cubre a" el titular', 'cubre a TAMAYO RODRIGUEZ POOL' in r, r[:300].replace('\n', ' | '))
+    CUMPL.pop('aus', None)
     pag.evaluate("() => { const b = document.getElementById('navDash') || document.querySelector('.ni'); if (b) b.click(); }"); pag.wait_for_timeout(300)
     # ── _COLUMNAS_AT_V1: Mis Atenciones (Excel) y Consulta por DNI (tabla y Excel) con TODAS las columnas ──
     r = pag.evaluate("""async () => { const cap = []; const orig = window.exportarExcelGen; window.exportarExcelGen = (d, cols, n) => cap.push(n + ':' + cols.length + ':' + cols.map(c => c.key).join('|'));
@@ -850,6 +876,36 @@ with sync_playwright() as pw:
     ok('Login: con Azure caido, pedir acceso va por Google', 'saveSolicitudAcceso' in RED['google'], ','.join(RED['google']))
     USRG['modo'] = 'ok'
     ok('Login (index) sin errores de JavaScript en la solicitud de acceso', not errores, '; '.join(errores[:3]))
+    pag.close()
+    # ── _AUSENCIAS_V1: Gestion Usuarios → Ausencia / Reemplazo ──
+    pag = ctx.new_page(); errores = []
+    pag.on('pageerror', lambda e: errores.append(str(e)[:300]))
+    pag.on('dialog', lambda d: d.accept('2026-10-05') if d.type == 'prompt' else d.accept())
+    pag.goto(BASE + 'frontend/pages/usuarios.html', wait_until='load'); pag.wait_for_timeout(2500)
+    r = pag.evaluate("() => document.getElementById('tbUs').innerText + ' || ' + document.getElementById('tbAus').innerText")
+    ok('Usuarios: la fila del ausente dice su motivo y su reemplazo; la del reemplazo dice a quien cubre; y la tarjeta lo lista VIGENTE', '🏥 Descanso médico' in r and 'reemplazo: Usuario Nuevo Prueba' in r and 'Cubre a TAMAYO RODRIGUEZ POOL' in r and 'VIGENTE' in r and 'cumplAusencias' in CUMPL['llamadas'], r[:500].replace('\n', ' '))
+    r = pag.evaluate("() => { _ausAbrir('ptamayo'); const o = Array.from(document.querySelectorAll('#aus_reemp option')).map(x => x.value); return o.join(',') + '|' + document.getElementById('ausLista').innerText; }")
+    ok('Usuarios: el reemplazo se elige entre usuarios ACTIVOS (sin el titular ni los dados de baja) y se ven sus ausencias registradas', r.startswith(',jtimoteo,nuevo|') and 'Se reincorporó' in r, r[:200])
+    CUMPLW['llamadas'].clear(); CUMPLW['cuerpos'].clear(); RED['google'].clear()
+    pag.evaluate("() => { sv('aus_tipo','VACACIONES'); sv('aus_desde','2026-10-01'); sv('aus_hasta','2026-10-15'); _ausGuardarForm(); }"); pag.wait_for_timeout(400)
+    ok('Usuarios: sin reemplazo no se guarda', CUMPLW['llamadas'] == [] and 'cumplAusencia' not in RED['google'], ','.join(CUMPLW['llamadas']))
+    pag.evaluate("() => { _ausAbrir('baja'); sv('aus_tipo','VACACIONES'); sv('aus_reemp','jtimoteo'); sv('aus_desde','2026-10-01'); sv('aus_hasta','2026-10-15'); sv('aus_obs','vacaciones'); _ausGuardarForm(); _ausGuardarForm(); }"); pag.wait_for_timeout(1200)
+    cu = ''.join(CUMPLW['cuerpos'])
+    ok('Usuarios: registrar ausencia va a Azure UNA vez (doble clic), con titular, reemplazo y huella, y NO por Google', CUMPLW['llamadas'] == ['cumplAusencia'] and '"op":"registrar"' in cu and '"titular":"baja"' in cu and '"reemplazo":"jtimoteo"' in cu and '"client_id":"aus-' in cu and 'cumplAusencia' not in RED['google'] and 'cvAplicarDesdeAzure' in RED['google'], ','.join(CUMPLW['llamadas']) + ' | ' + cu[:200] + ' | google: ' + ','.join(RED['google']))
+    r = pag.evaluate("() => document.getElementById('tbAus').innerText")
+    ok('Usuarios: tras guardar, la tarjeta muestra la nueva ausencia PROGRAMADA', 'PROGRAMADA' in r, r[:300].replace('\n', ' '))
+    CUMPLW['llamadas'].clear(); CUMPLW['cuerpos'].clear()
+    pag.evaluate("() => { _ausAbrir('ptamayo'); _ausReincorporar('AUS-1'); }"); pag.wait_for_timeout(900)
+    cu = ''.join(CUMPLW['cuerpos'])
+    ok('Usuarios: "Se reincorporó" envia la fecha de regreso', CUMPLW['llamadas'] == ['cumplAusencia'] and '"op":"reincorporar"' in cu and '"regreso":"2026-10-05"' in cu and '"id":"AUS-1"' in cu, cu[:200])
+    CUMPLW['rechazo'] = True; CUMPLW['llamadas'].clear(); RED['google'].clear()
+    r = pag.evaluate("async () => { _ausAbrir('ptamayo'); sv('aus_tipo','LICENCIA'); sv('aus_reemp','nuevo'); sv('aus_desde','2026-10-01'); await _ausGuardarForm(); await new Promise(z => setTimeout(z, 300)); return (document.getElementById('_toast') || {}).textContent; }")
+    ok('Usuarios: si Azure dice que no (se cruza), se muestra el motivo y NO se reintenta por Google', 'se cruza' in (r or '') and 'cumplAusencia' not in RED['google'], str(r))
+    CUMPLW.pop('rechazo', None); CUMPLW['modo'] = 'caido'; RED['google'].clear()
+    pag.evaluate("async () => { _ausAbrir('ptamayo'); sv('aus_tipo','LICENCIA'); sv('aus_reemp','nuevo'); sv('aus_desde','2026-11-01'); await _ausGuardarForm(); }"); pag.wait_for_timeout(1500)
+    ok('Usuarios: con Azure caido, la ausencia se guarda por Google', 'cumplAusencia' in RED['google'], ','.join(RED['google']))
+    CUMPLW['modo'] = 'ok'
+    ok('Gestion Usuarios sin errores de JavaScript', not errores, '; '.join(errores[:3]))
     pag.close()
     for nombre, ruta in [('Calculo Remunerativo', 'frontend/pages/calculo-remunerativo.html'), ('Login (index)', 'index.html')]:
         pag = ctx.new_page(); errores = []
