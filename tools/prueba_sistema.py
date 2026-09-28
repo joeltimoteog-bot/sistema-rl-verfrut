@@ -99,6 +99,11 @@ def resp_azure(url, post=''):
         acc = url.split('/api/cumpl/')[1].split('?')[0]
         CUMPL['llamadas'].append(acc)
         if acc == 'cumplPanel': return {'success': True, 'hoy': '2026-09-26', 'supervisores': [], 'actividades': [], 'config': {}, 'fuente': 'azure'}
+        if acc == 'cumplPendientes' and CUMPL.get('venc'): return {'success': True, 'usuario': 'ptamayo', 'nombre': 'POOL TAMAYO', 'rol': 'supervisor', 'esAdmin': False, 'hoy': '2026-09-28',
+                'config': {'aviso_proximo_dias': 2, 'critico_dias': 5, 'escalar_dias': 3, 'excelente': 90, 'regular': 70},
+                'actividades': [{'tipo': 'CASO', 'clave': 'caso_77', 'caso': 77, 'actividad': 'Investigación e informe', 'trabajador': 'JUAN', 'fecha_limite': '2026-09-22', 'dias_retraso': 6, 'dias_restantes': -6, 'estado': 'CRITICO', 'accion': 'Subir Informe', 'documentos_pendientes': ['Informe']},
+                                {'tipo': 'CASO', 'clave': 'caso_78', 'caso': 78, 'actividad': 'Cierre del caso', 'trabajador': 'ANA', 'fecha_limite': '2026-09-26', 'dias_retraso': 2, 'dias_restantes': -2, 'estado': 'VENCIDO', 'accion': 'Concluir el caso', 'documentos_pendientes': []}],
+                'resumen': {'EN_PLAZO': 0, 'PROXIMO': 0, 'VENCE_HOY': 0, 'VENCIDO': 1, 'CRITICO': 1}, 'restriccion': {'activa': False, 'modulos': [], 'criticos': 1, 'motivo': '', 'exonerado_hasta': ''}, 'indice': None, 'fuente': 'azure'}
         if acc == 'cumplPendientes' and CUMPL.get('cal'): return {'success': True, 'usuario': 'jtimoteo', 'nombre': 'JOEL', 'rol': 'administrador', 'esAdmin': True, 'hoy': '2026-09-26',
                 'config': {'aviso_proximo_dias': 2, 'critico_dias': 5, 'escalar_dias': 3, 'excelente': 90, 'regular': 70, 'calendario': CUMPL['cal']},
                 'actividades': [], 'resumen': {'EN_PLAZO': 0, 'PROXIMO': 0, 'VENCE_HOY': 0, 'VENCIDO': 0, 'CRITICO': 0}, 'restriccion': {'activa': False, 'modulos': [], 'criticos': 0, 'motivo': '', 'exonerado_hasta': ''}, 'indice': None, 'fuente': 'azure'}
@@ -633,6 +638,12 @@ with sync_playwright() as pw:
     ok('Permisos: si fallan los servidores se usan los ultimos permisos conocidos', m['casos'] and m['fusiones'] is False, json.dumps(m))
     c.close()
     ACC['modo'] = 'ok'; PERMX['gas_falla'] = False
+    # _AVISO_ESCALAR_V1: supervisor con casos retrasados -> aviso claro de que se reporta a Joel Timoteo y Eduardo Coveñas
+    CUMPL['venc'] = True
+    c, pg, errs = sesion_perm('ptamayo')
+    t = pg.evaluate("() => { const g = document.getElementById('cumplGate'); return g ? g.innerText : 'SIN AVISO'; }")
+    ok('Aviso de casos retrasados: el supervisor ve cuantos tiene, el detalle y que se reportara a Joel Timoteo y Eduardo Coveñas', 'TIENES 2 CASOS / ACTIVIDADES RETRASADAS' in t and 'Joel Timoteo' in t and 'Eduardo Coveñas' in t and '3 días de retraso' in t and '1 de tus actividades ya superaron' in t and 'Por favor, cumple con este proceso' in t, t[:300].replace('\n', ' '))
+    c.close(); CUMPL.pop('venc', None)
     # 4) usuario antiguo sin permisos guardados -> menu de siempre
     PERMX['resp'] = {'success': True, 'permisos': {}, 'vacio': True, 'usuario': 'ovilela', 'fuente': 'azure'}
     c, pg, errs = sesion_perm('ovilela')

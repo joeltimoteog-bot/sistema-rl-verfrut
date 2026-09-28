@@ -13607,8 +13607,14 @@ function pantallaEntrada() {
     if (ya) return;
     var lst = D.data.actividades.filter(function (a) { return a.dias_retraso > 0; });
     var ov = document.createElement('div'); ov.className = 'cumpl-ov'; ov.id = 'cumplGate';
-    ov.innerHTML = '<div class="cumpl-mod"><div class="hd">⚠️ TIENES ACTIVIDADES VENCIDAS</div><div class="bd">' +
-      '<p style="margin:0 0 12px;font-size:13.5px;line-height:1.5">Se han identificado <b>' + venc + '</b> actividad(es) que superaron el plazo establecido. Antes de continuar con determinadas operaciones del sistema, debes revisar tus pendientes.</p>' +
+    /* _AVISO_ESCALAR_V1 (27-set-2026): mensaje claro de que el retraso se reporta al administrador y a Eduardo Coveñas */
+    var escD = (D.data.config && D.data.config.escalar_dias) || 3;
+    var yaEsc = lst.filter(function (a) { return a.dias_retraso >= escD; }).length;
+    var nomU = esc(((u && (u.nombre || u.usuario)) || '').split(' ')[0]);
+    ov.innerHTML = '<div class="cumpl-mod"><div class="hd">⚠️ TIENES ' + (venc === 1 ? 'UN CASO / ACTIVIDAD RETRASADA' : venc + ' CASOS / ACTIVIDADES RETRASADAS') + '</div><div class="bd">' +
+      '<p style="margin:0 0 10px;font-size:13.5px;line-height:1.5">' + (nomU ? 'Hola <b>' + nomU + '</b>, t' : 'T') + 'ienes <b>' + venc + '</b> actividad(es) que <b>superaron el plazo establecido</b>. Debes cumplirlas a la brevedad (subir el informe, cargar los documentos o cerrar el caso).</p>' +
+      '<div style="margin:0 0 12px;font-size:13px;line-height:1.5;background:#fff7ed;border:1.5px solid #f97316;border-radius:8px;padding:9px 12px;color:#7c2d12">📣 <b>Importante:</b> si una actividad llega a <b>' + escD + ' días de retraso</b>, el sistema enviará automáticamente una <b>alerta al administrador del sistema, Joel Timoteo, y a Eduardo Coveñas</b> con el detalle de los retrasos del caso. ' +
+      (yaEsc ? '<b>' + yaEsc + ' de tus actividades ya superaron ese límite y están siendo reportadas.</b> ' : '') + 'Por favor, cumple con este proceso.</div>' +
       '<div style="max-height:40vh;overflow:auto"><table class="cumpl-tb"><thead><tr><th>Caso</th><th>Actividad</th><th>Fecha límite</th><th>Retraso</th><th>Acción pendiente</th></tr></thead><tbody>' +
       lst.map(function (a) { return '<tr><td><b>' + esc(a.caso) + '</b>' + (a.trabajador ? '<br><span style="color:#64748b">' + esc(a.trabajador) + '</span>' : '') + '</td><td>' + esc(a.actividad) + '</td><td>' + dmy(a.fecha_limite) + '</td><td style="color:#b91c1c;font-weight:800">' + a.dias_retraso + ' día(s)' + (a.estado === 'CRITICO' ? '<br>⚫ CRÍTICO' : '') + '</td><td>' + esc(a.accion) + '</td></tr>'; }).join('') +
       '</tbody></table></div>' +
