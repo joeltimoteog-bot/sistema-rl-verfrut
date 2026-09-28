@@ -765,9 +765,11 @@ with sync_playwright() as pw:
     ok('Evaluacion 360: la pagina carga (apiPost existe)', pag.evaluate("typeof apiPost") == 'function', pag.url)
     r = pag.evaluate("() => Array.from(document.getElementById('eval_supervisor').options).map(o => o.value)")
     pool = [x for x in r if 'tamayo' in x.lower()]
-    ok('Evaluacion 360: "Supervisor evaluado" trae a todos los usuarios activos, sin repetir a quien ya estaba ni a los dados de baja', 'JOEL ANGEL TIMOTEO GONZA' in r and 'Usuario Nuevo Prueba' in r and 'Usuario Dado De Baja' not in r and pool == ['Pool Tamayo Rodríguez'] and 'Deysi Quispe Juárez' in r, str(len(r)) + ' opciones | tamayo: ' + str(pool) + ' | ' + ', '.join(r[-4:]))
-    r = pag.evaluate("() => { const s = document.getElementById('eval_supervisor'); s.value = 'Usuario Nuevo Prueba'; actualizarEmpresaSup(); return document.getElementById('eval_empresa').value; }")
+    ok('Evaluacion 360: "Supervisor evaluado" trae a todos los usuarios activos, sin repetir a quien ya estaba ni a los dados de baja', 'JOEL ANGEL TIMOTEO GONZA' in r and 'USUARIO NUEVO PRUEBA' in r and 'USUARIO DADO DE BAJA' not in r and pool == ['POOL TAMAYO RODRÍGUEZ'] and 'DEYSI QUISPE JUÁREZ' in r and all(x == x.upper() for x in r), str(len(r)) + ' opciones | tamayo: ' + str(pool) + ' | ' + ', '.join(r[-4:]))
+    r = pag.evaluate("() => { const s = document.getElementById('eval_supervisor'); s.value = 'USUARIO NUEVO PRUEBA'; actualizarEmpresaSup(); return document.getElementById('eval_empresa').value; }")
     ok('Evaluacion 360: al elegir un usuario nuevo se pone su empresa', r == 'VERFRUT', str(r))
+    r = pag.evaluate("() => { localStorage.setItem('eval360_historial', JSON.stringify([{id:'A', supervisor:'Pool Tamayo Rodríguez', periodo:'2026-06', porcentaje:70}])); return getHistorial()[0].supervisor; }")
+    ok('Evaluacion 360: las evaluaciones antiguas tambien se ven en MAYUSCULAS (mismo supervisor que la lista)', r == 'POOL TAMAYO RODRÍGUEZ', str(r))
     E360G['llamadas'].clear(); E360G['auth'].clear(); E360G['cuerpos'].clear(); RED['google'].clear()
     r = pag.evaluate("""async () => { const b = {action:'saveEvaluacion360', id:'EVA-1', supervisor:'Pool Tamayo Rodríguez', empresa:'RAPEL', fecha:'2026-09-27', periodo:'2026-09', competencias:[{nombre:'Liderazgo', promedio:4, respuestas:[{valor:4}]}], porcentaje:80, clasificacion:'Bueno', evaluadorUser:'JOEL'};
         const x = await Promise.all([apiPost(Object.assign({}, b)), apiPost(Object.assign({}, b))]); return x.map(d => (d && d.fuente) + ':' + (d && d.success) + ':' + (d && d.accion)).join(','); }""")

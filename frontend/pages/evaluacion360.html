@@ -706,7 +706,10 @@ function getSupervisores() {
   const custom = JSON.parse(localStorage.getItem(CUSTOM_SUPS_KEY) || '[]');
   const lista = [...SUPERVISORES_BASE, ...custom];
   _supsUsuarios.forEach(u => { if (!lista.some(s => _e360MismaPersona(s.nombre, u.nombre))) lista.push(u); });
-  return lista;
+  /* _E360_MAYUS_V1: todos los nombres en MAYUSCULAS (sin repetir) */
+  const vistos = {};
+  return lista.map(s => Object.assign({}, s, { nombre: String(s.nombre || '').trim().toUpperCase() }))
+    .filter(s => s.nombre && !vistos[s.nombre] && (vistos[s.nombre] = 1));
 }
 async function _e360CargarUsuarios() {
   try {
@@ -776,8 +779,8 @@ function guardarSupCustom() {
 }
 
 // ── Historial ──
-function getHistorial() {
-  return JSON.parse(localStorage.getItem(HISTORIAL_KEY) || '[]');
+function getHistorial() {   /* _E360_MAYUS_V1: el supervisor siempre en MAYUSCULAS (las evaluaciones antiguas tambien) */
+  return JSON.parse(localStorage.getItem(HISTORIAL_KEY) || '[]').map(e => Object.assign(e, { supervisor: String(e.supervisor || '').trim().toUpperCase() }));
 }
 function setHistorial(h) {
   localStorage.setItem(HISTORIAL_KEY, JSON.stringify(h));
@@ -1170,7 +1173,7 @@ function _datosRanking() {
     periodo: ev.periodo || periodoDe(ev.fecha),
     porcentaje: Number(ev.porcentaje) || 0
   }));
-  if (esSupervisor) historial = historial.filter(ev => ev.supervisor === USER.nombre);
+  if (esSupervisor) historial = historial.filter(ev => ev.supervisor === String(USER.nombre || '').trim().toUpperCase());   /* _E360_MAYUS_V1 */
   const filtEmp = document.getElementById('filtEmpRank')?.value || '';
   const filtSup = document.getElementById('filtSupRank')?.value || '';
   const mesSel  = document.getElementById('filtMesRank')?.value || '';
@@ -1857,10 +1860,11 @@ async function abrirInformeGuardado(i) {
   if (!x) return;
   // Restaurar supervisor (agregándolo al combo si fuera necesario)
   const sel = document.getElementById('infSup');
-  if (![...sel.options].some(o => o.value === x.supervisor)) {
-    const o = document.createElement('option'); o.value = o.textContent = x.supervisor; sel.appendChild(o);
+  const _supX = String(x.supervisor || '').trim().toUpperCase();   /* _E360_MAYUS_V1 */
+  if (![...sel.options].some(o => o.value === _supX)) {
+    const o = document.createElement('option'); o.value = o.textContent = _supX; sel.appendChild(o);
   }
-  sel.value = x.supervisor;
+  sel.value = _supX;
   const selP = document.getElementById('infPer');
   if (x.periodo && ![...selP.options].some(o => o.value === String(x.periodo))) {
     const o = document.createElement('option'); o.value = o.textContent = x.periodo; selP.appendChild(o);
