@@ -392,7 +392,7 @@ window.onload = function() {
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   var AZ = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/cumpl/';
-  var ES_DUENO = String(USER.usuario || '').trim().toLowerCase() === 'jtimoteo';
+  function esDueno() { try { return String((USER && USER.usuario) || '').trim().toLowerCase() === 'jtimoteo'; } catch (e) { return false; } }   /* se evalua al usarse: USER puede cargarse despues */
   var TIPO = { 'VACACIONES': '🏖️ Vacaciones', 'DESCANSO MEDICO': '🏥 Descanso médico', 'ACCIDENTE': '🚑 Accidente', 'LICENCIA': '📄 Licencia', 'OTRO': '📌 Otro' };
   var A = { lista: [], hoy: '', cargado: false, titular: null, editId: null };
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -428,20 +428,20 @@ window.onload = function() {
     });
     return out.join('<br>');
   };
-  window._ausBtn = function (u) { return ES_DUENO ? '<button class="btn-a" style="background:#ede9fe;color:#5b21b6" onclick="_ausAbrir(\'' + esc(u.usuario) + '\')">🔄 Ausencia</button>' : ''; };
+  window._ausBtn = function (u) { return esDueno() ? '<button class="btn-a" style="background:#ede9fe;color:#5b21b6" onclick="_ausAbrir(\'' + esc(u.usuario) + '\')">🔄 Ausencia</button>' : ''; };
   function pintarCard() {
     var card = document.getElementById('ausCard'), tb = document.getElementById('tbAus'); if (!card || !tb) return;
     var h = A.hoy || hoyL(), lim = new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10);
     var ls = A.lista.filter(function (a) { var e = estado(a); return e === 'VIGENTE' || e === 'PROGRAMADA' || (e === 'TERMINADA' && (a.hasta || '') >= lim); })
       .sort(function (x, y) { var o = { VIGENTE: 0, PROGRAMADA: 1, TERMINADA: 2 }; return (o[estado(x)] - o[estado(y)]) || String(x.desde).localeCompare(String(y.desde)); });
-    card.style.display = ls.length || ES_DUENO ? 'block' : 'none';
+    card.style.display = ls.length || esDueno() ? 'block' : 'none';
     tb.innerHTML = ls.length ? ls.map(function (a) {
       var e = estado(a), col = e === 'VIGENTE' ? '#d1fae5;color:#065f46' : e === 'PROGRAMADA' ? '#e0f2fe;color:#075985' : '#f1f5f9;color:#64748b';
-      return '<tr><td><b>' + esc(a.nombre || nombreDe(a.usuario)) + '</b></td><td>' + esc(TIPO[a.tipo] || a.tipo) + (a.obs ? '<br><span style="font-size:11px;color:#64748b">' + esc(a.obs) + '</span>' : '') + '</td><td>' + dmy(a.desde) + '</td><td>' + (a.hasta ? dmy(a.hasta) : '<i style="color:#64748b">sin fecha</i>') + '</td><td>' + esc(a.reemplazo_nombre || nombreDe(a.reemplazo)) + '</td><td><span class="bg" style="background:' + col + '">' + e + '</span></td><td>' + (ES_DUENO ? '<button class="btn-a be" onclick="_ausAbrir(\'' + esc(a.usuario) + '\')">Gestionar</button>' : '') + '</td></tr>';
+      return '<tr><td><b>' + esc(a.nombre || nombreDe(a.usuario)) + '</b></td><td>' + esc(TIPO[a.tipo] || a.tipo) + (a.obs ? '<br><span style="font-size:11px;color:#64748b">' + esc(a.obs) + '</span>' : '') + '</td><td>' + dmy(a.desde) + '</td><td>' + (a.hasta ? dmy(a.hasta) : '<i style="color:#64748b">sin fecha</i>') + '</td><td>' + esc(a.reemplazo_nombre || nombreDe(a.reemplazo)) + '</td><td><span class="bg" style="background:' + col + '">' + e + '</span></td><td>' + (esDueno() ? '<button class="btn-a be" onclick="_ausAbrir(\'' + esc(a.usuario) + '\')">Gestionar</button>' : '') + '</td></tr>';
     }).join('') : '<tr><td colspan="7" class="empty">Nadie ausente. Para registrar una ausencia usa el botón 🔄 Ausencia en la fila del usuario.</td></tr>';
   }
   window._ausAbrir = function (usuario) {
-    if (!ES_DUENO) return;
+    if (!esDueno()) return;
     A.titular = String(usuario).toLowerCase(); A.editId = null;
     document.getElementById('ausTit').textContent = 'Ausencia / Reemplazo — ' + nombreDe(usuario);
     ['aus_desde', 'aus_hasta', 'aus_obs'].forEach(function (id) { sv(id, ''); }); sv('aus_tipo', '');

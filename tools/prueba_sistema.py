@@ -453,6 +453,14 @@ with sync_playwright() as pw:
     r = pag.evaluate("() => (document.getElementById('cumplAdminBody') || {}).innerText || ''")
     ok('Panel: en actividades, el caso heredado dice "cubre a" el titular', 'cubre a TAMAYO RODRIGUEZ POOL' in r, r[:300].replace('\n', ' | '))
     CUMPL.pop('aus', None)
+    # ── _AUSENCIAS_V1: tambien en Gestion Usuarios DENTRO del dashboard (la que usa Joel) ──
+    pag.evaluate("() => { delete CACHE.usuarios; ir('usuarios', document.getElementById('navUsr')); }"); pag.wait_for_timeout(1500)
+    r = pag.evaluate("() => document.getElementById('tbUs').innerText + ' || ' + document.getElementById('tbAus').innerText + ' || ' + document.querySelectorAll('#tbUs button').length + ' || ' + USER.usuario + ' || ' + typeof window._ausBtn")
+    ok('Dashboard > Gestion Usuarios: columna Ausencia/Reemplazo, boton 🔄 Ausencia y tarjeta de ausencias', 'Descanso médico' in r and 'Cubre a TAMAYO RODRIGUEZ POOL' in r and 'VIGENTE' in r and '🔄 Ausencia' in r, r[-250:].replace('\n', ' '))
+    CUMPLW['llamadas'].clear(); CUMPLW['cuerpos'].clear(); RED['google'].clear()
+    pag.evaluate("() => { _ausAbrir('nuevo'); sv('aus_tipo','VACACIONES'); sv('aus_reemp','jtimoteo'); sv('aus_desde','2026-10-01'); _ausGuardarForm(); }"); pag.wait_for_timeout(1200)
+    ok('Dashboard > Gestion Usuarios: registrar ausencia va a Azure y no por Google', CUMPLW['llamadas'] == ['cumplAusencia'] and '"titular":"nuevo"' in ''.join(CUMPLW['cuerpos']) and 'cumplAusencia' not in RED['google'], ','.join(CUMPLW['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    pag.evaluate("() => cerrar('mAus')")
     pag.evaluate("() => { const b = document.getElementById('navDash') || document.querySelector('.ni'); if (b) b.click(); }"); pag.wait_for_timeout(300)
     # ── _COLUMNAS_AT_V1: Mis Atenciones (Excel) y Consulta por DNI (tabla y Excel) con TODAS las columnas ──
     r = pag.evaluate("""async () => { const cap = []; const orig = window.exportarExcelGen; window.exportarExcelGen = (d, cols, n) => cap.push(n + ':' + cols.length + ':' + cols.map(c => c.key).join('|'));
