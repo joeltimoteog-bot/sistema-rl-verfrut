@@ -691,15 +691,40 @@ function empC(e){const m={RAPEL:'brap',VERFRUT:'bver',AMBAS:'bam'};return m[Stri
 document.addEventListener('click', e=>{ if(e.target.classList.contains('ov')) e.target.classList.remove('on'); });
 
 // ── Supervisores (base + custom) ──
+/* _E360_SUP_USUARIOS_V1 (27-set-2026): el campo "Supervisor evaluado" trae TAMBIEN a todos los
+   usuarios ACTIVOS del sistema (hoja Usuarios). Si un usuario ya esta en la lista (mismo nombre, aunque
+   cambie el orden, las mayusculas o las tildes) se usa el nombre de la lista, para no partir su historial. */
+let _supsUsuarios = [];
+function _e360Tokens(s) { return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z ]/g, ' ').split(/\s+/).filter(Boolean); }
+function _e360MismaPersona(a, b) {
+  const A = _e360Tokens(a), B = _e360Tokens(b);
+  if (!A.length || !B.length) return false;
+  const x = A.length <= B.length ? A : B, y = x === A ? B : A;
+  return x.length >= 2 && x.every(t => y.indexOf(t) >= 0);
+}
 function getSupervisores() {
   const custom = JSON.parse(localStorage.getItem(CUSTOM_SUPS_KEY) || '[]');
-  return [...SUPERVISORES_BASE, ...custom];
+  const lista = [...SUPERVISORES_BASE, ...custom];
+  _supsUsuarios.forEach(u => { if (!lista.some(s => _e360MismaPersona(s.nombre, u.nombre))) lista.push(u); });
+  return lista;
+}
+async function _e360CargarUsuarios() {
+  try {
+    const d = await apiGet({ action: 'getUsuarios' });
+    if (!d || !d.success || !Array.isArray(d.data)) return;
+    _supsUsuarios = d.data.filter(u => u && u.activo && String(u.nombre || '').trim())
+      .map(u => ({ nombre: String(u.nombre).trim(), empresa: (u.empresa === 'RAPEL' || u.empresa === 'VERFRUT') ? u.empresa : '', sector: '', usuario: u.usuario || '' }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
+    poblarSelectSupervisores();
+    console.log('[_E360_SUP_USUARIOS_V1] usuarios activos: ' + _supsUsuarios.length + ' · en la lista: ' + getSupervisores().length);
+  } catch (e) { console.warn('[_E360_SUP_USUARIOS_V1] no se pudo leer la lista de usuarios:', e.message); }
 }
 
 function poblarSelectSupervisores() {
   const sups = getSupervisores();
   const sel = document.getElementById('eval_supervisor');
   if (!sel) return;
+  const _antes = sel.value, _antesF = (document.getElementById('filtSupRank') || {}).value;   /* _E360_SUP_USUARIOS_V1: no perder lo elegido al recargar */
   while (sel.options.length > 1) sel.remove(1);
   sups.forEach(s => {
     const o = document.createElement('option');
@@ -718,7 +743,9 @@ function poblarSelectSupervisores() {
       o.textContent = s.nombre;
       filtSup.appendChild(o);
     });
+    if (_antesF) filtSup.value = _antesF;
   }
+  if (_antes) sel.value = _antes;
 }
 
 function actualizarEmpresaSup() {
@@ -1991,6 +2018,7 @@ window.onload = function() {
   poblarSelectSupervisores();
   poblarMesesRanking();
   renderRanking();
+  _e360CargarUsuarios();   /* _E360_SUP_USUARIOS_V1 */
   // Sincronizar con API (Sheets es la fuente de verdad)
   cargarEvaluacionesAPI();
 };

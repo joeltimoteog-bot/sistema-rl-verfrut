@@ -55,6 +55,11 @@ def resp_google(a):
     if a in ('saludLog', 'saludReporte'): return {'ok': True, 'nro': 1, 'guardados': 1}
     if a == 'papeleraNros': return {'success': True, 'data': ['500'], 'pares': ['500|11111111']}
     if a == 'calcParamsLeer': return {'success': True, 'params': None}
+    if a == 'getUsuarios': return {'success': True, 'data': [
+        {'usuario': 'ptamayo', 'nombre': 'TAMAYO RODRIGUEZ POOL', 'rol': 'supervisor', 'empresa': 'RAPEL', 'activo': True},
+        {'usuario': 'jtimoteo', 'nombre': 'JOEL ANGEL TIMOTEO GONZA', 'rol': 'administrador', 'empresa': 'AMBAS', 'activo': True},
+        {'usuario': 'nuevo', 'nombre': 'Usuario Nuevo Prueba', 'rol': 'supervisor', 'empresa': 'VERFRUT', 'activo': True},
+        {'usuario': 'baja', 'nombre': 'Usuario Dado De Baja', 'rol': 'supervisor', 'empresa': 'RAPEL', 'activo': False}]}
     if a == 'accesoHorarioDeUsuario': return {'success': True, 'dentro': True, 'tieneHorario': False}
     # escrituras y lecturas genericas
     return {'success': True, 'ok': True, 'nro': 9999, 'data': [], 'hoja': 'TEST', 'fecha_registro': '2026-09-24'}
@@ -758,6 +763,11 @@ with sync_playwright() as pw:
     pag.on('pageerror', lambda e: errores.append((str(e)+' @ '+(e.stack or '').split('\n')[1:3].__str__())[:400]))
     pag.goto(BASE + 'frontend/pages/evaluacion360.html', wait_until='load'); pag.wait_for_timeout(3000)
     ok('Evaluacion 360: la pagina carga (apiPost existe)', pag.evaluate("typeof apiPost") == 'function', pag.url)
+    r = pag.evaluate("() => Array.from(document.getElementById('eval_supervisor').options).map(o => o.value)")
+    pool = [x for x in r if 'tamayo' in x.lower()]
+    ok('Evaluacion 360: "Supervisor evaluado" trae a todos los usuarios activos, sin repetir a quien ya estaba ni a los dados de baja', 'JOEL ANGEL TIMOTEO GONZA' in r and 'Usuario Nuevo Prueba' in r and 'Usuario Dado De Baja' not in r and pool == ['Pool Tamayo Rodríguez'] and 'Deysi Quispe Juárez' in r, str(len(r)) + ' opciones | tamayo: ' + str(pool) + ' | ' + ', '.join(r[-4:]))
+    r = pag.evaluate("() => { const s = document.getElementById('eval_supervisor'); s.value = 'Usuario Nuevo Prueba'; actualizarEmpresaSup(); return document.getElementById('eval_empresa').value; }")
+    ok('Evaluacion 360: al elegir un usuario nuevo se pone su empresa', r == 'VERFRUT', str(r))
     E360G['llamadas'].clear(); E360G['auth'].clear(); E360G['cuerpos'].clear(); RED['google'].clear()
     r = pag.evaluate("""async () => { const b = {action:'saveEvaluacion360', id:'EVA-1', supervisor:'Pool Tamayo Rodríguez', empresa:'RAPEL', fecha:'2026-09-27', periodo:'2026-09', competencias:[{nombre:'Liderazgo', promedio:4, respuestas:[{valor:4}]}], porcentaje:80, clasificacion:'Bueno', evaluadorUser:'JOEL'};
         const x = await Promise.all([apiPost(Object.assign({}, b)), apiPost(Object.assign({}, b))]); return x.map(d => (d && d.fuente) + ':' + (d && d.success) + ':' + (d && d.accion)).join(','); }""")
