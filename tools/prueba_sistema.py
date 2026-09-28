@@ -55,6 +55,10 @@ def resp_google(a):
     if a in ('saludLog', 'saludReporte'): return {'ok': True, 'nro': 1, 'guardados': 1}
     if a == 'papeleraNros': return {'success': True, 'data': ['500'], 'pares': ['500|11111111']}
     if a == 'calcParamsLeer': return {'success': True, 'params': None}
+    if a == 'cumplConfigListar': return {'success': True, 'filas': [
+        {'clave': 'plazo_investigacion', 'valor': 5, 'descripcion': 'Dias habiles', 'actualizado': '', 'por': ''},
+        {'clave': 'dias_laborables', 'valor': 'LUN,MAR,MIE,JUE,VIE', 'descripcion': 'CALENDARIO', 'actualizado': '', 'por': ''},
+        {'clave': 'feriados', 'valor': '2026-10-08,2026-12-25', 'descripcion': 'CALENDARIO', 'actualizado': '', 'por': ''}]}
     if a == 'getUsuarios': return {'success': True, 'data': [
         {'usuario': 'ptamayo', 'nombre': 'TAMAYO RODRIGUEZ POOL', 'rol': 'supervisor', 'empresa': 'RAPEL', 'activo': True},
         {'usuario': 'jtimoteo', 'nombre': 'JOEL ANGEL TIMOTEO GONZA', 'rol': 'administrador', 'empresa': 'AMBAS', 'activo': True},
@@ -95,6 +99,9 @@ def resp_azure(url, post=''):
         acc = url.split('/api/cumpl/')[1].split('?')[0]
         CUMPL['llamadas'].append(acc)
         if acc == 'cumplPanel': return {'success': True, 'hoy': '2026-09-26', 'supervisores': [], 'actividades': [], 'config': {}, 'fuente': 'azure'}
+        if acc == 'cumplPendientes' and CUMPL.get('cal'): return {'success': True, 'usuario': 'jtimoteo', 'nombre': 'JOEL', 'rol': 'administrador', 'esAdmin': True, 'hoy': '2026-09-26',
+                'config': {'aviso_proximo_dias': 2, 'critico_dias': 5, 'escalar_dias': 3, 'excelente': 90, 'regular': 70, 'calendario': CUMPL['cal']},
+                'actividades': [], 'resumen': {'EN_PLAZO': 0, 'PROXIMO': 0, 'VENCE_HOY': 0, 'VENCIDO': 0, 'CRITICO': 0}, 'restriccion': {'activa': False, 'modulos': [], 'criticos': 0, 'motivo': '', 'exonerado_hasta': ''}, 'indice': None, 'fuente': 'azure'}
         if acc == 'getCumplimiento': return {'success': True, 'esAdmin': True, 'semana': 39, 'rangoSemana': '14/09 al 20/09', 'pendientesVisitas': [], 'casosPendientes': [], 'fuente': 'azure'}
         return {'success': True, 'usuario': 'jtimoteo', 'nombre': 'JOEL', 'rol': 'administrador', 'esAdmin': True, 'hoy': '2026-09-26',
                 'config': {'aviso_proximo_dias': 2, 'critico_dias': 5, 'escalar_dias': 3, 'excelente': 90, 'regular': 70},
@@ -393,6 +400,29 @@ with sync_playwright() as pw:
     r = pag.evaluate(CARRERA, {'action': 'updateUsuario', 'usuario': 'ptamayo', 'activo': True})
     ok('Usuarios: con Azure caido, va por Google', r['r'] == 'OK' and 'updateUsuario' in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
     USRG['modo'] = 'ok'
+    # ── _CALENDARIO_V1: un solo calendario laboral (L-V por defecto, feriados) para casos, visitas y cumplimiento ──
+    r = pag.evaluate("""() => { const y = d => { const x = sumarDiasHabiles(new Date(d + 'T00:00:00'), 5); return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
+        const v = d => { const x = fechaLimiteInforme(new Date(d + 'T00:00:00')); return x.getFullYear() + '-' + ('0' + (x.getMonth() + 1)).slice(-2) + '-' + ('0' + x.getDate()).slice(-2); };
+        return [y('2026-09-28'), y('2026-10-05'), v('2026-10-02'), v('2026-10-04'), RL_CAL.dias.join('')].join('|'); }""")
+    ok('Calendario: caso reportado lun 28/09 vence lun 05/10 (sin sab/dom); el del 05/10 vence 13/10 (8/10 feriado); visitas vencen el lunes', r == '2026-10-05|2026-10-13|2026-10-05|2026-10-05|12345', str(r))
+    CUMPL['cal'] = {'dias': [1, 2, 3, 4, 5, 6], 'feriados': ['2026-10-05']}
+    pag.evaluate("async () => { await window._cumplRecargar('prueba calendario'); }"); pag.wait_for_timeout(300)
+    r = pag.evaluate("""() => { const x = fechaLimiteInforme(new Date('2026-10-02T00:00:00')); return RL_CAL.dias.join('') + '|' + x.getDate() + '|' + JSON.parse(localStorage.getItem('rl_calendario')).feriados.join(','); }""")
+    ok('Calendario: si el administrador lo cambia (L-S, lunes 05/10 feriado), la pantalla lo toma y la visita vence el martes 06/10', r == '123456|6|2026-10-05', str(r))
+    CUMPL['cal'] = {'dias': [1, 2, 3, 4, 5], 'feriados': ['2026-10-08', '2026-12-25']}
+    pag.evaluate("async () => { await window._cumplRecargar('prueba calendario 2'); }"); pag.wait_for_timeout(300); CUMPL.pop('cal', None)
+    CUMPLW['llamadas'].clear(); CUMPLW['cuerpos'].clear()
+    pag.evaluate("() => { const b = document.getElementById('navCumpl'); if (b) b.click(); }"); pag.wait_for_timeout(1200)
+    pag.evaluate("() => { const t = document.querySelector('.cumpl-tabs button[data-t=\\'cfg\\']'); if (t) t.click(); }"); pag.wait_for_timeout(1200)
+    r = pag.evaluate("() => { const s = document.querySelector('[data-tipo=\\'dias\\']'), t = document.querySelector('[data-tipo=\\'feriados\\']'); if (!s || !t) return 'sin controles: ' + (document.getElementById('cumplAdminBody') || {}).innerText; return s.querySelectorAll('input:checked').length + '|' + t.value.split('\\n').length; }")
+    ok('Configuracion: dias laborables con casillas (5 marcadas) y feriados en un cuadro', r == '5|2', str(r)[:200])
+    pag.evaluate("""() => { const s = document.querySelector('[data-tipo="dias"]'); s.querySelector('input[value="SAB"]').checked = true; const t = document.querySelector('[data-tipo="feriados"]'); t.value = '25/12/2026\\n2026-10-08\\n2026-12-8'; document.getElementById('cumplCfgGuardar').click(); }""")
+    pag.wait_for_timeout(1500)
+    cu = ''.join(CUMPLW['cuerpos'])
+    ok('Configuracion: al guardar envia el calendario ordenado (LUN..SAB y feriados aaaa-mm-dd)', 'cumplConfigGuardar' in CUMPLW['llamadas'] and '"dias_laborables":"LUN,MAR,MIE,JUE,VIE,SAB"' in cu and '"feriados":"2026-10-08,2026-12-08,2026-12-25"' in cu, ','.join(CUMPLW['llamadas']) + ' | ' + cu[:300])
+    pag.evaluate("() => { const t = document.querySelector('[data-tipo=\\'feriados\\']'); if (t) { t.value = '31/02/2026'; document.getElementById('cumplCfgGuardar').click(); } }"); pag.wait_for_timeout(600)
+    ok('Configuracion: una fecha de feriado no valida se rechaza (no se guarda)', CUMPLW['llamadas'].count('cumplConfigGuardar') == 1, ','.join(CUMPLW['llamadas']))
+    pag.evaluate("() => { const b = document.getElementById('navDash') || document.querySelector('.ni'); if (b) b.click(); }"); pag.wait_for_timeout(300)
     # ── _COLUMNAS_AT_V1: Mis Atenciones (Excel) y Consulta por DNI (tabla y Excel) con TODAS las columnas ──
     r = pag.evaluate("""async () => { const cap = []; const orig = window.exportarExcelGen; window.exportarExcelGen = (d, cols, n) => cap.push(n + ':' + cols.length + ':' + cols.map(c => c.key).join('|'));
         window._atFiltradas = [{nro: 1, dni: '11111111'}]; exportarAtenciones(); window._consultaDNIResultados = [{nro: 1}]; exportarConsultaDNI(); window.exportarExcelGen = orig; return cap; }""")

@@ -23,7 +23,9 @@ const ADMIN = ['administrador', 'administrador 01', 'administrador 02', 'coordin
 const DEFAULTS = [['plazo_registro_caso', 1], ['plazo_investigacion', 5], ['plazo_documentos', 7], ['plazo_cierre', 10], ['plazo_visita_dias', 1],
   ['aviso_proximo_dias', 2], ['critico_dias', 5], ['escalar_coordinador_dias', 3], ['restricciones_activas', 'SI'],
   ['modulos_restringidos', 'correo,fusiones,calculo,mantenimiento,almuerzos,exportar'], ['correo_coordinador', ''],
-  ['indice_excelente_pct', 90], ['indice_regular_pct', 70]];   /* = CUMPL_DEFAULTS */
+  ['indice_excelente_pct', 90], ['indice_regular_pct', 70],
+  ['dias_laborables', 'LUN,MAR,MIE,JUE,VIE'], ['feriados', '2026-01-01,2026-04-02,2026-04-03,2026-05-01,2026-06-07,2026-06-29,2026-07-23,2026-07-28,2026-07-29,2026-08-06,2026-08-30,2026-10-08,2026-11-01,2026-12-08,2026-12-09,2026-12-25,2027-01-01,2027-03-25,2027-03-26,2027-05-01,2027-06-07,2027-06-29,2027-07-23,2027-07-28,2027-07-29,2027-08-06,2027-08-30,2027-10-08,2027-11-01,2027-12-08,2027-12-09,2027-12-25']];   /* = CUMPL_DEFAULTS · _CALENDARIO_V1: + calendario */
+const MOTOR = require('./cumpl-motor');
 
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
 const S = v => esD(v) ? v.$s : String(v == null ? '' : v);
@@ -83,7 +85,8 @@ function configDe(T) {
     restricciones: si('restricciones_activas'),
     modulos_restringidos: String(cfg.modulos_restringidos || '').split(',').map(s => s.trim()).filter(Boolean),
     correo_coordinador: String(cfg.correo_coordinador || '').trim(),
-    excelente: num('indice_excelente_pct', 90), regular: num('indice_regular_pct', 70) };
+    excelente: num('indice_excelente_pct', 90), regular: num('indice_regular_pct', 70),
+    dias: MOTOR.calParseDias(cfg.dias_laborables), feriados: MOTOR.calParseFeriados(cfg.feriados) };   /* _CALENDARIO_V1 */
 }
 /* bloque 'restricc' de _cumplDatosAzure_ */
 function restriccDe(T) {
@@ -162,8 +165,14 @@ async function ejecutar(pool, accion, b, usuario, rol, prueba, ahoraMs) {
       const T = await TH.leer(pool, 'cumpl_config');
       if (!T) { await tx.rollback(); return { status: 503, body: { success: false, error: 'Tabla de configuracion aun no cargada' } }; }
       const antes = configDe(T).raw, cambios = b.config || {}, u = usr(usuario), filas = T.filas.map(r => r.slice()), hechos = [], logs = [];
+      const DESC = { dias_laborables: 'CALENDARIO: dias que se trabajan (LUN,MAR,MIE,JUE,VIE,SAB,DOM). Los demas NO cuentan en ningun plazo (casos, visitas, cumplimiento)',
+        feriados: 'CALENDARIO: feriados que NO cuentan en ningun plazo (aaaa-mm-dd, separados por coma)' };
       for (const k of Object.keys(cambios)) {
-        const i = filas.findIndex(r => S(r[0] === undefined ? '' : r[0]).trim() === k);
+        let i = filas.findIndex(r => S(r[0] === undefined ? '' : r[0]).trim() === k);
+        if (i < 0 && DESC[k]) {   /* _CALENDARIO_V1: clave nueva que la tabla aun no tiene: se agrega (Google la crea igual) */
+          const d0 = DEFAULTS.find(d => d[0] === k), nuevaF = [k, d0 ? d0[1] : '', DESC[k], ahora, 'sistema'].map(CAP.comoHoja);
+          await CAP.agregarFilas(tx, 'cumpl_config', [nuevaF]); filas.push(nuevaF); i = filas.length - 1; tocar.push('cumpl_config');
+        }
         if (i < 0) continue;
         if (S(filas[i][1] === undefined ? '' : filas[i][1]).trim() === String(cambios[k]).trim()) continue;
         const nueva = filas[i].slice(); while (nueva.length < 5) nueva.push('');

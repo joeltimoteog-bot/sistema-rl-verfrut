@@ -70,6 +70,30 @@ function nombreMatch(a, b) {
   return hit >= need;
 }
 
+/* _CALENDARIO_V1 (27-set-2026): = _calParseDias_ / _calParseFeriados_ del Apps Script */
+function calParseDias(v) {
+  if (Array.isArray(v)) v = v.join(',');
+  const M = { DOM: 0, LUN: 1, MAR: 2, MIE: 3, JUE: 4, VIE: 5, SAB: 6 }, out = [];
+  String(v == null ? '' : v).toUpperCase().split(/[,;\s]+/).forEach(t => {
+    t = t.trim(); if (!t) return;
+    const n = /^[0-6]$/.test(t) ? +t : M[t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').slice(0, 3)];
+    if (n !== undefined && out.indexOf(n) < 0) out.push(n);
+  });
+  return out.length ? out.sort() : [1, 2, 3, 4, 5];
+}
+function calParseFeriados(v) {
+  const out = [], add = d => { if (d && out.indexOf(d) < 0) out.push(d); };
+  if (Array.isArray(v)) v = v.join(',');
+  const s = String(v == null ? '' : v);
+  if (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(s.trim())) { add(ymd(limaDe(new Date(s.trim())))); return out; }   /* una sola fecha: la hoja la volvio fecha */
+  s.split(/[,;\s]+/).forEach(t => {
+    let m;
+    if ((m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/))) add(m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2));
+    else if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) add(m[3] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2));
+  });
+  return out.sort();
+}
+
 function crearMotor(D) {
   const K = D.constantes || {};
   const FER = K.feriados || [], AI = K.altaIni || { m: 1, d: 5 }, AF = K.altaFin || { m: 6, d: 26 };
@@ -84,14 +108,18 @@ function crearMotor(D) {
     fecha_limite: parse(c.fecha_limite), fecha_cierre: parse(c.fecha_cierre)
   }));
 
+  /* _CALENDARIO_V1: dias laborables + feriados de la configuracion (antes: temporada alta L-V / baja L-Sab) */
+  const CAL_DIAS = calParseDias(cfg.dias), CAL_FER = {};
+  calParseFeriados(cfg.feriados).concat(FER).forEach(f => { CAL_FER[f] = 1; });
   function esHabil(f) {
-    const dia = f.getUTCDay();
-    if (dia === 0) return false;
-    if (FER.indexOf(ymd(f)) !== -1) return false;
-    const y = f.getUTCFullYear();
-    const alta = f >= fecha(y, AI.m - 1, AI.d) && f <= fecha(y, AF.m - 1, AF.d);
-    if (alta) return dia >= 1 && dia <= 5;
-    return dia >= 1 && dia <= 6;
+    if (CAL_DIAS.indexOf(f.getUTCDay()) < 0) return false;
+    return !CAL_FER[ymd(f)];
+  }
+  function limiteVisita(lunes, plazo) {   /* = cumplLimiteVisita_ */
+    let cur = copia(lunes), g = 0;
+    while (!esHabil(cur) && g++ < 30) cur = sumar(cur, 1);
+    const n = parseInt(plazo, 10) || 1;
+    return n > 1 ? sumarHabiles(cur, n - 1) : cur;
   }
   function sumarHabiles(desde, n) {
     let cur = copia(desde), cont = 0, guardia = 0;
@@ -133,7 +161,7 @@ function crearMotor(D) {
     if (!c.enlace_informe) docs.push('Informe');
     if (!c.enlace_reporte) docs.push('Reporte/Descargo');
     let etapa, limite, plazo;
-    if (!c.enlace_informe) { etapa = 'Investigación e informe'; plazo = cfg.plazo_investigacion; limite = (c.fecha_limite && plazo === PLAZO_CASOS) ? c.fecha_limite : sumarHabiles(base, plazo); }
+    if (!c.enlace_informe) { etapa = 'Investigación e informe'; plazo = cfg.plazo_investigacion; limite = sumarHabiles(base, plazo); }   /* _CALENDARIO_V1: siempre con el calendario vigente */
     else if (!c.enlace_reporte) { etapa = 'Carga de reporte/descargo'; plazo = cfg.plazo_documentos; limite = sumarHabiles(base, plazo); }
     else { etapa = 'Cierre del caso'; plazo = cfg.plazo_cierre; limite = sumarHabiles(base, plazo); }
     const s = semaforo(limite, hoy);
@@ -163,7 +191,7 @@ function crearMotor(D) {
       const fi = fechaV(v.fecha_inicio), ff = fechaV(v.fecha_fin) || fi, finf = fechaV(v.fecha_informe);
       if ((fi && ff && fi <= domingoPasado && ff >= lunesPasado) || (finf && finf >= lunesPasado && finf <= domingoPasado)) reportaron[usr(v.supervisor)] = true;
     });
-    const limite = sumar(lunesEsta, cfg.plazo_visita_dias - 1);
+    const limite = limiteVisita(lunesEsta, cfg.plazo_visita_dias);   /* _CALENDARIO_V1 */
     const s = semaforo(limite, hoy);
     sups.forEach(nombreSup => {
       const key = usr(nombreSup);
@@ -226,7 +254,7 @@ function crearMotor(D) {
     if (lv) {
       for (; ; d = sumar(d, 7)) {
         const dom = sumar(d, 6);
-        const limV = sumar(d, 6 + (cfg.plazo_visita_dias || 1));
+        const limV = limiteVisita(sumar(d, 7), cfg.plazo_visita_dias || 1);   /* _CALENDARIO_V1 */
         if (dom >= hoy || limV >= hoy) break;
         semanas++;
         const lunes = d;
@@ -279,7 +307,8 @@ function crearMotor(D) {
     const restr = restriccion(u, propias, hoy);
     const ind = esAdmin ? null : indice(u, vp, hoy);
     return { success: true, usuario: u.usuario, nombre: u.nombre, rol: u.rol, esAdmin, hoy: ymd(hoy),
-      config: { aviso_proximo_dias: cfg.aviso_proximo_dias, critico_dias: cfg.critico_dias, escalar_dias: cfg.escalar_dias, excelente: cfg.excelente, regular: cfg.regular },
+      config: { aviso_proximo_dias: cfg.aviso_proximo_dias, critico_dias: cfg.critico_dias, escalar_dias: cfg.escalar_dias, excelente: cfg.excelente, regular: cfg.regular,
+        calendario: { dias: CAL_DIAS, feriados: Object.keys(CAL_FER).sort() } },   /* _CALENDARIO_V1 */
       actividades: acts, resumen, restriccion: restr, indice: ind };
   }
 
@@ -327,7 +356,7 @@ function crearMotor(D) {
     const lunesPasado = sumar(lunesEsta, -7);
     const domDia = sumar(lunesEsta, -1);
     const domingoPasado = new Date(domDia.getTime() + DIA - 1);
-    const esLunesHoy = (dow === 1);
+    const esLunesHoy = hoy <= limiteVisita(lunesEsta, cfg.plazo_visita_dias);   /* _CALENDARIO_V1: el lunes o el siguiente dia laborable */
     const sem = semanaNum(domDia);
     const rangoSemana = ddmm(lunesPasado) + ' al ' + ddmm(domDia);
     const reportaron = {};
@@ -364,4 +393,4 @@ function crearMotor(D) {
   return { cumplPendientes, cumplPanel, getCumplimiento };
 }
 
-module.exports = { crearMotor, nombreMatch, _t: { parse, fechaV, semanaNum, hoyLima, ymd } };
+module.exports = { crearMotor, nombreMatch, calParseDias, calParseFeriados, _t: { parse, fechaV, semanaNum, hoyLima, ymd } };

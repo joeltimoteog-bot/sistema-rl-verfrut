@@ -3554,6 +3554,32 @@ function getCarpetaUsuarioCaso() {
 
 // ── Lógica de temporadas y días hábiles ──────────────────────
 
+/* _CALENDARIO_V1 (27-set-2026): CALENDARIO LABORAL unico para casos, visitas y cumplimiento.
+   Dias laborables y feriados los define el administrador en Cumplimiento > Configuracion
+   (llegan con el control de cumplimiento y se recuerdan en este navegador). Por defecto LUN-VIE
+   y los feriados nacionales. Antes: temporada alta L-V / baja L-Sab y sin feriados. */
+var RL_CAL_DEF = { dias: [1, 2, 3, 4, 5], feriados: ["2026-01-01", "2026-04-02", "2026-04-03", "2026-05-01", "2026-06-07", "2026-06-29", "2026-07-23", "2026-07-28", "2026-07-29", "2026-08-06", "2026-08-30", "2026-10-08", "2026-11-01", "2026-12-08", "2026-12-09", "2026-12-25", "2027-01-01", "2027-03-25", "2027-03-26", "2027-05-01", "2027-06-07", "2027-06-29", "2027-07-23", "2027-07-28", "2027-07-29", "2027-08-06", "2027-08-30", "2027-10-08", "2027-11-01", "2027-12-08", "2027-12-09", "2027-12-25"] };
+var RL_CAL = (function () {
+  try { var c = JSON.parse(localStorage.getItem('rl_calendario') || 'null'); if (c && Array.isArray(c.dias) && c.dias.length && Array.isArray(c.feriados)) return c; } catch (e) {}
+  return RL_CAL_DEF;
+})();
+function rlCalFijar(c) {
+  if (!c || !Array.isArray(c.dias) || !c.dias.length) return;
+  RL_CAL = { dias: c.dias.map(Number), feriados: (c.feriados || []).map(String) };
+  try { localStorage.setItem('rl_calendario', JSON.stringify(RL_CAL)); } catch (e) {}
+}
+function rlEsLaborable(fecha) {
+  var d = (fecha instanceof Date) ? fecha : new Date(fecha + 'T00:00:00');
+  if (RL_CAL.dias.indexOf(d.getDay()) < 0) return false;
+  var k = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  return RL_CAL.feriados.indexOf(k) < 0;
+}
+function rlDiasTexto() {
+  var N = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'], o = [1, 2, 3, 4, 5, 6, 0].filter(function (x) { return RL_CAL.dias.indexOf(x) >= 0; });
+  var seguidos = o.every(function (x, i) { return i === 0 || x === (o[i - 1] + 1) % 7; });
+  return o.length > 2 && seguidos ? N[o[0]] + '-' + N[o[o.length - 1]] : o.map(function (x) { return N[x]; }).join(', ');
+}
+
 /**
  * Detecta la temporada de una fecha
  * Baja: 01 Ene – 26 Jun  (Lun-Vie)
@@ -3571,11 +3597,8 @@ function detectarTemporada(fecha) {
  * Determina si una fecha es día hábil según su temporada
  * Baja: Lun(1)–Vie(5) | Alta: Lun(1)–Sáb(6)  — Domingo nunca hábil
  */
-function esDiaHabilCaso(fecha) {
-  const d = (fecha instanceof Date) ? fecha : new Date(fecha + 'T00:00:00');
-  const dow = d.getDay();
-  if (dow === 0) return false;
-  return detectarTemporada(d) === 'baja' ? dow <= 5 : true;
+function esDiaHabilCaso(fecha) {   /* _CALENDARIO_V1 */
+  return rlEsLaborable(fecha);
 }
 
 /**
@@ -8698,12 +8721,8 @@ function esTemporadaAlta(fecha) {
   return false;
 }
 
-function esDiaHabil(fecha) {
-  const d   = (fecha instanceof Date) ? fecha : new Date(fecha + 'T00:00:00');
-  const dow = d.getDay(); // 0=Dom,6=Sab
-  if (dow === 0) return false;                        // Domingo siempre libre
-  if (dow === 6 && !esTemporadaAlta(d)) return false; // Sábado libre en temporada baja
-  return true;
+function esDiaHabil(fecha) {   /* _CALENDARIO_V1 */
+  return rlEsLaborable(fecha);
 }
 
 function diasHabilesEntre(desde, hasta) {
@@ -8718,13 +8737,12 @@ function diasHabilesEntre(desde, hasta) {
 }
 
 function fechaLimiteInforme(fechaFin) {
-  // Plazo: 2 dias habiles a partir del dia siguiente a fechaFin
-  let cur   = new Date(fechaFin);
-  let plazo = 0;
-  while (plazo < 2) {
-    cur.setDate(cur.getDate() + 1);
-    if (esDiaHabil(cur)) plazo++;
-  }
+  /* _CALENDARIO_V1: el informe de la semana se sube el LUNES siguiente (si el lunes no es laborable,
+     el siguiente dia laborable). Antes: 2 dias habiles despues de la fecha fin. */
+  let cur = new Date(fechaFin); cur.setHours(0, 0, 0, 0);
+  do { cur.setDate(cur.getDate() + 1); } while (cur.getDay() !== 1);
+  let g = 0;
+  while (!esDiaHabil(cur) && g++ < 30) cur.setDate(cur.getDate() + 1);
   return cur;
 }
 
@@ -8747,13 +8765,13 @@ function calcSemanaVisita() {
   limite.setHours(0,0,0,0);
 
   const diasTrans  = diasHabilesEntre(ffD, hoy);
-  const diasPerm   = 2;
-  const diasRetr   = Math.max(0, diasTrans - diasPerm);
+  const diasPerm   = diasHabilesEntre(ffD, limite);            /* _CALENDARIO_V1: dias habiles hasta el lunes limite */
+  const diasRetr   = hoy > limite ? diasHabilesEntre(limite, hoy) : 0;
   // ⭐ Escala unificada con Casos: 100 = puntual, −10 pts por día hábil de retraso
   const pctAvance  = calcularAvance(diasRetr);
   const pctRetraso = 100 - pctAvance;
   const estado     = hoy > limite ? 'RETRASADO' : 'EN PLAZO';
-  const temporada  = esTemporadaAlta(ffD) ? 'ALTA (Lun-Sáb)' : 'BAJA (Lun-Vie)';
+  const temporada  = 'Días laborables ' + rlDiasTexto();   /* _CALENDARIO_V1 */
 
   // Guardar en dataset para usarlos al guardar
   document.getElementById('vFF').dataset.diasTrans  = diasTrans;
@@ -8777,12 +8795,12 @@ function calcSemanaVisita() {
   if (estado === 'EN PLAZO') {
     indDiv.style.background = '#f0fdf4';
     indDiv.style.border = '1.5px solid #16a34a';
-    indDiv.innerHTML = `✅ <b>EN PLAZO</b> — Temporada ${temporada}. Plazo máximo: <b>${fmtLimite}</b>. Días hábiles transcurridos: ${diasTrans}/${diasPerm}. Avance: <b>${pctAvance}%</b>.`;
+    indDiv.innerHTML = `✅ <b>EN PLAZO</b> — ${temporada}. Plazo máximo: <b>${fmtLimite}</b>. Días hábiles transcurridos: ${Math.min(diasTrans, diasPerm)}/${diasPerm}. Avance: <b>${pctAvance}%</b>.`;
     document.getElementById('motivoRetrasoDiv').style.display = 'none';
   } else {
     indDiv.style.background = '#fef2f2';
     indDiv.style.border = '1.5px solid #dc2626';
-    indDiv.innerHTML = `⚠️ <b>FUERA DE PLAZO</b> — Temporada ${temporada}. Plazo venció: <b>${fmtLimite}</b>. Días de retraso: <b>${diasRetr}</b> (Avance: <b>${pctAvance}%</b> · Retraso: <b>${pctRetraso}%</b>). Debes ingresar el motivo para continuar.`;
+    indDiv.innerHTML = `⚠️ <b>FUERA DE PLAZO</b> — ${temporada}. Plazo venció: <b>${fmtLimite}</b>. Días de retraso: <b>${diasRetr}</b> (Avance: <b>${pctAvance}%</b> · Retraso: <b>${pctRetraso}%</b>). Debes ingresar el motivo para continuar.`;
     document.getElementById('motivoRetrasoDiv').style.display = 'block';
   }
 }
@@ -13508,7 +13526,8 @@ async function cargar(motivo, forzar) {
   D.cargando = (async function () {
     try {
       var r = await apiPost({ action: 'cumplPendientes', usuario: u.usuario, rol: u.rol });
-      if (r && r.success) { D.data = r; D.ts = Date.now(); pintarTodo(); console.log('[_CUMPL_UI_V1] ' + (motivo || '') + ' → ' + JSON.stringify(r.resumen)); return r; }
+      if (r && r.success) { try { if (r.config && r.config.calendario) rlCalFijar(r.config.calendario); } catch (eCal) {}   /* _CALENDARIO_V1 */
+        D.data = r; D.ts = Date.now(); pintarTodo(); console.log('[_CUMPL_UI_V1] ' + (motivo || '') + ' → ' + JSON.stringify(r.resumen)); return r; }
       console.warn('[_CUMPL_UI_V1] backend:', r && r.error);
     } catch (e) { console.warn('[_CUMPL_UI_V1]', e.message); }
     return null;
@@ -13838,12 +13857,37 @@ function pintarAdmin() {
     body.innerHTML = '<p style="color:#64748b">Cargando…</p>';
     apiPost({ action: 'cumplConfigListar', usuario: USER.usuario, rol: USER.rol }).then(function (r) {
       if (!r || !r.success) { body.innerHTML = '<p style="color:#dc2626">' + esc((r && r.error) || 'Error') + '</p>'; return; }
-      body.innerHTML = '<p style="margin:0 0 10px;font-size:12.5px;color:#334155">Los plazos se cuentan en <b>días hábiles</b> (misma regla de temporada y feriados que las alertas de casos). Los cambios aplican de inmediato y quedan en el historial.</p>' +
+      body.innerHTML = '<p style="margin:0 0 10px;font-size:12.5px;color:#334155">Los plazos se cuentan en <b>días hábiles</b> según el <b>calendario laboral</b> (días laborables y feriados, al final de la tabla): se aplica a casos, visitas, alertas y cumplimiento. Los cambios aplican de inmediato y quedan en el historial.</p>' +
         '<table class="cumpl-tb"><thead><tr><th>Parámetro</th><th>Valor</th><th>Descripción</th><th>Actualizado</th></tr></thead><tbody>' +
-        r.filas.map(function (f) { var ancho = String(f.valor).length > 12 ? '320px' : '90px'; return '<tr><td><code style="font-size:11px">' + esc(f.clave) + '</code></td><td><input class="cumpl-sel" data-k="' + esc(f.clave) + '" value="' + esc(f.valor) + '" style="width:' + ancho + '"></td><td style="white-space:normal;font-size:11.5px">' + esc(f.descripcion) + '</td><td style="font-size:11px;color:#64748b">' + dmy(f.actualizado) + (f.por ? '<br>' + esc(f.por) : '') + '</td></tr>'; }).join('') +
+        r.filas.map(function (f) {
+          var celda;   /* _CALENDARIO_V1: dias con casillas y feriados en un cuadro */
+          if (f.clave === 'dias_laborables') {
+            var sel = String(f.valor || '').toUpperCase();
+            celda = '<span data-k="dias_laborables" data-tipo="dias">' + ['LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB', 'DOM'].map(function (dd) { return '<label style="margin-right:8px;white-space:nowrap"><input type="checkbox" value="' + dd + '"' + (sel.indexOf(dd) >= 0 ? ' checked' : '') + '> ' + dd + '</label>'; }).join('') + '</span>';
+          } else if (f.clave === 'feriados') {
+            var lista = String(f.valor || '').split(/[,;\s]+/).filter(Boolean);
+            celda = '<textarea class="cumpl-sel" data-k="feriados" data-tipo="feriados" rows="6" style="width:320px;font-family:monospace;font-size:11.5px" placeholder="aaaa-mm-dd, uno por linea">' + esc(lista.join('\n')) + '</textarea>';
+          } else {
+            var ancho = String(f.valor).length > 12 ? '320px' : '90px';
+            celda = '<input class="cumpl-sel" data-k="' + esc(f.clave) + '" value="' + esc(f.valor) + '" style="width:' + ancho + '">';
+          }
+          return '<tr><td><code style="font-size:11px">' + esc(f.clave) + '</code></td><td>' + celda + '</td><td style="white-space:normal;font-size:11.5px">' + esc(f.descripcion) + '</td><td style="font-size:11px;color:#64748b">' + dmy(f.actualizado) + (f.por ? '<br>' + esc(f.por) : '') + '</td></tr>'; }).join('') +
         '</tbody></table><div style="text-align:right;margin-top:12px"><button class="cumpl-btn" id="cumplCfgGuardar">💾 Guardar cambios</button></div>';
       document.getElementById('cumplCfgGuardar').onclick = async function () {
         var cambios = {}; body.querySelectorAll('input[data-k]').forEach(function (i) { cambios[i.getAttribute('data-k')] = i.value.trim(); });
+        /* _CALENDARIO_V1 */
+        var sd = body.querySelector('[data-tipo="dias"]');
+        if (sd) { var dd = Array.prototype.map.call(sd.querySelectorAll('input:checked'), function (c) { return c.value; }); if (!dd.length) { mostrarToast('❌ Marca al menos un día laborable', 'error'); return; } cambios.dias_laborables = dd.join(','); }
+        var tf = body.querySelector('[data-tipo="feriados"]');
+        if (tf) {
+          var malos = [], fer = [];
+          tf.value.split(/[,;\s]+/).filter(Boolean).forEach(function (t) { var m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/) || null, m2 = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+            var y, mo, da; if (m) { y = +m[1]; mo = +m[2]; da = +m[3]; } else if (m2) { y = +m2[3]; mo = +m2[2]; da = +m2[1]; } else { malos.push(t); return; }
+            var x = new Date(y, mo - 1, da); if (x.getFullYear() !== y || x.getMonth() !== mo - 1 || x.getDate() !== da) { malos.push(t); return; }
+            var k = y + '-' + ('0' + mo).slice(-2) + '-' + ('0' + da).slice(-2); if (fer.indexOf(k) < 0) fer.push(k); });
+          if (malos.length) { mostrarToast('❌ Feriados con fecha no valida: ' + malos.slice(0, 3).join(', ') + ' (usa aaaa-mm-dd)', 'error'); return; }
+          cambios.feriados = fer.sort().join(',');
+        }
         var ok = await apiPost({ action: 'cumplConfigGuardar', usuario: USER.usuario, rol: USER.rol, config: cambios });
         if (ok && ok.success) { mostrarToast('✅ Configuración guardada (' + ok.cambios + ' parámetros)'); D.panel = null; D.data = null; cargar('cfg', true); cargarPanelAdmin(true); }
         else mostrarToast('❌ ' + ((ok && ok.error) || 'No se pudo guardar'), 'error');
