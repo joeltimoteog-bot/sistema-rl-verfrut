@@ -127,8 +127,15 @@ function crearMotor(D) {
     while (cont < n && guardia < 90) { cur = sumar(cur, 1); if (esHabil(cur)) cont++; guardia++; }
     return cur;
   }
+  /* _RETRASO_HABIL_V1: = _casoDiasHabilesEntre (a exclusivo, b inclusivo) y cumplRetrasoHabil_ */
+  function habilesEntre(a, b) {
+    if (b <= a) return 0;
+    let cur = copia(a), n = 0, g = 0;
+    while (cur < b && g < 400) { cur = sumar(cur, 1); if (esHabil(cur)) n++; g++; }
+    return n;
+  }
   function semaforo(limite, hoy) {
-    const rest = dias(hoy, limite);
+    const rest = hoy > limite ? -Math.max(1, habilesEntre(limite, hoy)) : habilesEntre(hoy, limite);   /* _RETRASO_HABIL_V1: dias habiles */
     const retraso = rest < 0 ? -rest : 0;
     const estado = rest > cfg.aviso_proximo_dias ? 'EN_PLAZO' : rest > 0 ? 'PROXIMO' : rest === 0 ? 'VENCE_HOY' : retraso >= cfg.critico_dias ? 'CRITICO' : 'VENCIDO';
     return { dias_restantes: rest, dias_retraso: retraso, estado };

@@ -642,7 +642,7 @@ with sync_playwright() as pw:
     CUMPL['venc'] = True
     c, pg, errs = sesion_perm('ptamayo')
     t = pg.evaluate("() => { const g = document.getElementById('cumplGate'); return g ? g.innerText : 'SIN AVISO'; }")
-    ok('Aviso de casos retrasados: el supervisor ve cuantos tiene, el detalle y que se reportara a Joel Timoteo y Eduardo Coveñas', 'TIENES 2 CASOS / ACTIVIDADES RETRASADAS' in t and 'Joel Timoteo' in t and 'Eduardo Coveñas' in t and '3 días de retraso' in t and '1 de tus actividades ya superaron' in t and 'Por favor, cumple con este proceso' in t, t[:300].replace('\n', ' '))
+    ok('Aviso de casos retrasados: el supervisor ve cuantos tiene, el detalle y que se reportara a Joel Timoteo y Eduardo Coveñas', 'TIENES 2 CASOS / ACTIVIDADES RETRASADAS' in t and 'Joel Timoteo' in t and 'Eduardo Coveñas' in t and '3 días hábiles de retraso' in t and '1 de tus actividades ya superaron' in t and 'Por favor, cumple con este proceso' in t, t[:300].replace('\n', ' '))
     c.close(); CUMPL.pop('venc', None)
     # 4) usuario antiguo sin permisos guardados -> menu de siempre
     PERMX['resp'] = {'success': True, 'permisos': {}, 'vacio': True, 'usuario': 'ovilela', 'fuente': 'azure'}
