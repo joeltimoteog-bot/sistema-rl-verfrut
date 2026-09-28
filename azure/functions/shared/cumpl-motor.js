@@ -254,7 +254,7 @@ function crearMotor(D) {
       docsPend += a.documentos_pendientes.length;
       if (a.dias_retraso > 0) { vencidos++; detalleVencidos.push({ caso: c.nro, trabajador: c.nombre, actividad: a.actividad, dias_retraso: a.dias_retraso, fecha_limite: a.fecha_limite }); }
     });
-    let semanas = 0, realizadas = 0, primerLunesV = null;
+    let semanas = 0, realizadas = 0, visEnPlazo = 0, primerLunesV = null;   /* _VISITA_PLAZO_V1 */
     const lv = esSupCampo(u) ? visitas : null;
     let d = copia(ini); while (d.getUTCDay() !== 1) d = sumar(d, 1);
     primerLunesV = copia(d);
@@ -265,21 +265,22 @@ function crearMotor(D) {
         if (dom >= hoy || limV >= hoy) break;
         semanas++;
         const lunes = d;
-        const ok = lv.some(v => {
+        const cubren = lv.filter(v => {
           if (!esDelUsuario({ supervisor: v.supervisor, registrado_por: '' }, u)) return false;
           const fi = fechaV(v.fecha_inicio), ff = fechaV(v.fecha_fin) || fi, finf = fechaV(v.fecha_informe);
           return (fi && ff && fi <= dom && ff >= lunes) || (finf && finf >= lunes && finf <= dom);
         });
-        if (ok) realizadas++;
+        if (cubren.length) realizadas++;
+        if (cubren.some(v => { const fr = v.fecha_reg ? fechaV(String(v.fecha_reg).slice(0, 10)) : null; return !fr || fr <= limV; })) visEnPlazo++;   /* _VISITA_PLAZO_V1 */
       }
     }
     const denom = cerrados + vencidos + semanas;
-    const pct = denom ? Math.round(100 * (enPlazo + realizadas) / denom) : 100;
+    const pct = denom ? Math.round(100 * (enPlazo + visEnPlazo) / denom) : 100;   /* _VISITA_PLAZO_V1 */
     const nivel = pct >= cfg.excelente ? 'EXCELENTE' : pct >= cfg.regular ? 'REGULAR' : 'BAJO';
     const extraVis = (visitasPend && !(visitasPend.dias_retraso > 0 && primerLunesV && (function () { const l0 = parse(visitasPend.fecha_registro); if (!l0) return false; return sumar(l0, -7) >= primerLunesV; })())) ? 1 : 0;
     return {
       mes: MESES[m] + ' ' + y, porcentaje: pct, nivel,
-      visitas_programadas: semanas, visitas_realizadas: realizadas, visitas_pendientes: Math.max(0, semanas - realizadas) + extraVis,
+      visitas_programadas: semanas, visitas_realizadas: realizadas, visitas_en_plazo: visEnPlazo, visitas_fuera_plazo: realizadas - visEnPlazo, visitas_pendientes: Math.max(0, semanas - realizadas) + extraVis,
       casos_asignados: delMes.length, casos_en_plazo: enPlazo, casos_fuera_plazo: fuera, casos_vencidos: vencidos,
       casos_en_investigacion: enInvest, documentos_pendientes: docsPend, casos_abiertos: abiertos.length,
       promedio_dias_cierre: cerrados ? Math.round(10 * sumaDias / cerrados) / 10 : 0, casos_cerrados_mes: cerrados,
