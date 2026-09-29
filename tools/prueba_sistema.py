@@ -444,6 +444,12 @@ with sync_playwright() as pw:
     ok('Configuracion: al guardar envia el calendario ordenado (LUN..SAB y feriados aaaa-mm-dd)', 'cumplConfigGuardar' in CUMPLW['llamadas'] and '"dias_laborables":"LUN,MAR,MIE,JUE,VIE,SAB"' in cu and '"feriados":"2026-10-08,2026-12-08,2026-12-25"' in cu, ','.join(CUMPLW['llamadas']) + ' | ' + cu[:300])
     pag.evaluate("() => { const t = document.querySelector('[data-tipo=\\'feriados\\']'); if (t) { t.value = '31/02/2026'; document.getElementById('cumplCfgGuardar').click(); } }"); pag.wait_for_timeout(600)
     ok('Configuracion: una fecha de feriado no valida se rechaza (no se guarda)', CUMPLW['llamadas'].count('cumplConfigGuardar') == 1, ','.join(CUMPLW['llamadas']))
+    r = pag.evaluate("() => { const b = document.getElementById('cumplAdminBody'); return (b.innerText.indexOf('registren desde hoy') >= 0) + '|' + !document.querySelector('[data-k=\"plazos_historial\"]') + '|' + !!(document.querySelector('[data-k=\"plazo_investigacion\"]') && !document.querySelector('[data-k=\"plazo_investigacion\"]').disabled); }")
+    ok('Configuracion (jtimoteo): aviso de que el cambio de plazo aplica a casos nuevos, historial oculto y plazos editables', r == 'true|true|true', r)
+    r = pag.evaluate("""async () => { const u0 = USER.usuario; USER.usuario = 'ovilela'; const t = document.querySelector('.cumpl-tabs button[data-t=\\'cfg\\']'); if (t) t.click(); await new Promise(z => setTimeout(z, 1200));
+        const i = document.querySelector('[data-k="plazo_investigacion"]'), g = document.getElementById('cumplCfgGuardar'); const x = (i && i.disabled) + '|' + (g && g.style.display === 'none') + '|' + (document.getElementById('cumplAdminBody').innerText.indexOf('Solo el administrador del sistema') >= 0);
+        USER.usuario = u0; if (t) t.click(); await new Promise(z => setTimeout(z, 1200)); return x; }""")
+    ok('Configuracion: otro administrador la ve pero NO puede cambiar plazos ni calendario', r == 'true|true|true', r)
     ok('Configuracion: las ausencias NO aparecen como parametro editable (se gestionan en Usuarios)', pag.evaluate("() => !document.querySelector('[data-k=\"ausencias\"]') && !!document.getElementById('cumplCfgGuardar')"), 'ok')
     # ── _AUSENCIAS_V1: insignias en la tabla del coordinador ──
     CUMPL['aus'] = True
@@ -500,6 +506,14 @@ with sync_playwright() as pw:
     CVG['modo'] = 'ok'
     # ── Nueva Atencion: primero en Azure ──
     RED['trf'] = []
+    r = pag.evaluate("""() => { rlPlazosFijar({plazo_investigacion: 3, plazo_documentos: 7, plazo_cierre: 10, historial: [{clave: 'plazo_investigacion', valor: 5, hasta: '2026-09-27'}]});
+        const fr = document.getElementById('cFechaReporte'), fl = document.getElementById('cFechaLimite'); if (!fr || !fl) return 'sin formulario';
+        _editandoCasoNro = null; fr.value = '2026-10-01'; calcularFechaLimiteCaso(); const nuevo = fl.value;
+        casosData.push({nro: 9191, fecha_reg: '2026-09-20'}); _editandoCasoNro = 9191; calcularFechaLimiteCaso(); const viejo = fl.value; _editandoCasoNro = null;
+        return nuevo + '|' + viejo + '|' + rlPlazoEn('plazo_investigacion', '2026-09-27') + '|' + rlPlazoEn('plazo_investigacion', '2026-09-28'); }""")
+    ok('Casos: caso NUEVO vence a los 3 dias habiles (01/10 → 06/10); un caso registrado antes del cambio conserva sus 5 dias (→ 09/10, 8/10 feriado)', r == '2026-10-06|2026-10-09|5|3', str(r))
+    r = pag.evaluate("""() => { const tb = document.getElementById('tbCasos'); if (!tb) return 'sin tabla'; renderTablaCasos([{nro: 1, nombre: 'A', estado_caso: 'CONCLUIDO_CON_RETRASO', estado_gestion: 'CERRADO', fecha_limite: '2026-09-01'}, {nro: 2, nombre: 'B', estado_caso: 'CONCLUIDO_DENTRO_PLAZO', estado_gestion: 'CERRADO', fecha_limite: '2026-09-01'}]); return tb.innerText; }""")
+    ok('Casos: el concluido fuera de plazo sale como OBSERVADO POR RETRASO (el concluido a tiempo, CONCLUIDO)', 'OBSERVADO POR RETRASO' in str(r) and 'CONCLUIDO' in str(r), ' '.join(str(r).split())[:200])
     r = pag.evaluate("() => COLS_AT_TODAS.map(c => c.label).join('|') + ' || ' + COLS_CONSULTA_DNI.map(c => c.key).join(',')")
     ok('Excel de atenciones: trae Parentesco, N° Licencia, Autorizado por y F. Término Periodo; Consulta DNI mantiene Cumpleaños despues de Código', all(x in r for x in ['|Parentesco', '|N° Licencia', '|Autorizado por', 'F. Término Periodo']) and 'codigo,cumpleanos,fundo_actual' in r, r[:400])
     r = pag.evaluate("""async () => { atTodas.push({nro: 4242, dni: '12345678', nombre: 'EDIT PRUEBA', empresa: 'RAPEL', detalle_documento: '34 LICENCIA POR MATERNIDAD', nro_licencia: 'LIC-99', autorizado_por: 'ESSALUD', parentesco: '', fecha_termino_periodo: '2026-12-31'});

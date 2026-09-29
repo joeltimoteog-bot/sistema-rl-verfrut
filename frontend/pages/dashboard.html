@@ -3595,6 +3595,23 @@ function rlCalFijar(c) {
   RL_CAL = { dias: c.dias.map(Number), feriados: (c.feriados || []).map(String) };
   try { localStorage.setItem('rl_calendario', JSON.stringify(RL_CAL)); } catch (e) {}
 }
+/* _PLAZO_VIGENTE_V1 (28-set-2026): plazos de casos desde la configuracion (Cumplimiento > Configuracion, solo jtimoteo).
+   Cada caso usa el plazo vigente el dia en que se REGISTRO: un cambio de plazo no altera los casos anteriores. */
+var RL_PLAZOS = (function () {
+  try { var p = JSON.parse(localStorage.getItem('rl_plazos') || 'null'); if (p && p.plazo_investigacion) return p; } catch (e) {}
+  return { plazo_investigacion: 5, plazo_documentos: 7, plazo_cierre: 10, historial: [] };
+})();
+function rlPlazosFijar(p) {
+  if (!p || !p.plazo_investigacion) return;
+  RL_PLAZOS = { plazo_investigacion: +p.plazo_investigacion, plazo_documentos: +p.plazo_documentos, plazo_cierre: +p.plazo_cierre, historial: Array.isArray(p.historial) ? p.historial : [] };
+  try { localStorage.setItem('rl_plazos', JSON.stringify(RL_PLAZOS)); } catch (e) {}
+}
+function rlPlazoEn(clave, fechaRegYmd) {   /* = cumplPlazoEn_ del Apps Script */
+  var actual = RL_PLAZOS[clave];
+  if (!fechaRegYmd) return actual;
+  for (var i = 0; i < RL_PLAZOS.historial.length; i++) { var h = RL_PLAZOS.historial[i]; if (h && h.clave === clave && fechaRegYmd <= String(h.hasta)) { var n = parseInt(h.valor, 10); return isNaN(n) ? actual : n; } }
+  return actual;
+}
 function rlEsLaborable(fecha) {
   var d = (fecha instanceof Date) ? fecha : new Date(fecha + 'T00:00:00');
   if (RL_CAL.dias.indexOf(d.getDay()) < 0) return false;
@@ -4021,8 +4038,10 @@ function calcularFechaLimiteCaso() {
   const fechaRep = new Date(fechaStr + 'T00:00:00');
   const temporada = detectarTemporada(fechaRep);
   document.getElementById('cTemporada').value = temporada === 'baja' ? 'Temporada Baja' : 'Temporada Alta';
-  // Plazo: 5 días hábiles desde el día siguiente al reporte
-  const fechaLimite = sumarDiasHabiles(fechaRep, 5);
+  // Plazo: dias habiles desde el dia siguiente al reporte (_PLAZO_VIGENTE_V1: el configurado, vigente el dia del REGISTRO del caso)
+  const _h = new Date(); let _fReg = _h.getFullYear() + '-' + ('0' + (_h.getMonth() + 1)).slice(-2) + '-' + ('0' + _h.getDate()).slice(-2);
+  try { if (typeof _editandoCasoNro !== 'undefined' && _editandoCasoNro) { const _cc = (casosData || []).find(x => String(x.nro) === String(_editandoCasoNro)); if (_cc && _cc.fecha_reg) _fReg = String(_cc.fecha_reg).slice(0, 10); } } catch (e) {}
+  const fechaLimite = sumarDiasHabiles(fechaRep, rlPlazoEn('plazo_investigacion', _fReg) || 5);
   const fl = fechaLimite.toISOString().split('T')[0];
   document.getElementById('cFechaLimite').value = fl;
   calcularEstadoCaso(fl);
@@ -4060,7 +4079,7 @@ function calcularEstadoCaso(fechaLimiteStr) {
     // Rojo: vencido
     estadoPlazo = esConcluido ? 'CONCLUIDO_CON_RETRASO' : 'EN_PROCESO_VENCIDO';
     color = '#dc2626'; bg = '#fef2f2'; border = '#fecaca';
-    etiqueta = (esConcluido ? '🔴 CONCLUIDO CON RETRASO' : '🔴 EN PROCESO — VENCIDO') +
+    etiqueta = (esConcluido ? '⛔ OBSERVADO POR RETRASO' : '🔴 EN PROCESO — VENCIDO') +   /* _PLAZO_VIGENTE_V1: documentos subidos fuera de plazo */
                ' — ' + diasRetraso + ' día(s) hábil(es) de retraso';
   }
 
@@ -4650,14 +4669,15 @@ function renderTablaCasos(data) {
       // Semáforo: verde / amarillo / rojo
       const concluido = estadoCaso.startsWith('CONCLUIDO') || ['CERRADO','CONCLUIDO','RESUELTO','FINALIZADO'].some(s => String(c.estado_gestion||'').toUpperCase().includes(s)); const _venc = c.fecha_limite ? (new Date(String(c.fecha_limite).split('T')[0]+'T00:00:00') < hoy) : (estadoCaso.includes('VENCIDO') || estadoCaso.includes('CON_RETRASO')); const vencido = _venc && !concluido;
       const porVencer = !vencido && !concluido && !!c.fecha_limite && diasRestantes <= 1;
-      const estColor = vencido ? '#dc2626' : (porVencer ? '#d97706' : '#16a34a');
-      const estBg    = vencido ? '#fee2e2' : (porVencer ? '#fef3c7' : '#dcfce7');
+      const _obsRet  = concluido && estadoCaso === 'CONCLUIDO_CON_RETRASO';   /* _PLAZO_VIGENTE_V1: concluido fuera de plazo = OBSERVADO POR RETRASO */
+      const estColor = (vencido || _obsRet) ? '#dc2626' : (porVencer ? '#d97706' : '#16a34a');
+      const estBg    = (vencido || _obsRet) ? '#fee2e2' : (porVencer ? '#fef3c7' : '#dcfce7');
       // ⭐ Concluidos: % congelado de la hoja; en proceso: recálculo contra hoy (caso vivo)
       const _pctGuardado = Math.min(100, Math.max(0, Number(c.porcentaje_avance ?? c.porcentaje) || 0));
       const porcentaje = concluido
         ? (_pctGuardado > 0 ? _pctGuardado : ((estadoCaso.includes('RETRASO') || estadoCaso.includes('VENCIDO')) ? _pctGuardado : 100))
         : (c.fecha_limite ? calcularAvance(calcularRetraso(String(c.fecha_limite).split('T')[0], hoy)) : _pctGuardado);
-      const estadoLabel = concluido ? 'CONCLUIDO' : (vencido ? 'VENCIDO' : (porVencer ? 'POR VENCER' : (c.fecha_limite ? 'EN PLAZO' : '-')));
+      const estadoLabel = concluido ? (_obsRet ? 'OBSERVADO POR RETRASO' : 'CONCLUIDO') : (vencido ? 'VENCIDO' : (porVencer ? 'POR VENCER' : (c.fecha_limite ? 'EN PLAZO' : '-')));
       const urlInforme  = c.archivo_informe_url  || c.enlace_informe  || '';
       const urlDescargo = c.archivo_descargo_url || c.enlace_reporte  || '';
       if (urlInforme || urlDescargo) console.log('[renderTablaCasos] caso[' + i + ']', c.nombre, '| informe:', urlInforme || '(vacío)', '| descargo:', urlDescargo || '(vacío)');
@@ -13561,7 +13581,7 @@ async function cargar(motivo, forzar) {
   D.cargando = (async function () {
     try {
       var r = await apiPost({ action: 'cumplPendientes', usuario: u.usuario, rol: u.rol });
-      if (r && r.success) { try { if (r.config && r.config.calendario) rlCalFijar(r.config.calendario); } catch (eCal) {}   /* _CALENDARIO_V1 */
+      if (r && r.success) { try { if (r.config && r.config.calendario) rlCalFijar(r.config.calendario); if (r.config && r.config.plazos) rlPlazosFijar(r.config.plazos); } catch (eCal) {}   /* _CALENDARIO_V1 · _PLAZO_VIGENTE_V1 */
         D.data = r; D.ts = Date.now(); pintarTodo(); console.log('[_CUMPL_UI_V1] ' + (motivo || '') + ' → ' + JSON.stringify(r.resumen)); return r; }
       console.warn('[_CUMPL_UI_V1] backend:', r && r.error);
     } catch (e) { console.warn('[_CUMPL_UI_V1]', e.message); }
@@ -13908,7 +13928,7 @@ function pintarAdmin() {
       if (!r || !r.success) { body.innerHTML = '<p style="color:#dc2626">' + esc((r && r.error) || 'Error') + '</p>'; return; }
       body.innerHTML = '<p style="margin:0 0 10px;font-size:12.5px;color:#334155">Los plazos se cuentan en <b>días hábiles</b> según el <b>calendario laboral</b> (días laborables y feriados, al final de la tabla): se aplica a casos, visitas, alertas y cumplimiento. Los cambios aplican de inmediato y quedan en el historial.</p>' +
         '<table class="cumpl-tb"><thead><tr><th>Parámetro</th><th>Valor</th><th>Descripción</th><th>Actualizado</th></tr></thead><tbody>' +
-        r.filas.filter(function (f) { return f.clave !== 'ausencias'; }).map(function (f) {   /* _AUSENCIAS_V1: se gestionan en Gestion Usuarios */
+        r.filas.filter(function (f) { return f.clave !== 'ausencias' && f.clave !== 'plazos_historial'; }).map(function (f) {   /* _AUSENCIAS_V1: se gestionan en Gestion Usuarios */
           var celda;   /* _CALENDARIO_V1: dias con casillas y feriados en un cuadro */
           if (f.clave === 'dias_laborables') {
             var sel = String(f.valor || '').toUpperCase();
@@ -13922,6 +13942,19 @@ function pintarAdmin() {
           }
           return '<tr><td><code style="font-size:11px">' + esc(f.clave) + '</code></td><td>' + celda + '</td><td style="white-space:normal;font-size:11.5px">' + esc(f.descripcion) + '</td><td style="font-size:11px;color:#64748b">' + dmy(f.actualizado) + (f.por ? '<br>' + esc(f.por) : '') + '</td></tr>'; }).join('') +
         '</tbody></table><div style="text-align:right;margin-top:12px"><button class="cumpl-btn" id="cumplCfgGuardar">💾 Guardar cambios</button></div>';
+      /* _PLAZO_VIGENTE_V1: solo jtimoteo cambia plazos y calendario; los demas la ven */
+      (function () {
+        var nota = document.createElement('p');
+        nota.style.cssText = 'margin:10px 0 0;font-size:12.5px;color:#7c2d12;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px';
+        nota.innerHTML = '📌 <b>Cambio de plazos:</b> aplica a los casos que se <b>registren desde hoy</b>. Los casos ya registrados conservan el plazo que tenían (queda en el historial).';
+        body.insertBefore(nota, body.querySelector('table'));
+        if (String((USER && USER.usuario) || '').toLowerCase() !== 'jtimoteo') {
+          body.querySelectorAll('input,textarea,select').forEach(function (x) { x.disabled = true; });
+          var bg = document.getElementById('cumplCfgGuardar'); if (bg) bg.style.display = 'none';
+          var ro = document.createElement('p'); ro.style.cssText = 'margin:8px 0 0;font-size:12px;color:#64748b'; ro.textContent = '🔒 Solo el administrador del sistema (Joel Timoteo) puede modificar plazos y calendario.';
+          body.appendChild(ro);
+        }
+      })();
       document.getElementById('cumplCfgGuardar').onclick = async function () {
         var cambios = {}; body.querySelectorAll('input[data-k]').forEach(function (i) { cambios[i.getAttribute('data-k')] = i.value.trim(); });
         /* _CALENDARIO_V1 */

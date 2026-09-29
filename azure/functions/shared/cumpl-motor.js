@@ -189,6 +189,20 @@ function ausAplicar(lista, b, usuarios, hoyS, ahoraTxt, por) {
   return { error: 'Operacion no valida.' };
 }
 
+/* _PLAZO_VIGENTE_V1 (28-set-2026): = cumplPlazosHist_ / cumplPlazoEn_ del Apps Script */
+function plazosHist(raw) {
+  const v = raw && raw.plazos_historial; let arr = [];
+  try { arr = JSON.parse(String(v === null || v === undefined || v === '' ? '[]' : v)); } catch (e) { arr = []; }
+  return Array.isArray(arr) ? arr.filter(x => x && x.clave && x.hasta) : [];
+}
+function plazoEn(cfg, clave, fechaRegYmd) {
+  const actual = cfg[clave];
+  if (!fechaRegYmd) return actual;
+  const h = plazosHist(cfg.raw);
+  for (const x of h) if (x.clave === clave && fechaRegYmd <= String(x.hasta)) { const n = parseInt(x.valor, 10); return isNaN(n) ? actual : n; }
+  return actual;
+}
+
 function crearMotor(D) {
   const K = D.constantes || {};
   const FER = K.feriados || [], AI = K.altaIni || { m: 1, d: 5 }, AF = K.altaFin || { m: 6, d: 26 };
@@ -264,9 +278,10 @@ function crearMotor(D) {
     if (!c.enlace_informe) docs.push('Informe');
     if (!c.enlace_reporte) docs.push('Reporte/Descargo');
     let etapa, limite, plazo;
-    if (!c.enlace_informe) { etapa = 'Investigación e informe'; plazo = cfg.plazo_investigacion; limite = sumarHabiles(base, plazo); }   /* _CALENDARIO_V1: siempre con el calendario vigente */
-    else if (!c.enlace_reporte) { etapa = 'Carga de reporte/descargo'; plazo = cfg.plazo_documentos; limite = sumarHabiles(base, plazo); }
-    else { etapa = 'Cierre del caso'; plazo = cfg.plazo_cierre; limite = sumarHabiles(base, plazo); }
+    const fReg = ymd(c.fecha_registro);   /* _PLAZO_VIGENTE_V1 */
+    if (!c.enlace_informe) { etapa = 'Investigación e informe'; plazo = plazoEn(cfg, 'plazo_investigacion', fReg); limite = sumarHabiles(base, plazo); }   /* _CALENDARIO_V1: siempre con el calendario vigente */
+    else if (!c.enlace_reporte) { etapa = 'Carga de reporte/descargo'; plazo = plazoEn(cfg, 'plazo_documentos', fReg); limite = sumarHabiles(base, plazo); }
+    else { etapa = 'Cierre del caso'; plazo = plazoEn(cfg, 'plazo_cierre', fReg); limite = sumarHabiles(base, plazo); }
     const s = semaforo(limite, hoy);
     const avance = c.enlace_informe && c.enlace_reporte ? 80 : c.enlace_informe ? 50 : 20;
     const o = {
@@ -354,7 +369,7 @@ function crearMotor(D) {
       const fin = c.fecha_cierre; if (!fin || fin < ini) return;
       if (!AUS.duenoEn(c, u, ymd(fin))) return;   /* _AUSENCIAS_V1: de quien era el caso el dia del cierre */
       cerrados++; sumaDias += dias(base, fin);
-      const lim = sumarHabiles(base, cfg.plazo_cierre);
+      const lim = sumarHabiles(base, plazoEn(cfg, 'plazo_cierre', ymd(c.fecha_registro)));   /* _PLAZO_VIGENTE_V1 */
       if (fin <= lim) enPlazo++; else fuera++;
     });
     let vencidos = 0, enInvest = 0, docsPend = 0;
@@ -432,7 +447,8 @@ function crearMotor(D) {
     const ind = esAdmin ? null : indice(u, vp, hoy);
     const out = { success: true, usuario: u.usuario, nombre: u.nombre, rol: u.rol, esAdmin, hoy: ymd(hoy),
       config: { aviso_proximo_dias: cfg.aviso_proximo_dias, critico_dias: cfg.critico_dias, escalar_dias: cfg.escalar_dias, excelente: cfg.excelente, regular: cfg.regular,
-        calendario: { dias: CAL_DIAS, feriados: Object.keys(CAL_FER).sort() } },   /* _CALENDARIO_V1 */
+        calendario: { dias: CAL_DIAS, feriados: Object.keys(CAL_FER).sort() },   /* _CALENDARIO_V1 */
+        plazos: { plazo_investigacion: cfg.plazo_investigacion, plazo_documentos: cfg.plazo_documentos, plazo_cierre: cfg.plazo_cierre, historial: plazosHist(cfg.raw) } },   /* _PLAZO_VIGENTE_V1 */
       actividades: acts, resumen, restriccion: restr, indice: ind };
     const au = AUS.ausencia(u, ymd(hoy)), cob = AUS.coberturas(u, ymd(hoy));   /* _AUSENCIAS_V1 */
     if (au) out.ausencia = { tipo: au.tipo, desde: au.desde, hasta: au.hasta || '', reemplazo: AUS.reemp(au) ? AUS.reemp(au).nombre : '' };
@@ -540,4 +556,4 @@ function crearMotor(D) {
   return { cumplPendientes, cumplPanel, getCumplimiento };
 }
 
-module.exports = { crearMotor, crearAus, ausParse, ausAplicar, AUS_TIPOS, nombreMatch, calParseDias, calParseFeriados, _t: { parse, fechaV, semanaNum, hoyLima, ymd } };
+module.exports = { crearMotor, plazosHist, plazoEn, crearAus, ausParse, ausAplicar, AUS_TIPOS, nombreMatch, calParseDias, calParseFeriados, _t: { parse, fechaV, semanaNum, hoyLima, ymd } };
