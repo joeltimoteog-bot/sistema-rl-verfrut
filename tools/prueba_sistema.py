@@ -299,6 +299,7 @@ def enrutar(route):
         return route.fulfill(status=200, body=json.dumps(resp_azure(url, req.post_data or '')), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
     # firebase, fuentes, cdn, etc.
     if 'firebaseio.com' in url and req.method in ('PUT', 'POST', 'PATCH'): RED.setdefault('firebase_escrituras', []).append(url)
+    if 'firebaseio.com/trafico/' in url and req.method == 'PUT': RED.setdefault('trf', []).append(req.post_data or '')   # _TRAFICO_V2
     return route.fulfill(status=200, body='{}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
 
 USUARIO = {'usuario': 'jtimoteo', 'nombre': 'JOEL TIMOTEO', 'rol': 'administrador', 'sector': ''}
@@ -498,11 +499,18 @@ with sync_playwright() as pw:
     ok('Visita: con Azure caido, se guarda por Google', r == 'OK' and 'saveVisita' in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     CVG['modo'] = 'ok'
     # ── Nueva Atencion: primero en Azure ──
+    RED['trf'] = []
+    r = pag.evaluate("() => [window._respDe('35 DESCANSO MEDICO - ENFERMEDAD','RAPEL'), window._respDe('34 LICENCIA POR MATERNIDAD','RAPEL'), window._respDe('35 DESCANSO MEDICO - ENFERMEDAD','VERFRUT')].join('|')")
+    ok('Mis Atenciones: documentos de RAPEL que llevaba Tania Vera van ahora a Rubi Figueroa (VERFRUT sigue con Leandro)', r == 'RUBI FIGUEROA FLORES|RUBI FIGUEROA FLORES|LEANDRO BILL MORALES YARLEQUE', r)
     AT = {'action': 'saveAtencion', 'dni': '87654321', 'nombre': 'PRUEBA AZURE', 'empresa': 'RAPEL', 'detalle_documento': 'X', 'usuario_sistema': 'jtimoteo'}
     RED['google'].clear(); RED['gurl'].clear(); AZG['llamadas'].clear(); AZG['cuerpos'].clear()
     r = pag.evaluate("""async (b) => { const d = await apiPost(Object.assign({}, b)); await new Promise(z => setTimeout(z, 600)); return (d && d.fuente) + ':' + (d && d.nro); }""", AT)
     hoja = [u for u in RED['gurl'] if 'saveAtencionDesdeAzure' in u]
     ok('Atencion nueva: se guarda en Azure (N° de Azure) y NO pasa por Google', r == 'azure:777' and 'saveAtencion' not in RED['google'] and AZG['llamadas'] == ['guardar'], r + ' | google: ' + ','.join(RED['google']))
+    pag.wait_for_timeout(600)
+    trf = [json.loads(x) for x in RED.get('trf', []) if x]
+    g = [t for t in trf if t.get('accion') == 'Guardó atención']
+    ok('Monitor en vivo: la atencion guardada en Azure aparece en el trafico (una sola vez, destino Azure SQL, con N°)', len(g) == 1 and g[0].get('destino') == 'Azure SQL' and 'N° 777' in g[0].get('detalle', '') and g[0].get('u') == 'jtimoteo', json.dumps(g)[:300])
     ok('Atencion nueva: la hoja se escribe en 2do plano con el MISMO N°', len(hoja) == 1 and '"nro":777' in hoja[0], str(len(hoja)) + ' ' + (hoja[0][-160:] if hoja else ''))
     ok('Atencion nueva: Azure recibe la huella (client_id)', AZG['cuerpos'] and '"client_id":"at-' in AZG['cuerpos'][0], (AZG['cuerpos'][0][:120] if AZG['cuerpos'] else ''))
     AZG['llamadas'].clear(); RED['google'].clear()
@@ -913,6 +921,8 @@ with sync_playwright() as pw:
     pag.evaluate("async () => { _ausAbrir('ptamayo'); sv('aus_tipo','LICENCIA'); sv('aus_reemp','nuevo'); sv('aus_desde','2026-11-01'); await _ausGuardarForm(); }"); pag.wait_for_timeout(1500)
     ok('Usuarios: con Azure caido, la ausencia se guarda por Google', 'cumplAusencia' in RED['google'], ','.join(RED['google']))
     CUMPLW['modo'] = 'ok'
+    trf = [json.loads(x) for x in RED.get('trf', []) if x]
+    ok('Monitor en vivo: en Gestion Usuarios se ve "Abrió Gestión usuarios" y el registro de ausencia (Azure SQL)', any(t.get('accion') == 'Abrió Gestión usuarios' for t in trf) and any(t.get('accion') == 'Registró ausencia / reemplazo' and t.get('destino') == 'Azure SQL' for t in trf) and any(t.get('accion') == 'Registró ausencia / reemplazo' and t.get('destino') == 'Google Sheets' for t in trf), ', '.join(sorted(set(t.get('accion', '') + '@' + t.get('destino', '') for t in trf)))[:400])
     ok('Gestion Usuarios sin errores de JavaScript', not errores, '; '.join(errores[:3]))
     pag.close()
     for nombre, ruta in [('Calculo Remunerativo', 'frontend/pages/calculo-remunerativo.html'), ('Login (index)', 'index.html')]:
