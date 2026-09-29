@@ -1,5 +1,6 @@
 const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
+const G = require('../shared/at-guardar');   /* _AT_COLS_V1: asegura las columnas nuevas */
  
 module.exports = async function (context, req) {
   // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
@@ -23,7 +24,7 @@ module.exports = async function (context, req) {
        quedan vacias. El DNI NO se recorta: si es invalido se rechaza con mensaje claro. */
     const _txt = { hora_inicio: 10, hora_termino: 10, nombre: 200, sexo: 10, empresa: 50, fundo: 100, cargo: 150, ruta: 50,
       codigo: 50, fundo_actual: 100, celular: 20, supervisor: 100, detalle_documento: 500, nro_licencia: 40, parentesco: 40,
-      responsable_recepcion: 150, estado: 30, usuario_sistema: 50 };
+      responsable_recepcion: 150, estado: 30, usuario_sistema: 50, autorizado_por: 100 };
     Object.keys(_txt).forEach(k => { if (d[k] != null && d[k] !== '') d[k] = String(d[k]).slice(0, _txt[k]); });
     const _fecha = (v) => {
       if (!v) return null;
@@ -34,7 +35,7 @@ module.exports = async function (context, req) {
       const f = new Date(s + 'T00:00:00Z');
       return (isNaN(f.getTime()) || f.toISOString().slice(0, 10) !== s) ? null : s;
     };
-    ['fecha_atencion', 'fecha_inicio_periodo', 'fecha_inicio_doc', 'fecha_termino_doc'].forEach(k => { d[k] = _fecha(d[k]); });
+    ['fecha_atencion', 'fecha_inicio_periodo', 'fecha_inicio_doc', 'fecha_termino_doc', 'fecha_termino_periodo'].forEach(k => { d[k] = _fecha(d[k]); });
     d.dni = String(d.dni).trim();
     if (d.dni.length > 15) {
       context.res = { status: 400, body: { success: false, error: 'DNI invalido (mas de 15 caracteres): ' + d.dni } };
@@ -42,6 +43,7 @@ module.exports = async function (context, req) {
     }
 
     const pool = await getPool();
+    await G.asegurarTablas(pool);
  
     const result = await pool.request()
       .input('nro', sql.Int, d.nro || null)
@@ -73,6 +75,8 @@ module.exports = async function (context, req) {
       .input('observaciones', sql.NVarChar(sql.MAX), d.observaciones || '')
       .input('estado', sql.NVarChar(30), d.estado || 'EN PROCESO')
       .input('usuario_sistema', sql.NVarChar(50), d.usuario_sistema || '')
+      .input('autorizado_por', sql.NVarChar(100), d.autorizado_por || '')   /* _AT_COLS_V1 */
+      .input('fecha_termino_periodo', sql.Date, d.fecha_termino_periodo || null)
       /* _UPSERT_V1 (25-set-2026): si ya existe la atencion (mismo N°, año y DNI) se
          ACTUALIZA en vez de crear otra. Asi las ediciones hechas en la hoja llegan a
          Azure y un envio repetido ya no duplica el registro. Sin N° -> se crea como antes. */
@@ -84,7 +88,7 @@ module.exports = async function (context, req) {
           SELECT TOP 1 @id = id FROM Atenciones WHERE nro = @nro AND anio = @anio AND dni = @dni ORDER BY id DESC;
         IF @id IS NOT NULL
         BEGIN
-          UPDATE Atenciones SET fecha_atencion = @fecha_atencion, hora_inicio = @hora_inicio, hora_termino = @hora_termino, nro_semana = @nro_semana, mes = @mes, nombre = @nombre, sexo = @sexo, fecha_inicio_periodo = @fecha_inicio_periodo, empresa = @empresa, fundo = @fundo, cargo = @cargo, ruta = @ruta, codigo = @codigo, fundo_actual = @fundo_actual, celular = @celular, supervisor = @supervisor, detalle_documento = @detalle_documento, nro_licencia = @nro_licencia, parentesco = @parentesco, fecha_inicio_doc = @fecha_inicio_doc, fecha_termino_doc = @fecha_termino_doc, dias_transcurridos = @dias_transcurridos, responsable_recepcion = @responsable_recepcion, observaciones = @observaciones, estado = @estado, usuario_sistema = @usuario_sistema
+          UPDATE Atenciones SET fecha_atencion = @fecha_atencion, hora_inicio = @hora_inicio, hora_termino = @hora_termino, nro_semana = @nro_semana, mes = @mes, nombre = @nombre, sexo = @sexo, fecha_inicio_periodo = @fecha_inicio_periodo, empresa = @empresa, fundo = @fundo, cargo = @cargo, ruta = @ruta, codigo = @codigo, fundo_actual = @fundo_actual, celular = @celular, supervisor = @supervisor, detalle_documento = @detalle_documento, nro_licencia = @nro_licencia, parentesco = @parentesco, fecha_inicio_doc = @fecha_inicio_doc, fecha_termino_doc = @fecha_termino_doc, dias_transcurridos = @dias_transcurridos, responsable_recepcion = @responsable_recepcion, observaciones = @observaciones, estado = @estado, usuario_sistema = @usuario_sistema, autorizado_por = CASE WHEN @autorizado_por <> N'' THEN @autorizado_por ELSE autorizado_por END, fecha_termino_periodo = COALESCE(@fecha_termino_periodo, fecha_termino_periodo)
           WHERE nro = @nro AND anio = @anio AND dni = @dni;
           SET @accion = N'actualizado';
         END
@@ -95,11 +99,11 @@ module.exports = async function (context, req) {
           dni, nombre, sexo, fecha_inicio_periodo, empresa, fundo, cargo, ruta, codigo,
           fundo_actual, celular, supervisor, detalle_documento, nro_licencia, parentesco, fecha_inicio_doc,
           fecha_termino_doc, dias_transcurridos, responsable_recepcion, observaciones,
-          estado, usuario_sistema
+          estado, usuario_sistema, autorizado_por, fecha_termino_periodo
           )
           OUTPUT INSERTED.id INTO @t
           VALUES (
-          @nro, @fecha_atencion, @hora_inicio, @hora_termino, @nro_semana, @mes, @anio, @dni, @nombre, @sexo, @fecha_inicio_periodo, @empresa, @fundo, @cargo, @ruta, @codigo, @fundo_actual, @celular, @supervisor, @detalle_documento, @nro_licencia, @parentesco, @fecha_inicio_doc, @fecha_termino_doc, @dias_transcurridos, @responsable_recepcion, @observaciones, @estado, @usuario_sistema
+          @nro, @fecha_atencion, @hora_inicio, @hora_termino, @nro_semana, @mes, @anio, @dni, @nombre, @sexo, @fecha_inicio_periodo, @empresa, @fundo, @cargo, @ruta, @codigo, @fundo_actual, @celular, @supervisor, @detalle_documento, @nro_licencia, @parentesco, @fecha_inicio_doc, @fecha_termino_doc, @dias_transcurridos, @responsable_recepcion, @observaciones, @estado, @usuario_sistema, @autorizado_por, @fecha_termino_periodo
           );
           SELECT TOP 1 @id = id FROM @t;
         END

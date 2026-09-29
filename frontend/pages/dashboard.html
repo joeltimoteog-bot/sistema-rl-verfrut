@@ -6027,6 +6027,12 @@ function editarAt(nro) {
   _initAtDoc();
   const r=document.getElementById('trabRes');r.style.display='block';r.textContent='✅ '+a.nombre+' · '+a.empresa;
   abrir('mAt');
+  /* _AT_COLS_V1 (28-set-2026): al editar se cargan tambien N° licencia, autorizado por y parentesco (antes quedaban vacios) */
+  setTimeout(function(){ try{
+    sv('at_nlic',a.nro_licencia||''); sv('at_autoriz',a.autorizado_por||'');
+    if(window._refrescarCampoParentesco) window._refrescarCampoParentesco();
+    sv('at_parentesco',a.parentesco||'');
+  }catch(e){} }, 80);
 }
 
 async function guardarAt() { if(window._savingAt) return;
@@ -9918,15 +9924,16 @@ function _aFechaExcel(v) {
 var COLS_AT_TODAS = [
   {key:'nro',label:'N°'},{key:'fecha_atencion',label:'Fecha Atención'},{key:'hora_inicio',label:'H. Inicio'},{key:'hora_termino',label:'H. Término'},
   {key:'nro_semana',label:'Semana'},{key:'mes',label:'Mes'},{key:'anio',label:'Año'},
-  {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},{key:'sexo',label:'Sexo'},{key:'fecha_inicio_periodo',label:'F. Inicio Periodo'},
+  {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},{key:'sexo',label:'Sexo'},{key:'fecha_inicio_periodo',label:'F. Inicio Periodo'},{key:'fecha_termino_periodo',label:'F. Término Periodo'},
   {key:'empresa',label:'Empresa'},{key:'fundo',label:'Fundo/Sector'},{key:'cargo',label:'Cargo'},{key:'ruta',label:'Ruta'},{key:'codigo',label:'Código'},
   {key:'fundo_actual',label:'Fundo Actual'},{key:'celular',label:'Celular'},{key:'supervisor',label:'Supervisor'},
   {key:'detalle_documento',label:'Documento'},{key:'fecha_inicio_doc',label:'F. Inicio Doc.'},{key:'fecha_termino_doc',label:'F. Fin Doc.'},
   {key:'dias_transcurridos',label:'Días'},{key:'responsable_recepcion',label:'Responsable Recepción'},{key:'observaciones',label:'Observaciones'},
   {key:'estado',label:'Estado'},{key:'fecha_registro',label:'Fecha Registro'},{key:'usuario_sistema',label:'Usuario Sistema'},
-  {key:'nro_licencia',label:'N° Licencia'},{key:'parentesco',label:'Parentesco'}
+  {key:'nro_licencia',label:'N° Licencia'},{key:'parentesco',label:'Parentesco'},{key:'autorizado_por',label:'Autorizado por'}   /* _AT_COLS_V1 (28-set): + F. Término Periodo y Autorizado por */
 ];
-var COLS_CONSULTA_DNI = COLS_AT_TODAS.slice(0, 16).concat([{key:'cumpleanos',label:'Cumpleaños'}], COLS_AT_TODAS.slice(16));
+var _iCod = COLS_AT_TODAS.findIndex(function (c) { return c.key === 'codigo'; }) + 1;   /* _AT_COLS_V1: Cumpleaños sigue despues de Código */
+var COLS_CONSULTA_DNI = COLS_AT_TODAS.slice(0, _iCod).concat([{key:'cumpleanos',label:'Cumpleaños'}], COLS_AT_TODAS.slice(_iCod));
 
 function exportarExcelGen(datos, columnas, nombreArchivo) {
   if(!datos || !datos.length) { mostrarToast('❌ No hay datos para exportar.', 'error'); return; }

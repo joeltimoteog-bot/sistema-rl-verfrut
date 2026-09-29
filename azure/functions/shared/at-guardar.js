@@ -20,7 +20,10 @@ function asegurarTablas(pool) {
     IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'IX_AtIdem_hoja')
       CREATE INDEX IX_AtIdem_hoja ON dbo.AtIdem (en_hoja, creado);
     IF OBJECT_ID('dbo.AtConfig', 'U') IS NULL
-      CREATE TABLE dbo.AtConfig (clave NVARCHAR(40) NOT NULL PRIMARY KEY, valor NVARCHAR(200) NULL, actualizado DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME());`)
+      CREATE TABLE dbo.AtConfig (clave NVARCHAR(40) NOT NULL PRIMARY KEY, valor NVARCHAR(200) NULL, actualizado DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME());
+    /* _AT_COLS_V1 (28-set-2026): campos del formulario que no se guardaban */
+    IF COL_LENGTH('dbo.Atenciones', 'autorizado_por') IS NULL ALTER TABLE dbo.Atenciones ADD autorizado_por NVARCHAR(100) NULL;
+    IF COL_LENGTH('dbo.Atenciones', 'fecha_termino_periodo') IS NULL ALTER TABLE dbo.Atenciones ADD fecha_termino_periodo DATE NULL;`)
     .catch(e => { listo = null; throw e; });
   return listo;
 }
@@ -61,7 +64,7 @@ function fechaValida(v) {
 
 const LARGOS = { hora_inicio: 10, hora_termino: 10, nombre: 200, sexo: 10, empresa: 50, fundo: 100, cargo: 150, ruta: 50,
   codigo: 50, fundo_actual: 100, celular: 20, supervisor: 100, detalle_documento: 500, nro_licencia: 40, parentesco: 40,
-  responsable_recepcion: 150, estado: 30, usuario_sistema: 50 };
+  responsable_recepcion: 150, estado: 30, usuario_sistema: 50, autorizado_por: 100 };   /* _AT_COLS_V1: + autorizado_por */
 
 /* Arma la atencion igual que saveAtencion del Apps Script */
 function armar(b) {
@@ -74,6 +77,7 @@ function armar(b) {
   d.nro_licencia = String(b.nro_licencia || '').trim().slice(0, 40);
   d.parentesco = parValor(b.parentesco);
   d.fecha_inicio_periodo = fechaValida(b.fecha_inicio_periodo);
+  d.fecha_termino_periodo = fechaValida(b.fecha_termino_periodo);   /* _AT_COLS_V1 */
   d.fecha_inicio_doc = fechaValida(b.fecha_inicio_doc);
   d.fecha_termino_doc = fechaValida(b.fecha_termino_doc);
   d.dias_transcurridos = parseInt(b.dias_transcurridos, 10) || 0;

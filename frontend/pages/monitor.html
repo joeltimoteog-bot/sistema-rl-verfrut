@@ -1807,11 +1807,14 @@ async function poll(){
   if(!vivo)return;
   try{
     var desde=Date.now()-30*60*1000;
-    var r=await fetch(DB+'/trafico.json?orderBy="$key"&startAt="'+desde+'"',{cache:'no-store'});
-    var j=await r.json(); if(!j)return;
+    /* _TRAFICO_V2 (28-set-2026): pide SOLO lo nuevo desde el ultimo evento visto (antes bajaba los 30 min completos cada 3 s) */
+    var inicio=window._trfUltKey||String(desde);
+    var r=await fetch(DB+'/trafico.json?orderBy="$key"&startAt="'+inicio+'"',{cache:'no-store'});
+    var j=await r.json();
     var nuevos=[];
-    Object.keys(j).sort().forEach(function(k){var e=j[k];if(!e||!e.ts||vistos[k])return;vistos[k]=1;e._k=k;eventos.push(e);nuevos.push(e);});
+    if(j)Object.keys(j).sort().forEach(function(k){if(!window._trfUltKey||k>window._trfUltKey)window._trfUltKey=k;var e=j[k];if(!e||!e.ts||vistos[k])return;vistos[k]=1;e._k=k;eventos.push(e);nuevos.push(e);});
     eventos=eventos.filter(function(e){return e.ts>=desde;});
+    if(!j){contadores();return;}
     nuevos.slice(-25).forEach(function(e,i){setTimeout(function(){lanzar(e,true);},i*250);});
     contadores();
   }catch(e){}

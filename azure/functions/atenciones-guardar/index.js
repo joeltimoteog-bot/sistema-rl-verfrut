@@ -24,11 +24,13 @@ function token(req) {
 const INSERT = `INSERT INTO dbo.Atenciones (
     nro, fecha_atencion, hora_inicio, hora_termino, nro_semana, mes, anio, dni, nombre, sexo, fecha_inicio_periodo,
     empresa, fundo, cargo, ruta, codigo, fundo_actual, celular, supervisor, detalle_documento, nro_licencia, parentesco,
-    fecha_inicio_doc, fecha_termino_doc, dias_transcurridos, responsable_recepcion, observaciones, estado, usuario_sistema)
+    fecha_inicio_doc, fecha_termino_doc, dias_transcurridos, responsable_recepcion, observaciones, estado, usuario_sistema,
+    autorizado_por, fecha_termino_periodo)
   OUTPUT INSERTED.id INTO @t
   VALUES (@nro, @fecha_atencion, @hora_inicio, @hora_termino, @nro_semana, @mes, @anio, @dni, @nombre, @sexo, @fecha_inicio_periodo,
     @empresa, @fundo, @cargo, @ruta, @codigo, @fundo_actual, @celular, @supervisor, @detalle_documento, @nro_licencia, @parentesco,
-    @fecha_inicio_doc, @fecha_termino_doc, @dias_transcurridos, @responsable_recepcion, @observaciones, @estado, @usuario_sistema);`;
+    @fecha_inicio_doc, @fecha_termino_doc, @dias_transcurridos, @responsable_recepcion, @observaciones, @estado, @usuario_sistema,
+    @autorizado_por, @fecha_termino_periodo);`;   /* _AT_COLS_V1 */
 
 async function yaGuardado(pool, clave) {
   const r = await pool.request().input('k', sql.NVarChar(80), clave).query('SELECT nro, anio FROM dbo.AtIdem WHERE clave = @k');
@@ -84,6 +86,7 @@ module.exports = async function (context, req) {
        .input('fecha_termino_doc', sql.Date, d.fecha_termino_doc).input('dias_transcurridos', sql.Int, d.dias_transcurridos)
        .input('responsable_recepcion', sql.NVarChar(150), d.responsable_recepcion).input('observaciones', sql.NVarChar(sql.MAX), d.observaciones)
        .input('estado', sql.NVarChar(30), d.estado).input('usuario_sistema', sql.NVarChar(50), d.usuario_sistema)
+       .input('autorizado_por', sql.NVarChar(100), d.autorizado_por).input('fecha_termino_periodo', sql.Date, d.fecha_termino_periodo)   /* _AT_COLS_V1 */
        .input('a', sql.Int, anioHoja).input('k', sql.NVarChar(80), clave || ('sin-huella-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)));
       const ins = await r.query(`SET NOCOUNT ON; DECLARE @t TABLE (id INT); ${INSERT}
         DECLARE @id INT = (SELECT TOP 1 id FROM @t);

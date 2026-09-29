@@ -468,11 +468,11 @@ with sync_playwright() as pw:
         window._atFiltradas = [{nro: 1, dni: '11111111'}]; exportarAtenciones(); window._consultaDNIResultados = [{nro: 1}]; exportarConsultaDNI(); window.exportarExcelGen = orig; return cap; }""")
     at = r[0] if r else ''; cd = r[1] if len(r) > 1 else ''
     faltan = [k for k in ['nro','fecha_atencion','hora_inicio','hora_termino','nro_semana','mes','anio','dni','nombre','sexo','fecha_inicio_periodo','empresa','fundo','cargo','ruta','codigo','fundo_actual','celular','supervisor','detalle_documento','fecha_inicio_doc','fecha_termino_doc','dias_transcurridos','responsable_recepcion','observaciones','estado','fecha_registro','usuario_sistema','nro_licencia','parentesco'] if k not in at.split(':')[-1].split('|') or k not in cd.split(':')[-1].split('|')]
-    ok('Excel de Mis Atenciones y de Consulta por DNI llevan TODAS las columnas (30 / 31 con cumpleaños)', at.startswith('Atenciones:30:') and cd.startswith('ConsultaDNI:31:') and not faltan, at[:40] + ' | ' + cd[:40] + ' | faltan: ' + ','.join(faltan))
+    ok('Excel de Mis Atenciones y de Consulta por DNI llevan TODAS las columnas (32 / 33 con cumpleaños)', at.startswith('Atenciones:32:') and cd.startswith('ConsultaDNI:33:') and not faltan, at[:40] + ' | ' + cd[:40] + ' | faltan: ' + ','.join(faltan))
     pag.evaluate("() => { document.getElementById('cDNI').value = '11111111'; }")
     pag.evaluate("async () => { await consultarDNI(); }"); pag.wait_for_timeout(800)
     r = pag.evaluate("() => { const t = document.querySelector('#consultaResult table'); if (!t) return 'sin tabla: ' + document.getElementById('consultaResult').innerText.slice(0, 120); return t.querySelectorAll('thead th').length + ':' + t.querySelectorAll('tbody tr').length + ':' + (t.querySelector('tbody tr') ? t.querySelector('tbody tr').children.length : 0) + ':' + Array.from(t.querySelectorAll('thead th')).map(x => x.textContent).slice(0, 6).join('|'); }")
-    ok('Consulta por DNI: la tabla muestra TODAS las columnas (31) en cada fila', re.match(r'^31:[1-9]\d*:31:', str(r)) is not None, str(r))
+    ok('Consulta por DNI: la tabla muestra TODAS las columnas (33) en cada fila', re.match(r'^33:[1-9]\d*:33:', str(r)) is not None, str(r))
     # ── _CAPAS_V1: 'Eliminar caso' se abre ENCIMA del formulario del caso · _PROGRESO_V1: circulo y ✓ ──
     pag.evaluate("() => { const n = document.getElementById('rlNovOv'); if (n) n.remove(); }")
     pag.wait_for_function("() => { const c = document.getElementById('rlProg'); return !c || c.style.display !== 'flex'; }", timeout=8000)
@@ -500,9 +500,15 @@ with sync_playwright() as pw:
     CVG['modo'] = 'ok'
     # ── Nueva Atencion: primero en Azure ──
     RED['trf'] = []
+    r = pag.evaluate("() => COLS_AT_TODAS.map(c => c.label).join('|') + ' || ' + COLS_CONSULTA_DNI.map(c => c.key).join(',')")
+    ok('Excel de atenciones: trae Parentesco, N° Licencia, Autorizado por y F. Término Periodo; Consulta DNI mantiene Cumpleaños despues de Código', all(x in r for x in ['|Parentesco', '|N° Licencia', '|Autorizado por', 'F. Término Periodo']) and 'codigo,cumpleanos,fundo_actual' in r, r[:400])
+    r = pag.evaluate("""async () => { atTodas.push({nro: 4242, dni: '12345678', nombre: 'EDIT PRUEBA', empresa: 'RAPEL', detalle_documento: '34 LICENCIA POR MATERNIDAD', nro_licencia: 'LIC-99', autorizado_por: 'ESSALUD', parentesco: '', fecha_termino_periodo: '2026-12-31'});
+        editarAt(4242); await new Promise(z => setTimeout(z, 300));
+        const g = id => (document.getElementById(id) || {}).value; const x = [g('at_nlic'), g('at_autoriz'), g('at_ftp')].join('|'); cerrar('mAt'); return x; }""")
+    ok('Editar atencion: el formulario carga N° licencia, Autorizado por y F. Término Periodo (antes quedaban vacios y se perdian)', r == 'LIC-99|ESSALUD|2026-12-31', str(r))
     r = pag.evaluate("() => [window._respDe('35 DESCANSO MEDICO - ENFERMEDAD','RAPEL'), window._respDe('34 LICENCIA POR MATERNIDAD','RAPEL'), window._respDe('35 DESCANSO MEDICO - ENFERMEDAD','VERFRUT')].join('|')")
     ok('Mis Atenciones: documentos de RAPEL que llevaba Tania Vera van ahora a Rubi Figueroa (VERFRUT sigue con Leandro)', r == 'RUBI FIGUEROA FLORES|RUBI FIGUEROA FLORES|LEANDRO BILL MORALES YARLEQUE', r)
-    AT = {'action': 'saveAtencion', 'dni': '87654321', 'nombre': 'PRUEBA AZURE', 'empresa': 'RAPEL', 'detalle_documento': 'X', 'usuario_sistema': 'jtimoteo'}
+    AT = {'action': 'saveAtencion', 'dni': '87654321', 'nombre': 'PRUEBA AZURE', 'empresa': 'RAPEL', 'detalle_documento': 'X', 'usuario_sistema': 'jtimoteo', 'autorizado_por': 'ESSALUD', 'fecha_termino_periodo': '2026-12-31'}
     RED['google'].clear(); RED['gurl'].clear(); AZG['llamadas'].clear(); AZG['cuerpos'].clear()
     r = pag.evaluate("""async (b) => { const d = await apiPost(Object.assign({}, b)); await new Promise(z => setTimeout(z, 600)); return (d && d.fuente) + ':' + (d && d.nro); }""", AT)
     hoja = [u for u in RED['gurl'] if 'saveAtencionDesdeAzure' in u]
@@ -510,6 +516,7 @@ with sync_playwright() as pw:
     pag.wait_for_timeout(600)
     trf = [json.loads(x) for x in RED.get('trf', []) if x]
     g = [t for t in trf if t.get('accion') == 'Guardó atención']
+    ok('Atencion nueva: Autorizado por y F. Término Periodo viajan a Azure', any('"autorizado_por":"ESSALUD"' in c and '"fecha_termino_periodo":"2026-12-31"' in c for c in AZG['cuerpos']), ''.join(AZG['cuerpos'])[:200])
     ok('Monitor en vivo: la atencion guardada en Azure aparece en el trafico (una sola vez, destino Azure SQL, con N°)', len(g) == 1 and g[0].get('destino') == 'Azure SQL' and 'N° 777' in g[0].get('detalle', '') and g[0].get('u') == 'jtimoteo', json.dumps(g)[:300])
     ok('Atencion nueva: la hoja se escribe en 2do plano con el MISMO N°', len(hoja) == 1 and '"nro":777' in hoja[0], str(len(hoja)) + ' ' + (hoja[0][-160:] if hoja else ''))
     ok('Atencion nueva: Azure recibe la huella (client_id)', AZG['cuerpos'] and '"client_id":"at-' in AZG['cuerpos'][0], (AZG['cuerpos'][0][:120] if AZG['cuerpos'] else ''))
