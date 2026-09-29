@@ -2252,7 +2252,7 @@ async function aprobarAccesoTemporal(fila, decision, usuario, horas) {
     const d = await apiPost(body);
     if (d.success) {
       const msg = decision === 'APROBADO'
-        ? '✅ Acceso otorgado' + (d.hora_fin ? ' hasta las ' + d.hora_fin : '')
+        ? '✅ Acceso otorgado' + ((d.hora_fin || d.hastaHora) ? ' hasta las ' + (d.hora_fin || d.hastaHora) : '')
         : '❌ Acceso rechazado';
       mostrarToast(msg);
       _accesosTempData = [];
@@ -16248,12 +16248,31 @@ console.log('[_CV_AZURE_PRIMERO_V1] listo: Casos y Visitas se guardan primero en
   function huella(b) { var s = JSON.stringify(b); return 'usr-' + h32(s, 2166136261) + h32(s, 5381) + '-' + Date.now().toString(36); }
   var previo = window.apiPost, enCurso = {}, apagadoHasta = 0;
   if (typeof previo !== 'function') return;
+  /* _USR_SESION_V1 (29-set-2026): si Azure no pudo y Google la rechaza ("ahora se hace desde Azure"),
+     se muestra el motivo real (sesion vencida, sin sesion, Azure sin respuesta...) en vez del mensaje generico. */
+  function tkVencido(tk) { try { var p = JSON.parse(atob(tk.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return !!(p.exp && p.exp * 1000 < Date.now()); } catch (e) { return false; } }
+  function motivo(tk, r) {
+    if (!tk) return '🔒 Esta pestaña no tiene sesión de Azure. Cierra sesión, vuelve a entrar y repite la acción.';
+    if ((r && r.status === 401) || tkVencido(tk)) return '🔒 Tu sesión venció (dura 8 horas). Cierra sesión, vuelve a entrar y repite la acción.';
+    if (!r) return '📡 Azure no respondió (internet lento o sin conexión). Espera unos segundos y repite la acción.';
+    return '⚠️ Azure respondió ' + r.status + ((r.j && r.j.error) ? ': ' + r.j.error : '') + '. Repite en unos segundos; si sigue, avisa al administrador.';
+  }
+  function respaldo(self, args, tk, r) {
+    return Promise.resolve(previo.apply(self, args)).then(function (g) {
+      if (g && g.success === false && /ahora se hace desde Azure/i.test(String(g.error || ''))) {
+        var m = motivo(tk, r); console.warn('[_USR_SESION_V1] ' + m); return { success: false, error: m, azureStatus: r ? r.status : null };
+      }
+      return g;
+    });
+  }
   window.apiPost = function (b) {
     var tk = null;
     try { tk = sessionStorage.getItem('rl_token'); } catch (e) {}
-    if (!b || !ACCIONES[b.action] || !tk || Date.now() < apagadoHasta) return previo.apply(this, arguments);
+    if (!b || !ACCIONES[b.action]) return previo.apply(this, arguments);
+    if (!tk || tkVencido(tk)) return respaldo(this, arguments, tk, tk ? { status: 401, j: null } : null);
+    if (Date.now() < apagadoHasta) return respaldo(this, arguments, tk, { status: 503, j: { error: 'Azure en pausa unos minutos' } });
     var self = this, args = arguments, igual, clave;
-    try { igual = JSON.stringify(b); clave = huella(b); } catch (e) { return previo.apply(self, args); }
+    try { igual = JSON.stringify(b); clave = huella(b); } catch (e) { return respaldo(self, args, tk, null); }
     if (enCurso[igual]) return enCurso[igual];
     var p = (async function () {
       var cuerpo = {}; Object.keys(b).forEach(function (k) { if (k !== 'action') cuerpo[k] = b[k]; });
@@ -16282,7 +16301,7 @@ console.log('[_CV_AZURE_PRIMERO_V1] listo: Casos y Visitas se guardan primero en
       }
       if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
       console.warn('[_USR_AZURE_V1] ' + b.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> Google (respaldo)');
-      return previo.apply(self, args);
+      return respaldo(self, args, tk, r);
     })();
     enCurso[igual] = p;
     p.then(function () { setTimeout(function () { delete enCurso[igual]; }, 3000); }, function () { delete enCurso[igual]; });
