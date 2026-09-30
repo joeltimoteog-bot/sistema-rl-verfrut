@@ -34,7 +34,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('#rango .pr'), function (b) { b.classList.toggle('on', b === boton); });
     $('rDesde').value = R.desde || ''; $('rHasta').value = R.hasta || '';
     SERIE = null;
-    K.cargar();
+    K.cargarVisible(['Calculando ' + (R.desde ? dmy(R.desde) + ' al ' + dmy(R.hasta) : 'todo el periodo') + '…', 'Rango aplicado', 'No se pudo calcular el rango']);
   }
   Array.prototype.forEach.call(document.querySelectorAll('#rango .pr'), function (b) { b.onclick = function () { aplicar(preset(b.dataset.r), b); }; });
   $('rAplicar').onclick = function () {
@@ -139,7 +139,9 @@
     /* serie diaria */
     var R = D.rango || {}, hasta = R.hasta > D.hoy ? D.hoy : R.hasta, key = R.desde + '|' + hasta;
     if (SERIE && SERIE_KEY === key) pintarSerie(SERIE);
-    else K.api('serie', { desde: R.desde, hasta: hasta }).then(function (j) { if (j && j.success) { SERIE = j.serie; SERIE_KEY = key; pintarSerie(SERIE); } }).catch(function () {});
+    else K.prog(['Cargando la evolución diaria…', 'Estadísticas listas', 'No se pudo cargar la evolución diaria'], function () {
+      return K.api('serie', { desde: R.desde, hasta: hasta }).then(function (j) { if (!j || !j.success) throw new Error((j && j.error) || 'Sin respuesta'); SERIE = j.serie; SERIE_KEY = key; pintarSerie(SERIE); });
+    }).catch(function () {});
     /* ranking + plan */
     var orden = P.slice().sort(function (a, b) { return (a.cumpl == null ? 9 : a.cumpl) - (b.cumpl == null ? 9 : b.cumpl); });
     $('stRank').innerHTML = '<tr><th>Persona</th><th>Sector(es)</th><th class="c">% cumplimiento</th><th class="c">Nota (1–5)</th><th>Estado</th><th>KPIs bajo la meta</th></tr>' + orden.map(function (p) {
@@ -181,10 +183,13 @@
         (terminado ? 'Mes terminado: se cierra solo a las 00:05 del día 1 (o ciérralo ahora).' : 'Mes en curso: el informe muestra el AVANCE a hoy.');
     }
     sel.onchange = estadoBtn; estadoBtn();
-    $('infVer').onclick = verInforme;
+    $('infVer').onclick = function () { verInforme(); };
     $('infCerrar').onclick = async function () {
       var b = this; b.disabled = true; b.textContent = '⏳ Cerrando…';
-      try { var j = await K.api('cerrarMes', { mes: sel.value }); if (!j.success) throw new Error(j.error); await K.cargar(); window._kpiInfPrep(); verInforme(); K.aviso('🔒 Mes ' + sel.value + ' cerrado.'); }
+      try {
+        await K.prog(['Cerrando el mes ' + sel.value + '…', 'Mes cerrado y congelado', 'No se pudo cerrar el mes'], async function () { var j = await K.api('cerrarMes', { mes: sel.value }); if (!j.success) throw new Error(j.error); await K.cargar(); });
+        window._kpiInfPrep(); verInforme(); K.aviso('🔒 Mes ' + sel.value + ' cerrado.');
+      }
       catch (e) { K.aviso('⚠️ ' + esc(e.message), 'av-e'); }
       b.disabled = false; b.textContent = '🔒 Cerrar el mes';
     };
@@ -192,7 +197,7 @@
   async function verInforme() {
     var mes = $('infMes').value, D = K.D(), c = (D.cierres || []).filter(function (x) { return x.mes === mes; })[0];
     $('infCuerpo').innerHTML = '<div class="sub">⏳ Preparando el informe…</div>';
-    try {
+    try { await K.prog(['Preparando el informe…', 'Informe listo', 'No se pudo preparar el informe'], async function () {
       var R;
       if (c) { R = await K.api('informe', { mes: mes }); if (!R.success) throw new Error(R.error); }
       else {
@@ -210,7 +215,7 @@
           datasets: codes.map(function (cc) { return { label: NOMK[cc], data: S.map(function (d) { var e = d.equipo[cc]; return e && e.den ? Math.round(e.num / e.den * 1000) / 10 : null; }), borderColor: SER[cc], backgroundColor: SER[cc], borderWidth: 2, pointRadius: 2.5 }; }) },
           options: Object.assign({}, baseOpc, { scales: { y: { min: 0, max: 100 } } }) });
       }
-    } catch (e) { $('infCuerpo').innerHTML = '<div class="aviso av-e">⚠️ ' + esc(e.message) + '</div>'; }
+    }); } catch (e) { $('infCuerpo').innerHTML = '<div class="aviso av-e">⚠️ ' + esc(e.message) + '</div>'; }
   }
 
   function informeHtml(R, mes) {

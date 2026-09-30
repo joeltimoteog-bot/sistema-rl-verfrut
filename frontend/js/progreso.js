@@ -9,6 +9,9 @@
    · Las copias en 2do plano (hoja, Firebase, registros internos) no muestran nada.
    · Solo mira; no cambia lo que se envia ni la respuesta.
    INTERRUPTOR: window.RL_PROGRESO = false  (antes de cargar este archivo)
+   _PROGRESO_V2 (30-set-2026): tambien para CARGAS y EXPORTACIONES que la pagina pida:
+     RLProgreso.accion(['Calculando…', 'Listo', 'No se pudo calcular'], function () { return promesa; })
+   Muestra el circulo, luego ✓ (o ✗ con el motivo) y devuelve el mismo resultado.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -52,6 +55,7 @@
     '#rlProg .ok{background:#16a34a}#rlProg .no{background:#dc2626}#rlProg .d{font-weight:500;font-size:13px;color:#b91c1c;display:none}' +
     '#rlProg.fin-ok{pointer-events:none;background:transparent}#rlProg.fin-ok .g,#rlProg.fin-no .g{display:none}#rlProg.fin-ok .ok{display:flex;animation:rlSalta .35s ease}#rlProg.fin-no .no{display:flex}#rlProg.fin-no .d{display:block}' +
     '@keyframes rlGira{to{transform:rotate(360deg)}}@keyframes rlSalta{0%{transform:scale(.4)}70%{transform:scale(1.12)}100%{transform:scale(1)}}' +
+    '@media print{#rlProg{display:none!important}}' +
     '@media (prefers-color-scheme:dark){#rlProg .c{background:#1e293b;color:#f1f5f9}#rlProg .g{border-color:#334155;border-top-color:#60a5fa}}';
   var caja = null;
   function asegurarCaja() {
@@ -81,7 +85,7 @@
       tOcultar = setTimeout(ocultar, 1100);
     } else if (error) {
       caja.classList.remove('fin-ok'); caja.classList.add('fin-no');
-      caja.querySelector('.t').textContent = 'No se pudo ' + (/Elimin/.test(etiqueta[0]) ? 'eliminar' : /Actualiz/.test(etiqueta[0]) ? 'actualizar' : 'guardar');
+      caja.querySelector('.t').textContent = etiqueta[2] || 'No se pudo ' + (/Elimin/.test(etiqueta[0]) ? 'eliminar' : /Actualiz/.test(etiqueta[0]) ? 'actualizar' : 'guardar');
       caja.querySelector('.d').textContent = String(error).slice(0, 180);
       caja.style.display = 'flex';
       tOcultar = setTimeout(ocultar, 3500);
@@ -90,7 +94,7 @@
   }
   function inicio(c) {
     clearTimeout(tFin); clearTimeout(tOcultar);
-    if (!pend && !etiqueta) { etiqueta = textos(c.a); huboOk = false; error = ''; }
+    if (!pend && !etiqueta) { etiqueta = c.t || textos(c.a); huboOk = false; error = ''; }
     pend++;
     if (!caja || caja.style.display !== 'flex' || caja.classList.contains('fin-ok') || caja.classList.contains('fin-no')) { clearTimeout(tMostrar); tMostrar = setTimeout(mostrar, 180); }
     clearTimeout(tMax); tMax = setTimeout(function () { pend = 0; terminar(); }, 60000);
@@ -100,6 +104,16 @@
     if (ok) huboOk = true; else if (definitivo && err) error = err;
     if (!pend) { clearTimeout(tFin); tFin = setTimeout(function () { if (!pend) terminar(); }, ok || definitivo ? 350 : 1600); }   /* espera: puede venir el reintento por Google */
   }
+
+  /* _PROGRESO_V2: acciones explicitas de la pagina (cargar, exportar, informe) */
+  window.RLProgreso = {
+    accion: function (t, fn) {
+      try { inicio({ a: '', t: [t[0], t[1], t[2] || 'No se pudo completar'] }); } catch (e) {}
+      var p; try { p = Promise.resolve(fn()); } catch (e) { p = Promise.reject(e); }
+      return p.then(function (r) { fin(true); return r; },
+        function (e) { fin(false, (e && e.message) || String(e || 'Error'), true); throw e; });
+    }
+  };
 
   var fetchOriginal = window.fetch;
   window.fetch = function (url, init) {
