@@ -97,6 +97,14 @@ module.exports = async function (context, req) {
         SELECT @id AS id;`);
       id = ins.recordset[0].id;
       if (prueba) await tx.rollback(); else await tx.commit();
+      /* _KPI_RRLL_V1 (30-set-2026): hora exacta en que se registro la atencion (KPI "registrada el mismo dia"). Nunca frena el guardado. */
+      if (!prueba) {
+        try {
+          await pool.request().input('a', sql.Int, d.anio).input('n', sql.Int, nro).input('f', sql.NVarChar(16), L.ymd + ' ' + L.hm)
+            .query(`IF OBJECT_ID('dbo.KPI_AtRegistro', 'U') IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.KPI_AtRegistro WHERE anio = @a AND nro = @n)
+                    INSERT INTO dbo.KPI_AtRegistro (anio, nro, fecha_registro, fuente) VALUES (@a, @n, CAST(@f AS DATETIME2(0)), 'azure')`);
+        } catch (eK) { context.log.warn('[atenciones-guardar] KPI_AtRegistro: ' + eK.message); }
+      }
     } catch (e) {
       try { await tx.rollback(); } catch (e2) {}
       /* misma huella guardada al mismo tiempo por otro envio -> devolver ese N° */

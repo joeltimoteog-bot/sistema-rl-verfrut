@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KPIs RR.LL. · Sistema RL</title>
+<link rel="icon" href="/sistema-rl-verfrut/favicon.ico">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- _KPI_RRLL_V1 (30-set-2026): KPIs oficiales del equipo de RR.LL. (solo jtimoteo y lcovenas) -->
+<style>
+:root{--azul:#0a2463;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;
+  --n1:#dc2626;--n1b:#fee2e2;--n2:#d97706;--n2b:#fef3c7;--n3:#16a34a;--n3b:#dcfce7;--n4:#0d9488;--n4b:#ccfbf1;--n5:#1d4ed8;--n5b:#dbeafe}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Barlow,sans-serif;background:var(--bg);color:var(--tx);font-size:14px}
+button{font-family:inherit}
+.top{background:var(--azul);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:20}
+.top .ic{width:38px;height:38px;background:var(--rojo);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px;flex:0 0 auto}
+.top h1{font-family:'Barlow Condensed',sans-serif;font-size:21px;letter-spacing:1px}
+.top .s{font-size:12px;color:rgba(255,255,255,.65)}
+.top .der{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.bt{border:none;border-radius:8px;padding:8px 12px;font-weight:700;font-size:13px;cursor:pointer}
+.bt-w{background:rgba(255,255,255,.12);color:#fff} .bt-w:hover{background:rgba(255,255,255,.22)}
+.bt-r{background:var(--rojo);color:#fff} .bt-a{background:var(--azul);color:#fff} .bt-g{background:#e2e8f0;color:var(--tx)}
+.bt:disabled{opacity:.55;cursor:wait}
+.wrap{max-width:1260px;margin:0 auto;padding:16px 16px 50px}
+.aviso{border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.5;margin-bottom:14px}
+.av-i{background:#eff6ff;border:1.5px solid #93c5fd;color:#1e3a8a} .av-e{background:#fef2f2;border:1.5px solid #fca5a5;color:#991b1b}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--bd);margin-bottom:14px;flex-wrap:wrap}
+.tabs button{background:none;border:none;padding:10px 13px;font-weight:700;font-size:14px;color:var(--gr);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tabs button.on{color:var(--azul);border-bottom-color:var(--rojo)}
+.sec{display:none} .sec.on{display:block}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin-bottom:14px}
+.kc{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:13px}
+.kc .v{font-family:'Barlow Condensed',sans-serif;font-size:31px;font-weight:800;line-height:1}
+.kc .l{font-size:12px;color:var(--gr);margin-top:4px;font-weight:600}
+.card{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:15px;margin-bottom:14px}
+.card h2{font-family:'Barlow Condensed',sans-serif;font-size:18px;color:var(--azul);letter-spacing:.5px;margin-bottom:9px}
+.sub{font-size:12px;color:var(--gr)}
+.escala{display:flex;gap:6px;flex-wrap:wrap;font-size:12px}
+.escala span{padding:5px 9px;border-radius:7px;font-weight:700}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse}
+.tabla{min-width:900px}
+th{background:var(--azul);color:#fff;font-size:12px;text-align:left;padding:9px 8px;font-weight:700}
+th.c,td.c{text-align:center}
+td{border-bottom:1px solid var(--bd);padding:9px 8px;vertical-align:middle}
+tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
+.nm{font-weight:700}
+.chip{display:inline-flex;flex-direction:column;align-items:center;min-width:66px;padding:4px 6px;border-radius:8px;font-weight:800;font-size:13px;line-height:1.2}
+.chip small{font-size:10.5px;font-weight:600;opacity:.85}
+.n1{background:var(--n1b);color:var(--n1)} .n2{background:var(--n2b);color:var(--n2)} .n3{background:var(--n3b);color:var(--n3)}
+.n4{background:var(--n4b);color:var(--n4)} .n5{background:var(--n5b);color:var(--n5)} .np{background:#f1f5f9;color:var(--gr)}
+.nota{font-family:'Barlow Condensed',sans-serif;font-size:25px;font-weight:800}
+.bar{height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin:3px auto 0;width:90px}
+.bar i{display:block;height:100%}
+.tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 7px;border-radius:6px;margin:3px 4px 0 0}
+.t-aus{background:#ede9fe;color:#6d28d9} .t-new{background:#e0f2fe;color:#0369a1} .t-warn{background:#fef3c7;color:#92400e}
+.dgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px}
+.kb{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:13px}
+.kb h3{font-size:14px;margin-bottom:6px;line-height:1.35}
+.kb .f{font-size:12.5px;color:var(--gr);margin:7px 0;line-height:1.5}
+.kb .txt{font-size:11.5px;color:var(--gr);font-style:italic;margin-top:6px;line-height:1.4}
+.ev{margin-top:8px;max-height:360px;overflow:auto;border-top:1px dashed var(--bd);padding-top:6px}
+.ev .it{display:flex;gap:7px;font-size:12.5px;line-height:1.45;padding:5px 2px;border-bottom:1px solid #f1f5f9}
+.ev .it .ico{flex:0 0 auto}
+.ev .it .sus{display:block;color:#6d28d9;font-size:11.5px}
+.filt{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px}
+.filt button{border:1px solid var(--bd);background:#fff;border-radius:999px;padding:3px 9px;font-size:11.5px;font-weight:700;color:var(--gr);cursor:pointer}
+.filt button.on{background:var(--azul);color:#fff;border-color:var(--azul)}
+.sel{padding:8px 10px;border:1.5px solid var(--bd);border-radius:8px;font-weight:600;font-size:14px;margin-bottom:12px;max-width:100%;font-family:inherit}
+.al{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd);font-size:13px;line-height:1.45}
+.al .ico{font-size:18px} .al .w{font-size:11.5px;color:var(--gr)}
+.al pre{white-space:pre-wrap;font-family:inherit;font-size:12px;color:var(--gr);margin-top:3px}
+.q{font-size:13px;line-height:1.6;padding-left:18px} .q li{margin-bottom:6px}
+.src td{font-size:13px;line-height:1.4}
+.ok{color:#16a34a;font-weight:700} .warn{color:#d97706;font-weight:700} .man{color:#1d4ed8;font-weight:700}
+.cargando{text-align:center;padding:60px 10px;color:var(--gr);font-weight:600}
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal.on{display:flex}
+.modal .box{background:#fff;border-radius:14px;max-width:460px;width:100%;padding:18px}
+.modal label{display:block;font-size:12.5px;font-weight:700;margin:10px 0 4px}
+.modal input,.modal select,.modal textarea{width:100%;padding:8px 10px;border:1.5px solid var(--bd);border-radius:8px;font-family:inherit;font-size:14px}
+@media (max-width:640px){.top h1{font-size:18px}.top .der{margin-left:0}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="ic">🎯</div>
+  <div><h1>KPIs RELACIONES LABORALES</h1><div class="s" id="subt">Periodo de evaluación: agosto – diciembre 2026 · Evaluador: Joel Timoteo</div></div>
+  <div class="der">
+    <button class="bt bt-w" id="btExcel" onclick="exportar()">⬇️ Excel</button>
+    <button class="bt bt-w" id="btRecalc" style="display:none" onclick="recalcular()">🔄 Recalcular ahora</button>
+    <button class="bt bt-w" onclick="location.href='dashboard.html'">← Volver</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <div id="msg"></div>
+  <div class="tabs" id="tabs" style="display:none">
+    <button class="on" data-t="s-tablero">📊 Tablero del equipo</button>
+    <button data-t="s-detalle">🔍 Detalle y evidencia</button>
+    <button data-t="s-alertas">🚨 Alertas</button>
+    <button data-t="s-reglas">🧩 Cómo se mide</button>
+  </div>
+  <div id="cargando" class="cargando">⏳ Calculando los KPIs desde Azure…</div>
+
+  <section id="s-tablero" class="sec">
+    <div class="kpis" id="resumen"></div>
+    <div class="card">
+      <h2>ESCALA DE EVALUACIÓN (archivo de la empresa)</h2>
+      <div class="escala">
+        <span class="n1">1 · Meta −10 pts o menos</span><span class="n2">2 · Meta −5 pts</span><span class="n3">3 · Cumple la meta (95% / 90%)</span>
+        <span class="n4">4 · 98% / 95%</span><span class="n5">5 · 100%</span><span class="np">Curso: ≤10→1 · 12→2 · 15→3 · 18→4 · 20→5</span>
+      </div>
+      <div class="sub" style="margin-top:8px">Nota parcial = promedio de los niveles ponderado por el peso de cada KPI que ya tiene datos. Los KPIs pesan 50% en total (el otro 50% lo evalúa la empresa por su lado).</div>
+    </div>
+    <div class="card">
+      <h2>CUMPLIMIENTO POR PERSONA <span class="sub" style="font-family:Barlow;letter-spacing:0">· clic en una fila para ver la evidencia</span></h2>
+      <div class="tw"><table class="tabla" id="tabla"></table></div>
+    </div>
+  </section>
+
+  <section id="s-detalle" class="sec">
+    <select class="sel" id="selP"></select>
+    <div id="detalle"></div>
+  </section>
+
+  <section id="s-alertas" class="sec">
+    <div class="card">
+      <h2>ALERTAS INMEDIATAS</h2>
+      <ul class="q">
+        <li>🔴 <b>KPI bajo la meta:</b> apenas un KPI cae a nivel 1 o 2 (o empeora), sale un correo a Joel Timoteo y Eduardo Coveñas con la evidencia.</li>
+        <li>⛔ <b>Vencido:</b> un caso pasó los 5 días hábiles sin informe, o una fecha programada en ETI pasó sin registrarse.</li>
+        <li>🟠 <b>Preventiva:</b> un caso vence hoy o mañana sin informe, o hay una programación ETI para mañana.</li>
+        <li>📝 <b>Solicitud de reprogramación:</b> el responsable informó en ETI por qué no se hizo una actividad. Tú asignas la nueva fecha en ETI y el KPI se recalcula con ella.</li>
+        <li>🟢 <b>Recuperación:</b> el KPI volvió a la meta.</li>
+        <li>📒 La bitácora <b>no se puede editar ni borrar</b> (lo impide la base de datos). El sistema revisa cada 5 minutos (y al abrir esta página) y el correo sale en los 5 minutos siguientes.</li>
+      </ul>
+    </div>
+    <div class="card"><h2>BITÁCORA</h2><div id="alertas"></div></div>
+  </section>
+
+  <section id="s-reglas" class="sec">
+    <div class="card"><h2>🔗 ENLACE DE USUARIOS CON SUS MÓDULOS</h2><div class="sub" style="margin-bottom:8px">Cada persona debe estar enlazada con su usuario del Sistema RR.LL. y, los supervisores, con su cuenta y sector en Capacitaciones ETI / Evaluaciones ETI. Lo que registran ahí alimenta sus KPIs.</div><div class="tw"><table class="src" id="enlaces" style="min-width:760px"></table></div></div>
+    <div class="card"><h2>CÓMO SE MIDE CADA KPI</h2><div class="tw"><table class="src" id="reglas" style="min-width:760px"></table></div></div>
+  </section>
+</div>
+
+<div class="modal" id="mNota"><div class="box">
+  <h2 style="font-family:'Barlow Condensed';color:var(--azul)">📝 NOTA DEL CURSO DE LEGISLACIÓN LABORAL</h2>
+  <div class="sub" id="mnQuien"></div>
+  <label>Nota (0 a 20)</label><input type="number" id="mnNota" min="0" max="20" step="0.5">
+  <label>Fecha del examen</label><input type="date" id="mnFecha">
+  <label>Constancia (PDF o imagen)</label><input type="file" id="mnArch" accept=".pdf,image/*">
+  <div class="sub" style="margin-top:4px">o pega el enlace:</div><input type="text" id="mnLink" placeholder="https://…">
+  <label>Observación (opcional)</label><textarea id="mnObs" rows="2"></textarea>
+  <div id="mnErr" style="color:#b91c1c;font-weight:700;font-size:13px;margin-top:8px"></div><div class="sub" style="margin-top:8px">🔒 La nota queda registrada con tu usuario y la hora. No se edita ni se borra: si hubiera un error, registra una nueva (vale la última).</div>
+  <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+    <button class="bt bt-g" onclick="cerrarNota()">Cancelar</button><button class="bt bt-a" id="mnOk" onclick="guardarNota()">Guardar nota</button>
+  </div>
+</div></div>
+
+<script src="azure-blob-upload.js"></script>
+<script>
+(function () {
+  'use strict';
+  var API = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/kpi/';
+  var VISORES = ['jtimoteo', 'lcovenas'];
+  var USER = null; try { USER = JSON.parse(sessionStorage.getItem('user') || 'null'); } catch (e) {}
+  if (!USER) { location.href = '/sistema-rl-verfrut/index.html'; return; }
+  var yo = String(USER.usuario || '').trim().toLowerCase();
+  var D = null, SEL = 0, FILTRO = {};
+  var NOM = ['', 'Muy bajo', 'Bajo la meta', 'Cumple', 'Supera', 'Excelente'];
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function pct(x) { return x == null ? '—' : (Math.round(x * 1000) / 10).toFixed(1).replace('.0', '') + '%'; }
+  function dmy(s) { s = String(s || ''); return s.length >= 10 ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : s; }
+  function colorNota(n) { return n == null ? 'var(--gr)' : n >= 4.5 ? 'var(--n5)' : n >= 3.5 ? 'var(--n4)' : n >= 3 ? 'var(--n3)' : n >= 2 ? 'var(--n2)' : 'var(--n1)'; }
+  function tk() { try { return sessionStorage.getItem('rl_token'); } catch (e) { return null; } }
+  function aviso(txt, tipo) { $('msg').innerHTML = txt ? '<div class="aviso ' + (tipo || 'av-i') + '">' + txt + '</div>' : ''; }
+
+  async function api(accion, cuerpo) {
+    var t = tk();
+    if (!t) throw new Error('Tu sesión de Azure no está activa. Cierra sesión y vuelve a entrar.');
+    var ult;
+    for (var i = 1; i <= 3; i++) {
+      try {
+        var ctrl = new AbortController(), rl = setTimeout(function () { ctrl.abort(); }, 45000);
+        var r = await fetch(API + accion, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t }, body: JSON.stringify(cuerpo || {}), signal: ctrl.signal });
+        clearTimeout(rl);
+        var j = await r.json().catch(function () { return null; });
+        if (r.status === 401) throw new Error('Tu sesión venció (dura 8 horas). Cierra sesión y vuelve a entrar.');
+        if (r.status === 403) throw new Error((j && j.error) || 'Sin permiso');
+        if (j) return j;
+        ult = new Error('Azure respondió ' + r.status);
+      } catch (e) { if (/sesión|permiso|Coordinaci/i.test(e.message)) throw e; ult = e; }
+      if (i < 3) await new Promise(function (z) { setTimeout(z, 1500 * i); });
+    }
+    throw new Error('Azure no respondió (' + (ult && ult.message) + '). Revisa tu internet y vuelve a intentar.');
+  }
+
+  function chip(k) {
+    if (!k || k.estado === 'pendiente') return '<span class="chip np">—<small>dic-2026</small></span>';
+    if (k.estado === 'sin_datos') return '<span class="chip np">—<small>sin datos</small></span>';
+    if (k.codigo === 'K4') return '<span class="chip n' + k.nivel + '">' + k.nota_curso + '<small>Nivel ' + k.nivel + '</small></span>';
+    return '<span class="chip n' + k.nivel + '">' + pct(k.pct) + '<small>' + k.num + '/' + k.den + ' · N' + k.nivel + '</small></span>';
+  }
+  function tags(p) {
+    var t = '';
+    (p.ausencias || []).forEach(function (a) { var rp = (D.personas || []).filter(function (x) { return x.usuario === String(a.reemplazo || '').toLowerCase(); })[0]; t += '<span class="tag t-aus">' + esc(a.tipo) + ' ' + dmy(a.desde) + (a.hasta ? '–' + dmy(a.hasta) : '') + ' · lo cubre ' + esc(rp ? rp.nombre : a.reemplazo) + ' (esos días no cuentan)</span>'; });
+    if (p.desde > (D.periodo && D.periodo.ini)) t += '<span class="tag t-new">Ingresó ' + dmy(p.ingreso) + ' · se mide desde esa fecha</span>';
+    if (!p.usuario_encontrado) t += '<span class="tag t-warn">⚠️ Usuario "' + esc(p.usuario) + '" no encontrado en el sistema</span>';
+    return t;
+  }
+
+  function pintar() {
+    var P = D.personas || [];
+    $('subt').textContent = 'Periodo: ' + dmy(D.periodo.ini) + ' – ' + dmy(D.periodo.fin) + ' · Corte: ' + dmy(D.hoy) + ' · Calculado ' +
+      new Date(D.calculado).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) + (D.eti_sync ? ' · ETI copiado ' + new Date(D.eti_sync + (/Z$/.test(D.eti_sync) ? '' : 'Z')).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '');
+    var conNota = P.filter(function (p) { return p.nota != null; });
+    var prom = conNota.length ? conNota.reduce(function (s, p) { return s + p.nota; }, 0) / conNota.length : null;
+    var bajo = P.filter(function (p) { return p.kpis.some(function (k) { return k.estado === 'ok' && k.nivel < 3; }); }).length;
+    var ini = new Date(D.periodo.ini + 'T00:00:00'), fin = new Date(D.periodo.fin + 'T00:00:00'), h = new Date(D.hoy + 'T00:00:00');
+    var avance = Math.max(0, Math.min(100, Math.round((h - ini) / (fin - ini) * 100)));
+    var sinEnviar = (D.alertas || []).filter(function (a) { return !a.enviado; }).length;
+    $('resumen').innerHTML =
+      '<div class="kc"><div class="v">' + P.length + '</div><div class="l">Personas evaluadas</div></div>' +
+      '<div class="kc"><div class="v" style="color:' + colorNota(prom) + '">' + (prom == null ? '—' : prom.toFixed(2)) + '</div><div class="l">Nota promedio del equipo (1 a 5)</div></div>' +
+      '<div class="kc"><div class="v" style="color:var(--n3)">' + (P.length - bajo) + '</div><div class="l">Con todos sus KPIs en la meta</div></div>' +
+      '<div class="kc"><div class="v" style="color:var(--n1)">' + bajo + '</div><div class="l">Con al menos un KPI bajo la meta</div></div>' +
+      '<div class="kc"><div class="v">' + avance + '%</div><div class="l">Avance del periodo</div></div>' +
+      '<div class="kc"><div class="v">' + (D.alertas || []).filter(function (a) { return !a.inicial; }).length + '</div><div class="l">Alertas enviadas' + (sinEnviar ? ' (' + sinEnviar + ' por salir)' : '') + '</div></div>';
+    var orden = P.slice().sort(function (a, b) { return (b.nota == null ? -1 : b.nota) - (a.nota == null ? -1 : a.nota); });
+    var t = '<tr><th>Colaborador</th><th class="c">Conflictos ≤5 días<br>(20%)</th><th class="c">Gestión documentaria<br>(10%)</th><th class="c">Capacitaciones ETI<br>(10%)</th><th class="c">Curso Legislación<br>(10%)</th><th class="c">Nota parcial</th></tr>';
+    orden.forEach(function (p) {
+      var i = P.indexOf(p);
+      var celdas;
+      if (p.tipo === 'ASIST') {
+        celdas = '<td colspan="4"><div style="display:flex;gap:8px;flex-wrap:wrap">' + p.kpis.map(function (k) {
+          return '<div style="text-align:center">' + chip(k) + '<div class="sub" style="font-size:10.5px;max-width:120px">' + esc(k.corto) + ' (' + Math.round(k.peso * 100) + '%)</div></div>'; }).join('') + '</div></td>';
+      } else celdas = p.kpis.map(function (k) { return '<td class="c">' + chip(k) + (k.codigo === 'K1' && k.estrellas ? '<div class="sub">⭐ ' + k.estrellas + ' en ≤3 días</div>' : '') + '</td>'; }).join('');
+      t += '<tr class="fila" data-i="' + i + '"><td><div class="nm">' + esc(p.nombre) + '</div><div class="sub">' + esc(p.empresa) + ' · ' + esc(p.puesto) + '</div>' + tags(p) + '</td>' + celdas +
+        '<td class="c"><div class="nota" style="color:' + colorNota(p.nota) + '">' + (p.nota == null ? '—' : p.nota.toFixed(2)) + '</div>' +
+        '<div class="bar"><i style="width:' + ((p.nota || 0) / 5 * 100) + '%;background:' + colorNota(p.nota) + '"></i></div><div class="sub">' + (p.nota == null ? 'sin datos' : NOM[Math.floor(p.nota)]) + '</div></td></tr>';
+    });
+    $('tabla').innerHTML = t;
+    Array.prototype.forEach.call(document.querySelectorAll('tr.fila'), function (tr) {
+      tr.onclick = function () { SEL = +tr.dataset.i; $('selP').value = SEL; detalle(); ir('s-detalle'); window.scrollTo(0, 0); };
+    });
+    $('selP').innerHTML = P.map(function (p, i) { return '<option value="' + i + '">' + esc(p.nombre) + ' · ' + (p.nota == null ? '—' : p.nota.toFixed(2)) + '</option>'; }).join('');
+    $('selP').value = SEL;
+    detalle(); alertas(); reglas(); enlaces();
+  }
+
+  function detalle() {
+    var p = D.personas[SEL]; if (!p) return;
+    var h = '<div class="card"><h2>' + esc(p.nombre) + '</h2><div class="sub">' + esc(p.empresa) + ' · ' + esc(p.puesto) + ' · DNI ' + esc(p.dni) + ' · usuario ' + esc(p.usuario) +
+      ' · Nota parcial <b style="color:' + colorNota(p.nota) + '">' + (p.nota == null ? '—' : p.nota.toFixed(2)) + '</b> (sobre ' + Math.round(p.peso_evaluado * 100) + '% de peso evaluado)</div>' + tags(p) + '</div><div class="dgrid">';
+    p.kpis.forEach(function (k) {
+      var f = FILTRO[k.codigo] || 'todo';
+      var ev = (k.evidencia || []).filter(function (e) { return f === 'todo' || (f === 'no' && e.ok === false) || (f === 'pend' && (e.ok === null || e.ok === undefined)) || (f === 'si' && e.ok === true); });
+      var nNo = (k.evidencia || []).filter(function (e) { return e.ok === false; }).length;
+      h += '<div class="kb"><h3>' + esc(k.corto) + ' <span class="sub">· peso ' + Math.round(k.peso * 100) + '%' + (k.meta ? ' · meta ' + Math.round(k.meta * 100) + '%' : '') + '</span></h3>' + chip(k) +
+        (k.estado === 'ok' && k.codigo !== 'K4' ? '<div class="f"><b>' + k.num + ' de ' + k.den + '</b> ' + esc(k.unidad) + ' cumplen → ' + pct(k.pct) + ' → nivel ' + k.nivel + ' (' + NOM[k.nivel] + ')' +
+          (k.estrellas ? '<br>⭐ ' + k.estrellas + ' caso(s) respondidos dentro del plazo interno de 3 días' : '') + '</div>' : '') +
+        (k.nota_def ? '<div class="f">' + esc(k.nota_def) + '</div>' : '') +
+        (k.codigo === 'K4' && D.puedeEditar ? '<button class="bt bt-a" style="margin:4px 0" onclick="abrirNota(' + SEL + ')">📝 Registrar nota</button>' : '') +
+        '<div class="txt">"' + esc(k.texto) + '"</div>';
+      if ((k.evidencia || []).length) {
+        h += '<div class="filt">' + [['todo', 'Todo'], ['no', 'No cumple (' + nNo + ')'], ['si', 'Cumple'], ['pend', 'Pendiente / no cuenta']].map(function (x) {
+          return '<button class="' + (f === x[0] ? 'on' : '') + '" onclick="filtrar(\'' + k.codigo + '\',\'' + x[0] + '\')">' + x[1] + '</button>'; }).join('') + '</div>';
+        h += '<div class="ev">' + (ev.length ? ev.map(function (e) {
+          var ic = e.ok === true ? (e.estrella ? '⭐' : '✅') : e.ok === false ? '❌' : (e.pendiente ? '⏳' : '➖');
+          return '<div class="it"><span class="ico">' + ic + '</span><span><b>' + esc(e.ref) + '</b>' + (e.fecha && !e.resumen ? ' · ' + dmy(e.fecha) : '') + (e.trabajador ? ' · ' + esc(e.trabajador) : '') +
+            (e.cubre ? ' <span class="tag t-aus">cubriendo</span>' : '') + '<br>' + esc(e.detalle) + (e.sustento ? '<span class="sus">🔄 ' + esc(e.sustento) + '</span>' : '') +
+            (e.constancia ? '<br><a href="' + esc(e.constancia) + '" target="_blank" rel="noopener">📎 Ver constancia</a>' : '') + '</span></div>';
+        }).join('') : '<div class="sub" style="padding:6px">Nada en este filtro.</div>') + '</div>';
+      }
+      h += '</div>';
+    });
+    h += '</div><div class="sub" style="margin-top:10px">🔒 Todo se calcula solo desde los registros del sistema (Casos, Mis Atenciones, historial de Cumplimiento y la programación de ETI). Nadie puede cambiar un porcentaje a mano; la única carga manual es la nota del curso, con constancia y autor.</div>';
+    $('detalle').innerHTML = h;
+  }
+  window.filtrar = function (c, f) { FILTRO[c] = f; detalle(); };
+
+  function alertas() {
+    var A = D.alertas || [], IC = { BAJO_META: '🔴', VENCIDO: '⛔', PREVENTIVA: '🟠', RECUPERA: '🟢', SOLICITUD: '📝' };
+    $('alertas').innerHTML = A.length ? A.map(function (a) {
+      return '<div class="al"><div class="ico">' + (IC[a.tipo] || '•') + '</div><div><div>' + esc(a.mensaje) + '</div>' + (a.detalle ? '<pre>' + esc(a.detalle) + '</pre>' : '') +
+        '<div class="w">' + new Date(a.creado + (/Z$/.test(a.creado) ? '' : 'Z')).toLocaleString('es-PE') + ' · ' +
+        (a.inicial ? 'estado inicial (al activar el módulo, sin correo)' : a.enviado ? 'enviado a ' + esc(a.destinatarios || 'Joel y Eduardo') : '⏳ correo por salir') + '</div></div></div>';
+    }).join('') : '<div class="sub">Aún no hay alertas.</div>';
+  }
+
+  function reglas() {
+    var R = [
+      ['Supervisores', 'K1', 'Casos cuyo informe se subió en ≤ 5 días hábiles ÷ casos reportados (los que aún están en plazo no cuentan todavía).', 'Registro de Casos + fecha real de subida del informe (registro de Azure / historial de Cumplimiento). ⭐ si fue en ≤ 3 días. Sábados, domingos y feriados no cuentan.'],
+      ['Supervisores', 'K2', 'Atenciones registradas el mismo día en que se atendieron + informes de caso subidos dentro del plazo interno vigente ÷ total.', 'Mis Atenciones (hora exacta de registro) + Registro de Casos.'],
+      ['Supervisores', 'K3', 'Fechas programadas en ETI registradas como ejecutadas ÷ fechas programadas ya vencidas.', 'Programación de Capacitaciones ETI, Evaluaciones de Checklist e Ingresos masivos (ETI → Azure cada 5 min y al abrir esta página). Si no se hizo, el responsable informa el motivo en ETI y pide reprogramar; cuando el administrador asigna la nueva fecha, cuenta esa fecha (la anterior deja de contar) y el motivo queda como sustento. Reforzamiento: suma solo si se hace.'],
+      ['Supervisores', 'K4', 'Nota del curso → escala 1–5 (15 = meta).', 'Registro manual del Coordinador de RR.LL. con constancia adjunta (no se edita ni se borra).'],
+      ['Asistente', 'A1', 'Atenciones registradas el mismo día ÷ atenciones registradas.', 'Mis Atenciones (hora exacta de registro).'],
+      ['Asistente', 'A2', 'Documentos remitidos el mismo día hábil ÷ registrados.', 'Pendiente: falta la marca "Remitido a…" en el sistema.'],
+      ['Asistente', 'A3', 'Consultas FINALIZADAS o derivadas ÷ consultas (las EN PROCESO de hasta 5 días hábiles aún no cuentan).', 'Mis Atenciones (estado).'],
+      ['Asistente', 'A4', 'Capacitaciones asistidas ÷ convocadas.', 'Pendiente: falta la lista de convocatorias.']
+    ];
+    var defs = {}; ['SUP', 'ASIST'].forEach(function (t) { (D.definiciones[t] || []).forEach(function (d) { defs[d.codigo] = d; }); });
+    $('reglas').innerHTML = '<tr><th>Para</th><th>KPI (texto de la empresa)</th><th class="c">Peso</th><th>Fórmula</th><th>De dónde sale</th></tr>' + R.map(function (r) {
+      var d = defs[r[1]] || {};
+      return '<tr><td>' + r[0] + '</td><td>' + esc(d.texto) + '</td><td class="c">' + Math.round((d.peso || 0) * 100) + '%</td><td>' + esc(r[2]) + '</td><td>' + esc(r[3]) + '</td></tr>';
+    }).join('');
+  }
+
+  function enlaces() {
+    var P = D.personas || [], malos = 0;
+    var h = '<tr><th>Persona</th><th>Usuario Sistema RR.LL.</th><th>Cuenta ETI (nombre con el que programa)</th><th>Sector(es) en ETI</th><th class="c">Programaciones ETI</th><th>Estado</th></tr>';
+    P.forEach(function (p) {
+      var e = p.enlace || {}, falta = [];
+      if (!e.rrll) falta.push('sin usuario en el Sistema RR.LL.');
+      if (e.aplica_eti) {
+        if (!e.eti_cuenta) falta.push('sin cuenta en ETI');
+        else if (!e.eti_activa) falta.push('cuenta ETI inactiva');
+        if (!(e.eti_sectores || []).length) falta.push('sin sector en la lista de supervisores de ETI');
+      }
+      if (falta.length) malos++;
+      h += '<tr><td><b>' + esc(p.nombre) + '</b><div class="sub">' + esc(p.puesto) + '</div></td><td>' + (e.rrll ? '✅ ' + esc(p.usuario) + '<div class="sub">' + esc(e.rrll_nombre) + '</div>' : '❌ ' + esc(p.usuario)) + '</td>' +
+        '<td>' + (!e.aplica_eti ? '<span class="sub">No aplica</span>' : e.eti_cuenta ? (e.eti_activa ? '✅ ' : '⚠️ ') + esc(e.eti_nombre) : '❌ No tiene') + '</td>' +
+        '<td>' + (!e.aplica_eti ? '' : (e.eti_sectores || []).length ? esc(e.eti_sectores.join(', ')) : '❌ Ninguno') + '</td>' +
+        '<td class="c">' + (e.aplica_eti ? (e.programaciones || 0) : '') + '</td>' +
+        '<td>' + (falta.length ? '<span class="warn">⚠️ ' + esc(falta.join(' · ')) + '</span>' : '<span class="ok">✅ Enlazado</span>') + '</td></tr>';
+    });
+    $('enlaces').innerHTML = h;
+    var t = document.querySelector('.tabs button[data-t="s-reglas"]');
+    if (t) t.innerHTML = '🧩 Cómo se mide' + (malos ? ' <span style="background:#dc2626;color:#fff;border-radius:999px;padding:0 7px;font-size:11px">' + malos + '</span>' : '');
+  }
+
+  function ir(id) {
+    Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.classList.toggle('on', b.dataset.t === id); });
+    Array.prototype.forEach.call(document.querySelectorAll('.sec'), function (s) { s.classList.toggle('on', s.id === id); });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.onclick = function () { ir(b.dataset.t); }; });
+  $('selP').onchange = function () { SEL = +this.value; detalle(); };
+
+  async function cargar() {
+    try {
+      var j = await api('tablero');
+      if (!j.success) throw new Error(j.error || 'No se pudo calcular');
+      D = j;
+      $('cargando').style.display = 'none'; $('tabs').style.display = '';
+      if (D.puedeEditar) $('btRecalc').style.display = '';
+      aviso('');
+      if (!document.querySelector('.sec.on')) ir('s-tablero');
+      pintar();
+    } catch (e) { $('cargando').style.display = 'none'; aviso('⚠️ ' + esc(e.message), 'av-e'); }
+  }
+
+  window.recalcular = async function () {
+    var b = $('btRecalc'); b.disabled = true; b.textContent = '⏳ Recalculando…';
+    try { var j = await api('recalcular'); if (!j.success) throw new Error(j.error); await cargar(); aviso('✅ Recalculado. ETI: ' + (j.eti && j.eti.error ? 'no respondió (' + esc(j.eti.error) + '), se usó la última copia' : (j.eti.programaciones + ' programaciones')) + (j.registro && j.registro.alertas_nuevas ? ' · ' + j.registro.alertas_nuevas + ' alerta(s) nueva(s)' : '')); }
+    catch (e) { aviso('⚠️ ' + esc(e.message), 'av-e'); }
+    b.disabled = false; b.textContent = '🔄 Recalcular ahora';
+  };
+
+  var notaDe = null;
+  window.abrirNota = function (i) { notaDe = D.personas[i]; $('mnQuien').textContent = notaDe.nombre; $('mnNota').value = ''; $('mnFecha').value = ''; $('mnArch').value = ''; $('mnLink').value = ''; $('mnObs').value = ''; $('mnErr').textContent = ''; $('mNota').classList.add('on'); };
+  window.cerrarNota = function () { $('mNota').classList.remove('on'); };
+  window.guardarNota = async function () {
+    var b = $('mnOk'); b.disabled = true; b.textContent = 'Guardando…';
+    try {
+      var link = $('mnLink').value.trim();
+      if ($('mnArch').files && $('mnArch').files[0]) {
+        if (typeof subirArchivoAzure !== 'function') throw new Error('No se pudo cargar el módulo de archivos; pega el enlace.');
+        var up = await subirArchivoAzure($('mnArch').files[0], 'documentos', null, { usuario: yo });
+        if (!up || !up.url) throw new Error('No se pudo subir la constancia. Intenta de nuevo o pega el enlace.');
+        link = up.url;
+      }
+      var j = await api('guardarNota', { usuario: notaDe.usuario, nota: $('mnNota').value, fecha_examen: $('mnFecha').value, constancia: link, observacion: $('mnObs').value });
+      if (!j.success) throw new Error(j.error);
+      cerrarNota(); await cargar(); aviso('✅ Nota registrada para ' + esc(notaDe.nombre));
+    } catch (e) { $('mnErr').textContent = '⚠️ ' + e.message; }
+    b.disabled = false; b.textContent = 'Guardar nota';
+  };
+
+  window.exportar = function () {
+    if (!D || typeof XLSX === 'undefined') return;
+    var res = [['Colaborador', 'Empresa', 'Puesto', 'KPI', 'Peso', 'Meta', 'Cumplen', 'Total', '%', 'Nivel', 'Nota parcial']];
+    var ev = [['Colaborador', 'KPI', 'Resultado', 'Referencia', 'Fecha', 'Trabajador', 'Detalle', 'Sustento']];
+    D.personas.forEach(function (p) {
+      p.kpis.forEach(function (k) {
+        res.push([p.nombre, p.empresa, p.puesto, k.corto, k.peso, k.meta || '', k.estado === 'ok' ? k.num : '', k.estado === 'ok' ? k.den : '', k.estado === 'ok' && k.pct != null ? Math.round(k.pct * 1000) / 10 : k.estado, k.nivel || '', p.nota == null ? '' : p.nota]);
+        (k.evidencia || []).forEach(function (e) { ev.push([p.nombre, k.corto, e.ok === true ? 'Cumple' : e.ok === false ? 'No cumple' : 'No cuenta / pendiente', e.ref, e.fecha || '', e.trabajador || '', e.detalle || '', e.sustento || '']); });
+      });
+    });
+    var al = [['Fecha', 'Tipo', 'Mensaje', 'Detalle', 'Enviado a']].concat((D.alertas || []).map(function (a) { return [a.creado, a.tipo, a.mensaje, a.detalle || '', a.inicial ? 'estado inicial' : (a.destinatarios || '')]; }));
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(res), 'Resumen');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(ev), 'Evidencia');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(al), 'Alertas');
+    XLSX.writeFile(wb, 'KPIs_RRLL_corte_' + D.hoy + '.xlsx');
+  };
+
+  if (VISORES.indexOf(yo) < 0) {
+    $('cargando').style.display = 'none';
+    aviso('🔒 Este módulo es solo para la Coordinación de RR.LL. y la Subgerencia de Personas.', 'av-e');
+    return;
+  }
+  cargar();
+  setInterval(function () { if (!document.hidden) cargar(); }, 5 * 60 * 1000);
+})();
+</script>
+<script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="KPIs RR.LL."></script>
+<script src="/sistema-rl-verfrut/frontend/js/trafico.js?v=2"></script>
+</body>
+</html>

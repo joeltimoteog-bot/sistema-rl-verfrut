@@ -553,7 +553,8 @@ function crearMotor(D) {
     return { success: true, esAdmin: false, semana: sem, rangoSemana, pendientesVisitas: misVisitas, casosPendientes: misCasos };
   }
 
-  return { cumplPendientes, cumplPanel, getCumplimiento };
+  return { cumplPendientes, cumplPanel, getCumplimiento,
+    _kpi: { esHabil, sumarHabiles, habilesEntre, AUS, esDelUsuario, concluido, casos, cfg, usuarios } };   /* _KPI_RRLL_V1 (30-set): piezas para el motor de KPIs (solo lectura) */
 }
 
 module.exports = { crearMotor, plazosHist, plazoEn, crearAus, ausParse, ausAplicar, AUS_TIPOS, nombreMatch, calParseDias, calParseFeriados, _t: { parse, fechaV, semanaNum, hoyLima, ymd } };
