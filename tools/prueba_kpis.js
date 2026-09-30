@@ -106,9 +106,9 @@ console.log('✅ motor OK');
 }
 /* ── atencion de sabado registrada el lunes = cumple ── */
 {
-  const at2 = [{ anio: 2026, nro: 90, fecha_atencion: '2026-08-01', usuario_sistema: 'atineo', fecha_registro: '2026-08-03 08:10', estado: 'FINALIZADO', nombre: 'S' },
-               { anio: 2026, nro: 91, fecha_atencion: '2026-08-01', usuario_sistema: 'atineo', fecha_registro: '2026-08-04 08:10', estado: 'FINALIZADO', nombre: 'S2' },
-               { anio: 2026, nro: 92, fecha_atencion: '2026-08-11', usuario_sistema: 'atineo', fecha_registro: '2026-08-12 09:00', estado: 'FINALIZADO', nombre: 'M' }];
+  const at2 = [{ anio: 2026, nro: 90, fecha_atencion: '2026-09-05', usuario_sistema: 'atineo', fecha_registro: '2026-09-07 08:10', estado: 'FINALIZADO', nombre: 'S' },
+               { anio: 2026, nro: 91, fecha_atencion: '2026-09-05', usuario_sistema: 'atineo', fecha_registro: '2026-09-08 08:10', estado: 'FINALIZADO', nombre: 'S2' },
+               { anio: 2026, nro: 92, fecha_atencion: '2026-09-15', usuario_sistema: 'atineo', fecha_registro: '2026-09-16 09:00', estado: 'FINALIZADO', nombre: 'M' }];
   const r4 = K.calcular({ M: m._kpi, personas: K.PERSONAS, informes: {}, atenciones: at2, eti: { programaciones: [], registros: {} }, notas: {}, hoy: '2026-10-01' });
   const k = r4.personas.find(p => p.usuario === 'atineo').kpis.find(x => x.codigo === 'K2');
   console.log('sabado->lunes', k.num, '/', k.den, k.evidencia.filter(e => e.ok === false).map(e => e.detalle).join(' | '));
@@ -127,6 +127,16 @@ console.log('✅ motor OK');
   const r5 = K.calcular({ M: m._kpi, personas: K.PERSONAS, informes: {}, atenciones: at3, eti: { programaciones: [], registros: {} }, notas: {}, hoy: '2026-10-01' });
   const k = r5.personas.find(p => p.usuario === 'atineo').kpis.find(x => x.codigo === 'K2');
   k.evidencia.filter(e => e.ok === false).forEach(e => console.log('   ', e.ref, e.detalle));
-  assert.equal(k.num, 3); assert.equal(k.den, 6);
-  console.log('✅ cierre de jornada 16:36 OK');
+  assert.equal(k.num, 3); assert.equal(k.den, 4); assert.equal(k.fuera_horario, 2);   // 2 y 5: mismo dia despues de 16:36 -> fuera de horario (no suman ni restan)
+  console.log('✅ cierre de jornada 16:36 y fuera de horario OK');
+}
+/* ── rango de fechas (del 1 al 15) y atribucion por vencimiento ── */
+{
+  const rq = K.calcular({ M: m._kpi, personas: K.PERSONAS, informes, atenciones: ats, eti, notas: {}, hoy: '2026-10-01', desde: '2026-09-01', hasta: '2026-09-15' });
+  const k1q = rq.personas.find(p => p.usuario === 'ptamayo').kpis[0];
+  console.log('rango 01-15 K1 ptamayo', k1q.num, '/', k1q.den, rq.rango);
+  assert.equal(k1q.num, 2); assert.equal(k1q.den, 2);   // casos 1 (vence 08/09) y 2 (vence 14/09)
+  const rt = K.calcular({ M: m._kpi, personas: K.PERSONAS, informes, atenciones: ats, eti, notas: {}, hoy: '2026-10-01', desde: '2026-08-01' });
+  assert.equal(rt.rango.desde, '2026-09-01');   // nunca antes del inicio de la medicion
+  console.log('✅ rango de fechas OK');
 }

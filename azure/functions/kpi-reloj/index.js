@@ -17,6 +17,8 @@ module.exports = async function (context) {
     try { eti = await ETI.sincronizar(pool); } catch (e) { eti = { error: e.message }; context.log.warn('[kpi-reloj] ETI: ' + e.message); }
     const d = await KDB.calcular(pool);
     const r = await KDB.registrar(pool, d);
+    try { const c = await KDB.cierreAutomatico(pool); if (c) context.log('[kpi-reloj] cierre mensual: ' + JSON.stringify(c)); }   /* el mes anterior se congela solo */
+    catch (eC) { context.log.error('[kpi-reloj] cierre mensual: ' + eC.message); }
     context.log('[kpi-reloj] OK en ' + (Date.now() - t0) + ' ms · ETI ' + JSON.stringify(eti) + ' · ' + JSON.stringify(r));
   } catch (e) {
     context.log.error('[kpi-reloj] ' + e.message);

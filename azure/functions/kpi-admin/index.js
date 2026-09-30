@@ -61,6 +61,14 @@ module.exports = async function (context, req) {
       const r = b.soloVer ? null : await KDB.registrar(pool, d);
       return res(200, { success: true, eti, registro: r, hoy: d.hoy });
     }
+    if (accion === 'cerrarMes') { return res(200, await KDB.cerrarMes(pool, String(b.mes || ''), String(b.por || 'Apps Script'))); }
+    if (accion === 'informe') {   /* mes cerrado, o { desde, hasta } calculado al momento (para el informe de avance) */
+      if (b.mes) { const i = await KDB.informeMes(pool, String(b.mes)); return res(200, i ? Object.assign({ success: true }, i) : { success: false, error: 'Mes no cerrado' }); }
+      const B = await KDB.cargar(pool), hoy = KDB.hoyLima();
+      const d = KDB.calcularCon(B, hoy, b.desde, b.hasta); delete d.avisos;
+      d.serie = KDB.serie(B, hoy, d.rango.desde, d.rango.hasta > hoy ? hoy : d.rango.hasta);
+      return res(200, Object.assign({ success: true, avance: true }, d));
+    }
     if (accion === 'resumen') {
       const d = await KDB.calcular(pool, b.hoy);
       return res(200, { success: true, hoy: d.hoy, eti_sync: d.eti_sync, personas: d.personas.map(p => ({ usuario: p.usuario, nombre: p.nombre, encontrado: p.usuario_encontrado, enlace: p.enlace,

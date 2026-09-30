@@ -17,8 +17,21 @@ function token(req) {
   try { return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET); } catch (e) { return null; }
 }
 
-let cache = { t: 0, d: null };
+let base = { t: 0, B: null };   /* datos leidos (se reusan 60 s para tablero / serie) */
 const CACHE_MS = 60000;
+const fechaOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : null;
+
+async function datosBase(pool, context, forzar) {
+  if (!forzar && base.B && Date.now() - base.t < CACHE_MS) return base;
+  /* lo registrado en ETI se ve al instante: si la ultima copia tiene mas de 3 minutos, se copia antes de calcular */
+  try {
+    const s = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'kpi_eti_sync'");
+    const v = s.recordset.length ? Date.parse(String(s.recordset[0].valor).slice(0, 19) + 'Z') : 0;
+    if (forzar || !v || Date.now() - v > 180000) await ETI.sincronizar(pool);
+  } catch (e) { context.log.warn('[kpi] ETI: ' + e.message); }
+  base = { t: Date.now(), B: await KDB.cargar(pool) };
+  return base;
+}
 
 module.exports = async function (context, req) {
   const accion = context.bindingData && context.bindingData.accion;
@@ -30,21 +43,28 @@ module.exports = async function (context, req) {
     if (K.VISORES.indexOf(quien) < 0) return res(403, { success: false, error: 'Este modulo es solo para la Coordinacion de RR.LL. y la Subgerencia de Personas' });
     const pool = await getPool();
     await KDB.asegurarTablas(pool);
+    const b = req.body || {};
 
-    if (accion === 'tablero') {
-      if (!cache.d || Date.now() - cache.t > CACHE_MS) {
-        /* lo registrado en ETI se ve al instante: si la ultima copia tiene mas de 3 minutos, se copia antes de calcular */
-        try {
-          const s = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'kpi_eti_sync'");
-          const v = s.recordset.length ? Date.parse(String(s.recordset[0].valor).slice(0, 19) + 'Z') : 0;
-          if (!v || Date.now() - v > 180000) await ETI.sincronizar(pool);
-        } catch (e) { context.log.warn('[kpi] ETI: ' + e.message); }
-        const d = await KDB.calcular(pool);
-        cache = { t: Date.now(), d };
-      }
+    if (accion === 'tablero') {   /* { desde, hasta } opcionales: sin rango = todo el periodo hasta hoy */
+      const c = await datosBase(pool, context);
+      const d = KDB.calcularCon(c.B, KDB.hoyLima(), fechaOk(b.desde), fechaOk(b.hasta));
       const al = await KDB.alertas(pool, 150);
-      return res(200, Object.assign({ success: true, fuente: 'azure', puedeEditar: K.EDITORES.indexOf(quien) >= 0, calculado: new Date(cache.t).toISOString() },
-        cache.d, { alertas: al, definiciones: K.DEF }));
+      let cie = []; try { cie = await KDB.cierres(pool); } catch (e) {}
+      delete d.avisos;
+      return res(200, Object.assign({ success: true, fuente: 'azure', puedeEditar: K.EDITORES.indexOf(quien) >= 0, calculado: new Date(c.t).toISOString() },
+        d, { alertas: al, definiciones: K.DEF, cierres: cie, hora_cierre: K.HORA_CIERRE }));
+    }
+    if (accion === 'serie') {   /* { desde, hasta }: por dia, lo que vencia ese dia */
+      const c = await datosBase(pool, context);
+      const hoy = KDB.hoyLima();
+      const desde = fechaOk(b.desde) || K.PERIODO.ini, hasta = fechaOk(b.hasta) || hoy;
+      return res(200, { success: true, desde, hasta, serie: KDB.serie(c.B, hoy, desde < K.PERIODO.ini ? K.PERIODO.ini : desde, hasta) });
+    }
+    if (accion === 'informe') {   /* informe de un mes CERRADO (foto inmutable) */
+      const mes = String(b.mes || '');
+      const inf = await KDB.informeMes(pool, mes);
+      if (!inf) return res(200, { success: false, error: 'El mes ' + mes + ' aún no está cerrado' });
+      return res(200, Object.assign({ success: true }, inf));
     }
 
     if (K.EDITORES.indexOf(quien) < 0) return res(403, { success: false, error: 'Solo el Coordinador de RR.LL. puede hacer este cambio' });
@@ -63,17 +83,22 @@ module.exports = async function (context, req) {
         .input('c', sql.NVarChar(1000), constancia.slice(0, 1000)).input('o', sql.NVarChar(500), String(b.observacion || '').slice(0, 500))
         .input('p', sql.NVarChar(60), quien)
         .query('INSERT INTO dbo.KPI_Notas (usuario, nota, fecha_examen, constancia, observacion, registrado_por) VALUES (@u, @n, @f, @c, @o, @p)');
-      cache = { t: 0, d: null };
+      base = { t: 0, B: null };
       return res(200, { success: true });
     }
 
     if (accion === 'recalcular') {
       let eti = null;
       try { eti = await ETI.sincronizar(pool); } catch (e) { eti = { error: e.message }; }
-      const d = await KDB.calcular(pool);
+      base = { t: Date.now(), B: await KDB.cargar(pool) };
+      const d = KDB.calcularCon(base.B, KDB.hoyLima());
       const r = await KDB.registrar(pool, d);
-      cache = { t: Date.now(), d };
       return res(200, { success: true, eti, registro: r });
+    }
+    if (accion === 'cerrarMes') {   /* el mes ya terminado queda congelado (no se edita ni se borra) */
+      const c = await datosBase(pool, context, true);
+      const r = await KDB.cerrarMes(pool, String(b.mes || ''), quien, c.B);
+      return res(200, r);
     }
 
     return res(404, { success: false, error: 'Accion desconocida: ' + accion });

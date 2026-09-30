@@ -7,6 +7,7 @@
 <link rel="icon" href="/sistema-rl-verfrut/favicon.ico">
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Barlow:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <!-- _KPI_RRLL_V1 (30-set-2026): KPIs oficiales del equipo de RR.LL. (solo jtimoteo y lcovenas) -->
 <style>
 :root{--azul:#0a2463;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;
@@ -82,6 +83,31 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
 .modal label{display:block;font-size:12.5px;font-weight:700;margin:10px 0 4px}
 .modal input,.modal select,.modal textarea{width:100%;padding:8px 10px;border:1.5px solid var(--bd);border-radius:8px;font-family:inherit;font-size:14px}
 @media (max-width:640px){.top h1{font-size:18px}.top .der{margin-left:0}}
+/* _KPI_STATS_V1: rango, estadisticas e informe mensual */
+.rango{display:flex;gap:6px;flex-wrap:wrap;align-items:center;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+.rango .pr{border:1px solid var(--bd);background:#fff;border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:700;color:var(--gr);cursor:pointer}
+.rango .pr.on{background:var(--azul);color:#fff;border-color:var(--azul)}
+.rango input{padding:5px 8px;border:1.5px solid var(--bd);border-radius:8px;font-family:inherit;font-size:13px}
+.rango .lb{font-size:12.5px;font-weight:700;color:var(--azul);margin-left:auto}
+.g2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
+.cv{position:relative;height:300px}
+.pa{border-left:4px solid var(--n2);background:#fffbeb;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px;line-height:1.5}
+.pa.cr{border-left-color:var(--n1);background:#fef2f2}
+.pa b.t{font-size:14px}
+.pa ul{margin:4px 0 0 18px}
+.est{display:inline-block;font-weight:800;font-size:11.5px;padding:2px 8px;border-radius:999px}
+.e-ok{background:var(--n3b);color:var(--n3)} .e-des{background:var(--n2b);color:var(--n2)} .e-cr{background:var(--n1b);color:var(--n1)} .e-sd{background:#f1f5f9;color:var(--gr)}
+.inf h2{margin-top:6px} .inf h3{font-family:'Barlow Condensed',sans-serif;color:var(--azul);font-size:16px;margin:14px 0 6px}
+.inf p{font-size:13.5px;line-height:1.6;margin:6px 0}
+.inf table{font-size:12.5px} .inf td,.inf th{padding:6px}
+.inf .portada{border-bottom:3px solid var(--rojo);padding-bottom:10px;margin-bottom:10px}
+@media print{
+  .top,.tabs,.rango,#msg,.noimp{display:none!important}
+  body{background:#fff} .wrap{max-width:none;padding:0}
+  .sec{display:none!important} #s-informe{display:block!important}
+  .card{border:none;padding:0} .inf .salto{page-break-before:always}
+  .tw{overflow:visible} table{min-width:0!important}
+}
 </style>
 </head>
 <body>
@@ -100,8 +126,21 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
   <div class="tabs" id="tabs" style="display:none">
     <button class="on" data-t="s-tablero">📊 Tablero del equipo</button>
     <button data-t="s-detalle">🔍 Detalle y evidencia</button>
+    <button data-t="s-stats">📈 Estadísticas</button>
+    <button data-t="s-informe">📄 Informe mensual</button>
     <button data-t="s-alertas">🚨 Alertas</button>
     <button data-t="s-reglas">🧩 Cómo se mide</button>
+  </div>
+  <div class="rango" id="rango" style="display:none">
+    <span style="font-weight:800;font-size:12.5px">📅 Rango:</span>
+    <button class="pr on" data-r="periodo">Todo el periodo</button>
+    <button class="pr" data-r="mes">Este mes</button>
+    <button class="pr" data-r="q1">Del 1 al 15</button>
+    <button class="pr" data-r="q2">Del 16 a fin de mes</button>
+    <button class="pr" data-r="7d">Últimos 7 días</button>
+    <button class="pr" data-r="mesant">Mes anterior</button>
+    <input type="date" id="rDesde"> <input type="date" id="rHasta"> <button class="bt bt-a" style="padding:6px 10px" id="rAplicar">Aplicar</button>
+    <span class="lb" id="rLabel"></span>
   </div>
   <div id="cargando" class="cargando">⏳ Calculando los KPIs desde Azure…</div>
 
@@ -124,6 +163,34 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
   <section id="s-detalle" class="sec">
     <select class="sel" id="selP"></select>
     <div id="detalle"></div>
+  </section>
+
+  <section id="s-stats" class="sec">
+    <div class="kpis" id="stResumen"></div>
+    <div class="g2">
+      <div class="card"><h2>RADAR DE CUMPLIMIENTO</h2><select class="sel" id="stRadarSel" style="margin-bottom:6px"></select><div class="cv"><canvas id="cRadar"></canvas></div>
+        <div class="sub">% de cumplimiento por KPI en el rango, frente a la meta de la empresa.</div></div>
+      <div class="card"><h2>CUMPLIMIENTO POR SECTOR</h2><div class="cv"><canvas id="cSector"></canvas></div>
+        <div class="sub">Promedio del % de cumplimiento de quienes atienden cada sector (sin el curso).</div></div>
+      <div class="card"><h2>¿CÓMO VA EL EQUIPO? (DISTRIBUCIÓN)</h2><div class="cv"><canvas id="cDist"></canvas></div>
+        <div class="sub">Cantidad de personas según su % de cumplimiento en el rango.</div></div>
+      <div class="card"><h2>EVOLUCIÓN DIARIA DEL EQUIPO</h2><div class="cv"><canvas id="cSerie"></canvas></div>
+        <div class="sub">Cada punto = % de lo que vencía ese día y se cumplió. Días sin puntos = no vencía nada.</div></div>
+    </div>
+    <div class="card"><h2>RANKING Y SEMÁFORO</h2><div class="tw"><table class="src" id="stRank" style="min-width:760px"></table></div>
+      <div class="sub" style="margin-top:6px">✅ Al día: todo en meta · 🟠 En desfase: algún KPI bajo la meta · 🔴 Crítico: menos de 50% de cumplimiento o nota menor a 2.</div></div>
+    <div class="card"><h2>PLAN DE ACCIÓN SUGERIDO (MEJORA, NO SANCIÓN)</h2><div id="stPlan"></div></div>
+  </section>
+
+  <section id="s-informe" class="sec">
+    <div class="card noimp" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <b>Mes:</b> <select class="sel" id="infMes" style="margin:0"></select>
+      <button class="bt bt-a" id="infVer">Ver informe</button>
+      <button class="bt bt-g" onclick="window.print()">🖨️ Imprimir / PDF</button>
+      <button class="bt bt-r" id="infCerrar" style="display:none">🔒 Cerrar el mes</button>
+      <span class="sub" id="infNota"></span>
+    </div>
+    <div class="card inf" id="infCuerpo"><div class="sub">Elige un mes y presiona "Ver informe". Los meses se cierran solos al terminar (el 1 del mes siguiente, 00:05) y quedan congelados: no se editan ni se borran.</div></div>
   </section>
 
   <section id="s-alertas" class="sec">
@@ -211,14 +278,14 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
   function tags(p) {
     var t = '';
     (p.ausencias || []).forEach(function (a) { var rp = (D.personas || []).filter(function (x) { return x.usuario === String(a.reemplazo || '').toLowerCase(); })[0]; t += '<span class="tag t-aus">' + esc(a.tipo) + ' ' + dmy(a.desde) + (a.hasta ? '–' + dmy(a.hasta) : '') + ' · lo cubre ' + esc(rp ? rp.nombre : a.reemplazo) + ' (esos días no cuentan)</span>'; });
-    if (p.desde > (D.periodo && D.periodo.ini)) t += '<span class="tag t-new">Ingresó ' + dmy(p.ingreso) + ' · se mide desde esa fecha</span>';
+    if (p.ingreso && p.ingreso > ((D.rango && D.rango.desde) || D.periodo.ini)) t += '<span class="tag t-new">Ingresó ' + dmy(p.ingreso) + ' · se mide desde esa fecha</span>';
     if (!p.usuario_encontrado) t += '<span class="tag t-warn">⚠️ Usuario "' + esc(p.usuario) + '" no encontrado en el sistema</span>';
     return t;
   }
 
   function pintar() {
     var P = D.personas || [];
-    $('subt').textContent = 'Periodo: ' + dmy(D.periodo.ini) + ' – ' + dmy(D.periodo.fin) + ' · Corte: ' + dmy(D.hoy) + ' · Calculado ' +
+    $('subt').textContent = 'Rango: ' + dmy((D.rango || D.periodo).desde || D.periodo.ini) + ' – ' + dmy(((D.rango || {}).hasta || D.periodo.fin) > D.hoy ? D.hoy : (D.rango || {}).hasta) + ' · Corte: ' + dmy(D.hoy) + ' · Calculado ' +
       new Date(D.calculado).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) + (D.eti_sync ? ' · ETI copiado ' + new Date(D.eti_sync + (/Z$/.test(D.eti_sync) ? '' : 'Z')).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : '');
     var conNota = P.filter(function (p) { return p.nota != null; });
     var prom = conNota.length ? conNota.reduce(function (s, p) { return s + p.nota; }, 0) / conNota.length : null;
@@ -297,8 +364,8 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
 
   function reglas() {
     var R = [
-      ['Supervisores', 'K1', 'Casos cuyo informe se subió en ≤ 5 días hábiles ÷ casos reportados (los que aún están en plazo no cuentan todavía).', 'Registro de Casos + fecha real de subida del informe (registro de Azure / historial de Cumplimiento). ⭐ si fue en ≤ 3 días. Sábados, domingos y feriados no cuentan.'],
-      ['Supervisores', 'K2', 'Atenciones registradas el mismo día, hasta el cierre de la jornada (16:36) + informes de caso subidos dentro del plazo interno vigente ÷ total. Si se atendió en sábado, domingo, feriado o después de las 16:36, vale hasta las 16:36 del primer día hábil siguiente.', 'Mis Atenciones (hora exacta de registro) + Registro de Casos.'],
+      ['Supervisores', 'K1', 'Casos cuyo informe se subió en ≤ 5 días hábiles ÷ casos que vencían en el rango (los que aún están en plazo no cuentan todavía). La medición empieza el 01/09/2026.', 'Registro de Casos + fecha real de subida del informe (registro de Azure / historial de Cumplimiento). ⭐ si fue en ≤ 3 días. Sábados, domingos y feriados no cuentan.'],
+      ['Supervisores', 'K2', 'Atenciones registradas el mismo día, hasta el cierre de la jornada (16:36) + informes de caso subidos dentro del plazo interno vigente ÷ total. Si se atendió en sábado, domingo, feriado o después de las 16:36, vale hasta las 16:36 del primer día hábil siguiente. Registrada el mismo día pero después de las 16:36 = ⏰ fuera de horario: no suma ni resta (en evaluación). Cada registro cuenta en el día en que vence.', 'Mis Atenciones (hora exacta de registro) + Registro de Casos.'],
       ['Supervisores', 'K3', 'Fechas programadas en ETI registradas como ejecutadas ÷ fechas programadas ya vencidas.', 'Programación de Capacitaciones ETI, Evaluaciones de Checklist e Ingresos masivos (ETI → Azure cada 5 min y al abrir esta página). Si no se hizo, el responsable informa el motivo en ETI y pide reprogramar; cuando el administrador asigna la nueva fecha, cuenta esa fecha (la anterior deja de contar) y el motivo queda como sustento. Reforzamiento: suma solo si se hace.'],
       ['Supervisores', 'K4', 'Nota del curso → escala 1–5 (15 = meta).', 'Registro manual del Coordinador de RR.LL. con constancia adjunta (no se edita ni se borra).'],
       ['Asistente', 'A1', 'Atenciones registradas el mismo día, hasta el cierre de la jornada (16:36) ÷ atenciones registradas (misma regla de días no laborables).', 'Mis Atenciones (hora exacta de registro).'],
@@ -339,13 +406,16 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
   function ir(id) {
     Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.classList.toggle('on', b.dataset.t === id); });
     Array.prototype.forEach.call(document.querySelectorAll('.sec'), function (s) { s.classList.toggle('on', s.id === id); });
+    if (id === 's-stats' && window._kpiStatsPintar) window._kpiStatsPintar();
+    if (id === 's-informe' && window._kpiInfPrep) window._kpiInfPrep();
   }
+  window._kpi = { api: function (a, c) { return api(a, c); }, D: function () { return D; }, esc: esc, pct: pct, dmy: dmy, colorNota: colorNota, chip: chip, ir: function (x) { ir(x); }, cargar: function () { return cargar(); }, aviso: aviso, NOM: NOM };
   Array.prototype.forEach.call(document.querySelectorAll('.tabs button'), function (b) { b.onclick = function () { ir(b.dataset.t); }; });
   $('selP').onchange = function () { SEL = +this.value; detalle(); };
 
   async function cargar() {
     try {
-      var j = await api('tablero');
+      var j = await api('tablero', window._kpiRango || {});
       if (!j.success) throw new Error(j.error || 'No se pudo calcular');
       D = j;
       $('cargando').style.display = 'none'; $('tabs').style.display = '';
@@ -353,6 +423,8 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
       aviso('');
       if (!document.querySelector('.sec.on')) ir('s-tablero');
       pintar();
+      $('rango').style.display = '';
+      if (window._kpiTrasCargar) window._kpiTrasCargar();
     } catch (e) { $('cargando').style.display = 'none'; aviso('⚠️ ' + esc(e.message), 'av-e'); }
   }
 
@@ -410,6 +482,7 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
   setInterval(function () { if (!document.hidden) cargar(); }, 5 * 60 * 1000);
 })();
 </script>
+<script src="kpi_stats.js?v=1"></script>   <!-- _KPI_STATS_V1: rango, estadisticas e informe mensual -->
 <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="KPIs RR.LL."></script>
 <script src="/sistema-rl-verfrut/frontend/js/trafico.js?v=2"></script>
 </body>

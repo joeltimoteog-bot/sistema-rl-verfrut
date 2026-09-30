@@ -20,7 +20,7 @@
 'use strict';
 const { plazoEn, nombreMatch } = require('./cumpl-motor');
 
-const PERIODO = { ini: '2026-08-01', fin: '2026-12-31', curso_desde: '2026-12-01' };
+const PERIODO = { ini: '2026-09-01', fin: '2026-12-31', curso_desde: '2026-12-01' };   /* Joel (30-set): la medicion arranca el 01-set-2026 */
 const VISORES = ['jtimoteo', 'lcovenas'];            /* ven el modulo */
 const EDITORES = ['jtimoteo'];                        /* registran la nota del curso */
 const TEMAS_ETI = ['CAPACITACIONES ETI', 'EVALUACIONES DE CHECKLIST', 'INGRESOS MASIVOS'];
@@ -73,6 +73,7 @@ const ymd = (d) => d ? d.toISOString().slice(0, 10) : '';
 const aFecha = (s) => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null; };
 const dm = (s) => s ? String(s).slice(8, 10) + '/' + String(s).slice(5, 7) : '';
 const max = (a, b) => (a > b ? a : b);
+const min = (a, b) => (a < b ? a : b);
 
 function nivelPct(p, meta) {
   if (p >= 1 - 1e-9) return 5;
@@ -113,6 +114,11 @@ function esPersonaEti(nombre, p, nombreUsuario, etiNombre) {
          hoy:'aaaa-mm-dd' } */
 function calcular(E) {
   const M = E.M, hoyS = E.hoy, hoy = aFecha(hoyS);
+  /* RANGO: cada registro cuenta en el dia en que VENCE (caso: dia 5; atencion: su dia de registro; ETI: la fecha programada).
+     Asi un mes (o del 1 al 15) se evalua con lo que vencia en ese lapso. */
+  const R = { desde: max(PERIODO.ini, String(E.desde || PERIODO.ini).slice(0, 10)), hasta: min(PERIODO.fin, String(E.hasta || PERIODO.fin).slice(0, 10)) };
+  const enR = (d) => !!d && d >= R.desde && d <= R.hasta;
+  const piso = ymd(new Date(aFecha(R.desde).getTime() - 20 * DIA));   /* registros de hasta 20 dias antes pueden vencer dentro del rango */
   const personas = (E.personas && E.personas.length ? E.personas : PERSONAS).filter(p => p.activo !== false);
   const porUsuario = {};
   (M.usuarios || []).forEach(u => { if (u && u.usuario) porUsuario[usr(u.usuario)] = u; });
@@ -120,10 +126,10 @@ function calcular(E) {
   const salida = personas.map(p => {
     const uSis = porUsuario[usr(p.usuario)] || null;
     const u = { usuario: usr(p.usuario), nombre: uSis ? uSis.nombre : p.nombre };
-    const desde = max(PERIODO.ini, p.ingreso || PERIODO.ini);
+    const desde = max(piso, p.ingreso || piso);   /* desde aqui se toman registros (la fecha de vencimiento decide si cuentan) */
     const cEti = E.eti && E.eti.usuarios ? E.eti.usuarios[u.usuario] : null;
     const etiNombre = cEti && String(cEti.estado || 'activo') !== 'inactivo' ? cEti.nombre : null;
-    const ausencias = (M.AUS.todas || []).filter(a => !a.anulada && usr(a.usuario) === u.usuario && (a.hasta || '9999') >= PERIODO.ini)
+    const ausencias = (M.AUS.todas || []).filter(a => !a.anulada && usr(a.usuario) === u.usuario && (a.hasta || '9999') >= R.desde && a.desde <= R.hasta)
       .map(a => ({ tipo: a.tipo, desde: a.desde, hasta: a.hasta || '', reemplazo: a.reemplazo || '' }));
     const casosP = casosDe(p, u, desde), av0 = avisos.length;
     const kpis = (DEF[p.tipo] || DEF.SUP).map(d => {
@@ -146,30 +152,32 @@ function calcular(E) {
       return o;
     });
     for (let i = av0; i < avisos.length; i++) { avisos[i].usuario = u.usuario; avisos[i].nombre = p.nombre; avisos[i].clave += ':' + u.usuario; }
-    let sp = 0, sw = 0;
+    let sp = 0, sw = 0, cp = 0, cw = 0;
     kpis.forEach(k => { if (k.estado === 'ok' && k.nivel) { sp += k.nivel * k.peso; sw += k.peso; } });
+    kpis.forEach(k => { if (k.estado === 'ok' && k.codigo !== 'K4' && k.den) { cp += (k.num / k.den) * k.peso; cw += k.peso; } });   /* % de cumplimiento (sin el curso) */
     const progsP = ((E.eti && E.eti.programaciones) || []).filter(g => esPersonaEti(g.supervisor, p, u.nombre, etiNombre));
     const enlace = { rrll: !!uSis, rrll_nombre: uSis ? uSis.nombre : '', eti_cuenta: !!cEti, eti_activa: !!etiNombre, eti_nombre: cEti ? cEti.nombre : '',
       eti_sectores: ((E.eti && E.eti.supervisores) || []).filter(x => etiNombre ? normN(x.nombre) === normN(etiNombre) : esPersona(x.nombre, p, u.nombre)).map(x => x.sector || ''),
       programaciones: progsP.length, aplica_eti: p.tipo === 'SUP' };
     return { usuario: u.usuario, nombre: p.nombre, empresa: p.empresa, tipo: p.tipo, puesto: p.puesto, dni: p.dni, ingreso: p.ingreso,
-      desde, ausencias, usuario_encontrado: !!uSis, enlace, kpis, nota: sw ? Math.round(sp / sw * 100) / 100 : null, peso_evaluado: Math.round(sw * 100) / 100 };
+      desde, ausencias, usuario_encontrado: !!uSis, enlace, kpis, nota: sw ? Math.round(sp / sw * 100) / 100 : null, peso_evaluado: Math.round(sw * 100) / 100,
+      cumpl: cw ? Math.round(cp / cw * 1000) / 1000 : null, sectores: enlace.eti_sectores.length ? enlace.eti_sectores : [p.tipo === 'ASIST' ? 'COORDINACIÓN RR.LL.' : 'SIN SECTOR'] };
   });
-  return { hoy: hoyS, periodo: PERIODO, personas: salida, avisos };
+  return { hoy: hoyS, periodo: PERIODO, rango: R, personas: salida, avisos };
 
   /* casos de la persona en el periodo, con fecha del informe y plazos */
   function casosDe(p, u, desde) {
     const out = [];
     (M.casos || []).forEach(c => {
       const base = c.fecha_reporte || c.fecha_registro; if (!base) return;
-      const b = ymd(base); if (b < desde || b > hoyS || b > PERIODO.fin) return;
+      const b = ymd(base); if (b < desde || b > hoyS || b > R.hasta) return;
       const propio = M.esDelUsuario(c, u);
       const dueno = M.AUS.duenoEn(c, u, b);
       if (!propio && !dueno) return;
       const ref = 'Caso N° ' + c.nro;
       if (!dueno) {   /* era suyo pero estaba ausente: lo responde el reemplazo */
         const a = M.AUS.cobCaso(c, b), r = a && M.AUS.reemp(a);
-        out.push({ c, ref, base, excluido: 'Reportado durante su ausencia: lo atiende ' + (r ? r.nombre : 'el reemplazo') + '. No cuenta para su KPI.' });
+        out.push({ c, ref, base, lim5: M.sumarHabiles(base, 5), excluido: 'Reportado durante su ausencia: lo atiende ' + (r ? r.nombre : 'el reemplazo') + '. No cuenta para su KPI.' });
         return;
       }
       const lim5 = M.sumarHabiles(base, 5), lim3 = M.sumarHabiles(base, 3);
@@ -188,7 +196,8 @@ function calcular(E) {
   function k1(casos) {
     const ev = []; let num = 0, den = 0;
     casos.forEach(x => {
-      const c = x.c, e = { ref: x.ref, fecha: x.base ? ymd(x.base) : '', trabajador: c.nombre, caso: c.nro };
+      if (!enR(ymd(x.lim5))) return;   /* cuenta en el rango donde vence (dia 5 habil) */
+      const c = x.c, e = { ref: x.ref, fecha: x.base ? ymd(x.base) : '', vence: ymd(x.lim5), trabajador: c.nombre, caso: c.nro };
       if (x.excluido) { e.ok = null; e.detalle = x.excluido; ev.push(e); return; }
       if (x.cubre) e.cubre = true;
       if (x.sinFecha) { e.ok = null; e.detalle = 'Tiene informe, pero se subió antes del registro automático de fechas: no se puede verificar el día. No suma ni resta.'; ev.push(e); return; }
@@ -221,7 +230,7 @@ function calcular(E) {
   function atencionesDe(p, u, desde) {
     return (E.atenciones || []).filter(a => {
       const f = String(a.fecha_atencion || '').slice(0, 10);
-      if (!f || f < desde || f > hoyS || f > PERIODO.fin) return false;
+      if (!f || f < desde || f > hoyS || f > R.hasta) return false;
       const us = usr(a.usuario_sistema);
       return us ? us === u.usuario : esPersona(a.supervisor, p, u.nombre);
     });
@@ -229,16 +238,24 @@ function calcular(E) {
 
   function mismoDia(ats, ev) {
     let num = 0, den = 0, sinHora = 0;
-    const malas = [];
+    const malas = [], fuera = [];
     ats.forEach(a => {
       const f = String(a.fecha_atencion).slice(0, 10), fr = a.fecha_registro ? String(a.fecha_registro).slice(0, 10) : '';
+      const fd0 = aFecha(f), hIni0 = String(a.hora_inicio || '').slice(0, 5);
+      const lim0 = (!M.esHabil(fd0) || (/^\d{2}:\d{2}$/.test(hIni0) && hIni0 > HORA_CIERRE)) ? ymd(M.sumarHabiles(fd0, 1)) : f;
+      if (!enR(lim0)) return;   /* cuenta en el dia en que debia registrarse */
       if (!fr) { sinHora++; return; }
-      den++;
       /* Regla (Joel, 30-set): se registra el MISMO dia hasta el cierre de la jornada (HORA_CIERRE).
          Atendida en sabado, domingo o feriado, o despues del cierre: vale hasta el cierre del primer dia habil siguiente. */
       const fd = aFecha(f), hIni = String(a.hora_inicio || '').slice(0, 5), hReg = String(a.fecha_registro).slice(11, 16);
       const pasaDia = !M.esHabil(fd) || (/^\d{2}:\d{2}$/.test(hIni) && hIni > HORA_CIERRE);
       const limite = pasaDia ? ymd(M.sumarHabiles(fd, 1)) : f;
+      if (fr === limite && hReg && hReg > HORA_CIERRE) {   /* Joel (30-set): mismo dia pero despues del cierre -> "fuera de horario": no suma ni resta, se evalua aparte */
+        fuera.push({ ref: 'Atención N° ' + a.nro + ' (' + a.anio + ')', fecha: f, trabajador: a.nombre, ok: null, fuera_horario: true,
+          detalle: '⏰ Fuera de horario: atendida el ' + dm(f) + (hIni ? ' ' + hIni : '') + ', registrada el ' + dm(fr) + ' a las ' + hReg + ' (después del cierre de ' + HORA_CIERRE + '). No suma ni resta: en evaluación.' });
+        return;
+      }
+      den++;
       const ok = fr < limite || (fr === limite && (!hReg || hReg <= HORA_CIERRE));
       if (ok) num++;
       else {
@@ -250,8 +267,11 @@ function calcular(E) {
     });
     if (den) ev.push({ ref: 'Atenciones registradas el mismo día', ok: true, resumen: true, detalle: num + ' de ' + den + ' atenciones se registraron el mismo día, hasta el cierre de la jornada (' + HORA_CIERRE + ').' });
     malas.forEach(x => ev.push(x));
+    if (fuera.length) ev.push({ ref: 'Registradas fuera de horario', ok: null, resumen: true, fuera_horario: fuera.length,
+      detalle: fuera.length + ' atención(es) registradas el mismo día pero después de las ' + HORA_CIERRE + '. No suman ni restan (en evaluación del Coordinador).' });
+    fuera.forEach(x => ev.push(x));
     if (sinHora) ev.push({ ref: 'Atenciones sin hora de registro', ok: null, resumen: true, detalle: sinHora + ' atención(es) sin hora de registro guardada (antes de la migración). No suman ni restan.' });
-    return { num, den };
+    return { num, den, fuera: fuera.length };
   }
 
   function k2(casos, ats) {
@@ -259,7 +279,7 @@ function calcular(E) {
     const r = mismoDia(ats, ev);
     let num = r.num, den = r.den;
     casos.forEach(x => {
-      if (x.excluido || x.sinFecha) return;
+      if (x.excluido || x.sinFecha || !enR(ymd(x.limInt))) return;
       const c = x.c, pz = M.habilesEntre(x.base, x.limInt);
       const e = { ref: 'Informe del caso N° ' + c.nro, fecha: ymd(x.base), trabajador: c.nombre };
       if (x.fi && x.fuente !== 'cierre sin informe') {
@@ -271,7 +291,7 @@ function calcular(E) {
       } else return;
       ev.push(e);
     });
-    return { estado: den ? 'ok' : 'sin_datos', num, den, evidencia: ev };
+    return { estado: den ? 'ok' : 'sin_datos', num, den, evidencia: ev, fuera_horario: r.fuera };
   }
 
   function k3(p, u, desde, etiNombre) {
@@ -294,7 +314,7 @@ function calcular(E) {
       });
       const solDe = (f) => { let r = null; sols.forEach(sl => { if ((sl.fechas || []).indexOf(f) >= 0) r = sl; }); return r; };
       fechas.forEach(f => {
-        if (f < desde || f > PERIODO.fin) return;
+        if (f < desde || !enR(f)) return;
         const e = { ref: tema + ' · ' + (g.sector || ''), fecha: f, prog: g.id };
         if (sustento) e.sustento = sustento;
         const hecha = ejec.has(f) || g.estado === 'ejecutada';
@@ -342,13 +362,14 @@ function calcular(E) {
 
   function a1(ats) {
     const ev = [], r = mismoDia(ats, ev);
-    return { estado: r.den ? 'ok' : 'sin_datos', num: r.num, den: r.den, evidencia: ev };
+    return { estado: r.den ? 'ok' : 'sin_datos', num: r.num, den: r.den, evidencia: ev, fuera_horario: r.fuera };
   }
 
   function a3(ats) {
     const ev = []; let num = 0, den = 0, pend = 0;
     ats.forEach(a => {
       const f = String(a.fecha_atencion).slice(0, 10), est = String(a.estado || '').toUpperCase();
+      if (!enR(f)) return;
       if (est.indexOf('FINALIZ') === 0 || est.indexOf('DERIV') === 0 || est.indexOf('ATENDID') === 0) { num++; den++; return; }
       const d = M.habilesEntre(aFecha(f), hoy);
       if (d > DIAS_CONSULTA) { den++; ev.push({ ref: 'Atención N° ' + a.nro + ' (' + a.anio + ')', fecha: f, trabajador: a.nombre, ok: false,
