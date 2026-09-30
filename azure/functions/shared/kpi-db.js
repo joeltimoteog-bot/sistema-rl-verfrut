@@ -95,7 +95,17 @@ async function datosCumpl(pool) {
 }
 
 /* fecha en que se subio el informe de cada caso: operaciones de Azure (desde el 26-set) + historial de Cumplimiento */
+/* _KPI_LIVIANO_V1 (01-oct-2026): las fechas de informe salen de busquedas LIKE sobre tablas con JSON grande
+   (CV_Ops, Cumpl_Historial). Se guardan 15 min en memoria para no cargar la base que usan todos. */
+let _infCache = null, _infEnCurso = null;
+const INF_TTL_MS = 15 * 60000;
 async function fechasInforme(pool) {
+  if (_infCache && Date.now() - _infCache.ts < INF_TTL_MS) return _infCache.out;
+  if (_infEnCurso) return _infEnCurso;
+  _infEnCurso = fechasInformeBD(pool).then(out => { _infCache = { ts: Date.now(), out }; return out; }).finally(() => { _infEnCurso = null; });
+  return _infEnCurso;
+}
+async function fechasInformeBD(pool) {
   const out = {};
   const poner = (nro, f, fuente) => { const k = String(nro); if (!f) return; if (!out[k] || f < out[k].fecha) out[k] = { fecha: f, fuente }; };
   try {

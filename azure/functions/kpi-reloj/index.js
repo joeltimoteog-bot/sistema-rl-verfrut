@@ -1,4 +1,4 @@
-/* kpi-reloj (_KPI_RRLL_V1, 30-set-2026) — cada 5 minutos:
+/* kpi-reloj (_KPI_RRLL_V1, 30-set-2026) — cada 15 minutos (_KPI_LIVIANO_V1, 01-oct: antes 5, cargaba la base):
    1) copia la programacion de ETI (Firestore) a Azure SQL,
    2) recalcula los KPIs del equipo de RR.LL.,
    3) guarda la foto del dia y registra en la bitacora las alertas NUEVAS
