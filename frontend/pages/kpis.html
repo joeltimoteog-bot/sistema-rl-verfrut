@@ -204,6 +204,7 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
   function chip(k) {
     if (!k || k.estado === 'pendiente') return '<span class="chip np">—<small>dic-2026</small></span>';
     if (k.estado === 'sin_datos') return '<span class="chip np">—<small>sin datos</small></span>';
+    if (k.estado === 'en_evaluacion') return '<span class="chip np">—<small>en evaluación</small></span>';
     if (k.codigo === 'K4') return '<span class="chip n' + k.nivel + '">' + k.nota_curso + '<small>Nivel ' + k.nivel + '</small></span>';
     return '<span class="chip n' + k.nivel + '">' + pct(k.pct) + '<small>' + k.num + '/' + k.den + ' · N' + k.nivel + '</small></span>';
   }
@@ -297,12 +298,12 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
   function reglas() {
     var R = [
       ['Supervisores', 'K1', 'Casos cuyo informe se subió en ≤ 5 días hábiles ÷ casos reportados (los que aún están en plazo no cuentan todavía).', 'Registro de Casos + fecha real de subida del informe (registro de Azure / historial de Cumplimiento). ⭐ si fue en ≤ 3 días. Sábados, domingos y feriados no cuentan.'],
-      ['Supervisores', 'K2', 'Atenciones registradas el mismo día en que se atendieron + informes de caso subidos dentro del plazo interno vigente ÷ total.', 'Mis Atenciones (hora exacta de registro) + Registro de Casos.'],
+      ['Supervisores', 'K2', 'Atenciones registradas el mismo día, hasta el cierre de la jornada (16:36) + informes de caso subidos dentro del plazo interno vigente ÷ total. Si se atendió en sábado, domingo, feriado o después de las 16:36, vale hasta las 16:36 del primer día hábil siguiente.', 'Mis Atenciones (hora exacta de registro) + Registro de Casos.'],
       ['Supervisores', 'K3', 'Fechas programadas en ETI registradas como ejecutadas ÷ fechas programadas ya vencidas.', 'Programación de Capacitaciones ETI, Evaluaciones de Checklist e Ingresos masivos (ETI → Azure cada 5 min y al abrir esta página). Si no se hizo, el responsable informa el motivo en ETI y pide reprogramar; cuando el administrador asigna la nueva fecha, cuenta esa fecha (la anterior deja de contar) y el motivo queda como sustento. Reforzamiento: suma solo si se hace.'],
       ['Supervisores', 'K4', 'Nota del curso → escala 1–5 (15 = meta).', 'Registro manual del Coordinador de RR.LL. con constancia adjunta (no se edita ni se borra).'],
-      ['Asistente', 'A1', 'Atenciones registradas el mismo día ÷ atenciones registradas.', 'Mis Atenciones (hora exacta de registro).'],
+      ['Asistente', 'A1', 'Atenciones registradas el mismo día, hasta el cierre de la jornada (16:36) ÷ atenciones registradas (misma regla de días no laborables).', 'Mis Atenciones (hora exacta de registro).'],
       ['Asistente', 'A2', 'Documentos remitidos el mismo día hábil ÷ registrados.', 'Pendiente: falta la marca "Remitido a…" en el sistema.'],
-      ['Asistente', 'A3', 'Consultas FINALIZADAS o derivadas ÷ consultas (las EN PROCESO de hasta 5 días hábiles aún no cuentan).', 'Mis Atenciones (estado).'],
+      ['Asistente', 'A3', 'EN EVALUACIÓN por el Coordinador: se muestra un cálculo referencial (atenciones FINALIZADAS ÷ total) pero no suma a la nota.', 'Mis Atenciones (estado).'],
       ['Asistente', 'A4', 'Capacitaciones asistidas ÷ convocadas.', 'Pendiente: falta la lista de convocatorias.']
     ];
     var defs = {}; ['SUP', 'ASIST'].forEach(function (t) { (D.definiciones[t] || []).forEach(function (d) { defs[d.codigo] = d; }); });

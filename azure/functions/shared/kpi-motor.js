@@ -25,6 +25,7 @@ const VISORES = ['jtimoteo', 'lcovenas'];            /* ven el modulo */
 const EDITORES = ['jtimoteo'];                        /* registran la nota del curso */
 const TEMAS_ETI = ['CAPACITACIONES ETI', 'EVALUACIONES DE CHECKLIST', 'INGRESOS MASIVOS'];
 const TEMA_OPCIONAL = 'REFORZAMIENTO';
+const HORA_CIERRE = '16:36';                          /* cierre de la jornada: hasta esa hora se registra lo del dia (decision de Joel, 30-set) */
 const DIAS_CONSULTA = 5;                              /* A3: consulta EN PROCESO mas de 5 dias habiles = no atendida */
 
 /* Definicion oficial (texto tal cual del archivo de la empresa) */
@@ -132,7 +133,11 @@ function calcular(E) {
       else if (d.codigo === 'K3') r = k3(p, u, desde, etiNombre);
       else if (d.codigo === 'K4') r = k4(p);
       else if (d.codigo === 'A1') r = a1(atencionesDe(p, u, desde));
-      else if (d.codigo === 'A3') r = a3(atencionesDe(p, u, desde));
+      else if (d.codigo === 'A3') {   /* Joel (30-set): se deja EN EVALUACION; se muestra el calculo pero no suma a la nota ni genera alertas */
+        r = a3(atencionesDe(p, u, desde));
+        r = Object.assign(r, { estado: 'en_evaluacion', calc_num: r.num, calc_den: r.den, num: 0, den: 0,
+          nota_def: 'En evaluación por el Coordinador de RR.LL.: aún no suma a la nota. Cálculo referencial: ' + r.num + ' de ' + r.den + ' atenciones FINALIZADAS (las EN PROCESO de más de ' + DIAS_CONSULTA + ' días hábiles cuentan como no atendidas).' });
+      }
       else r = { estado: 'sin_datos', num: 0, den: 0, evidencia: [], nota_def: d.codigo === 'A2'
         ? 'Aún no existe en el sistema la marca "Remitido a…" con fecha y hora. Se medirá cuando se habilite.'
         : 'Aún no existe la lista de capacitaciones a las que es convocada. Se medirá cuando se habilite.' };
@@ -229,14 +234,21 @@ function calcular(E) {
       const f = String(a.fecha_atencion).slice(0, 10), fr = a.fecha_registro ? String(a.fecha_registro).slice(0, 10) : '';
       if (!fr) { sinHora++; return; }
       den++;
-      /* atendida en sabado, domingo o feriado (sin acceso al sistema): vale si se registra el primer dia habil siguiente */
-      const fd = aFecha(f), limite = M.esHabil(fd) ? f : ymd(M.sumarHabiles(fd, 1));
-      if (fr <= limite) num++;
-      else malas.push({ ref: 'Atención N° ' + a.nro + ' (' + a.anio + ')', fecha: f, trabajador: a.nombre, ok: false,
-        detalle: 'Atendida el ' + dm(f) + (limite !== f ? ' (día no laborable; vencía el ' + dm(limite) + ')' : '') + ', registrada el ' + dm(fr) + ' ' + String(a.fecha_registro).slice(11, 16) +
-          ' (' + M.habilesEntre(aFecha(limite), aFecha(fr)) + ' día(s) hábil(es) después)' });
+      /* Regla (Joel, 30-set): se registra el MISMO dia hasta el cierre de la jornada (HORA_CIERRE).
+         Atendida en sabado, domingo o feriado, o despues del cierre: vale hasta el cierre del primer dia habil siguiente. */
+      const fd = aFecha(f), hIni = String(a.hora_inicio || '').slice(0, 5), hReg = String(a.fecha_registro).slice(11, 16);
+      const pasaDia = !M.esHabil(fd) || (/^\d{2}:\d{2}$/.test(hIni) && hIni > HORA_CIERRE);
+      const limite = pasaDia ? ymd(M.sumarHabiles(fd, 1)) : f;
+      const ok = fr < limite || (fr === limite && (!hReg || hReg <= HORA_CIERRE));
+      if (ok) num++;
+      else {
+        const dh = M.habilesEntre(aFecha(limite), aFecha(fr));
+        malas.push({ ref: 'Atención N° ' + a.nro + ' (' + a.anio + ')', fecha: f, trabajador: a.nombre, ok: false,
+          detalle: 'Atendida el ' + dm(f) + (hIni ? ' ' + hIni : '') + ' · debía registrarse hasta el ' + dm(limite) + ' ' + HORA_CIERRE +
+            ' · se registró el ' + dm(fr) + (hReg ? ' ' + hReg : '') + (dh ? ' (' + dh + ' día(s) hábil(es) después)' : ' (después del cierre de la jornada)') });
+      }
     });
-    if (den) ev.push({ ref: 'Atenciones registradas el mismo día', ok: true, resumen: true, detalle: num + ' de ' + den + ' atenciones se registraron el mismo día en que se atendieron.' });
+    if (den) ev.push({ ref: 'Atenciones registradas el mismo día', ok: true, resumen: true, detalle: num + ' de ' + den + ' atenciones se registraron el mismo día, hasta el cierre de la jornada (' + HORA_CIERRE + ').' });
     malas.forEach(x => ev.push(x));
     if (sinHora) ev.push({ ref: 'Atenciones sin hora de registro', ok: null, resumen: true, detalle: sinHora + ' atención(es) sin hora de registro guardada (antes de la migración). No suman ni restan.' });
     return { num, den };
@@ -349,4 +361,4 @@ function calcular(E) {
   }
 }
 
-module.exports = { calcular, fechaDeUrl, nivelPct, nivelNota, esPersona, esPersonaEti, PERIODO, DEF, PERSONAS, VISORES, EDITORES, TEMAS_ETI, TEMA_OPCIONAL };
+module.exports = { calcular, fechaDeUrl, HORA_CIERRE, nivelPct, nivelNota, esPersona, esPersonaEti, PERIODO, DEF, PERSONAS, VISORES, EDITORES, TEMAS_ETI, TEMA_OPCIONAL };

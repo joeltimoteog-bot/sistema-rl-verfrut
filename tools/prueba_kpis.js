@@ -65,7 +65,7 @@ assert.equal(KP('fzapata', 'K3').den, 1); assert.equal(KP('fzapata', 'K3').num, 
 assert.equal(KP('almartinez', 'K3').den, 0);   // no toma la programacion de ALEX ZAPATA JUAREZ
 const sm = P('smiranda'); console.log('smiranda', sm.kpis.map(k => k.codigo + ':' + k.estado + ':' + k.num + '/' + k.den).join(' '), 'nota', sm.nota);
 assert.equal(KP('smiranda', 'A1').num, 2); assert.equal(KP('smiranda', 'A1').den, 3);
-assert.equal(KP('smiranda', 'A3').num, 1); assert.equal(KP('smiranda', 'A3').den, 2);
+assert.equal(KP('smiranda', 'A3').estado, 'en_evaluacion'); assert.equal(KP('smiranda', 'A3').calc_num, 1); assert.equal(KP('smiranda', 'A3').calc_den, 2);
 console.log('avisos', r.avisos.map(a => a.clave).join(' | '));
 console.log('niveles', K.nivelPct(1,.95), K.nivelPct(.98,.95), K.nivelPct(.95,.95), K.nivelPct(.9,.95), K.nivelPct(.899,.95), K.nivelPct(.95,.9), K.nivelPct(.9,.9), K.nivelPct(.85,.9), K.nivelPct(.849,.9));
 console.log('notas', [10,12,14.9,15,18,20].map(K.nivelNota).join(','));
@@ -114,4 +114,19 @@ console.log('✅ motor OK');
   console.log('sabado->lunes', k.num, '/', k.den, k.evidencia.filter(e => e.ok === false).map(e => e.detalle).join(' | '));
   assert.equal(k.num, 1); assert.equal(k.den, 3);
   console.log('✅ regla de dia no laborable OK');
+}
+/* ── cierre de la jornada 16:36 ── */
+{
+  const at3 = [
+    { anio: 2026, nro: 1, fecha_atencion: '2026-09-02', hora_inicio: '09:00', usuario_sistema: 'atineo', fecha_registro: '2026-09-02 16:30', nombre: 'a' },   // si
+    { anio: 2026, nro: 2, fecha_atencion: '2026-09-02', hora_inicio: '09:00', usuario_sistema: 'atineo', fecha_registro: '2026-09-02 16:37', nombre: 'b' },   // no: despues del cierre
+    { anio: 2026, nro: 3, fecha_atencion: '2026-09-02', hora_inicio: '17:10', usuario_sistema: 'atineo', fecha_registro: '2026-09-03 08:00', nombre: 'c' },   // si: atendida despues del cierre -> dia siguiente
+    { anio: 2026, nro: 4, fecha_atencion: '2026-09-05', hora_inicio: '10:00', usuario_sistema: 'atineo', fecha_registro: '2026-09-07 16:00', nombre: 'd' },   // si: sabado -> lunes
+    { anio: 2026, nro: 5, fecha_atencion: '2026-09-05', hora_inicio: '10:00', usuario_sistema: 'atineo', fecha_registro: '2026-09-07 17:00', nombre: 'e' },   // no
+    { anio: 2026, nro: 6, fecha_atencion: '2026-09-03', hora_inicio: '09:00', usuario_sistema: 'atineo', fecha_registro: '2026-09-04 08:00', nombre: 'f' } ]; // no
+  const r5 = K.calcular({ M: m._kpi, personas: K.PERSONAS, informes: {}, atenciones: at3, eti: { programaciones: [], registros: {} }, notas: {}, hoy: '2026-10-01' });
+  const k = r5.personas.find(p => p.usuario === 'atineo').kpis.find(x => x.codigo === 'K2');
+  k.evidencia.filter(e => e.ok === false).forEach(e => console.log('   ', e.ref, e.detalle));
+  assert.equal(k.num, 3); assert.equal(k.den, 6);
+  console.log('✅ cierre de jornada 16:36 OK');
 }

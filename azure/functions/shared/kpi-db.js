@@ -109,7 +109,7 @@ async function fechasInforme(pool) {
 
 async function atenciones(pool) {
   const r = await pool.request().input('ini', sql.Date, K.PERIODO.ini).query(`
-    SELECT a.anio, a.nro, CONVERT(CHAR(10), a.fecha_atencion, 120) AS fecha_atencion, a.usuario_sistema, a.supervisor, a.estado, a.nombre,
+    SELECT a.anio, a.nro, CONVERT(CHAR(10), a.fecha_atencion, 120) AS fecha_atencion, a.hora_inicio, a.usuario_sistema, a.supervisor, a.estado, a.nombre,
            CONVERT(CHAR(16), r.fecha_registro, 120) AS fecha_registro
     FROM dbo.Atenciones a LEFT JOIN dbo.KPI_AtRegistro r ON r.anio = a.anio AND r.nro = a.nro
     WHERE a.fecha_atencion >= @ini`);
