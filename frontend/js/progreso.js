@@ -12,6 +12,13 @@
    _PROGRESO_V2 (30-set-2026): tambien para CARGAS y EXPORTACIONES que la pagina pida:
      RLProgreso.accion(['Calculando…', 'Listo', 'No se pudo calcular'], function () { return promesa; })
    Muestra el circulo, luego ✓ (o ✗ con el motivo) y devuelve el mismo resultado.
+   _PROGRESO_V3 (30-set-2026), en TODOS los modulos que cargan este archivo, sin tocarlos:
+   · CARGAS pedidas con un boton/filtro (lecturas a Google o Azure que empiezan hasta
+     1,5 s despues del clic): "Cargando…" y ✓ "Listo". Si responde en menos de 0,2 s no
+     muestra nada (no parpadea). Las lecturas automaticas (sin clic) no muestran nada.
+   · DESCARGAS Excel (XLSX.writeFile) y PDF (jsPDF .save / html2pdf .save):
+     "Generando el Excel/PDF…" y ✓ "Excel/PDF descargado".
+   Solo mira: no cambia lo que se envia, lo que responde ni los errores de la pagina.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -67,18 +74,21 @@
     document.body.appendChild(caja);
     return caja;
   }
+  var vis = false, giroVisto = false, pendLect = 0, tGesto = 0;
   var pend = 0, etiqueta = null, huboOk = false, error = '', tMostrar = null, tFin = null, tOcultar = null, tMax = null;
   function mostrar() {
     if (!asegurarCaja()) return;
     caja.classList.remove('fin-ok', 'fin-no');
     caja.querySelector('.t').textContent = etiqueta[0];
     caja.style.display = 'flex';
+    giroVisto = true;
   }
   function ocultar() { if (caja) { caja.style.display = 'none'; caja.classList.remove('fin-ok', 'fin-no'); } }
   function terminar() {
     clearTimeout(tMostrar); clearTimeout(tMax);
     if (!asegurarCaja()) return;
-    if (huboOk) {
+    if (huboOk && !vis && !giroVisto && !error) ocultar();   /* _PROGRESO_V3: carga rapida, sin parpadeo */
+    else if (huboOk) {
       caja.classList.remove('fin-no'); caja.classList.add('fin-ok');
       caja.querySelector('.t').textContent = etiqueta[1];
       caja.style.display = 'flex';
@@ -90,11 +100,12 @@
       caja.style.display = 'flex';
       tOcultar = setTimeout(ocultar, 3500);
     } else ocultar();
-    etiqueta = null; huboOk = false; error = '';
+    etiqueta = null; huboOk = false; error = ''; vis = false; giroVisto = false;
   }
   function inicio(c) {
     clearTimeout(tFin); clearTimeout(tOcultar);
-    if (!pend && !etiqueta) { etiqueta = c.t || textos(c.a); huboOk = false; error = ''; }
+    if (!pend && !etiqueta) { etiqueta = c.t || (c.lectura ? T_CARGA : textos(c.a)); huboOk = false; error = ''; vis = false; giroVisto = false; }
+    if (!c.lectura) vis = true;
     pend++;
     if (!caja || caja.style.display !== 'flex' || caja.classList.contains('fin-ok') || caja.classList.contains('fin-no')) { clearTimeout(tMostrar); tMostrar = setTimeout(mostrar, 180); }
     clearTimeout(tMax); tMax = setTimeout(function () { pend = 0; terminar(); }, 60000);
@@ -109,17 +120,93 @@
   window.RLProgreso = {
     accion: function (t, fn) {
       try { inicio({ a: '', t: [t[0], t[1], t[2] || 'No se pudo completar'] }); } catch (e) {}
+      enganchar();
       var p; try { p = Promise.resolve(fn()); } catch (e) { p = Promise.reject(e); }
       return p.then(function (r) { fin(true); return r; },
         function (e) { fin(false, (e && e.message) || String(e || 'Error'), true); throw e; });
     }
   };
 
+  /* _PROGRESO_V3: cargas pedidas por el usuario y descargas Excel/PDF */
+  var T_CARGA = ['Cargando…', 'Listo', 'No se pudo cargar'];
+  var T_XLS = ['Generando el Excel…', 'Excel descargado', 'No se pudo generar el Excel'];
+  var T_PDF = ['Generando el PDF…', 'PDF descargado', 'No se pudo generar el PDF'];
+  var LECT_SILENCIO = /^(accesoHorarioDeUsuario|saludLog|saludReporte|ping|version)$/i;
+  function gesto(ev) {
+    try {
+      var t = ev.target;
+      if (ev.type === 'change' ? (t && /^(SELECT|INPUT)$/.test(t.tagName)) : (t && t.closest && t.closest('button,a,[onclick],[role=button],input[type=button],input[type=submit],.btn,.tab'))) tGesto = Date.now();
+      enganchar();
+    } catch (e) {}
+  }
+  document.addEventListener('click', gesto, true);
+  document.addEventListener('change', gesto, true);
+  function lecturaPedida(url, init) {
+    try {
+      if (!(pendLect > 0 || Date.now() - tGesto < 1500)) return null;
+      var u = String(url && url.url ? url.url : url || ''), m;
+      if (/azurewebsites\.net\/api\//.test(u)) {
+        if (init && String(init.method || 'GET').toUpperCase() === 'OPTIONS') return null;
+        if (/\/api\/kpi\//.test(u)) return null;   /* KPIs ya lo muestra con su propio texto */
+        return { a: '', lectura: true, azure: true };
+      }
+      if (!/script\.google(usercontent)?\.com/.test(u)) return null;
+      var a = '';
+      if (init && typeof init.body === 'string') { m = init.body.match(/"action"\s*:\s*"([^"]+)"/); if (m) a = m[1]; }
+      if (!a && (m = u.match(/[?&]action=([^&]+)/))) a = decodeURIComponent(m[1]);
+      if (a && (SILENCIO.test(a) || LECT_SILENCIO.test(a))) return null;
+      return { a: a, lectura: true, azure: false };
+    } catch (e) { return null; }
+  }
+  function envolver(obj, nombre, t) {
+    var o = obj && obj[nombre];
+    if (typeof o !== 'function' || o._rlProg) return;
+    var w = function () {
+      try { inicio({ a: '', t: t }); } catch (e) {}
+      var r;
+      try { r = o.apply(this, arguments); } catch (e) { fin(false, (e && e.message) || 'Error', true); throw e; }
+      if (r && typeof r.then === 'function') {
+        try { Promise.resolve(r).then(function () { fin(true); }, function (e) { fin(false, (e && e.message) || 'Error', true); }); } catch (e) { fin(true); }
+      } else fin(true);
+      return r;
+    };
+    w._rlProg = 1;
+    try { obj[nombre] = w; } catch (e) {}
+  }
+  function enganchar() {
+    try {
+      if (window.XLSX) { envolver(window.XLSX, 'writeFile', T_XLS); envolver(window.XLSX, 'writeFileXLSX', T_XLS); }
+      var J = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+      if (J && J.API && Array.isArray(J.API.events) && !J._rlProg) {   /* jsPDF crea .save en cada documento */
+        J._rlProg = 1;
+        J.API.events.push(['initialized', function () { try { envolver(this, 'save', T_PDF); } catch (e) {} }]);
+      }
+      if (window.html2pdf && window.html2pdf.Worker && window.html2pdf.Worker.prototype) envolver(window.html2pdf.Worker.prototype, 'save', T_PDF);
+    } catch (e) {}
+  }
+  enganchar();
+  document.addEventListener('DOMContentLoaded', enganchar);
+  window.addEventListener('load', enganchar);
+
   var fetchOriginal = window.fetch;
   window.fetch = function (url, init) {
     var c = clasificar(url, init);
+    if (!c) c = lecturaPedida(url, init);   /* _PROGRESO_V3 */
     var p = fetchOriginal.apply(this, arguments);
     if (!c) return p;
+    if (c.lectura) {
+      try { inicio(c); pendLect++; } catch (e) {}
+      p.then(function (resp) {
+        pendLect = Math.max(0, pendLect - 1);
+        if (!resp.ok) fin(false, 'HTTP ' + resp.status, !c.azure);
+        else resp.clone().text().then(function (t) {
+          var j = null; try { j = JSON.parse(t); } catch (e) {}
+          if (j && (j.success === false || j.ok === false)) fin(false, null, true);   /* la pagina muestra su propio aviso: se cierra sin ✓ ni ✗ */
+          else fin(true);
+        }, function () { fin(true); });
+      }, function () { pendLect = Math.max(0, pendLect - 1); fin(false, 'Sin conexion', !c.azure); });
+      return p;
+    }
     try { inicio(c); } catch (e) {}
     p.then(function (resp) {
       var definitivo = !c.azure || resp.status === 200;
