@@ -559,7 +559,7 @@ window.onload = function() {
       var cuerpo = {}; Object.keys(b).forEach(function (k) { if (k !== 'action') cuerpo[k] = b[k]; });
       cuerpo.client_id = clave;
       var r = null;
-      for (var intento = 1; intento <= 2; intento++) {
+      for (var intento = 1; intento <= 4; intento++) {   /* _USR_REINTENTOS_V1: red inestable (ERR_NETWORK_CHANGED) -> 4 intentos; Google no puede hacer esta accion */
         var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 20000);
         try {
@@ -571,7 +571,7 @@ window.onload = function() {
         clearTimeout(reloj);
         if (r && r.status === 200 && r.j) break;
         if (r && [400, 401, 403, 404, 503].indexOf(r.status) >= 0) break;
-        if (intento < 2) await new Promise(function (z) { setTimeout(z, 1500); });
+        if (intento < 4) await new Promise(function (z) { setTimeout(z, [1500, 2000, 2500][intento - 1]); });
       }
       if (r && r.status === 200 && r.j) {
         if (r.j.success) {   /* esperar la copia a la hoja (max 15 s): la lista se recarga de Google */
