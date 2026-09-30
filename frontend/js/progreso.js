@@ -19,6 +19,12 @@
    · DESCARGAS Excel (XLSX.writeFile) y PDF (jsPDF .save / html2pdf .save):
      "Generando el Excel/PDF…" y ✓ "Excel/PDF descargado".
    Solo mira: no cambia lo que se envia, lo que responde ni los errores de la pagina.
+   _PROGRESO_V5 (01-oct-2026) — correccion: el circulo de CARGA salia en cualquier clic o cambio
+   de campo (fechas, listas) y tapaba la pantalla mientras se registraba. Ahora:
+   · CARGAS: solo al BUSCAR (boton "Buscar/Consultar/🔍" o Enter en un campo), en una tarjeta
+     pequeña que NO bloquea la pantalla ni la escritura; ✓ breve.
+   · No se copia ni se lee la respuesta de las cargas (antes se leia completa: mas lento).
+   · GUARDAR / ACTUALIZAR / ELIMINAR y descargas Excel/PDF: igual que antes.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -57,6 +63,7 @@
   /* ── la ventanita ── */
   var css = '#rlProg{position:fixed;inset:0;z-index:2147483000;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,.28)}' +
     '#rlProg .c{background:#fff;color:#0f172a;border-radius:16px;padding:22px 30px;min-width:190px;max-width:86vw;box-shadow:0 18px 50px rgba(0,0,0,.28);display:flex;flex-direction:column;align-items:center;gap:12px;font:600 15px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;text-align:center}' +
+    '#rlProg.lect{background:transparent;pointer-events:none;align-items:flex-start;padding-top:72px}#rlProg.lect .c{padding:10px 18px;min-width:0;flex-direction:row;gap:10px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.18)}#rlProg.lect .g,#rlProg.lect .ok{width:22px;height:22px;border-width:3px;font-size:14px}#rlProg.lect .no{width:22px;height:22px;font-size:14px}' +
     '#rlProg .g{width:46px;height:46px;border-radius:50%;border:5px solid #e2e8f0;border-top-color:#2563eb;animation:rlGira .8s linear infinite}' +
     '#rlProg .ok,#rlProg .no{width:46px;height:46px;border-radius:50%;display:none;align-items:center;justify-content:center;color:#fff;font-size:28px;font-weight:800}' +
     '#rlProg .ok{background:#16a34a}#rlProg .no{background:#dc2626}#rlProg .d{font-weight:500;font-size:13px;color:#b91c1c;display:none}' +
@@ -80,6 +87,7 @@
     if (!asegurarCaja()) return;
     caja.classList.remove('fin-ok', 'fin-no');
     caja.querySelector('.t').textContent = etiqueta[0];
+    caja.classList.toggle('lect', !vis);   /* _PROGRESO_V5: busqueda = tarjeta pequeña, no bloquea */
     caja.style.display = 'flex';
     giroVisto = true;
   }
@@ -91,8 +99,9 @@
     else if (huboOk) {
       caja.classList.remove('fin-no'); caja.classList.add('fin-ok');
       caja.querySelector('.t').textContent = etiqueta[1];
+      caja.classList.toggle('lect', !vis);
       caja.style.display = 'flex';
-      tOcultar = setTimeout(ocultar, 1100);
+      tOcultar = setTimeout(ocultar, vis ? 1100 : 700);
     } else if (error) {
       caja.classList.remove('fin-ok'); caja.classList.add('fin-no');
       caja.querySelector('.t').textContent = etiqueta[2] || 'No se pudo ' + (/Elimin/.test(etiqueta[0]) ? 'eliminar' : /Actualiz/.test(etiqueta[0]) ? 'actualizar' : 'guardar');
@@ -128,22 +137,27 @@
   };
 
   /* _PROGRESO_V3: cargas pedidas por el usuario y descargas Excel/PDF */
-  var T_CARGA = ['Cargando…', 'Listo', 'No se pudo cargar'];
+  var T_CARGA = ['Buscando…', 'Listo', 'No se pudo buscar'];
   var T_XLS = ['Generando el Excel…', 'Excel descargado', 'No se pudo generar el Excel'];
   var T_PDF = ['Generando el PDF…', 'PDF descargado', 'No se pudo generar el PDF'];
   var LECT_SILENCIO = /^(accesoHorarioDeUsuario|saludLog|saludReporte|ping|version)$/i;
   function gesto(ev) {
     try {
       var t = ev.target;
-      if (ev.type === 'change' ? (t && /^(SELECT|INPUT)$/.test(t.tagName)) : (t && t.closest && t.closest('button,a,[onclick],[role=button],input[type=button],input[type=submit],.btn,.tab'))) tGesto = Date.now();
       enganchar();
+      /* _PROGRESO_V5: solo BUSCAR cuenta como pedido de carga */
+      if (ev.type === 'keydown') { if (ev.key === 'Enter' && t && t.tagName === 'INPUT') tGesto = Date.now(); return; }
+      var b = t && t.closest && t.closest('button,[role=button],input[type=button],input[type=submit],.btn');
+      if (!b) return;
+      var txt = [b.textContent || '', b.value || '', b.id || '', b.title || '', b.getAttribute('aria-label') || '', b.getAttribute('onclick') || ''].join(' ');
+      if (/busc|consult|search|🔍/i.test(txt)) tGesto = Date.now();
     } catch (e) {}
   }
   document.addEventListener('click', gesto, true);
-  document.addEventListener('change', gesto, true);
+  document.addEventListener('keydown', gesto, true);
   function lecturaPedida(url, init) {
     try {
-      if (!(pendLect > 0 || Date.now() - tGesto < 1500)) return null;
+      if (!(pendLect > 0 || Date.now() - tGesto < 1200)) return null;
       var u = String(url && url.url ? url.url : url || ''), m;
       if (/azurewebsites\.net\/api\//.test(u)) {
         if (init && String(init.method || 'GET').toUpperCase() === 'OPTIONS') return null;
@@ -199,11 +213,7 @@
       p.then(function (resp) {
         pendLect = Math.max(0, pendLect - 1);
         if (!resp.ok) fin(false, 'HTTP ' + resp.status, !c.azure);
-        else resp.clone().text().then(function (t) {
-          var j = null; try { j = JSON.parse(t); } catch (e) {}
-          if (j && (j.success === false || j.ok === false)) fin(false, null, true);   /* la pagina muestra su propio aviso: se cierra sin ✓ ni ✗ */
-          else fin(true);
-        }, function () { fin(true); });
+        else fin(true);   /* _PROGRESO_V5: no se lee la respuesta (mas rapido) */
       }, function () { pendLect = Math.max(0, pendLect - 1); fin(false, 'Sin conexion', !c.azure); });
       return p;
     }
