@@ -5649,9 +5649,9 @@ setInterval(function () {
     var sec = document.getElementById('sec-atenciones');
     if (!sec || !sec.classList.contains('on')) return;
     if (!USER || !USER.usuario) return;
-    refrescarAtencionesHoy('auto 90s');
+    refrescarAtencionesHoy('auto 3min');
   } catch (e) {}
-}, 90 * 1000);
+}, 180 * 1000);   /* _STATS_FRENO_V2 (01-oct): 3 min (antes 90 s) — Firebase sigue avisando al instante */
 
 function renderAt(lista) {
   const tb=document.getElementById('tbAt');
@@ -7906,6 +7906,8 @@ function _fbAplicarEstadisticasFirebase(fbData) {
       if (window._fbRefreshAtTimer) clearTimeout(window._fbRefreshAtTimer);
       window._fbRefreshAtTimer = setTimeout(function () {
         try {
+          /* _STATS_FRENO_V2 (01-oct): pestaña oculta → no consulta (al volver se refresca por el reloj/visibilidad) */
+          if (document.visibilityState !== 'visible') return;
           /* REFRESCO_AT_V1: antes llamaba cargarAtenciones(true) = 365 dias a
              Azure y encima Azure devolvia lo cacheado 3 min. Ahora: solo los
              ultimos 2 dias, sin cache, fusionados con lo que ya hay. */
@@ -7913,7 +7915,7 @@ function _fbAplicarEstadisticasFirebase(fbData) {
           if (typeof refrescarAtencionesHoy === 'function') refrescarAtencionesHoy('firebase');
           else cargarAtenciones(true);
         } catch (e) { console.warn('[FB-refresh-at] refresco fallo:', e); }
-      }, 1500);
+      }, 3000 + Math.floor(Math.random() * 27000));   /* _STATS_FRENO_V2: cada pestaña en un momento distinto (antes todas a los 1,5 s) */
     }
   } catch (e) { /* no romper el flujo si falla */ }
   const rg = fbData.resumen_global;
@@ -13358,7 +13360,7 @@ console.log('[_PARENTESCO_V1] listo');
 var IDS = ['sH', 'sM', 'sP', 'sF', 'sA'];
 /* USER y CACHE estan declarados con let (no cuelgan de window): se leen por nombre */
 function _usr() { try { return (typeof USER !== 'undefined' && USER && USER.usuario) ? USER : null; } catch (e) { return null; } }
-var ultimo = null, agg = null, enCurso = null, reloj = null;
+var ultimo = null, agg = null, enCurso = null, reloj = null, _glob = null, _pausaHasta = 0;
 
 function esAdmin() { try { return ROLES_VER_TODO.includes(USER.rol); } catch (e) { return false; } }
 
@@ -13369,11 +13371,14 @@ async function pedir() {
      "Finalizados" y "Por estado" sumaran todos los años (57 mil) frente a un total anual de 19 mil. */
   var sup = esAdmin() ? '' : '&supervisor=' + encodeURIComponent(USER.nombre || USER.usuario);
   var base = AZURE_FN_BASE + '/atenciones/stats?_=' + Date.now() + sup;
-  var rr = await Promise.all([fetch(base + '&anio=' + new Date().getFullYear()), fetch(base).catch(function () { return null; })]);
+  /* _STATS_FRENO_V2 (01-oct): la lectura global (solo tendencia por año) se pide cada 30 min, no en cada refresco */
+  var pedirGlobal = !_glob || (Date.now() - _glob.ts) > 30 * 60000;
+  var rr = await Promise.all([fetch(base + '&anio=' + new Date().getFullYear()), pedirGlobal ? fetch(base).catch(function () { return null; }) : Promise.resolve(null)]);
   if (!rr[0].ok) throw new Error('HTTP ' + rr[0].status);
   var j = await rr[0].json();
   if (!j || !j.success || !j.resumen_global) throw new Error('respuesta sin resumen_global');
   var jg = null; try { jg = rr[1] && rr[1].ok ? await rr[1].json() : null; } catch (e) {}
+  if (jg && jg.success) _glob = { ts: Date.now(), j: jg }; else if (_glob) jg = _glob.j;
   var g = j.resumen_global;
   agg = { por_mes: j.por_mes || {}, por_anio: (jg && jg.por_anio) || j.por_anio || {}, por_estado: j.por_estado || {}, por_empresa: j.por_empresa || {} };
   return { hoy: g.hoy || 0, mes: g.este_mes || 0, anio: g.este_anio || 0,
@@ -13389,14 +13394,15 @@ function pintar(s) {
 async function refrescar(motivo) {
   if (enCurso) return enCurso;
   /* _STATS_FRENO_V1 (24-set): max 1 refresco por minuto por pantalla (salvo guardado propio) */
-  if (ultimo && (Date.now() - ultimo.ts) < 60000 && !/guard/i.test(String(motivo || ''))) return Promise.resolve(true);
+  if (ultimo && (Date.now() - ultimo.ts) < 180000 && !/guard/i.test(String(motivo || ''))) return Promise.resolve(true);   /* _STATS_FRENO_V2: 3 min (antes 1) */
+  if (Date.now() < _pausaHasta && !/guard/i.test(String(motivo || ''))) return Promise.resolve(false);   /* Azure fallo hace poco: no insistir */
   enCurso = (async function () {
     try {
       var s = await pedir();
       if (s) { ultimo = s; pintar(s); try { if (!_hayFiltro()) dibujarDesdeAzure(); } catch (e) { console.warn('[_STATS_AZURE_V1] graficos:', e.message); }
         console.log('[_STATS_AZURE_V1] ' + (motivo || '') + ' → hoy ' + s.hoy + ' | mes ' + s.mes + ' | año ' + s.anio + ' | en proceso ' + s.enProceso + (esAdmin() ? ' (global)' : ' (solo ' + (USER.nombre || USER.usuario) + ')'));
         return true; }
-    } catch (e) { console.warn('[_STATS_AZURE_V1] Azure no respondió (' + (motivo || '') + '): ' + e.message + ' — se mantiene el cálculo anterior'); }
+    } catch (e) { _pausaHasta = Date.now() + 180000; console.warn('[_STATS_AZURE_V1] Azure no respondió (' + (motivo || '') + '): ' + e.message + ' — se mantiene el cálculo anterior (pausa 3 min)'); }
     return false;
   })().finally(function () { enCurso = null; });
   return enCurso;
@@ -13484,7 +13490,7 @@ if (typeof _fbOrig === 'function') {
       window.countUp = function (id) { if (IDS.indexOf(id) >= 0) return; return cu.apply(this, arguments); };
     }
     try { return _fbOrig.apply(self, args); }
-    finally { if (typeof cu === 'function') window.countUp = cu; programar('firebase', 3000); }
+    finally { if (typeof cu === 'function') window.countUp = cu; programar('firebase', 5000 + Math.floor(Math.random() * 55000)); }   /* _STATS_FRENO_V2: cada pestaña en un momento distinto (antes todas a los 3 s) */
   };
 }
 
@@ -13498,8 +13504,8 @@ if (typeof _refAtOrig === 'function') {
 
 /* 5) Cada 3 min con la pestaña visible */
 setInterval(function () {
-  try { if (document.visibilityState === 'visible' && _usr()) refrescar('auto 3min'); } catch (e) {}
-}, 3 * 60 * 1000);
+  try { if (document.visibilityState === 'visible' && _usr()) refrescar('auto 5min'); } catch (e) {}
+}, 5 * 60 * 1000);   /* _STATS_FRENO_V2: cada 5 min (antes 3) */
 
 /* 6) Primera carga: apenas haya usuario en sesión */
 (function esperar(n) {

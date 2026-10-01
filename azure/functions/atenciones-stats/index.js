@@ -161,7 +161,7 @@ async function calcularOriginal(context, req) {
    ═══════════════════════════════════════════════════════════════════════════ */
 const _cache = new Map();
 const _enCurso = new Map();
-const TTL_MS = 120000, TTL_VIEJO_MS = 30 * 60000;
+const TTL_MS = 5 * 60000, TTL_VIEJO_MS = 30 * 60000;   /* _STATS_FRENO_V2 (01-oct): 5 min (antes 2) — la base se saturaba en horario de trabajo */
 
 module.exports = async function (context, req) {
   const authUser = exigirAuth(context, req);
