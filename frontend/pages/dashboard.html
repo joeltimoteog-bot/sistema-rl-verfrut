@@ -16137,9 +16137,9 @@ window.apiPost = function (b) {
   try { clave = b.client_id || huella(b); } catch (e) { return previo.apply(self, args); }
   if (enCurso[clave]) return enCurso[clave];
   var p = (async function () {
-    var r = null;
+    var r = null, _t0 = Date.now();
     for (var intento = 1; intento <= 2; intento++) {
-      try { r = await azure(b, clave, 12000); } catch (e) { r = null; }
+      try { r = await azure(b, clave, 8000); } catch (e) { r = null; }   /* _GUARDAR_RAPIDO_V1 (01-oct): 8 s por intento (antes 12) */
       if (r && r.status === 200 && r.j && r.j.success && r.j.nro) break;
       if (r && (r.status === 503 || r.status === 401 || r.status === 400 || r.status === 404)) break;   // decide Google, sin reintentar
       if (intento < 2) await new Promise(function (z) { setTimeout(z, 1500); });
@@ -16152,7 +16152,9 @@ window.apiPost = function (b) {
         delete fila.client_id;
         Promise.resolve(previo.call(self, fila)).catch(function () {});   // la hoja, en 2do plano (la red de seguridad cubre si falla)
       } catch (e) {}
-      console.log('[_AT_AZURE_PRIMERO_V1] guardada en Azure N° ' + j.nro + (j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : ''));
+      console.log('[_AT_AZURE_PRIMERO_V1] guardada en Azure N° ' + j.nro + (j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : '') + ' en ' + (Date.now() - _t0) + ' ms');
+      /* _GUARDAR_RAPIDO_V1: los guardados de mas de 2,5 s quedan en LOG_ERRORES (saludHoy muestra cuanto tarda guardar) */
+      try { var _ms = Date.now() - _t0; if (_ms > 2500 && window.rlSalud && window.rlSalud.registrar) window.rlSalud.registrar('guardado_lento', 'azure:atenciones/guardar', _ms, 'intentos ' + intento); } catch (e) {}
       return j;
     }
     if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;

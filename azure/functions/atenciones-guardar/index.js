@@ -45,18 +45,23 @@ module.exports = async function (context, req) {
     if (!t || !t.usuario) { context.res = { status: 401, body: { success: false, error: 'Sin sesion valida' } }; return; }
     const pool = await getPool();
     await G.asegurarTablas(pool);
-    if (!prueba && (await G.config(pool, 'azure_primero')) !== '1') {
+    /* _GUARDAR_RAPIDO_V1 (01-oct-2026): interruptor y "¿ya se guardo este formulario?" en paralelo (1 ida y vuelta menos) */
+    const clave = String(b.client_id || '').replace(/[^\w-]/g, '').slice(0, 80);
+    const [cfgAz, previoGuardado] = await Promise.all([
+      prueba ? Promise.resolve('1') : G.config(pool, 'azure_primero'),
+      (clave && !prueba) ? yaGuardado(pool, clave) : Promise.resolve(null)
+    ]);
+    if (!prueba && cfgAz !== '1') {
       context.res = { status: 503, body: { success: false, apagado: true, error: 'Guardado en Azure apagado' } }; return;
     }
     const d = G.armar(b);
     if (!/^\d{8}$/.test(d.dni) && !/^[A-Za-z0-9]{6,15}$/.test(d.dni)) { context.res = { status: 400, body: { success: false, error: 'DNI invalido' } }; return; }
     if (!d.nombre) { context.res = { status: 400, body: { success: false, error: 'Falta el nombre' } }; return; }
     if (!d.usuario_sistema) d.usuario_sistema = String(t.usuario).slice(0, 50);
-    const clave = String(b.client_id || '').replace(/[^\w-]/g, '').slice(0, 80);
     const L = G.lima(), anioHoja = L.anio;
 
     if (clave && !prueba) {
-      const p = await yaGuardado(pool, clave);
+      const p = previoGuardado;
       if (p) { context.res = { status: 200, body: { success: true, nro: p.nro, duplicadoEvitado: true, hoja: 'BB. DE REGISTROS ' + anioHoja, fuente: 'azure' } }; return; }
     }
 

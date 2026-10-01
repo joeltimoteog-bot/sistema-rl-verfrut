@@ -88,7 +88,16 @@ function armar(b) {
   return d;
 }
 
+/* _GUARDAR_RAPIDO_V1 (01-oct-2026): el interruptor se recuerda 30 s (antes: 1 consulta por cada guardado) */
+const _cfgCache = new Map();
 async function config(pool, clave) {
+  const c = _cfgCache.get(clave);
+  if (c && Date.now() - c.ts < 30000) return c.v;
+  const v = await configBD(pool, clave);
+  _cfgCache.set(clave, { ts: Date.now(), v });
+  return v;
+}
+async function configBD(pool, clave) {
   await asegurarTablas(pool);
   const r = await pool.request().input('k', sql.NVarChar(40), clave).query('SELECT valor FROM dbo.AtConfig WHERE clave = @k');
   return r.recordset.length ? r.recordset[0].valor : null;
