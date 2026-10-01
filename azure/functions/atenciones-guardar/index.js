@@ -97,6 +97,7 @@ module.exports = async function (context, req) {
         SELECT @id AS id;`);
       id = ins.recordset[0].id;
       if (prueba) await tx.rollback(); else await tx.commit();
+      if (!prueba) { try { require('../shared/stats-pizarron').invalidar(); } catch (eP) {} }   /* _STATS_PIZARRON_V1: las cifras del dashboard incluyen esta atencion en la siguiente lectura */
       /* _KPI_RRLL_V1 (30-set-2026): hora exacta en que se registro la atencion (KPI "registrada el mismo dia"). Nunca frena el guardado. */
       if (!prueba) {
         try {

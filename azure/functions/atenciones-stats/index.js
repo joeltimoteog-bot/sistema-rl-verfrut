@@ -163,10 +163,23 @@ const _cache = new Map();
 const _enCurso = new Map();
 const TTL_MS = 5 * 60000, TTL_VIEJO_MS = 30 * 60000;   /* _STATS_FRENO_V2 (01-oct): 5 min (antes 2) — la base se saturaba en horario de trabajo */
 
+const PIZ = require('../shared/stats-pizarron');   /* _STATS_PIZARRON_V1 (01-oct-2026) */
+
 module.exports = async function (context, req) {
   const authUser = exigirAuth(context, req);
   if (authUser === null) return;
   const q = req.query || {};
+  /* 1) Pizarron: una lectura agrupada por minuto para TODOS; si falla, el calculo de siempre (abajo) */
+  try {
+    const t0 = Date.now();
+    const agg = await PIZ.leer(await getPool());
+    const body = PIZ.armar(agg, q);
+    body.elapsed = Date.now() - t0; body.edad_s = Math.round((Date.now() - agg.ts) / 1000);
+    context.res = { status: 200, headers: { 'X-Cache': 'PIZARRON' }, body };
+    return;
+  } catch (eP) {
+    context.log.warn('[atenciones-stats] pizarron no disponible, calculo original: ' + eP.message);
+  }
   const k = [q.anio || '', q.empresa || '', q.supervisor || ''].join('|').toUpperCase();
   const c = _cache.get(k), ahora = Date.now();
   if (c && (ahora - c.ts) < TTL_MS) {
