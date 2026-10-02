@@ -6326,7 +6326,13 @@ async function updateAt() {
         .filter(([k,nv]) => String(_snapDet[k]||'') !== String(nv||''))
         .map(([k,nv]) => ({campo: k, anterior: String(_snapDet[k]||''), nuevo: String(nv||'')}));
       _logCambioAt(detNro, _cambiosDet);
-      cerrar('mDet');invalidarCache('atenciones');await refrescarEnBackground();cargarAtenciones();cargarStats();mostrarToast('✅ Actualizado');
+      /* _EDIT_RAPIDO_V1 (01-oct-2026): el cambio ya quedo guardado -> se ve AL INSTANTE (como el formulario completo).
+         Antes se borraba la lista y se ESPERABA la recarga completa antes de soltar el boton (eso era lo lento). */
+      [CACHE.atenciones, atTodas].forEach(function (l) { (l || []).forEach(function (a) { if (a && String(a.nro) === String(detNro)) Object.assign(a, _nuevoDet); }); });
+      try { renderAt(atTodas); CACHE_TS = Date.now(); guardarCacheLS(); } catch (eR) {}
+      cerrar('mDet'); mostrarToast('✅ Actualizado');
+      setTimeout(function () { Promise.resolve(refrescarEnBackground()).then(function () { try { cargarStats(); } catch (eS) {} }, function () {}); }, 300);   // cifras y datos del servidor, en 2do plano
+      try { _programarRefrescoTrasGuardar(); } catch (eP) {}   // REFRESCO_AT_V1: version confirmada (ahora solo pide lo que cambio)
     }
     else mostrarToast('❌ Error: '+(r.error||'No tienes permiso'),'error');
   } finally {

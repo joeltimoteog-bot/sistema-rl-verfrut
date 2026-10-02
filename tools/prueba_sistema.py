@@ -636,6 +636,21 @@ with sync_playwright() as pw:
     r2 = pag.evaluate(CARRERA, dict(ED, observaciones='apagado 2'))
     ok('Editar atencion: apagado (503) -> Google, y no vuelve a preguntar a Azure por 5 min', r['r'] == 'OK' and r2['r'] == 'OK' and AZE['llamadas'] == ['503'] and RED['google'].count('updateAtencion') == 2, 'azure: ' + ','.join(AZE['llamadas']) + ' | google updateAtencion x' + str(RED['google'].count('updateAtencion')))
     AZE['modo'] = 'ok'
+    # ── _EDIT_RAPIDO_V1: "Detalle -> Actualizar" no espera la recarga completa ──
+    limpiar_ed()
+    r = pag.evaluate("""async () => {
+        const orig = refrescarEnBackground; let llamado = false;
+        refrescarEnBackground = () => { llamado = true; return new Promise(z => setTimeout(z, 5000)); };   // recarga lenta simulada
+        try {
+          atTodas.push({nro: 4545, dni: '12345678', nombre: 'DET RAPIDO', estado: 'EN PROCESO', fecha_atencion: hoy()});
+          detNro = 4545; sv('dEst', 'FINALIZADO'); sv('dHT', '11:45'); sv('dObs', 'listo');
+          const t0 = Date.now(); await updateAt(); const ms = Date.now() - t0;
+          await new Promise(z => setTimeout(z, 500));
+          const a = atTodas.find(x => String(x.nro) === '4545');
+          return [ms < 1500, a && a.estado, a && a.hora_termino, llamado, (document.getElementById('_toast') || {}).textContent || ''].join('|');
+        } finally { refrescarEnBackground = orig; }
+    }""")
+    ok('Detalle -> Actualizar: responde al instante (no espera la recarga completa) y la fila se ve cambiada', r.startswith('true|FINALIZADO|11:45|true|') and 'Actualizado' in r and (AZE['llamadas'] == ['editar'] or 'updateAtencion' in RED['google']), r + ' | azure: ' + ','.join(AZE['llamadas']) + ' | google: ' + ','.join(RED['google']))   # tras la prueba del 503, por 5 min va por Google (a proposito)
     # ── Control de Cumplimiento desde Azure ──
     RED['google'].clear(); CUMPL['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiPost({action:'cumplPendientes', usuario:'jtimoteo', rol:'administrador'}); return (d && d.fuente) + ':' + (d && d.success); }""")
