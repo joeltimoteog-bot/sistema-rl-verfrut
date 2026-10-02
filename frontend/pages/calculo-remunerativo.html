@@ -178,7 +178,7 @@
       <div id="pOficial" style="margin:4px 0 12px"></div>
       <div class="grid g5">
         <div><label>Rem. Bruta base (S/)</label><input type="number" id="pBruta" step="0.01"></div>
-        <div><label>RMV vigente (S/)</label><input type="number" id="pRmv" step="0.01"></div>
+        <div><label>RMV vigente (S/)</label><input type="number" id="pRmv" step="0.01" onchange="_rmvCambio()"></div>
         <div><label>Base de BETA y Asig. Fam.</label><select id="pBase"><option value="rmv">RMV (Ley 31110 / Ley 25129)</option><option value="basica">Rem. Básica (criterio anterior)</option></select></div>
         <div><label>Factor Bruta→Básica</label><input type="number" id="pFactor" step="0.0001"></div>
         <div><label>% CTS Agraria</label><input type="number" id="pCts" step="0.0001"></div>
@@ -235,15 +235,15 @@ window._crBloqueado = false;
    ═══════════════════════════════════════════════════════════════ */
 
 const PARAMS_DEFAULT = {
-  remBruta: 1428.09,          // Rem. Bruta mensual (BB.DD- SUELDOS)
-  rmv: 1130,                  // _CALC_LEGAL_V1: Remuneración Mínima Vital vigente (verificar con planillas)
+  remBruta: 1554.47,          // Rem. Bruta mensual (BB.DD- SUELDOS) — _RMV_2026_V1: RMV 1230 × 1.2638 (antes 1428.09 = 1130 × 1.2638)
+  rmv: 1230,                  // _CALC_LEGAL_V1 / _RMV_2026_V1: RMV vigente desde 01-oct-2026 (D.S. 015-2026-TR; antes S/ 1 130)
   baseBetaAF: 'rmv',          // _CALC_LEGAL_V1: 'rmv' (Ley 31110 / Ley 25129) o 'basica' (criterio anterior hoja Excel)
   factorBruta: 1.2638,        // Bruta = Básica × (1 + CTS 9.72% + Gratif 16.66%)
   pctCTS: 0.0972,
   pctGratif: 0.1666,
   pctBonif: 0.06,             // Bonif. Extraordinaria = 6% de la Gratificación
-  pctAF: 0.10,                // Asignación Familiar = 10% de la básica
-  pctBETA: 0.30,              // BETA = 30% de la básica
+  pctAF: 0.10,                // Asignación Familiar = 10% de la RMV (Ley 25129)
+  pctBETA: 0.30,              // BETA = 30% de la RMV (Ley 31110)
   tarifaBonoAplicacion: 9.2,  // S/ por hora (Bono Aplicación, 2° quincena)
   afps: [
     { nombre: 'HABITAT',   flujo: 0.1284, mixta: 0.1137 },
@@ -264,13 +264,37 @@ const PARAMS_DEFAULT = {
 
 function basicaDe(p) { return p.remBruta / p.factorBruta; }
 
+/* ── _RMV_2026_V1 (02-oct-2026): RMV por PERIODO (D.S. 015-2026-TR: S/ 1 230 desde el 01-oct-2026) ──
+   · Un mes anterior a oct-2026 se calcula con S/ 1 130; desde oct-2026 con S/ 1 230 (o la RMV de
+     Parametros si es mayor, p. ej. el 2° tramo de S/ 1 300 antes de agregarlo aqui).
+   · Trabajador AL MINIMO: si la Rem. Bruta es el minimo de alguna RMV (RMV × 1.2638), se usa el
+     minimo del periodo. Si es MENOR al minimo y no es un minimo conocido, solo se avisa.
+   2° tramo (S/ 1 300, 1er semestre 2027): agregar aqui la fecha y el monto cuando salga su decreto. */
+const RMV_HIST = [['2025-01', 1130], ['2026-10', 1230]];
+function rmvPeriodo(p, anio, mes) {
+  const per = anio + '-' + String(mes).padStart(2, '0');
+  let legal = RMV_HIST[0][1];
+  RMV_HIST.forEach(function (x) { if (per >= x[0]) legal = x[1]; });
+  return per >= RMV_HIST[RMV_HIST.length - 1][0] ? Math.max(Number(p.rmv) || 0, legal) : legal;
+}
+function rmvHoy(p) { const h = new Date(); return rmvPeriodo(p, h.getFullYear(), h.getMonth() + 1); }
+function brutaMinima(p, rmv) { return Math.round(rmv * p.factorBruta * 100) / 100; }
+function ajustarBruta(p, bruta, rmv) {
+  const min = brutaMinima(p, rmv);
+  const alMinimo = RMV_HIST.some(function (x) { return Math.abs(brutaMinima(p, x[1]) - bruta) < 0.02; }) || Math.abs(brutaMinima(p, Number(p.rmv) || 0) - bruta) < 0.02;
+  if (alMinimo && Math.abs(bruta - min) >= 0.005) return { bruta: min, ajustada: true, bajo: false, min: min };
+  return { bruta: bruta, ajustada: false, bajo: bruta < min - 0.005, min: min };
+}
+/* parametros para HOY (Diario y Horas Extras no tienen mes) */
+function pVigente(p) { const rmv = rmvHoy(p); return Object.assign({}, p, { rmv: rmv, remBruta: ajustarBruta(p, p.remBruta, rmv).bruta }); }
+
 /* ── _CALC_LEGAL_V1 (24-set-2026) ──
    BETA (Ley 31110: 30% de la RMV) y Asignación Familiar (Ley 25129: 10% de la RMV)
    se calculan sobre la RMV. Antes se calculaban sobre la básica del trabajador, lo que
    solo coincidía cuando ganaba el mínimo. baseBetaAF='basica' conserva el criterio anterior. */
 function baseBetaAF(p, basica) {
   if (p.baseBetaAF === 'basica') return (basica != null ? basica : basicaDe(p));
-  return Number(p.rmv) || 1130;
+  return Number(p.rmv) || 1230;   /* _RMV_2026_V1 */
 }
 
 /* ── _FERIADOS_V1 (24-set-2026): feriados nacionales por año ──
@@ -492,7 +516,7 @@ function quitarIna(f) { INA = INA.filter(x => x !== f); localStorage.setItem(LS_
 /* ════════ QUINCENAL ════════ */
 let qManual = null; // estado de inputs manuales por quincena
 function initQuin() {
-  el('qBruta').value = P.remBruta;
+  el('qBruta').value = P.remBruta;   /* renderQuin la lleva al minimo del mes si el trabajador esta al minimo (_RMV_2026_V1) */
   const sel = el('qAfp');
   sel.innerHTML = P.afps.map((a,i) => `<option value="${i}" ${a.nombre==='PROFUTURO'?'selected':''}>${a.nombre}</option>`).join('');
   setTasaQ();
@@ -510,8 +534,11 @@ function renderQuin() {
   const cal = calendarioMes(anio, mes, P, INA);
   const auto = v('qAuto') === '1';
   const tasa = parseFloat(v('qTasa')) || 0;
-  const bruta = parseFloat(v('qBruta')) || P.remBruta;
-  const pLocal = Object.assign({}, P, { remBruta: bruta });
+  const rmvQ = rmvPeriodo(P, anio, mes);   /* _RMV_2026_V1: RMV del mes que se calcula */
+  const ajQ = ajustarBruta(P, parseFloat(v('qBruta')) || P.remBruta, rmvQ);
+  if (ajQ.ajustada) el('qBruta').value = ajQ.bruta;
+  const bruta = ajQ.bruta;
+  const pLocal = Object.assign({}, P, { remBruta: bruta, rmv: rmvQ });
   const diasMes = cal.diasMes;
   const dq2 = diasMes - 15;
 
@@ -521,7 +548,11 @@ function renderQuin() {
   };
   el('qInfo').innerHTML = `Mes en cálculo: <b>${MESES[mes-1]} ${anio}</b> (${diasMes} días) · Horas del calendario — Q1: <b>${fnum(cal.horasQ1)}</b> h · Q2: <b>${fnum(cal.horasQ2)}</b> h. Edita días/horas en cada quincena si lo necesitas.`;
 
-  el('qInfo').innerHTML += ' · BETA y Asig. Fam. sobre <b>' + (P.baseBetaAF === 'basica' ? 'la Rem. Básica' : 'RMV S/ ' + fnum(P.rmv || 1130)) + '</b>';   /* _CALC_LEGAL_V1 */
+  el('qInfo').innerHTML += ' · BETA y Asig. Fam. sobre <b>' + (P.baseBetaAF === 'basica' ? 'la Rem. Básica' : 'RMV S/ ' + fnum(rmvQ)) + '</b>';
+  /* _RMV_2026_V1 */
+  if (ajQ.ajustada) el('qInfo').innerHTML += '<div style="margin-top:6px;color:#166534">✅ Rem. Bruta al <b>mínimo vigente</b> de ' + MESES[mes-1] + ' ' + anio + ': S/ ' + fnum(ajQ.bruta) + ' (RMV S/ ' + fnum(rmvQ) + ' × ' + P.factorBruta + ').</div>';
+  if (ajQ.bajo) el('qInfo').innerHTML += '<div style="margin-top:6px;color:#b91c1c">⚠️ La Rem. Bruta S/ ' + fnum(bruta) + ' da una básica <b>menor a la RMV S/ ' + fnum(rmvQ) + '</b>. Mínimo: S/ ' + fnum(ajQ.min) +
+    ' <button type="button" onclick="el(\'qBruta\').value=' + ajQ.min + ';renderQuin()" style="margin-left:6px;background:#0a2463;color:#fff;border:0;border-radius:6px;padding:3px 9px;cursor:pointer">Usar el mínimo</button></div>';   /* _CALC_LEGAL_V1 */
   const cols = [['q1','1° QUINCENA (días 1–15)', cal.horasQ1], ['q2','2° QUINCENA (días 16–'+diasMes+')', cal.horasQ2]];
   let netoMes = 0, netoMesSin = 0;
   el('qCols').innerHTML = cols.map(([k, titulo, hCal]) => {
@@ -568,11 +599,11 @@ function qSet(q, campo, val) { qManual[q][campo] = parseFloat(val) || 0; renderQ
 
 /* ════════ DIARIO ════════ */
 function initDia() {
-  el('dBasica').value = Math.round(basicaDe(P) * 100) / 100;
+  el('dBasica').value = Math.round(basicaDe(pVigente(P)) * 100) / 100;   /* _RMV_2026_V1 */
   el('dTasa').value = 0.1306;
 }
 function renderDia() {
-  const basica = parseFloat(v('dBasica')) || basicaDe(P);
+  const basica = parseFloat(v('dBasica')) || basicaDe(pVigente(P));   /* _RMV_2026_V1 */
   const tasa = parseFloat(v('dTasa')) || 0;
   const hPers = parseFloat(v('dHrs')) || 0;
   const escenarios = [
@@ -581,7 +612,7 @@ function renderDia() {
     ['Personalizada', hPers]
   ];
   const filas = ['remDiaria|Remun. Diaria','descSem|Desc. Semanal','afDiaria|Asig. Familiar','cts|CTS Agraria','gratif|Gratif. Agraria','bonif|Bonif. Ext. Agraria','beta|BETA','total|TOTAL INGRESOS','afp|Desc. AFP/ONP','netoConAF|NETO DIARIO CON Asig. Fam.','netoSinAF|NETO DIARIO SIN Asig. Fam.'];
-  const res = escenarios.map(e => calcDiario(e[1], basica, tasa, P));
+  const res = escenarios.map(e => calcDiario(e[1], basica, tasa, pVigente(P)));   /* _RMV_2026_V1: Asig. Fam. y BETA con la RMV de hoy */
   let html = '<tr><th>Concepto</th>' + escenarios.map(e => `<th class="num">${e[0]}<br><span style="font-weight:600;opacity:.85">${fnum(e[1])} h</span></th>`).join('') + '</tr>';
   filas.forEach(f => {
     const [key, lbl] = f.split('|');
@@ -592,7 +623,7 @@ function renderDia() {
 }
 
 /* ════════ HORAS EXTRAS ════════ */
-function initHE() { el('hBruta').value = P.remBruta; el('hTasa').value = 0.1306; }
+function initHE() { el('hBruta').value = pVigente(P).remBruta; el('hTasa').value = 0.1306; }   /* _RMV_2026_V1 */
 function renderHE() {
   const bruta = parseFloat(v('hBruta')) || P.remBruta;
   const tasa = parseFloat(v('hTasa')) || 0;
@@ -618,7 +649,7 @@ function renderHE() {
 /* ════════ PARÁMETROS ════════ */
 function renderPar() {
   el('pBruta').value = P.remBruta; el('pFactor').value = P.factorBruta;
-  el('pRmv').value = P.rmv || 1130; el('pBase').value = P.baseBetaAF || 'rmv';   /* _CALC_LEGAL_V1 */
+  el('pRmv').value = P.rmv || 1230; el('pRmv').dataset.prev = el('pRmv').value; el('pBase').value = P.baseBetaAF || 'rmv';   /* _CALC_LEGAL_V1 */
   el('pCts').value = P.pctCTS; el('pGrat').value = P.pctGratif; el('pBon').value = P.pctBonif;
   el('pAf').value = P.pctAF; el('pBeta').value = P.pctBETA; el('pBonoAp').value = P.tarifaBonoAplicacion;
   el('pJA').value = P.jornadaAltaLV; el('pJB').value = P.jornadaBajaLV; el('pJS').value = P.jornadaBajaSab;
@@ -634,13 +665,13 @@ function quitarFeriado(f) { P.feriados = P.feriados.filter(x => x !== f); render
 function guardarParams() {
   leerParamsUI(); P._modLocal = true;
   localStorage.setItem(LS_KEY, JSON.stringify(P));
-  el('qBruta').value = P.remBruta; el('hBruta').value = P.remBruta;
-  el('dBasica').value = Math.round(basicaDe(P) * 100) / 100;
+  el('qBruta').value = P.remBruta; el('hBruta').value = pVigente(P).remBruta;   /* _RMV_2026_V1 */
+  el('dBasica').value = Math.round(basicaDe(pVigente(P)) * 100) / 100;
   renderCal(); renderPar(); alert('✅ Parámetros guardados en este equipo');
 }
 function leerParamsUI() {
   P.remBruta = parseFloat(v('pBruta')) || P.remBruta;
-  P.rmv = parseFloat(v('pRmv')) || P.rmv || 1130; P.baseBetaAF = v('pBase') || 'rmv';   /* _CALC_LEGAL_V1 */
+  P.rmv = parseFloat(v('pRmv')) || P.rmv || 1230; P.baseBetaAF = v('pBase') || 'rmv';   /* _CALC_LEGAL_V1 */
   P.factorBruta = parseFloat(v('pFactor')) || P.factorBruta;
   P.pctCTS = parseFloat(v('pCts')); P.pctGratif = parseFloat(v('pGrat')); P.pctBonif = parseFloat(v('pBon'));
   P.pctAF = parseFloat(v('pAf')); P.pctBETA = parseFloat(v('pBeta'));
@@ -847,6 +878,13 @@ function volverOficiales() {
   if (!OFICIAL) return;
   _crAplicarOficial(OFICIAL); _crRefrescar(); renderPar();
 }
+/* _RMV_2026_V1: al cambiar la RMV en Parametros, si la Rem. Bruta era el minimo anterior, pasa al nuevo minimo */
+function _rmvCambio() {
+  var nueva = parseFloat(v('pRmv')) || 0, prev = parseFloat(el('pRmv').dataset.prev) || 0, f = parseFloat(v('pFactor')) || P.factorBruta;
+  var bruta = parseFloat(v('pBruta')) || 0;
+  if (nueva && prev && Math.abs(Math.round(prev * f * 100) / 100 - bruta) < 0.02) el('pBruta').value = Math.round(nueva * f * 100) / 100;
+  el('pRmv').dataset.prev = nueva || prev;
+}
 function renderOficial() {
   var d = el('pOficial'); if (!d) return;
   var box = function (bg, bd, txt) { return '<div style="background:' + bg + ';border-left:4px solid ' + bd + ';padding:9px 12px;border-radius:7px;font-size:12.5px;line-height:1.6">' + txt + '</div>'; };
@@ -856,6 +894,9 @@ function renderOficial() {
                                '<button type="button" onclick="volverOficiales()" style="margin-left:6px;background:#0a2463;color:#fff;border:0;border-radius:6px;padding:4px 10px;cursor:pointer;font-weight:700">Volver a los oficiales</button>');
   else html = box('#eff6ff', '#0a2463', 'ℹ️ Aún no hay parámetros oficiales publicados: se usan los guardados en este equipo.');
   if (_crEsAdmin()) html += '<button type="button" onclick="publicarOficiales()" style="margin-top:8px;background:#16a34a;color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:700;font-family:inherit">📢 Publicar estos parámetros como oficiales para todos</button>';
+  var rh = rmvHoy(P);   /* _RMV_2026_V1 */
+  if ((Number(P.rmv) || 0) < rh) html += box('#fef2f2', '#dc2626', '⚠️ La RMV de estos parámetros (S/ ' + fnum(P.rmv) + ') es <b>menor que la vigente: S/ ' + fnum(rh) + '</b> desde el 01-oct-2026 (D.S. 015-2026-TR). ' +
+    'Los cálculos de octubre en adelante ya usan S/ ' + fnum(rh) + '. Pon la RMV en S/ ' + fnum(rh) + ' (la Rem. Bruta al mínimo se ajusta sola), guarda' + (_crEsAdmin() ? ' y <b>publica como oficiales</b>.' : '.'));
   d.innerHTML = html;
 }
 function publicarOficiales() {
