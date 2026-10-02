@@ -68,7 +68,7 @@
 <header>
   <div style="font-size:26px">🧮</div>
   <div>
-    <h1>CÁLCULO REMUNERATIVO — OBRERO CAMPO</h1>
+    <h1>CÁLCULO REMUNERATIVO — OBRERO CAMPO · EMPLEADO</h1>
     <div class="sub">Régimen Agrario · VERFRUT S.A.C / RAPEL S.A.C — UNIFRUTTI GROUP · Sistema RL v3.0</div>
   </div>
   <button onclick="location.href='dashboard.html'" style="margin-left:auto;background:rgba(255,255,255,.12);color:#fff;border:1.5px solid rgba(255,255,255,.45);border-radius:8px;padding:8px 16px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">← Volver al Dashboard</button>
@@ -80,6 +80,7 @@
     <button class="tab" data-t="tQuin" onclick="tab('tQuin',this)">🧮 Cálculo Quincenal</button>
     <button class="tab" data-t="tDia"  onclick="tab('tDia',this)">☀️ Cálculo Diario</button>
     <button class="tab" data-t="tHE"   onclick="tab('tHE',this)">⏱️ Horas Extras</button>
+    <button class="tab" data-t="tEmp"  onclick="tab('tEmp',this)">👔 Empleado</button>   <!-- _EMPLEADO_V1 -->
     <button class="tab" data-t="tPar"  onclick="tab('tPar',this)">⚙️ Parámetros</button>
   </div>
 
@@ -168,6 +169,32 @@
         <div><label id="hLblCant">Cantidad de horas</label><input type="number" id="hCant" step="0.5" value="8" onchange="renderHE()"></div>
         <div class="kpi verde" style="align-self:end"><div class="v" id="kHE">—</div><div class="l">Monto Neto</div></div>
       </div>
+    </div>
+  </div>
+
+  <!-- ════════ TAB EMPLEADO (_EMPLEADO_V1, 02-oct-2026) ════════ -->
+  <div id="tEmp" class="tabpane" style="display:none">
+    <div class="card">
+      <h2>👔 Cálculo Mensual — EMPLEADO (sueldo fijo, base 30 días)</h2>
+      <div class="grid g5" style="margin-bottom:6px">
+        <div><label>Sueldo mensual fijo (S/)</label><input type="number" id="eSueldo" step="0.01" value="2000" onchange="renderEmp()"></div>
+        <div><label>Mes</label><input type="month" id="ePer" onchange="renderEmp()"></div>
+        <div><label>Faltas / días no pagados</label><input type="number" id="eFaltas" step="1" min="0" max="30" value="0" onchange="renderEmp()"></div>
+        <div><label>Asignación Familiar</label><select id="eAF" onchange="renderEmp()"><option value="1">Sí (tiene hijos)</option><option value="0">No</option></select></div>
+        <div><label>BETA (régimen agrario)</label><select id="eBeta" onchange="renderEmp()"><option value="1">Sí</option><option value="0">No</option></select></div>
+        <div><label>AFP / ONP</label><select id="eAfp" onchange="setTasaE();renderEmp()"></select></div>
+        <div><label>Tipo comisión</label><select id="eCom" onchange="setTasaE();renderEmp()"><option value="flujo">FLUJO</option><option value="mixta">MIXTA</option></select></div>
+        <div><label>Tasa AFP/ONP</label><input type="number" id="eTasa" step="0.0001" onchange="renderEmp()"></div>
+        <div><label>CTS y Gratificación</label><select id="eBenef" onchange="renderEmp()"><option value="aparte">Se pagan aparte (no van en el mes)</option><option value="prorrateo">Prorrateadas en el sueldo (agrario)</option></select></div>
+      </div>
+      <div class="nota" id="eInfo"></div>
+      <div style="overflow-x:auto;margin-top:12px"><table id="tblEmp"></table></div>
+      <div class="grid g3" style="margin-top:14px">
+        <div class="kpi verde"><div class="v" id="kENeto">—</div><div class="l">Neto del Mes</div></div>
+        <div class="kpi"><div class="v" id="kEAF">—</div><div class="l">Asig. Familiar (10% RMV)</div></div>
+        <div class="kpi ambar"><div class="v" id="kEBeta">—</div><div class="l">BETA (30% RMV)</div></div>
+      </div>
+      <div class="nota">Sueldo fijo mensual en base a <b>30 días</b>: remuneración = sueldo ÷ 30 × días pagados. Asignación Familiar (Ley 25129) = 10% de la RMV y BETA (Ley 31110) = 30% de la RMV, según el mes, prorrateados por días pagados. AFP/ONP sobre sueldo + Asig. Fam. (el BETA no está afecto).</div>
     </div>
   </div>
 
@@ -466,6 +493,7 @@ function tab(id, btn) {
   if (id === 'tQuin') renderQuin();
   if (id === 'tDia')  renderDia();
   if (id === 'tHE')   renderHE();
+  if (id === 'tEmp')  renderEmp();   /* _EMPLEADO_V1 */
   if (id === 'tPar')  renderPar();
 }
 
@@ -646,6 +674,51 @@ function renderHE() {
   el('kHE').textContent = fmt(calcHoraExtra(tipo, bH, tasa, P).neto * cant);
 }
 
+/* ════════ EMPLEADO (_EMPLEADO_V1, 02-oct-2026) — sueldo fijo mensual, base 30 dias ════════ */
+function calcEmpleado(inp, p) {
+  const dias = Math.max(0, Math.min(30, 30 - (inp.faltas || 0)));
+  const diario = (inp.sueldo || 0) / 30;
+  const rem = diario * dias;
+  const af = inp.conAF ? p.rmv * p.pctAF * dias / 30 : 0;
+  const beta = inp.conBeta ? p.rmv * p.pctBETA * dias / 30 : 0;
+  const pror = inp.benef === 'prorrateo';
+  const cts = pror ? rem * p.pctCTS : 0, gratif = pror ? rem * p.pctGratif : 0, bonif = gratif * p.pctBonif;
+  const afp = (rem + af) * (inp.tasaAFP || 0);
+  const neto = rem + af + cts + gratif + bonif + beta - afp;
+  return { dias, diario, rem, af, beta, cts, gratif, bonif, afp, neto };
+}
+function setTasaE() {
+  const a = P.afps[parseInt(v('eAfp'))] || P.afps[0];
+  el('eTasa').value = v('eCom') === 'mixta' ? a.mixta : a.flujo;
+}
+function initEmp() {
+  const h = new Date();
+  if (!v('ePer')) el('ePer').value = h.getFullYear() + '-' + String(h.getMonth() + 1).padStart(2, '0');
+  el('eAfp').innerHTML = P.afps.map((a, i) => `<option value="${i}" ${a.nombre === 'PROFUTURO' ? 'selected' : ''}>${a.nombre}</option>`).join('');
+  setTasaE();
+}
+function renderEmp() {
+  const per = (v('ePer') || '').split('-'), anio = parseInt(per[0]) || new Date().getFullYear(), mes = parseInt(per[1]) || (new Date().getMonth() + 1);
+  const rmv = rmvPeriodo(P, anio, mes);   /* _RMV_2026_V1: RMV del mes */
+  const pE = Object.assign({}, P, { rmv: rmv });
+  const inp = { sueldo: parseFloat(v('eSueldo')) || 0, faltas: parseFloat(v('eFaltas')) || 0, conAF: v('eAF') === '1', conBeta: v('eBeta') === '1',
+                benef: v('eBenef'), tasaAFP: parseFloat(v('eTasa')) || 0 };
+  const r = calcEmpleado(inp, pE);
+  let info = `Mes: <b>${MESES[mes - 1]} ${anio}</b> · RMV <b>S/ ${fnum(rmv)}</b> → Asig. Fam. S/ ${fnum(rmv * P.pctAF)} · BETA S/ ${fnum(rmv * P.pctBETA)} (mes completo) · Sueldo diario S/ ${fnum(r.diario)} · Días pagados <b>${r.dias}</b> de 30`;
+  if (inp.sueldo && inp.sueldo < rmv - 0.005) info += `<div style="margin-top:6px;color:#b91c1c">⚠️ El sueldo S/ ${fnum(inp.sueldo)} es <b>menor que la RMV S/ ${fnum(rmv)}</b> de ${MESES[mes - 1]} ${anio}.</div>`;
+  el('eInfo').innerHTML = info;
+  const fila = (lbl, x, cls) => `<tr class="${cls || ''}"><td>${lbl}</td><td class="num">${fnum(x)}</td></tr>`;
+  let html = '<tr><th>Concepto</th><th class="num">S/</th></tr>' +
+    fila(`Remuneración (S/ ${fnum(r.diario)} × ${r.dias} días)`, r.rem) +
+    (inp.conAF ? fila('Asignación Familiar (10% RMV)', r.af) : '') +
+    (inp.benef === 'prorrateo' ? fila(`CTS Agraria ${(P.pctCTS * 100).toFixed(2)}%`, r.cts) + fila(`Gratif. Agraria ${(P.pctGratif * 100).toFixed(2)}%`, r.gratif) + fila(`Bonif. Extr. ${(P.pctBonif * 100).toFixed(0)}% de la Gratif.`, r.bonif) : '') +
+    fila(`Desc. AFP/ONP (${(inp.tasaAFP * 100).toFixed(2)}% de sueldo + Asig. Fam.)`, -r.afp) +
+    (inp.conBeta ? fila('BETA (30% RMV, no afecto)', r.beta) : '') +
+    fila('NETO DEL MES', r.neto, 'neto');
+  el('tblEmp').innerHTML = html;
+  el('kENeto').textContent = fmt(r.neto); el('kEAF').textContent = fmt(r.af); el('kEBeta').textContent = fmt(r.beta);
+}
+
 /* ════════ PARÁMETROS ════════ */
 function renderPar() {
   el('pBruta').value = P.remBruta; el('pFactor').value = P.factorBruta;
@@ -686,7 +759,7 @@ function restaurarParams() {
 }
 
 /* ════════ INIT ════════ */
-if (!window._crBloqueado) { initCal(); initQuin(); initDia(); initHE(); }
+if (!window._crBloqueado) { initCal(); initQuin(); initDia(); initHE(); initEmp(); }   /* _EMPLEADO_V1: + initEmp */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CR_TURNOS_V1 (09-ago-2026) — Remuneración rápida + Calculadora de turno
