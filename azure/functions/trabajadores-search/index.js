@@ -45,21 +45,34 @@ module.exports = async function (context, req) {
     const pool = await getPool();
     const request = pool.request();
     request.input('dni', sql.NVarChar(20), dni);
+    /* _DNI_CERO_V1 (02-oct-2026): en la hoja los DNI que empiezan con 0 se guardan como
+       numero (01234567 -> 1234567). Antes Azure buscaba solo el texto exacto -> 404 ->
+       el sistema caia a Google (~20 s). Ahora busca las dos formas (con y sin ceros a la
+       izquierda) y devuelve el DNI con 8 digitos, igual que buscarTrabajador de Google. */
+    const dniSin0 = /^\d+$/.test(dni) ? dni.replace(/^0+/, '') : dni;
+    const dni8 = /^\d{1,8}$/.test(dniSin0) ? ('00000000' + dniSin0).slice(-8) : dni;
+    request.input('dni2', sql.NVarChar(20), dniSin0 || dni);
+    request.input('dni3', sql.NVarChar(20), dni8);
+    const W = 'dni IN (@dni, @dni2, @dni3)';
 
     let query;
     if (empresa === 'RAPEL') {
-      query = `SELECT *, 'RAPEL' AS empresa_origen FROM dbo.Trabajadores_RAPEL WHERE dni = @dni`;
+      query = `SELECT *, 'RAPEL' AS empresa_origen FROM dbo.Trabajadores_RAPEL WHERE ${W}`;
     } else if (empresa === 'VERFRUT') {
-      query = `SELECT *, 'VERFRUT' AS empresa_origen FROM dbo.Trabajadores_VERFRUT WHERE dni = @dni`;
+      query = `SELECT *, 'VERFRUT' AS empresa_origen FROM dbo.Trabajadores_VERFRUT WHERE ${W}`;
     } else {
       query = `
-        SELECT *, 'RAPEL' AS empresa_origen FROM dbo.Trabajadores_RAPEL WHERE dni = @dni
+        SELECT *, 'RAPEL' AS empresa_origen FROM dbo.Trabajadores_RAPEL WHERE ${W}
         UNION ALL
-        SELECT *, 'VERFRUT' AS empresa_origen FROM dbo.Trabajadores_VERFRUT WHERE dni = @dni
+        SELECT *, 'VERFRUT' AS empresa_origen FROM dbo.Trabajadores_VERFRUT WHERE ${W}
       `;
     }
 
     const result = await request.query(query);
+    (result.recordset || []).forEach(function (t) {
+      const d = String(t.dni == null ? '' : t.dni).trim();
+      if (/^\d{7}$/.test(d)) t.dni = '0' + d;   /* _DNI_CERO_V1: misma forma que Google */
+    });
     const elapsed = Date.now() - startTime;
     context.log('Busqueda DNI ' + dni + ' en ' + elapsed + 'ms - ' + result.recordset.length + ' resultado(s)');
 
