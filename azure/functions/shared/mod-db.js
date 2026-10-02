@@ -12,5 +12,5 @@ function asegurarTablas(pool) {
 /* claves obligatorias de cada modulo (si falta alguna -> 503 y la pantalla usa Google) */
 const CLAVES = { horas: ['registros', 'motivos', 'config'], cap: ['hdr', 'bbdd'],
   fus: ['getFusiones'], sol: ['getSolicitudes'], casosaux: ['getMotivosCasos'], inv: ['invGetAll'],
-  estadm: ['filas'] };   /* _ESTADM_AZURE_V1 */   /* _MOD_SIMPLES_V1 */
+  estadm: ['filas'], sup: ['getSupervisores'] };   /* _PRELOAD_AZURE_V1: + sup */   /* _ESTADM_AZURE_V1 */   /* _MOD_SIMPLES_V1 */
 module.exports = { asegurarTablas, CLAVES };

@@ -86,6 +86,7 @@ def resp_azure(url, post=''):
         if acc == 'listarCapacitaciones': base.update({'capacitaciones': [], 'total': 0, 'esAdmin': True})
         if acc == 'estadisticasCapacitaciones': base.update({'esAdmin': True, 'stats': {}})
         if acc in ('getFusiones', 'getSolicitudes', 'getMotivosCasos'): base['data'] = []
+        if acc == 'getSupervisores': base['data'] = resp_google('getSupervisores')['data']   # _PRELOAD_AZURE_V1: la misma lista que da Google
         if acc == 'invGetAll': base.update({'productos': [], 'ingresos': [], 'entregas': []})
         if acc == 'getEstadisticasAdmin': base['data'] = {'stats': {'atenciones': {'total': 5, 'enProceso': 1, 'finalizados': 4, 'esteMes': 2}, 'visitas': {'total': 0, 'enPlazo': 0, 'retrasadas': 0, 'esteMes': 0}, 'casos': {'total': 0, 'enPlazo': 0, 'retrasados': 0, 'esteMes': 0}, 'fusiones': {'total': 0, 'pendientes': 0, 'validados': 0, 'trabajadores': 0, 'esteMes': 0}}, 'porSupervisor': {}, 'tendencia': [], 'filtros': {'anio': '', 'mes': ''}}
         return base
@@ -197,6 +198,9 @@ def resp_azure(url, post=''):
         return {'success': True, 'total': 2, 'data': [
             {'id': 1, 'nro': 500, 'dni': '11111111', 'nombre': 'A', 'fecha_atencion': hoy, 'supervisor': 'SUPERVISOR PRUEBA', 'estado': 'EN PROCESO'},
             {'id': 2, 'nro': 500, 'dni': '22222222', 'nombre': 'B', 'fecha_atencion': hoy, 'supervisor': 'SUPERVISOR PRUEBA', 'estado': 'EN PROCESO'}]}
+    if '/api/usuarios/lista' in url:   # _PRELOAD_AZURE_V1
+        RED.setdefault('usrlista', []).append(1)
+        return {'success': True, 'data': resp_google('getUsuarios')['data'], 'fuente': 'azure'}
     if '/atenciones/stats' in url:
         return {'success': True, 'resumen_global': {'hoy': 1, 'este_mes': 2, 'este_anio': 3, 'en_proceso': 1, 'finalizados': 2, 'total': 3}}
     return {'success': True, 'data': []}
@@ -351,8 +355,26 @@ with sync_playwright() as pw:
     pre = [u for u in RED['gurl'] if 'getPreloadOptimizado' in u]
     nC = pag.evaluate("(typeof CACHE!=='undefined' && Array.isArray(CACHE.casos)) ? CACHE.casos.length : -1")
     nV = pag.evaluate("(typeof CACHE!=='undefined' && Array.isArray(CACHE.visitas)) ? CACHE.visitas.length : -1")
-    ok('Casos/Visitas: al entrar se traen de Azure (la hoja no los lee)', pre and all('cvAzure=1' in u for u in pre) and nC == 2 and nV == 1 and 'getCasos' in CV['llamadas'],
-       'preload con cvAzure: ' + str(bool(pre) and all('cvAzure=1' in u for u in pre)) + ' | casos ' + str(nC) + ' | visitas ' + str(nV) + ' | azure: ' + ','.join(CV['llamadas']))
+    ok('Casos/Visitas: al entrar se traen de Azure (la hoja no los lee)', not pre and nC == 2 and nV == 1 and 'getCasos' in CV['llamadas'],
+       'preload por Google: ' + str(len(pre)) + ' | casos ' + str(nC) + ' | visitas ' + str(nV) + ' | azure: ' + ','.join(CV['llamadas']))
+    # ── Carga al entrar desde Azure (_PRELOAD_AZURE_V1) ──
+    r = pag.evaluate("() => [CACHE.stats && CACHE.stats.hoy, (CACHE.supervisores || []).length, Array.isArray(CACHE.fusiones), Array.isArray(CACHE.solicitudes)].join('|')")
+    ok('Carga al entrar (admin): sale de Azure (cifras, fusiones, solicitudes, supervisores) y NO pide getPreloadOptimizado a Google', not pre and r == '1|3|true|true' and all(m in MODX['llamadas'] for m in ['fus/getFusiones', 'sup/getSupervisores', 'sol/getSolicitudes']), r + ' | mod: ' + ','.join(sorted(set(MODX['llamadas']))))
+    PRE = {'action': 'getPreloadOptimizado', 'usuario': 'jtimoteo', 'nombre': 'JOEL', 'rol': 'administrador', 'empresa': '', 'cvAzure': '1'}
+    RED['google'].clear()
+    r = pag.evaluate("""async (p) => { const d = await apiGet(p); return [d && d.fuente, d && d.data && d.data.usuarios && d.data.usuarios.length, d && d.data && d.data.stats && d.data.stats.anio].join('|'); }""", PRE)
+    ok('Carga al entrar (administrador): usuarios y cifras vienen de Azure (/usuarios/lista y /atenciones/stats)', r == 'azure|4|3' and 'getPreloadOptimizado' not in RED['google'] and 'getUsuarios' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    r = pag.evaluate("""async (p) => { const d = await apiGet(Object.assign({}, p, {rol: 'coordinador'})); return [d && d.fuente, d && d.data && ('usuarios' in d.data)].join('|'); }""", PRE)
+    ok('Carga al entrar (coordinador): no pide ni manda la lista de usuarios (como Google)', r == 'azure|false', r)
+    RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiGet({action: 'getUsuarios', usuario: 'jtimoteo', rol: 'administrador'}); return (d && d.fuente) + ':' + (d && d.data && d.data.length) + ':' + (d && d.data && d.data.some(u => 'password' in u)); }""")
+    ok('Gestion de usuarios: la lista sale de Azure (sin contraseñas)', r == 'azure:4:false' and 'getUsuarios' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    MODX['modo'] = 'caido'; RED['google'].clear()
+    r = pag.evaluate("""async (p) => { const t0 = Date.now(); const d = await apiGet(p); return [d && d.success, d && d.fuente === 'azure', Date.now() - t0 < 8000].join('|'); }""", PRE)
+    ok('Carga al entrar: si Azure falla, la carga completa va por Google (como antes)', r == 'true|false|true' and 'getPreloadOptimizado' in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    MODX['modo'] = 'ok'; RED['google'].clear()
+    r = pag.evaluate("""async () => { const d = await apiGet({action: 'getSupervisores'}); return (d && d.fuente) + ':' + (d && d.data && d.data.length); }""")
+    ok('Supervisores: la lista sale de Azure (antes ~22 s por Google)', r == 'azure:3' and 'getSupervisores' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     RED['google'].clear(); CV['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiGet({action:'getCasos', empresa:'', motivo:'', usuario:'jtimoteo', rol:'administrador'}); return (d && d.fuente) + ':' + (d && d.data ? d.data.length : -1); }""")
     ok('Casos/Visitas: la lista de casos sale de Azure', r == 'azure:2' and 'getCasos' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
@@ -671,13 +693,13 @@ with sync_playwright() as pw:
     ctxS.add_init_script(SIN_ESCAPE); ctxS.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(SUP)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
                          'try{localStorage.setItem("rl_nov_2026-09-23_sprueba","1")}catch(e){}')
     ctxS.route('**/*', enrutar)
-    RED['google'].clear(); RED['gurl'].clear(); RED['azure'].clear()
+    RED['google'].clear(); RED['gurl'].clear(); RED['azure'].clear(); MODX['llamadas'].clear()
     pag = ctxS.new_page(); errores = []
     pag.on('pageerror', lambda e: errores.append((str(e)+' @ '+(e.stack or '').split('\n')[1:3].__str__())[:400]))
     pag.goto(BASE + 'frontend/pages/dashboard.html', wait_until='load')
     pag.wait_for_timeout(6000)
     pre = [u for u in RED['gurl'] if 'getPreloadOptimizado' in u]
-    ok('Supervisor: login pide preload liviano (atAzure=1)', pre and all('atAzure=1' in u for u in pre), str(len(pre)) + ' pedidos')
+    ok('Supervisor: la carga al entrar sale de Azure (no pide getPreloadOptimizado a Google)', not pre and 'sup/getSupervisores' in MODX['llamadas'], str(len(pre)) + ' pedidos a Google | mod: ' + ','.join(sorted(set(MODX['llamadas']))))
     ok('Supervisor: no lee atenciones de la hoja al entrar', 'getAtencionesOptimizado' not in RED['google'], ','.join(sorted(set(RED['google']))))
     n = pag.evaluate("(typeof CACHE!=='undefined' && Array.isArray(CACHE.atenciones)) ? CACHE.atenciones.length : -1")
     ok('Supervisor: atenciones cargadas desde Azure al entrar', n >= 1, str(n) + ' registros')

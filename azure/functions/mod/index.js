@@ -60,6 +60,7 @@ const HANDLERS = {
   sol:      { crear: require('../shared/mod-snap').crear, acciones: { getSolicitudes: 'getSolicitudes' } },
   casosaux: { crear: require('../shared/mod-snap').crear, acciones: { getMotivosCasos: 'getMotivosCasos' } },
   inv:      { crear: require('../shared/mod-snap').crear, acciones: { invGetAll: 'invGetAll' } },
+  sup:      { crear: require('../shared/mod-snap').crear, acciones: { getSupervisores: 'getSupervisores' } },   /* _PRELOAD_AZURE_V1 (01-oct): lista de supervisores */
   /* _ESTADM_AZURE_V1: Estadisticas Admin (atenciones directo de SQL) */
   estadm:   { crear: require('../shared/mod-estadm').crear, acciones: { getEstadisticasAdmin: 'getEstadisticasAdmin' } }
 };

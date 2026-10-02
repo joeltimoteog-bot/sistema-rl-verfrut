@@ -8,6 +8,7 @@ function crear(D) {
     getFusiones: () => copia(D.getFusiones),
     getMotivosCasos: () => copia(D.getMotivosCasos),
     invGetAll: () => copia(D.invGetAll),
+    getSupervisores: () => copia(D.getSupervisores),   /* _PRELOAD_AZURE_V1 (01-oct): BD_Supervisores */
     getSolicitudes: (p) => {
       const r = copia(D.getSolicitudes);
       if (r && r.success && p && p.estado) r.data = (r.data || []).filter(s => s.estado === p.estado);
