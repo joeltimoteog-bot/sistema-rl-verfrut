@@ -177,7 +177,7 @@
     <div class="card">
       <h2>👔 Cálculo Mensual — EMPLEADO (sueldo fijo, base 30 días)</h2>
       <div class="grid g5" style="margin-bottom:6px">
-        <div><label>Sueldo mensual fijo (S/)</label><input type="number" id="eSueldo" step="0.01" value="2000" onchange="renderEmp()"></div>
+        <div><label>Remuneración básica mensual (sueldo fijo, S/)</label><input type="number" id="eSueldo" step="0.01" value="2000" onchange="renderEmp()"></div>
         <div><label>Mes</label><input type="month" id="ePer" onchange="renderEmp()"></div>
         <div><label>Faltas / días no pagados</label><input type="number" id="eFaltas" step="1" min="0" max="30" value="0" onchange="renderEmp()"></div>
         <div><label>Asignación Familiar</label><select id="eAF" onchange="renderEmp()"><option value="1">Sí (tiene hijos)</option><option value="0">No</option></select></div>
@@ -204,7 +204,8 @@
       <h2>⚙️ Parámetros del Cálculo <span style="font-size:11px;color:#64748b;font-weight:600">(se guardan en este navegador)</span></h2>
       <div id="pOficial" style="margin:4px 0 12px"></div>
       <div class="grid g5">
-        <div><label>Rem. Bruta base (S/)</label><input type="number" id="pBruta" step="0.01"></div>
+        <div><label>Rem. Básica (S/)</label><input type="number" id="pBasica" step="0.01" onchange="_basicaCambio()"></div>   <!-- _CALC_BASICA_V1 -->
+        <div><label>Rem. Bruta base (S/)</label><input type="number" id="pBruta" step="0.01" onchange="_brutaCambio()"></div>
         <div><label>RMV vigente (S/)</label><input type="number" id="pRmv" step="0.01" onchange="_rmvCambio()"></div>
         <div><label>Base de BETA y Asig. Fam.</label><select id="pBase"><option value="rmv">RMV (Ley 31110 / Ley 25129)</option><option value="basica">Rem. Básica (criterio anterior)</option></select></div>
         <div><label>Factor Bruta→Básica</label><input type="number" id="pFactor" step="0.0001"></div>
@@ -377,15 +378,18 @@ function calendarioMes(anio, mes, p, inasistencias) {
   const ina = new Set(inasistencias || []);
   const diasMes = new Date(anio, mes, 0).getDate();
   const dias = [];
-  let q1 = 0, q2 = 0;
+  let q1 = 0, q2 = 0, fer1 = 0, fer2 = 0, lv1 = 0, lv2 = 0;   /* _DESC_SEM_V1 */
   for (let dd = 1; dd <= diasMes; dd++) {
     const d = new Date(anio, mes - 1, dd);
     const h = horasDia(d, p, fer, ina);
     dias.push({ dia: dd, iso: fmtISO(d), dow: d.getDay(), horas: h,
                 feriado: fer.has(fmtISO(d)), inasistencia: ina.has(fmtISO(d)) });
     if (dd <= 15) q1 += h; else q2 += h;
+    const lv = d.getDay() >= 1 && d.getDay() <= 5;   /* _DESC_SEM_V1: lunes a viernes */
+    if (lv && fer.has(fmtISO(d))) { if (dd <= 15) fer1++; else fer2++; }        // feriado L-V (Calendario!N4:N19)
+    if (lv && h > 0) { if (dd <= 15) lv1++; else lv2++; }                       // dia L-V trabajado (sin feriados ni inasistencias)
   }
-  return { dias, diasMes, horasQ1: r2(q1, 10), horasQ2: r2(q2, 10), horasMes: r2(q1 + q2, 10) };
+  return { dias, diasMes, horasQ1: r2(q1, 10), horasQ2: r2(q2, 10), horasMes: r2(q1 + q2, 10), fer1, fer2, lv1, lv2 };
 }
 function r2(x, dec) { const f = Math.pow(10, dec === undefined ? 2 : dec); return Math.round(x * f) / f; }
 
@@ -403,7 +407,7 @@ function calcQuincena(inp, p) {
   const basico    = (inp.horas || 0) * basicoHora;
   const basicoNoc = (inp.hrsBasicoNoc || 0) * basicoHora * 1.35;
   const derFeriado= (inp.diasFeriado || 0) * basicoDiario;
-  const descSem   = (inp.diasDescSem || 0) * (basicoDiario / 5);
+  const descSem   = (inp.diasDescSem || 0) * (basicoDiario / 6);   /* _DESC_SEM_V1 (02-oct-2026): Diario ÷ 6 (como la hoja y el Calc. Diario; antes ÷ 5) */
   const asigFam   = (inp.diasAF || 0) * (afMensual / inp.diasMes);
   const domFer    = (inp.diasDomFer || 0) * (basica / 30 * 2);
   const he25      = (inp.hrs25 || 0) * basicoHora * 1.25;
@@ -574,6 +578,14 @@ function renderQuin() {
     q1: { horas:'', hrsBasicoNoc:0, diasFeriado:0, diasDescSem:11, diasAF:15, diasDomFer:0, hrs25:0, hrs35:0, hrs25noc:0, hrs35noc:0, diasDescMed:0, hrsBonoAplic:0, diasBETA:15 },
     q2: { horas:'', hrsBasicoNoc:0, diasFeriado:0, diasDescSem:11, diasAF:dq2, diasDomFer:0, hrs25:0, hrs35:0, hrs25noc:0, hrs35noc:0, diasDescMed:0, hrsBonoAplic:0, diasBETA:dq2 }
   };
+  /* _DESC_SEM_V1: con "usar horas del calendario", Der. Feriado, Desc. Semanal y dias de AF/BETA salen del mes.
+     Lo que el usuario edita a mano se respeta hasta que cambie de mes. */
+  if (qManual._per !== anio + '-' + mes) { qManual._per = anio + '-' + mes; qManual.q1._ed = {}; qManual.q2._ed = {}; }
+  if (auto) {
+    const autoQ = { q1: { diasFeriado: cal.fer1, diasDescSem: cal.lv1, diasAF: 15, diasBETA: 15 },
+                    q2: { diasFeriado: cal.fer2, diasDescSem: cal.lv2, diasAF: dq2, diasBETA: dq2 } };
+    ['q1', 'q2'].forEach(function (k) { Object.keys(autoQ[k]).forEach(function (c) { if (!qManual[k]._ed[c]) qManual[k][c] = autoQ[k][c]; }); });
+  }
   el('qInfo').innerHTML = `Mes en cálculo: <b>${MESES[mes-1]} ${anio}</b> (${diasMes} días) · Horas del calendario — Q1: <b>${fnum(cal.horasQ1)}</b> h · Q2: <b>${fnum(cal.horasQ2)}</b> h. Edita días/horas en cada quincena si lo necesitas.`;
 
   el('qInfo').innerHTML += ' · BETA y Asig. Fam. sobre <b>' + (P.baseBetaAF === 'basica' ? 'la Rem. Básica' : 'RMV S/ ' + fnum(rmvQ)) + '</b>';
@@ -623,7 +635,7 @@ function renderQuin() {
   el('kNetoMesSin').textContent = fmt(netoMesSin);
   el('kBasica').textContent = fmt(basicaDe(pLocal));
 }
-function qSet(q, campo, val) { qManual[q][campo] = parseFloat(val) || 0; renderQuin(); }
+function qSet(q, campo, val) { qManual[q][campo] = parseFloat(val) || 0; (qManual[q]._ed = qManual[q]._ed || {})[campo] = true; renderQuin(); }   /* _DESC_SEM_V1: lo editado a mano se respeta */
 
 /* ════════ DIARIO ════════ */
 function initDia() {
@@ -709,7 +721,8 @@ function renderEmp() {
   el('eInfo').innerHTML = info;
   const fila = (lbl, x, cls) => `<tr class="${cls || ''}"><td>${lbl}</td><td class="num">${fnum(x)}</td></tr>`;
   let html = '<tr><th>Concepto</th><th class="num">S/</th></tr>' +
-    fila(`Remuneración (S/ ${fnum(r.diario)} × ${r.dias} días)`, r.rem) +
+    fila('Remuneración básica mensual (sueldo fijo)', inp.sueldo) +   /* _CALC_BASICA_V1 */
+    fila(`Remuneración del mes (básica ÷ 30 = S/ ${fnum(r.diario)} × ${r.dias} días)`, r.rem) +
     (inp.conAF ? fila('Asignación Familiar (10% RMV)', r.af) : '') +
     (inp.benef === 'prorrateo' ? fila(`CTS Agraria ${(P.pctCTS * 100).toFixed(2)}%`, r.cts) + fila(`Gratif. Agraria ${(P.pctGratif * 100).toFixed(2)}%`, r.gratif) + fila(`Bonif. Extr. ${(P.pctBonif * 100).toFixed(0)}% de la Gratif.`, r.bonif) : '') +
     fila(`Desc. AFP/ONP (${(inp.tasaAFP * 100).toFixed(2)}% de sueldo + Asig. Fam.)`, -r.afp) +
@@ -722,6 +735,7 @@ function renderEmp() {
 /* ════════ PARÁMETROS ════════ */
 function renderPar() {
   el('pBruta').value = P.remBruta; el('pFactor').value = P.factorBruta;
+  el('pBasica').value = Math.round(P.remBruta / P.factorBruta * 100) / 100;   /* _CALC_BASICA_V1 */
   el('pRmv').value = P.rmv || 1230; el('pRmv').dataset.prev = el('pRmv').value; el('pBase').value = P.baseBetaAF || 'rmv';   /* _CALC_LEGAL_V1 */
   el('pCts').value = P.pctCTS; el('pGrat').value = P.pctGratif; el('pBon').value = P.pctBonif;
   el('pAf').value = P.pctAF; el('pBeta').value = P.pctBETA; el('pBonoAp').value = P.tarifaBonoAplicacion;
@@ -732,10 +746,15 @@ function renderPar() {
       <td class="num"><input style="width:100px;text-align:right;padding:4px 6px" type="number" step="0.0001" value="${a.mixta}" onchange="P.afps[${i}].mixta=parseFloat(this.value)||0"></td></tr>`).join('');
   el('pFerList').innerHTML = P.feriados.slice().sort().map(f => `<span class="pill">${f}<button onclick="quitarFeriado('${f}')">✕</button></span>`).join('');
   try { renderFerAviso(); renderOficial(); } catch (e) {}
+  try { _crBloquearPar(); } catch (e) {}   /* _CALC_DUENO_V1 */
 }
 function addFeriado() { const f = v('pFerNew'); if (f && P.feriados.indexOf(f) === -1) P.feriados.push(f); el('pFerNew').value=''; renderPar(); }
 function quitarFeriado(f) { P.feriados = P.feriados.filter(x => x !== f); renderPar(); }
+/* _CALC_BASICA_V1: Rem. Basica <-> Rem. Bruta (Bruta = Basica × factor) */
+function _basicaCambio() { var f = parseFloat(v('pFactor')) || P.factorBruta, b = parseFloat(v('pBasica')) || 0; if (b) el('pBruta').value = Math.round(b * f * 100) / 100; }
+function _brutaCambio() { var f = parseFloat(v('pFactor')) || P.factorBruta, b = parseFloat(v('pBruta')) || 0; if (b) el('pBasica').value = Math.round(b / f * 100) / 100; }
 function guardarParams() {
+  if (!_crEsDueno()) { alert('🔒 Solo el administrador del sistema puede modificar los parámetros.'); return; }   /* _CALC_DUENO_V1 */
   leerParamsUI(); P._modLocal = true;
   localStorage.setItem(LS_KEY, JSON.stringify(P));
   el('qBruta').value = P.remBruta; el('hBruta').value = pVigente(P).remBruta;   /* _RMV_2026_V1 */
@@ -752,6 +771,7 @@ function leerParamsUI() {
   P.jornadaAltaLV = parseFloat(v('pJA')); P.jornadaBajaLV = parseFloat(v('pJB')); P.jornadaBajaSab = parseFloat(v('pJS'));
 }
 function restaurarParams() {
+  if (!_crEsDueno()) { volverOficiales(); return; }   /* _CALC_DUENO_V1 */
   if (typeof OFICIAL !== 'undefined' && OFICIAL && OFICIAL.params) { if (confirm('¿Volver a los parámetros OFICIALES publicados por el administrador?')) volverOficiales(); return; }   /* _CALC_PARAMS_V1 */
   if (!confirm('¿Restaurar todos los parámetros a los valores 2026 del Excel oficial?')) return;
   localStorage.removeItem(LS_KEY); P = JSON.parse(JSON.stringify(PARAMS_DEFAULT));
@@ -929,7 +949,21 @@ function crAplicarTurno(q, modo){
 var CALC_GAS = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 var OFICIAL = null;
 function _crUser() { try { return JSON.parse(sessionStorage.getItem('user') || 'null') || {}; } catch (e) { return {}; } }
-function _crEsAdmin() { return /admin/i.test(String(_crUser().rol || '')); }
+/* _CALC_DUENO_V1 (02-oct-2026): los parametros SOLO los modifica y publica el dueño del sistema.
+   Los demas los ven y calculan con ellos (los oficiales), sin poder alterarlos. */
+var CALC_DUENOS = ['jtimoteo'];
+function _crEsDueno() { return CALC_DUENOS.indexOf(String(_crUser().usuario || '').trim().toLowerCase()) >= 0; }
+function _crEsAdmin() { return _crEsDueno(); }   /* boton "Publicar" y textos: solo el dueño */
+function _crBloquearPar() {
+  var dueno = _crEsDueno(), pane = el('tPar'); if (!pane) return;
+  pane.querySelectorAll('input, select').forEach(function (x) { x.disabled = !dueno; });
+  pane.querySelectorAll('button').forEach(function (b) { if (!dueno && !/volverOficiales/.test(b.getAttribute('onclick') || '')) b.style.display = 'none'; });
+  var av = el('pSoloLectura');
+  if (!dueno && !av) { av = document.createElement('div'); av.id = 'pSoloLectura';
+    av.style.cssText = 'background:#f1f5f9;border-left:4px solid #64748b;padding:9px 12px;border-radius:7px;font-size:12.5px;margin:4px 0 10px';
+    av.innerHTML = '🔒 <b>Solo lectura.</b> Estos parámetros los define el administrador del sistema; tus cálculos usan exactamente estos valores.';
+    var o = el('pOficial'); if (o && o.parentNode) o.parentNode.insertBefore(av, o); }
+}
 function _crLimpio(o) { var c = JSON.parse(JSON.stringify(o)); delete c._oficialVersion; delete c._modLocal; return c; }
 function _crRefrescar() {
   try { initQuin(); initDia(); initHE(); renderCal(); if (el('tPar').style.display !== 'none') renderPar(); } catch (e) {}
@@ -942,7 +976,7 @@ function cargarOficiales() {
   fetch(CALC_GAS + '?action=calcParamsLeer').then(function (r) { return r.json(); }).then(function (j) {
     if (j && j.success && j.params) {
       OFICIAL = j;
-      if (P._oficialVersion !== j.version) { _crAplicarOficial(j); _crRefrescar(); }
+      if (P._oficialVersion !== j.version || (P._modLocal && !_crEsDueno())) { _crAplicarOficial(j); _crRefrescar(); }   /* _CALC_DUENO_V1 */
     }
     renderOficial();
   }).catch(function () { renderOficial(); });
