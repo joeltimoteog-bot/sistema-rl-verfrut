@@ -1,5 +1,6 @@
 const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
+const AC = require('../shared/at-cambios');   /* _AT_CAMBIOS_V1 */
 
 module.exports = async function (context, req) {
   // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
@@ -34,11 +35,12 @@ module.exports = async function (context, req) {
     }
 
     const pool = await getPool();
+    await AC.asegurar(pool);   /* _AT_CAMBIOS_V1 */
     const result = await pool.request()
       .input('id', sql.Int, id)
       .input('estado', sql.NVarChar(30), estado)
       .query(`
-        UPDATE Atenciones SET estado = @estado WHERE id = @id;
+        UPDATE Atenciones SET estado = @estado, modificado = SYSUTCDATETIME() WHERE id = @id;
         SELECT @@ROWCOUNT AS filas_afectadas;
       `);
 

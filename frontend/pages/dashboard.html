@@ -5564,6 +5564,57 @@ async function cargarAtenciones(historial=false) {
    · Nunca pisa la tabla con "Cargando..." ni muestra errores: si falla, se
      queda como estaba y lo intenta en la siguiente vuelta.
    ══════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   _AT_CAMBIOS_V1 (01-oct-2026) — el refresco de "Mis Atenciones" pide SOLO lo que
+   cambio desde la vez anterior (Azure: /atenciones?cambiosDesde=...), no los 2 dias.
+   · La 1ra vez (o cada 30 min) se hace la carga completa de 2 dias, como siempre,
+     y se toma la hora de Azure ANTES de cargar (asi no se pierde nada entre medio).
+   · Si Azure no sabe responder, hay mas de 1000 cambios o algo falla -> carga completa.
+   · Se piden 2 min de margen hacia atras (lo repetido se fusiona sin duplicar).
+   ═══════════════════════════════════════════════════════════════════════════ */
+var _atCur = { t: null, en: 0 };
+function _atCambiosPedir(desdeIso, extra, lim) {
+  var u = AZURE_FN_BASE + '/atenciones?limit=' + (lim || 1000) + '&page=1&cambiosDesde=' + encodeURIComponent(desdeIso) + (extra || '');
+  try { if (typeof AZURE_FN_KEY_ATLIST !== 'undefined' && AZURE_FN_KEY_ATLIST) u += '&code=' + encodeURIComponent(AZURE_FN_KEY_ATLIST); } catch (e) {}
+  var c = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var t = setTimeout(function () { try { c && c.abort(); } catch (e) {} }, 15000);
+  return fetch(u, c ? { signal: c.signal } : undefined).then(function (r) {
+    clearTimeout(t); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json();
+  }, function (e) { clearTimeout(t); throw e; });
+}
+/* Devuelve: arreglo (puede venir vacio = nada nuevo) o null = hacer la carga completa */
+async function _atCambios(esAdmin) {
+  if (typeof AZURE_FN_BASE === 'undefined' || !USER || !USER.usuario) return null;
+  if (!_atCur.t || (Date.now() - _atCur.en) > 30 * 60 * 1000) {
+    _atCur.t = null;
+    try { var j0 = await _atCambiosPedir('2999-01-01T00:00:00Z', '', 1); if (j0 && j0.success && j0.ahora) { _atCur.t = j0.ahora; _atCur.en = Date.now(); } } catch (e) {}
+    return null;   // la carga completa la hace quien llama (despues de tomar la hora)
+  }
+  var desde = new Date(Date.parse(_atCur.t) - 120000).toISOString();
+  var nombre = String(USER.nombre || '').trim(), usuario = String(USER.usuario || '').trim();
+  var extras = esAdmin ? [''] : (nombre ? ['&supervisor=' + encodeURIComponent(nombre)] : []).concat(['&usuario=' + encodeURIComponent(usuario)]);
+  try {
+    var rs = await Promise.all(extras.map(function (x) { return _atCambiosPedir(desde, x); }));
+    var malo = rs.some(function (j) { return !j || !j.success || !j.ahora || Number(j.total || 0) > (j.data || []).length; });
+    if (malo) { _atCur.t = null; return null; }
+    var visto = {}, out = [];
+    rs.forEach(function (j) {
+      (j.data || []).forEach(function (a) {
+        if (!a) return;
+        ['fecha_atencion', 'fecha_inicio_periodo', 'fecha_termino_periodo', 'fecha_inicio_doc', 'fecha_termino_doc', 'fecha_registro', 'fecha_creacion']
+          .forEach(function (f) { if (a[f]) a[f] = String(a[f]).slice(0, 10); });
+        var k = a.nro != null ? 'n' + a.nro + '|' + String(a.dni || '') : 'i' + a.id;
+        if (visto[k]) return; visto[k] = 1; out.push(a);
+      });
+    });
+    try { if (typeof window._filtrarEliminadas === 'function') out = window._filtrarEliminadas(out) || out; } catch (eF) {}
+    _atCur.t = rs.map(function (j) { return j.ahora; }).sort()[0];
+    _atCur.en = Date.now();
+    return out;
+  } catch (e) { _atCur.t = null; return null; }
+}
+window._atCambios = _atCambios;
+
 var _refAtEnCurso = null;
 async function refrescarAtencionesHoy(motivo) {
   if (_refAtEnCurso) return _refAtEnCurso;
@@ -5572,7 +5623,13 @@ async function refrescarAtencionesHoy(motivo) {
     var esAdmin = ROLES_VER_TODO.includes(USER.rol);
     var frescos = null;
     try {
-      if (esAdmin && typeof window._azAtencionesRango === 'function') {
+      var _inc = null;
+      try { _inc = await _atCambios(esAdmin); } catch (eI) { _inc = null; }   /* _AT_CAMBIOS_V1: solo lo que cambio */
+      if (_inc) {
+        if (!_inc.length) return false;   // Azure respondio: no hay nada nuevo
+        frescos = _inc;
+      }
+      if (!frescos && esAdmin && typeof window._azAtencionesRango === 'function') {
         try { if (window._azLimpiarCache) window._azLimpiarCache(); } catch (e) {}
         frescos = await window._azAtencionesRango(_azHaceDias(2));
         if (Array.isArray(frescos) && !frescos.length) return false;   /* _REFRESCO_AZURE_V2: Azure respondio, no hay nada nuevo */
@@ -5581,7 +5638,7 @@ async function refrescarAtencionesHoy(motivo) {
           frescos.forEach(function (a) { _fld.forEach(function (c) { if (a[c]) a[c] = String(a[c]).slice(0, 10); }); });
         }
       }
-      if (!esAdmin && typeof window._azAtencionesSup === 'function') {   /* _AT_SUP_AZURE_V1 */
+      if (!frescos && !esAdmin && typeof window._azAtencionesSup === 'function') {   /* _AT_SUP_AZURE_V1 */
         try { frescos = await window._azAtencionesSup(2, true); } catch (eS) { frescos = null; }
         if (frescos && !frescos.length) return false;   // Azure respondio: no hay nada nuevo, no se molesta a la hoja
       }

@@ -1,6 +1,7 @@
 const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
 const G = require('../shared/at-guardar');   /* _AT_COLS_V1: asegura las columnas nuevas */
+const AC = require('../shared/at-cambios');   /* _AT_CAMBIOS_V1 */
  
 module.exports = async function (context, req) {
   // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
@@ -43,7 +44,7 @@ module.exports = async function (context, req) {
     }
 
     const pool = await getPool();
-    await G.asegurarTablas(pool);
+    await Promise.all([G.asegurarTablas(pool), AC.asegurar(pool)]);   /* _AT_CAMBIOS_V1 */
  
     const result = await pool.request()
       .input('nro', sql.Int, d.nro || null)
@@ -88,7 +89,7 @@ module.exports = async function (context, req) {
           SELECT TOP 1 @id = id FROM Atenciones WHERE nro = @nro AND anio = @anio AND dni = @dni ORDER BY id DESC;
         IF @id IS NOT NULL
         BEGIN
-          UPDATE Atenciones SET fecha_atencion = @fecha_atencion, hora_inicio = @hora_inicio, hora_termino = @hora_termino, nro_semana = @nro_semana, mes = @mes, nombre = @nombre, sexo = @sexo, fecha_inicio_periodo = @fecha_inicio_periodo, empresa = @empresa, fundo = @fundo, cargo = @cargo, ruta = @ruta, codigo = @codigo, fundo_actual = @fundo_actual, celular = @celular, supervisor = @supervisor, detalle_documento = @detalle_documento, nro_licencia = @nro_licencia, parentesco = @parentesco, fecha_inicio_doc = @fecha_inicio_doc, fecha_termino_doc = @fecha_termino_doc, dias_transcurridos = @dias_transcurridos, responsable_recepcion = @responsable_recepcion, observaciones = @observaciones, estado = @estado, usuario_sistema = @usuario_sistema, autorizado_por = CASE WHEN @autorizado_por <> N'' THEN @autorizado_por ELSE autorizado_por END, fecha_termino_periodo = COALESCE(@fecha_termino_periodo, fecha_termino_periodo)
+          UPDATE Atenciones SET fecha_atencion = @fecha_atencion, hora_inicio = @hora_inicio, hora_termino = @hora_termino, nro_semana = @nro_semana, mes = @mes, nombre = @nombre, sexo = @sexo, fecha_inicio_periodo = @fecha_inicio_periodo, empresa = @empresa, fundo = @fundo, cargo = @cargo, ruta = @ruta, codigo = @codigo, fundo_actual = @fundo_actual, celular = @celular, supervisor = @supervisor, detalle_documento = @detalle_documento, nro_licencia = @nro_licencia, parentesco = @parentesco, fecha_inicio_doc = @fecha_inicio_doc, fecha_termino_doc = @fecha_termino_doc, dias_transcurridos = @dias_transcurridos, responsable_recepcion = @responsable_recepcion, observaciones = @observaciones, estado = @estado, usuario_sistema = @usuario_sistema, autorizado_por = CASE WHEN @autorizado_por <> N'' THEN @autorizado_por ELSE autorizado_por END, fecha_termino_periodo = COALESCE(@fecha_termino_periodo, fecha_termino_periodo), modificado = SYSUTCDATETIME()
           WHERE nro = @nro AND anio = @anio AND dni = @dni;
           SET @accion = N'actualizado';
         END

@@ -20,6 +20,7 @@ CV = {'caido': False, 'llamadas': []}
 PERMX = {'resp': None, 'gas_falla': False}
 CUMPL = {'modo': 'ok', 'llamadas': []}   # ok | caido | 503
 AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
+ATC = {'urls': [], 'data': [], 'total': None}   # _AT_CAMBIOS_V1
 AZE = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _EDIT_AZURE_PRIMERO_V1  ok | caido | 503 | 403 | 404
 MODX = {'modo': 'ok', 'llamadas': []}
 CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
@@ -193,6 +194,12 @@ def resp_azure(url, post=''):
                 'resultados': [{'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'}]}
     if '/atenciones/by-dni' in url:
         return {'success': True, 'en_proceso': [], 'finalizadas_recientes': []}
+    if re.search(r'/api/atenciones\?', url):
+        ATC['urls'].append(url)
+    if re.search(r'/api/atenciones\?', url) and 'cambiosDesde=' in url:   # _AT_CAMBIOS_V1
+        if 'cambiosDesde=2999' in url: return {'success': True, 'total': 0, 'data': [], 'ahora': '2026-10-02T05:00:00.000Z'}
+        d = list(ATC['data'])
+        return {'success': True, 'total': ATC['total'] if ATC['total'] is not None else len(d), 'data': d, 'ahora': '2026-10-02T05:03:00.000Z'}
     if re.search(r'/api/atenciones\?', url):
         hoy = time.strftime('%Y-%m-%d')
         return {'success': True, 'total': 2, 'data': [
@@ -375,6 +382,23 @@ with sync_playwright() as pw:
     MODX['modo'] = 'ok'; RED['google'].clear()
     r = pag.evaluate("""async () => { const d = await apiGet({action: 'getSupervisores'}); return (d && d.fuente) + ':' + (d && d.data && d.data.length); }""")
     ok('Supervisores: la lista sale de Azure (antes ~22 s por Google)', r == 'azure:3' and 'getSupervisores' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    # ── Mis Atenciones: refresco solo con lo que cambio (_AT_CAMBIOS_V1) ──
+    def completas(): return [u for u in ATC['urls'] if 'cambiosDesde=' not in u]
+    def cambios(): return [u for u in ATC['urls'] if 'cambiosDesde=' in u and 'cambiosDesde=2999' not in u]
+    pag.evaluate("() => { _atCur.t = null; }"); ATC['urls'].clear(); ATC['data'] = []; ATC['total'] = None
+    pag.evaluate("async () => { await refrescarAtencionesHoy('prueba 1'); }")
+    ok('Mis Atenciones: la 1ra vez toma la hora de Azure (limit=1) y hace la carga completa de 2 dias', any('cambiosDesde=2999' in u and 'limit=1&' in u for u in ATC['urls']) and len(completas()) >= 1, str(len(completas())) + ' completas | ' + ' '.join(u.split('?')[1][:60] for u in ATC['urls'])[:300])
+    ATC['urls'].clear()
+    r = pag.evaluate("async () => await refrescarAtencionesHoy('prueba 2')")
+    ok('Mis Atenciones: luego pide SOLO lo que cambio (sin carga completa) y con 2 min de margen', r is False and len(cambios()) == 1 and not completas() and 'cambiosDesde=2026-10-02T04%3A58%3A00.000Z' in cambios()[0], str(r) + ' | ' + ' '.join(u.split('?')[1][:90] for u in ATC['urls']))
+    hoyS = time.strftime('%Y-%m-%d'); ATC['urls'].clear()
+    ATC['data'] = [{'id': 77, 'nro': 7777, 'dni': '33333333', 'nombre': 'CAMBIO NUEVO', 'fecha_atencion': hoyS + 'T00:00:00.000Z', 'supervisor': 'X', 'estado': 'FINALIZADO'}]
+    r = pag.evaluate("async () => { await refrescarAtencionesHoy('prueba 3'); const a = (CACHE.atenciones || []).find(x => String(x.nro) === '7777'); return a ? a.estado + '|' + a.fecha_atencion : 'no esta'; }")
+    ok('Mis Atenciones: un cambio llega a la lista (con la fecha normalizada) sin recargar los 2 dias', r == 'FINALIZADO|' + hoyS and not completas() and 'cambiosDesde=2026-10-02T05%3A01%3A00.000Z' in ''.join(cambios()), r + ' | ' + ' '.join(u.split('?')[1][:90] for u in ATC['urls']))
+    ATC['urls'].clear(); ATC['total'] = 5000
+    pag.evaluate("async () => { await refrescarAtencionesHoy('prueba 4'); }")
+    ok('Mis Atenciones: si hay demasiados cambios (mas de 1000), hace la carga completa como antes', len(completas()) >= 1, str(len(completas())) + ' completas')
+    ATC['data'] = []; ATC['total'] = None
     RED['google'].clear(); CV['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiGet({action:'getCasos', empresa:'', motivo:'', usuario:'jtimoteo', rol:'administrador'}); return (d && d.fuente) + ':' + (d && d.data ? d.data.length : -1); }""")
     ok('Casos/Visitas: la lista de casos sale de Azure', r == 'azure:2' and 'getCasos' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))

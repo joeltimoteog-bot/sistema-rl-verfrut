@@ -17,6 +17,7 @@
 const jwt = require('jsonwebtoken');
 const { sql, getPool } = require('../shared/db');
 const G = require('../shared/at-guardar');
+const AC = require('../shared/at-cambios');   /* _AT_CAMBIOS_V1 */
 
 function token(req) {
   const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
@@ -47,7 +48,7 @@ module.exports = async function (context, req) {
     const nro = parseInt(b.nro, 10);
     if (!nro) { context.res = { status: 400, body: { success: false, error: 'Falta N°' } }; return; }
     const pool = await getPool();
-    await G.asegurarTablas(pool);
+    await Promise.all([G.asegurarTablas(pool), AC.asegurar(pool)]);
     if (!prueba && !(await interruptor(pool))) {
       context.res = { status: 503, body: { success: false, apagado: true, error: 'Edicion en Azure apagada' } }; return;
     }
@@ -108,7 +109,7 @@ module.exports = async function (context, req) {
     try {
       const q = new sql.Request(tx);
       P.forEach(x => q.input(x[0], x[1], x[2]));
-      const u = await q.query(`SET NOCOUNT ON; UPDATE dbo.Atenciones SET ${set.join(', ')} WHERE nro = @n AND anio = @a AND dni = @d; SELECT @@ROWCOUNT AS n;`);
+      const u = await q.query(`SET NOCOUNT ON; UPDATE dbo.Atenciones SET ${set.join(', ')}, modificado = SYSUTCDATETIME() WHERE nro = @n AND anio = @a AND dni = @d; SELECT @@ROWCOUNT AS n;`);
       filasAct = u.recordset[0].n;
       if (prueba) await tx.rollback(); else await tx.commit();
     } catch (e) { try { await tx.rollback(); } catch (e2) {} throw e; }

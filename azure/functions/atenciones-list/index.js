@@ -1,5 +1,6 @@
 const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
+const AC = require('../shared/at-cambios');   /* _AT_CAMBIOS_V1 */
 
 module.exports = async function (context, req) {
   // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
@@ -50,6 +51,15 @@ module.exports = async function (context, req) {
     if (dni)        { where.push('dni = @dni');                  request.input('dni', sql.NVarChar, dni); }
     if (estado)     { where.push('estado = @estado');            request.input('estado', sql.NVarChar, estado); }
     if (usuario)    { where.push('usuario_sistema = @usuario'); request.input('usuario', sql.NVarChar, usuario); }
+    /* _AT_CAMBIOS_V1 (01-oct-2026): ?cambiosDesde=<ISO UTC> -> solo lo que cambio desde esa hora (+ 'ahora' de Azure) */
+    let ahora = null;
+    if (q.cambiosDesde !== undefined) {
+      const cd = new Date(String(q.cambiosDesde));
+      if (isNaN(cd.getTime())) { context.res = { status: 400, body: { success: false, error: 'cambiosDesde invalido' } }; return; }
+      await AC.asegurar(pool);
+      ahora = (await pool.request().query('SELECT SYSUTCDATETIME() AS a')).recordset[0].a;   /* antes de leer: no se pierde nada entre consultas */
+      where.push('modificado >= @cambiosDesde'); request.input('cambiosDesde', sql.DateTime2(3), cd);
+    }
 
     context.log('Ejecutando query: limite=' + lim + ', pagina=' + pag + ', offset=' + off);
 
@@ -69,6 +79,7 @@ module.exports = async function (context, req) {
         success: true,
         data: result.recordset,
         total: countResult.recordset[0].total,
+        ...(ahora ? { ahora: new Date(ahora).toISOString() } : {}),   /* _AT_CAMBIOS_V1 */
         pagina: pag,
         limite: lim
       }
