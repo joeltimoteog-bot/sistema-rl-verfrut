@@ -107,7 +107,8 @@
         <span><span class="dot" style="background:#f8fafc;border:1.5px solid #e2e8f0"></span>No laborable</span>
       </div>
       <div style="margin-top:10px" id="cInaList"></div>
-      <div class="nota">Jornadas: <b>02–03 ene</b> 8.45h · <b>04 ene</b> (si sábado) 5.75h · <b>Temporada Alta</b> (05 ene–26 jun) Lun-Vie 9.6h · <b>Temporada Baja</b> (27 jun–31 dic) Lun-Vie 8.45h y Sáb 5.75h · Domingos y feriados 0h. Feriados editables en ⚙️ Parámetros.</div>
+      <div class="nota" id="cHorario" style="margin-bottom:6px"></div>   <!-- _HORARIOS_V1 -->
+      <div class="nota">Jornadas: las define el <b>horario por periodo</b> (⚙️ Parámetros). Antes del 05-ene-2026: <b>02–03 ene</b> 8.45h · <b>04 ene</b> (si sábado) 5.75h · <b>Temporada Alta</b> (05 ene–26 jun) Lun-Vie 9.6h · <b>Temporada Baja</b> (27 jun–31 dic) Lun-Vie 8.45h y Sáb 5.75h · Domingos y feriados 0h. Feriados editables en ⚙️ Parámetros.</div>
     </div>
   </div>
 
@@ -219,6 +220,9 @@
         <div><label>Jornada T.Baja L-V (h)</label><input type="number" id="pJB" step="0.05"></div>
         <div><label>Jornada T.Baja Sáb (h)</label><input type="number" id="pJS" step="0.05"></div>
       </div>
+      <h3>🕐 Horarios por periodo <span style="font-size:11px;color:#64748b;font-weight:600">(cada fila rige desde su fecha hasta el siguiente cambio · horas = salida − entrada − refrigerio)</span></h3>
+      <div style="overflow-x:auto"><table id="tblHor"></table></div>
+      <div style="margin:8px 0 14px"><button type="button" class="btn sec" onclick="addHorario()">➕ Agregar cambio de horario</button></div>
       <h3>Tasas AFP / ONP</h3>
       <div style="overflow-x:auto"><table id="tblAfp"></table></div>
       <h3>Feriados</h3>
@@ -284,6 +288,13 @@ const PARAMS_DEFAULT = {
   jornadaAltaLV: 9.6,    // Temporada Alta: Lun-Vie (05 ene - 26 jun)
   jornadaBajaLV: 8.45,   // Temporada Baja: Lun-Vie (27 jun - 31 dic)
   jornadaBajaSab: 5.75,  // Temporada Baja: Sábado
+  /* _HORARIOS_V1 (02-oct-2026): horario de trabajo POR PERIODO (rige desde 'desde' hasta el siguiente cambio).
+     Horas = salida − entrada − refrigerio. Antes del 05-ene-2026 se usa la regla anterior (temporadas fijas). */
+  horarios: [
+    { desde: '2026-01-05', lvIni: '06:15', lvFin: '16:36', lvRef: 45, sab: false, sabIni: '06:15', sabFin: '12:00', sabRef: 0, nota: 'Temporada alta (L-V)' },
+    { desde: '2026-06-27', lvIni: '06:15', lvFin: '15:27', lvRef: 45, sab: true,  sabIni: '06:15', sabFin: '12:00', sabRef: 0, nota: 'Temporada baja (L-S)' },
+    { desde: '2026-10-01', lvIni: '06:15', lvFin: '16:36', lvRef: 45, sab: false, sabIni: '06:15', sabFin: '12:00', sabRef: 0, nota: 'Horario actual: L-V, sábado y domingo descanso' }
+  ],
   // Feriados (réplica EXACTA de la hoja Calendario N4:N19)
   feriados: ['2026-01-01','2026-04-17','2026-04-18','2026-05-01','2026-06-07',
              '2026-06-29','2026-07-23','2026-07-25','2026-07-29','2026-08-06',
@@ -351,9 +362,19 @@ function feriadosAnio(p, y) {
 
 /* ── Horas de jornada de un día (réplica fórmula hoja Calendario) ──
    d: Date local · feriadosSet/inasistSet: Set de 'yyyy-mm-dd' */
+/* ── _HORARIOS_V1: horario vigente de un dia y sus horas ── */
+function _hm(x) { const m = String(x || '').match(/^(\d{1,2}):(\d{2})/); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+function horasTramo(ini, fin, ref) { const a = _hm(ini), b = _hm(fin); if (a == null || b == null || b <= a) return 0; return Math.max(0, Math.round(((b - a) - (Number(ref) || 0)) / 60 * 100) / 100); }
+function horasHorario(h) { return { lv: horasTramo(h.lvIni, h.lvFin, h.lvRef), sab: h.sab ? horasTramo(h.sabIni, h.sabFin, h.sabRef) : 0 }; }
+function horarioDe(p, iso) {
+  const l = (p.horarios || []).filter(function (h) { return h && h.desde && h.desde <= iso; }).sort(function (a, b) { return a.desde < b.desde ? -1 : 1; });
+  return l.length ? l[l.length - 1] : null;
+}
 function horasDia(d, p, feriadosSet, inasistSet) {
   const iso = fmtISO(d);
   if (feriadosSet.has(iso) || inasistSet.has(iso)) return 0;
+  const hz = horarioDe(p, iso);   /* _HORARIOS_V1: si hay horario para esa fecha, manda el horario */
+  if (hz) { const w = d.getDay(), x = horasHorario(hz); return (w >= 1 && w <= 5) ? x.lv : (w === 6 ? x.sab : 0); }
   const y = d.getFullYear();
   const dow = d.getDay() === 0 ? 7 : d.getDay();   // 1=Lun ... 7=Dom (WEEKDAY(,2))
   const t = d.getTime();
@@ -385,9 +406,10 @@ function calendarioMes(anio, mes, p, inasistencias) {
     dias.push({ dia: dd, iso: fmtISO(d), dow: d.getDay(), horas: h,
                 feriado: fer.has(fmtISO(d)), inasistencia: ina.has(fmtISO(d)) });
     if (dd <= 15) q1 += h; else q2 += h;
-    const lv = d.getDay() >= 1 && d.getDay() <= 5;   /* _DESC_SEM_V1: lunes a viernes */
-    if (lv && fer.has(fmtISO(d))) { if (dd <= 15) fer1++; else fer2++; }        // feriado L-V (Calendario!N4:N19)
-    if (lv && h > 0) { if (dd <= 15) lv1++; else lv2++; }                       // dia L-V trabajado (sin feriados ni inasistencias)
+    /* _HORARIOS_V1: feriado que cae en un dia LABORABLE del horario vigente (L-V; tambien sabado si ese horario trabaja sabados) */
+    const labor = horasDia(d, p, new Set(), new Set()) > 0;
+    if (labor && fer.has(fmtISO(d))) { if (dd <= 15) fer1++; else fer2++; }
+    if (h > 0) { if (dd <= 15) lv1++; else lv2++; }                             // dias trabajados (sin feriados ni inasistencias) -> Desc. Semanal
   }
   return { dias, diasMes, horasQ1: r2(q1, 10), horasQ2: r2(q2, 10), horasMes: r2(q1 + q2, 10), fer1, fer2, lv1, lv2 };
 }
@@ -514,6 +536,11 @@ function initCal() {
 function renderCal() {
   const anio = parseInt(v('cAnio')), mes = parseInt(v('cMes'));
   const cal = calendarioMes(anio, mes, P, INA);
+  try {   /* _HORARIOS_V1: horario(s) que rigen en el mes */
+    const ini = anio + '-' + String(mes).padStart(2, '0') + '-01', fin = anio + '-' + String(mes).padStart(2, '0') + '-' + String(cal.diasMes).padStart(2, '0');
+    const hs = (P.horarios || []).slice().sort((a, b) => a.desde < b.desde ? -1 : 1).filter((h, i, l) => h.desde <= fin && (!l[i + 1] || l[i + 1].desde > ini));
+    el('cHorario').innerHTML = hs.length ? '🕐 Horario del mes: ' + hs.map(h => { const x = horasHorario(h); return '<b>desde ' + h.desde + '</b>: L-V ' + h.lvIni + '–' + h.lvFin + ' (−' + (h.lvRef || 0) + ' min) = ' + fnum(x.lv) + ' h' + (h.sab ? ' · Sáb ' + h.sabIni + '–' + h.sabFin + ' = ' + fnum(x.sab) + ' h' : ' · Sábado y domingo descanso') + (h.nota ? ' <i>(' + h.nota + ')</i>' : ''); }).join(' &nbsp;|&nbsp; ') : '';
+  } catch (e) {}
   el('kQ1').textContent = fnum(cal.horasQ1) + ' h';
   el('kQ2').textContent = fnum(cal.horasQ2) + ' h';
   el('kMes').textContent = fnum(cal.horasMes) + ' h';
@@ -740,6 +767,18 @@ function renderPar() {
   el('pCts').value = P.pctCTS; el('pGrat').value = P.pctGratif; el('pBon').value = P.pctBonif;
   el('pAf').value = P.pctAF; el('pBeta').value = P.pctBETA; el('pBonoAp').value = P.tarifaBonoAplicacion;
   el('pJA').value = P.jornadaAltaLV; el('pJB').value = P.jornadaBajaLV; el('pJS').value = P.jornadaBajaSab;
+  /* _HORARIOS_V1 */
+  if (!Array.isArray(P.horarios)) P.horarios = JSON.parse(JSON.stringify(PARAMS_DEFAULT.horarios));
+  P.horarios.sort(function (a, b) { return a.desde < b.desde ? -1 : 1; });
+  const _q = x => String(x == null ? '' : x).replace(/"/g, '&quot;');
+  el('tblHor').innerHTML = '<tr><th>Desde</th><th>L-V entrada</th><th>L-V salida</th><th>Refrig. L-V (min)</th><th>¿Sábado?</th><th>Sáb entrada</th><th>Sáb salida</th><th>Refrig. sáb (min)</th><th class="num">Horas L-V</th><th class="num">Horas Sáb</th><th>Nota</th><th></th></tr>' +
+    P.horarios.map((h, i) => {
+      const x = horasHorario(h), inp = (c, t, w) => `<input type="${t}" value="${_q(h[c])}" style="width:${w}px;padding:4px 6px" onchange="setHorario(${i},'${c}',this.value)">`;
+      return `<tr><td>${inp('desde','date',140)}</td><td>${inp('lvIni','time',100)}</td><td>${inp('lvFin','time',100)}</td><td>${inp('lvRef','number',70)}</td>
+        <td><select onchange="setHorario(${i},'sab',this.value)"><option value="0" ${h.sab ? '' : 'selected'}>No</option><option value="1" ${h.sab ? 'selected' : ''}>Sí</option></select></td>
+        <td>${inp('sabIni','time',100)}</td><td>${inp('sabFin','time',100)}</td><td>${inp('sabRef','number',70)}</td>
+        <td class="num"><b>${fnum(x.lv)}</b></td><td class="num"><b>${fnum(x.sab)}</b></td><td>${inp('nota','text',190)}</td>
+        <td><button type="button" onclick="quitarHorario(${i})" title="Quitar">✕</button></td></tr>`; }).join('');
   el('tblAfp').innerHTML = '<tr><th>AFP / ONP</th><th class="num">Flujo</th><th class="num">Mixta</th></tr>' +
     P.afps.map((a,i) => `<tr><td>${a.nombre}</td>
       <td class="num"><input style="width:100px;text-align:right;padding:4px 6px" type="number" step="0.0001" value="${a.flujo}" onchange="P.afps[${i}].flujo=parseFloat(this.value)||0"></td>
@@ -760,6 +799,22 @@ function guardarParams() {
   el('qBruta').value = P.remBruta; el('hBruta').value = pVigente(P).remBruta;   /* _RMV_2026_V1 */
   el('dBasica').value = Math.round(basicaDe(pVigente(P)) * 100) / 100;
   renderCal(); renderPar(); alert('✅ Parámetros guardados en este equipo');
+}
+/* _HORARIOS_V1: edicion de la tabla de horarios (solo el dueño: la pestaña queda bloqueada para los demas) */
+function setHorario(i, c, val) {
+  if (!P.horarios[i]) return;
+  P.horarios[i][c] = c === 'sab' ? val === '1' : ((c === 'lvRef' || c === 'sabRef') ? (parseFloat(val) || 0) : val);
+  renderPar(); try { renderCal(); } catch (e) {}
+}
+function addHorario() {
+  const ult = P.horarios[P.horarios.length - 1] || PARAMS_DEFAULT.horarios[0];
+  const n = JSON.parse(JSON.stringify(ult)); n.desde = fmtISO(new Date()); n.nota = 'Nuevo horario';
+  P.horarios.push(n); renderPar(); try { renderCal(); } catch (e) {}
+}
+function quitarHorario(i) {
+  if (P.horarios.length <= 1) { alert('Debe quedar al menos un horario.'); return; }
+  if (!confirm('¿Quitar el horario que rige desde ' + P.horarios[i].desde + '?')) return;
+  P.horarios.splice(i, 1); renderPar(); try { renderCal(); } catch (e) {}
 }
 function leerParamsUI() {
   P.remBruta = parseFloat(v('pBruta')) || P.remBruta;
