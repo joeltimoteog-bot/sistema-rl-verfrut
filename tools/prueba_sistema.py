@@ -20,6 +20,7 @@ CV = {'caido': False, 'llamadas': []}
 PERMX = {'resp': None, 'gas_falla': False}
 CUMPL = {'modo': 'ok', 'llamadas': []}   # ok | caido | 503
 AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
+AZE = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _EDIT_AZURE_PRIMERO_V1  ok | caido | 503 | 403 | 404
 MODX = {'modo': 'ok', 'llamadas': []}
 CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
 CAPG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _CAP_AZURE_PRIMERO_V1
@@ -88,6 +89,9 @@ def resp_azure(url, post=''):
         if acc == 'invGetAll': base.update({'productos': [], 'ingresos': [], 'entregas': []})
         if acc == 'getEstadisticasAdmin': base['data'] = {'stats': {'atenciones': {'total': 5, 'enProceso': 1, 'finalizados': 4, 'esteMes': 2}, 'visitas': {'total': 0, 'enPlazo': 0, 'retrasadas': 0, 'esteMes': 0}, 'casos': {'total': 0, 'enPlazo': 0, 'retrasados': 0, 'esteMes': 0}, 'fusiones': {'total': 0, 'pendientes': 0, 'validados': 0, 'trabajadores': 0, 'esteMes': 0}}, 'porSupervisor': {}, 'tendencia': [], 'filtros': {'anio': '', 'mes': ''}}
         return base
+    if '/api/atenciones/editar' in url:
+        AZE['llamadas'].append('editar'); AZE['cuerpos'].append(post)
+        return {'success': True, 'nro': 4242, 'anio': 2026, 'filas': 1, 'fuente': 'azure'}
     if '/api/atenciones/guardar' in url:
         AZG['llamadas'].append('guardar'); AZG['cuerpos'].append(post)
         return {'success': True, 'nro': 777, 'hoja': 'BB. DE REGISTROS 2026', 'fuente': 'azure', 'fecha_atencion': '2026-09-26', 'hora_inicio': '08:00', 'estado': 'EN PROCESO', 'parentesco': '', 'nro_licencia': ''}
@@ -279,6 +283,11 @@ def enrutar(route):
         if '/api/mod/' in url and MODX['modo'] == 'caido':
             MODX['llamadas'].append('caido')
             return route.abort()
+        if '/api/atenciones/editar' in url and AZE['modo'] != 'ok':
+            AZE['llamadas'].append(AZE['modo'])
+            if AZE['modo'] == 'caido': return route.abort()
+            cuerpo = {'503': '{"success":false,"apagado":true}', '403': '{"success":false,"error":"No tienes permiso para editar este registro."}', '404': '{"success":false,"noEsta":true}'}[AZE['modo']]
+            return route.fulfill(status=int(AZE['modo']), body=cuerpo, headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if '/api/atenciones/guardar' in url and AZG['modo'] == 'caido':
             AZG['llamadas'].append('caido')
             return route.abort()
@@ -546,6 +555,41 @@ with sync_playwright() as pw:
     r2 = pag.evaluate(CARRERA, dict(AT, nombre='APAGADO 2'))
     ok('Atencion nueva: apagado (503) -> Google, y no vuelve a preguntar a Azure por 5 min', r['r'] == 'OK' and r2['r'] == 'OK' and AZG['llamadas'] == ['503'] and RED['google'].count('saveAtencion') == 2, 'azure: ' + ','.join(AZG['llamadas']) + ' | google saveAtencion x' + str(RED['google'].count('saveAtencion')))
     AZG['modo'] = 'ok'
+    # ── Editar atencion: primero en Azure (_EDIT_AZURE_PRIMERO_V1) ──
+    ED = {'action': 'updateAtencion', 'nro': 4242, 'estado': 'FINALIZADO', 'hora_termino': '10:30', 'observaciones': 'ok', 'rol': 'administrador', 'usuario': 'jtimoteo'}
+    def limpiar_ed(): AZE['llamadas'].clear(); AZE['cuerpos'].clear(); RED['google'].clear(); RED['gurl'].clear()
+    limpiar_ed()
+    r = pag.evaluate("""async (b) => { const t0 = Date.now(); const d = await apiPost(Object.assign({}, b)); await new Promise(z => setTimeout(z, 900)); return (d && d.fuente) + ':' + (d && d.success) + ':' + (Date.now() - t0); }""", ED)
+    hoja = [u for u in RED['gurl'] if 'updateAtencionDesdeAzure' in u]
+    ok('Editar atencion: va a Azure y NO espera a Google (ni pide syncAtencionAzure)', r.startswith('azure:true:') and AZE['llamadas'] == ['editar'] and 'updateAtencion' not in RED['google'] and 'syncAtencionAzure' not in RED['google'], r + ' | azure: ' + ','.join(AZE['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    ok('Editar atencion: la hoja se actualiza en 2do plano (una vez, mismo N°)', len(hoja) == 1 and '"nro":4242' in hoja[0] and '"estado":"FINALIZADO"' in hoja[0], str(len(hoja)) + ' ' + (hoja[0][-160:] if hoja else ''))
+    ok('Editar atencion: Azure no recibe "action" y si recibe rol/usuario', AZE['cuerpos'] and '"action"' not in AZE['cuerpos'][0] and '"usuario":"jtimoteo"' in AZE['cuerpos'][0], (AZE['cuerpos'][0][:160] if AZE['cuerpos'] else ''))
+    pag.wait_for_timeout(300)
+    trf = [json.loads(x) for x in RED.get('trf', []) if x]
+    ge = [t for t in trf if t.get('accion') == 'Actualizó atención']
+    ok('Monitor en vivo: la edicion aparece una vez como Azure SQL (la copia a la hoja no se cuenta)', len(ge) == 1 and ge[0].get('destino') == 'Azure SQL', json.dumps(ge)[:300])
+    limpiar_ed()
+    r = pag.evaluate("""async (b) => { const x = await Promise.all([apiPost(Object.assign({}, b)), apiPost(Object.assign({}, b))]); return x.map(d => d && d.fuente).join(','); }""", dict(ED, observaciones='doble'))
+    ok('Editar atencion: doble clic -> 1 solo envio a Azure', AZE['llamadas'] == ['editar'] and r == 'azure,azure', r + ' | azure: ' + ','.join(AZE['llamadas']))
+    limpiar_ed()
+    r = pag.evaluate("""async () => { atTodas.push({nro: 4343, dni: '12345678', nombre: 'EDIT AZ', empresa: 'RAPEL', detalle_documento: '34 LICENCIA POR MATERNIDAD', nro_licencia: 'LIC-1', autorizado_por: 'ESSALUD', parentesco: '', fecha_termino_periodo: '2026-12-31', estado: 'EN PROCESO'});
+        editarAt(4343); await new Promise(z => setTimeout(z, 300)); await guardarAt(); await new Promise(z => setTimeout(z, 600)); try { cerrar('mAt'); } catch (e) {} return 'ok'; }""")
+    cu = ''.join(AZE['cuerpos'])
+    ok('Editar atencion (formulario completo): Autorizado por, licencia y fin de periodo viajan a Azure', AZE['llamadas'] == ['editar'] and '"autorizado_por":"ESSALUD"' in cu and '"nro_licencia":"LIC-1"' in cu and '"fecha_termino_periodo":"2026-12-31"' in cu and '"parentesco"' in cu and 'updateAtencion' not in RED['google'], cu[:300] + ' | google: ' + ','.join(RED['google']))
+    AZE['modo'] = 'caido'; limpiar_ed()
+    r = pag.evaluate(CARRERA, dict(ED, observaciones='caido'))
+    ok('Editar atencion: Azure caido -> 2 intentos y se edita por Google (con sync a Azure como antes)', r['r'] == 'OK' and AZE['llamadas'].count('caido') == 2 and 'updateAtencion' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms | azure: ' + ','.join(AZE['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    AZE['modo'] = '403'; limpiar_ed()
+    r = pag.evaluate("""async (b) => { const d = await apiPost(Object.assign({}, b)); return (d && d.success) + ':' + (d && d.error); }""", dict(ED, observaciones='ajeno', rol='supervisor'))
+    ok('Editar atencion: sin permiso (403) -> muestra el aviso y NO va a Google', r == 'false:No tienes permiso para editar este registro.' and 'updateAtencion' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    AZE['modo'] = '404'; limpiar_ed()
+    r = pag.evaluate("""async (b) => { const d = await apiPost(Object.assign({}, b)); return String(d && d.success); }""", dict(ED, observaciones='no esta'))
+    ok('Editar atencion: no esta en Azure (404) -> se edita por Google', r == 'true' and AZE['llamadas'] == ['404'] and 'updateAtencion' in RED['google'], r + ' | azure: ' + ','.join(AZE['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    AZE['modo'] = '503'; limpiar_ed()
+    r = pag.evaluate(CARRERA, dict(ED, observaciones='apagado 1'))
+    r2 = pag.evaluate(CARRERA, dict(ED, observaciones='apagado 2'))
+    ok('Editar atencion: apagado (503) -> Google, y no vuelve a preguntar a Azure por 5 min', r['r'] == 'OK' and r2['r'] == 'OK' and AZE['llamadas'] == ['503'] and RED['google'].count('updateAtencion') == 2, 'azure: ' + ','.join(AZE['llamadas']) + ' | google updateAtencion x' + str(RED['google'].count('updateAtencion')))
+    AZE['modo'] = 'ok'
     # ── Control de Cumplimiento desde Azure ──
     RED['google'].clear(); CUMPL['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiPost({action:'cumplPendientes', usuario:'jtimoteo', rol:'administrador'}); return (d && d.fuente) + ':' + (d && d.success); }""")
@@ -640,10 +684,10 @@ with sync_playwright() as pw:
     r = pag.evaluate("""async () => { await _sincronizarPapelera(); const x = await window._azAtencionesSup(30, true);
       return (x||[]).map(a => a.nro + '|' + a.dni).join(','); }""")
     ok('Supervisor: eliminada se oculta y la otra con el mismo N° sigue visible', r == '500|22222222', r)
-    RED['google'].clear()
+    RED['google'].clear(); AZE['llamadas'].clear()
     r = pag.evaluate(CARRERA, {'action': 'updateAtencion', 'nro': 500, 'estado': 'FINALIZADO', 'usuario': 'sprueba', 'rol': 'supervisor'})
     pag.wait_for_timeout(1500)
-    ok('Supervisor: editar -> guarda y sube a Azure en 2do plano', r['r'] == 'OK' and 'syncAtencionAzure' in RED['google'], r['r'] + ' | red: ' + ','.join(RED['google']))
+    ok('Supervisor: editar -> guarda en Azure y copia a la hoja en 2do plano (_EDIT_AZURE_PRIMERO_V1)', r['r'] == 'OK' and AZE['llamadas'] == ['editar'] and 'updateAtencionDesdeAzure' in RED['google'] and 'updateAtencion' not in RED['google'], r['r'] + ' | azure: ' + ','.join(AZE['llamadas']) + ' | red: ' + ','.join(RED['google']))
     RED['google'].clear()
     r = pag.evaluate("""async () => { if (typeof _chequearHistorialDNI!=='function') return 'SIN FUNCION';
       await Promise.race([_chequearHistorialDNI('12345678'), new Promise(z=>setTimeout(z,8000))]); return 'OK'; }""")

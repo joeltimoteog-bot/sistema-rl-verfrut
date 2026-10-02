@@ -61,7 +61,7 @@ window.RLTrafico = window.RLTrafico || (function () {
     saveEvaluacion360: 'Guardó evaluación 360', deleteEvaluacion360: 'Eliminó evaluación 360', savePreaviso: 'Registró preaviso',
     addAlmuerzo: 'Registró almuerzo', updateAlmuerzo: 'Actualizó almuerzo', permisosGuardar: 'Cambió permisos', accesoHorarioGuardar: 'Cambió horario de acceso'
   };
-  var NO = /^(cvAplicarDesdeAzure|salud|presencia|ping|keepwarm)/i;
+  var NO = /^(cvAplicarDesdeAzure|updateAtencionDesdeAzure|salud|presencia|ping|keepwarm)/i;
   var ESCRITURA = /^(save|update|delete|eliminar|add|resolver|registrar|aprobar|subir|guardar|programar|actualizar|cumplJustificar|cumplConfigGuardar|cumplRestriccionLevantar|cumplAusencia$|horas(Registrar|Editar|Eliminar|Aprobar)|inv(Agregar|Editar|Eliminar|Registrar|Guardar)|mant_|permisosGuardar|accesoHorario(Guardar|Eliminar)|horarios(Guardar|Eliminar)|duplicar)/i;
   var VERBOS = { save: 'Guardó', guardar: 'Guardó', update: 'Actualizó', actualizar: 'Actualizó', delete: 'Eliminó', eliminar: 'Eliminó', add: 'Agregó', registrar: 'Registró',
     aprobar: 'Aprobó', resolver: 'Resolvió', subir: 'Subió', programar: 'Programó', duplicar: 'Duplicó' };
@@ -84,6 +84,7 @@ window.RLTrafico = window.RLTrafico || (function () {
       if ((m = ruta.match(/^[\w-]+\/guardar\/(\w+)/))) return { accion: humano(m[1]), destino: 'Azure SQL' };
       if (ruta === 'atenciones/guardar') return { accion: 'Guardó atención', destino: 'Azure SQL' };
       if (ruta === 'atenciones/update') return { accion: 'Actualizó atención', destino: 'Azure SQL' };
+      if (ruta === 'atenciones/editar') return { accion: 'Actualizó atención', destino: 'Azure SQL' };   /* _EDIT_AZURE_PRIMERO_V1 */
       if (ruta === 'atenciones' && met === 'POST') return { accion: 'Sincronizó atención', destino: 'Azure SQL' };
       if (ruta.indexOf('trabajadores/buscar') === 0) return { accion: 'Buscó trabajador', destino: 'Azure SQL', tipo: 'consulta', sinJson: true };
       if (ruta.indexOf('atenciones/by-dni') === 0) return { accion: 'Consultó historial por DNI', destino: 'Azure SQL', tipo: 'consulta', sinJson: true };
