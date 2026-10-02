@@ -25,6 +25,12 @@
      pequeña que NO bloquea la pantalla ni la escritura; ✓ breve.
    · No se copia ni se lee la respuesta de las cargas (antes se leia completa: mas lento).
    · GUARDAR / ACTUALIZAR / ELIMINAR y descargas Excel/PDF: igual que antes.
+   _PROGRESO_V6 (02-oct-2026):
+   · Editar atencion por Azure (/atenciones/editar) muestra "Actualizando… ✓"; la copia a la hoja
+     (updateAtencionDesdeAzure) es de 2do plano y no muestra nada.
+   · Firestore (apps ETI): RLProgreso.firestoreCompat(firebase) muestra el circulo y ✓ en add / set /
+     update / delete del SDK compat; las escrituras REST (PATCH/DELETE a firestore.googleapis.com) tambien.
+   · RLProgreso.silencio(fn): lo que se escriba dentro de fn (en ese instante) no muestra nada (2do plano).
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -33,7 +39,7 @@
 
   var ESCRITURA = /^(save|update|delete|eliminar|add|resolver|registrar|aprobar|subir|guardar|programar|actualizar|cumplConfigGuardar|cumplRestriccionLevantar|horas(Registrar|Editar|Eliminar|Aprobar|AgregarMotivo|EliminarMotivo)|inv(Agregar|Editar|Eliminar|Registrar|Guardar|Armar)|mant_|permisosGuardar|accesoHorario(Guardar|Eliminar)|horarios(Guardar|Eliminar)|duplicar)/i;
   /* en 2do plano: no se muestran */
-  var SILENCIO = /^(saveAtencionDesdeAzure|syncAtencionAzure|syncFirebaseAtencion|registrarArchivoAzure|subirArchivoAzure|saludLog|saludReporte|cumplJustificar|registrarEnvioAlmuerzos|guardarCacheLS|updateUltimaAlerta)$/i;
+  var SILENCIO = /^(saveAtencionDesdeAzure|updateAtencionDesdeAzure|syncAtencionAzure|syncFirebaseAtencion|registrarArchivoAzure|subirArchivoAzure|saludLog|saludReporte|cumplJustificar|registrarEnvioAlmuerzos|guardarCacheLS|updateUltimaAlerta)$/i;
 
   function textos(a) {
     if (/elimin|delete|borrar/i.test(a)) return ['Eliminando…', 'Eliminado'];
@@ -48,8 +54,14 @@
         if (init && String(init.method || 'GET').toUpperCase() === 'OPTIONS') return null;
         if ((m = u.match(/\/api\/[a-z]+\/guardar\/([A-Za-z]+)/))) return { a: m[1], azure: true };
         if (/\/api\/atenciones\/guardar/.test(u)) return { a: 'saveAtencion', azure: true };
+        if (/\/api\/atenciones\/editar/.test(u)) return { a: 'updateAtencion', azure: true };   /* _PROGRESO_V6 */
         if ((m = u.match(/\/api\/acceso\/(accesoHorarioGuardar|accesoHorarioEliminar|permisosGuardar)/))) return { a: m[1], azure: true };
         return null;
+      }
+      if (/firestore\.googleapis\.com\/v1\//.test(u)) {   /* _PROGRESO_V6: escrituras REST a Firestore (ETI) */
+        if (_silencio) return null;
+        var met = String((init && init.method) || 'GET').toUpperCase();
+        return met === 'PATCH' ? { a: 'actualizar', azure: false } : (met === 'DELETE' ? { a: 'eliminar', azure: false } : null);
       }
       if (!/script\.google(usercontent)?\.com/.test(u)) return null;
       var a = '';
@@ -126,7 +138,35 @@
   }
 
   /* _PROGRESO_V2: acciones explicitas de la pagina (cargar, exportar, informe) */
+  var _silencio = 0;   /* _PROGRESO_V6 */
+  var T_G = ['Guardando…', 'Guardado', 'No se pudo guardar'], T_A = ['Actualizando…', 'Actualizado', 'No se pudo actualizar'], T_E = ['Eliminando…', 'Eliminado', 'No se pudo eliminar'];
   window.RLProgreso = {
+    /* _PROGRESO_V6: lo que se escriba DENTRO de fn (al llamarla) no muestra nada */
+    silencio: function (fn) { _silencio++; try { return fn(); } finally { _silencio--; } },
+    /* _PROGRESO_V6: Firestore SDK compat (firebase.firestore()): circulo y ✓ en add/set/update/delete */
+    firestoreCompat: function (fb) {
+      try {
+        var F = fb && fb.firestore;
+        if (!F || !F.CollectionReference || F._rlProgOk) return false;
+        F._rlProgOk = true;
+        var env = function (proto, nombre, t) {
+          var o = proto && proto[nombre];
+          if (typeof o !== 'function') return;
+          proto[nombre] = function () {
+            var self = this, args = arguments;
+            if (_silencio) return o.apply(self, args);
+            return window.RLProgreso.accion(t, function () { return o.apply(self, args); });
+          };
+        };
+        env(F.CollectionReference.prototype, 'add', T_G);
+        env(F.DocumentReference.prototype, 'set', T_G);
+        env(F.DocumentReference.prototype, 'update', T_A);
+        env(F.DocumentReference.prototype, 'delete', T_E);
+        return true;
+      } catch (e) { return false; }
+    },
+    /* para el SDK modular (import { addDoc... }): T.guardar / T.actualizar / T.eliminar */
+    T: { guardar: T_G, actualizar: T_A, eliminar: T_E },
     accion: function (t, fn) {
       try { inicio({ a: '', t: [t[0], t[1], t[2] || 'No se pudo completar'] }); } catch (e) {}
       enganchar();
@@ -223,7 +263,7 @@
       if (!resp.ok) { fin(false, 'HTTP ' + resp.status, definitivo); return; }
       resp.clone().text().then(function (t) {
         var j = null; try { j = JSON.parse(t); } catch (e) {}
-        if (j && (j.success === false || j.ok === false || j.error)) fin(false, j.error || j.msg || j.mensaje || 'No se completo', definitivo);   /* Mantenimiento responde {ok, msg} */
+        if (j && (j.success === false || j.ok === false || j.error)) fin(false, (j.error && j.error.message) || j.error || j.msg || j.mensaje || 'No se completo', definitivo);   /* _PROGRESO_V6: Firestore REST da {error:{message}} */   /* Mantenimiento responde {ok, msg} */
         else fin(true);
       }, function () { fin(true); });
     }, function (e) { fin(false, 'Sin conexion', !c.azure); });
