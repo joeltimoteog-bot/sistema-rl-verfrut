@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Fecha y hora de hoy
   const now = new Date();
-  sv('capFecha', now.toISOString().split('T')[0]);
+  sv('capFecha', _hoyLimaCap(now));   /* _CAP_HOY_LIMA_V1: antes toISOString (UTC) -> despues de las 7 p.m. salia el dia siguiente */
   sv('capHoraInicio', now.toTimeString().slice(0, 5));
 
   // Feedback visual en checkboxes de tipo
@@ -198,8 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Rango export default: últimos 30 días
   const hace30 = new Date(Date.now() - 30 * 24 * 3600 * 1000);
-  sv('expDesde', hace30.toISOString().split('T')[0]);
-  sv('expHasta', now.toISOString().split('T')[0]);
+  sv('expDesde', _hoyLimaCap(hace30));   /* _CAP_HOY_LIMA_V1 */
+  sv('expHasta', _hoyLimaCap(now));
 
   // Mostrar paso0 al iniciar
   _mostrarPaso(0);
@@ -291,7 +291,7 @@ function _mostrarModalBusquedaCapacitaciones() {
   overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
 
   // Fecha por defecto: hoy
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = _hoyLimaCap(new Date());   /* _CAP_HOY_LIMA_V1 */
 
   let html = '<div style="background:white;padding:24px;border-radius:12px;max-width:760px;max-height:85vh;overflow:auto;width:100%">';
   html += '<h3 style="margin-top:0;margin-bottom:6px">📅 Regenerar formato R-SC-01</h3>';
@@ -1538,8 +1538,8 @@ async function buscarSupervisorPorDNI() {
   const elN = document.getElementById('capRespNombre');
   if (elN) elN.placeholder = '🔍 Buscando...';
   try {
-    // 1. Buscar en BD_Supervisores
-    const ds = await apiGet({ action: 'getSupervisores' });
+    // 1. Buscar en BD_Supervisores — _CAP_RESP_AZURE_V1: primero Azure (misma lista), Google de respaldo
+    const ds = await _capSupervisoresAzure() || await apiGet({ action: 'getSupervisores' });
     if (ds.success && ds.data) {
       const sup = ds.data.find(s => String(s.dni).trim() === dni);
       if (sup) {
@@ -1610,6 +1610,32 @@ function _getLogoBase64() {
     }
     intentar();
   });
+}
+
+/* _CAP_HOY_LIMA_V1 (03-oct-2026): fecha AAAA-MM-DD en hora de Lima (no UTC) */
+function _hoyLimaCap(d) {
+  try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d || new Date()); }
+  catch (e) { const x = new Date((d || new Date()).getTime() - 5 * 3600e3); return x.toISOString().slice(0, 10); }
+}
+
+/* _CAP_RESP_AZURE_V1 (03-oct-2026): lista de supervisores (BD_Supervisores) desde Azure,
+   la misma que usa la carga del dashboard. Se pide una sola vez por pagina.
+   Si Azure falla o tarda mas de 6 s -> null y se usa Google como siempre. */
+let _capSupAzureCache = null;
+async function _capSupervisoresAzure() {
+  if (_capSupAzureCache) return _capSupAzureCache;
+  const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  const reloj = setTimeout(() => { try { ctrl && ctrl.abort(); } catch (e) {} }, 6000);
+  try {
+    const op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' };
+    if (ctrl) op.signal = ctrl.signal;
+    const r = await fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/sup/getSupervisores', op);
+    const j = await r.json();
+    clearTimeout(reloj);
+    if (r.status === 200 && j && j.success && Array.isArray(j.data)) { _capSupAzureCache = j; return j; }
+    console.warn('[_CAP_RESP_AZURE_V1] Azure HTTP ' + r.status + ' -> Google (respaldo)');
+  } catch (e) { clearTimeout(reloj); console.warn('[_CAP_RESP_AZURE_V1] Azure sin respuesta -> Google (respaldo)'); }
+  return null;
 }
 
 /* ─────────────────────── REGISTROS ─────────────────────── */
@@ -2279,7 +2305,7 @@ function capPareceAdmin() {
 function capDesdeMeses(n) {
   var f = new Date();
   f.setMonth(f.getMonth() - n);
-  return f.toISOString().slice(0, 10);
+  return _hoyLimaCap(f);   /* _CAP_HOY_LIMA_V1 */
 }
 
 async function capCargarSupervisores() {
@@ -2293,7 +2319,7 @@ async function capCargarSupervisores() {
       usuario:    USER.usuario,
       empresa:    '',
       desde:      capDesdeMeses(CAP_MESES_SUP),
-      hasta:      new Date().toISOString().slice(0, 10),
+      hasta:      _hoyLimaCap(new Date()),   /* _CAP_HOY_LIMA_V1 */
       supervisor: ''
     });
     try {
