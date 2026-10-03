@@ -42,7 +42,9 @@ function crear(D) {
       for (let r = 1; r < datos.length; r++) {
         const obj = {};
         headers.forEach((h, i) => { obj[camel(T(h))] = datos[r][i]; });
-        const f = T(obj.fecha || '').split('T')[0];
+        /* _CAP_REG_V2 (03-oct): antes comparaba el texto de la fecha ("Thu Oct 02 2026 ...") con
+           "2026-10-01" y el filtro Desde/Hasta nunca funciono (ni en Google). Ahora fecha de Lima. */
+        const f = esD(obj.fecha) ? capFecha_(obj.fecha) : T(obj.fecha || '').split('T')[0];
         if (desde && f < desde) continue;
         if (hasta && f > hasta) continue;
         if (empresa && empresa !== 'AMBAS' && J(obj.empresa) !== empresa) continue;

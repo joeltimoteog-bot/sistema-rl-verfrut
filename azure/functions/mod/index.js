@@ -89,6 +89,15 @@ module.exports = async function (context, req) {
   const h = HANDLERS[modulo], fn = h && h.acciones[accion];
   if (!fn) { context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
   try {
+    if (modulo === 'cap' && accion === 'listarCapacitaciones') {   /* _CAP_REG_V2: la lista solo necesita las cabeceras (antes cargaba tambien los ~20 mil asistentes) */
+      const cab = await TH.leer(await getPool(), 'cap_cabeceras');
+      if (cab) {
+        const out = require('../shared/mod-cap').crear({ hdr: [cab.encabezado].concat(cab.filas) }).capListar(req.body || {});
+        out.fuente = 'azure';
+        context.res = { status: 200, body: out };
+        return;
+      }
+    }
     if (modulo === 'cap' && accion === 'exportarCapacitaciones') {   /* _CAP_EXPORT_SQL_V1: sin cargar las tablas completas */
       const t0 = Date.now();
       const out = await require('../shared/mod-cap').capExportarSql(await getPool(), req.body || {});

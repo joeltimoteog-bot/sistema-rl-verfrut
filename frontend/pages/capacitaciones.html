@@ -135,6 +135,37 @@
     .modal-add-row { display:flex; gap:8px; margin-top:12px; flex-shrink:0; }
     .modal-add-row input { flex:1; }
 
+    /* _CAP_REG_V2: Registros e indicadores */
+    .creg-head { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .creg-rango { font-size:12px; color:#64748b; font-weight:600; }
+    .creg-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; align-items:end; }
+    .creg-grid select, .creg-grid input { width:100%; }
+    .creg-grid .fg.creg-btns { display:flex; flex-direction:row; gap:6px; flex-wrap:wrap; align-items:flex-end; grid-column: span 2; }
+    @media(max-width:640px){ .creg-btns { grid-column: span 1; } }
+    .creg-btns .btn { padding:8px 12px; font-size:12.5px; width:auto; flex:0 0 auto; }
+    .creg-kpis { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:12px; margin:14px 0; }
+    @media(max-width:1000px){ .creg-kpis { grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); } }
+    .creg-kpi { background:#fff; border:1px solid #e6eaf2; border-radius:14px; padding:14px 16px; position:relative; overflow:hidden; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 6px 18px rgba(10,36,99,.06); }
+    .creg-kpi::before { content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--k,#0a2463); }
+    .creg-kpi .k-top { display:flex; align-items:center; justify-content:space-between; }
+    .creg-kpi .k-lbl { font-size:10.5px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; color:#64748b; }
+    .creg-kpi .k-ico { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:15px; background:var(--kb,#eef2fb); }
+    .creg-kpi .k-val { font-family:'Barlow Condensed',sans-serif; font-size:32px; font-weight:800; color:#0f172a; line-height:1.1; margin-top:6px; }
+    .creg-kpi .k-sub { font-size:12px; color:#64748b; margin-top:2px; }
+    .creg-graf { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+    .creg-box { background:#fff; border:1px solid #e6eaf2; border-radius:14px; padding:14px 16px; box-shadow:0 1px 2px rgba(15,23,42,.04), 0 6px 18px rgba(10,36,99,.06); min-width:0; }
+    .creg-box h3 { margin:0 0 10px; font-family:'Barlow Condensed',sans-serif; font-size:14px; font-weight:700; color:#0a2463; text-transform:uppercase; letter-spacing:.5px; }
+    .creg-box h3 span { color:#94a3b8; font-weight:600; text-transform:none; letter-spacing:0; }
+    .creg-ancho { grid-column: 1 / -1; }
+    .creg-doble { grid-column: span 2; }
+    .creg-canvas { position:relative; height:220px; }
+    .creg-alto { height:260px; }
+    #cregBoxSup { grid-column: 1 / -1; }
+    @media(max-width:900px){ .creg-graf { grid-template-columns:1fr; } .creg-ancho, .creg-doble, #cregBoxSup { grid-column: 1 / -1; } }
+    #tbRegistrosWrap .data-table td.creg-tema { min-width:200px; }
+    #tbRegistrosWrap .data-table td.creg-capac { min-width:120px; }
+    #tbRegistrosWrap .data-table .creg-reu { padding:5px 8px; white-space:nowrap; }
+    .creg-chip { display:inline-block; padding:2px 8px; border-radius:999px; font-size:10.5px; font-weight:700; background:#eef2fb; color:#0a2463; white-space:nowrap; }
     /* ── Stats / Gráficos capacitaciones (admin) ── */
     .stats-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:14px; margin-bottom:20px; }
     .stat-card { background:#fff; border-radius:12px; padding:18px 16px; text-align:center; box-shadow:0 2px 8px rgba(0,0,0,.08); border-left:4px solid #0a2463; }
@@ -474,42 +505,44 @@ h3{font-size:16px !important}
 <!-- ══════════════════ TAB: REGISTROS ══════════════════ -->
 <div class="tab-content" id="tab-registros">
 
-  <!-- ESTADÍSTICAS (solo admin) -->
-  <div id="seccionRegistrosAdmin" style="display:none;margin-bottom:18px">
-    <div class="stats-cards">
-      <div class="stat-card"><div class="stat-icon">📚</div><div class="stat-value" id="statTotal">0</div><div class="stat-label">Total Capacitaciones</div></div>
-      <div class="stat-card"><div class="stat-icon">👥</div><div class="stat-value" id="statAsistentes">0</div><div class="stat-label">Personas Capacitadas</div></div>
-      <div class="stat-card"><div class="stat-icon">📅</div><div class="stat-value" id="statEsteMes">0</div><div class="stat-label">Este Mes</div></div>
-      <div class="stat-card"><div class="stat-icon">👤</div><div class="stat-value" id="statSupActivos">0</div><div class="stat-label">Sup. Activos</div></div>
+  <!-- _CAP_REG_V2 (03-oct-2026): Registros por rango de fechas + filtros "Registrado por" y
+       "Capacitador" + indicadores calculados sobre lo filtrado (para todos los usuarios). -->
+  <div class="card creg-filtros">
+    <div class="creg-head">
+      <div class="card-title" style="margin:0">📋 Registros de capacitaciones</div>
+      <div id="cregRango" class="creg-rango"></div>
     </div>
-    <div class="graficos-row">
-      <div class="grafico-box"><h3>📈 Tendencia últimos 6 meses</h3><canvas id="chartTendenciaCap"></canvas></div>
-      <div class="grafico-box"><h3>🏢 Por Empresa</h3><canvas id="chartEmpresaCap"></canvas></div>
+    <div class="creg-grid">
+      <div class="fg"><label class="lbl">Desde</label><input type="date" id="cregDesde"></div>
+      <div class="fg"><label class="lbl">Hasta</label><input type="date" id="cregHasta"></div>
+      <div class="fg"><label class="lbl">Empresa</label>
+        <select id="cregEmpresa"><option value="">Todas</option><option value="RAPEL">RAPEL</option><option value="VERFRUT">VERFRUT</option></select></div>
+      <div class="fg" id="cregSupWrap" style="display:none"><label class="lbl">Registrado por</label>
+        <select id="cregSup" onchange="cregAplicar()"><option value="">Todos</option></select></div>
+      <div class="fg"><label class="lbl">Capacitador</label>
+        <select id="cregCap" onchange="cregAplicar()"><option value="">Todos</option></select></div>
+      <div class="fg creg-btns">
+        <button class="btn btn-primary" onclick="cargarRegistros()">🔍 Buscar</button>
+        <button class="btn btn-gray" onclick="cregRapido('mes')" title="Mes actual">Este mes</button>
+        <button class="btn btn-gray" onclick="cregRapido('mesant')" title="Mes anterior">Mes anterior</button>
+      </div>
     </div>
-    <div class="grafico-box" style="margin-top:14px"><h3>🏆 Top Supervisores del Mes</h3><canvas id="chartTopSupCap"></canvas></div>
   </div>
 
-  <!-- TABLA + FILTROS -->
+  <div id="cregKpis" class="creg-kpis"></div>
+
+  <div id="cregGraficos" class="creg-graf" style="display:none">
+    <div class="creg-box creg-ancho"><h3>Evolución <span id="cregEvoLbl"></span></h3><div class="creg-canvas"><canvas id="cregChEvo"></canvas></div></div>
+    <div class="creg-box"><h3>Por tipo de actividad</h3><div class="creg-canvas"><canvas id="cregChTipo"></canvas></div></div>
+    <div class="creg-box"><h3>Por empresa</h3><div class="creg-canvas"><canvas id="cregChEmp"></canvas></div></div>
+    <div class="creg-box creg-doble"><h3>Temas más dictados</h3><div class="creg-canvas"><canvas id="cregChTema"></canvas></div></div>
+    <div class="creg-box" id="cregBoxSup"><h3>Supervisores · personas capacitadas</h3><div class="creg-canvas creg-alto"><canvas id="cregChSup"></canvas></div></div>
+  </div>
+
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <div class="card-title" style="margin:0">📋 Registros de capacitaciones</div>
-      <button class="btn btn-primary btn-sm" onclick="cargarRegistros()">🔄 Actualizar</button>
-    </div>
-    <div class="filtros-avanzados">
-      <select id="filtroEmpReg" style="padding:7px 11px;border:2px solid #e2e8f0;border-radius:8px;font-size:13px;font-family:'Barlow',sans-serif">
-        <option value="">Todas las empresas</option>
-        <option value="RAPEL">RAPEL</option>
-        <option value="VERFRUT">VERFRUT</option>
-      </select>
-      <span id="filtroSupRow" style="display:none;align-items:center;gap:6px">
-        <select id="filtroSupCap" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:12px;font-family:'Barlow',sans-serif;min-width:160px">
-          <option value="">Todos los supervisores</option>
-        </select>
-      </span>
-      <input type="date" id="filtroDesdeCap" placeholder="Desde" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:12px">
-      <input type="date" id="filtroHastaCap" placeholder="Hasta" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:8px;font-size:12px">
-      <button class="btn btn-primary btn-sm" onclick="aplicarFiltrosCap()">🔍 Filtrar</button>
-      <button class="btn btn-sm" style="background:#f1f5f9;color:#475569;border:none;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer" onclick="limpiarFiltrosCap()">✖ Limpiar</button>
+    <div class="creg-head">
+      <div class="card-title" style="margin:0">Detalle</div>
+      <div id="cregConteo" class="creg-rango"></div>
     </div>
     <div id="tbRegistrosWrap" style="overflow-x:auto">
       <div class="empty"><div class="empty-icon">⏳</div>Cargando registros...</div>

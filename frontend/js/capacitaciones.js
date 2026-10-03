@@ -1639,171 +1639,233 @@ async function _capSupervisoresAzure() {
 }
 
 /* ─────────────────────── REGISTROS ─────────────────────── */
-let _chartTendenciaCap = null;
-let _chartEmpresaCap   = null;
-let _chartTopSupCap    = null;
+/* _CAP_REG_V2 (03-oct-2026) — Registros por rango de fechas.
+   · Al abrir carga SOLO el mes actual (antes traia todo el historial: lento).
+   · "Buscar" pide a Azure el rango y la empresa elegidos (Google de respaldo).
+   · "Registrado por" (solo admin) y "Capacitador" filtran al instante lo ya cargado.
+   · Indicadores y graficos se calculan sobre lo filtrado, para todos los usuarios.
+     Ya no se llama a estadisticasCapacitaciones (una consulta menos). */
+let _cregDatos = [];          // lo que devolvio el servidor para el rango
+let _cregEsAdmin = false;
+const _cregCharts = {};
+
+function _cregNum(x) { const n = parseFloat(String(x == null ? '' : x).replace(',', '.')); return isNaN(n) ? 0 : n; }
+function _cregFecha(r) { return String(r.fecha || r.fechaCapacitacion || '').substring(0, 10); }
+function _cregFmt(n, dec) { return Number(n || 0).toLocaleString('es-PE', { maximumFractionDigits: dec || 0, minimumFractionDigits: 0 }); }
+function _cregDdmm(f) { const p = String(f || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (f || ''); }
+function _cregEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function _cregRangoInicial() {
+  const hoy = _hoyLimaCap(new Date());
+  if (!v('cregDesde')) sv('cregDesde', hoy.slice(0, 8) + '01');
+  if (!v('cregHasta')) sv('cregHasta', hoy);
+}
+
+function cregRapido(que) {
+  const hoy = _hoyLimaCap(new Date());
+  if (que === 'mes') { sv('cregDesde', hoy.slice(0, 8) + '01'); sv('cregHasta', hoy); }
+  else {
+    const y = +hoy.slice(0, 4), m = +hoy.slice(5, 7) - 1;            // mes anterior
+    const yy = m === 0 ? y - 1 : y, mm = m === 0 ? 12 : m;
+    const ult = new Date(Date.UTC(yy, mm, 0)).getUTCDate();
+    const p = String(mm).padStart(2, '0');
+    sv('cregDesde', yy + '-' + p + '-01'); sv('cregHasta', yy + '-' + p + '-' + String(ult).padStart(2, '0'));
+  }
+  cargarRegistros();
+}
 
 async function cargarRegistros() {
   const wrap = document.getElementById('tbRegistrosWrap');
   if (!wrap || !USER) return;
-  wrap.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div>Cargando...</div>';
+  _cregRangoInicial();
+  const desde = v('cregDesde'), hasta = v('cregHasta');
+  if (desde && hasta && desde > hasta) { wrap.innerHTML = '<div class="empty"><div class="empty-icon">⚠️</div>La fecha "Desde" no puede ser mayor que "Hasta"</div>'; return; }
+  wrap.innerHTML = '<div class="empty"><div class="empty-icon">⏳</div>Cargando registros...</div>';
+  const kp = document.getElementById('cregKpis'); if (kp) kp.style.opacity = '.5';
   try {
+    const t0 = Date.now();
     const d = await apiPost({
-      action:     'listarCapacitaciones',
-      rol:        USER.rol,
-      usuario:    USER.usuario,
-      empresa:    v('filtroEmpReg')     || '',
-      desde:      v('filtroDesdeCap')   || '',
-      hasta:      v('filtroHastaCap')   || '',
-      supervisor: v('filtroSupCap')     || ''
+      action: 'listarCapacitaciones', rol: USER.rol, usuario: USER.usuario,
+      empresa: v('cregEmpresa') || '', desde: desde, hasta: hasta, supervisor: ''
     });
     if (!d.success) throw new Error(d.error || 'Error servidor');
-
-    const lista = d.capacitaciones || [];
-    const esAdmin = !!d.esAdmin;
-
-    // Mostrar/ocultar sección admin
-    const secAdmin = document.getElementById('seccionRegistrosAdmin');
-    if (secAdmin) secAdmin.style.display = esAdmin ? '' : 'none';
-
-    // Ocultar filtro supervisor si no es admin
-    const filtroSupRow = document.getElementById('filtroSupRow');
-    if (filtroSupRow) filtroSupRow.style.display = esAdmin ? '' : 'none';
-
-    if (!lista.length) {
-      wrap.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>Sin registros aún</div>';
-    } else {
-      esAdmin ? renderizarTablaAdmin(lista) : renderizarTablaSupervisor(lista, wrap);
-    }
-
-    if (esAdmin) await cargarEstadisticas();
-
-  } catch(e) {
-    wrap.innerHTML = `<div class="empty"><div class="empty-icon">❌</div>Error: ${e.message}</div>`;
-  }
+    _cregDatos = (d.capacitaciones || []).slice().sort((a, b) => _cregFecha(b).localeCompare(_cregFecha(a)));
+    _cregEsAdmin = !!d.esAdmin;
+    console.log('[_CAP_REG_V2] ' + _cregDatos.length + ' capacitaciones (' + desde + ' a ' + hasta + ') en ' + (Date.now() - t0) + ' ms · fuente ' + (d.fuente || 'google'));
+    const rg = document.getElementById('cregRango');
+    if (rg) rg.textContent = _cregDdmm(desde) + ' — ' + _cregDdmm(hasta);
+    _cregLlenarFiltros();
+    cregAplicar();
+  } catch (e) {
+    wrap.innerHTML = `<div class="empty"><div class="empty-icon">❌</div>Error: ${_cregEsc(e.message)}</div>`;
+  } finally { if (kp) kp.style.opacity = ''; }
 }
 
-function renderizarTablaSupervisor(lista, wrap) {
-  window._capRegistros = lista;          /* _CAP_DUPLICAR_V1 */
-  if (!wrap) wrap = document.getElementById('tbRegistrosWrap');
-  wrap.innerHTML = `
-    <table class="data-table">
-      <thead><tr>
-        <th>Empresa</th><th>Fecha</th><th>Tipo</th><th>Tema</th>
-        <th style="text-align:center">Asistentes</th><th></th>
-      </tr></thead>
-      <tbody>${lista.map((r, i) => `<tr>
-        <td><span class="badge-emp ${r.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${r.empresa || ''}</span></td>
-        <td>${String(r.fecha||'').substring(0,10)}</td>
-        <td style="font-size:11px;color:#475569">${r.tipo || ''}</td>
-        <td style="font-size:12px">${(r.tema||'').substring(0,60)}${(r.tema||'').length>60?'…':''}</td>
-        <td style="text-align:center;font-weight:700">${r.totalAsistentes || r.total_asistentes || 0}</td>
-        <td><button class="btn btn-gray btn-sm" title="Usar esta misma nomina con otro titulo"
-             onclick="capAbrirDuplicar(${i})">📋 Reutilizar</button></td>
-      </tr>`).join('')}</tbody>
-    </table>`;
+/* Opciones de los filtros = lo que hay en el rango cargado (se conserva lo elegido) */
+function _cregLlenarFiltros() {
+  const pinta = (id, pares, txtTodos) => {
+    const sel = document.getElementById(id); if (!sel) return;
+    const actual = sel.value;
+    sel.innerHTML = '<option value="">' + txtTodos + '</option>' +
+      pares.map(p => `<option value="${_cregEsc(p[0])}">${_cregEsc(p[1])}</option>`).join('');
+    if (pares.some(p => p[0] === actual)) sel.value = actual;
+  };
+  const sup = {}, cap = {};
+  _cregDatos.forEach(r => {
+    const u = String(r.creadaPor || '').toLowerCase().trim(); if (u && !sup[u]) sup[u] = r.creadaPorNombre || r.creadaPor;
+    const c = String(r.capacitadorNombre || '').trim(); if (c) cap[c.toUpperCase()] = c;
+  });
+  const sw = document.getElementById('cregSupWrap'); if (sw) sw.style.display = _cregEsAdmin ? '' : 'none';
+  pinta('cregSup', Object.keys(sup).map(u => [u, sup[u]]).sort((a, b) => String(a[1]).localeCompare(String(b[1]))), 'Todos');
+  pinta('cregCap', Object.keys(cap).sort().map(k => [k, cap[k]]), 'Todos');
 }
 
-function renderizarTablaAdmin(lista) {
-  window._capRegistros = lista;          /* _CAP_DUPLICAR_V1 */
-  const wrap = document.getElementById('tbRegistrosWrap');
-  if (!wrap) return;
-  wrap.innerHTML = `
-    <table class="data-table">
-      <thead><tr>
-        <th>Empresa</th><th>Fecha</th><th>Tipo</th><th>Tema</th>
-        <th style="text-align:center">Asistentes</th><th>Supervisor</th><th></th>
-      </tr></thead>
-      <tbody>${lista.map((r, i) => `<tr>
-        <td><span class="badge-emp ${r.empresa === 'RAPEL' ? 'badge-rap' : 'badge-vrf'}">${r.empresa || ''}</span></td>
-        <td>${String(r.fecha||'').substring(0,10)}</td>
-        <td style="font-size:11px;color:#475569">${r.tipo || ''}</td>
-        <td style="font-size:12px">${(r.tema||'').substring(0,60)}${(r.tema||'').length>60?'…':''}</td>
-        <td style="text-align:center;font-weight:700">${r.totalAsistentes || r.total_asistentes || 0}</td>
-        <td style="font-size:11px;color:#64748b">${r.creadaPorNombre || r.creadaPor || '—'}</td>
-        <td><button class="btn btn-gray btn-sm" title="Usar esta misma nomina con otro titulo"
-             onclick="capAbrirDuplicar(${i})">📋 Reutilizar</button></td>
-      </tr>`).join('')}</tbody>
-    </table>`;
+function _cregFiltrados() {
+  const sup = v('cregSup'), cap = v('cregCap');
+  return _cregDatos.filter(r =>
+    (!sup || String(r.creadaPor || '').toLowerCase().trim() === sup) &&
+    (!cap || String(r.capacitadorNombre || '').trim().toUpperCase() === cap));
 }
 
-async function cargarEstadisticas() {
-  try {
-    const d = await apiPost({ action: 'estadisticasCapacitaciones', rol: USER.rol, usuario: USER.usuario });
-    if (!d.success || !d.esAdmin) return;
-    renderizarCards(d.stats);
-    renderizarGraficoTendencia(d.stats.tendencia || []);
-    renderizarGraficoEmpresa(d.stats.porEmpresa || {});
-    renderizarGraficoTopSupervisores(d.stats.topSupervisores || []);
-  } catch(e) { console.warn('[capStats] Error:', e); }
+function cregAplicar() {
+  const lista = _cregFiltrados();
+  window._capRegistros = lista;          /* _CAP_DUPLICAR_V1: "Reutilizar" usa esta lista */
+  _cregKpis(lista);
+  _cregGraficos(lista);
+  _cregTabla(lista);
 }
 
-function renderizarCards(stats) {
-  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? 0; };
-  set('statTotal',      stats.totalCapacitaciones);
-  set('statAsistentes', stats.totalAsistentes);
-  set('statEsteMes',    stats.capacitacionesEsteMes);
-  set('statSupActivos', stats.supervisoresActivosMes);
+function _cregKpis(lista) {
+  const el = document.getElementById('cregKpis'); if (!el) return;
+  let asis = 0, hom = 0, muj = 0, horas = 0, hh = 0;
+  const sups = new Set(), caps = new Set(), dias = new Set();
+  lista.forEach(r => {
+    const a = _cregNum(r.totalAsistentes), t = _cregNum(r.totalHoras);
+    asis += a; hom += _cregNum(r.hombres); muj += _cregNum(r.mujeres); horas += t; hh += a * t;
+    if (r.creadaPor) sups.add(String(r.creadaPor).toLowerCase().trim());
+    if (r.capacitadorNombre) caps.add(String(r.capacitadorNombre).trim().toUpperCase());
+    dias.add(_cregFecha(r));
+  });
+  const n = lista.length, prom = n ? asis / n : 0;
+  const pctM = (hom + muj) ? Math.round(muj * 100 / (hom + muj)) : 0;
+  const tarjeta = (lbl, val, sub, ico, color, fondo) =>
+    `<div class="creg-kpi" style="--k:${color};--kb:${fondo}"><div class="k-top"><span class="k-lbl">${lbl}</span><span class="k-ico">${ico}</span></div>` +
+    `<div class="k-val">${val}</div><div class="k-sub">${sub}</div></div>`;
+  el.innerHTML =
+    tarjeta('Capacitaciones', _cregFmt(n), _cregFmt(dias.size) + ' día(s) con actividad', '📚', '#0a2463', '#e8edf8') +
+    tarjeta('Personas capacitadas', _cregFmt(asis), 'H ' + _cregFmt(hom) + ' · M ' + _cregFmt(muj) + (hom + muj ? ' (' + pctM + '% mujeres)' : ''), '👥', '#D91F26', '#fdecec') +
+    tarjeta('Horas-hombre', _cregFmt(hh, 1), _cregFmt(horas, 1) + ' h dictadas', '⏱️', '#0f766e', '#e6f4f2') +
+    tarjeta('Promedio por sesión', _cregFmt(prom, 1), 'personas por capacitación', '📈', '#b45309', '#fdf3e4') +
+    tarjeta(_cregEsAdmin ? 'Supervisores activos' : 'Capacitadores', _cregFmt(_cregEsAdmin ? sups.size : caps.size),
+            _cregEsAdmin ? _cregFmt(caps.size) + ' capacitador(es) distintos' : 'personas que dictaron', '🧑‍🏫', '#6d28d9', '#f1ebfd');
 }
 
-function renderizarGraficoTendencia(tendencia) {
-  const canvas = document.getElementById('chartTendenciaCap');
-  if (!canvas || !window.Chart) return;
-  if (_chartTendenciaCap) _chartTendenciaCap.destroy();
-  _chartTendenciaCap = new Chart(canvas.getContext('2d'), {
-    type: 'line',
-    data: {
-      labels: tendencia.map(t => t.mes),
+function _cregChart(id, cfg) {
+  if (_cregCharts[id]) { try { _cregCharts[id].destroy(); } catch (e) {} }
+  const c = document.getElementById(id);
+  if (!c || !window.Chart) return;
+  _cregCharts[id] = new Chart(c.getContext('2d'), cfg);
+}
+
+function _cregGraficos(lista) {
+  const box = document.getElementById('cregGraficos');
+  if (!box) return;
+  if (!lista.length || !window.Chart) { box.style.display = 'none'; return; }
+  box.style.display = '';
+  const AZ = '#0a2463', RO = '#D91F26', PAL = ['#0a2463', '#D91F26', '#0f766e', '#b45309', '#6d28d9', '#0284c7', '#be185d', '#4d7c0f'];
+  Chart.defaults.font.family = "'Barlow', sans-serif"; Chart.defaults.color = '#475569';
+  const grid = { color: 'rgba(148,163,184,.18)' }, sinGrid = { display: false };
+
+  /* Evolucion: por dia si el rango es corto, por mes si es largo */
+  const desde = v('cregDesde'), hasta = v('cregHasta');
+  const diasRango = (Date.parse(hasta) - Date.parse(desde)) / 864e5;
+  const porMes = !(diasRango <= 62);
+  const llave = r => porMes ? _cregFecha(r).slice(0, 7) : _cregFecha(r);
+  const ev = {};
+  if (!porMes && desde && hasta) { for (let t = Date.parse(desde); t <= Date.parse(hasta); t += 864e5) ev[new Date(t).toISOString().slice(0, 10)] = { c: 0, a: 0 }; }
+  lista.forEach(r => { const k = llave(r); if (!ev[k]) ev[k] = { c: 0, a: 0 }; ev[k].c++; ev[k].a += _cregNum(r.totalAsistentes); });
+  const ks = Object.keys(ev).sort();
+  const lbl = document.getElementById('cregEvoLbl'); if (lbl) lbl.textContent = porMes ? '· por mes' : '· por día';
+  _cregChart('cregChEvo', {
+    data: { labels: ks.map(k => porMes ? k.slice(5, 7) + '/' + k.slice(0, 4) : k.slice(8, 10) + '/' + k.slice(5, 7)),
       datasets: [
-        { label: 'Capacitaciones', data: tendencia.map(t => t.capacitaciones),
-          borderColor: '#0a2463', backgroundColor: 'rgba(10,36,99,0.1)', fill: true, tension: 0.4 },
-        { label: 'Asistentes', data: tendencia.map(t => t.asistentes),
-          borderColor: '#D91F26', backgroundColor: 'rgba(217,31,38,0.1)', fill: false, tension: 0.4, yAxisID: 'y1' }
-      ]
-    },
-    options: { responsive: true, scales: {
-      y:  { beginAtZero: true, position: 'left' },
-      y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } }
-    }}
+        { type: 'bar', label: 'Capacitaciones', data: ks.map(k => ev[k].c), backgroundColor: 'rgba(10,36,99,.85)', borderRadius: 4, yAxisID: 'y', order: 2 },
+        { type: 'line', label: 'Personas capacitadas', data: ks.map(k => ev[k].a), borderColor: RO, backgroundColor: RO, pointRadius: 2.5, tension: .3, cubicInterpolationMode: 'monotone', yAxisID: 'y1', order: 1 }
+      ] },
+    options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { position: 'top', align: 'end', labels: { boxWidth: 10, usePointStyle: true } } },
+      scales: { x: { grid: sinGrid }, y: { beginAtZero: true, grid: grid, ticks: { precision: 0 }, title: { display: true, text: 'Capacitaciones' } },
+                y1: { beginAtZero: true, position: 'right', grid: sinGrid, ticks: { precision: 0 }, title: { display: true, text: 'Personas' } } } }
   });
+
+  /* Por tipo (una capacitacion puede tener varios tipos) */
+  const tipos = {};
+  lista.forEach(r => String(r.tipo || 'SIN TIPO').split(',').map(t => t.trim()).filter(Boolean).forEach(t => { tipos[t] = (tipos[t] || 0) + 1; }));
+  const tk = Object.keys(tipos).sort((a, b) => tipos[b] - tipos[a]);
+  const dona = { responsive: true, maintainAspectRatio: false, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true, padding: 10 } } } };
+  _cregChart('cregChTipo', { type: 'doughnut', data: { labels: tk, datasets: [{ data: tk.map(t => tipos[t]), backgroundColor: PAL, borderWidth: 2, borderColor: '#fff' }] }, options: dona });
+
+  /* Por empresa (personas capacitadas) */
+  const emp = { RAPEL: 0, VERFRUT: 0 };
+  lista.forEach(r => { const e = String(r.empresa || '').toUpperCase(); const k = e.indexOf('RAPEL') >= 0 ? 'RAPEL' : 'VERFRUT'; emp[k] += _cregNum(r.totalAsistentes); });
+  _cregChart('cregChEmp', { type: 'doughnut', data: { labels: ['RAPEL', 'VERFRUT'], datasets: [{ data: [emp.RAPEL, emp.VERFRUT], backgroundColor: [RO, AZ], borderWidth: 2, borderColor: '#fff' }] }, options: dona });
+
+  /* Supervisores (solo admin, si hay mas de uno) */
+  const bs = document.getElementById('cregBoxSup');
+  const sup = {};
+  lista.forEach(r => { const u = r.creadaPorNombre || r.creadaPor || '—'; if (!sup[u]) sup[u] = { a: 0, c: 0 }; sup[u].a += _cregNum(r.totalAsistentes); sup[u].c++; });
+  const sk = Object.keys(sup).sort((a, b) => sup[b].a - sup[a].a).slice(0, 10);
+  const verSup = _cregEsAdmin && sk.length > 1;
+  if (bs) bs.style.display = verSup ? '' : 'none';
+  box.classList.toggle('sin-sup', !verSup);
+  const barras = { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } },
+    scales: { x: { beginAtZero: true, grid: grid, ticks: { precision: 0 } }, y: { grid: sinGrid, ticks: { autoSkip: false, font: { size: 11 } } } } };
+  if (verSup) _cregChart('cregChSup', { type: 'bar', data: { labels: sk.map(s => String(s).length > 28 ? String(s).slice(0, 27) + '…' : s),
+    datasets: [{ label: 'Personas capacitadas', data: sk.map(s => sup[s].a), backgroundColor: 'rgba(10,36,99,.85)', borderRadius: 4 }] }, options: barras });
+
+  /* Temas mas dictados */
+  const tem = {};
+  lista.forEach(r => { const t = String(r.tema || 'Sin tema').trim(); tem[t] = (tem[t] || 0) + 1; });
+  const tm = Object.keys(tem).sort((a, b) => tem[b] - tem[a]).slice(0, 8);
+  _cregChart('cregChTema', { type: 'bar', data: { labels: tm.map(t => t.length > 42 ? t.slice(0, 41) + '…' : t),
+    datasets: [{ label: 'Capacitaciones', data: tm.map(t => tem[t]), backgroundColor: 'rgba(217,31,38,.85)', borderRadius: 4 }] }, options: barras });
 }
 
-function renderizarGraficoEmpresa(porEmpresa) {
-  const canvas = document.getElementById('chartEmpresaCap');
-  if (!canvas || !window.Chart) return;
-  if (_chartEmpresaCap) _chartEmpresaCap.destroy();
-  _chartEmpresaCap = new Chart(canvas.getContext('2d'), {
-    type: 'doughnut',
-    data: {
-      labels: ['RAPEL', 'VERFRUT'],
-      datasets: [{ data: [porEmpresa.RAPEL || 0, porEmpresa.VERFRUT || 0],
-        backgroundColor: ['#D91F26', '#0a2463'], borderWidth: 0 }]
-    },
-    options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
-  });
+function _cregTabla(lista) {
+  const wrap = document.getElementById('tbRegistrosWrap');
+  const cnt = document.getElementById('cregConteo');
+  if (cnt) cnt.textContent = lista.length + ' capacitación(es)' + (lista.length !== _cregDatos.length ? ' de ' + _cregDatos.length + ' en el rango' : '');
+  if (!wrap) return;
+  if (!lista.length) { wrap.innerHTML = '<div class="empty"><div class="empty-icon">📭</div>Sin capacitaciones en este rango</div>'; return; }
+  wrap.innerHTML = `
+    <table class="data-table">
+      <thead><tr>
+        <th>Fecha</th><th>Empresa</th><th>Tipo</th><th>Tema</th><th>Capacitador</th>
+        <th style="text-align:center">Personas</th><th style="text-align:center">Horas</th>${_cregEsAdmin ? '<th>Registrado por</th>' : ''}<th></th>
+      </tr></thead>
+      <tbody>${lista.map((r, i) => `<tr>
+        <td style="white-space:nowrap">${_cregDdmm(_cregFecha(r))}</td>
+        <td><span class="badge-emp ${String(r.empresa || '').toUpperCase().indexOf('RAPEL') >= 0 ? 'badge-rap' : 'badge-vrf'}">${_cregEsc(r.empresa || '')}</span></td>
+        <td>${String(r.tipo || '').split(',').map(t => t.trim()).filter(Boolean).map(t => '<span class="creg-chip">' + _cregEsc(t) + '</span>').join(' ')}</td>
+        <td class="creg-tema" style="font-size:12px" title="${_cregEsc(r.tema)}">${_cregEsc(String(r.tema || '').substring(0, 60))}${String(r.tema || '').length > 60 ? '…' : ''}</td>
+        <td class="creg-capac" style="font-size:11.5px;color:#475569">${_cregEsc(r.capacitadorNombre || '—')}</td>
+        <td style="text-align:center;font-weight:700">${_cregFmt(_cregNum(r.totalAsistentes))}</td>
+        <td style="text-align:center">${_cregNum(r.totalHoras) ? _cregFmt(_cregNum(r.totalHoras), 1) : '—'}</td>
+        ${_cregEsAdmin ? `<td style="font-size:11px;color:#64748b">${_cregEsc(r.creadaPorNombre || r.creadaPor || '—')}</td>` : ''}
+        <td><button class="btn btn-gray btn-sm creg-reu" title="Reutilizar: misma nómina con otro título" onclick="capAbrirDuplicar(${i})">📋</button></td>
+      </tr>`).join('')}</tbody>
+    </table>`;
 }
 
-function renderizarGraficoTopSupervisores(topSup) {
-  const canvas = document.getElementById('chartTopSupCap');
-  if (!canvas || !window.Chart) return;
-  if (_chartTopSupCap) _chartTopSupCap.destroy();
-  if (!topSup.length) return;
-  _chartTopSupCap = new Chart(canvas.getContext('2d'), {
-    type: 'bar',
-    data: {
-      labels: topSup.map(s => s.nombre || s.usuario),
-      datasets: [{ label: 'Asistentes capacitados', data: topSup.map(s => s.asistentes),
-        backgroundColor: '#0a2463' }]
-    },
-    options: { indexAxis: 'y', responsive: true, plugins: { legend: { display: false } } }
-  });
-}
-
+/* compatibilidad con llamadas anteriores */
 function aplicarFiltrosCap() { cargarRegistros(); }
 function limpiarFiltrosCap() {
-  ['filtroEmpReg','filtroDesdeCap','filtroHastaCap','filtroSupCap'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+  sv('cregEmpresa', ''); sv('cregSup', ''); sv('cregCap', ''); sv('cregDesde', ''); sv('cregHasta', '');
   cargarRegistros();
 }
+window.cargarRegistros = cargarRegistros;
+window.cregAplicar = cregAplicar;
+window.cregRapido = cregRapido;
 
 /* ─────────────────────── EXPORTAR CSV ─────────────────────── */
 async function exportarCSV() {
