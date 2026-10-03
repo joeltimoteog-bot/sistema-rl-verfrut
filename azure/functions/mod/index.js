@@ -54,7 +54,7 @@ async function desdeTablas(pool, modulo, D) {
 }
 const HANDLERS = {
   horas: { crear: require('../shared/mod-horas').crear, acciones: { horasListar: 'horasListar', horasResumenIndividual: 'horasResumenIndividual', horasResumenGeneral: 'horasResumenGeneral', horasListarMotivos: 'horasListarMotivos' } },
-  cap:   { crear: require('../shared/mod-cap').crear,   acciones: { listarCapacitaciones: 'capListar', estadisticasCapacitaciones: 'capEstadisticas' } },
+  cap:   { crear: require('../shared/mod-cap').crear,   acciones: { listarCapacitaciones: 'capListar', estadisticasCapacitaciones: 'capEstadisticas', exportarCapacitaciones: 'capExportar' } },   /* _CAP_EXPORT_SQL_V1: exportarCapacitaciones se atiende aparte, por SQL (ver abajo) */
   /* _MOD_SIMPLES_V1: consultas sin calculo — Azure guarda la respuesta de Google tal cual */
   fus:      { crear: require('../shared/mod-snap').crear, acciones: { getFusiones: 'getFusiones' } },
   sol:      { crear: require('../shared/mod-snap').crear, acciones: { getSolicitudes: 'getSolicitudes' } },
@@ -89,6 +89,21 @@ module.exports = async function (context, req) {
   const h = HANDLERS[modulo], fn = h && h.acciones[accion];
   if (!fn) { context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
   try {
+    if (modulo === 'cap' && accion === 'exportarCapacitaciones') {   /* _CAP_EXPORT_SQL_V1: sin cargar las tablas completas */
+      const t0 = Date.now();
+      const out = await require('../shared/mod-cap').capExportarSql(await getPool(), req.body || {});
+      if (!out) { context.res = { status: 503, body: { success: false, error: 'Capacitaciones aun no cargadas en Azure' } }; return; }
+      out.fuente = 'azure'; out.ms = Date.now() - t0;
+      /* _CAP_EXPORT_SQL_V2: el año completo (~20 mil filas, ~15 MB) hacia caer la respuesta (HTTP 500).
+         Comprimido (gzip) pesa ~10 veces menos; el navegador y Google lo descomprimen solos. */
+      const txt = JSON.stringify(out), ae = String((req.headers && req.headers['accept-encoding']) || '');
+      if (txt.length > 200000 && /gzip/i.test(ae)) {
+        context.res = { status: 200, isRaw: true, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip' }, body: require('zlib').gzipSync(Buffer.from(txt, 'utf8')) };
+      } else {
+        context.res = { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: txt };
+      }
+      return;
+    }
     const m = await datos(modulo);
     if (!m) { context.res = { status: 503, body: { success: false, error: 'Modulo aun no migrado a Azure' } }; return; }
     const out = await m[fn](req.body || {});   /* _ESTADM_AZURE_V1: admite calculos async */

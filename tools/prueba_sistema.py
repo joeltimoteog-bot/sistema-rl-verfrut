@@ -86,6 +86,7 @@ def resp_azure(url, post=''):
         if acc == 'horasListarMotivos': base['motivos'] = ['A']
         if acc == 'listarCapacitaciones': base.update({'capacitaciones': [], 'total': 0, 'esAdmin': True})
         if acc == 'estadisticasCapacitaciones': base.update({'esAdmin': True, 'stats': {}})
+        if acc == 'exportarCapacitaciones': base.update({'data': [], 'total': 0, 'esAdmin': True})   # _CAP_EXPORT_AZURE_V1
         if acc in ('getFusiones', 'getSolicitudes', 'getMotivosCasos'): base['data'] = []
         if acc == 'getSupervisores': base['data'] = resp_google('getSupervisores')['data']   # _PRELOAD_AZURE_V1: la misma lista que da Google
         if acc == 'invGetAll': base.update({'productos': [], 'ingresos': [], 'entregas': []})
@@ -878,7 +879,7 @@ with sync_playwright() as pw:
     ok('Capacitaciones: estadisticas salen de Azure', r == 'azure:true' and 'estadisticasCapacitaciones' not in RED['google'], r)
     RED['google'].clear()
     r = pag.evaluate(CARRERA, {'action': 'exportarCapacitaciones', 'desde': '2026-09-01', 'hasta': '2026-09-30', 'rol': 'administrador'})
-    ok('Capacitaciones: el export sigue por Google', r['r'] == 'OK' and 'exportarCapacitaciones' in RED['google'], r['r'])
+    ok('Capacitaciones: el export (y Fecha anterior) sale de Azure', r['r'] == 'OK' and 'exportarCapacitaciones' not in RED['google'] and 'cap/exportarCapacitaciones' in MODX['llamadas'], r['r'])   # _CAP_EXPORT_AZURE_V1
     MODX['modo'] = 'caido'; RED['google'].clear()
     r = pag.evaluate(CARRERA, {'action': 'listarCapacitaciones', 'rol': 'administrador'})
     ok('Capacitaciones: con Azure caido, sale de Google', r['r'] == 'OK' and 'listarCapacitaciones' in RED['google'], r['r'])

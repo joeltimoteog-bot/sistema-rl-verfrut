@@ -15,6 +15,17 @@ function limaYM() {
   new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit' }).formatToParts(new Date()).forEach(x => { p[x.type] = x.value; });
   return { y: +p.year, m: +p.month - 1 };
 }
+/* _CAP_EXPORT_AZURE_V1 (03-oct-2026): capFecha_/capHora_ del Apps Script (formatDate en America/Lima) */
+const S = (v) => (v === null || v === undefined) ? '' : T(v);
+function limaFmt(iso, conHora, soloHora) {
+  const d = new Date(iso); if (isNaN(d.getTime())) return '';
+  const p = {}; new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(d).forEach(x => { p[x.type] = x.value; });
+  const f = p.year + '-' + p.month + '-' + p.day, h = p.hour + ':' + p.minute;
+  return soloHora ? h : (conHora ? f + ' ' + h : f);
+}
+const capFecha_ = (v) => esD(v) ? limaFmt(v.$d) : S(v).substring(0, 10);
+const capHora_ = (v) => esD(v) ? limaFmt(v.$d, false, true) : S(v).trim();
 const ym = (y, m) => { const d = new Date(Date.UTC(y, m, 1)); return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2); };
 
 function crear(D) {
@@ -78,6 +89,86 @@ function crear(D) {
         capacitacionesEsteMes: esteMes.length, asistentesEsteMes, supervisoresActivosMes: act.size, porEmpresa, topSupervisores, tendencia, topTemas } };
     } catch (e) { return { success: false, error: e.toString() }; }
   }
-  return { capListar, capEstadisticas };
+  /* _CAP_EXPORT_AZURE_V1 (03-oct-2026): copia fiel de capExportarV2 (Apps Script).
+     Lo usan Exportar y "Fecha anterior". Antes iba solo por Google (lento). */
+  function capExportar(body) {
+    try {
+      const b = body || {};
+      const desde = b.desde, hasta = b.hasta;
+      if (!desde || !hasta) return { success: false, error: 'Falta el rango de fechas' };
+      const esAdmin = ROLES_ADMIN.includes(String(b.rol || '').toLowerCase().trim());
+      const usuario = String(b.usuario || '').toLowerCase().trim();
+      const empresa = b.empresa || '';
+      const col = (hs, n) => { for (let i = 0; i < hs.length; i++) if (S(hs[i]).trim().toUpperCase() === n) return i; return -1; };
+      const H = D.hdr || [], Hh = H[0] || [];
+      let hId = col(Hh, 'ID_CAPACITACION'); if (hId < 0) hId = 0;
+      const cabPorId = {};
+      for (let r = 1; r < H.length; r++) {
+        const o = {}; Hh.forEach((h, i) => { o[S(h).trim()] = H[r][i]; });
+        cabPorId[S(H[r][hId]).trim()] = o;
+      }
+      const EXTRA = ['FUENTE', 'TOTAL_HORAS', 'FRECUENCIA', 'CAPACITADOR_DNI', 'CAPACITADOR_CARGO', 'TOTAL_ASISTENTES', 'HOMBRES', 'MUJERES', 'PRODUCTOR', 'CREADA_POR_NOMBRE'];
+      const B = D.bbdd || [];
+      if (B.length < 2) return { success: true, data: [], total: 0 };
+      const Bh = B[0];
+      let bId = col(Bh, 'ID_CAPACITACION'); if (bId < 0) bId = 0;
+      const data = [];
+      for (let r = 1; r < B.length; r++) {
+        const fila = B[r], obj = {};
+        Bh.forEach((h, i) => { obj[S(h).trim()] = fila[i] === undefined ? '' : fila[i]; });
+        const fechaCap = capFecha_(obj['FECHA_CAPACITACION'] || obj['FECHA']);
+        if (!fechaCap) continue;
+        if (fechaCap < desde || fechaCap > hasta) continue;
+        if (empresa && empresa !== 'AMBAS' && J(obj['EMPRESA']) !== empresa) continue;
+        const quien = S(obj['CREADA_POR'] || '').toLowerCase().trim();
+        if (!esAdmin && usuario && quien && quien !== usuario) continue;
+        if (esAdmin && b.supervisor && quien !== String(b.supervisor).toLowerCase().trim()) continue;
+        obj['FECHA_CAPACITACION'] = fechaCap;
+        obj['HORA_INICIO'] = capHora_(obj['HORA_INICIO']);
+        obj['HORA_FIN'] = capHora_(obj['HORA_FIN']);
+        if (esD(obj['FECHA_REGISTRO'])) obj['FECHA_REGISTRO'] = limaFmt(obj['FECHA_REGISTRO'].$d, true);
+        const cab = cabPorId[S(fila[bId]).trim()];
+        EXTRA.forEach(c => {
+          if (obj[c] === undefined) { const v = cab ? cab[c] : ''; obj[c] = esD(v) ? capFecha_(v) : (v == null ? '' : v); }
+        });
+        const x = {}; Object.keys(obj).forEach(k => { x[k] = J(obj[k]); });
+        data.push(x);
+      }
+      return { success: true, data, total: data.length, esAdmin };
+    } catch (e) { return { success: false, error: e.message }; }
+  }
+  return { capListar, capEstadisticas, capExportar };
 }
-module.exports = { crear };
+/* _CAP_EXPORT_SQL_V1 (03-oct-2026): la 1ra version armaba el export sobre las DOS tablas
+   completas en memoria y Azure se caia (HTTP 500 / 504 en la comparacion). Ahora SQL trae
+   solo los asistentes del rango de fechas (con 1 dia de margen) y el mismo capExportar
+   filtra exacto. La cabecera (pocas filas) sale de la memoria de tablas-hoja. */
+async function capExportarSql(pool, body) {
+  const { sql } = require('./db');
+  const TH = require('./tablas-hoja');
+  const b = body || {};
+  if (!b.desde || !b.hasta) return { success: false, error: 'Falta el rango de fechas' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.desde)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(b.hasta))) return { success: false, error: 'Rango de fechas invalido' };
+  await TH.asegurar(pool, 'cap_asistentes');
+  const e = await pool.request().input('k', sql.NVarChar(40), 'cap_asistentes').query('SELECT encabezado, ancho, marca FROM dbo.TH_Estado WHERE clave = @k');
+  const est = e.recordset[0];
+  if (!est || !est.marca) return null;
+  const cab = await TH.leer(pool, 'cap_cabeceras');
+  if (!cab) return null;
+  const d0 = new Date(Date.parse(b.desde + 'T00:00:00Z') - 86400e3), d1 = new Date(Date.parse(b.hasta + 'T00:00:00Z') + 2 * 86400e3);
+  /* _CAP_EXPORT_SQL_V2 (03-oct-2026): SQL tambien recorta por usuario/supervisor/empresa (sin
+     perder nada: las celdas vacias o raras pasan y el filtro exacto de capExportar decide). */
+  const rq = pool.request().input('d0', sql.DateTime2(3), d0).input('d1', sql.DateTime2(3), d1);
+  let w = '((fecha_capacitacion >= @d0 AND fecha_capacitacion < @d1) OR fecha_capacitacion IS NULL)';
+  const esAdm = ROLES_ADMIN.includes(String(b.rol || '').toLowerCase().trim());
+  const usu = String(b.usuario || '').toLowerCase().trim(), sup = String(b.supervisor || '').toLowerCase().trim();
+  const quien = 'LOWER(LTRIM(RTRIM(creada_por)))';
+  if (!esAdm && usu) { rq.input('u', sql.NVarChar(60), usu); w += " AND (creada_por IS NULL OR LTRIM(RTRIM(creada_por)) = '' OR " + quien + ' = @u)'; }
+  if (esAdm && sup) { rq.input('s', sql.NVarChar(60), sup); w += ' AND (creada_por IS NULL OR ' + quien + ' = @s)'; }
+  if (b.empresa && b.empresa !== 'AMBAS') { rq.input('e', sql.NVarChar(20), String(b.empresa)); w += ' AND (empresa IS NULL OR empresa = @e)'; }
+  const r = await rq.query('SELECT * FROM dbo.Cap_Asistentes WHERE ' + w + ' ORDER BY fila');
+  const filas = r.recordset.map(x => TH.aCeldas('cap_asistentes', x, est.ancho));
+  const D = { hdr: [cab.encabezado].concat(cab.filas), bbdd: [JSON.parse(est.encabezado || '[]')].concat(filas) };
+  return crear(D).capExportar(b);
+}
+module.exports = { crear, capExportarSql };

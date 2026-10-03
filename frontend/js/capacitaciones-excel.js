@@ -79,24 +79,29 @@
     }
   }
 
+  /* _EXCEL_PARALELO_V1 (03-oct-2026): antes consultaba los DNI de uno en uno
+     (100 DNI = ~30-40 s). Ahora 6 a la vez; el orden del Excel se respeta. */
   async function _consultarDnis(dnis) {
     _excelEncontrados = []; _excelNoHallados = [];
-    const total = dnis.length;
-    for (let i = 0; i < total; i++) {
-      const dni = dnis[i];
-      _estado('Consultando ' + (i + 1) + ' / ' + total + '\u2026');
-      try {
-        const r = await buscarTrabajadorAzure(dni);
-        if (r && r.success && r.data && r.data.length) {
-          const t = r.data[0];
-          _excelEncontrados.push({ dni: dni, nombre: t.nombre || '', empresa: t.empresa || '', cargo: t.cargo || '', sexo: t.sexo || '' });
-        } else {
-          _excelNoHallados.push(dni);
-        }
-      } catch (e) {
-        _excelNoHallados.push(dni);
+    const total = dnis.length, res = new Array(total);
+    let sig = 0, hechos = 0;
+    async function trabajador() {
+      while (sig < total) {
+        const i = sig++, dni = dnis[i];
+        try {
+          const r = await buscarTrabajadorAzure(dni);
+          res[i] = (r && r.success && r.data && r.data.length) ? r.data[0] : null;
+        } catch (e) { res[i] = null; }
+        hechos++;
+        _estado('Consultando ' + hechos + ' / ' + total + '\u2026');
       }
     }
+    await Promise.all(Array.from({ length: Math.min(6, total) }, trabajador));
+    dnis.forEach((dni, i) => {
+      const t = res[i];
+      if (t) _excelEncontrados.push({ dni: dni, nombre: t.nombre || '', empresa: t.empresa || '', cargo: t.cargo || '', sexo: t.sexo || '' });
+      else _excelNoHallados.push(dni);
+    });
     _renderRevision();
   }
 

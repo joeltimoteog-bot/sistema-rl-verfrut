@@ -609,7 +609,7 @@ h3{font-size:16px !important}
   if (!MOD_AZURE_ACTIVO || window._rlModAzOk) return;
   window._rlModAzOk = true;
   var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/cap/';
-  var ACCIONES = { listarCapacitaciones: 1, estadisticasCapacitaciones: 1 };
+  var ACCIONES = { listarCapacitaciones: 1, estadisticasCapacitaciones: 1, exportarCapacitaciones: 1 };   /* _CAP_EXPORT_AZURE_V1 (03-oct): Exportar y Fecha anterior tambien desde Azure */
   var previo = window.apiPost;
   if (typeof previo !== 'function') return;
   window.apiPost = function (b) {
@@ -618,7 +618,7 @@ h3{font-size:16px !important}
     return (async function () {
       var cuerpo = {}; Object.keys(b).forEach(function (k) { if (k !== 'action') cuerpo[k] = b[k]; });
       var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 8000);
+      var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, b.action === 'exportarCapacitaciones' ? 45000 : 8000);   /* _CAP_EXPORT_SQL_V2: un export grande tarda mas que 8 s; Google tardaria aun mas */
       try {
         var op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) };
         if (ctrl) op.signal = ctrl.signal;
