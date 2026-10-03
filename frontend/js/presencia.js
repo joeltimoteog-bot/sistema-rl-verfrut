@@ -86,50 +86,151 @@
       return _ahEnCurso;
     }
 
-    function minutosParaElCierre() {
-      var a = new Date();
-      return Math.round((HORA_FIN - (a.getHours() + a.getMinutes() / 60)) * 60);
+    /* ════════════════════════════════════════════════════════════════════
+       _SESION_HORARIO_V2 (02-oct-2026) — avisos de fin de horario, profesionales
+       ANTES: alert() que bloqueaba la pantalla, se repetia al cambiar de modulo,
+              calculaba siempre contra las 17:00 y quien tenia horario propio no
+              recibia aviso (se le cortaba de golpe). Ademas un recuadro amarillo
+              con cuenta regresiva quedaba fijo toda la jornada.
+       AHORA: silencio toda la jornada. Con el fin REAL de su sesion (17:00 o su
+              horario propio / acceso temporal, lo que llegue mas tarde):
+                · 15 min antes: aviso discreto arriba, UNA vez por sesion.
+                · 5 min antes: ventana con cuenta regresiva + Solicitar extension /
+                  Cerrar sesion ahora / Seguir trabajando.
+                · ultimos 15 min: chip pequeno con la cuenta regresiva.
+                · a la hora: pantalla "Sesion finalizada" y cierre a los 10 s.
+              La regla para cerrar es LA MISMA de siempre (fueraDeHorario + acceso
+              vigente + horario propio); ante error o sin red NO se cierra.
+       ════════════════════════════════════════════════════════════════════ */
+    window.__RL_HORARIO_V2__ = true;
+    var K2 = 'rlh2_', cerrando = false, uiTimer = null, finActual = 0;
+    function marca(k, v) { try { if (v === undefined) return sessionStorage.getItem(K2 + k); sessionStorage.setItem(K2 + k, v); } catch (e) { return null; } }
+    function dosD(n) { return ('0' + n).slice(-2); }
+    function hhmm(ms) { var d = new Date(ms); return dosD(d.getHours()) + ':' + dosD(d.getMinutes()); }
+    function mmss(ms) { var s = Math.max(0, Math.ceil(ms / 1000)); return dosD(Math.floor(s / 60)) + ':' + dosD(s % 60); }
+    /* fin real = lo que llegue mas tarde entre el horario general (L-V hasta las 17:00, si aun estamos dentro) y su acceso vigente */
+    function finSesion() {
+      var a = new Date(), dow = a.getDay(), h = a.getHours() + a.getMinutes() / 60, gen = 0, acc = 0;
+      if (dow !== 0 && dow !== 6 && h >= HORA_INI && h < HORA_FIN) { var f = new Date(a); f.setHours(Math.floor(HORA_FIN), Math.round((HORA_FIN % 1) * 60), 0, 0); gen = f.getTime(); }
+      try { var t = JSON.parse(sessionStorage.getItem('accesoTemporal') || 'null'); if (t && t.activo && t.expiraEn && Number(t.expiraEn) > Date.now()) acc = Number(t.expiraEn); } catch (e) {}
+      return Math.max(gen, acc);
     }
-
-    async function revisar() {
+    function estilos() {
+      if (document.getElementById('rlh2-css')) return;
+      var s = document.createElement('style'); s.id = 'rlh2-css';
+      s.textContent =
+        '#rlh2-toast{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:100000;background:#fff;color:#0b1e45;border-left:5px solid #f59e0b;border-radius:10px;box-shadow:0 10px 30px rgba(11,30,69,.25);padding:12px 16px;display:flex;gap:12px;align-items:center;font:500 14px/1.4 system-ui,Segoe UI,Arial;max-width:92vw;animation:rlh2In .35s ease}' +
+        '#rlh2-toast b{color:#0b1e45}#rlh2-toast small{display:block;color:#64748b;font-weight:400}' +
+        '.rlh2-btn{border:0;border-radius:8px;padding:9px 14px;font:600 13px system-ui,Segoe UI,Arial;cursor:pointer}' +
+        '.rlh2-pri{background:#0b1e45;color:#fff}.rlh2-sec{background:#eef2f7;color:#0b1e45}.rlh2-dan{background:#d9292b;color:#fff}' +
+        '#rlh2-modal,#rlh2-fin{position:fixed;inset:0;z-index:100001;background:rgba(11,30,69,.55);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;animation:rlh2In .3s ease}' +
+        '.rlh2-card{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:26px 26px 20px;width:min(420px,92vw);text-align:center;font:400 14px/1.5 system-ui,Segoe UI,Arial;color:#334155}' +
+        '.rlh2-card h3{margin:6px 0 4px;color:#0b1e45;font-size:18px}.rlh2-reloj{font:700 44px/1.1 ui-monospace,Consolas,monospace;color:#d9292b;margin:10px 0 6px;letter-spacing:2px}' +
+        '.rlh2-acc{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:16px}.rlh2-link{background:none;border:0;color:#64748b;font-size:12px;margin-top:10px;cursor:pointer;text-decoration:underline}' +
+        '#rlh2-chip{position:fixed;left:16px;bottom:16px;z-index:99999;background:#0b1e45;color:#fff;border-radius:999px;padding:7px 14px;font:600 13px system-ui,Segoe UI,Arial;box-shadow:0 6px 18px rgba(0,0,0,.25);cursor:pointer}' +
+        '#rlh2-chip.urg{background:#d9292b}@keyframes rlh2In{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1}}' +
+        '#rlh2-modal,#rlh2-fin{animation-name:none}';
+      document.head.appendChild(s);
+    }
+    function quitar(id) { var e = document.getElementById(id); if (e && e.parentNode) e.parentNode.removeChild(e); }
+    function quitarUI() { quitar('rlh2-toast'); quitar('rlh2-modal'); quitar('rlh2-chip'); if (uiTimer) { clearInterval(uiTimer); uiTimer = null; } }
+    function salir() {
+      try { sessionStorage.clear(); } catch (e2) {}
+      try { localStorage.removeItem('rl_session'); } catch (e3) {}
+      location.href = '/sistema-rl-verfrut/index.html';
+    }
+    function extension(user) {
+      if (typeof window.solicitarAccesoTemporal === 'function') { try { window.solicitarAccesoTemporal(); return; } catch (e) {} }
+      var t = 'Hola Joel, soy *' + (user.nombre || user.usuario) + '* y necesito una extension de mi horario de acceso al sistema RL. ¿Puede autorizarme?';
+      window.open('https://wa.me/51960853224?text=' + encodeURIComponent(t), '_blank');
+    }
+    function toast(fin, resta) {
+      estilos(); quitar('rlh2-toast');
+      var d = document.createElement('div'); d.id = 'rlh2-toast';
+      d.innerHTML = '<span style="font-size:22px">🕐</span><div><b>Tu horario termina a las ' + hhmm(fin) + '</b> (en ' + Math.max(1, Math.round(resta / 60000)) + ' min)' +
+        '<small>Guarda lo que estés registrando antes del cierre de sesión.</small></div><button class="rlh2-btn rlh2-pri">Entendido</button>';
+      d.querySelector('button').onclick = function () { quitar('rlh2-toast'); };
+      document.body.appendChild(d);
+      setTimeout(function () { quitar('rlh2-toast'); }, 60000);
+    }
+    function modal(fin, user) {
+      if (document.getElementById('rlh2-modal')) return;
+      estilos(); quitar('rlh2-toast');
+      var m = document.createElement('div'); m.id = 'rlh2-modal';
+      m.innerHTML = '<div class="rlh2-card"><div style="font-size:30px">⏳</div><h3>Tu sesión se cerrará pronto</h3>' +
+        '<div>Tu horario de acceso termina a las <b>' + hhmm(fin) + '</b>.</div><div class="rlh2-reloj" id="rlh2-reloj">' + mmss(fin - Date.now()) + '</div>' +
+        '<div>Guarda tu trabajo antes de que el sistema se cierre.</div>' +
+        '<div class="rlh2-acc"><button class="rlh2-btn rlh2-sec" data-a="ext">Solicitar extensión</button><button class="rlh2-btn rlh2-dan" data-a="salir">Cerrar sesión ahora</button></div>' +
+        '<button class="rlh2-link" data-a="seguir">Seguir trabajando (el contador queda abajo a la izquierda)</button></div>';
+      m.addEventListener('click', function (ev) {
+        var a = ev.target && ev.target.getAttribute && ev.target.getAttribute('data-a'); if (!a) return;
+        if (a === 'salir') salir();
+        else if (a === 'ext') extension(user);
+        else { marca('m5_' + fin, '1'); quitar('rlh2-modal'); }
+      });
+      document.body.appendChild(m);
+    }
+    function chip(fin) {
+      estilos();
+      var c = document.getElementById('rlh2-chip');
+      if (!c) { c = document.createElement('div'); c.id = 'rlh2-chip'; c.title = 'Tiempo restante de tu horario de acceso'; document.body.appendChild(c); }
+      var r = fin - Date.now();
+      c.textContent = '🕐 Cierre ' + hhmm(fin) + ' · ' + mmss(r);
+      c.className = r <= 5 * 60000 ? 'urg' : '';
+      var rel = document.getElementById('rlh2-reloj'); if (rel) rel.textContent = mmss(r);
+    }
+    function animar(fin) {
+      finActual = fin;
+      if (uiTimer) return;
+      uiTimer = setInterval(function () {
+        var r = finActual - Date.now();
+        if (r <= 0) { clearInterval(uiTimer); uiTimer = null; tick(); return; }
+        chip(finActual);
+        if (r <= 5 * 60000 && !marca('m5_' + finActual)) { try { modal(finActual, JSON.parse(sessionStorage.getItem('user') || '{}')); } catch (e) {} }
+      }, 1000);
+    }
+    function finalizar(fin) {
+      cerrando = true; quitarUI(); estilos();
+      var f = document.createElement('div'); f.id = 'rlh2-fin';
+      f.innerHTML = '<div class="rlh2-card"><div style="font-size:30px">🔒</div><h3>Sesión finalizada</h3>' +
+        '<div>Tu horario de acceso al sistema terminó' + (fin ? ' a las <b>' + hhmm(fin) + '</b>' : '') + '.</div>' +
+        '<div style="margin-top:6px">Si necesitas continuar, solicita un acceso temporal al Administrador.</div>' +
+        '<div class="rlh2-reloj" style="font-size:28px;color:#0b1e45" id="rlh2-fin-s">10</div>' +
+        '<div class="rlh2-acc"><button class="rlh2-btn rlh2-pri">Ir al inicio de sesión</button></div></div>';
+      f.querySelector('button').onclick = salir;
+      document.body.appendChild(f);
+      var n = 10, t = setInterval(function () { n--; var e = document.getElementById('rlh2-fin-s'); if (e) e.textContent = n; if (n <= 0) { clearInterval(t); salir(); } }, 1000);
+    }
+    async function tick() {
       try {
-        var raw = sessionStorage.getItem('user');
-        if (!raw) return;
-        var user = JSON.parse(raw);
-
-        // Aviso 10 minutos antes, a todo el que tenga restriccion
-        var _usr = String((user && user.usuario) || '').toLowerCase().trim();
-        if (USUARIOS_SIN_HORARIO.indexOf(_usr) < 0 && !user.sin_restriccion && !avisado) {
-          var m = minutosParaElCierre();
-          if (m > 0 && m <= 10 && !accesoTemporalVigente() && !(await horarioPropio(_usr))) {
-            avisado = true;
-            try {
-              alert('Tu horario de acceso termina en ' + m + ' minuto(s), a las 17:00.\n\n' +
-                    'Guarda lo que estes haciendo: al cumplirse la hora la sesion se cerrara.');
-            } catch (e1) {}
-          }
+        if (cerrando) return;
+        var raw = sessionStorage.getItem('user'); if (!raw) return;
+        var user = JSON.parse(raw), usr = String((user && user.usuario) || '').toLowerCase().trim();
+        if (USUARIOS_SIN_HORARIO.indexOf(usr) >= 0 || user.sin_restriccion) { quitarUI(); return; }
+        var fin = finSesion(), resta = fin - Date.now();
+        /* cerca del cierre (o ya fuera): ¿su horario propio llega mas tarde? (max 1 consulta por minuto) */
+        if (!accesoTemporalVigente() && resta <= 16 * 60000) {
+          var hp = await horarioPropio(usr);
+          if (hp === true) { fin = finSesion(); resta = fin - Date.now(); }
         }
-
-        if (!fueraDeHorario(user)) return;
-        if (accesoTemporalVigente()) return;
-        var _ah = await horarioPropio(_usr);
-        if (_ah === true || _ah === null) return;   // dentro de su horario, o no se pudo consultar: NO se expulsa
-
-        try { sessionStorage.clear(); } catch (e2) {}
-        try { localStorage.removeItem('rl_session'); } catch (e3) {}
-        try {
-          alert('Tu horario de acceso al sistema termino (05:30 a 17:00).\n\n' +
-                'La sesion se cerro. Si necesitas ingresar fuera de horario, solicita ' +
-                'un acceso temporal al Administrador.');
-        } catch (e4) {}
-        location.href = '/sistema-rl-verfrut/index.html';
+        if (resta > 15 * 60000) { quitarUI(); return; }
+        if (resta > 0) {
+          if (resta > 5 * 60000 && !marca('t15_' + fin)) { marca('t15_' + fin, '1'); toast(fin, resta); }
+          chip(fin); animar(fin);
+          return;
+        }
+        /* hora cumplida: MISMA regla de siempre para cerrar */
+        if (!fueraDeHorario(user) || accesoTemporalVigente()) { quitarUI(); return; }
+        var ah = await horarioPropio(usr);
+        if (ah === true || ah === null) { quitarUI(); return; }   // dentro de su horario o sin red: NO se cierra
+        finalizar(finActual || 0);
       } catch (e) { /* nunca cerrar sesion por un error nuestro */ }
     }
 
-    setTimeout(revisar, 30000);      // primera revision a los 30 s
-    setInterval(revisar, CADA_MS);   // despues cada 5 min
+    setTimeout(tick, 20000);         // primera revision a los 20 s
+    setInterval(tick, 30000);        // despues cada 30 s (solo mira la hora; a la red va cerca del cierre)
     document.addEventListener('visibilitychange', function () {
-      if (!document.hidden) revisar();
+      if (!document.hidden) tick();
     });
   } catch (e) { /* jamas romper la pagina */ }
 })();
@@ -469,7 +570,8 @@
         var yaToca = (Date.now() - _ultimoAvisoSesionTs) >= RECORDATORIO_CADA_MS;
         if (!yaToca) return;
         var inactivoMs = Date.now() - _ultimaActividadRL;
-        var finJornada = new Date().getHours() >= JORNADA_FIN_HORA;
+        /* _SESION_HORARIO_V2 (02-oct): el fin de horario ya lo avisa el bloque V2 (15/5 min y cierre); aqui solo queda la inactividad */
+        var finJornada = !window.__RL_HORARIO_V2__ && new Date().getHours() >= JORNADA_FIN_HORA;
         if (inactivoMs >= IDLE_LIMITE_MS || finJornada) {
           mostrarAvisoSesion();
         }

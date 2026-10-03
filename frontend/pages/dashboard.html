@@ -8521,6 +8521,7 @@ function logout(){
 }
 
 function iniciarCountdownAcceso() {
+  if (window.__RL_HORARIO_V2__) return;   /* _SESION_HORARIO_V2 (02-oct): presencia.js avisa solo al final (15/5 min) y cierra; sin recuadro fijo */
   const raw = sessionStorage.getItem('accesoTemporal');
   if (!raw) return;
   let acceso;
