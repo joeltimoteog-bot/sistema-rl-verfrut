@@ -76,7 +76,16 @@
       var t = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 20000);
       var op = { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
       if (ctrl) op.signal = ctrl.signal;
-      _ahEnCurso = fetch(AH_API, op).then(function (r) { return r.json(); }).then(function (d) {
+      /* _AH_AZURE_V1 (02-oct-2026): primero Azure (/acceso/accesoHorarioDeUsuario, 6 s); si falla, Google como siempre */
+      var _azC = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var _azT = setTimeout(function () { try { _azC && _azC.abort(); } catch (e) {} }, 6000);
+      var _azO = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
+      if (_azC) _azO.signal = _azC.signal;
+      var _pedir = fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/acceso/accesoHorarioDeUsuario', _azO)
+        .then(function (r) { clearTimeout(_azT); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (j) { if (!j || j.success !== true) throw new Error('sin respuesta valida'); return j; })
+        .catch(function () { clearTimeout(_azT); return fetch(AH_API, op).then(function (r) { return r.json(); }); });
+      _ahEnCurso = _pedir.then(function (d) {
         if (d && d.tieneAcceso && d.expiraEn) {
           try { sessionStorage.setItem('accesoTemporal', JSON.stringify({ hastaHora: d.hastaHora || d.hasta || '', expiraEn: d.expiraEn, minutosRestantes: d.minutosRestantes || 0, activo: true, fuente: 'horario_propio' })); } catch (e) {}
           return true;

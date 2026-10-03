@@ -1183,9 +1183,20 @@ checkSessionCache();
       opciones.signal = ctrl.signal;
       reloj = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, ESPERA_MS);
     }
-    return fetch(API, opciones)
-      .then(function (r) { if (reloj) clearTimeout(reloj); return r.json(); })
-      .catch(function (e) { if (reloj) clearTimeout(reloj); throw e; });
+    /* _AH_AZURE_V1 (02-oct-2026): primero Azure (~1 s); si no responde en 6 s, Google como siempre */
+    var _azCtrl = null, _azReloj = null;
+    try { _azCtrl = new AbortController(); _azReloj = setTimeout(function () { try { _azCtrl.abort(); } catch (e) {} }, 6000); } catch (e) {}
+    var _azOp = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
+    if (_azCtrl) _azOp.signal = _azCtrl.signal;
+    return fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/acceso/accesoHorarioDeUsuario', _azOp)
+      .then(function (r) { if (_azReloj) clearTimeout(_azReloj); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(function (j) { if (!j || j.success !== true) throw new Error('sin respuesta valida'); if (reloj) clearTimeout(reloj); return j; })
+      .catch(function () {
+        if (_azReloj) clearTimeout(_azReloj);
+        return fetch(API, opciones)
+          .then(function (r) { if (reloj) clearTimeout(reloj); return r.json(); })
+          .catch(function (e) { if (reloj) clearTimeout(reloj); throw e; });
+      });
   }
 
   window.verificarAccesoTemporal = async function (usuario) {
