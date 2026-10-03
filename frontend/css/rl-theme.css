@@ -34,7 +34,9 @@ html.theme-glass .card{border-radius:16px;border:1px solid rgba(10,36,99,.07);bo
 html.theme-glass .card-h{background:linear-gradient(180deg,rgba(10,36,99,.035),transparent)}
 html.theme-glass table tbody tr{transition:background .18s}
 html.theme-glass table tbody tr:hover{background:rgba(59,130,246,.055)}
-html.theme-glass table th{background:linear-gradient(180deg,#f4f7fd,#edf1f9)}
+/* _TH_AZUL_V1 (03-oct-2026): antes fondo gris claro y muchas paginas ponen la letra blanca -> no se leia. Encabezado azul con letra blanca en todos los modulos */
+html.theme-glass table th{background:linear-gradient(180deg,#143a8a,#0a2463);color:#fff;border-color:rgba(255,255,255,.12)}
+html.theme-glass table th *:not(input):not(select):not(textarea):not(option){color:inherit}
 
 /* Botones */
 html.theme-glass .btn-a,html.theme-glass .btn-save{box-shadow:0 8px 20px rgba(10,36,99,.22);transition:transform .18s,box-shadow .22s,filter .2s}
