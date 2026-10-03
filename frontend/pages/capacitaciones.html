@@ -301,6 +301,24 @@ h3{font-size:16px !important}
           <input type="text" id="capLugar" placeholder="Ej: Sala de reuniones Fundo El Papayo">
         </div>
 
+        <!-- _FORMATO_RSC01_2026_V1 (02-oct-2026): campos del formato nuevo R-SC-01. Solo se imprimen en el PDF (no se guardan). -->
+        <div class="fg">
+          <label class="lbl">Labor</label>
+          <!-- _CAP_LISTAS_TOPE_V1: lista con Gestionar, como Tema/Fuente/Area -->
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="capLabor" style="flex:1"><option value="">Seleccionar labor...</option></select>
+            <button type="button" class="btn btn-gray btn-sm" onclick="gestionarLista('labor')">✏️ Gestionar</button>
+          </div>
+        </div>
+
+        <div class="fg">
+          <label class="lbl">Servicio o contratista</label>
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="capServicio" style="flex:1"><option value="">Sin contratista</option></select>
+            <button type="button" class="btn btn-gray btn-sm" onclick="gestionarLista('servicio')">✏️ Gestionar</button>
+          </div>
+        </div>
+
         <div class="fg">
           <label class="lbl">Hora inicio</label>
           <input type="time" id="capHoraInicio" oninput="calcHoras()">
@@ -326,7 +344,7 @@ h3{font-size:16px !important}
         </div>
 
         <div class="fg full">
-          <label class="lbl">Productor</label>
+          <label class="lbl">Razón social</label>
           <input type="text" id="capProductor" readonly placeholder="Se auto-completa al seleccionar empresa" style="background:#f8fafc;color:#475569">
         </div>
 

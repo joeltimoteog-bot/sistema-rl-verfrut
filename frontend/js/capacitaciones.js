@@ -23,9 +23,13 @@ let _esRetroactivo           = false;
 let _fechaRetroactiva        = null;
 let _motivoRetroactivo       = '';
 let _capGuardada             = false; // flujo unificado guardar+PDF
+let _topeEnCurso             = 0;     /* _CAP_LISTAS_TOPE_V1: busquedas de DNI en vuelo (para no pasarse del tope) */
+let _topePreguntando         = false; /* _CAP_LISTAS_TOPE_V1: hay un aviso de tope abierto */
 
 /* ─────────────────────── LISTAS DESPLEGABLES ─────────────────────── */
 const LISTAS_DEFAULT = {
+  labor:    [],   /* _CAP_LISTAS_TOPE_V1: el usuario arma su lista con Gestionar */
+  servicio: [],   /* _CAP_LISTAS_TOPE_V1 */
   tema:   [
     'BUENAS PRÁCTICAS SOCIALES, LABORALES, COMERCIO ÉTICO Y SUSTENTABILIDAD / ÉTICA EMPRESARIAL',
     'Uso correcto de EPP', 'Manejo seguro de agroquímicos', 'Seguridad e Higiene Industrial'
@@ -74,18 +78,20 @@ function poblarSelect(tipo) {
   // Restaurar selección previa o elegir el primer ítem por defecto
   if (actual && items.includes(actual)) {
     sel.value = actual;
+  } else if (tipo === 'labor' || tipo === 'servicio') {
+    sel.value = '';   /* _CAP_LISTAS_TOPE_V1: Labor y Servicio arrancan en blanco (no se elige nada solo) */
   } else if (items.length > 0) {
     sel.value = items[0];
   }
 }
 
 function inicializarListasCapacitaciones() {
-  ['tema', 'fuente', 'area', 'fundo'].forEach(t => poblarSelect(t));
+  ['tema', 'fuente', 'area', 'fundo', 'labor', 'servicio'].forEach(t => poblarSelect(t));   /* _CAP_LISTAS_TOPE_V1 */
 }
 
 function gestionarLista(tipo) {
   _listaActiva = tipo;
-  const titulos = { tema: 'Temas', fuente: 'Fuentes', area: 'Áreas', fundo: 'Fundos' };
+  const titulos = { tema: 'Temas', fuente: 'Fuentes', area: 'Áreas', fundo: 'Fundos', labor: 'Labores', servicio: 'Servicios o contratistas' };   /* _CAP_LISTAS_TOPE_V1 */
   const el = document.getElementById('modalListaTitulo');
   if (el) el.textContent = '✏️ Gestionar: ' + (titulos[tipo] || tipo);
   renderizarItemsLista(tipo);
@@ -540,6 +546,7 @@ async function regenerarFormatoCapacitacion(cap) {
     respCargo:   v('capRespCargo'),
     area:        v('capArea'),
     fundo:       v('capFundo'),   /* _FUNDO_CAP_V1 */
+    labor:       v('capLabor'), servicio: v('capServicio'),   /* _FORMATO_RSC01_2026_V1 */
     tipos:       getTipos(),
     asistentes:  asistentes.slice()
   };
@@ -552,6 +559,7 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capLugar',       cap.lugar);
     sv('capArea', cap.area);
     if (cap.fundo) sv('capFundo', cap.fundo);   /* _FUNDO_CAP_V1 */
+    sv('capLabor', ''); sv('capServicio', '');   /* _FORMATO_RSC01_2026_V1: no se guardan; al regenerar salen en blanco */
     setTipos(cap.tipo);
     sv('capHoraInicio',  cap.horaInicio);
     sv('capHoraTermino', cap.horaFin);
@@ -578,6 +586,7 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capLugar',       backup.lugar);
     sv('capArea', backup.area);
     sv('capFundo', backup.fundo);   /* _FUNDO_CAP_V1 */
+    sv('capLabor', backup.labor); sv('capServicio', backup.servicio);   /* _FORMATO_RSC01_2026_V1 */
     setTipos((backup.tipos || []).join(','));
     sv('capHoraInicio',  backup.horaInicio);
     sv('capHoraTermino', backup.horaTermino);
@@ -802,7 +811,11 @@ async function procesarDni(dni) {
     return;
   }
 
+  /* _CAP_LISTAS_TOPE_V1: tope = cantidad programada en el paso 0 */
+  if (!await _capPermitirSobreTope(dni)) return;
+
   mostrarFeedback('ok', `🔍 Buscando DNI ${dni}...`);
+  _topeEnCurso++;
   try {
     const d = await buscarTrabajadorAzure(dni);
 
@@ -817,17 +830,55 @@ async function procesarDni(dni) {
     if (d.success && d.data && d.data.length) {
       const t = d.data[0];
       agregarAsistente({ dni, nombre: t.nombre || '', empresa: t.empresa || '', cargo: t.cargo || '', sexo: t.sexo || '' });
-      mostrarFeedback('ok', `✅ ${t.nombre || dni}  ·  ${t.empresa || ''}  ·  ${t.cargo || ''}`);
+      mostrarFeedback('ok', `✅ ${t.nombre || dni}  ·  ${t.empresa || ''}  ·  ${t.cargo || ''}` + _capAvisoTope());
     } else {
       // Registrar solo con DNI si no se encuentra en la BD de trabajadores
       agregarAsistente({ dni, nombre: '', empresa: v('capEmpresa') || '', cargo: '', sexo: '' });
-      mostrarFeedback('ok', `✅ DNI ${dni} registrado (sin datos en BD — completar manualmente)`);
+      mostrarFeedback('ok', `✅ DNI ${dni} registrado (sin datos en BD — completar manualmente)` + _capAvisoTope());
     }
     beep(true); vibrar([80]);
   } catch(e) {
     mostrarFeedback('err', `❌ Error al buscar DNI ${dni}: ` + e.message);
     beep(false);
+  } finally {
+    _topeEnCurso = Math.max(0, _topeEnCurso - 1);   /* _CAP_LISTAS_TOPE_V1 */
   }
+}
+
+/* _CAP_LISTAS_TOPE_V1 (02-oct-2026): al llegar a la cantidad programada en el
+   paso 0 se avisa; si escanean uno mas, se pregunta. Si dicen que si, la
+   cantidad sube en 1 (y se crea otro formato R-SC-01 cuando haga falta). */
+async function _capPermitirSobreTope(dni) {
+  const tope = _trabajadoresProgramados;
+  if (!tope || (asistentes.length + _topeEnCurso) < tope) return true;
+  if (_topePreguntando) return false;          // ya hay un aviso abierto: se ignora este escaneo
+  _topePreguntando = true;
+  try {
+    beep(false); vibrar([100, 50, 100]);
+    const ok = await appConfirm(
+      `🎯 Ya completaste los ${tope} trabajadores programados.\n\n` +
+      `¿Agregar también el DNI ${dni}?\n` +
+      `(La cantidad pasará a ${tope + 1}` +
+      (Math.ceil((tope + 1) / FILAS_POR_FORMATO) > Math.ceil(tope / FILAS_POR_FORMATO) ? ' y se creará un formato R-SC-01 más' : '') + ')'
+    );
+    if (!ok) {
+      delete _dniCooldown[dni];
+      mostrarFeedback('dup', `⏸️ DNI ${dni} no agregado — ya se completó la cantidad programada (${tope})`);
+      return false;
+    }
+    _trabajadoresProgramados = tope + 1;
+    _totalFormatos = Math.ceil(_trabajadoresProgramados / FILAS_POR_FORMATO);
+    sv('cantTrabajadores', String(_trabajadoresProgramados));
+    return true;
+  } finally {
+    _topePreguntando = false;
+  }
+}
+
+function _capAvisoTope() {
+  return (_trabajadoresProgramados && asistentes.length === _trabajadoresProgramados)
+    ? `  ·  🎯 Completaste los ${_trabajadoresProgramados} programados`
+    : '';
 }
 
 /* ─────────────────────── DNI MANUAL ─────────────────────── */
@@ -951,9 +1002,10 @@ async function agregarAsistenteManual() {
   if (asistentes.some(a => String(a.dni) === dni)) {
     await appAlert(`⚠️ DNI ${dni} ya está en la lista`); return;
   }
+  if (!await _capPermitirSobreTope(dni)) return;   /* _CAP_LISTAS_TOPE_V1 */
   agregarAsistente({ dni, nombre, cargo, sexo, empresa: v('capEmpresa') || '' });
   cerrarModalManual();
-  mostrarFeedback('ok', `✅ ${nombre} agregado manualmente`);
+  mostrarFeedback('ok', `✅ ${nombre} agregado manualmente` + _capAvisoTope());
 }
 
 /* ─────────────────────── CALCULAR HORAS ─────────────────────── */
@@ -1166,7 +1218,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     const tipos     = getTipos();
     const nH        = asistentes.filter(a => (a.sexo || '').toUpperCase() === 'M').length;
     const nM        = asistentes.filter(a => (a.sexo || '').toUpperCase() === 'F').length;
-    const logoB64   = await _getLogoBase64();
+    const logoB64   = (await _getLogoBase64()) || _LOGO_UNIFRUTTI_B64_;   /* _RSC01_LOGO_FREC_V1: si la imagen no carga, usa el logo embebido */
 
     // ── Estilos reutilizables ──
     const sBorder  = { lineColor: C.negro, lineWidth: 0.3 };
@@ -1203,11 +1255,11 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       margin: { left: MGS, right: MGS, bottom: 5 },
       body: [
         [
-          { content: `Caserío El Papayo Mz. O, Castilla,\nPiura, Piura, Perú\n${rucEmp}`,
-            styles: { halign: 'center', valign: 'middle', fontSize: 7,
-                      textColor: C.negro, cellWidth: COL1, minCellHeight: 8, cellPadding: 1 } },
+          { content: `Caserío El Papayo Mz. O,\nCastilla, Piura, Piura, Perú\n${rucEmp}`,   /* _RSC01_LOGO_FREC_V1: 3 lineas como el modelo */
+            styles: { halign: 'center', valign: 'middle', fontSize: 6.5,
+                      textColor: C.negro, cellWidth: COL1, minCellHeight: 8, cellPadding: 0.8 } },
           { content: 'Empresa dedicada al cultivo, procesamiento y comercialización de fruta fresca.',
-            styles: { halign: 'center', valign: 'middle', fontStyle: 'italic', fontSize: 8,
+            styles: { halign: 'center', valign: 'middle', fontStyle: 'normal', fontSize: 8,   /* _RSC01_LOGO_FREC_V1: sin cursiva, como el modelo */
                       textColor: C.negro, cellWidth: COL2, minCellHeight: 8, cellPadding: 1 } },
           { content: '', styles: { cellWidth: COL3, minCellHeight: 8 } }
         ]
@@ -1216,13 +1268,14 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
       styles: { lineWidth: 0 }
     });
     // Frecuencia: etiqueta en negrita + línea (como el oficial)
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.setTextColor(...C.negro);
-    doc.text('Frecuencia:', MGS + COL1 + COL2 + 2, yFila2 + 3.5);
-    doc.setDrawColor(...C.negro); doc.setLineWidth(0.2);
-    doc.line(MGS + COL1 + COL2 + 2, yFila2 + 7, MGS + bW - 2, yFila2 + 7);
+    /* _RSC01_LOGO_FREC_V1: como el modelo nuevo -> "Frecuencia: Anual" a la altura de la frase y SIN linea debajo */
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C.negro);
+    const _yFrec = doc.lastAutoTable.finalY - (doc.lastAutoTable.finalY - yFila2) / 2 + 1.2;
+    doc.text('Frecuencia:', MGS + COL1 + COL2 + 2, _yFrec);
+    doc.setFont('helvetica', 'normal'); doc.text('Anual', MGS + COL1 + COL2 + 2 + doc.getTextWidth('Frecuencia: ') + 1.2, _yFrec);
 
     // Logo encima celda izquierda fila 1 — CUADRADO 12×12mm (el original es 225×225, 1:1)
-    if (logoB64) { try { doc.addImage(logoB64, 'JPEG', MGS + (COL1 - 12) / 2, y + 1.5, 12, 12); } catch(e) {} }
+    if (logoB64) { try { doc.addImage(logoB64, 'JPEG', MGS + (COL1 - 14) / 2, y + 0.5, 14, 14);   /* _RSC01_LOGO_FREC_V1 */ } catch(e) {} }
 
     // Texto celda central fila 1: empresa (8pt normal) + título (10pt bold)
     // Centro horizontal de COL2: x = MGS + COL1 + COL2/2 = 10+35+55 = 100mm
@@ -1244,8 +1297,10 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     doc.setFontSize(8);
     doc.text('Versión N.° 0.0', rC, y + 8.6, { align: 'center' });
     doc.line(rX, y + 10, rX + COL3, y + 10);        // divide Versión / Última revisión
-    doc.text('Última revisión:', rC, y + 12.6, { align: 'center' });
-    doc.text('24/03/2026', rC, y + 14.6, { align: 'center' });
+    doc.setFontSize(6.5);   /* _FORMATO_RSC01_2026_V1: antes se montaban las dos lineas */
+    doc.text('Última revisión:', rC, y + 12.3, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(7);   /* _RSC01_LOGO_FREC_V1: fecha en letra normal, como el modelo */
+    doc.text('24/03/2026', rC, y + 14.8, { align: 'center' });
 
     y = doc.lastAutoTable.finalY;
 
@@ -1329,13 +1384,16 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     _val(nMv, MGS + 178, yA);
     yA += 9;
 
-    // FECHA (izquierda) + LUGAR (derecha), como el oficial
-    _lbl('FECHA:', MGS + 1, yA);
-    _val(v('capFecha'), MGS + 17, yA, 76);
-    _sub(MGS + 15, yA + 5, MGS + 95);
-    _lbl('LUGAR:', MGS + 99, yA);
-    _val(v('capLugar').trim(), MGS + 114, yA, bW - 115);
-    _sub(MGS + 112, yA + 5, MGS + bW);
+    // _FORMATO_RSC01_2026_V1: LABOR + FECHA + LUGAR (formato nuevo)
+    _lbl('LABOR:', MGS + 1, yA);
+    _val(v('capLabor').trim(), MGS + 14, yA, 62);
+    _sub(MGS + 12, yA + 5, MGS + 77);
+    _lbl('FECHA:', MGS + 80, yA);
+    _val(v('capFecha'), MGS + 92, yA, 32);
+    _sub(MGS + 90, yA + 5, MGS + 124);
+    _lbl('LUGAR:', MGS + 127, yA);
+    _val(v('capLugar').trim(), MGS + 140, yA, bW - 141);
+    _sub(MGS + 138, yA + 5, MGS + bW);
     yA += 10;
 
     // HORA DE INICIO + HORA DE TÉRMINO + TOTAL DE HORAS (etiquetas completas)
@@ -1345,16 +1403,28 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     _lbl('HORA DE TÉRMINO:', MGS + 80, yA);
     _val(v('capHoraTermino') || '', MGS + 114, yA);
     _sub(MGS + 112, yA + 5, MGS + 148);
-    _lbl('TOTAL DE HORAS:', MGS + 152, yA);
-    _val(v('capHoras') || '', MGS + 183, yA);
-    _sub(MGS + 181, yA + 5, MGS + bW);
+    _lbl('DURACIÓN:', MGS + 152, yA);   /* _FORMATO_RSC01_2026_V1: antes "TOTAL DE HORAS" */
+    _val(v('capHoras') || '', MGS + 170, yA);
+    _sub(MGS + 168, yA + 5, MGS + bW);
     yA += 9;
 
     // PRODUCTOR
     const prodV = v('capProductor') || (esRapel ? 'Sociedad Agrícola Rapel S.A.C.' : 'Sociedad Exportadora Verfrut S.A.C.');
-    _lbl('PRODUCTOR:', MGS + 1, yA);
-    _val(prodV, MGS + 24, yA, bW - 25);
-    _sub(MGS + 23, yA + 5.5, MGS + bW - 1.5);
+    /* _FORMATO_RSC01_2026_V1: RAZÓN SOCIAL + ZONA (fundo) + SERVICIO O CONTRATISTA (formato nuevo; antes "PRODUCTOR") */
+    _lbl('RAZÓN SOCIAL:', MGS + 1, yA);
+    _val(prodV, MGS + 22, yA, 55);
+    _sub(MGS + 21, yA + 5.5, MGS + 79);
+    _lbl('ZONA:', MGS + 82, yA);
+    _val(v('capFundo').trim(), MGS + 91, yA, 33);
+    _sub(MGS + 90, yA + 5.5, MGS + 125);
+    _lbl('SERVICIO O CONTRATISTA:', MGS + 128, yA);
+    { /* texto largo: se achica la letra para que quepa en una linea */
+      const _sv = v('capServicio').trim() || '__', _mw = bW - 164;
+      doc.setFont('helvetica','normal'); let _fs = 8; doc.setFontSize(_fs);
+      while (_fs > 5 && doc.getTextWidth(_sv) > _mw) { _fs -= 0.5; doc.setFontSize(_fs); }
+      doc.setTextColor(...C.negro); doc.text(doc.splitTextToSize(_sv, _mw)[0], MGS + 163, yA + 3.5);
+    }
+    _sub(MGS + 162, yA + 5.5, MGS + bW - 1.5);
     yA += 7;
 
     // ⭐ MARCO: encierra toda la sección DATOS DE LA ACTIVIDAD (como el formato oficial)
@@ -1401,7 +1471,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
 
     doc.autoTable({
       startY: y, margin: { left: MGS, right: MGS, bottom: 5 },
-      head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / ÁREA', 'FIRMA / HUELLA', 'OBS.']],
+      head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / ÁREA', 'FIRMA / HUELLA', 'OBSERVACIONES']],   /* _FORMATO_RSC01_2026_V1 */
       body: filasPart,
       theme: 'grid',
       headStyles: { ...sCabHead },
@@ -1416,6 +1486,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
         4: { cellWidth: 50 }, 5: { cellWidth: 20, halign: 'left' }   /* _FIRMA_HUELLA_V4: FIRMA/HUELLA 40->50 mm. Suma: 8+20+62+30+50+20 = 190 mm = ancho util A4 */
       },
       didParseCell: d => {
+        if (d.section === 'head' && d.column.index === 5) { d.cell.styles.fontSize = 5.6; d.cell.styles.cellPadding = 0.2; }   /* _FORMATO_RSC01_2026_V1: "OBSERVACIONES" cabe en 20 mm */
         if (d.section === 'body') {
           d.cell.styles.textColor = String(d.cell.raw || '').trim() ? C.negro : [200, 200, 200];
         }
@@ -1428,7 +1499,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     // ═══════════════════════════════════════════════════════
     doc.autoTable({
       startY: y, margin: { left: MGS, right: MGS, bottom: 5 },
-      body: [[{ content: esRapel ? 'RESPONSABLE DEL REGISTRO / SEGURIDAD ALIMENTARIA' : 'RESPONSABLE DEL REGISTRO', styles: sBanner }]],
+      body: [[{ content: 'RESPONSABLE DEL REGISTRO / SEGURIDAD ALIMENTARIA', styles: sBanner }]],   /* _FORMATO_RSC01_2026_V1: igual para RAPEL y VERFRUT */
       theme: 'grid', styles: sBorder
     });
     y = doc.lastAutoTable.finalY;
@@ -1508,6 +1579,9 @@ function _campo(doc, x, y, w, h, label, valor, sombreado) {
   doc.text(String(valor || ''), x + 1.5, y + 5.8, { maxWidth: w - 3 });
   doc.setTextColor(0, 0, 0); // reset a negro
 }
+
+/* _RSC01_LOGO_FREC_V1: logo Unifrutti embebido (respaldo si ../images/logo-unifrutti.jpg no carga) */
+const _LOGO_UNIFRUTTI_B64_ = 'data:image/jpeg;base64,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';
 
 // Cargar logo Unifrutti como base64 (Image.onload con canvas — evita CORS de fetch)
 function _getLogoBase64() {
