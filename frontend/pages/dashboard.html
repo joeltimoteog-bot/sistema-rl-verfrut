@@ -17003,5 +17003,83 @@ console.log('[_CV_AZURE_PRIMERO_V1] listo: Casos y Visitas se guardan primero en
   }
 })();
 </script>
+<!-- ══════ _CASOS_UI_V3 (03-oct-2026) — Registro de Casos: encabezado azul + filtros ordenados ══════
+     · La cabecera de la tabla (V2 la pintaba gris #f1f5f9 y la letra quedaba blanca) → azul con letra blanca.
+     · Filtros en UN solo panel ordenado: buscador arriba; Empresa · Motivo · Supervisor · acciones en una
+       fila; Estado/Medida abajo. Solo se MUEVEN los mismos controles (mismos id y eventos): no cambia la lógica.
+     · Habia dos listas "Todos los motivos": queda la que trae todos los motivos (cChipMotivo). La otra
+       (cFiltroMotivo) sigue en la pagina, oculta, para que nada que la use se rompa.
+     · "Limpiar" ahora tambien limpia el buscador y los chips. -->
+<style id="casosUi3Css">
+#sec-casos .sec-hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#sec-casos .sec-hd h2{margin-right:auto}
+#sec-casos .cTablaWrap thead th{background:linear-gradient(180deg,#143a8a,#0a2463)!important;color:#fff!important;border-bottom:2px solid #061a47!important;font-size:10px;letter-spacing:1px}
+#sec-casos .cTablaWrap thead th *{color:inherit}
+.cp3{background:#fff;border:1px solid var(--bd);border-radius:16px;padding:14px 16px 12px;margin-bottom:14px;box-shadow:0 1px 2px rgba(15,23,42,.04),0 10px 24px -18px rgba(10,36,99,.35)}
+.cp3-tit{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:800;color:var(--azul,#0a2463);letter-spacing:.8px;text-transform:uppercase;margin-bottom:10px}
+.cp3-tit small{font-weight:600;color:var(--gr);text-transform:none;letter-spacing:0}
+.cp3-search{margin-bottom:12px}
+.cp3-search>div{margin:0!important}
+.cp3-search input{height:44px;border-radius:12px!important;font-size:14px!important;background:#f8fafc}
+.cp3-search input:focus{outline:none;border-color:#3b82f6!important;background:#fff;box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+.cp3-grid{display:grid;grid-template-columns:minmax(150px,1fr) minmax(200px,1.4fr) minmax(170px,1.2fr) auto;gap:10px;align-items:end}
+.cp3-f label{display:block;font-size:10px;font-weight:800;color:var(--gr);text-transform:uppercase;letter-spacing:.7px;margin:0 0 4px 2px}
+.cp3-f select,.cp3-f input{width:100%;height:40px;box-sizing:border-box;padding:0 12px!important;border:1.5px solid var(--bd)!important;border-radius:10px!important;font-size:13px!important;font-weight:600;background:#f8fafc!important;color:var(--tx,#0f172a);min-width:0!important}
+.cp3-f select:focus,.cp3-f input:focus{outline:none;border-color:#3b82f6!important;background:#fff!important}
+.cp3-acc{display:flex;gap:8px;align-items:center;justify-content:flex-end;flex-wrap:wrap}
+.cp3-acc button{height:40px;border-radius:10px!important;padding:0 14px!important;font-size:12px!important;font-weight:700!important;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.cp3-acc .btn-a{background:linear-gradient(180deg,#16a34a,#15803d)!important;color:#fff!important;border:none!important}
+.cp3-acc .cp3-limpiar{background:#fff!important;border:1.5px solid var(--bd)!important;color:#334155!important}
+.cp3-acc .cp3-limpiar:hover{border-color:#94a3b8!important}
+.cp3-acc #cBtnVerTodos{background:#0a2463!important;border-color:#0a2463!important}
+.cp3-chips{margin-top:12px;padding-top:10px;border-top:1px dashed var(--bd)}
+.cp3-chips #cChips{gap:8px!important}
+.cp3-chips #cChips>span:first-child{font-size:10px!important;font-weight:800!important;text-transform:uppercase;letter-spacing:.7px;margin-right:6px!important}
+.cp3-chips #cChips>span[onclick]{padding:6px 12px!important;font-size:11.5px!important;border-radius:999px!important}
+.cp3-chips #cChips>span[onclick]:hover{transform:translateY(-1px);box-shadow:0 4px 10px -6px rgba(15,23,42,.4)}
+@media(max-width:1000px){.cp3-grid{grid-template-columns:1fr 1fr}.cp3-acc{grid-column:1/-1;justify-content:flex-start}}
+@media(max-width:560px){.cp3-grid{grid-template-columns:1fr}}
+</style>
+<script>
+(function () {
+  'use strict';
+  if (window._casosUi3Listo) return; window._casosUi3Listo = true;
+  function armar() {
+    try {
+      var sec = document.getElementById('sec-casos'); if (!sec || document.getElementById('cPanel3')) return;
+      var filtros = sec.querySelector('.filtros'), buscar = document.getElementById('cBuscar');
+      var bWrap = buscar && buscar.closest('div[style*="margin-bottom:10px"]');
+      var emp = document.getElementById('cFiltroEmp'), motViejo = document.getElementById('cFiltroMotivo'), sup = document.getElementById('cFiltroSup');
+      var mot = document.getElementById('cChipMotivo'), chips = document.getElementById('cChips'), verT = document.getElementById('cBtnVerTodos');
+      if (!filtros || !bWrap || !emp || !sup || !mot || !chips) return;   /* algo distinto: no se toca nada */
+      var exp = filtros.querySelector('button.btn-a'), limp = filtros.querySelector('button[title="Limpiar todos los filtros"]');
+      var p = document.createElement('div'); p.id = 'cPanel3'; p.className = 'cp3';
+      p.innerHTML = '<div class="cp3-tit">🔎 Buscar y filtrar <small>los filtros se combinan entre sí</small></div>' +
+        '<div class="cp3-search"></div><div class="cp3-grid">' +
+        '<div class="cp3-f" data-c="emp"><label>Empresa</label></div><div class="cp3-f" data-c="mot"><label>Motivo</label></div>' +
+        '<div class="cp3-f" data-c="sup"><label>Supervisor</label></div><div class="cp3-acc"></div></div><div class="cp3-chips"></div>' +
+        '<span style="display:none" data-c="oculto"></span>';
+      filtros.parentNode.insertBefore(p, filtros);
+      var q = function (s) { return p.querySelector(s); };
+      q('.cp3-search').appendChild(buscar.parentNode);              /* caja de busqueda con su lupa y su ✕ */
+      q('[data-c="emp"]').appendChild(emp);
+      q('[data-c="mot"]').appendChild(mot);
+      q('[data-c="sup"]').appendChild(sup);
+      if (motViejo) q('[data-c="oculto"]').appendChild(motViejo);
+      var acc = q('.cp3-acc');
+      if (verT) acc.appendChild(verT);
+      if (exp) acc.appendChild(exp);
+      if (limp) {
+        limp.classList.add('cp3-limpiar'); acc.appendChild(limp);
+        limp.addEventListener('click', function () { try { if (typeof verTodosLosCasos === 'function') verTodosLosCasos(); } catch (e) {} });
+      }
+      q('.cp3-chips').appendChild(chips);
+      filtros.style.display = 'none'; bWrap.style.display = 'none';   /* quedan vacios */
+      if (sup.placeholder) sup.placeholder = 'Nombre del supervisor…';
+    } catch (e) { console.warn('[_CASOS_UI_V3] no se pudo ordenar el panel:', e); }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', armar); else armar();
+})();
+</script>
 </body>
 </html>
