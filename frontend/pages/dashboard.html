@@ -1851,10 +1851,13 @@ function renderEstadisticasAdmin(data) {
   console.log('[RENDER-EST] ▶ iniciando ranking con', filas.length, 'supervisores');
   const rankEl = document.getElementById('estRankingBody');
   console.log('[RENDER-EST] #estRankingBody encontrado:', !!rankEl);
-  if (rankEl && filas.length) {
+  /* _RANKING_SIN_BS_V1: sin el personal de Bienestar Social (la tabla de arriba los sigue mostrando) */
+  const filasRank = Object.entries(porSupervisor || {}).filter(([k, sv]) => !_rlFueraRanking(k, sv)).map(([, sv]) => sv)
+    .sort((a,b) => (b.atenciones+b.visitas+b.casos+b.fusiones) - (a.atenciones+a.visitas+a.casos+a.fusiones));
+  if (rankEl && filasRank.length) {
     const medallas = ['🥇','🥈','🥉'];
-    const maxTotal = Math.max(...filas.map(s => s.atenciones + s.visitas + s.casos));
-    rankEl.innerHTML = filas.map((s, i) => {
+    const maxTotal = Math.max(...filasRank.map(s => s.atenciones + s.visitas + s.casos));
+    rankEl.innerHTML = filasRank.map((s, i) => {
       const total = s.atenciones + s.visitas + s.casos;
       const pct = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
       const nombre = (s.nombre && !s.nombre.includes('GMT') && !s.nombre.match(/^\d{4}-/)) ? s.nombre : '—';
@@ -4950,7 +4953,14 @@ function cargarCacheLS() {
     if(!raw) return false;
     const stored = JSON.parse(raw);
     if(!stored || !stored.data) return false;
-    CACHE    = stored.data; if (Array.isArray(stored.atHoy) && stored.atHoy.length) CACHE.atenciones = stored.atHoy;
+    /* _HOY_STALE_V1: cache guardada OTRO dia -> no mostrar sus cifras de "hoy" (eran de ese dia) */
+    const _diaCache = stored.ts ? new Date(Number(stored.ts) - 5 * 3600e3).toISOString().slice(0, 10) : '';
+    const _cacheOtroDia = !_diaCache || _diaCache !== hoy();
+    CACHE    = stored.data; if (!_cacheOtroDia && Array.isArray(stored.atHoy) && stored.atHoy.length) CACHE.atenciones = stored.atHoy;
+    if (_cacheOtroDia && CACHE.stats && typeof CACHE.stats === 'object') {
+      if ('hoy' in CACHE.stats) CACHE.stats.hoy = 0;
+      if (_diaCache.slice(0, 7) !== hoy().slice(0, 7) && 'mes' in CACHE.stats) CACHE.stats.mes = 0;
+    }
     CACHE_TS = stored.ts;
     return true;
   } catch(e) { return false; }
@@ -8015,8 +8025,12 @@ function _fbAplicarEstadisticasFirebase(fbData) {
 
   // Admin/coordinador: usar resumen_global
   console.log('[Firebase] resumen_global → hoy:', rg.hoy, '| este_mes:', rg.este_mes, '| en_proceso:', rg.en_proceso, '| total:', rg.total);
-  _fbSet('sH', rg.hoy);
-  _fbSet('sM', rg.este_mes);
+  /* _HOY_STALE_V1 (03-oct-2026): si nadie registra (sabado/domingo/feriado) Firebase se queda con
+     las cifras del ultimo dia con registros y el inicio mostraba "hoy" de ayer unos segundos. */
+  const _fbFecha = String(rg.fecha_ultima_actualizacion || ''), _hoyFb = hoy();
+  const _fbOtroDia = !!_fbFecha && _fbFecha !== _hoyFb, _fbOtroMes = !!_fbFecha && _fbFecha.slice(0, 7) !== _hoyFb.slice(0, 7);
+  _fbSet('sH', _fbOtroDia ? 0 : rg.hoy);
+  _fbSet('sM', _fbOtroMes ? 0 : rg.este_mes);
   _fbSet('sP', rg.en_proceso);
   _fbSet('sF', rg.finalizados);
   (function(){
@@ -8186,12 +8200,22 @@ function _fbDibujarEmpresa(porEmpresa) {
   });
 }
 
+/* _RANKING_SIN_BS_V1 (03-oct-2026): el personal de Bienestar Social no compite en el
+   Ranking de supervisores (inicio y Estadisticas). Para sumar/quitar a alguien: esta lista. */
+var RL_FUERA_RANKING = ['mmechato', 'lmorales', 'rfigueroa', 'jsiancas', 'rpalomino', 'dsanchez', 'ovilela', 'jchavez'];
+function _rlFueraRanking(clave, v) {
+  var c = [clave, v && v.usuario, v && v.creadaPor, v && v.registradoPor].map(function (x) { return String(x || '').toLowerCase().trim(); });
+  return c.some(function (x) { return x && RL_FUERA_RANKING.indexOf(x) >= 0; });
+}
+window._rlFueraRanking = _rlFueraRanking;
+
 function _fbRenderRankingSup(porSupervisor) {
   const el  = document.getElementById('fbRankingLista');
   const mes = document.getElementById('fbRankingMes');
   if (!el || !porSupervisor) return;
   if (mes) mes.textContent = 'mes ' + hoy().slice(0,7);
   const sorted = Object.entries(porSupervisor)
+    .filter(([k, v]) => !_rlFueraRanking(k, v))   /* _RANKING_SIN_BS_V1 */
     .sort((a,b) => (b[1].este_mes||0) - (a[1].este_mes||0))
     .slice(0, 12);
   if (!sorted.length) { el.innerHTML = '<div style="padding:8px;color:#94a3b8;text-align:center">Sin datos</div>'; return; }
