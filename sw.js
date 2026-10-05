@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3.9.5-motivo-devolucion';
+const CACHE_VERSION = 'v3.9.6-red-lenta';   /* _SW_RED_LENTA_V1 (05-oct-2026) */
 const CACHE_NAME    = 'sistema-rl-' + CACHE_VERSION;
 const BASE          = '/sistema-rl-verfrut';
 // Solo lo mínimo para soporte offline básico — el resto se pide por red
@@ -65,20 +65,34 @@ self.addEventListener('fetch', (event) => {
     // Network-first REAL: cache:'no-cache' obliga a revalidar contra el servidor
     // (GitHub Pages sirve max-age=600; sin esto, fetch() devolvía la copia HTTP
     // vieja del navegador y los usuarios veían versiones antiguas tras cada deploy)
+    /* _SW_RED_LENTA_V1: antes, si la red se quedaba "pensando" (sin cortar), la pagina
+       esperaba lo que tarde el navegador en rendirse: 1 a 5 MINUTOS al cambiar de modulo.
+       Ahora: se pide a la red como siempre; si en 4 s no contesta y hay copia guardada,
+       se muestra la copia y la red sigue en segundo plano actualizando la copia.
+       Sin copia guardada se espera a la red (como antes). */
+    const red = fetch(event.request, { cache: 'no-cache' })
+      .then((resp) => {
+        if (resp && resp.status === 200) {
+          const copia = resp.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(event.request, copia));
+        }
+        return resp;
+      });
+    const copiaGuardada = caches.match(event.request);
     event.respondWith(
-      fetch(event.request, { cache: 'no-cache' })
-        .then((resp) => {
-          if (resp && resp.status === 200) {
-            const copia = resp.clone();
-            caches.open(CACHE_NAME).then((c) => c.put(event.request, copia));
-          }
-          return resp;
-        })
-        .catch(() =>
-          caches.match(event.request)
-            .then((c) => c || caches.match(BASE + '/index.html'))
-        )
+      new Promise((resolver) => {
+        let listo = false;
+        const dar = (r) => { if (!listo && r) { listo = true; resolver(r); } };
+        const reloj = setTimeout(() => { copiaGuardada.then((c) => { if (c) dar(c); }); }, 4000);
+        red.then((r) => { clearTimeout(reloj); dar(r); })
+           .catch(() => {
+             clearTimeout(reloj);
+             copiaGuardada.then((c) => c || caches.match(BASE + '/index.html'))
+               .then((c) => dar(c || Response.error()));
+           });
+      })
     );
+    event.waitUntil(red.catch(() => {}));
     return;
   }
   // Cache-first para imágenes, fuentes e iconos (cambian raramente)
