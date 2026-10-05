@@ -16494,8 +16494,10 @@ window.apiGet = function (p) {
       var qs = (emp && emp !== 'TODAS' && emp !== 'AMBAS') ? '?empresa=' + encodeURIComponent(emp) : '';
       var r = await Promise.all([
         pedir('/mod/fus/getFusiones', {}).then(lista),
-        pedir('/mod/sup/getSupervisores', {}).then(lista),
-        esAdmin ? pedir('/mod/sol/getSolicitudes', {}).then(lista) : Promise.resolve([]),
+        /* _PRELOAD_OPCIONAL_V1 (05-oct-2026): supervisores y solicitudes ya NO mandan toda la carga a
+           Google si Azure tarda (eso hacia la entrada lentisima). Si fallan, se usa lo ultimo guardado. */
+        pedir('/mod/sup/getSupervisores', {}).then(lista).catch(function (e) { console.warn('[_PRELOAD_OPCIONAL_V1] supervisores: ' + (e && e.message) + ' -> se usa lo guardado'); return (typeof CACHE !== 'undefined' && Array.isArray(CACHE.supervisores)) ? CACHE.supervisores : []; }),
+        esAdmin ? pedir('/mod/sol/getSolicitudes', {}).then(lista).catch(function (e) { console.warn('[_PRELOAD_OPCIONAL_V1] solicitudes: ' + (e && e.message) + ' -> se usa lo guardado'); return (typeof CACHE !== 'undefined' && Array.isArray(CACHE.solicitudes)) ? CACHE.solicitudes : []; }) : Promise.resolve([]),
         esAdmin ? pedir('/atenciones/stats' + qs).then(cifras) : Promise.resolve({ _sinStatsSupervisor: true }),
         rol === 'administrador' ? pedir('/usuarios/lista').then(lista).catch(function () { return null; }) : Promise.resolve(null)   // opcional
       ]);
