@@ -10891,80 +10891,62 @@ window._fbSuscribirEstadisticas = function(callback) {
 </div>
 
 <script>
-// ── Service Worker + toast "Nueva versión disponible" ──────────────
+// ── Service Worker (_SW_SIN_TRABA_V1, 05-oct-2026) ──────────────
+/* ANTES: cada vez que se instalaba una version nueva del SW salia el aviso
+   "Nueva version disponible · Recargar". Como el SW ya se activa solo
+   (skipWaiting en sw.js), el boton "Recargar" le hablaba a un SW que ya estaba
+   activo y NO hacia nada -> el usuario se quedaba ahi. Ademas se buscaba
+   version nueva cada 60 s en cada pestana abierta.
+   AHORA: sin aviso que bloquee. Si llega una version nueva, la pagina se
+   recarga sola UNA vez (nunca en bucle: maximo 1 recarga cada 2 min por
+   pestana) y solo si el usuario no esta escribiendo; si esta escribiendo,
+   se muestra un aviso chico cuyo boton recarga de verdad. Revisa version
+   nueva cada 30 min. */
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sistema-rl-verfrut/sw.js')
       .then(registration => {
         console.log('[SW] Registrado:', registration.scope);
-
-        // Detectar cuando hay una nueva versión disponible
         registration.addEventListener('updatefound', () => {
           const newWorker = registration.installing;
           if (!newWorker) return;
           newWorker.addEventListener('statechange', () => {
-            // Cuando el nuevo SW está instalado y hay uno controlando
-            if (newWorker.state === 'installed' &&
-                navigator.serviceWorker.controller) {
-              mostrarToastActualizacion(newWorker);
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              try { if (window.rlSalud && window.rlSalud.registrar) window.rlSalud.registrar('sw_nuevo', location.pathname, 0, ''); } catch (e) {}
             }
           });
         });
-
-        // Verificar updates cada 60 segundos mientras la app está abierta
-        setInterval(() => { registration.update(); }, 60000);
+        setInterval(() => { try { registration.update(); } catch (e) {} }, 30 * 60 * 1000);
       })
       .catch(err => console.error('[SW] Error registro:', err));
 
-    // Recargar la página cuando el nuevo SW toma control
-    let refreshing = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return;
-      refreshing = true;
+      let ult = 0;
+      try { ult = Number(sessionStorage.getItem('rl_sw_recarga') || 0); } catch (e) {}
+      if (Date.now() - ult < 120000) { console.log('[SW] version nueva activa (sin recargar otra vez)'); return; }
+      const ae = document.activeElement;
+      const escribiendo = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) && String(ae.value || '').length > 0;
+      if (escribiendo) { mostrarToastActualizacion(); return; }
+      try { sessionStorage.setItem('rl_sw_recarga', String(Date.now())); } catch (e) {}
       window.location.reload();
     });
   });
 }
 
-function mostrarToastActualizacion(newWorker) {
-  // Evitar duplicados
+function mostrarToastActualizacion() {
   if (document.getElementById('toast-update')) return;
   const toast = document.createElement('div');
   toast.id = 'toast-update';
-  toast.innerHTML = `
-    <div style="position:fixed;bottom:24px;right:24px;background:linear-gradient(135deg,#0a2463 0%,#1e40af 100%);color:#fff;padding:16px 20px;border-radius:12px;box-shadow:0 10px 25px rgba(0,0,0,.3);z-index:99999;display:flex;align-items:center;gap:12px;font-family:system-ui,-apple-system,sans-serif;font-size:14px;max-width:380px;animation:slideUp .4s ease-out">
-      <span style="font-size:24px">🔄</span>
-      <div style="flex:1">
-        <div style="font-weight:600;margin-bottom:2px">Nueva versión disponible</div>
-        <div style="font-size:12px;opacity:.9">Recarga para ver las últimas mejoras</div>
-      </div>
-      <button id="btnReloadUpdate" style="background:#fff;color:#0a2463;border:none;padding:8px 14px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px">Recargar</button>
-      <button id="btnCloseUpdate" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.3);padding:8px 10px;border-radius:8px;cursor:pointer;font-size:13px">✕</button>
-    </div>
-    <style>@keyframes slideUp{from{transform:translateY(100px);opacity:0}to{transform:translateY(0);opacity:1}}
-/* === AUMENTO LEGIBILIDAD 18-may-2026 === */
-.av-n{font-size:14px !important;font-weight:700}
-.av-r{font-size:11.5px !important}
-#wN{font-size:26px !important}
-.ni{font-size:14px !important}
-body{font-size:15px}
-table th{font-size:12.5px !important;letter-spacing:.5px}
-table td{font-size:13px !important}
-.lbl,label{font-size:12.5px !important}
-input,select,textarea{font-size:14px !important}
-button{font-size:13.5px !important}
-h1{font-size:22px !important}
-h2{font-size:18px !important}
-h3{font-size:16px !important}
-</style>
-  `;
+  toast.innerHTML = '<div style="position:fixed;bottom:20px;left:20px;background:#0a2463;color:#fff;padding:10px 14px;border-radius:10px;box-shadow:0 8px 20px rgba(0,0,0,.25);z-index:99999;display:flex;align-items:center;gap:10px;font-family:system-ui,sans-serif;font-size:13px;max-width:340px">' +
+    '<span>🔄 Hay una versión nueva del sistema.</span>' +
+    '<button id="btnReloadUpdate" style="background:#fff;color:#0a2463;border:none;padding:6px 10px;border-radius:7px;font-weight:700;cursor:pointer">Actualizar</button>' +
+    '<button id="btnCloseUpdate" style="background:transparent;color:#fff;border:1px solid rgba(255,255,255,.35);padding:6px 8px;border-radius:7px;cursor:pointer">Luego</button></div>';
   document.body.appendChild(toast);
   document.getElementById('btnReloadUpdate').onclick = () => {
-    newWorker.postMessage({ type: 'SKIP_WAITING' });
+    try { sessionStorage.setItem('rl_sw_recarga', String(Date.now())); } catch (e) {}
+    window.location.reload();
   };
-  document.getElementById('btnCloseUpdate').onclick = () => {
-    toast.remove();
-  };
+  document.getElementById('btnCloseUpdate').onclick = () => { toast.remove(); };
 }
 </script>
 <!-- _FIX_FINAL_V3 — Modal Reenviar Visita (estructura correcta del sistema) -->
