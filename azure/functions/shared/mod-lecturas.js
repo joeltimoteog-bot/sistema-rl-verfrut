@@ -87,12 +87,31 @@ const LECTURAS = {
   acc:  { tabla: 'acc_solicitudes', interruptor: 'usr_azure_primero',  fn: solicitudesAcceso },
   mant: { tabla: 'mant_registro',   interruptor: 'mant_azure_primero', fn: solicitudesMant }
 };
+/* _RESP_AZURE_V1 (06-oct-2026) — getResponsablesEnRango CON fechas: los supervisores (columna S = 'supervisor')
+   que tienen atenciones en el rango. Google leia las hojas 2024, 2025 y 2026 completas (hasta 90 s, a veces no
+   alcanzaba). Mismo criterio: texto sin espacios a los lados, sin repetidos, orden de JavaScript; las filas sin
+   fecha cuentan. SIN fechas (todos los usuarios activos) -> null -> Google, como siempre. */
+async function responsablesEnRango(pool, p) {
+  const d = String((p && p.fechaDesde) || '').trim(), h = String((p && p.fechaHasta) || '').trim();
+  if (!d && !h) return null;
+  const okF = s => /^\d{4}-\d{2}-\d{2}$/.test(s);
+  if ((d && !okF(d)) || (h && !okF(h))) return null;
+  const r = pool.request(), w = ["LTRIM(RTRIM(ISNULL(supervisor, ''))) <> ''"];
+  if (d) { w.push('(fecha_atencion IS NULL OR fecha_atencion >= @d)'); r.input('d', sql.Date, d); }
+  if (h) { w.push('(fecha_atencion IS NULL OR fecha_atencion <= @h)'); r.input('h', sql.Date, h); }
+  const q = await r.query('SELECT DISTINCT LTRIM(RTRIM(supervisor)) COLLATE Latin1_General_BIN2 AS s FROM Atenciones WHERE ' + w.join(' AND '));
+  const lista = Array.from(new Set(q.recordset.map(x => String(x.s).trim()).filter(x => x))).sort();
+  if (!lista.length) return null;
+  return { success: true, data: lista };
+}
+
 /* devuelve la respuesta, o null si Azure no es la fuente al dia (-> 503 -> Google) */
 async function leer(pool, modulo, body) {
+  if (modulo === 'resp') return responsablesEnRango(pool, body || {});   /* _RESP_AZURE_V1 */
   const L = LECTURAS[modulo];
   if (!L || !(await azurePrimero(pool, L.interruptor))) return null;
   const T = await TH.leer(pool, L.tabla);
   if (!T) return null;
   return L.fn(T, body || {});
 }
-module.exports = { leer, LECTURAS, solicitudesAcceso, solicitudesMant };
+module.exports = { leer, LECTURAS, solicitudesAcceso, solicitudesMant, responsablesEnRango };

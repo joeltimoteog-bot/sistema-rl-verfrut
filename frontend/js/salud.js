@@ -59,8 +59,18 @@ function guardarCola(c) {
 }
 var _vistos = {};
 var _recientes = [];
+/* _SALUD_SALIENDO_V1 (06-oct-2026): al cambiar de modulo el navegador corta las consultas que estaban
+   en camino y eso se anotaba como "falla" (p. ej. papeleraNros, listarSolicitudesMantenimiento). Mientras
+   la pagina se esta cerrando, esos cortes NO se anotan (no son errores del sistema). Si el usuario cancela
+   la salida, a los 5 s se vuelve a anotar todo. */
+var _salidaTs = 0, _salidaFin = false;
+window.addEventListener('beforeunload', function () { _salidaTs = Date.now(); });
+window.addEventListener('pagehide', function () { _salidaFin = true; });
+window.addEventListener('pageshow', function () { _salidaFin = false; _salidaTs = 0; });
+function saliendo() { return _salidaFin || (_salidaTs && (Date.now() - _salidaTs) < 5000); }
 function registrar(tipo, accion, ms, detalle) {
   try {
+    if ((/_falla$/.test(String(tipo)) || tipo === 'js_promesa') && saliendo()) return;   /* _SALUD_SALIENDO_V1 */
     var clave = tipo + '|' + accion + '|' + String(detalle || '').slice(0, 60);
     var t = Date.now();
     if (_vistos[clave] && (t - _vistos[clave]) < 60000) return;   // mismo error en 60 s = 1 registro

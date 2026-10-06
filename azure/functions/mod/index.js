@@ -65,7 +65,8 @@ const HANDLERS = {
   estadm:   { crear: require('../shared/mod-estadm').crear, acciones: { getEstadisticasAdmin: 'getEstadisticasAdmin' } },
   /* _DASH_AZURE_V1 (05-oct): lecturas del dashboard desde sus tablas reales (shared/mod-lecturas.js) */
   acc:      { crear: null, acciones: { getSolicitudesAcceso: 'getSolicitudesAcceso' } },
-  mant:     { crear: null, acciones: { listarSolicitudesMantenimiento: 'listarSolicitudesMantenimiento' } }
+  mant:     { crear: null, acciones: { listarSolicitudesMantenimiento: 'listarSolicitudesMantenimiento' } },
+  resp:     { crear: null, acciones: { getResponsablesEnRango: 'getResponsablesEnRango' } }   /* _RESP_AZURE_V1 (06-oct) */
 };
 /* memoria por version: cada consulta pregunta solo la hora de la ultima carga (consulta
    minima); si no cambio, reutiliza lo ya leido. Asi, apenas Google sube un cambio
@@ -118,7 +119,7 @@ module.exports = async function (context, req) {
       }
       return;
     }
-    if (modulo === 'acc' || modulo === 'mant') {   /* _DASH_AZURE_V1 */
+    if (modulo === 'acc' || modulo === 'mant' || modulo === 'resp') {   /* _DASH_AZURE_V1 · _RESP_AZURE_V1 */
       const out = await require('../shared/mod-lecturas').leer(await getPool(), modulo, req.body || {});
       if (!out) { context.res = { status: 503, body: { success: false, error: 'Azure aun no es la fuente de este modulo' } }; return; }
       out.fuente = 'azure';
