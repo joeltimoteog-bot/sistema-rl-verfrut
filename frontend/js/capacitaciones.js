@@ -2349,6 +2349,9 @@ async function capConfirmarDuplicar() {
        NO generaba el documento (habia que buscarlo en "Regenerar"). Ahora genera el
        formato R-SC-01 del registro nuevo de inmediato. */
     aviso('✔ Registro creado con ' + d.asistentes + ' asistentes. Generando el formato R-SC-01...', true);
+    /* _CAP_DUP_LISTA_YA_V1 (06-oct): la lista se actualiza YA (antes, solo al terminar el PDF;
+       si Azure estaba lento, el registro nuevo tardaba en aparecer y parecia que no se guardo) */
+    if (typeof cargarRegistros === 'function') { try { cargarRegistros(); } catch (eL) {} }
     var pdfOk = false;
     try {
       var capNueva = await _capArmarDuplicado(r, d.idCapacitacion, titulo, d.fecha || fecha);
