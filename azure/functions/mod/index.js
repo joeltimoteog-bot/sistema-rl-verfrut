@@ -62,7 +62,10 @@ const HANDLERS = {
   inv:      { crear: require('../shared/mod-snap').crear, acciones: { invGetAll: 'invGetAll' } },
   sup:      { crear: require('../shared/mod-snap').crear, acciones: { getSupervisores: 'getSupervisores' } },   /* _PRELOAD_AZURE_V1 (01-oct): lista de supervisores */
   /* _ESTADM_AZURE_V1: Estadisticas Admin (atenciones directo de SQL) */
-  estadm:   { crear: require('../shared/mod-estadm').crear, acciones: { getEstadisticasAdmin: 'getEstadisticasAdmin' } }
+  estadm:   { crear: require('../shared/mod-estadm').crear, acciones: { getEstadisticasAdmin: 'getEstadisticasAdmin' } },
+  /* _DASH_AZURE_V1 (05-oct): lecturas del dashboard desde sus tablas reales (shared/mod-lecturas.js) */
+  acc:      { crear: null, acciones: { getSolicitudesAcceso: 'getSolicitudesAcceso' } },
+  mant:     { crear: null, acciones: { listarSolicitudesMantenimiento: 'listarSolicitudesMantenimiento' } }
 };
 /* memoria por version: cada consulta pregunta solo la hora de la ultima carga (consulta
    minima); si no cambio, reutiliza lo ya leido. Asi, apenas Google sube un cambio
@@ -113,6 +116,13 @@ module.exports = async function (context, req) {
       } else {
         context.res = { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' }, body: txt };
       }
+      return;
+    }
+    if (modulo === 'acc' || modulo === 'mant') {   /* _DASH_AZURE_V1 */
+      const out = await require('../shared/mod-lecturas').leer(await getPool(), modulo, req.body || {});
+      if (!out) { context.res = { status: 503, body: { success: false, error: 'Azure aun no es la fuente de este modulo' } }; return; }
+      out.fuente = 'azure';
+      context.res = { status: 200, body: out };
       return;
     }
     const m = await datos(modulo);
