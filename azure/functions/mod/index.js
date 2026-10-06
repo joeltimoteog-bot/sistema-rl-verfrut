@@ -89,6 +89,8 @@ module.exports = async function (context, req) {
   const h = HANDLERS[modulo], fn = h && h.acciones[accion];
   if (!fn) { context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
   try {
+    /* _AZ_TOKEN_V1: este modulo aun no exige sesion; por ahora solo se cuenta quien llama sin ella */
+    try { const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || ''; if (!h.startsWith('Bearer ')) require('../shared/auth').anotarSinToken(req, 'sin-token'); } catch (e) {}
     if (modulo === 'cap' && accion === 'listarCapacitaciones') {   /* _CAP_REG_V2: la lista solo necesita las cabeceras (antes cargaba tambien los ~20 mil asistentes) */
       const cab = await TH.leer(await getPool(), 'cap_cabeceras');
       if (cab) {
