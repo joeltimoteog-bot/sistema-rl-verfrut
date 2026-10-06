@@ -356,38 +356,8 @@ async function _ejecutarBusquedaCapacitaciones() {
       return;
     }
 
-    // Agrupar filas por idCapacitacion (acepta claves variadas del backend)
-    const grupos = {};
-    r.data.forEach(row => {
-      const id = row.ID_CAPACITACION || row.idCapacitacion || row.id_capacitacion || row.ID || row.id || ('CAP-' + Object.keys(grupos).length);
-      if (!grupos[id]) {
-        grupos[id] = {
-          id,
-          empresa:           row.EMPRESA || row.empresa || '',
-          fecha:             row.FECHA_CAPACITACION || row.FECHA || row.fecha || desde,
-          tema:              row.TEMA || row.tema || '',
-          lugar:             row.LUGAR || row.lugar || '',
-          area:              row.AREA || row.area || '',
-          tipo:              row.TIPO || row.tipo || '',
-          horaInicio:        _fmtHoraCap(row.HORA_INICIO || row.horaInicio || ''),
-          horaFin:           _fmtHoraCap(row.HORA_FIN || row.horaFin || ''),
-          horas:             row.HORAS || row.horas || row.totalHoras || _calcHorasDesde(_fmtHoraCap(row.HORA_INICIO||row.horaInicio||''), _fmtHoraCap(row.HORA_FIN||row.horaFin||'')),
-          capacitadorDni:    row.CAPACITADOR_DNI || row.capacitadorDni || '',
-          capacitadorNombre: row.CAPACITADOR_NOMBRE || row.capacitadorNombre || '',
-          capacitadorCargo:  row.CAPACITADOR_CARGO || row.capacitadorCargo || '',
-          asistentes: []
-        };
-      }
-      grupos[id].asistentes.push({
-        dni:     row.DNI || row.dni || '',
-        nombre:  row.APELLIDOS_Y_NOMBRES || row.NOMBRE || row.nombre || row.nombres || '',
-        cargo:   row.CARGO_AREA || row.CARGO || row.cargo || '',
-        sexo:    row.SEXO || row.sexo || '',
-        empresa: row.EMPRESA || row.empresa || ''
-      });
-    });
-
-    const lista = Object.values(grupos);
+    // Agrupar filas por idCapacitacion (acepta claves variadas del backend) — _CAP_PDF_MASIVO_V1
+    const lista = _capAgruparExport(r.data, desde);
 
     // Render resultados
     let html = '<p style="color:#475569;margin-bottom:12px;font-size:14px">Se encontraron <b>' + lista.length + '</b> capacitación(es). Haz clic en una para regenerar el formato R-SC-01.</p>';
@@ -421,6 +391,53 @@ async function _ejecutarBusquedaCapacitaciones() {
   } catch(e) {
     cont.innerHTML = '<div style="color:#dc2626;padding:14px;background:#fef2f2;border-radius:6px">❌ Error: ' + e.message + '</div>';
   }
+}
+
+/* _CAP_PDF_MASIVO_V1: agrupa las filas del export (una por asistente) en capacitaciones.
+   Lo usan "Regenerar formato" y "Reutilizar la nomina" (para generar su PDF al toque). */
+function _capAgruparExport(data, desde) {
+  const grupos = {};
+  data.forEach(row => {
+    const id = row.ID_CAPACITACION || row.idCapacitacion || row.id_capacitacion || row.ID || row.id || ('CAP-' + Object.keys(grupos).length);
+    if (!grupos[id]) {
+      grupos[id] = {
+        id,
+        empresa:           row.EMPRESA || row.empresa || '',
+        fecha:             row.FECHA_CAPACITACION || row.FECHA || row.fecha || desde,
+        tema:              row.TEMA || row.tema || '',
+        lugar:             row.LUGAR || row.lugar || '',
+        area:              row.AREA || row.area || '',
+        tipo:              row.TIPO || row.tipo || '',
+        horaInicio:        _fmtHoraCap(row.HORA_INICIO || row.horaInicio || ''),
+        horaFin:           _fmtHoraCap(row.HORA_FIN || row.horaFin || ''),
+        horas:             row.TOTAL_HORAS || row.HORAS || row.horas || row.totalHoras || _calcHorasDesde(_fmtHoraCap(row.HORA_INICIO||row.horaInicio||''), _fmtHoraCap(row.HORA_FIN||row.horaFin||'')),
+        /* _CAP_PDF_MASIVO_V1: la hoja de asistentes guarda el nombre del capacitador en la
+           columna CAPACITADOR (no CAPACITADOR_NOMBRE) -> antes salia vacio y pedia el DNI.
+           El DNI llega como numero: se le devuelve el 0 inicial. FUENTE tampoco se pasaba. */
+        capacitadorDni:    _capDni8(row.CAPACITADOR_DNI || row.capacitadorDni || ''),
+        capacitadorNombre: row.CAPACITADOR_NOMBRE || row.CAPACITADOR || row.capacitadorNombre || '',
+        capacitadorCargo:  row.CAPACITADOR_CARGO || row.capacitadorCargo || '',
+        fuente:            row.FUENTE || row.fuente || '',
+        fundo:             row.FUNDO || row.fundo || '',
+        asistentes: []
+      };
+    }
+    grupos[id].asistentes.push({
+      dni:     _capDni8(row.DNI || row.dni || ''),   /* _CAP_PDF_MASIVO_V1 */
+      nombre:  row.APELLIDOS_Y_NOMBRES || row.NOMBRE || row.nombre || row.nombres || '',
+      cargo:   row.CARGO_AREA || row.CARGO || row.cargo || '',
+      sexo:    row.SEXO || row.sexo || '',
+      empresa: row.EMPRESA || row.empresa || ''
+    });
+  });
+
+  return Object.values(grupos);
+}
+
+/* _CAP_PDF_MASIVO_V1: Azure/Sheets guardan el DNI como numero (46073509 ok, 01234567 -> 1234567) */
+function _capDni8(d) {
+  const s = String(d == null ? '' : d).trim().replace(/\.0+$/, '');
+  return /^\d{7}$/.test(s) ? '0' + s : s;
 }
 
 function _mostrarListaCapacitacionesAntiguas(capacitaciones, fechaTxt) {
@@ -490,7 +507,9 @@ async function regenerarFormatoCapacitacion(cap) {
   let capCargo  = cap.capacitadorCargo  || '';
 
   // Si la capacitación original no tiene datos del capacitador, pedirlos
-  if (!capDni || !capNombre) {
+  /* _CAP_PDF_MASIVO_V1: solo se pide si falta el NOMBRE (antes, si faltaba el DNI,
+     aparecia el aviso; si lo cancelaban, no se generaba el documento) */
+  if (!capNombre) {
     const dniInput = (await appPrompt('🔍 Ingresa el DNI del CAPACITADOR (quien dictó la capacitación):') || '').trim();
     if (!dniInput) return;
     if (!/^\d{7,8}$/.test(dniInput)) {
@@ -534,6 +553,7 @@ async function regenerarFormatoCapacitacion(cap) {
     empresa:     v('capEmpresa'),
     fecha:       v('capFecha'),
     tema:        v('capTema'),
+    fuente:      v('capFuente'),   /* _CAP_PDF_MASIVO_V1 */
     lugar:       v('capLugar'),
     horaInicio:  v('capHoraInicio'),
     horaTermino: v('capHoraTermino'),
@@ -556,9 +576,10 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capEmpresa',     cap.empresa);
     sv('capFecha',       cap.fecha);
     sv('capTema',        cap.tema);
+    sv('capFuente',      cap.fuente || '');   /* _CAP_PDF_MASIVO_V1: antes salia la FUENTE de otra capacitacion */
     sv('capLugar',       cap.lugar);
     sv('capArea', cap.area);
-    if (cap.fundo) sv('capFundo', cap.fundo);   /* _FUNDO_CAP_V1 */
+    sv('capFundo', cap.fundo || '');   /* _FUNDO_CAP_V1 · _CAP_PDF_MASIVO_V1: si no tiene, en blanco (no el de otra) */
     sv('capLabor', ''); sv('capServicio', '');   /* _FORMATO_RSC01_2026_V1: no se guardan; al regenerar salen en blanco */
     setTipos(cap.tipo);
     sv('capHoraInicio',  cap.horaInicio);
@@ -577,12 +598,13 @@ async function regenerarFormatoCapacitacion(cap) {
 
     asistentes = cap.asistentes.slice();
 
-    await generarPDFsFormatos();
+    return await generarPDFsFormatos();   /* _CAP_PDF_MASIVO_V1: devuelve si se genero */
   } finally {
     // Restaurar TODO al estado original
     sv('capEmpresa',     backup.empresa);
     sv('capFecha',       backup.fecha);
     sv('capTema',        backup.tema);
+    sv('capFuente',      backup.fuente);   /* _CAP_PDF_MASIVO_V1 */
     sv('capLugar',       backup.lugar);
     sv('capArea', backup.area);
     sv('capFundo', backup.fundo);   /* _FUNDO_CAP_V1 */
@@ -1031,7 +1053,8 @@ function calcHoras() {
 async function guardarYGenerar() {
   const btn = document.getElementById('btnGuardarGen');
   if (_capGuardada) {            // ya guardado en BD: solo (re)generar PDF
-    await generarPDFsFormatos();
+    const ok2 = await generarPDFsFormatos();
+    if (ok2 && btn) { btn.disabled = true; btn.innerHTML = '✅ Guardado y PDF generado — usa "Nueva"'; }   /* _CAP_PDF_MASIVO_V1 */
     return;
   }
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Guardando...'; }
@@ -1042,8 +1065,14 @@ async function guardarYGenerar() {
   }
   _capGuardada = true;
   if (btn) btn.innerHTML = '<span class="spin"></span> Generando PDF...';
-  await generarPDFsFormatos();               // 2) genera PDF(s)
-  if (btn) { btn.disabled = true; btn.innerHTML = '✅ Guardado y PDF generado — usa "Nueva"'; }
+  const pdfOk = await generarPDFsFormatos();               // 2) genera PDF(s)
+  /* _CAP_PDF_MASIVO_V1 (06-oct): antes el boton quedaba bloqueado con "PDF generado"
+     aunque el PDF NO se hubiera generado (falta responsable, error, descarga bloqueada).
+     Ahora, si falla, el boton queda activo para volver a generar SIN volver a guardar. */
+  if (btn) {
+    if (pdfOk) { btn.disabled = true; btn.innerHTML = '✅ Guardado y PDF generado — usa "Nueva"'; }
+    else       { btn.disabled = false; btn.innerHTML = '📄 Ya guardado — Generar PDF R-SC-01'; }
+  }
 }
 
 async function guardarCapacitacion() {
@@ -1149,47 +1178,62 @@ async function generarPDFsFormatos() {
   if (!respDni || !respNombre || !respCargo) {
     await appAlert('⚠️ Debes ingresar el DNI del responsable del registro.\n\nEl DNI debe existir en BD_Supervisores para auto-completar el nombre y cargo.');
     document.getElementById('capRespDni').focus();
-    return;
+    return false;
   }
   const n = asistentes.length;
-  if (n === 0) { mostrarFeedback('err', '❌ No hay asistentes registrados'); return; }
+  if (n === 0) { mostrarFeedback('err', '❌ No hay asistentes registrados'); return false; }
 
   const totalFormatos = Math.ceil(n / FILAS_POR_FORMATO);
-  if (totalFormatos > 1) {
-    const ok = await appConfirm(
-      `📋 Se generarán ${totalFormatos} formatos R-SC-01\n` +
-      `• ${n} asistentes en total\n` +
-      `• ${FILAS_POR_FORMATO} asistentes por hoja\n\n¿Continuar?`
-    );
-    if (!ok) return;
-  }
 
+  /* _CAP_PDF_MASIVO_V1 (06-oct-2026): con 12 personas por hoja, un registro masivo
+     (ej. 60 personas = 5 formatos) hacia 5 descargas seguidas. El navegador (sobre todo
+     en celular) bloquea la 2da descarga en adelante y "no se generaba el documento".
+     Ahora TODOS los formatos van en UN SOLO PDF (una hoja por formato) = una descarga. */
   const btn = document.getElementById('btnPDF') || {};
   btn.disabled = true;
   try {
+    let doc = null;
     for (let i = 0; i < totalFormatos; i++) {
       const inicio = i * FILAS_POR_FORMATO;
       const fin    = Math.min(inicio + FILAS_POR_FORMATO, n);
       const chunk  = asistentes.slice(inicio, fin);
-      const label  = totalFormatos > 1 ? `Formato ${i + 1} de ${totalFormatos}` : '';
       btn.innerHTML = totalFormatos > 1
         ? `<span class="spin"></span> Formato ${i + 1}/${totalFormatos}...`
         : '<span class="spin"></span> Generando PDF...';
-      await generarPDF(chunk, label);
+      doc = await generarPDF(chunk, '', doc, inicio);
     }
+    const label = totalFormatos > 1 ? `${totalFormatos}_formatos` : '';
+    _guardarPdfCap(doc, label);
     mostrarFeedback('ok', totalFormatos > 1
-      ? `✅ ${totalFormatos} PDFs generados (${n} asistentes)`
+      ? `✅ PDF generado: ${totalFormatos} formatos R-SC-01 en un solo archivo (${n} asistentes)`
       : `✅ PDF generado correctamente`);
+    return true;
   } catch(e) {
+    console.error('[_CAP_PDF_MASIVO_V1] Error al generar PDF:', e);
     mostrarFeedback('err', '❌ Error al generar PDF: ' + e.message);
+    return false;
   } finally {
     btn.disabled = false;
     btn.innerHTML = '📄 Generar PDF R-SC-01';
   }
 }
 
-async function generarPDF(asistentesOverride = null, formatoLabel = '') {
+/* _CAP_PDF_MASIVO_V1: guarda el PDF ya armado (una sola descarga) */
+function _guardarPdfCap(doc, label) {
+  const empresa = v('capEmpresa');
+  const fmtSuffix = label ? `_${String(label).replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+  const fname = `R-SC-01_${empresa}_${v('capFecha')}${fmtSuffix}_${v('capTema').trim().substring(0, 20).replace(/[\s/\\:*?"<>|]+/g, '-')}.pdf`;
+  doc.save(fname);
+}
+
+/* _CAP_PDF_MASIVO_V1: H / M con todas las formas en que llega el sexo (M, H, MASCULINO, F, MUJER...) */
+function _capEsHombre(s) { const x = String(s || '').trim().toUpperCase(); return x === 'M' || x === 'H' || x === 'MASC' || x === 'MASCULINO' || x === 'HOMBRE'; }
+function _capEsMujer(s)  { const x = String(s || '').trim().toUpperCase(); return x === 'F' || x === 'MUJ' || x === 'FEM' || x === 'FEMENINO' || x === 'MUJER'; }
+
+async function generarPDF(asistentesOverride = null, formatoLabel = '', docExistente = null) {
   // Sólo se llama desde generarPDFsFormatos (validaciones ya hechas)
+  /* _CAP_PDF_MASIVO_V1: si llega docExistente, el formato se agrega como hoja nueva
+     del mismo PDF y NO se descarga aqui (lo descarga generarPDFsFormatos una sola vez). */
   const empresa = v('capEmpresa');
   const respDni    = v('capRespDni').trim();
   const respNombre = v('capRespNombre').trim();
@@ -1201,7 +1245,9 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
   try {
     const { jsPDF } = window.jspdf;
     // A4 VERTICAL — UNA SOLA HOJA (210 × 297 mm)
-    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    let doc;
+    if (docExistente) { doc = docExistente; doc.addPage('a4', 'portrait'); }   /* _CAP_PDF_MASIVO_V1 */
+    else doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = 210, H = 297, MGS = 10, MGT = 5;
     const bW = W - 2 * MGS; // 190mm
 
@@ -1216,8 +1262,8 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     const nombreEmp = esRapel ? 'SOCIEDAD AGRÍCOLA RAPEL S.A.C.' : 'SOCIEDAD EXPORTADORA VERFRUT S.A.C.';
     const rucEmp    = esRapel ? 'RUC 20451779711' : 'RUC 20601438586';
     const tipos     = getTipos();
-    const nH        = asistentes.filter(a => (a.sexo || '').toUpperCase() === 'M').length;
-    const nM        = asistentes.filter(a => (a.sexo || '').toUpperCase() === 'F').length;
+    const nH        = asistentes.filter(a => _capEsHombre(a.sexo)).length;   /* _CAP_PDF_MASIVO_V1: antes solo contaba 'M' / 'F' exactos */
+    const nM        = asistentes.filter(a => _capEsMujer(a.sexo)).length;
     const logoB64   = (await _getLogoBase64()) || _LOGO_UNIFRUTTI_B64_;   /* _RSC01_LOGO_FREC_V1: si la imagen no carga, usa el logo embebido */
 
     // ── Estilos reutilizables ──
@@ -1369,9 +1415,12 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
     yA += 12;
 
     // ÁREA + N° TRABAJADORES + H / M (como el oficial)
-    const nTrabV = v('capNTrab') || String(asistentes.length);
-    const nHv    = v('capNH') || String(nH);
-    const nMv    = v('capNM') || String(nM);
+    /* _CAP_PDF_MASIVO_V1: se calculan de la lista REAL de asistentes. Antes se leian de
+       las casillas del formulario, que al regenerar / reutilizar tenian los numeros de
+       OTRA capacitacion (la ultima registrada) y salian datos equivocados en el PDF. */
+    const nTrabV = String(asistentes.length);
+    const nHv    = String(nH);
+    const nMv    = String(nM);
     _lbl('ÁREA:', MGS + 1, yA);
     _val(v('capArea').trim(), MGS + 15, yA, 78);
     _sub(MGS + 13, yA + 5, MGS + 95);
@@ -1523,9 +1572,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '') {
 
     // ── Footer eliminado: el formato oficial R-SC-01 no lleva pie de página ──
 
-    const fmtSuffix = formatoLabel ? `_${formatoLabel.replace(/[^a-zA-Z0-9]/g,'_')}` : '';
-    const fname = `R-SC-01_${empresa}_${v('capFecha')}${fmtSuffix}_${v('capTema').trim().substring(0,20).replace(/[\s/\\:*?"<>|]+/g,'-')}.pdf`;
-    doc.save(fname);
+    return doc;   /* _CAP_PDF_MASIVO_V1: la descarga la hace generarPDFsFormatos (una sola vez) */
   } catch(e) {
     console.error('[PDF] Error:', e);
     throw e;
@@ -2221,6 +2268,7 @@ function capAbrirDuplicarRegen(idx) {
   var lista = window._capacitacionesEncontradas || [];
   var c = lista[idx];
   if (!c) { alert('No encuentro esa capacitación. Vuelve a buscar.'); return; }
+  window._capDupCompleto = c;   /* _CAP_PDF_MASIVO_V1: ya trae la nomina completa -> PDF inmediato */
   capAbrirDuplicarObj({
     idCapacitacion:  c.id,
     tema:            c.tema,
@@ -2236,6 +2284,7 @@ function capAbrirDuplicar(idx) {
   var lista = window._capRegistros || [];
   var r = lista[idx];
   if (!r) { mostrarFeedback('err', 'No encuentro ese registro. Actualiza la lista.'); return; }
+  window._capDupCompleto = null;   /* _CAP_PDF_MASIVO_V1 */
   capAbrirDuplicarObj(r);
 }
 
@@ -2296,19 +2345,57 @@ async function capConfirmarDuplicar() {
     });
     if (!d || !d.success) { aviso((d && d.error) || 'No se pudo crear el registro'); return; }
 
-    aviso('✔ Registro creado con ' + d.asistentes + ' asistentes.', true);
-    setTimeout(function () {
-      capCerrarDuplicar();
-      mostrarFeedback('ok', '✅ Se creó "' + titulo + '" con la misma nómina (' +
-                            d.asistentes + ' personas). Ya puedes generar su formato.');
-      if (typeof cargarRegistros === 'function') cargarRegistros();
-    }, 900);
+    /* _CAP_PDF_MASIVO_V1 (06-oct): antes solo creaba el registro con el tema nuevo y
+       NO generaba el documento (habia que buscarlo en "Regenerar"). Ahora genera el
+       formato R-SC-01 del registro nuevo de inmediato. */
+    aviso('✔ Registro creado con ' + d.asistentes + ' asistentes. Generando el formato R-SC-01...', true);
+    var pdfOk = false;
+    try {
+      var capNueva = await _capArmarDuplicado(r, d.idCapacitacion, titulo, d.fecha || fecha);
+      if (capNueva) {
+        capCerrarDuplicar();
+        var rg = document.getElementById('modalRegenOverlay'); if (rg) rg.style.display = 'none';
+        try { pdfOk = await regenerarFormatoCapacitacion(capNueva); }
+        finally { if (rg) rg.style.display = 'flex'; }
+      }
+    } catch (ePdf) { console.error('[_CAP_PDF_MASIVO_V1] PDF del duplicado:', ePdf); }
+    capCerrarDuplicar();
+    if (pdfOk) {
+      mostrarFeedback('ok', '✅ Se creó "' + titulo + '" con la misma nómina (' + d.asistentes + ' personas) y se generó su formato R-SC-01.');
+    } else {
+      mostrarFeedback('err', '⚠️ Se creó "' + titulo + '" (' + d.asistentes + ' personas), pero el PDF no se generó. ' +
+                             'Búscalo en "Regenerar formato" con la fecha ' + (d.fecha || fecha) + '.');
+    }
+    if (typeof cargarRegistros === 'function') cargarRegistros();
 
   } catch (e) {
     aviso('Error de conexión: ' + e.message);
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '✔ Crear el registro'; }
   }
+}
+
+/* _CAP_PDF_MASIVO_V1: arma la capacitacion nueva (misma nomina, tema/fecha nuevos) para su PDF */
+async function _capArmarDuplicado(r, idNuevo, titulo, fechaNueva) {
+  var idOrig = String(r.idCapacitacion || r.id_capacitacion || r.id || '').trim();
+  var base = window._capDupCompleto;
+  var fNueva = String(fechaNueva || '').substring(0, 10);
+  function derivar(b) {
+    return Object.assign({}, b, { id: idNuevo || b.id, tema: titulo, fecha: fNueva || b.fecha, asistentes: (b.asistentes || []).slice() });
+  }
+  if (base && String(base.id).trim() === idOrig && base.asistentes && base.asistentes.length) return derivar(base);
+
+  async function buscar(id, f) {
+    if (!id || !/^\d{4}-\d{2}-\d{2}$/.test(f)) return null;
+    var ex = await apiPost({ action: 'exportarCapacitaciones', desde: f, hasta: f, empresa: '', usuario: USER.usuario, rol: USER.rol });
+    if (!ex || !ex.success || !ex.data) return null;
+    var filas = ex.data.filter(function (x) { return String(x.ID_CAPACITACION || x.idCapacitacion || x.id || '').trim() === id; });
+    return filas.length ? _capAgruparExport(filas, f)[0] : null;
+  }
+  var nueva = await buscar(String(idNuevo || '').trim(), fNueva);          // el registro nuevo, tal cual quedo guardado
+  if (nueva && nueva.asistentes.length) return nueva;
+  var orig = await buscar(idOrig, String(r.fecha || '').substring(0, 10)); // o el original con el tema/fecha nuevos
+  return (orig && orig.asistentes.length) ? derivar(orig) : null;
 }
 
 window.capAbrirDuplicar      = capAbrirDuplicar;
