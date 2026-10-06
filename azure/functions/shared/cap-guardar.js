@@ -72,6 +72,72 @@ async function tocarMarcas(tx, claves) {
     .query('UPDATE dbo.TH_Estado SET marca = @m, filas = (SELECT COUNT(*) FROM ' + TH.ESQ[k].tabla + '), actualizado = SYSUTCDATETIME() WHERE clave = @k');
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   _CAP_ELIMINAR_V1 (06-oct-2026) — ELIMINAR una capacitacion (cabecera + asistentes)
+   · Solo administradores. Motivo obligatorio (10+ caracteres).
+   · Antes de borrar se copia TODO a dbo.Cap_Eliminados (celdas tal cual, quien,
+     cuando y motivo): se puede recuperar con capRestaurar (Apps Script / admin).
+   · La operacion queda en dbo.CV_Ops y el Apps Script la copia a la hoja
+     (capEliminar: borra las filas y las guarda en CAPACITACIONES_ELIMINADAS).
+   ═══════════════════════════════════════════════════════════════════════════ */
+async function asegurarEliminados(pool) {
+  await pool.request().query(`IF OBJECT_ID('dbo.Cap_Eliminados', 'U') IS NULL
+    CREATE TABLE dbo.Cap_Eliminados (id INT IDENTITY(1,1) NOT NULL PRIMARY KEY, id_capacitacion NVARCHAR(40) NOT NULL,
+      eliminado_en DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(), eliminado_por NVARCHAR(100) NULL, motivo NVARCHAR(1000) NULL,
+      tema NVARCHAR(400) NULL, fecha_capacitacion NVARCHAR(20) NULL, empresa NVARCHAR(20) NULL, total_asistentes INT NULL,
+      cabecera NVARCHAR(MAX) NULL, asistentes NVARCHAR(MAX) NULL, restaurado_en DATETIME2(0) NULL);`);
+}
+async function eliminar(pool, b, usuario, rol, prueba, claveOp, clave) {
+  if (CAP_ROLES_ADMIN.indexOf(String(rol || '').toLowerCase().trim()) < 0)
+    return { status: 403, body: { success: false, error: 'Sin permisos: solo administradores pueden eliminar capacitaciones' } };
+  const id = String(b.idCapacitacion || '').trim(), motivo = String(b.motivo || '').trim();
+  if (!id) return { status: 400, body: { success: false, error: 'Falta indicar que capacitacion se va a eliminar.' } };
+  if (motivo.length < 10) return { status: 400, body: { success: false, error: 'El motivo es obligatorio y debe tener al menos 10 caracteres' } };
+  await asegurarEliminados(pool);
+  const anchos = {};
+  (await pool.request().query("SELECT clave, ancho FROM dbo.TH_Estado WHERE clave IN ('cap_cabeceras', 'cap_asistentes')")).recordset.forEach(x => { anchos[x.clave] = x.ancho; });
+  const resp = { success: true, idCapacitacion: id, eliminado: true };
+  const tx = new sql.Transaction(pool);
+  await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+  try {
+    await tx.request().query("EXEC sp_getapplock @Resource = 'cap_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+    const ch = (await tx.request().input('id', sql.NVarChar(40), id).query('SELECT * FROM dbo.Cap_Cabeceras WHERE LTRIM(RTRIM(id_capacitacion)) = @id ORDER BY fila')).recordset;
+    const ca = (await tx.request().input('id', sql.NVarChar(40), id).query('SELECT * FROM dbo.Cap_Asistentes WHERE LTRIM(RTRIM(id_capacitacion)) = @id ORDER BY fila')).recordset;
+    if (!ch.length && !ca.length) {
+      await tx.rollback();
+      const ya = await pool.request().input('id', sql.NVarChar(40), id).query('SELECT TOP 1 eliminado_por, eliminado_en FROM dbo.Cap_Eliminados WHERE id_capacitacion = @id AND restaurado_en IS NULL ORDER BY id DESC');
+      if (ya.recordset.length) return { status: 200, body: { success: true, idCapacitacion: id, eliminado: true, yaEliminado: true } };
+      return { status: 404, body: { success: false, error: 'Capacitacion no encontrada. Actualiza la lista.' } };
+    }
+    const celH = ch.map(r => TH.aCeldas('cap_cabeceras', r, anchos.cap_cabeceras));
+    const celA = ca.map(r => TH.aCeldas('cap_asistentes', r, anchos.cap_asistentes));
+    const h0 = ch[0] || {}, a0 = ca[0] || {};
+    const fcap = h0.fecha || a0.fecha_capacitacion;
+    resp.tema = String(h0.tema || a0.tema || ''); resp.asistentesEliminados = ca.length;
+    await tx.request().input('id', sql.NVarChar(40), id).input('u', sql.NVarChar(100), usuario ? String(usuario) : null)
+      .input('m', sql.NVarChar(1000), motivo).input('t', sql.NVarChar(400), resp.tema.slice(0, 400))
+      .input('f', sql.NVarChar(20), fcap ? capFecha({ $d: new Date(fcap).toISOString() }) : '').input('e', sql.NVarChar(20), String(h0.empresa || a0.empresa || '').slice(0, 20))
+      .input('n', sql.Int, ca.length).input('ch', sql.NVarChar(sql.MAX), JSON.stringify(celH)).input('ca', sql.NVarChar(sql.MAX), JSON.stringify(celA))
+      .query('INSERT INTO dbo.Cap_Eliminados (id_capacitacion, eliminado_por, motivo, tema, fecha_capacitacion, empresa, total_asistentes, cabecera, asistentes) VALUES (@id, @u, @m, @t, @f, @e, @n, @ch, @ca)');
+    await tx.request().input('id', sql.NVarChar(40), id).query('DELETE FROM dbo.Cap_Asistentes WHERE LTRIM(RTRIM(id_capacitacion)) = @id; DELETE FROM dbo.Cap_Cabeceras WHERE LTRIM(RTRIM(id_capacitacion)) = @id;');
+    await tocarMarcas(tx, ['cap_cabeceras', 'cap_asistentes']);
+    resp.fuente = 'azure';
+    const cuerpo = { idCapacitacion: id, motivo, usuario: usuario ? String(usuario) : '', rol: String(rol || ''), _fechaAzure: limaAhora() };
+    await tx.request().input('k', sql.NVarChar(100), claveOp).input('a', sql.NVarChar(30), 'eliminarCapacitacion').input('u', sql.NVarChar(100), usuario ? String(usuario) : null)
+      .input('c', sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input('r', sql.NVarChar(sql.MAX), JSON.stringify(resp))
+      .query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'cap', @a, NULL, @u, @c, @r)");
+    if (prueba) { await tx.rollback(); resp.prueba = true; } else await tx.commit();
+  } catch (e) {
+    try { await tx.rollback(); } catch (e2) {}
+    if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || '')) {
+      const p = await pool.request().input('k', sql.NVarChar(100), claveOp).query('SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k');
+      if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+    }
+    throw e;
+  }
+  return { status: 200, body: resp };
+}
+
 async function ejecutar(pool, accion, b, usuario, rol, prueba) {
   await CG.asegurarTablas(pool); await TH.asegurar(pool, 'cap_cabeceras'); await TH.asegurar(pool, 'cap_asistentes');
   const clave = String(b.client_id || '').replace(/[^\w-]/g, '').slice(0, 90);
@@ -80,6 +146,7 @@ async function ejecutar(pool, accion, b, usuario, rol, prueba) {
     const p = await pool.request().input('k', sql.NVarChar(100), claveOp).query('SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k');
     if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
   }
+  if (accion === 'eliminarCapacitacion') return eliminar(pool, b, usuario, rol, prueba, claveOp, clave);   /* _CAP_ELIMINAR_V1 */
   const fechaReg = (prueba && b._fechaRegPrueba) ? String(b._fechaRegPrueba) : limaAhora();
   let cab, filas, resp, cuerpo;
   if (accion === 'guardarCapacitacion') {

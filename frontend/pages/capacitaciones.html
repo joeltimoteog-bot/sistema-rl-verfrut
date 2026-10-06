@@ -631,7 +631,7 @@ h3{font-size:16px !important}
 </div>
 
 <script src="../js/modal-system.js"></script>
-  <script src="../js/capacitaciones.js?v=06oct-pdfmasivo"></script>  <!-- _CAP_PDF_MASIVO_V1: fuerza a bajar la version nueva -->
+  <script src="../js/capacitaciones.js?v=06oct-eliminar"></script>  <!-- _CAP_PDF_MASIVO_V1: fuerza a bajar la version nueva -->
   <script src="../js/capacitaciones-excel.js"></script>
 <script>
 /* _MOD_AZURE_V1 (26-set-2026) — Capacitaciones: las consultas salen de Azure (mismo calculo que
@@ -680,7 +680,7 @@ h3{font-size:16px !important}
   if (!CAP_AZURE_PRIMERO || window._rlCapAzPrimOk) return;
   window._rlCapAzPrimOk = true;
   var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/cap/guardar/';
-  var ACCIONES = { guardarCapacitacion: 1, duplicarCapacitacion: 1 };
+  var ACCIONES = { guardarCapacitacion: 1, duplicarCapacitacion: 1, eliminarCapacitacion: 1 };   /* _CAP_ELIMINAR_V1 */
   function h32(s, seed) { var h = seed >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   function huella(b) { var s = JSON.stringify(b); return 'cap-' + h32(s, 2166136261) + h32(s, 5381) + '-' + s.length.toString(36); }
   var previo = window.apiPost, enCurso = {}, apagadoHasta = 0;

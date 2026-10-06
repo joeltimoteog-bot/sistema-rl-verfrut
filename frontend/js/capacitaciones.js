@@ -1899,7 +1899,7 @@ function _cregTabla(lista) {
         <td style="text-align:center;font-weight:700">${_cregFmt(_cregNum(r.totalAsistentes))}</td>
         <td style="text-align:center">${_cregNum(r.totalHoras) ? _cregFmt(_cregNum(r.totalHoras), 1) : '—'}</td>
         ${_cregEsAdmin ? `<td style="font-size:11px;color:#64748b">${_cregEsc(r.creadaPorNombre || r.creadaPor || '—')}</td>` : ''}
-        <td><button class="btn btn-gray btn-sm creg-reu" title="Reutilizar: misma nómina con otro título" onclick="capAbrirDuplicar(${i})">📋</button></td>
+        <td style="white-space:nowrap"><button class="btn btn-gray btn-sm creg-reu" title="Reutilizar: misma nómina con otro título" onclick="capAbrirDuplicar(${i})">📋</button>${_cregEsAdmin ? ` <button class="btn btn-sm creg-reu" style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca" title="Eliminar esta capacitación (solo administradores)" onclick="capAbrirEliminar(${i})">🗑</button>` : ''}</td>
       </tr>`).join('')}</tbody>
     </table>`;
 }
@@ -2405,6 +2405,121 @@ window.capConfirmarDuplicar = capConfirmarDuplicar;
 window.capCerrarDuplicar   = capCerrarDuplicar;
 
 console.log('[_CAP_DUPLICAR_V1] reutilizar nomina listo');
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _CAP_ELIMINAR_V1 (06-oct-2026) — ELIMINAR una capacitacion guardada
+   Solo administradores (el boton solo se pinta si el servidor dice esAdmin, y
+   Azure / Google lo vuelven a validar). Motivo obligatorio. Lo eliminado queda
+   respaldado (Azure: dbo.Cap_Eliminados · hoja: CAPACITACIONES_ELIMINADAS).
+   ═══════════════════════════════════════════════════════════════════════════ */
+function capCrearModalEliminar() {
+  if (document.getElementById('modalElimOverlay')) return;
+  var d = document.createElement('div');
+  d.className = 'modal-overlay';
+  d.id = 'modalElimOverlay';
+  d.style.zIndex = '10050';
+  d.onclick = function (e) { if (e.target === d) capCerrarEliminar(); };
+  d.innerHTML =
+    '<div class="modal-lista" onclick="event.stopPropagation()">' +
+      '<h3 style="color:#b91c1c">🗑 Eliminar capacitación</h3>' +
+      '<div id="elimResumen" style="background:#fef2f2;border:1.5px solid #fecaca;border-radius:8px;' +
+        'padding:10px 13px;font-size:12.5px;color:#7f1d1d;line-height:1.6;margin-bottom:14px"></div>' +
+      '<div class="fg" style="margin-bottom:12px">' +
+        '<label class="lbl">Motivo de la eliminación * (mínimo 10 caracteres)</label>' +
+        '<textarea id="elimMotivo" maxlength="500" rows="3" style="width:100%;resize:vertical" ' +
+          'placeholder="Ej: Registro duplicado por error, la nómina correcta es la del CAP-..."></textarea>' +
+      '</div>' +
+      '<label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:#334155;margin-bottom:14px;cursor:pointer">' +
+        '<input type="checkbox" id="elimConfirmo" style="margin-top:2px"> ' +
+        '<span>Confirmo que quiero eliminar esta capacitación y <b>todos sus asistentes</b>. ' +
+        'Dejará de aparecer en Registros, Exportar y los indicadores.</span>' +
+      '</label>' +
+      '<div style="font-size:11.5px;color:#475569;background:#f8fafc;border:1px solid #e2e8f0;' +
+        'border-radius:7px;padding:8px 11px;margin-bottom:14px;line-height:1.55">' +
+        'Queda un <b>respaldo</b> con quién, cuándo y el motivo. Si fue un error, se puede recuperar.' +
+      '</div>' +
+      '<div id="elimAlerta"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+        '<button class="btn btn-gray btn-sm" onclick="capCerrarEliminar()">Cancelar</button>' +
+        '<button class="btn btn-sm" id="elimBtn" style="background:#dc2626;color:#fff" onclick="capConfirmarEliminar()">🗑 Eliminar</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(d);
+}
+
+function capCerrarEliminar() {
+  var o = document.getElementById('modalElimOverlay');
+  if (o) o.classList.remove('open');
+}
+
+function capAbrirEliminar(idx) {
+  var r = (window._capRegistros || [])[idx];
+  if (!r) { mostrarFeedback('err', 'No encuentro ese registro. Actualiza la lista.'); return; }
+  capCrearModalEliminar();
+  window._capElimActual = r;
+  var n = r.totalAsistentes || r.total_asistentes || 0;
+  var fecha = String(r.fecha || '').substring(0, 10);
+  var res = document.getElementById('elimResumen');
+  if (res) {
+    res.innerHTML =
+      '<b>' + _cregEsc(r.tema || '(sin título)') + '</b><br>' +
+      _cregEsc(r.empresa || '') + ' · ' + _cregEsc(fecha) + ' · <b>' + n + ' personas</b>' +
+      (r.creadaPorNombre || r.creadaPor ? ' · registró ' + _cregEsc(r.creadaPorNombre || r.creadaPor) : '') +
+      '<br><span style="font-size:11px;color:#991b1b">ID: ' + _cregEsc(r.idCapacitacion || r.id || '') + '</span>';
+  }
+  var m = document.getElementById('elimMotivo'); if (m) m.value = '';
+  var c = document.getElementById('elimConfirmo'); if (c) c.checked = false;
+  var a = document.getElementById('elimAlerta'); if (a) a.innerHTML = '';
+  var b = document.getElementById('elimBtn'); if (b) { b.disabled = false; b.innerHTML = '🗑 Eliminar'; }
+  document.getElementById('modalElimOverlay').classList.add('open');
+  setTimeout(function () { if (m) m.focus(); }, 120);
+}
+
+async function capConfirmarEliminar() {
+  var r = window._capElimActual;
+  if (!r) return;
+  var motivo = String((document.getElementById('elimMotivo') || {}).value || '').trim();
+  var conf = !!(document.getElementById('elimConfirmo') || {}).checked;
+  var al = document.getElementById('elimAlerta');
+  function aviso(msg, ok) {
+    if (!al) return;
+    al.innerHTML = '<div style="background:' + (ok ? '#dcfce7' : '#fef2f2') +
+      ';border:1.5px solid ' + (ok ? '#86efac' : '#fecaca') + ';color:' + (ok ? '#166534' : '#dc2626') +
+      ';border-radius:8px;padding:9px 12px;font-size:12.5px;margin-bottom:12px">' + msg + '</div>';
+  }
+  if (motivo.length < 10) { aviso('Escribe el motivo (mínimo 10 caracteres).'); return; }
+  if (!conf)              { aviso('Marca la casilla de confirmación.'); return; }
+
+  var btn = document.getElementById('elimBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Eliminando...'; }
+  var ok = false;
+  try {
+    var d = await apiPost({
+      action: 'eliminarCapacitacion',
+      idCapacitacion: r.idCapacitacion || r.id_capacitacion || r.id,
+      motivo: motivo,
+      usuario: USER.usuario,
+      rol: USER.rol
+    });
+    if (!d || !d.success) { aviso((d && d.error) || 'No se pudo eliminar'); return; }
+    ok = true;
+    aviso('✔ Capacitación eliminada' + (d.asistentesEliminados != null ? ' (' + d.asistentesEliminados + ' asistentes)' : '') + '.', true);
+    setTimeout(function () {
+      capCerrarEliminar();
+      mostrarFeedback('ok', '🗑 Se eliminó "' + (r.tema || '') + '". Queda respaldada por si hay que recuperarla.');
+      if (typeof cargarRegistros === 'function') cargarRegistros();
+    }, 800);
+  } catch (e) {
+    aviso('Error de conexión: ' + e.message);
+  } finally {
+    if (btn && !ok) { btn.disabled = false; btn.innerHTML = '🗑 Eliminar'; }
+  }
+}
+
+window.capAbrirEliminar     = capAbrirEliminar;
+window.capConfirmarEliminar = capConfirmarEliminar;
+window.capCerrarEliminar    = capCerrarEliminar;
 
 
 /* ═══════════════════════════════════════════════════════════════════════════
