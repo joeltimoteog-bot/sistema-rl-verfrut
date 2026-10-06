@@ -22,7 +22,7 @@ npm install
 ## Desplegar a Azure
 
 cd azure/functions
-func azure functionapp publish rl-functions-verfrut
+func azure functionapp publish rl-functions-verfrut --build remote   # SIEMPRE con --build remote (o usar .\publicar-azure.ps1): sin eso Azure queda sin librerias y todo da 500
 
 ## URL base
 
