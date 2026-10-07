@@ -11377,6 +11377,13 @@ if (typeof _guardarOrig === 'function') {
       if (esEdicion || !_formularioCompleto()) {
         return _guardarOrig.apply(self, args);            // que salga el aviso de siempre
       }
+      /* _AT_REG_EN_PROCESO_V1 (06-oct-2026): las REGULARIZACIONES no preguntan: su estado
+         ya lo puso el formulario (EN PROCESO automatico al elegir el documento). */
+      var _docReg = String((document.getElementById('at_doc') || {}).value ||
+                           (document.getElementById('at_doc_txt') || {}).value || '');
+      if (_docReg.toUpperCase().indexOf('REGULARIZAR') >= 0) {
+        return _guardarOrig.apply(self, args);
+      }
 
       return _preguntarFinalizado().then(function (r) {
         if (r === 'cancelar') return;                     // no guarda nada
@@ -17306,9 +17313,46 @@ function _refrescarAutorizaV4() {
   }
 }
 
+/* ── _AT_REG_EN_PROCESO_V1: Regularizar -> estado EN PROCESO automatico ────
+   Solo en atenciones NUEVAS y solo cuando CAMBIA el documento: si el usuario
+   luego cambia el estado a mano, se respeta. Si deja de ser regularizacion y el
+   estado lo habia puesto el sistema, vuelve a FINALIZADO. */
+var _docEstadoUlt = null, _estadoAuto = false;
+function _estadoPorDocumento() {
+  var esNueva = !String((document.getElementById('at_nro_edit') || {}).value || '').trim();
+  var doc = _docTxt();
+  if (doc === _docEstadoUlt) return;
+  _docEstadoUlt = doc;
+  if (!esNueva) return;
+  var est = document.getElementById('at_est');
+  if (!est) return;
+  var esReg = doc.toUpperCase().indexOf('REGULARIZAR') >= 0;
+  var nuevo = null;
+  if (esReg && est.value !== 'EN PROCESO') { nuevo = 'EN PROCESO'; _estadoAuto = true; }
+  else if (!esReg && _estadoAuto) { nuevo = 'FINALIZADO'; _estadoAuto = false; }
+  if (nuevo) {
+    est.value = nuevo;
+    try { est.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}   /* refresca el N° de licencia */
+    [60, 400].forEach(function (ms) { setTimeout(function () { try { if (typeof window._refrescarCampoLicencia === 'function') window._refrescarCampoLicencia(); } catch (e) {} }, ms); });
+    var aviso = document.getElementById('_avisoEstadoReg');
+    if (esReg) {
+      if (!aviso && est.parentNode) {
+        aviso = document.createElement('div'); aviso.id = '_avisoEstadoReg';
+        aviso.style.cssText = 'margin-top:5px;font-size:11.5px;line-height:1.45;padding:6px 9px;border-radius:7px;background:#fff7ed;border:1px solid #fed7aa;color:#9a3412';
+        est.parentNode.appendChild(aviso);
+      }
+      if (aviso) aviso.innerHTML = '⏳ Documento por regularizar: el estado queda <b>EN PROCESO</b> automáticamente.';
+    } else if (aviso) { aviso.remove(); }
+  }
+}
+document.addEventListener('change', function (e) {
+  if (e.target && e.target.id === 'at_est' && e.isTrusted) { _estadoAuto = false; var av = document.getElementById('_avisoEstadoReg'); if (av) av.remove(); }   /* solo cambios hechos por el usuario */
+}, true);
+
 /* ── Un solo refresco, al tocar documento, empresa o DNI ─────────────────── */
 var _ult = '';
 function _refrescar() {
+  try { _estadoPorDocumento(); } catch (e) {}
   try { _asegurarResponsables(); } catch (e) {}
   try { _refrescarTipo(); } catch (e) {}
   try { _refrescarAutorizaV4(); } catch (e) {}
@@ -17327,14 +17371,19 @@ setInterval(function () {
     var m = document.getElementById('mAt');
     if (!m || !m.classList.contains('on')) return;
     if (_docTxt() + '|' + _empresa() !== _ult) _refrescar();
+    /* _AT_REG_EN_PROCESO_V1: EN PROCESO no pide N° de licencia -> que no quede a la vista */
+    var _est = document.getElementById('at_est'), _cj = document.getElementById('at_nlic_wrap');
+    if (_est && _cj && String(_est.value).toUpperCase().indexOf('PROCESO') >= 0 && _cj.style.display !== 'none' &&
+        typeof window._refrescarCampoLicencia === 'function') window._refrescarCampoLicencia();
   } catch (e) {}
-}, 700);
+}, 300);
 
 var _abrirOrig = window.abrirAt;
 if (typeof _abrirOrig === 'function') {
   window.abrirAt = function () {
     var r = _abrirOrig.apply(this, arguments);
     try { var s = document.getElementById('at_autoriz'); if (s && s.dataset) delete s.dataset.docManual; } catch (e) {}
+    _docEstadoUlt = null; _estadoAuto = false; try { var _av = document.getElementById('_avisoEstadoReg'); if (_av) _av.remove(); } catch (e) {}
     setTimeout(_refrescar, 50);
     return r;
   };
