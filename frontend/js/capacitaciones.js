@@ -359,35 +359,7 @@ async function _ejecutarBusquedaCapacitaciones() {
     // Agrupar filas por idCapacitacion (acepta claves variadas del backend) — _CAP_PDF_MASIVO_V1
     const lista = _capAgruparExport(r.data, desde);
 
-    // Render resultados
-    let html = '<p style="color:#475569;margin-bottom:12px;font-size:14px">Se encontraron <b>' + lista.length + '</b> capacitación(es). Haz clic en una para regenerar el formato R-SC-01.</p>';
-
-    lista.forEach((c, i) => {
-      html += '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:10px;background:#f8fafc">';
-      html += '<div style="font-weight:600;font-size:14px;margin-bottom:6px;color:#0f172a">' + (c.tema || '(sin tema)') + '</div>';
-      html += '<div style="font-size:12px;color:#64748b;margin-bottom:10px;line-height:1.6">';
-      html += '📅 <b>' + (c.fecha || '—') + '</b> · 🏢 ' + (c.empresa || '—') + ' · 📍 ' + (c.lugar || '—');
-      html += '<br>⏰ ' + (c.horaInicio || '—') + ' a ' + (c.horaFin || '—') + ' · 👥 <b>' + c.asistentes.length + '</b> asistentes';
-      html += '</div>';
-      html += '<button class="btn btn-primary" data-idx="' + i + '" style="font-size:13px;padding:8px 14px">📄 Regenerar formato R-SC-01</button>';
-      /* _CAP_DUPLICAR_V1: misma nomina, otro titulo */
-      html += ' <button class="btn btn-gray" data-dup="' + i + '" style="font-size:13px;padding:8px 14px" ' +
-              'title="Crear otro registro con estas mismas personas y otro titulo">📋 Otro título</button>';
-      html += '</div>';
-    });
-
-    cont.innerHTML = html;
-    window._capacitacionesEncontradas = lista;
-
-    cont.querySelectorAll('button[data-idx]').forEach(btn => {
-      btn.onclick = () => {
-        const idx = parseInt(btn.dataset.idx);
-        regenerarFormatoCapacitacion(window._capacitacionesEncontradas[idx]);
-      };
-    });
-    cont.querySelectorAll('button[data-dup]').forEach(btn => {      /* _CAP_DUPLICAR_V1 */
-      btn.onclick = () => capAbrirDuplicarRegen(parseInt(btn.dataset.dup));
-    });
+    _capPintarRegen(cont, lista);   /* _CAP_QUIEN_REGISTRO_V1 */
   } catch(e) {
     cont.innerHTML = '<div style="color:#dc2626;padding:14px;background:#fef2f2;border-radius:6px">❌ Error: ' + e.message + '</div>';
   }
@@ -419,6 +391,9 @@ function _capAgruparExport(data, desde) {
         capacitadorCargo:  row.CAPACITADOR_CARGO || row.capacitadorCargo || '',
         fuente:            row.FUENTE || row.fuente || '',
         fundo:             row.FUNDO || row.fundo || '',
+        creadaPor:         row.CREADA_POR || row.creadaPor || '',              /* _CAP_QUIEN_REGISTRO_V1 */
+        creadaPorNombre:   row.CREADA_POR_NOMBRE || row.creadaPorNombre || '',
+        fechaRegistro:     row.FECHA_REGISTRO || row.fechaRegistro || '',
         asistentes: []
       };
     }
@@ -432,6 +407,78 @@ function _capAgruparExport(data, desde) {
   });
 
   return Object.values(grupos);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _CAP_QUIEN_REGISTRO_V1 (07-oct-2026) — reconocer los registros de cada usuario
+   · "Fecha anterior": cada tarjeta dice quien la registro y cuando, y hay un
+     filtro "Registrado por" (si hay mas de un usuario en el resultado).
+   · Registros: columna "Registrado por" con fecha/hora, marca "📅 fecha anterior"
+     y (administradores) resumen por usuario arriba de la tabla.
+   Solo pantalla: los datos ya venian del servidor.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _capEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+/* "2026-10-07 08:45" (Lima) o ISO UTC -> "07/10/2026 8:45 a. m." */
+function _capFmtRegistro(x) {
+  if (!x) return '';
+  let s = String(x), y, mo, d, h, mi;
+  let m = s.match(/^(\d{4})-(\d{2})-(\d{2})[ ](\d{1,2}):(\d{2})/);
+  if (m) { [, y, mo, d, h, mi] = m; }
+  else {
+    const t = Date.parse(s); if (isNaN(t)) return s;
+    const L = new Date(t - 5 * 3600e3).toISOString();   /* hora de Lima */
+    y = L.slice(0, 4); mo = L.slice(5, 7); d = L.slice(8, 10); h = L.slice(11, 13); mi = L.slice(14, 16);
+  }
+  let hh = +h; const ap = hh >= 12 ? 'p. m.' : 'a. m.'; hh = hh % 12 || 12;
+  return d + '/' + mo + '/' + y + ' ' + hh + ':' + mi + ' ' + ap;
+}
+function _capQuien(c) { return String(c.creadaPorNombre || c.creadaPor || '').trim(); }
+
+function _capPintarRegen(cont, todas) {
+  const sel0 = document.getElementById('regenFiltroUsr');
+  const elegido = sel0 ? sel0.value : '';
+  const usuarios = {};
+  todas.forEach(c => { const k = String(c.creadaPor || '').toLowerCase().trim(); if (k) usuarios[k] = (usuarios[k] || { n: 0, nom: _capQuien(c) }), usuarios[k].n++; });
+  const claves = Object.keys(usuarios).sort((a, b) => usuarios[a].nom.localeCompare(usuarios[b].nom));
+  const lista = elegido ? todas.filter(c => String(c.creadaPor || '').toLowerCase().trim() === elegido) : todas;
+
+  let html = '';
+  if (claves.length > 1) {
+    html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">' +
+      '<label style="font-size:12px;color:#64748b;font-weight:600">👤 Registrado por</label>' +
+      '<select id="regenFiltroUsr" style="padding:6px 9px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px">' +
+      '<option value="">Todos (' + todas.length + ')</option>' +
+      claves.map(k => '<option value="' + _capEsc(k) + '"' + (k === elegido ? ' selected' : '') + '>' + _capEsc(usuarios[k].nom) + ' (' + usuarios[k].n + ')</option>').join('') +
+      '</select></div>';
+  }
+  html += '<p style="color:#475569;margin-bottom:12px;font-size:14px">Se encontraron <b>' + lista.length + '</b> capacitación(es). Haz clic en una para regenerar el formato R-SC-01.</p>';
+  lista.forEach((c, i) => {
+    const quien = _capQuien(c), cuando = _capFmtRegistro(c.fechaRegistro);
+    html += '<div style="border:1px solid #e2e8f0;border-radius:8px;padding:14px;margin-bottom:10px;background:#f8fafc">';
+    html += '<div style="font-weight:600;font-size:14px;margin-bottom:6px;color:#0f172a">' + _capEsc(c.tema || '(sin tema)') + '</div>';
+    html += '<div style="font-size:12px;color:#64748b;margin-bottom:6px;line-height:1.6">';
+    html += '📅 <b>' + _capEsc(c.fecha || '—') + '</b> · 🏢 ' + _capEsc(c.empresa || '—') + ' · 📍 ' + _capEsc(c.lugar || '—');
+    html += '<br>⏰ ' + _capEsc(c.horaInicio || '—') + ' a ' + _capEsc(c.horaFin || '—') + ' · 👥 <b>' + c.asistentes.length + '</b> asistentes';
+    html += '</div>';
+    if (quien || cuando) {
+      html += '<div style="font-size:12px;color:#1e3a8a;background:#eff6ff;border:1px solid #dbeafe;border-radius:6px;padding:5px 9px;margin-bottom:10px;display:inline-block">' +
+              '👤 <b>Registrado por:</b> ' + _capEsc(quien || '—') + (cuando ? ' · 🕒 ' + _capEsc(cuando) : '') + '</div><br>';
+    }
+    html += '<button class="btn btn-primary" data-idx="' + i + '" style="font-size:13px;padding:8px 14px">📄 Regenerar formato R-SC-01</button>';
+    html += ' <button class="btn btn-gray" data-dup="' + i + '" style="font-size:13px;padding:8px 14px" ' +
+            'title="Crear otro registro con estas mismas personas y otro titulo">📋 Otro título</button>';
+    html += '</div>';
+  });
+  cont.innerHTML = html;
+  window._capacitacionesEncontradas = lista;
+  cont.querySelectorAll('button[data-idx]').forEach(btn => {
+    btn.onclick = () => regenerarFormatoCapacitacion(window._capacitacionesEncontradas[parseInt(btn.dataset.idx)]);
+  });
+  cont.querySelectorAll('button[data-dup]').forEach(btn => {
+    btn.onclick = () => capAbrirDuplicarRegen(parseInt(btn.dataset.dup));
+  });
+  const sel = document.getElementById('regenFiltroUsr');
+  if (sel) sel.onchange = () => _capPintarRegen(cont, todas);
 }
 
 /* _CAP_PDF_MASIVO_V1: Azure/Sheets guardan el DNI como numero (46073509 ok, 01234567 -> 1234567) */
@@ -1791,7 +1838,30 @@ function _cregFiltrados() {
     (!cap || String(r.capacitadorNombre || '').trim().toUpperCase() === cap));
 }
 
+/* _CAP_QUIEN_REGISTRO_V1: registrada DESPUES de la fecha de la capacitacion */
+function _cregRetro(r) { const fc = _cregFecha(r), fr = _cregFechaReg(r); return !!(fc && fr && fr > fc); }
+/* _CAP_QUIEN_REGISTRO_V1: resumen por usuario (administradores); un clic filtra */
+function _cregChips() {
+  const tb = document.getElementById('tbRegistrosWrap'); if (!tb || !tb.parentNode) return;
+  let el = document.getElementById('cregChips');
+  if (!_cregEsAdmin) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'cregChips'; el.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 10px'; tb.parentNode.insertBefore(el, tb); }
+  const cap = v('cregCap'), sup = v('cregSup'), cnt = {};
+  _cregDatos.filter(r => !cap || String(r.capacitadorNombre || '').trim().toUpperCase() === cap).forEach(r => {
+    const k = String(r.creadaPor || '').toLowerCase().trim(); if (!k) return;
+    cnt[k] = cnt[k] || { nom: r.creadaPorNombre || r.creadaPor, n: 0, p: 0 }; cnt[k].n++; cnt[k].p += _cregNum(r.totalAsistentes);
+  });
+  const ks = Object.keys(cnt).sort((a, b) => cnt[b].n - cnt[a].n);
+  if (ks.length < 2) { el.innerHTML = ''; return; }
+  el.innerHTML = '<span style="font-size:12px;color:#64748b;font-weight:600">👤 Por usuario:</span>' + ks.map(k =>
+    '<button type="button" data-u="' + _cregEsc(k) + '" title="' + cnt[k].p + ' personas" style="cursor:pointer;font-size:12px;border-radius:14px;padding:3px 10px;border:1px solid ' +
+    (sup === k ? '#1d4ed8;background:#1d4ed8;color:#fff' : '#cbd5e1;background:#fff;color:#334155') + '">' + _cregEsc(cnt[k].nom) + ' <b>' + cnt[k].n + '</b></button>').join('') +
+    (sup ? ' <button type="button" data-u="" style="cursor:pointer;font-size:11.5px;border:0;background:none;color:#1d4ed8;text-decoration:underline">ver todos</button>' : '');
+  el.querySelectorAll('button[data-u]').forEach(b => { b.onclick = () => { const u = b.getAttribute('data-u'); sv('cregSup', u === sup ? '' : u); cregAplicar(); }; });
+}
+
 function cregAplicar() {
+  try { _cregChips(); } catch (e) {}
   const lista = _cregFiltrados();
   window._capRegistros = lista;          /* _CAP_DUPLICAR_V1: "Reutilizar" usa esta lista */
   _cregKpis(lista);
@@ -1905,17 +1975,17 @@ function _cregTabla(lista) {
     <table class="data-table">
       <thead><tr>
         <th>Fecha</th><th>Empresa</th><th>Tipo</th><th>Tema</th><th>Capacitador</th>
-        <th style="text-align:center">Personas</th><th style="text-align:center">Horas</th>${_cregEsAdmin ? '<th>Registrado por</th>' : ''}<th></th>
+        <th style="text-align:center">Personas</th><th style="text-align:center">Horas</th><th>Registrado por</th><th></th>
       </tr></thead>
       <tbody>${lista.map((r, i) => `<tr>
-        <td style="white-space:nowrap">${_cregDdmm(_cregFecha(r))}</td>
+        <td style="white-space:nowrap">${_cregDdmm(_cregFecha(r))}${_cregRetro(r) ? '<div title="Registrada el ' + _cregEsc(_cregDdmm(_cregFechaReg(r))) + ', despues de la fecha de la capacitacion" style="margin-top:3px;display:inline-block;font-size:10.5px;font-weight:700;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:10px;padding:1px 7px">📅 fecha anterior</div>' : ''}</td>
         <td><span class="badge-emp ${String(r.empresa || '').toUpperCase().indexOf('RAPEL') >= 0 ? 'badge-rap' : 'badge-vrf'}">${_cregEsc(r.empresa || '')}</span></td>
         <td>${String(r.tipo || '').split(',').map(t => t.trim()).filter(Boolean).map(t => '<span class="creg-chip">' + _cregEsc(t) + '</span>').join(' ')}</td>
         <td class="creg-tema" style="font-size:12px" title="${_cregEsc(r.tema)}">${_cregEsc(String(r.tema || '').substring(0, 60))}${String(r.tema || '').length > 60 ? '…' : ''}</td>
         <td class="creg-capac" style="font-size:11.5px;color:#475569">${_cregEsc(r.capacitadorNombre || '—')}</td>
         <td style="text-align:center;font-weight:700">${_cregFmt(_cregNum(r.totalAsistentes))}</td>
         <td style="text-align:center">${_cregNum(r.totalHoras) ? _cregFmt(_cregNum(r.totalHoras), 1) : '—'}</td>
-        ${_cregEsAdmin ? `<td style="font-size:11px;color:#64748b">${_cregEsc(r.creadaPorNombre || r.creadaPor || '—')}</td>` : ''}
+        <td style="font-size:11px;color:#334155;line-height:1.35"><b>${_cregEsc(r.creadaPorNombre || r.creadaPor || '—')}</b>${r.fechaRegistro ? '<div style="color:#64748b;font-size:10.5px">🕒 ' + _cregEsc(_capFmtRegistro(r.fechaRegistro)) + '</div>' : ''}</td>
         <td style="white-space:nowrap"><button class="btn btn-gray btn-sm creg-reu" title="Reutilizar: misma nómina con otro título" onclick="capAbrirDuplicar(${i})">📋</button>${_cregEsAdmin ? ` <button class="btn btn-sm creg-reu" style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca" title="Eliminar esta capacitación (solo administradores)" onclick="capAbrirEliminar(${i})">🗑</button>` : ''}</td>
       </tr>`).join('')}</tbody>
     </table>`;
