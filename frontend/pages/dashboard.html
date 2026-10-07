@@ -1138,7 +1138,7 @@ h3{font-size:16px !important}
     <div class="fc"><label>Fecha Atención *</label><input type="date" id="at_fec"></div>
     <div class="fc"><label>Hora Inicio</label><input type="time" id="at_hi"></div>
     <div class="fc"><label>Hora Término</label><input type="time" id="at_ht"></div>
-    <div class="fc" style="grid-column:span 3"><label>Detalle / Documento *</label>
+    <div class="fc" style="grid-column:span 3"><label>Tipo de licencia *</label>
       <div id="at_doc_wrap" style="position:relative">
         <input type="text" id="at_doc_txt" placeholder="Buscar por nombre o código..." autocomplete="off"
                oninput="_atDocInput(this.value)" onkeydown="_atDocKeydown(event)" style="width:100%">
@@ -6140,7 +6140,7 @@ async function guardarAt() { if(window._savingAt) return;
     nro_licencia:v('at_nlic'),      /* _NRO_LICENCIA_V1 */
     autorizado_por:v('at_autoriz')  /* _ATENCION_V3 */
   };
-  const _miss=[];if(!/^\d{8}$/.test(String(d.dni||'').trim()))_miss.push(['at_dni','DNI (8 digitos)']);if(!String(d.nombre||'').trim())_miss.push(['at_nom','Nombre']);if(!String(d.detalle_documento||'').trim())_miss.push(['at_doc_txt','Documento']);if(typeof _licenciaObligatoria==='function'&&_licenciaObligatoria(d.detalle_documento)&&!String(d.nro_licencia||'').trim())_miss.push(['at_nlic','N° de licencia']);if(_miss.length){const el=document.getElementById(_miss[0][0]);if(el){el.focus();el.style.borderColor='#ef4444';setTimeout(function(){el.style.borderColor='';},2500);}mostrarToast('Falta completar: '+_miss.map(function(m){return m[1];}).join(', '),'error');return;}
+  const _miss=[];if(!/^\d{8}$/.test(String(d.dni||'').trim()))_miss.push(['at_dni','DNI (8 digitos)']);if(!String(d.nombre||'').trim())_miss.push(['at_nom','Nombre']);if(!String(d.detalle_documento||'').trim())_miss.push(['at_doc_txt','Tipo de licencia']);if(typeof _licenciaObligatoria==='function'&&_licenciaObligatoria(d.detalle_documento)&&!String(d.nro_licencia||'').trim())_miss.push(['at_nlic','N° de licencia']);if(_miss.length){const el=document.getElementById(_miss[0][0]);if(el){el.focus();el.style.borderColor='#ef4444';setTimeout(function(){el.style.borderColor='';},2500);}mostrarToast('Falta completar: '+_miss.map(function(m){return m[1];}).join(', '),'error');return;}
   if (!modoEdicion && window._atRegularizadas && window._atRegularizadas.length) {
     const _regs = window._atRegularizadas.filter(x => String(x.dni) === String(d.dni||'').trim());
     if (_regs.length) {
@@ -17199,9 +17199,9 @@ function _crearTipo() {
   caja.className = 'fc';
   caja.style.cssText = 'display:none;margin-top:10px';
   caja.innerHTML =
-    '<label>Tipo de licencia <span style="color:#dc2626">*</span></label>' +
+    '<label>Tipo de descanso médico <span style="color:#dc2626">*</span></label>' +
     '<select id="at_tlic" style="width:100%;padding:8px 10px;border:1.5px solid #c0ceea;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box">' +
-      '<option value="">— selecciona el tipo de licencia —</option>' +
+      '<option value="">— selecciona el tipo de descanso médico —</option>' +
       TIPOS.map(function (t) { return '<option value="' + t[1] + '">' + t[0] + '</option>'; }).join('') +
     '</select>';
   ref.parentNode.insertBefore(caja, ref.nextSibling);
@@ -17254,7 +17254,7 @@ if (typeof _guardarOrig === 'function') {
       if (_docTxt() === DM_ETIQUETA && !String((document.getElementById('at_doc') || {}).value || '')) {
         var s = document.getElementById('at_tlic');
         if (s) { s.focus(); s.style.borderColor = '#ef4444'; setTimeout(function () { s.style.borderColor = ''; }, 2500); }
-        if (typeof mostrarToast === 'function') mostrarToast('Falta completar: Tipo de licencia', 'error');
+        if (typeof mostrarToast === 'function') mostrarToast('Falta completar: Tipo de descanso médico', 'error');
         return;
       }
     } catch (e) {}
