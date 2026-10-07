@@ -16,8 +16,7 @@ const FILA = `a.id, a.nro, CONVERT(CHAR(10), a.fecha_atencion, 120) AS fecha_ate
   a.dni, a.nombre, a.sexo, CONVERT(CHAR(10), a.fecha_inicio_periodo, 120) AS fecha_inicio_periodo, a.empresa, a.fundo, a.cargo, a.ruta, a.codigo,
   a.fundo_actual, a.celular, a.supervisor, a.detalle_documento, CONVERT(CHAR(10), a.fecha_inicio_doc, 120) AS fecha_inicio_doc,
   CONVERT(CHAR(10), a.fecha_termino_doc, 120) AS fecha_termino_doc, a.dias_transcurridos, a.responsable_recepcion, a.observaciones,
-  a.estado, a.usuario_sistema, a.nro_licencia, a.parentesco,
-  a.autorizado_por, CONVERT(CHAR(10), a.fecha_termino_periodo, 120) AS fecha_termino_periodo, a.tipo_licencia`;   /* _AT_COLS_V1 · _AT_TIPO_LIC_V1 */
+  a.estado, a.usuario_sistema, a.nro_licencia, a.parentesco`;
 
 async function subirContador(pool, anio, max) {
   await pool.request().input('a', sql.Int, anio).input('m', sql.Int, max).query(`

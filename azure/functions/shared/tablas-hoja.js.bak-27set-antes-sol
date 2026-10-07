@@ -1,0 +1,144 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   _TABLAS_HC_V1 (26-set-2026) — TABLAS REALES de Horas y Capacitaciones
+   ---------------------------------------------------------------------------
+   Una fila por registro y una columna por dato, con su tipo (segun el censo
+   horasCapCenso del 26-set). Sin perder nada: si una celda no calza con el tipo
+   de su columna (p. ej. texto en una columna de fecha) se guarda tal cual en
+   'otros' (JSON). Asi Azure puede devolver la hoja EXACTA que usan los calculos
+   (mod-horas.js / mod-cap.js) y las comparaciones con Google salen identicas.
+   Carga por lotes en una tabla de paso (__carga) y cambio en una transaccion.
+   ═══════════════════════════════════════════════════════════════════════════ */
+'use strict';
+const { sql } = require('./db');
+
+const ESQ = {
+  horas_registros: { tabla: 'dbo.Horas_Registros', cols: [
+    ['id', 't40'], ['fecha_registro', 'f'], ['registrado_por', 't60'], ['dni', 'n'], ['nombre', 't200'], ['empresa', 't20'],
+    ['cargo', 't150'], ['fecha_entrada', 'f'], ['hora_entrada', 'f'], ['fecha_salida', 'f'], ['hora_salida', 'f'],
+    ['horas_trabajadas', 'n'], ['jornada_esperada', 'n'], ['horas_acumuladas', 'n'], ['horas_permiso', 'n'], ['horas_deuda', 'n'],
+    ['motivo', 't150'], ['detalle', 't1000'], ['observaciones', 't2000'], ['alerta', 't2000'], ['estado', 't30'],
+    ['aprobado_por', 't60'], ['aprobado_en', 'f']] },
+  horas_motivos: { tabla: 'dbo.Horas_Motivos', cols: [['motivo', 't200']] },
+  /* _HORAS_AZURE_PRIMERO_V1 (27-set): horarios (los sigue editando la hoja), pagadas en planilla y bitacora */
+  horas_horarios: { tabla: 'dbo.Horas_Horarios', cols: [
+    ['desde', 'f'], ['hasta', 'f'], ['lv_entrada', 'f'], ['lv_salida', 'f'], ['lv_refrig_min', 'n'], ['sab_entrada', 'f'],
+    ['sab_salida', 'f'], ['sab_refrig_min', 'n'], ['acceso_activo', 't10'], ['acceso_margen_min', 'n'], ['nota', 't1000']] },
+  horas_pagadas: { tabla: 'dbo.Horas_Pagadas', cols: [
+    ['fecha_registro', 'f'], ['registrado_por', 't60'], ['fecha_del_dia', 'f'], ['dni', 'n'], ['trabajador', 't200'], ['empresa', 't20'],
+    ['cargo', 't150'], ['horas_pagadas', 'n'], ['acumulado_antes', 'n'], ['acumulado_despues', 'n'], ['id_registro', 't40'], ['observaciones', 't2000']] },
+  /* _FUS_AZURE_V1 (27-set): Fusiones_Buses en el orden REAL de los datos (la cabecera de la hoja esta desfasada) */
+  fus_buses: { tabla: 'dbo.Fusiones_Buses', cols: [
+    ['id', 't20'], ['fecha', 'f'], ['hora', 't20'], ['usuario', 't100'], ['sector', 't100'], ['supervisor', 't200'], ['reemplazo', 't10'],
+    ['reemplazante', 't200'], ['reemplazado', 't200'], ['cant_buses', 't20'], ['ruta_origen', 't400'], ['cod_origen', 'n'], ['total_trab', 'n'],
+    ['ruta1', 't400'], ['codigo1', 'n'], ['personal1', 'n'], ['ruta2', 't400'], ['codigo2', 'n'], ['personal2', 'n'],
+    ['ruta3', 't400'], ['codigo3', 'n'], ['personal3', 'n'], ['motivo', 't1000'], ['observaciones', 't2000'],
+    ['foto1', 't1000'], ['foto2', 't1000'], ['foto3', 't1000'], ['estado', 't30']] },
+  horas_auditoria: { tabla: 'dbo.Horas_Auditoria', cols: [
+    ['fecha', 'f'], ['usuario', 't60'], ['accion', 't40'], ['registro_id', 't40'], ['detalle', 't4000']] },
+  cap_cabeceras: { tabla: 'dbo.Cap_Cabeceras', cols: [
+    ['id_capacitacion', 't40'], ['fecha_registro', 'f'], ['empresa', 't20'], ['tipo', 't60'], ['tema', 't400'], ['fuente', 't400'],
+    ['area', 't100'], ['lugar', 't200'], ['fecha', 'f'], ['hora_inicio', 'f'], ['hora_fin', 'f'], ['total_horas', 'n'],
+    ['frecuencia', 't100'], ['capacitador_dni', 'n'], ['capacitador_nombre', 't200'], ['capacitador_cargo', 't150'],
+    ['total_asistentes', 'n'], ['hombres', 'n'], ['mujeres', 'n'], ['creada_por', 't60'], ['creada_por_nombre', 't200']] },
+  cap_asistentes: { tabla: 'dbo.Cap_Asistentes', cols: [
+    ['id_capacitacion', 't40'], ['fecha_registro', 'f'], ['empresa', 't20'], ['tipo', 't60'], ['tema', 't400'],
+    ['fecha_capacitacion', 'f'], ['hora_inicio', 'f'], ['hora_fin', 'f'], ['n_orden', 'n'], ['dni', 'n'],
+    ['apellidos_nombres', 't200'], ['cargo_area', 't150'], ['sexo', 't10'], ['fundo', 't100'], ['area', 't100'],
+    ['lugar', 't200'], ['capacitador', 't200'], ['creada_por', 't60']] }
+};
+const tipoSql = t => t === 'f' ? 'DATETIME2(3) NULL' : t === 'n' ? 'FLOAT NULL' : 'NVARCHAR(' + t.slice(1) + ') NULL';
+const tipoMs = t => t === 'f' ? sql.DateTime2(3) : t === 'n' ? sql.Float : sql.NVarChar(parseInt(t.slice(1), 10));
+
+let listo = {};
+function asegurar(pool, clave) {
+  if (!listo[clave]) listo[clave] = (async () => {
+    const E = ESQ[clave], cols = E.cols.map(c => c[0] + ' ' + tipoSql(c[1])).join(', ');
+    const def = (t, conPk) => `IF OBJECT_ID('${t}', 'U') IS NULL CREATE TABLE ${t} (${conPk ? 'id_fila INT IDENTITY(1,1) NOT NULL PRIMARY KEY, ' : ''}fila INT NOT NULL, ${cols}, otros NVARCHAR(MAX) NULL${conPk ? ', actualizado DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME()' : ''});`;
+    await pool.request().query(`
+      IF OBJECT_ID('dbo.TH_Estado', 'U') IS NULL
+        CREATE TABLE dbo.TH_Estado (clave NVARCHAR(40) NOT NULL PRIMARY KEY, encabezado NVARCHAR(MAX) NULL, ancho INT NULL,
+          marca NVARCHAR(40) NULL, filas INT NULL, actualizado DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());
+      ${def(E.tabla, true)}
+      ${def(E.tabla + '__carga', false)}
+      IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_${clave}_fila') CREATE UNIQUE INDEX UX_${clave}_fila ON ${E.tabla}(fila);`);
+  })().catch(e => { listo[clave] = null; throw e; });
+  return listo[clave];
+}
+
+/* String(fecha) como la da Google (zona de Lima). Si no coincide con lo que mando Google
+   (fechas antiguas: Lima tenia otra hora), se guarda el texto original en 'otros'. */
+const DIAS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], MESES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const p2 = n => (n < 10 ? '0' : '') + n;
+const LMT_HASTA = Date.UTC(1908, 6, 28, 5, 8, 36);   /* hasta ahi Lima usaba su hora local media (-5:08:36) */
+function textoGoogle(d) {
+  const lmt = d.getTime() < LMT_HASTA, x = new Date(d.getTime() - (lmt ? 18516e3 : 5 * 3600e3));
+  return DIAS[x.getUTCDay()] + ' ' + MESES[x.getUTCMonth()] + ' ' + p2(x.getUTCDate()) + ' ' + x.getUTCFullYear() + ' ' +
+    p2(x.getUTCHours()) + ':' + p2(x.getUTCMinutes()) + ':' + p2(x.getUTCSeconds()) + (lmt ? ' GMT-0508' : ' GMT-0500') + ' (Peru Standard Time)';
+}
+const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
+
+/* celdas de la hoja → valores de columna + otros */
+function aFila(clave, celdas) {
+  const E = ESQ[clave], vals = [], otros = {};
+  E.cols.forEach((c, i) => {
+    const x = celdas[i], t = c[1];
+    if (x === '' || x === null || x === undefined) { vals.push(null); return; }
+    if (t === 'f' && esD(x) && x.$d) {
+      const d = new Date(x.$d); vals.push(d);
+      if (x.$s !== textoGoogle(d)) otros[i + 's'] = x.$s;
+      return;
+    }
+    if (t === 'n' && typeof x === 'number') { vals.push(x); return; }
+    if (t.charAt(0) === 't' && typeof x === 'string' && x.length <= parseInt(t.slice(1), 10)) { vals.push(x); return; }
+    vals.push(null); otros[i] = x;                     /* no calza: se guarda tal cual */
+  });
+  for (let i = E.cols.length; i < celdas.length; i++) if (celdas[i] !== '' && celdas[i] !== null && celdas[i] !== undefined) otros[i] = celdas[i];
+  return { vals, otros: Object.keys(otros).length ? JSON.stringify(otros) : null };
+}
+/* registro de la tabla → celdas exactamente como las entrega Google (fechas como {$d,$s}) */
+function aCeldas(clave, r, ancho) {
+  const E = ESQ[clave], o = r.otros ? JSON.parse(r.otros) : {}, out = [];
+  const n = ancho || E.cols.length;   /* _HORAS_AZURE_PRIMERO_V1: mismo ancho que la hoja (HORARIOS JORNADA tiene menos columnas que la tabla) */
+  for (let i = 0; i < n; i++) {
+    if (i in o) { out.push(o[i]); continue; }
+    const c = E.cols[i];
+    if (!c) { out.push(''); continue; }
+    const v = r[c[0]];
+    if (v === null || v === undefined) out.push('');
+    else if (c[1] === 'f') out.push({ $d: v.toISOString(), $s: (i + 's') in o ? o[i + 's'] : textoGoogle(v) });
+    else out.push(v);
+  }
+  return out;
+}
+
+function tablaCarga(clave, filas, desde) {
+  const E = ESQ[clave], T = new sql.Table(E.tabla + '__carga'); T.create = false;
+  T.columns.add('fila', sql.Int, { nullable: false });
+  E.cols.forEach(c => T.columns.add(c[0], tipoMs(c[1]), { nullable: true }));
+  T.columns.add('otros', sql.NVarChar(sql.MAX), { nullable: true });
+  let conOtros = 0;
+  filas.forEach((celdas, i) => { const f = aFila(clave, celdas); if (f.otros) conOtros++; T.rows.add.apply(T.rows, [desde + i + 1].concat(f.vals, [f.otros])); });
+  return { T, conOtros };
+}
+
+/* lectura: devuelve { encabezado, filas:[celdas] } con memoria por marca de carga */
+const memoria = {};
+async function leer(pool, clave) {
+  await asegurar(pool, clave);
+  const e = await pool.request().input('k', sql.NVarChar(40), clave).query('SELECT encabezado, ancho, marca FROM dbo.TH_Estado WHERE clave = @k');
+  const est = e.recordset[0];
+  if (!est || !est.marca) return null;
+  if (memoria[clave] && memoria[clave].marca === est.marca) return memoria[clave].d;
+  const r = await pool.request().query(`SELECT * FROM ${ESQ[clave].tabla} ORDER BY fila`);
+  const d = { encabezado: JSON.parse(est.encabezado || '[]'), filas: r.recordset.map(x => aCeldas(clave, x, est.ancho)) };
+  memoria[clave] = { marca: est.marca, d };
+  return d;
+}
+async function marcas(pool, claves) {
+  const r = await pool.request().query(`IF OBJECT_ID('dbo.TH_Estado', 'U') IS NULL SELECT CAST(NULL AS NVARCHAR(40)) AS clave, CAST(NULL AS NVARCHAR(40)) AS marca WHERE 1 = 0
+    ELSE SELECT clave, marca FROM dbo.TH_Estado WHERE clave IN (${claves.map(k => "'" + k + "'").join(',')})`);
+  const m = {}; r.recordset.forEach(x => { m[x.clave] = x.marca; });
+  return claves.every(k => m[k]) ? claves.map(k => m[k]).join('|') : null;
+}
+
+module.exports = { ESQ, asegurar, aFila, aCeldas, tablaCarga, leer, marcas, textoGoogle };

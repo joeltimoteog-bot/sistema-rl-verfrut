@@ -396,11 +396,11 @@ h3{font-size:16px !important}
         <div class="tw">
           <table><thead><tr>
             <th>N°</th><th>Fecha</th><th>H.Inicio</th><th>H.Fin</th><th>DNI</th><th>Trabajador</th>
-            <th>Celular</th><th>Empresa</th><th>Fundo</th><th>Ruta</th><th>Código</th><th>Documento</th>
+            <th>Celular</th><th>Empresa</th><th>Fundo</th><th>Ruta</th><th>Código</th><th>Documento</th><th>Tipo Licencia</th>
             <th>F.Inicio Doc</th><th>F.Fin Doc</th><th>Días</th><th>Estado</th>
             <th>N° Licencia</th><th>Parentesco</th>
             <th>Observación</th><th>Acciones</th>
-          </tr></thead><tbody id="tbAt"><tr><td colspan="20" class="empty">⏳ Cargando...</td></tr></tbody></table>
+          </tr></thead><tbody id="tbAt"><tr><td colspan="21" class="empty">⏳ Cargando...</td></tr></tbody></table>
         </div>
       </div>
     </div>
@@ -1138,7 +1138,7 @@ h3{font-size:16px !important}
     <div class="fc"><label>Fecha Atención *</label><input type="date" id="at_fec"></div>
     <div class="fc"><label>Hora Inicio</label><input type="time" id="at_hi"></div>
     <div class="fc"><label>Hora Término</label><input type="time" id="at_ht"></div>
-    <div class="fc" style="grid-column:span 3"><label>Tipo de licencia *</label>
+    <div class="fc" style="grid-column:span 3"><label>Detalle / Documento *</label>
       <div id="at_doc_wrap" style="position:relative">
         <input type="text" id="at_doc_txt" placeholder="Buscar por nombre o código..." autocomplete="off"
                oninput="_atDocInput(this.value)" onkeydown="_atDocKeydown(event)" style="width:100%">
@@ -5493,7 +5493,7 @@ async function cargarAtenciones(historial=false) {
     return;
   }
   const tb = document.getElementById('tbAt');
-  if (tb) tb.innerHTML = '<tr><td colspan="20" class="empty">Cargando atenciones...</td></tr>';
+  if (tb) tb.innerHTML = '<tr><td colspan="21" class="empty">Cargando atenciones...</td></tr>';
 
   const _esAdminAt = ROLES_VER_TODO.includes(USER.rol);
 
@@ -5549,10 +5549,10 @@ async function cargarAtenciones(historial=false) {
       atTodas = d.data.filter(a => a.fecha_atencion === hoy());
       renderAt(atTodas);
     } else {
-      if (tb) tb.innerHTML = '<tr><td colspan="20" class="empty">' + (d.error||'Error al cargar atenciones') + '</td></tr>';
+      if (tb) tb.innerHTML = '<tr><td colspan="21" class="empty">' + (d.error||'Error al cargar atenciones') + '</td></tr>';
     }
   } catch (e) {
-    if (tb) tb.innerHTML = '<tr><td colspan="20" class="empty">Error de conexion</td></tr>';
+    if (tb) tb.innerHTML = '<tr><td colspan="21" class="empty">Error de conexion</td></tr>';
     console.error('cargarAtenciones (GAS):', e);
   }
 }
@@ -5724,9 +5724,9 @@ setInterval(function () {
 
 function renderAt(lista) {
   const tb=document.getElementById('tbAt');
-  if(!lista.length){tb.innerHTML='<tr><td colspan="20" class="empty">No hay atenciones registradas</td></tr>';return;}
+  if(!lista.length){tb.innerHTML='<tr><td colspan="21" class="empty">No hay atenciones registradas</td></tr>';return;}
   const esSup = ROLES_SUP.includes(USER.rol);
-  tb.innerHTML = '<tr><td colspan="20" class="empty">⏳ Cargando tabla...</td></tr>';
+  tb.innerHTML = '<tr><td colspan="21" class="empty">⏳ Cargando tabla...</td></tr>';
   setTimeout(() => {
     tb.innerHTML=lista.map(a=>{
       const esDueno = a.supervisor===(USER.nombre||USER.usuario) || a.supervisor===USER.usuario;
@@ -5742,6 +5742,7 @@ function renderAt(lista) {
         <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
         <td>${a.fundo||''}</td><td>${a.ruta||''}</td><td>${a.codigo||''}</td>
         <td>${a.detalle_documento||''}</td>
+        <td>${a.tipo_licencia||''}</td>
         <td>${a.fecha_inicio_doc||''}</td>
         <td>${a.fecha_termino_doc||''}</td>
         <td style="text-align:center;font-weight:700">${a.dias_transcurridos||''}</td>
@@ -6140,7 +6141,7 @@ async function guardarAt() { if(window._savingAt) return;
     nro_licencia:v('at_nlic'),      /* _NRO_LICENCIA_V1 */
     autorizado_por:v('at_autoriz')  /* _ATENCION_V3 */
   };
-  const _miss=[];if(!/^\d{8}$/.test(String(d.dni||'').trim()))_miss.push(['at_dni','DNI (8 digitos)']);if(!String(d.nombre||'').trim())_miss.push(['at_nom','Nombre']);if(!String(d.detalle_documento||'').trim())_miss.push(['at_doc_txt','Tipo de licencia']);if(typeof _licenciaObligatoria==='function'&&_licenciaObligatoria(d.detalle_documento)&&!String(d.nro_licencia||'').trim())_miss.push(['at_nlic','N° de licencia']);if(_miss.length){const el=document.getElementById(_miss[0][0]);if(el){el.focus();el.style.borderColor='#ef4444';setTimeout(function(){el.style.borderColor='';},2500);}mostrarToast('Falta completar: '+_miss.map(function(m){return m[1];}).join(', '),'error');return;}
+  const _miss=[];if(!/^\d{8}$/.test(String(d.dni||'').trim()))_miss.push(['at_dni','DNI (8 digitos)']);if(!String(d.nombre||'').trim())_miss.push(['at_nom','Nombre']);if(!String(d.detalle_documento||'').trim())_miss.push(['at_doc_txt','Documento']);if(typeof _licenciaObligatoria==='function'&&_licenciaObligatoria(d.detalle_documento)&&!String(d.nro_licencia||'').trim())_miss.push(['at_nlic','N° de licencia']);if(_miss.length){const el=document.getElementById(_miss[0][0]);if(el){el.focus();el.style.borderColor='#ef4444';setTimeout(function(){el.style.borderColor='';},2500);}mostrarToast('Falta completar: '+_miss.map(function(m){return m[1];}).join(', '),'error');return;}
   if (!modoEdicion && window._atRegularizadas && window._atRegularizadas.length) {
     const _regs = window._atRegularizadas.filter(x => String(x.dni) === String(d.dni||'').trim());
     if (_regs.length) {
@@ -6229,7 +6230,8 @@ async function guardarAt() { if(window._savingAt) return;
              fila optimista hasta recargar la pagina. */
           nro_licencia:         d.nro_licencia         || '',
           parentesco:           ((document.getElementById('at_parentesco')||{}).value || d.parentesco || ''),
-          autorizado_por:       d.autorizado_por       || ''
+          autorizado_por:       d.autorizado_por       || '',
+          tipo_licencia:        (window._atTipoLicValor ? window._atTipoLicValor() : '')   /* _AT_TIPO_LIC_V1 */
         };
 
         // Agregar al cache en memoria
@@ -10076,7 +10078,7 @@ var COLS_AT_TODAS = [
   {key:'dni',label:'DNI'},{key:'nombre',label:'Nombre'},{key:'sexo',label:'Sexo'},{key:'fecha_inicio_periodo',label:'F. Inicio Periodo'},{key:'fecha_termino_periodo',label:'F. Término Periodo'},
   {key:'empresa',label:'Empresa'},{key:'fundo',label:'Fundo/Sector'},{key:'cargo',label:'Cargo'},{key:'ruta',label:'Ruta'},{key:'codigo',label:'Código'},
   {key:'fundo_actual',label:'Fundo Actual'},{key:'celular',label:'Celular'},{key:'supervisor',label:'Supervisor'},
-  {key:'detalle_documento',label:'Documento'},{key:'fecha_inicio_doc',label:'F. Inicio Doc.'},{key:'fecha_termino_doc',label:'F. Fin Doc.'},
+  {key:'detalle_documento',label:'Documento'},{key:'tipo_licencia',label:'Tipo de Licencia'},{key:'fecha_inicio_doc',label:'F. Inicio Doc.'},{key:'fecha_termino_doc',label:'F. Fin Doc.'},
   {key:'dias_transcurridos',label:'Días'},{key:'responsable_recepcion',label:'Responsable Recepción'},{key:'observaciones',label:'Observaciones'},
   {key:'estado',label:'Estado'},{key:'fecha_registro',label:'Fecha Registro'},{key:'usuario_sistema',label:'Usuario Sistema'},
   {key:'nro_licencia',label:'N° Licencia'},{key:'parentesco',label:'Parentesco'},{key:'autorizado_por',label:'Autorizado por'}   /* _AT_COLS_V1 (28-set): + F. Término Periodo y Autorizado por */
@@ -11172,7 +11174,7 @@ setTimeout(_instalarEnviado, 3500);
    _ATENCION_V3 (25-ago-2026): por indicacion de Joel, el certificado medico
    particular (CMP) y el odontologico (COP) TAMBIEN piden numero. Antes estaban
    como excepcion; la lista de excepciones queda vacia. */
-var LIC_PALABRAS  = ['CITT', 'CMP', 'ODONTOLOG', 'MATERNIDAD', 'ENFERMEDAD', 'ACCIDENTE'];
+var LIC_PALABRAS  = ['CITT', 'CMP', 'ODONTOLOG', 'MATERNIDAD', 'ENFERMEDAD', 'ACCIDENTE', 'DESCANSO MEDICO'];   /* _AT_TIPO_LIC_V1: + DESCANSO MEDICO (ahora es un solo documento) */
 var LIC_EXCEPCION = [];
 
 function _norm(s) {
@@ -13324,6 +13326,8 @@ function _parentescoObligatorio(doc) {
   try {
     var t = _parNorm(doc);
     if (!t) return false;
+    /* _AT_TIPO_LIC_V1: descanso medico con tipo "enfermedad grave terminal" tambien pide parentesco */
+    try { var _tl = _parNorm(window._atTipoLicValor ? window._atTipoLicValor() : ''); if (_tl.indexOf('ENFERMEDAD GRAVE') >= 0) return true; } catch (eTl) {}
     for (var i = 0; i < PAR_PALABRAS.length; i++) {
       if (t.indexOf(PAR_PALABRAS[i]) >= 0) return true;
     }
@@ -17107,7 +17111,7 @@ var RESP_LEANDRO = 'LEANDRO BILL MORALES YARLEQUE';
 var AUT_RUBI     = 'RUBI ELIZABETH FIGUEROA FLORES - EMPRESA RAPEL';
 var AUT_LEANDRO  = 'LEANDRO BILL MORALES YARLEQUE - EMPRESA VERFRUT';
 
-var DM_ETIQUETA = '35 DESCANSO MEDICO / LICENCIA';
+var DM_ETIQUETA = '35 DESCANSO MEDICO';   /* _AT_TIPO_LIC_V1: un solo documento; el tipo va en el campo general "Tipo de licencia" */
 var TIPOS = [   /* [lo que ve el usuario, lo que se guarda] */
   ['ENFERMEDAD',                    '35 DESCANSO MEDICO - ENFERMEDAD'],
   ['MATERNIDAD',                    '36 DESCANSO MEDICO - MATERNIDAD'],
@@ -17231,6 +17235,7 @@ function _refrescarTipo() {
   _crearTipo();
   var caja = document.getElementById('at_tlic_wrap'), sel = document.getElementById('at_tlic');
   if (!caja || !sel) return;
+  caja.style.display = 'none'; return;   /* _AT_TIPO_LIC_V1: reemplazado por el campo general "Tipo de licencia" */
   var d = _docTxt();
   if (d === DM_ETIQUETA) { caja.style.display = ''; if (sel.value) sel.value = ''; }
   else if (GUARDA_TIPO[d]) { caja.style.display = ''; sel.value = d; }
@@ -17243,7 +17248,7 @@ if (typeof _selOrig === 'function') {
   window._selectAtDoc = function (val) {
     var r = _selOrig.apply(this, arguments);
     try {
-      if (val === DM_ETIQUETA) {
+      if (false && val === DM_ETIQUETA) {   /* _AT_TIPO_LIC_V1: ya no hace falta */
         if (typeof sv === 'function') sv('at_doc', '');
         _refrescar();
         setTimeout(function () { var s = document.getElementById('at_tlic'); if (s) s.focus(); }, 60);
@@ -17291,6 +17296,8 @@ function _asegurarAutoriza() {
 function _esLicenciaEmpresa(doc) {
   var t = String(doc || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   if (!t || t.indexOf('REGULARIZAR') >= 0) return false;
+  /* _AT_TIPO_LIC_V1: descanso medico de paternidad o enfermedad grave = licencia de la empresa */
+  try { var tl = String(window._atTipoLicValor ? window._atTipoLicValor() : '').toUpperCase(); if (t.indexOf('DESCANSO MEDICO') >= 0 && (tl.indexOf('PATERNIDAD') >= 0 || tl.indexOf('ENFERMEDAD GRAVE') >= 0)) return true; } catch (e) {}
   return t.indexOf('PATERNIDAD') >= 0 || t.indexOf('FALLECIMIENTO') >= 0 || t.indexOf('ENFERMEDAD GRAVE') >= 0;
 }
 function _empresa() { return String((document.getElementById('at_emp') || {}).value || '').toUpperCase(); }
@@ -17403,6 +17410,7 @@ if (typeof _editarOrig === 'function') {
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _refrescar); else _refrescar();
 setTimeout(_refrescar, 1500);
+window._atV4Refrescar = _refrescar;   /* _AT_TIPO_LIC_V1 */
 console.log('[_AT_TIPO_LICENCIA_V4] tipo de licencia, catalogo sin empresa, responsable y autorizado por empresa listos');
 
 } catch (eV4) { console.warn('[_AT_TIPO_LICENCIA_V4] no se aplico (el formulario sigue como antes):', eV4); }
@@ -17465,6 +17473,186 @@ try {
   window._rlAvisoRegularizar = mostrar;   /* para probarlo desde la consola */
   console.log('[_AT_AVISO_REGULARIZAR_V1] listo');
 } catch (eR) { console.warn('[_AT_AVISO_REGULARIZAR_V1] no se aplico:', eR); }
+})();
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _AT_TIPO_LIC_V1 (07-oct-2026) — Campo "Tipo de licencia" en Nueva Atencion
+   · Aparece en CITT, CMP, descanso medico y cualquier LICENCIA (tambien sus
+     regularizaciones). Lista: Enfermedad, Maternidad, Accidente de trabajo,
+     Accidente comun, Enfermedad profesional, Paternidad, Accidente de transito,
+     Lic. enfermedad grave terminal, u OTRO (se escribe).
+   · Obligatorio cuando aparece, salvo EN PROCESO.
+   · Se guarda en Azure (dbo.Atenciones.tipo_licencia) y en la hoja (col 33),
+     se ve en la tabla de Mis Atenciones y sale en el Excel.
+   Si algo aqui falla, el formulario sigue como estaba.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+'use strict';
+try {
+var OPCIONES = ['ENFERMEDAD', 'MATERNIDAD', 'ACCIDENTE DE TRABAJO', 'ACCIDENTE COMUN', 'ENFERMEDAD PROFESIONAL',
+                'PATERNIDAD', 'ACCIDENTE DE TRANSITO', 'LIC. ENFERMEDAD GRAVE TERMINAL'];
+var OTRO = '__OTRO__';
+function norm(s) { return String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+function docActual() { var t = document.getElementById('at_doc_txt'), o = document.getElementById('at_doc'); return String((t && t.value) || (o && o.value) || '').trim(); }
+function aplica(doc) { var t = norm(doc); return !!t && /CITT|CMP|DESCANSO MEDICO|LICENCIA/.test(t); }
+function enProceso() { var e = document.getElementById('at_est'); return !!e && norm(e.value).indexOf('PROCESO') >= 0; }
+/* tipo sugerido segun el documento elegido */
+function sugerido(doc) {
+  var t = norm(doc);
+  if (t.indexOf('ENFERMEDAD GRAVE') >= 0) return 'LIC. ENFERMEDAD GRAVE TERMINAL';
+  if (t.indexOf('MATERNIDAD') >= 0) return 'MATERNIDAD';
+  if (t.indexOf('PATERNIDAD') >= 0) return 'PATERNIDAD';
+  if (t.indexOf('ACCIDENTE DE TRABAJO') >= 0) return 'ACCIDENTE DE TRABAJO';
+  if (t.indexOf('ACCIDENTE COMUN') >= 0) return 'ACCIDENTE COMUN';
+  if (t.indexOf('ACCIDENTE DE TRANSITO') >= 0) return 'ACCIDENTE DE TRANSITO';
+  if (t.indexOf('ENFERMEDAD PROFESIONAL') >= 0) return 'ENFERMEDAD PROFESIONAL';
+  if (/DESCANSO MEDICO - ENFERMEDAD$/.test(t)) return 'ENFERMEDAD';
+  return '';
+}
+
+function crear() {
+  if (document.getElementById('at_tlic2')) return;
+  var ref = document.getElementById('at_doc_wrap');
+  if (!ref || !ref.parentNode) return;
+  var caja = document.createElement('div');
+  caja.id = 'at_tlic2_wrap';
+  caja.className = 'fc';
+  caja.style.cssText = 'display:none;margin-top:10px';
+  caja.innerHTML =
+    '<label>Tipo de licencia <span style="color:#dc2626">*</span></label>' +
+    '<select id="at_tlic2" style="width:100%;padding:8px 10px;border:1.5px solid #c0ceea;border-radius:8px;font-size:14px;font-family:inherit;box-sizing:border-box">' +
+      '<option value="">— selecciona el tipo de licencia —</option>' +
+      OPCIONES.map(function (o) { return '<option value="' + o + '">' + o + '</option>'; }).join('') +
+      '<option value="' + OTRO + '">OTRO (escribir)…</option>' +
+    '</select>' +
+    '<input type="text" id="at_tlic2_otro" maxlength="100" placeholder="Escribe el tipo de licencia" autocomplete="off" ' +
+      'style="display:none;margin-top:6px;width:100%;padding:8px 10px;border:1.5px solid #c0ceea;border-radius:8px;font-size:14px;box-sizing:border-box">';
+  ref.parentNode.insertBefore(caja, ref.nextSibling);
+  var sel = document.getElementById('at_tlic2'), otro = document.getElementById('at_tlic2_otro');
+  sel.addEventListener('change', function () {
+    otro.style.display = sel.value === OTRO ? '' : 'none';
+    if (sel.value === OTRO) setTimeout(function () { otro.focus(); }, 30); else otro.value = '';
+    caja.dataset.manual = '1';
+    efectos();
+  });
+  otro.addEventListener('input', function () { caja.dataset.manual = '1'; });
+  otro.addEventListener('change', efectos);
+}
+function efectos() {
+  try { if (typeof window._refrescarCampoParentesco === 'function') window._refrescarCampoParentesco(); } catch (e) {}
+  try { if (typeof window._atV4Refrescar === 'function') window._atV4Refrescar(); } catch (e) {}
+}
+function valor() {
+  var caja = document.getElementById('at_tlic2_wrap'), sel = document.getElementById('at_tlic2'), otro = document.getElementById('at_tlic2_otro');
+  if (!caja || !sel || caja.style.display === 'none') return '';
+  if (sel.value === OTRO) return String((otro && otro.value) || '').trim().toUpperCase().slice(0, 100);
+  return sel.value || '';
+}
+window._atTipoLicValor = valor;
+/* pone un valor guardado (de la lista o escrito) */
+function poner(v) {
+  crear();
+  var sel = document.getElementById('at_tlic2'), otro = document.getElementById('at_tlic2_otro');
+  if (!sel) return;
+  v = String(v || '').trim().toUpperCase();
+  if (!v) { sel.value = ''; otro.value = ''; otro.style.display = 'none'; return; }
+  if (OPCIONES.indexOf(v) >= 0) { sel.value = v; otro.value = ''; otro.style.display = 'none'; }
+  else { sel.value = OTRO; otro.value = v; otro.style.display = ''; }
+}
+var _docUlt = null;
+function refrescar() {
+  crear();
+  var caja = document.getElementById('at_tlic2_wrap');
+  if (!caja) return;
+  var doc = docActual();
+  if (aplica(doc)) {
+    caja.style.display = '';
+    if (doc !== _docUlt) {   /* documento nuevo: sugerir el tipo si el usuario no eligio uno */
+      if (!caja.dataset.manual) { var s = sugerido(doc); if (s) poner(s); }
+    }
+  } else if (caja.style.display !== 'none') {
+    caja.style.display = 'none'; poner(''); delete caja.dataset.manual;
+  }
+  _docUlt = doc;
+}
+['input', 'change', 'blur'].forEach(function (ev) {
+  document.addEventListener(ev, function (e) {
+    var id = e.target && e.target.id;
+    if (id === 'at_doc_txt' || id === 'at_doc') setTimeout(refrescar, 0);
+  }, false);
+});
+setInterval(function () {
+  try { var m = document.getElementById('mAt'); if (m && m.classList.contains('on') && docActual() !== _docUlt) refrescar(); } catch (e) {}
+}, 400);
+
+/* Nueva atencion: limpio */
+var _abrir = window.abrirAt;
+if (typeof _abrir === 'function') {
+  window.abrirAt = function () {
+    var r = _abrir.apply(this, arguments);
+    try { poner(''); var c = document.getElementById('at_tlic2_wrap'); if (c) { delete c.dataset.manual; c.style.display = 'none'; } _docUlt = null; } catch (e) {}
+    return r;
+  };
+}
+/* Editar: carga lo guardado */
+var _editar = window.editarAt;
+if (typeof _editar === 'function') {
+  window.editarAt = function (nro) {
+    var r = _editar.apply(this, arguments);
+    try {
+      var a = (typeof atTodas !== 'undefined' ? atTodas : []).find(function (x) { return String(x.nro) === String(nro); });
+      setTimeout(function () {
+        var c = document.getElementById('at_tlic2_wrap');
+        _docUlt = docActual();
+        if (c) { c.dataset.manual = '1'; c.style.display = aplica(_docUlt) ? '' : 'none'; }
+        poner(a && a.tipo_licencia || '');
+        if (c && !aplica(_docUlt)) c.style.display = 'none';
+      }, 120);
+    } catch (e) {}
+    return r;
+  };
+}
+/* Validacion: obligatorio cuando aparece (salvo EN PROCESO) */
+var _guardar = window.guardarAt;
+if (typeof _guardar === 'function') {
+  window.guardarAt = function () {
+    try {
+      refrescar();
+      var c = document.getElementById('at_tlic2_wrap');
+      if (c && c.style.display !== 'none' && !enProceso() && !valor()) {
+        var sel = document.getElementById('at_tlic2'), otro = document.getElementById('at_tlic2_otro');
+        var foco = (sel && sel.value === OTRO) ? otro : sel;
+        if (foco) { foco.focus(); foco.style.borderColor = '#ef4444'; setTimeout(function () { foco.style.borderColor = '#c0ceea'; }, 2500); }
+        if (typeof mostrarToast === 'function') mostrarToast('Falta completar: Tipo de licencia', 'error');
+        return;
+      }
+    } catch (e) {}
+    return _guardar.apply(this, arguments);
+  };
+}
+/* Que el dato viaje (nueva, edicion completa y copia a Azure) */
+var _api = window.apiPost;
+if (typeof _api === 'function') {
+  window.apiPost = function (b) {
+    try {
+      if (b && (b.action === 'saveAtencion' ||
+                ((b.action === 'updateAtencion' || b.action === 'syncFirebaseAtencion') && b.autorizado_por !== undefined))) {
+        if (b.tipo_licencia === undefined) b.tipo_licencia = valor();
+        /* parentesco: que llegue a Azure desde el primer envio (antes solo llegaba por la copia de la hoja) */
+        if (b.action === 'saveAtencion' && b.parentesco === undefined && typeof window._parentescoObligatorio === 'function') {
+          var _ps = document.getElementById('at_parentesco');
+          if (window._parentescoObligatorio(b.detalle_documento || '')) b.parentesco = String((_ps && _ps.value) || '');
+        }
+      }
+    } catch (e) {}
+    return _api.apply(this, arguments);
+  };
+  try { apiPost = window.apiPost; } catch (e) {}
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', refrescar); else refrescar();
+console.log('[_AT_TIPO_LIC_V1] campo Tipo de licencia listo');
+} catch (eT) { console.warn('[_AT_TIPO_LIC_V1] no se aplico (el formulario sigue como antes):', eT); }
 })();
 </script>
 <script src="/sistema-rl-verfrut/frontend/js/sesion-azure.js?v=06oct"></script>  <!-- _SESION_SIN_LLAVE_V1: aviso si la sesion no tiene llave de Azure (modo lento) -->

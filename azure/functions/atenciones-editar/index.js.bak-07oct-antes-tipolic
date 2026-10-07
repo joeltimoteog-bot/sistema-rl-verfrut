@@ -100,10 +100,6 @@ module.exports = async function (context, req) {
                "autorizado_por = CASE WHEN @autorizado_por <> N'' THEN @autorizado_por ELSE autorizado_por END",
                'fecha_termino_periodo = COALESCE(@fecha_termino_periodo, fecha_termino_periodo)');
     }
-    if (b.tipo_licencia !== undefined) {   /* _AT_TIPO_LIC_V1: un campo vacio NO borra lo guardado */
-      r.input('tipo_licencia', sql.NVarChar(100), String(b.tipo_licencia || '').trim().slice(0, 100));
-      set.push("tipo_licencia = CASE WHEN @tipo_licencia <> N'' THEN @tipo_licencia ELSE tipo_licencia END");
-    }
     if (!set.length) { context.res = { status: 200, body: { success: true, nro, sinCambios: true, fuente: 'azure' } }; return; }
 
     r.input('n', sql.Int, nro).input('a', sql.Int, fila.anio).input('d', sql.NVarChar(15), String(fila.dni || ''));
