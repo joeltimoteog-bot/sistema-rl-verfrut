@@ -109,7 +109,7 @@ function crear(D) {
         const o = {}; Hh.forEach((h, i) => { o[S(h).trim()] = H[r][i]; });
         cabPorId[S(H[r][hId]).trim()] = o;
       }
-      const EXTRA = ['FUENTE', 'TOTAL_HORAS', 'FRECUENCIA', 'CAPACITADOR_DNI', 'CAPACITADOR_CARGO', 'TOTAL_ASISTENTES', 'HOMBRES', 'MUJERES', 'PRODUCTOR', 'CREADA_POR_NOMBRE'];
+      const EXTRA = ['FUENTE', 'TOTAL_HORAS', 'FRECUENCIA', 'CAPACITADOR_DNI', 'CAPACITADOR_CARGO', 'TOTAL_ASISTENTES', 'HOMBRES', 'MUJERES', 'PRODUCTOR', 'CREADA_POR_NOMBRE', 'LABOR', 'SERVICIO'];   /* _CAP_EDITAR_V1 */
       const B = D.bbdd || [];
       if (B.length < 2) return { success: true, data: [], total: 0 };
       const Bh = B[0];

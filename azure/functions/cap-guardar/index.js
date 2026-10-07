@@ -17,7 +17,7 @@ function token(req) {
 module.exports = async function (context, req) {
   const accion = context.bindingData.accion;
   try {
-    if (accion !== 'guardarCapacitacion' && accion !== 'duplicarCapacitacion' && accion !== 'eliminarCapacitacion') {   /* _CAP_ELIMINAR_V1 */ context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
+    if (accion !== 'guardarCapacitacion' && accion !== 'duplicarCapacitacion' && accion !== 'eliminarCapacitacion' && accion !== 'editarCapacitacion') {   /* _CAP_ELIMINAR_V1 · _CAP_EDITAR_V1 */ context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
     const t = token(req);
     if (!t || !t.usuario) { context.res = { status: 401, body: { success: false, error: 'Sin sesion valida' } }; return; }
     const pool = await getPool(); await CG.asegurarTablas(pool);

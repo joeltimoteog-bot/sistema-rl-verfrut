@@ -138,6 +138,112 @@ async function eliminar(pool, b, usuario, rol, prueba, claveOp, clave) {
   return { status: 200, body: resp };
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   _CAP_EDITAR_V1 (07-oct-2026) — CORREGIR una capacitacion ya registrada
+   Igual que capEditar del Apps Script: quien la registro o un administrador;
+   corrige la cabecera y las filas de asistentes; historial en dbo.Cap_Ediciones.
+   LABOR y SERVICIO pasan a guardarse (columnas nuevas al final de la cabecera).
+   ═══════════════════════════════════════════════════════════════════════════ */
+const CAP_EDITABLES = {
+  tema: ['TEMA', 'TEMA'], fuente: ['FUENTE', ''], tipo: ['TIPO', 'TIPO'], area: ['AREA', 'AREA'], lugar: ['LUGAR', 'LUGAR'],
+  fecha: ['FECHA', 'FECHA_CAPACITACION'], horaInicio: ['HORA_INICIO', 'HORA_INICIO'], horaFin: ['HORA_FIN', 'HORA_FIN'],
+  totalHoras: ['TOTAL_HORAS', ''], capacitadorDni: ['CAPACITADOR_DNI', ''], capacitadorNombre: ['CAPACITADOR_NOMBRE', 'CAPACITADOR'],
+  capacitadorCargo: ['CAPACITADOR_CARGO', ''], labor: ['LABOR', ''], servicio: ['SERVICIO', ''], fundo: ['', 'FUNDO']
+};
+/* la cabecera de Azure gana las columnas LABOR y SERVICIO (como la hoja) */
+async function asegurarEncabezadoExtra(tx) {
+  const r = await tx.request().query("SELECT encabezado, ancho FROM dbo.TH_Estado WHERE clave = 'cap_cabeceras'");
+  if (!r.recordset.length) return null;
+  const enc = JSON.parse(r.recordset[0].encabezado || '[]');
+  const up = enc.map(h => T(h).trim().toUpperCase());
+  let cambio = false;
+  ['LABOR', 'SERVICIO'].forEach(c => { if (up.indexOf(c) < 0) { enc.push(c); up.push(c); cambio = true; } });
+  if (cambio) await tx.request().input('e', sql.NVarChar(sql.MAX), JSON.stringify(enc)).input('a', sql.Int, Math.max(enc.length, r.recordset[0].ancho || 0))
+    .query("UPDATE dbo.TH_Estado SET encabezado = @e, ancho = @a WHERE clave = 'cap_cabeceras'");
+  return enc;
+}
+async function reescribirFila(tx, clave, r, celdas) {
+  const E = TH.ESQ[clave], f = TH.aFila(clave, celdas), q = tx.request();
+  q.input('idf', sql.Int, r.id_fila);
+  const sets = E.cols.map((c, k) => {
+    q.input('v' + k, c[1] === 'f' ? sql.DateTime2(3) : c[1] === 'n' ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
+    return c[0] + ' = @v' + k;
+  });
+  q.input('o', sql.NVarChar(sql.MAX), f.otros);
+  await q.query(`UPDATE ${E.tabla} SET ${sets.join(', ')}, otros = @o WHERE id_fila = @idf`);
+}
+async function editar(pool, b, usuario, rol, prueba, claveOp, clave) {
+  const id = String(b.idCapacitacion || '').trim(), cambios = b.cambios || {};
+  const claves = Object.keys(cambios).filter(k => CAP_EDITABLES[k]);
+  if (!id) return { status: 400, body: { success: false, error: 'Falta indicar que capacitacion se va a corregir.' } };
+  if (!claves.length) return { status: 400, body: { success: false, error: 'No hay cambios para guardar.' } };
+  await pool.request().query(`IF OBJECT_ID('dbo.Cap_Ediciones', 'U') IS NULL
+    CREATE TABLE dbo.Cap_Ediciones (id INT IDENTITY(1,1) NOT NULL PRIMARY KEY, id_capacitacion NVARCHAR(40) NOT NULL,
+      editado_en DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(), editado_por NVARCHAR(100) NULL, campo NVARCHAR(60) NULL,
+      antes NVARCHAR(1000) NULL, despues NVARCHAR(1000) NULL);`);
+  const u = String(usuario || '').toLowerCase().trim();
+  const resp = { success: true, idCapacitacion: id, campos: claves.length };
+  const tx = new sql.Transaction(pool);
+  await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+  try {
+    await tx.request().query("EXEC sp_getapplock @Resource = 'cap_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+    const encH = await asegurarEncabezadoExtra(tx);
+    const eb = (await tx.request().query("SELECT encabezado, ancho FROM dbo.TH_Estado WHERE clave = 'cap_asistentes'")).recordset[0] || {};
+    const encB = JSON.parse(eb.encabezado || '[]');
+    const anchoH = (encH || []).length;
+    const ch = (await tx.request().input('id', sql.NVarChar(40), id).query('SELECT * FROM dbo.Cap_Cabeceras WHERE LTRIM(RTRIM(id_capacitacion)) = @id ORDER BY fila')).recordset;
+    if (!ch.length) { await tx.rollback(); return { status: 404, body: { success: false, error: 'Capacitacion no encontrada. Actualiza la lista.' } }; }
+    const dueno = T(ch[0].creada_por).toLowerCase().trim();
+    if (CAP_ROLES_ADMIN.indexOf(String(rol || '').toLowerCase().trim()) < 0 && dueno && dueno !== u) {
+      await tx.rollback();
+      return { status: 403, body: { success: false, error: 'Esta capacitacion la registro ' + dueno + '. Solo esa persona o un administrador pueden corregirla.' } };
+    }
+    const hist = [];
+    for (const r of ch) {
+      const cel = TH.aCeldas('cap_cabeceras', r, anchoH);
+      claves.forEach(k => {
+        const c = capCol(encH, CAP_EDITABLES[k][0]); if (!CAP_EDITABLES[k][0] || c < 0) return;
+        while (cel.length <= c) cel.push('');
+        hist.push([k, T(cel[c]), String(cambios[k] == null ? '' : cambios[k])]);
+        cel[c] = comoHoja(cambios[k] == null ? '' : cambios[k]);
+      });
+      await reescribirFila(tx, 'cap_cabeceras', r, cel);
+    }
+    const ca = (await tx.request().input('id', sql.NVarChar(40), id).query('SELECT * FROM dbo.Cap_Asistentes WHERE LTRIM(RTRIM(id_capacitacion)) = @id ORDER BY fila')).recordset;
+    let nA = 0;
+    for (const r of ca) {
+      const cel = TH.aCeldas('cap_asistentes', r, eb.ancho);
+      let toca = false;
+      claves.forEach(k => {
+        const c = capCol(encB, CAP_EDITABLES[k][1]); if (!CAP_EDITABLES[k][1] || c < 0) return;
+        cel[c] = comoHoja(cambios[k] == null ? '' : cambios[k]); toca = true;
+      });
+      if (toca) { await reescribirFila(tx, 'cap_asistentes', r, cel); nA++; }
+    }
+    resp.asistentesActualizados = nA;
+    for (const h of hist) {
+      await tx.request().input('id', sql.NVarChar(40), id).input('u', sql.NVarChar(100), u || null).input('c', sql.NVarChar(60), h[0])
+        .input('a', sql.NVarChar(1000), h[1].slice(0, 1000)).input('d', sql.NVarChar(1000), h[2].slice(0, 1000))
+        .query('INSERT INTO dbo.Cap_Ediciones (id_capacitacion, editado_por, campo, antes, despues) VALUES (@id, @u, @c, @a, @d)');
+    }
+    await tocarMarcas(tx, ['cap_cabeceras', 'cap_asistentes']);
+    resp.fuente = 'azure';
+    const cuerpo = { idCapacitacion: id, cambios: cambios, usuario: u, rol: String(rol || ''), _fechaAzure: limaAhora() };
+    await tx.request().input('k', sql.NVarChar(100), claveOp).input('a', sql.NVarChar(30), 'editarCapacitacion').input('u', sql.NVarChar(100), u || null)
+      .input('c', sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input('r', sql.NVarChar(sql.MAX), JSON.stringify(resp))
+      .query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'cap', @a, NULL, @u, @c, @r)");
+    if (prueba) { await tx.rollback(); resp.prueba = true; } else await tx.commit();
+  } catch (e) {
+    try { await tx.rollback(); } catch (e2) {}
+    if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || '')) {
+      const p = await pool.request().input('k', sql.NVarChar(100), claveOp).query('SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k');
+      if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+    }
+    throw e;
+  }
+  return { status: 200, body: resp };
+}
+
 async function ejecutar(pool, accion, b, usuario, rol, prueba) {
   await CG.asegurarTablas(pool); await TH.asegurar(pool, 'cap_cabeceras'); await TH.asegurar(pool, 'cap_asistentes');
   const clave = String(b.client_id || '').replace(/[^\w-]/g, '').slice(0, 90);
@@ -147,6 +253,7 @@ async function ejecutar(pool, accion, b, usuario, rol, prueba) {
     if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
   }
   if (accion === 'eliminarCapacitacion') return eliminar(pool, b, usuario, rol, prueba, claveOp, clave);   /* _CAP_ELIMINAR_V1 */
+  if (accion === 'editarCapacitacion') return editar(pool, b, usuario, rol, prueba, claveOp, clave);       /* _CAP_EDITAR_V1 */
   const fechaReg = (prueba && b._fechaRegPrueba) ? String(b._fechaRegPrueba) : limaAhora();
   let cab, filas, resp, cuerpo;
   if (accion === 'guardarCapacitacion') {
@@ -193,6 +300,12 @@ async function ejecutar(pool, accion, b, usuario, rol, prueba) {
   await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
   try {
     await tx.request().query("EXEC sp_getapplock @Resource = 'cap_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+    if (accion === 'guardarCapacitacion') {   /* _CAP_EDITAR_V1: LABOR y SERVICIO, por el nombre de su columna */
+      const encH = await asegurarEncabezadoExtra(tx), a = b.actividad || {};
+      if (encH) [['LABOR', a.labor], ['SERVICIO', a.servicio]].forEach(p => {
+        const c = capCol(encH, p[0]); if (c >= 0) { while (cab.length <= c) cab.push(''); cab[c] = p[1] || ''; }
+      });
+    }
     await agregarFilas(tx, 'cap_cabeceras', [cab.map(comoHoja)]);
     await agregarFilas(tx, 'cap_asistentes', filas.map(f => f.map(comoHoja)));
     await tocarMarcas(tx, ['cap_cabeceras', 'cap_asistentes']);

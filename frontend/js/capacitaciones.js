@@ -394,6 +394,8 @@ function _capAgruparExport(data, desde) {
         creadaPor:         row.CREADA_POR || row.creadaPor || '',              /* _CAP_QUIEN_REGISTRO_V1 */
         creadaPorNombre:   row.CREADA_POR_NOMBRE || row.creadaPorNombre || '',
         fechaRegistro:     row.FECHA_REGISTRO || row.fechaRegistro || '',
+        labor:             row.LABOR || row.labor || '',                       /* _CAP_EDITAR_V1 */
+        servicio:          row.SERVICIO || row.servicio || '',
         asistentes: []
       };
     }
@@ -467,9 +469,13 @@ function _capPintarRegen(cont, todas) {
     html += '<button class="btn btn-primary" data-idx="' + i + '" style="font-size:13px;padding:8px 14px">📄 Regenerar formato R-SC-01</button>';
     html += ' <button class="btn btn-gray" data-dup="' + i + '" style="font-size:13px;padding:8px 14px" ' +
             'title="Crear otro registro con estas mismas personas y otro titulo">📋 Otro título</button>';
+    if (_capPuedeEditar(c)) html += ' <button class="btn btn-gray" data-edit="' + i + '" style="font-size:13px;padding:8px 14px" title="Corregir los datos de esta capacitacion">✏️ Editar datos</button>';   /* _CAP_EDITAR_V1 */
     html += '</div>';
   });
   cont.innerHTML = html;
+  cont.querySelectorAll('button[data-edit]').forEach(btn => {
+    btn.onclick = () => capAbrirEditar(window._capacitacionesEncontradas[parseInt(btn.dataset.edit)], () => _ejecutarBusquedaCapacitaciones());
+  });
   window._capacitacionesEncontradas = lista;
   cont.querySelectorAll('button[data-idx]').forEach(btn => {
     btn.onclick = () => regenerarFormatoCapacitacion(window._capacitacionesEncontradas[parseInt(btn.dataset.idx)]);
@@ -480,6 +486,86 @@ function _capPintarRegen(cont, todas) {
   const sel = document.getElementById('regenFiltroUsr');
   if (sel) sel.onchange = () => _capPintarRegen(cont, todas);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _CAP_EDITAR_V1 (07-oct-2026) — Corregir los datos de una capacitacion ya
+   registrada desde "Fecha anterior". Quien la registro o un administrador.
+   Solo se envian los campos que cambiaron. La nomina no se toca aqui.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function _capPuedeEditar(c) {
+  try {
+    if (typeof capPareceAdmin === 'function' && capPareceAdmin()) return true;
+    return String(c.creadaPor || '').toLowerCase().trim() === String((USER && USER.usuario) || '').toLowerCase().trim();
+  } catch (e) { return false; }
+}
+var _CAP_TIPOS_ED = ['INDUCCIÓN', 'PAUTA-CHARLA', 'CAPACITACIÓN', 'ENTRENAMIENTO', 'SIMULACRO'];
+var _CAP_CAMPOS_ED = [   /* [clave, etiqueta, tipo de input] */
+  ['tema', 'Tema', 'text'], ['fuente', 'Fuente', 'text'], ['area', 'Área', 'text'], ['fundo', 'Zona (fundo)', 'text'],
+  ['lugar', 'Lugar', 'text'], ['labor', 'Labor', 'text'], ['servicio', 'Servicio o contratista', 'text'],
+  ['fecha', 'Fecha', 'date'], ['horaInicio', 'Hora de inicio', 'time'], ['horaFin', 'Hora de término', 'time'], ['totalHoras', 'Total horas', 'number'],
+  ['capacitadorDni', 'DNI capacitador', 'text'], ['capacitadorNombre', 'Nombre capacitador', 'text'], ['capacitadorCargo', 'Cargo capacitador', 'text']
+];
+function capAbrirEditar(c, alTerminar) {
+  if (!c) return;
+  const prev = document.getElementById('modalEditCapOverlay'); if (prev) prev.remove();
+  const ini = {
+    tema: c.tema || '', fuente: c.fuente || '', area: c.area || '', fundo: c.fundo || '', lugar: c.lugar || '',
+    labor: c.labor || '', servicio: c.servicio || '', fecha: String(c.fecha || '').substring(0, 10),
+    horaInicio: c.horaInicio || '', horaFin: c.horaFin || '', totalHoras: c.horas === '' || c.horas == null ? '' : String(c.horas),
+    capacitadorDni: c.capacitadorDni || '', capacitadorNombre: c.capacitadorNombre || '', capacitadorCargo: c.capacitadorCargo || '',
+    tipo: String(c.tipo || '')
+  };
+  const tiposIni = ini.tipo.split(',').map(t => t.trim().toUpperCase()).filter(Boolean);
+  const d = document.createElement('div');
+  d.id = 'modalEditCapOverlay';
+  d.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:10060;padding:16px';
+  d.innerHTML =
+    '<div style="background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:90vh;overflow:auto;padding:20px 22px">' +
+      '<h3 style="margin:0 0 4px">✏️ Corregir capacitación</h3>' +
+      '<div style="font-size:12px;color:#64748b;margin-bottom:12px">' + _capEsc(c.empresa || '') + ' · ' + c.asistentes.length + ' asistentes · ID ' + _capEsc(c.id) +
+        '<br>Los cambios quedan en el historial (quién, cuándo y qué cambió).</div>' +
+      '<div style="margin-bottom:10px"><label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px">Tipo de actividad</label>' +
+        _CAP_TIPOS_ED.map(t => '<label style="display:inline-flex;gap:5px;align-items:center;margin:0 12px 4px 0;font-size:13px"><input type="checkbox" class="edTipo" value="' + t + '"' + (tiposIni.indexOf(t) >= 0 ? ' checked' : '') + '> ' + t + '</label>').join('') + '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px">' +
+        _CAP_CAMPOS_ED.map(f => '<div' + (f[0] === 'tema' || f[0] === 'fuente' ? ' style="grid-column:1/-1"' : '') + '><label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:3px">' + f[1] + '</label>' +
+          '<input id="ed_' + f[0] + '" type="' + f[2] + '"' + (f[2] === 'number' ? ' step="0.5" min="0"' : '') + ' value="' + _capEsc(ini[f[0]]) + '" style="width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px"></div>').join('') +
+      '</div>' +
+      '<div id="edAlerta" style="margin-top:12px"></div>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
+        '<button class="btn btn-gray btn-sm" id="edCancelar">Cancelar</button>' +
+        '<button class="btn btn-primary btn-sm" id="edGuardar">💾 Guardar cambios</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(d);
+  const al = document.getElementById('edAlerta');
+  const aviso = (m, ok) => { al.innerHTML = '<div style="background:' + (ok ? '#dcfce7' : '#fef2f2') + ';border:1.5px solid ' + (ok ? '#86efac' : '#fecaca') + ';color:' + (ok ? '#166534' : '#dc2626') + ';border-radius:8px;padding:8px 11px;font-size:12.5px">' + m + '</div>'; };
+  document.getElementById('edCancelar').onclick = () => d.remove();
+  d.onclick = e => { if (e.target === d) d.remove(); };
+  document.getElementById('edGuardar').onclick = async () => {
+    const cambios = {};
+    _CAP_CAMPOS_ED.forEach(f => {
+      const val = String((document.getElementById('ed_' + f[0]) || {}).value || '').trim();
+      if (val !== String(ini[f[0]] || '').trim()) cambios[f[0]] = val;
+    });
+    const tipos = [...d.querySelectorAll('.edTipo:checked')].map(x => x.value);
+    if (!tipos.length) { aviso('Marca al menos un tipo de actividad.'); return; }
+    const tipoTxt = tipos.join(', ');
+    if (tipoTxt.toUpperCase() !== tiposIni.join(', ')) cambios.tipo = tipoTxt;
+    if (cambios.tema === '') { aviso('El tema no puede quedar vacío.'); return; }
+    if (cambios.fecha === '') { aviso('La fecha no puede quedar vacía.'); return; }
+    if (!Object.keys(cambios).length) { aviso('No cambiaste ningún dato.'); return; }
+    const btn = document.getElementById('edGuardar'); btn.disabled = true; btn.textContent = 'Guardando...';
+    try {
+      const r = await apiPost({ action: 'editarCapacitacion', idCapacitacion: c.id, cambios: cambios, usuario: USER.usuario, rol: USER.rol });
+      if (!r || !r.success) { aviso((r && r.error) || 'No se pudo guardar'); btn.disabled = false; btn.textContent = '💾 Guardar cambios'; return; }
+      aviso('✔ Cambios guardados (' + Object.keys(cambios).length + ' dato(s)).', true);
+      setTimeout(() => { d.remove(); if (typeof mostrarFeedback === 'function') mostrarFeedback('ok', '✅ Capacitación corregida. Si necesitas el PDF, usa "Regenerar formato".'); if (typeof alTerminar === 'function') alTerminar(); }, 800);
+    } catch (e) {
+      aviso('Error de conexión: ' + e.message); btn.disabled = false; btn.textContent = '💾 Guardar cambios';
+    }
+  };
+}
+window.capAbrirEditar = capAbrirEditar;
 
 /* _CAP_PDF_MASIVO_V1: Azure/Sheets guardan el DNI como numero (46073509 ok, 01234567 -> 1234567) */
 function _capDni8(d) {
@@ -627,7 +713,7 @@ async function regenerarFormatoCapacitacion(cap) {
     sv('capLugar',       cap.lugar);
     sv('capArea', cap.area);
     sv('capFundo', cap.fundo || '');   /* _FUNDO_CAP_V1 · _CAP_PDF_MASIVO_V1: si no tiene, en blanco (no el de otra) */
-    sv('capLabor', ''); sv('capServicio', '');   /* _FORMATO_RSC01_2026_V1: no se guardan; al regenerar salen en blanco */
+    sv('capLabor', cap.labor || ''); sv('capServicio', cap.servicio || '');   /* _CAP_EDITAR_V1: ahora se guardan (los registros antiguos salen en blanco) */
     setTipos(cap.tipo);
     sv('capHoraInicio',  cap.horaInicio);
     sv('capHoraTermino', cap.horaFin);
@@ -1180,6 +1266,8 @@ async function _buildBody() {
     horaFin:           v('capHoraTermino') || '',
     totalHoras:        parseFloat(v('capHoras')) || 0,
     frecuencia:        v('capFrecuencia') || '',
+    labor:             v('capLabor').trim(),      /* _CAP_EDITAR_V1: ahora se guardan */
+    servicio:          v('capServicio').trim(),
     capacitadorDni:    v('capCapDni').trim(),
     capacitadorNombre: v('capCapNombre').trim(),
     capacitadorCargo:  v('capCapCargo').trim(),

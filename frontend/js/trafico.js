@@ -56,7 +56,7 @@ window.RLTrafico = window.RLTrafico || (function () {
     cumplAusencia: 'Registró ausencia / reemplazo', saveUsuario: 'Creó usuario', updateUsuario: 'Actualizó usuario', saveSolicitudAcceso: 'Pidió acceso temporal',
     resolverAccesoTemporal: 'Resolvió acceso temporal', aprobarAccesoTemporal: 'Resolvió acceso temporal',
     horasRegistrar: 'Registró horas', horasEditar: 'Editó horas', horasEliminar: 'Eliminó horas', horasAprobar: 'Aprobó horas',
-    guardarCapacitacion: 'Registró capacitación', duplicarCapacitacion: 'Duplicó capacitación', eliminarCapacitacion: 'Eliminó capacitación',
+    guardarCapacitacion: 'Registró capacitación', duplicarCapacitacion: 'Duplicó capacitación', eliminarCapacitacion: 'Eliminó capacitación', editarCapacitacion: 'Corrigió capacitación',
     guardarSolicitudMantenimiento: 'Pidió mantenimiento', programarMantenimiento: 'Programó mantenimiento', actualizarEstadoMantenimiento: 'Actualizó mantenimiento',
     saveEvaluacion360: 'Guardó evaluación 360', deleteEvaluacion360: 'Eliminó evaluación 360', savePreaviso: 'Registró preaviso',
     addAlmuerzo: 'Registró almuerzo', updateAlmuerzo: 'Actualizó almuerzo', permisosGuardar: 'Cambió permisos', accesoHorarioGuardar: 'Cambió horario de acceso'
