@@ -1699,6 +1699,14 @@ const _cregCharts = {};
 
 function _cregNum(x) { const n = parseFloat(String(x == null ? '' : x).replace(',', '.')); return isNaN(n) ? 0 : n; }
 function _cregFecha(r) { return String(r.fecha || r.fechaCapacitacion || '').substring(0, 10); }
+/* _CAP_REG_POR_REGISTRO_V1: dia (Lima) en que se registro: viene como ISO UTC (Azure/Google) o "aaaa-mm-dd hh:mm" de Lima */
+function _cregFechaReg(r) {
+  const x = r && r.fechaRegistro; if (!x) return '';
+  const s = String(x);
+  if (/^\d{4}-\d{2}-\d{2}[ ]\d/.test(s) || /^\d{4}-\d{2}-\d{2}$/.test(s)) return s.substring(0, 10);   /* ya es hora de Lima */
+  const t = Date.parse(s); if (isNaN(t)) return s.substring(0, 10);
+  return new Date(t - 5 * 3600e3).toISOString().substring(0, 10);
+}
 function _cregFmt(n, dec) { return Number(n || 0).toLocaleString('es-PE', { maximumFractionDigits: dec || 0, minimumFractionDigits: 0 }); }
 function _cregDdmm(f) { const p = String(f || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (f || ''); }
 function _cregEsc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -1732,16 +1740,24 @@ async function cargarRegistros() {
   const kp = document.getElementById('cregKpis'); if (kp) kp.style.opacity = '.5';
   try {
     const t0 = Date.now();
+    /* _CAP_REG_POR_REGISTRO_V1 (07-oct-2026): "Buscar por fecha de registro". Antes solo se
+       filtraba por la fecha DE LA CAPACITACION: lo registrado hoy con fecha 30/09 no salia en
+       "Este mes" y parecia que no se habia guardado. Por registro: se traen las cabeceras sin
+       rango (son pocas filas) y se filtra aqui por el dia en que se registro (hora de Lima). */
+    const porReg = v('cregPor') === 'reg';
     const d = await apiPost({
       action: 'listarCapacitaciones', rol: USER.rol, usuario: USER.usuario,
-      empresa: v('cregEmpresa') || '', desde: desde, hasta: hasta, supervisor: ''
+      empresa: v('cregEmpresa') || '', desde: porReg ? '' : desde, hasta: porReg ? '' : hasta, supervisor: ''
     });
     if (!d.success) throw new Error(d.error || 'Error servidor');
-    _cregDatos = (d.capacitaciones || []).slice().sort((a, b) => _cregFecha(b).localeCompare(_cregFecha(a)));
+    let _lst = (d.capacitaciones || []).slice();
+    if (porReg) _lst = _lst.filter(r => { const f = _cregFechaReg(r); return f && (!desde || f >= desde) && (!hasta || f <= hasta); });
+    _cregDatos = _lst.sort((a, b) => porReg ? String(b.fechaRegistro || '').localeCompare(String(a.fechaRegistro || ''))
+                                            : _cregFecha(b).localeCompare(_cregFecha(a)));
     _cregEsAdmin = !!d.esAdmin;
     console.log('[_CAP_REG_V2] ' + _cregDatos.length + ' capacitaciones (' + desde + ' a ' + hasta + ') en ' + (Date.now() - t0) + ' ms · fuente ' + (d.fuente || 'google'));
     const rg = document.getElementById('cregRango');
-    if (rg) rg.textContent = _cregDdmm(desde) + ' — ' + _cregDdmm(hasta);
+    if (rg) rg.textContent = (porReg ? 'Registrados del ' : '') + _cregDdmm(desde) + ' — ' + _cregDdmm(hasta);   /* _CAP_REG_POR_REGISTRO_V1 */
     _cregLlenarFiltros();
     cregAplicar();
   } catch (e) {

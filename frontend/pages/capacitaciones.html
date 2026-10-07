@@ -514,6 +514,8 @@ h3{font-size:16px !important}
       <div id="cregRango" class="creg-rango"></div>
     </div>
     <div class="creg-grid">
+      <div class="fg"><label class="lbl">Buscar por</label>   <!-- _CAP_REG_POR_REGISTRO_V1 -->
+        <select id="cregPor" onchange="cargarRegistros()" title="Fecha de la capacitación o fecha en que se registró en el sistema"><option value="cap">Fecha de capacitación</option><option value="reg">Fecha de registro</option></select></div>
       <div class="fg"><label class="lbl">Desde</label><input type="date" id="cregDesde"></div>
       <div class="fg"><label class="lbl">Hasta</label><input type="date" id="cregHasta"></div>
       <div class="fg"><label class="lbl">Empresa</label>
@@ -631,7 +633,7 @@ h3{font-size:16px !important}
 </div>
 
 <script src="../js/modal-system.js"></script>
-  <script src="../js/capacitaciones.js?v=06oct-eliminar"></script>  <!-- _CAP_PDF_MASIVO_V1: fuerza a bajar la version nueva -->
+  <script src="../js/capacitaciones.js?v=07oct-porregistro"></script>  <!-- _CAP_PDF_MASIVO_V1: fuerza a bajar la version nueva -->
   <script src="../js/capacitaciones-excel.js"></script>
 <script>
 /* _MOD_AZURE_V1 (26-set-2026) — Capacitaciones: las consultas salen de Azure (mismo calculo que
