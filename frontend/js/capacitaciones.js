@@ -1269,7 +1269,7 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '', docExist
     // ── Estilos reutilizables ──
     const sBorder  = { lineColor: C.negro, lineWidth: 0.3 };
     const sBanner  = { fillColor: C.banner, textColor: C.negro, fontStyle: 'bold', halign: 'center', valign: 'middle', fontSize: 10, minCellHeight: 6, cellPadding: 1 };
-    const sCabHead = { fillColor: C.cabecera, textColor: C.negro, fontStyle: 'bold', halign: 'center', valign: 'middle', fontSize: 9, minCellHeight: 6 };
+    const sCabHead = { fillColor: [255, 255, 255], textColor: C.negro, fontStyle: 'bold', halign: 'center', valign: 'middle', fontSize: 8.5, minCellHeight: 6 };   /* _RSC01_IDENTICO_V1: encabezados de tabla en blanco, como el oficial */
 
     // Anchos encabezado (suman 190mm)
     const COL1 = 35, COL2 = 110, COL3 = 45;
@@ -1315,10 +1315,12 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '', docExist
     });
     // Frecuencia: etiqueta en negrita + línea (como el oficial)
     /* _RSC01_LOGO_FREC_V1: como el modelo nuevo -> "Frecuencia: Anual" a la altura de la frase y SIN linea debajo */
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); doc.setTextColor(...C.negro);
-    const _yFrec = doc.lastAutoTable.finalY - (doc.lastAutoTable.finalY - yFila2) / 2 + 1.2;
-    doc.text('Frecuencia:', MGS + COL1 + COL2 + 2, _yFrec);
-    doc.setFont('helvetica', 'normal'); doc.text('Anual', MGS + COL1 + COL2 + 2 + doc.getTextWidth('Frecuencia: ') + 1.2, _yFrec);
+    /* _RSC01_IDENTICO_V1 (07-oct-2026): como el formato oficial -> "Frecuencia:" en blanco con su linea debajo */
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(7); doc.setTextColor(...C.negro);
+    const _yFrec = yFila2 + 3;
+    doc.text('Frecuencia:', MGS + COL1 + COL2 + 1, _yFrec);
+    doc.setDrawColor(...C.negro); doc.setLineWidth(0.2);
+    doc.line(MGS + COL1 + COL2 + 1, _yFrec + 3.2, MGS + bW - 1, _yFrec + 3.2);
 
     // Logo encima celda izquierda fila 1 — CUADRADO 12×12mm (el original es 225×225, 1:1)
     if (logoB64) { try { doc.addImage(logoB64, 'JPEG', MGS + (COL1 - 14) / 2, y + 0.5, 14, 14);   /* _RSC01_LOGO_FREC_V1 */ } catch(e) {} }
@@ -1381,100 +1383,98 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '', docExist
     // ═══════════════════════════════════════════════════════
 
     // ── Réplica EXACTA del formato oficial R-SC-01 ──
-    yA += 1.5;
+    /* _RSC01_IDENTICO_V1 (07-oct-2026): igual al formato oficial (imagen de Joel):
+       TEMA/FUENTE en letra grande, casillas con X negra, filas compactas separadas por
+       lineas completas (sin subrayado por dato), fecha dd/mm/aaaa, hora "8:00 A.M",
+       duracion "02 HORAS", razon social sin punto final y ZONA en rojo. */
+    const _fFecha = f => { const p = String(f || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(f || ''); };
+    const _fHora = h => {
+      const m = String(h || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return String(h || '');
+      let hh = +m[1]; const ap = hh >= 12 ? 'P.M' : 'A.M'; hh = hh % 12 || 12;
+      return hh + ':' + m[2] + ' ' + ap;
+    };
+    const _fDur = x => {
+      const n = parseFloat(String(x || '').replace(',', '.')); if (!n || isNaN(n)) return String(x || '');
+      const h = Math.floor(n), mi = Math.round((n - h) * 60), p2 = k => (k < 10 ? '0' : '') + k;
+      if (!mi) return p2(h) + (h === 1 ? ' HORA' : ' HORAS');
+      return p2(h) + ':' + p2(mi) + ' HORAS';
+    };
+    const _L = (text, x, yd, fs) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(fs || 7.5); doc.setTextColor(...C.negro); doc.text(text, x, yd); return x + doc.getTextWidth(text) + 1.5; };
+    const _V = (text, x, yd, fs, maxW, color) => {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(fs || 8); doc.setTextColor(...(color || C.negro));
+      let t = String(text || '');
+      if (maxW) { let f = fs || 8; while (f > 5.5 && doc.getTextWidth(t) > maxW) { f -= 0.5; doc.setFontSize(f); } t = doc.splitTextToSize(t, maxW)[0] || ''; }
+      doc.text(t, x, yd); doc.setTextColor(...C.negro);
+    };
+    const _H = (yl) => { doc.setDrawColor(...C.negro); doc.setLineWidth(0.25); doc.line(MGS, yl, MGS + bW, yl); };
+    const XC2 = MGS + 72, XC3 = MGS + 112;          // columnas 2 y 3 (FECHA / LUGAR ...)
+    const FIN_LINEA = MGS + bW - 15;                // TEMA y FUENTE: la linea no llega al borde
 
-    // TEMA (línea solo bajo el valor, como el oficial)
-    _lbl('TEMA:', MGS + 1, yA);
-    _val(v('capTema').trim(), MGS + 16, yA, bW - 17);
-    _sub(MGS + 15, yA + 5, MGS + bW);
+    // TEMA
+    yA += 6;
+    let _x = _L('TEMA:', MGS + 1, yA, 8.5);
+    _V(v('capTema').trim(), _x + 1, yA, 11, FIN_LINEA - _x - 2);
+    _sub(_x, yA + 1.3, FIN_LINEA);
     yA += 6.5;
 
     // FUENTE
-    _lbl('FUENTE:', MGS + 1, yA);
-    _val(v('capFuente').trim(), MGS + 16, yA, bW - 17);
-    _sub(MGS + 15, yA + 5, MGS + bW);
-    yA += 9;
+    _x = _L('FUENTE:', MGS + 1, yA, 6.5);
+    _V(v('capFuente').trim(), _x + 1, yA, 10, FIN_LINEA - _x - 2);
+    _sub(_x, yA + 1.3, FIN_LINEA);
+    yA += 4;
 
-    // CHECKBOXES estilo oficial: etiqueta + recuadro grande, fondo blanco, x roja
+    // CASILLAS: etiqueta normal + recuadro, X negra
     const tiposPDF = ['INDUCCIÓN', 'PAUTA/CHARLA', 'CAPACITACIÓN', 'ENTRENAMIENTO', 'SIMULACRO'];
     const tiposSel = tipos.map(t => String(t).replace(/-/g, '/'));
-    const grpW = bW / tiposPDF.length;
+    const COLX = [MGS + 0.5, MGS + 34, MGS + 70, MGS + 113, MGS + 153];
     tiposPDF.forEach((t, i) => {
-      const gx = MGS + i * grpW;
-      doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(...C.negro);
-      doc.text(t, gx + 1, yA + 5);
-      const tw = doc.getTextWidth(t);
-      const bx = gx + 1 + tw + 2.5, by = yA;
+      const gx = COLX[i];
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(...C.negro);
+      doc.text(t, gx, yA + 4.8);
+      const bx = gx + doc.getTextWidth(t) + 2, by = yA;
       doc.setDrawColor(...C.negro); doc.setLineWidth(0.5);
-      doc.rect(bx, by, 10, 7.5);
+      doc.rect(bx, by, 10, 6.8);
       if (tiposSel.includes(t)) {
-        doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(...C.rojo);
-        doc.text('x', bx + 5, by + 5.3, { align: 'center' });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...C.negro);
+        doc.text('X', bx + 5, by + 4.7, { align: 'center' });
       }
     });
-    yA += 12;
+    yA += 13;
 
-    // ÁREA + N° TRABAJADORES + H / M (como el oficial)
-    /* _CAP_PDF_MASIVO_V1: se calculan de la lista REAL de asistentes. Antes se leian de
-       las casillas del formulario, que al regenerar / reutilizar tenian los numeros de
-       OTRA capacitacion (la ultima registrada) y salian datos equivocados en el PDF. */
+    // ÁREA + N° TRABAJADORES + H / M (sin subrayado, como el oficial)
     const nTrabV = String(asistentes.length);
     const nHv    = String(nH);
     const nMv    = String(nM);
-    _lbl('ÁREA:', MGS + 1, yA);
-    _val(v('capArea').trim(), MGS + 15, yA, 78);
-    _sub(MGS + 13, yA + 5, MGS + 95);
-    _lbl('N° TRABAJADORES:', MGS + 99, yA);
-    _val(nTrabV, MGS + 132, yA);
-    _sub(MGS + 130, yA + 5, MGS + 152);
-    _lbl('H:', MGS + 158, yA);
-    _val(nHv, MGS + 163, yA);
-    _lbl('M:', MGS + 173, yA);
-    _val(nMv, MGS + 178, yA);
-    yA += 9;
+    _x = _L('ÁREA:', MGS + 1, yA, 7.5);
+    _V(v('capArea').trim(), _x + 1, yA, 9, XC3 - _x - 4);
+    _x = _L('N° TRABAJADORES:', XC3, yA, 7);
+    _V(nTrabV, _x + 1, yA, 8);
+    _x = _L('H:', MGS + 161, yA, 7);  _V(nHv, _x + 0.5, yA, 8);
+    _x = _L('M:', MGS + 175, yA, 7);  _V(nMv, _x + 0.5, yA, 8);
+    yA += 2.2; _H(yA);
 
-    // _FORMATO_RSC01_2026_V1: LABOR + FECHA + LUGAR (formato nuevo)
-    _lbl('LABOR:', MGS + 1, yA);
-    _val(v('capLabor').trim(), MGS + 14, yA, 62);
-    _sub(MGS + 12, yA + 5, MGS + 77);
-    _lbl('FECHA:', MGS + 80, yA);
-    _val(v('capFecha'), MGS + 92, yA, 32);
-    _sub(MGS + 90, yA + 5, MGS + 124);
-    _lbl('LUGAR:', MGS + 127, yA);
-    _val(v('capLugar').trim(), MGS + 140, yA, bW - 141);
-    _sub(MGS + 138, yA + 5, MGS + bW);
-    yA += 10;
+    // LABOR + FECHA + LUGAR
+    yA += 4;
+    _x = _L('LABOR:', MGS + 1, yA, 7.5);   _V(v('capLabor').trim(), _x, yA, 7.5, XC2 - _x - 2);
+    _x = _L('FECHA:', XC2, yA, 7.5);       _V(_fFecha(v('capFecha')), _x, yA, 7.5);
+    _x = _L('LUGAR:', XC3, yA, 7.5);       _V(v('capLugar').trim(), _x, yA, 8.5, MGS + bW - _x - 1);
+    yA += 2.2; _H(yA);
 
-    // HORA DE INICIO + HORA DE TÉRMINO + TOTAL DE HORAS (etiquetas completas)
-    _lbl('HORA DE INICIO:', MGS + 8, yA);
-    _val(v('capHoraInicio') || '', MGS + 38, yA);
-    _sub(MGS + 36, yA + 5, MGS + 72);
-    _lbl('HORA DE TÉRMINO:', MGS + 80, yA);
-    _val(v('capHoraTermino') || '', MGS + 114, yA);
-    _sub(MGS + 112, yA + 5, MGS + 148);
-    _lbl('DURACIÓN:', MGS + 152, yA);   /* _FORMATO_RSC01_2026_V1: antes "TOTAL DE HORAS" */
-    _val(v('capHoras') || '', MGS + 170, yA);
-    _sub(MGS + 168, yA + 5, MGS + bW);
-    yA += 9;
+    // HORA DE INICIO + HORA DE TÉRMINO + DURACIÓN
+    yA += 4;
+    _x = _L('HORA DE INICIO:', MGS + 1, yA, 7);     _V(_fHora(v('capHoraInicio')), _x, yA, 7.5);
+    _x = _L('HORA DE TÉRMINO:', XC2, yA, 7);        _V(_fHora(v('capHoraTermino')), _x, yA, 7.5, XC3 - _x - 2);
+    _x = _L('DURACIÓN:', XC3, yA, 7.5);             _V(_fDur(v('capHoras')), _x, yA, 8);
+    yA += 2.2; _H(yA);
 
-    // PRODUCTOR
-    const prodV = v('capProductor') || (esRapel ? 'Sociedad Agrícola Rapel S.A.C.' : 'Sociedad Exportadora Verfrut S.A.C.');
-    /* _FORMATO_RSC01_2026_V1: RAZÓN SOCIAL + ZONA (fundo) + SERVICIO O CONTRATISTA (formato nuevo; antes "PRODUCTOR") */
-    _lbl('RAZÓN SOCIAL:', MGS + 1, yA);
-    _val(prodV, MGS + 22, yA, 55);
-    _sub(MGS + 21, yA + 5.5, MGS + 79);
-    _lbl('ZONA:', MGS + 82, yA);
-    _val(v('capFundo').trim(), MGS + 91, yA, 33);
-    _sub(MGS + 90, yA + 5.5, MGS + 125);
-    _lbl('SERVICIO O CONTRATISTA:', MGS + 128, yA);
-    { /* texto largo: se achica la letra para que quepa en una linea */
-      const _sv = v('capServicio').trim() || '__', _mw = bW - 164;
-      doc.setFont('helvetica','normal'); let _fs = 8; doc.setFontSize(_fs);
-      while (_fs > 5 && doc.getTextWidth(_sv) > _mw) { _fs -= 0.5; doc.setFontSize(_fs); }
-      doc.setTextColor(...C.negro); doc.text(doc.splitTextToSize(_sv, _mw)[0], MGS + 163, yA + 3.5);
-    }
-    _sub(MGS + 162, yA + 5.5, MGS + bW - 1.5);
-    yA += 7;
+    // RAZÓN SOCIAL + ZONA (en rojo) + SERVICIO O CONTRATISTA
+    yA += 4;
+    const prodV = (v('capProductor') || (esRapel ? 'Sociedad Agrícola Rapel S.A.C' : 'Sociedad Exportadora Verfrut S.A.C')).replace(/\.\s*$/, '');
+    _x = _L('RAZÓN SOCIAL:', MGS + 1, yA, 7.5);   _V(prodV, _x, yA, 8, XC2 - _x - 2);
+    _x = _L('ZONA:', XC2, yA, 7.5);               _V(v('capFundo').trim(), _x, yA, 8.5, XC3 - _x - 2, C.rojo);
+    _x = _L('SERVICIO O CONTRATISTA:', XC3, yA, 6.5);
+    _V(v('capServicio').trim() || '_', _x, yA, 8, MGS + bW - _x - 1);
+    yA += 2.5;
 
     // ⭐ MARCO: encierra toda la sección DATOS DE LA ACTIVIDAD (como el formato oficial)
     doc.setDrawColor(...C.negro); doc.setLineWidth(0.3);
@@ -1494,13 +1494,13 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '', docExist
 
     doc.autoTable({
       startY: y, margin: { left: MGS, right: MGS, bottom: 5 },
-      head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / INSTITUCIÓN', 'FIRMA']],
+      head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO/INSTITUCIÓN', 'FIRMA']],   /* _RSC01_IDENTICO_V1 */
       body: [['1', v('capCapDni').trim(), v('capCapNombre').trim(), v('capCapCargo').trim(), '']],
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
-      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 8 },
-      columnStyles: { 0:{cellWidth:12}, 1:{cellWidth:25}, 2:{cellWidth:75}, 3:{cellWidth:55}, 4:{cellWidth:23} }
+      bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 8 },   /* _RSC01_IDENTICO_V1: el cargo entra en una linea */
+      columnStyles: { 0:{cellWidth:9.6}, 1:{cellWidth:20.9}, 2:{cellWidth:71.5}, 3:{cellWidth:59.2}, 4:{cellWidth:28.8} }   /* _RSC01_IDENTICO_V1: anchos del oficial (suma 190) */
     });
     y = doc.lastAutoTable.finalY;
 
@@ -1530,12 +1530,13 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '', docExist
         /* _FIX_FIRMA_HUELLA_ANCHO_V3: estructura ORIGINAL (6 columnas, sin dividir).
            Solo se amplia la columna combinada FIRMA / HUELLA: 27mm -> 40mm.
            Compensado achicando Nombre y Cargo (tenian espacio de sobra); N°, DNI y OBS quedan igual que el original. */
-        0: { cellWidth: 8 }, 1: { cellWidth: 20 },
-        2: { cellWidth: 62, halign: 'left' }, 3: { cellWidth: 30, halign: 'left' },   /* _FIRMA_HUELLA_V4: nombres 70->62, cargo 32->30 */
-        4: { cellWidth: 50 }, 5: { cellWidth: 20, halign: 'left' }   /* _FIRMA_HUELLA_V4: FIRMA/HUELLA 40->50 mm. Suma: 8+20+62+30+50+20 = 190 mm = ancho util A4 */
+        /* _RSC01_IDENTICO_V1: anchos del formato oficial: 9.6+20.9+71.5+32.7+26.6+28.7 = 190 mm */
+        0: { cellWidth: 9.6 }, 1: { cellWidth: 20.9 },
+        2: { cellWidth: 71.5, halign: 'left' }, 3: { cellWidth: 32.7, halign: 'left' },   /* _FIRMA_HUELLA_V4: nombres 70->62, cargo 32->30 */
+        4: { cellWidth: 26.6 }, 5: { cellWidth: 28.7, halign: 'left' }   /* _FIRMA_HUELLA_V4: FIRMA/HUELLA 40->50 mm. Suma: 8+20+62+30+50+20 = 190 mm = ancho util A4 */
       },
       didParseCell: d => {
-        if (d.section === 'head' && d.column.index === 5) { d.cell.styles.fontSize = 5.6; d.cell.styles.cellPadding = 0.2; }   /* _FORMATO_RSC01_2026_V1: "OBSERVACIONES" cabe en 20 mm */
+        if (d.section === 'head' && d.column.index === 5) { d.cell.styles.fontSize = 8; d.cell.styles.cellPadding = 0.3; }   /* _RSC01_IDENTICO_V1: ahora la columna es ancha como el oficial */   /* _FORMATO_RSC01_2026_V1: "OBSERVACIONES" cabe en 20 mm */
         if (d.section === 'body') {
           d.cell.styles.textColor = String(d.cell.raw || '').trim() ? C.negro : [200, 200, 200];
         }
@@ -1560,8 +1561,8 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '', docExist
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
-      bodyStyles: { fontSize: 9, halign: 'center', valign: 'middle', minCellHeight: 8 },
-      columnStyles: { 0:{cellWidth:12}, 1:{cellWidth:25}, 2:{cellWidth:75}, 3:{cellWidth:55}, 4:{cellWidth:23} }
+      bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 8 },   /* _RSC01_IDENTICO_V1: el cargo entra en una linea */
+      columnStyles: { 0:{cellWidth:9.6}, 1:{cellWidth:20.9}, 2:{cellWidth:71.5}, 3:{cellWidth:59.2}, 4:{cellWidth:28.8} }   /* _RSC01_IDENTICO_V1: anchos del oficial (suma 190) */
     });
 
     // ── _FIX_RESPONSABLE_PAG1_V1: NO borrar páginas extra ──
