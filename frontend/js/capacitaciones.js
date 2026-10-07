@@ -2415,6 +2415,11 @@ function capCrearModalDuplicar() {
         '<label class="lbl">Título del nuevo registro *</label>' +
         '<input type="text" id="dupTitulo" maxlength="160" placeholder="Ej: Comunicado de seguridad">' +
       '</div>' +
+      '<div class="fg" style="margin-bottom:12px">' +   /* _CAP_DUP_FUENTE_V1 */
+        '<label class="lbl">Fuente</label>' +
+        '<input type="text" id="dupFuente" maxlength="250" placeholder="Ej: Decreto Supremo N.° 015-2026-TR.">' +
+        '<div style="font-size:11px;color:#64748b;margin-top:3px">Viene la del registro original. Cámbiala si el nuevo tema tiene otra fuente.</div>' +
+      '</div>' +
       '<div class="fg" style="margin-bottom:12px">' +
         '<label class="lbl">Fecha</label>' +
         '<input type="date" id="dupFecha">' +
@@ -2447,6 +2452,7 @@ function capAbrirDuplicarRegen(idx) {
   capAbrirDuplicarObj({
     idCapacitacion:  c.id,
     tema:            c.tema,
+    fuente:          c.fuente || '',   /* _CAP_DUP_FUENTE_V1 */
     empresa:         c.empresa,
     fecha:           c.fecha,
     totalAsistentes: (c.asistentes || []).length,
@@ -2480,6 +2486,7 @@ function capAbrirDuplicarObj(r) {
   }
   var t = document.getElementById('dupTitulo'); if (t) t.value = '';
   var f = document.getElementById('dupFecha');  if (f) f.value = fecha;
+  var fu = document.getElementById('dupFuente'); if (fu) fu.value = r.fuente || '';   /* _CAP_DUP_FUENTE_V1 */
   var a = document.getElementById('dupAlerta'); if (a) a.innerHTML = '';
 
   document.getElementById('modalDupOverlay').classList.add('open');
@@ -2492,6 +2499,7 @@ async function capConfirmarDuplicar() {
 
   var titulo = String((document.getElementById('dupTitulo') || {}).value || '').trim();
   var fecha  = String((document.getElementById('dupFecha')  || {}).value || '').trim();
+  var fuente = String((document.getElementById('dupFuente') || {}).value || '').trim();   /* _CAP_DUP_FUENTE_V1 */
   var al = document.getElementById('dupAlerta');
 
   function aviso(msg, ok) {
@@ -2515,6 +2523,7 @@ async function capConfirmarDuplicar() {
       idCapacitacion: r.idCapacitacion || r.id_capacitacion || r.id,
       tituloNuevo: titulo,
       fecha: fecha,
+      fuenteNueva: fuente,   /* _CAP_DUP_FUENTE_V1 */
       usuario: USER.usuario,
       rol: USER.rol
     });
@@ -2530,6 +2539,7 @@ async function capConfirmarDuplicar() {
     var pdfOk = false;
     try {
       var capNueva = await _capArmarDuplicado(r, d.idCapacitacion, titulo, d.fecha || fecha);
+      if (capNueva && fuente) capNueva.fuente = fuente;   /* _CAP_DUP_FUENTE_V1: el PDF sale con la fuente nueva */
       if (capNueva) {
         capCerrarDuplicar();
         var rg = document.getElementById('modalRegenOverlay'); if (rg) rg.style.display = 'none';

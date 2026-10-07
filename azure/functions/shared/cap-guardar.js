@@ -291,9 +291,11 @@ async function ejecutar(pool, accion, b, usuario, rol, prueba) {
     const idNuevo = 'CAP-' + Date.now(), fechaNueva = capFecha(b.fecha) || capFecha(original[cFecha]);
     cab = original.slice(); cab[cId] = idNuevo; cab[1] = fechaReg;
     if (cTema >= 0) cab[cTema] = titulo; if (cFecha >= 0) cab[cFecha] = fechaNueva; if (cTipo >= 0 && b.tipo) cab[cTipo] = String(b.tipo);
+    const cFuente = capCol(Hd.encabezado, 'FUENTE');   /* _CAP_DUP_FUENTE_V1 */
+    if (cFuente >= 0 && String(b.fuenteNueva || '').trim()) cab[cFuente] = String(b.fuenteNueva).trim();
     filas = asis.map(f => { const n = f.slice(); n[bId] = idNuevo; n[1] = fechaReg; if (bTema >= 0) n[bTema] = titulo; if (bFecha >= 0) n[bFecha] = fechaNueva; return n; });
     resp = { success: true, idCapacitacion: idNuevo, titulo, fecha: fechaNueva, asistentes: filas.length };
-    cuerpo = { idCapacitacion: id, tituloNuevo: titulo, fecha: b.fecha, tipo: b.tipo, usuario: u, rol: rol, _idAzure: idNuevo, _fechaRegAzure: fechaReg };
+    cuerpo = { idCapacitacion: id, tituloNuevo: titulo, fecha: b.fecha, tipo: b.tipo, fuenteNueva: b.fuenteNueva || '', usuario: u, rol: rol, _idAzure: idNuevo, _fechaRegAzure: fechaReg };   /* _CAP_DUP_FUENTE_V1 */
   } else return { status: 404, body: { success: false, error: 'Accion desconocida' } };
 
   const tx = new sql.Transaction(pool);
