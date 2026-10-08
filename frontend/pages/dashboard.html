@@ -484,13 +484,14 @@ h3{font-size:16px !important}
         <!-- Campos Para y CC — se incluyen en el mailto al enviar -->
         <div class="fg" style="margin-top:10px">
           <div class="fc" style="grid-column:1/-1">
-            <label>Para (correos separados por coma): <span style="font-weight:400;color:#94a3b8">obligatorio</span></label>
-            <input type="text" id="cPara" value="olga.vilela@unifrutti.com, joel.timoteo@unifrutti.com, jorge.chavez@unifrutti.com"
+            <label>Para (correos separados por coma): <span style="font-weight:400;color:#94a3b8">obligatorio · se llena con el correo del responsable que selecciones arriba</span></label>
+            <input type="text" id="cPara" value="" placeholder="Selecciona uno o más responsables de recepción arriba (o escribe el correo)"
                    style="width:100%;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
+            <div id="cParaAviso" style="font-size:11px;color:#b45309;margin-top:4px"></div>
           </div>
           <div class="fc" style="grid-column:1/-1">
-            <label>Con copia (CC): <span style="font-weight:400;color:#94a3b8">opcional</span></label>
-            <input type="text" id="cCC" value=""
+            <label>Con copia (CC): <span style="font-weight:400;color:#94a3b8">jefatura (puedes agregar más)</span></label>
+            <input type="text" id="cCC" value="eduardo.covenas@unifrutti.com, miguel.portocarrero@unifrutti.com, joel.timoteo@unifrutti.com"
                    style="width:100%;padding:8px 12px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif">
           </div>
         </div>
@@ -7963,12 +7964,81 @@ function getRespSeleccionados() {
 
 function getParaFinal() {
   const el = document.getElementById('cPara');
-  return el ? (el.value || '').trim() : 'olga.vilela@unifrutti.com, joel.timoteo@unifrutti.com, jorge.chavez@unifrutti.com';
+  return el ? (el.value || '').trim() : '';
 }
 function getCCFinal() {
   const el = document.getElementById('cCC');
-  return el ? (el.value || '').trim() : '';
+  return el ? (el.value || '').trim() : 'eduardo.covenas@unifrutti.com, miguel.portocarrero@unifrutti.com, joel.timoteo@unifrutti.com';
 }
+
+/* ═══ _CORREOS_JEFATURA_V1 (08-oct-2026) — Enviar Reporte por Correo
+   · CC fijo: Eduardo Coveñas, Miguel Portocarrero y Joel Timoteo (ya no Olga Vilela ni Jorge Chavez).
+   · PARA: el correo de cada "Responsable de Recepción" seleccionado, tomado de la lista
+     de usuarios (Azure; Google de respaldo). Si alguno no tiene correo, se avisa y se
+     puede escribir a mano. Si algo falla, el campo queda editable como siempre. ═══ */
+(function () {
+  var _usrCache = null;
+  function norm(s) { return String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim(); }
+  function cargarUsuarios() {
+    if (_usrCache) return Promise.resolve(_usrCache);
+    try {
+      if (typeof CACHE !== 'undefined' && Array.isArray(CACHE.usuarios) && CACHE.usuarios.length && CACHE.usuarios.some(function (u) { return u && u.correo; })) {
+        _usrCache = CACHE.usuarios; return Promise.resolve(_usrCache);
+      }
+    } catch (e) {}
+    if (typeof apiGet !== 'function') return Promise.resolve([]);
+    return Promise.resolve(apiGet({ action: 'getUsuarios' })).then(function (j) {
+      var l = Array.isArray(j) ? j : (j && Array.isArray(j.data) ? j.data : []);
+      if (l.length) _usrCache = l;
+      return l;
+    }).catch(function () { return []; });
+  }
+  /* "RUBI FIGUEROA" coincide con "RUBI ELIZABETH FIGUEROA FLORES": todas las palabras del responsable estan en el nombre */
+  function correoDe(resp, usuarios) {
+    var pal = norm(resp).split(' ').filter(Boolean);
+    if (!pal.length) return '';
+    var cand = usuarios.filter(function (u) {
+      if (!u || !u.correo || u.activo === false) return false;
+      var n = ' ' + norm(u.nombre) + ' ';
+      return pal.every(function (p) { return n.indexOf(' ' + p + ' ') >= 0; });
+    });
+    return cand.length === 1 ? String(cand[0].correo).trim() : '';
+  }
+  var _ultimoAuto = '';
+  function actualizarPara() {
+    var para = document.getElementById('cPara'), aviso = document.getElementById('cParaAviso');
+    if (!para) return;
+    var sel = (typeof getRespSeleccionados === 'function') ? getRespSeleccionados() : [];
+    /* si el usuario escribio algo a mano distinto de lo que pusimos, no se lo pisamos al cargar */
+    if (!sel.length) {
+      if (para.value.trim() === _ultimoAuto) { para.value = ''; _ultimoAuto = ''; }
+      if (aviso) aviso.textContent = 'Selecciona el responsable de recepción para llenar el "Para", o escribe el correo.';
+      return;
+    }
+    if (aviso) aviso.textContent = 'Buscando correos...';
+    cargarUsuarios().then(function (usuarios) {
+      var correos = [], sinCorreo = [];
+      sel.forEach(function (r) { var c = correoDe(r, usuarios || []); if (c) { if (correos.indexOf(c) < 0) correos.push(c); } else sinCorreo.push(r); });
+      para.value = correos.join(', ');
+      _ultimoAuto = para.value;
+      if (aviso) aviso.textContent = sinCorreo.length
+        ? '⚠️ Sin correo registrado para: ' + sinCorreo.join(', ') + ' — escríbelo a mano en "Para".'
+        : '';
+    });
+  }
+  window._correoActualizarPara = actualizarPara;
+  function enganchar() {
+    var s = document.getElementById('cRespMulti');
+    if (!s || s.dataset.paraV1) return;
+    s.dataset.paraV1 = '1';
+    s.addEventListener('change', actualizarPara);
+    actualizarPara();
+    /* al abrir "Enviar Reporte" se adelanta la lista de correos (asi al elegir el responsable sale al instante) */
+    var nav = document.getElementById('navCorreo');
+    if (nav) nav.addEventListener('click', function () { setTimeout(function () { cargarUsuarios(); }, 300); });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', enganchar); else enganchar();
+})();
 
 // ══════════════════ FIREBASE ESTADÍSTICAS ══════════════════
 

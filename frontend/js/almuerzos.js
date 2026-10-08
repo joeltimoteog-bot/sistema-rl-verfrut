@@ -17,7 +17,7 @@ const AZURE_DNI = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.
 
 // Destinatarios del correo de almuerzos
 const ALM_TO = 'lucia.castillo@unifrutti.com';                                  // Para:
-const ALM_CC = 'olga.vilela@unifrutti.com,jorge.chavez@unifrutti.com,joel.timoteo@unifrutti.com,eduardo.covenas@unifrutti.com';  // CC:
+const ALM_CC = 'eduardo.covenas@unifrutti.com,miguel.portocarrero@unifrutti.com,joel.timoteo@unifrutti.com';  // CC: (_CORREOS_JEFATURA_V1 08-oct)
 
 const COMEDORES = [
   'COMEDOR ADMINISTRACION',
