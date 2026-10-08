@@ -13058,15 +13058,27 @@ function _horVer(cual) {
   if (esHor) horCargarUsuarios();
 }
 
+/* _HOR_AMPM_V1 (07-oct-2026): la hora se escribe en formato de 12 h segun la PC; "11:30" sin
+   marcar p. m. quedaba como 11:30 de la MAÑANA (paso con rmolero). Ahora se muestra el horario
+   en palabras (a. m. / p. m. y cuantas horas) y se avisa si la salida parece estar en la mañana. */
+function _horTxt(h) { var m = String(h || '').match(/^(\d{1,2}):(\d{2})/); if (!m) return h || ''; var hh = +m[1], ap = hh >= 12 ? 'p. m.' : 'a. m.'; hh = hh % 12 || 12; return hh + ':' + m[2] + ' ' + ap; }
+function _horMin(h) { var m = String(h || '').match(/^(\d{1,2}):(\d{2})/); return m ? (+m[1]) * 60 + (+m[2]) : null; }
 function _horAvisarCruce() {
   var i = document.getElementById('horIni').value, f = document.getElementById('horFin').value;
   var av = document.getElementById('horCruza');
   if (!i || !f) { av.style.display = 'none'; return; }
-  if (f <= i) {
-    av.style.display = 'block';
-    av.innerHTML = 'Este horario <b>cruza la medianoche</b>: entra a las ' + i +
-                   ' y sale a las ' + f + ' <b>del día siguiente</b>. Los días marcados son los de <b>entrada</b>.';
-  } else { av.style.display = 'none'; }
+  var mi = _horMin(i), mf = _horMin(f), cruza = f <= i;
+  var dur = cruza ? (1440 - mi + mf) : (mf - mi), dh = Math.floor(dur / 60), dm = dur % 60;
+  var txt = '🕒 <b>Entra ' + _horTxt(i) + '</b> y <b>sale ' + _horTxt(f) + (cruza ? ' del día siguiente' : '') + '</b> · ' +
+            dh + ' h' + (dm ? ' ' + dm + ' min' : '') + ' de acceso.';
+  var raro = !cruza && mf < 12 * 60 && dur < 6 * 60;
+  if (raro) txt += '<br><b style="color:#b91c1c">⚠️ ¿La salida es en la NOCHE?</b> Está como ' + _horTxt(f) +
+                   ' — si querías ' + ((+f.slice(0, 2)) % 12 || 12) + ':' + f.slice(3, 5) + ' p. m., cambia la hora de salida a <b>p. m.</b>';
+  if (cruza) txt += '<br>Este horario <b>cruza la medianoche</b>. Los días marcados son los de <b>entrada</b>.';
+  av.style.display = 'block';
+  av.style.borderColor = raro ? '#fca5a5' : '';
+  av.style.background = raro ? '#fef2f2' : '';
+  av.innerHTML = txt;
 }
 
 var _horUsuariosCargados = false;
@@ -13113,7 +13125,7 @@ async function horCargarDeUsuario() {
       document.getElementById('horNota').value  = reg.nota  || '';
       _horPonerDias(reg.dias || [1,2,3,4,5,6]);
       est.innerHTML = '<span style="color:#15803d">Ya tiene horario propio: <b>' +
-                      reg.horaInicio + ' a ' + reg.horaFin + '</b>' +
+                      _horTxt(reg.horaInicio) + ' a ' + _horTxt(reg.horaFin) + '</b>' +   /* _HOR_AMPM_V1 */
                       (reg.activo ? '' : ' (INACTIVO)') + '.</span>';
     } else {
       document.getElementById('horIni').value   = '05:30';
@@ -13138,6 +13150,10 @@ async function horGuardar() {
   document.querySelectorAll('#horDias input[data-dia]').forEach(function (c) { if (c.checked) dias.push(c.getAttribute('data-dia')); });
   if (!dias.length) { est.innerHTML = '<span style="color:#b45309">Marca al menos un día.</span>'; return; }
 
+  /* _HOR_AMPM_V1: confirmar si la salida parece estar en la manana */
+  var _hi = document.getElementById('horIni').value, _hf = document.getElementById('horFin').value;
+  if (_hf > _hi && _horMin(_hf) < 12 * 60 && (_horMin(_hf) - _horMin(_hi)) < 6 * 60 &&
+      !confirm('La hora de SALIDA está en la MAÑANA: ' + _horTxt(_hf) + '.\n\nEl usuario solo podrá entrar de ' + _horTxt(_hi) + ' a ' + _horTxt(_hf) + '.\n\n¿Es correcto?\n(Si querías de noche, pulsa Cancelar y cambia la salida a p. m.)')) return;
   var txt = btn.textContent; btn.disabled = true; btn.textContent = 'Guardando…';
   est.textContent = '';
   try {
