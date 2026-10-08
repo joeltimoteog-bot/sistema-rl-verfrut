@@ -2107,14 +2107,34 @@ async function exportarCSV() {
     if (!d.data || !d.data.length) { if (fb) fb.textContent = '⚠️ Sin datos para ese rango'; return; }
 
     const rows   = d.data;
-    const header = Object.keys(rows[0]).join(',');
-    const body   = rows.map(r =>
-      Object.values(r).map(val => `"${String(val == null ? '' : val).replace(/"/g, '""')}"`).join(',')
-    ).join('\n');
-    const blob = new Blob(['\uFEFF' + header + '\n' + body], { type: 'text/csv;charset=utf-8' });
-    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: `capacitaciones_${v('expDesde')}_${v('expHasta')}.csv` });
-    a.click(); URL.revokeObjectURL(a.href);
-    if (fb) fb.textContent = `✅ ${rows.length} registros exportados`;
+    /* _CAP_EXPORT_XLSX_V1 (08-oct-2026): antes salia un .csv con comas y el Excel en
+       espanol lo mostraba todo en la columna A. Ahora sale un .xlsx real: cada dato en su
+       columna, con TODOS los encabezados (incluye los que solo tienen algunas filas,
+       p. ej. LABOR / SERVICIO). Si la libreria de Excel no cargo, CSV con ';' (Excel en espanol). */
+    const cols = [];
+    rows.forEach(r => Object.keys(r || {}).forEach(k => { if (cols.indexOf(k) < 0) cols.push(k); }));
+    const celda = val => (val == null ? '' : (typeof val === 'object' ? JSON.stringify(val) : String(val)));
+    const nombre = `capacitaciones_${v('expDesde') || 'inicio'}_${v('expHasta') || 'hoy'}`;
+    if (typeof XLSX !== 'undefined' && XLSX.utils) {
+      const aoa = [cols].concat(rows.map(r => cols.map(c => celda(r[c]))));   /* todo como texto: DNI y fechas no se deforman */
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+      ws['!cols'] = cols.map((c, i) => {
+        let w = c.length;
+        for (let k = 1; k < Math.min(aoa.length, 300); k++) w = Math.max(w, String(aoa[k][i] || '').length);
+        return { wch: Math.min(Math.max(w + 2, 8), 60) };
+      });
+      ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: aoa.length - 1, c: cols.length - 1 } }) };
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Capacitaciones');
+      XLSX.writeFile(wb, nombre + '.xlsx');
+    } else {
+      const esc = val => `"${celda(val).replace(/"/g, '""')}"`;
+      const txt = 'sep=;\n' + cols.map(esc).join(';') + '\n' + rows.map(r => cols.map(c => esc(r[c])).join(';')).join('\n');
+      const blob = new Blob(['﻿' + txt], { type: 'text/csv;charset=utf-8' });
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: nombre + '.csv' });
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }
+    if (fb) fb.textContent = `✅ ${rows.length} registros exportados (${cols.length} columnas)`;
   } catch(e) {
     if (fb) fb.textContent = '❌ Error: ' + e.message;
   }
