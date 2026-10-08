@@ -185,7 +185,11 @@ function calcular(E) {
       const inf = E.informes && E.informes[String(c.nro)];
       let fi = null, fuente = '';
       const fUrl = fechaDeUrl(c.enlace_informe);   /* hora exacta de subida del PDF (va en el nombre del archivo en Azure Blob) */
-      if (fUrl) { fi = aFecha(fUrl); fuente = 'hora de subida del archivo'; }
+      if (fUrl) {
+        fi = aFecha(fUrl); fuente = 'hora de subida del archivo';
+        /* _IND_FIX_V1 (08-oct-2026): cuenta el PRIMER informe; si se volvio a subir corregido, antes valia la fecha del ultimo */
+        if (inf && inf.fecha) { const f2 = aFecha(inf.fecha); if (f2 && fi && f2 < fi) { fi = f2; fuente = inf.fuente || 'primer registro del informe'; } }
+      }
       else if (c.enlace_informe && inf && inf.fecha) { fi = aFecha(inf.fecha); fuente = inf.fuente || ''; }
       else if (!c.enlace_informe && M.concluido(c) && c.fecha_cierre) { fi = c.fecha_cierre; fuente = 'cierre sin informe'; }
       out.push({ c, ref, base, lim5, lim3, limInt, fi, fuente, cubre: !propio, sinFecha: !!(c.enlace_informe && !fi) });
@@ -316,8 +320,14 @@ function calcular(E) {
       fechas.forEach(f => {
         if (f < desde || !enR(f)) return;
         const e = { ref: tema + ' · ' + (g.sector || ''), fecha: f, prog: g.id };
+        /* _IND_FIX_V1: programada en dias de AUSENCIA con reemplazo y no ejecutada -> no cuenta para el titular */
+        const _aus = M.AUS && M.AUS.ausencia ? M.AUS.ausencia(u, f) : null, _rmp = _aus && M.AUS.reemp(_aus);
+        if (_rmp && !ejec.has(f) && g.estado !== 'ejecutada') {
+          e.ok = null; e.detalle = 'Programada el ' + dm(f) + ' durante su ausencia (' + String(_aus.tipo || 'ausencia').toLowerCase() + '; reemplazo: ' + (_rmp.nombre || _rmp.usuario) + '). No cuenta para su KPI.';
+          ev.push(e); return;
+        }
         if (sustento) e.sustento = sustento;
-        const hecha = ejec.has(f) || g.estado === 'ejecutada';
+        const hecha = ejec.has(f) || (g.estado === 'ejecutada' && f <= hoyS);   /* _IND_FIX_V1: el estado global no da por hechas fechas futuras */
         if (hecha) {
           const tarde = !ejec.has(f) && fReg && fReg > fin;
           e.ok = !tarde;

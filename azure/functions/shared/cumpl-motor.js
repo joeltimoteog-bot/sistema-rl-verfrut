@@ -260,11 +260,18 @@ function crearMotor(D) {
     for (let j = 0; j < lista.length; j++) if (nombreMatch(usr(lista[j].nombre), k) || nombreMatch(k, usr(lista[j].nombre))) return lista[j];
     return null;
   }
+  /* _IND_FIX_V1 (08-oct-2026): el caso es del SUPERVISOR responsable. Quien lo registro cuenta SOLO si
+     el caso no tiene supervisor (o el supervisor escrito no corresponde a ningun usuario). Antes contaba
+     para los dos: si A registraba un caso de B y vencia, bajaban A y B. */
   function esDelUsuario(caso, u) {
     if (!u) return false;
     const sup = usr(caso.supervisor), reg = usr(caso.registrado_por);
-    if (reg === u.usuario || sup === u.usuario || sup === usr(u.nombre)) return true;
-    return nombreMatch(sup, usr(u.nombre)) || nombreMatch(usr(u.nombre), sup);
+    if (sup) {
+      if (sup === u.usuario || sup === usr(u.nombre)) return true;
+      if (nombreMatch(sup, usr(u.nombre)) || nombreMatch(usr(u.nombre), sup)) return true;
+      if (usuarioPor(usuarios || [], sup)) return false;   /* es de otra persona conocida */
+    }
+    return !!reg && reg === u.usuario;
   }
   function concluido(c) {
     const eg = c.estado_gestion || '', ec = String(c.estado || '').toUpperCase();
@@ -366,7 +373,7 @@ function crearMotor(D) {
     casos.forEach(c => {
       if (!concluido(c)) return;
       const base = c.fecha_reporte || c.fecha_registro; if (!base) return;
-      const fin = c.fecha_cierre; if (!fin || fin < ini) return;
+      const fin = c.fecha_cierre || c.fecha_registro; if (!fin || fin < ini) return;   /* _IND_FIX_V1: concluido al registrarlo = cerrado ese dia (antes no contaba) */
       if (!AUS.duenoEn(c, u, ymd(fin))) return;   /* _AUSENCIAS_V1: de quien era el caso el dia del cierre */
       cerrados++; sumaDias += dias(base, fin);
       const lim = sumarHabiles(base, plazoEn(cfg, 'plazo_cierre', ymd(c.fecha_registro)));   /* _PLAZO_VIGENTE_V1 */
@@ -384,7 +391,7 @@ function crearMotor(D) {
     const propio = esSupCampo(u);   /* _AUSENCIAS_V1: + semanas que cubre como reemplazo; - semanas en que estuvo ausente */
     const cobV = AUS.lista.filter(a => usr(a.reemplazo) === u.usuario && AUS.reemp(a) && esSupCampo(AUS.titular(a)));
     const lv = (propio || cobV.length) ? visitas : null;
-    let d = copia(ini); while (d.getUTCDay() !== 1) d = sumar(d, 1);
+    let d = copia(ini); while (d.getUTCDay() !== 1) d = sumar(d, -1);   /* _IND_FIX_V1: semana del dia 1 (su domingo cae en este mes); antes se saltaba la semana que cruza dos meses */
     primerLunesV = copia(d);
     if (lv) {
       for (; ; d = sumar(d, 7)) {
@@ -406,8 +413,8 @@ function crearMotor(D) {
       }
     }
     const denom = cerrados + vencidos + semanas;
-    const pct = denom ? Math.round(100 * (enPlazo + visEnPlazo) / denom) : 100;   /* _VISITA_PLAZO_V1 */
-    const nivel = pct >= cfg.excelente ? 'EXCELENTE' : pct >= cfg.regular ? 'REGULAR' : 'BAJO';
+    const pct = denom ? Math.round(100 * (enPlazo + visEnPlazo) / denom) : null;   /* _VISITA_PLAZO_V1 · _IND_FIX_V1: sin actividad = SIN DATOS (antes 100%) */
+    const nivel = pct === null ? 'SIN DATOS' : pct >= cfg.excelente ? 'EXCELENTE' : pct >= cfg.regular ? 'REGULAR' : 'BAJO';
     const extraVis = (visitasPend && !(visitasPend.dias_retraso > 0 && primerLunesV && (function () { const l0 = parse(visitasPend.fecha_registro); if (!l0) return false; return sumar(l0, -7) >= primerLunesV; })())) ? 1 : 0;
     return {
       mes: MESES[m] + ' ' + y, porcentaje: pct, nivel,
@@ -486,7 +493,8 @@ function crearMotor(D) {
       if (cob.length) fila.cubriendo = cob.map(a => ({ nombre: AUS.titular(a).nombre, tipo: a.tipo, desde: a.desde, hasta: a.hasta || '' }));
       filas.push(fila);
     });
-    filas.sort((a, b2) => (b2.criticos - a.criticos) || (b2.vencidos - a.vencidos) || (a.porcentaje - b2.porcentaje));
+    const _pS = x => (x === null || x === undefined ? 101 : x);   /* _IND_FIX_V1: SIN DATOS al final */
+    filas.sort((a, b2) => (b2.criticos - a.criticos) || (b2.vencidos - a.vencidos) || (_pS(a.porcentaje) - _pS(b2.porcentaje)));
     detalle.sort(ordenar);
     return { success: true, hoy: ymd(hoy), supervisores: filas, actividades: detalle, config: cfg.raw };
   }

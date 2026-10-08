@@ -67,8 +67,10 @@ function crear(D) {
       const filasHdr = D.hdr.slice(1).filter(r => r[0]);
       const filasBdd = D.bbdd.slice(1).filter(r => r[0]);
       const L = limaYM(), mesAct = ym(L.y, L.m);
-      const esteMes = filasHdr.filter(r => T(r[8] || '').substring(0, 7) === mesAct);
-      const asistentesEsteMes = filasBdd.filter(r => T(r[5] || '').substring(0, 7) === mesAct).length;
+      /* _IND_FIX_V1 (08-oct-2026): la fecha llega como celda {$d,$s} ('Thu Oct 02 2026 ...'): T() nunca daba 'aaaa-mm' y el mes salia en 0 */
+      const mesDe = v => capFecha_(v || '').substring(0, 7);
+      const esteMes = filasHdr.filter(r => mesDe(r[8]) === mesAct);
+      const asistentesEsteMes = filasBdd.filter(r => mesDe(r[5]) === mesAct).length;
       const porEmpresa = { RAPEL: 0, VERFRUT: 0 };
       filasBdd.forEach(r => { const e = T(r[2] || '').toUpperCase(); if (e.indexOf('RAPEL') !== -1) porEmpresa.RAPEL++; else if (e.indexOf('VERFRUT') !== -1) porEmpresa.VERFRUT++; });
       const porSup = {};
@@ -81,7 +83,7 @@ function crear(D) {
         .map(u => ({ usuario: u, nombre: porSup[u].nombre, capacitaciones: porSup[u].capacitaciones, asistentes: porSup[u].asistentes }));
       const tm = {};
       for (let i = 5; i >= 0; i--) tm[ym(L.y, L.m - i)] = { capacitaciones: 0, asistentes: 0 };
-      filasHdr.forEach(r => { const f = T(r[8] || '').substring(0, 7); if (tm[f]) { tm[f].capacitaciones++; tm[f].asistentes += pInt(r[16]) || 0; } });
+      filasHdr.forEach(r => { const f = mesDe(r[8]); if (tm[f]) { tm[f].capacitaciones++; tm[f].asistentes += pInt(r[16]) || 0; } });
       const tendencia = Object.keys(tm).map(mes => ({ mes, capacitaciones: tm[mes].capacitaciones, asistentes: tm[mes].asistentes }));
       const porTema = {};
       filasHdr.forEach(r => { const t = T(r[4] || 'Sin especificar').substring(0, 60); porTema[t] = (porTema[t] || 0) + 1; });

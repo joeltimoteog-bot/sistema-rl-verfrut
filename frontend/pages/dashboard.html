@@ -14057,8 +14057,9 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
 function pintarIndice() {
   if (!D.data || D.data.esAdmin || !D.data.indice) return;
   var ix = D.data.indice, cfg = D.data.config;
-  var col = ix.nivel === 'EXCELENTE' ? '#16a34a' : ix.nivel === 'REGULAR' ? '#d97706' : '#dc2626';
-  var ico = ix.nivel === 'EXCELENTE' ? '🟢 Excelente cumplimiento' : ix.nivel === 'REGULAR' ? '🟡 Cumplimiento regular' : '🔴 Cumplimiento bajo';
+  var _sd = ix.porcentaje === null || ix.porcentaje === undefined || ix.nivel === 'SIN DATOS';   /* _IND_FIX_V1: aun sin nada que evaluar este mes */
+  var col = _sd ? '#64748b' : ix.nivel === 'EXCELENTE' ? '#16a34a' : ix.nivel === 'REGULAR' ? '#d97706' : '#dc2626';
+  var ico = _sd ? '⚪ Sin datos aún este mes' : ix.nivel === 'EXCELENTE' ? '🟢 Excelente cumplimiento' : ix.nivel === 'REGULAR' ? '🟡 Cumplimiento regular' : '🔴 Cumplimiento bajo';
   var host = document.getElementById('cumplIndiceCard');
   if (!host) {
     var sec = document.getElementById('sec-dashboard'); if (!sec) return;
@@ -14068,8 +14069,8 @@ function pintarIndice() {
   }
   var kpi = function (n, l) { return '<div class="cumpl-kpi"><div class="n">' + n + '</div><div class="l">' + l + '</div></div>'; };
   host.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px">' +
-    '<div><div style="font-size:11px;font-weight:800;letter-spacing:.6px;color:#64748b;text-transform:uppercase">Índice de Cumplimiento · ' + esc(ix.mes) + '</div><div style="font-size:34px;font-weight:900;color:' + col + ';line-height:1.1">' + ix.porcentaje + '%</div><div style="font-size:12.5px;font-weight:700;color:' + col + '">' + ico + '</div></div>' +
-    '<div style="flex:1;min-width:180px;max-width:360px"><div style="height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden"><div style="height:100%;width:' + ix.porcentaje + '%;background:' + col + ';transition:width .8s"></div></div><div style="font-size:10.5px;color:#64748b;margin-top:4px">Excelente ≥ ' + cfg.excelente + '% · Regular ≥ ' + cfg.regular + '%</div></div>' +
+    '<div><div style="font-size:11px;font-weight:800;letter-spacing:.6px;color:#64748b;text-transform:uppercase">Índice de Cumplimiento · ' + esc(ix.mes) + '</div><div style="font-size:34px;font-weight:900;color:' + col + ';line-height:1.1">' + (_sd ? '—' : ix.porcentaje + '%') + '</div><div style="font-size:12.5px;font-weight:700;color:' + col + '">' + ico + '</div></div>' +
+    '<div style="flex:1;min-width:180px;max-width:360px"><div style="height:10px;background:#e2e8f0;border-radius:6px;overflow:hidden"><div style="height:100%;width:' + (_sd ? 0 : ix.porcentaje) + '%;background:' + col + ';transition:width .8s"></div></div><div style="font-size:10.5px;color:#64748b;margin-top:4px">Excelente ≥ ' + cfg.excelente + '% · Regular ≥ ' + cfg.regular + '%</div></div>' +
     '<button class="cumpl-btn" onclick="document.getElementById(\'cumplBell\').click()">VER MIS PENDIENTES</button></div>' +
     '<div style="display:flex;gap:10px;flex-wrap:wrap">' + kpi(ix.visitas_programadas, 'Visitas programadas') + kpi(ix.visitas_realizadas, 'Visitas realizadas') + (ix.visitas_fuera_plazo ? kpi(ix.visitas_fuera_plazo, 'Visitas subidas tarde') : '') + kpi(ix.visitas_pendientes, 'Visitas pendientes')   /* _VISITA_PLAZO_V1 */  +
     kpi(ix.casos_asignados, 'Casos del mes') + kpi(ix.casos_en_plazo, 'Cerrados en plazo') + kpi(ix.casos_fuera_plazo, 'Cerrados fuera de plazo') + kpi(ix.casos_vencidos, 'Casos vencidos') +
@@ -14127,12 +14128,13 @@ function pintarAdmin() {
       '<select class="cumpl-sel" id="cfSup"><option value="">Todos los supervisores</option>' + P.supervisores.map(function (s) { return '<option value="' + esc(s.usuario) + '"' + (f.sup === s.usuario ? ' selected' : '') + '>' + esc(s.nombre) + '</option>'; }).join('') + '</select>' +
       '<select class="cumpl-sel" id="cfSector"><option value="">Todos los sectores</option>' + Object.keys(sectores).sort().map(function (s) { return '<option' + (f.sector === s ? ' selected' : '') + '>' + esc(s) + '</option>'; }).join('') + '</select>' +
       '<select class="cumpl-sel" id="cfEst"><option value="">Cualquier estado</option><option value="porvencer"' + (f.est === 'porvencer' ? ' selected' : '') + '>Con actividades por vencer</option><option value="vencido"' + (f.est === 'vencido' ? ' selected' : '') + '>Con vencidos</option><option value="critico"' + (f.est === 'critico' ? ' selected' : '') + '>Con incumplimiento crítico</option></select>' +
-      '<select class="cumpl-sel" id="cfNivel"><option value="">Cualquier nivel</option>' + ['EXCELENTE', 'REGULAR', 'BAJO'].map(function (n) { return '<option' + (f.nivel === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></div>' +
+      '<select class="cumpl-sel" id="cfNivel"><option value="">Cualquier nivel</option>' + ['EXCELENTE', 'REGULAR', 'BAJO', 'SIN DATOS'].map(function (n) { return '<option' + (f.nivel === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></div>' +
       '<div style="overflow:auto"><table class="cumpl-tb"><thead><tr><th>Supervisor</th><th>Sector</th><th style="text-align:right">Visitas pend.</th><th style="text-align:right">Casos</th><th style="text-align:right">En plazo</th><th style="text-align:right">Por vencer</th><th style="text-align:right">Vencidos</th><th style="text-align:right">% Cumplimiento</th><th>Restricción</th></tr></thead><tbody>' +
       (filas.length ? filas.map(function (s) {
-        var col = s.nivel === 'EXCELENTE' ? '#16a34a' : s.nivel === 'REGULAR' ? '#d97706' : '#dc2626';
+        var _sd = s.porcentaje === null || s.porcentaje === undefined || s.nivel === 'SIN DATOS';   /* _IND_FIX_V1 */
+        var col = _sd ? '#94a3b8' : s.nivel === 'EXCELENTE' ? '#16a34a' : s.nivel === 'REGULAR' ? '#d97706' : '#dc2626';
         return '<tr><td><b>' + esc(s.nombre) + '</b><br><span style="color:#64748b;font-size:10.5px">' + esc(s.empresa) + '</span>' + _ausInsignias(s) + '</td><td>' + esc(s.sector) + '</td><td style="text-align:right">' + s.visitas_pendientes + '</td><td style="text-align:right">' + s.casos_abiertos + '</td><td style="text-align:right;color:#16a34a;font-weight:700">' + s.en_plazo + '</td><td style="text-align:right;color:#d97706;font-weight:700">' + s.por_vencer + '</td><td style="text-align:right;color:#dc2626;font-weight:800">' + s.vencidos + (s.criticos ? ' <span title="críticos">⚫' + s.criticos + '</span>' : '') + '</td>' +
-          '<td style="text-align:right"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div style="width:70px;height:7px;background:#eef2f6;border-radius:5px;overflow:hidden"><div style="height:100%;width:' + s.porcentaje + '%;background:' + col + '"></div></div><b style="color:' + col + '">' + s.porcentaje + '%</b></div></td>' +
+          '<td style="text-align:right"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div style="width:70px;height:7px;background:#eef2f6;border-radius:5px;overflow:hidden"><div style="height:100%;width:' + (_sd ? 0 : s.porcentaje) + '%;background:' + col + '"></div></div><b style="color:' + col + '" title="' + (_sd ? 'Aún sin casos ni semanas de visita que evaluar este mes' : '') + '">' + (_sd ? 'Sin datos' : s.porcentaje + '%') + '</b></div></td>' +
           '<td>' + (s.restriccion ? '<span class="cumpl-bd" style="background:#fee2e2;color:#7f1d1d">⛔ ACTIVA</span> <button class="cumpl-btn gris" style="margin:0;padding:3px 8px" onclick="_cumplLevantar(\'' + esc(s.usuario) + '\',\'' + esc(s.nombre) + '\')">Levantar</button>' : s.exonerado_hasta ? '<span style="font-size:10.5px;color:#64748b">levantada hasta ' + dmy(s.exonerado_hasta) + '</span>' : '—') + '</td></tr>';
       }).join('') : '<tr><td colspan="9" style="text-align:center;color:#64748b;padding:14px">Sin supervisores para ese filtro</td></tr>') + '</tbody></table></div>';
     ['cfSup', 'cfSector', 'cfEst', 'cfNivel'].forEach(function (id) { var el = document.getElementById(id); if (el) el.onchange = function () { D.f = { sup: document.getElementById('cfSup').value, sector: document.getElementById('cfSector').value, est: document.getElementById('cfEst').value, nivel: document.getElementById('cfNivel').value }; pintarAdmin(); }; });
@@ -15817,8 +15819,8 @@ async function misDatos(foco) {
         });
       }
       if ((foco === 'todo' || foco === 'indice') && c.indice) {
-        var i = c.indice, ic = i.nivel === 'EXCELENTE' ? '🟢' : i.nivel === 'REGULAR' ? '🟡' : '🔴';
-        partes.push('📈 Tu índice de cumplimiento (' + (i.mes || 'este mes') + '): ' + ic + ' ' + i.porcentaje + '% — ' + i.nivel + '\n' +
+        var i = c.indice, _sdI = i.porcentaje === null || i.porcentaje === undefined, ic = _sdI ? '⚪' : i.nivel === 'EXCELENTE' ? '🟢' : i.nivel === 'REGULAR' ? '🟡' : '🔴';   /* _IND_FIX_V1 */
+        partes.push('📈 Tu índice de cumplimiento (' + (i.mes || 'este mes') + '): ' + ic + ' ' + (_sdI ? 'sin datos aún' : i.porcentaje + '% — ' + i.nivel) + '\n' +
           '• Visitas: ' + (i.visitas_realizadas || 0) + ' de ' + (i.visitas_programadas || 0) + ' realizadas' +
           ((i.visitas_pendientes || 0) ? ' (' + i.visitas_pendientes + ' pendiente/s)' : '') + '\n' +
           '• Casos abiertos: ' + (i.casos_abiertos || 0) + (i.casos_vencidos ? '  · vencidos: ' + i.casos_vencidos : '') +

@@ -90,7 +90,7 @@ async function insertarLotes(tx, tabla, cols, filas) {
 async function sincronizar(pool, fetchFn) {
   await asegurarTablas(pool);
   const [pEti, pEval, regs, usus, sups] = await Promise.all([
-    coleccion('programaciones_eti', fetchFn), coleccion('programaciones_eval', fetchFn).catch(() => []), coleccion('capacitaciones', fetchFn),
+    coleccion('programaciones_eti', fetchFn), coleccion('programaciones_eval', fetchFn)   /* _IND_FIX_V1 (08-oct-2026): antes .catch(() => []): si fallaba la lectura se BORRABAN las programaciones de checklist y el K3 subia; ahora se aborta y queda lo de la vuelta anterior */, coleccion('capacitaciones', fetchFn),
     coleccion('usuarios_eti', fetchFn), coleccion('supervisores_eti', fetchFn)]);
   const P = [];
   pEti.forEach(d => P.push(['eti', d])); pEval.forEach(d => P.push(['eval', d]));
