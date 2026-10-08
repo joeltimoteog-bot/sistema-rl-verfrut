@@ -137,7 +137,7 @@ async function sincronizar(pool, fetchFn) {
 async function leer(pool) {
   await asegurarTablas(pool);
   const p = (await pool.request().query('SELECT * FROM dbo.ETI_Programaciones')).recordset;
-  const r = (await pool.request().query('SELECT id, supervisor, sector, tema, CONVERT(CHAR(10), fecha_ejecucion, 120) AS fecha_ejecucion, CONVERT(CHAR(10), fecha_envio, 120) AS fecha_envio, CONVERT(CHAR(10), fecha_limite, 120) AS fecha_limite FROM dbo.ETI_Registros')).recordset;   /* _IND_COMPL_V1: + datos del acta */
+  const r = (await pool.request().query('SELECT id, CONVERT(CHAR(10), fecha_ejecucion, 120) AS fecha_ejecucion FROM dbo.ETI_Registros')).recordset;
   const J = (s, d) => { try { return JSON.parse(s || ''); } catch (e) { return d; } };
   const registros = {}; r.forEach(x => { registros[x.id] = { fecha_ejecucion: x.fecha_ejecucion }; });
   const usuarios = {}; (await pool.request().query('SELECT usuario, nombre, estado FROM dbo.ETI_Usuarios')).recordset
@@ -146,8 +146,7 @@ async function leer(pool) {
   return { programaciones: p.map(x => ({ id: x.id, origen: x.origen, supervisor: x.supervisor, sector: x.sector, tema: x.tema,
     fechas: J(x.fechas, []), fechas_ejecutadas: J(x.fechas_ejecutadas, []), estado: x.estado, registro_id: x.registro_id,
     ejecutada_en: x.ejecutada_en, veces_reprog: x.veces_reprog, reprogramaciones: J(x.reprogramaciones, []), solicitudes: J(x.solicitudes, []) })),
-    registros, usuarios, supervisores,
-    actas: r.map(x => ({ id: x.id, supervisor: x.supervisor, sector: x.sector, tema: x.tema, ejecucion: x.fecha_ejecucion, envio: x.fecha_envio, limite: x.fecha_limite })) };   /* _IND_COMPL_V1 */
+    registros, usuarios, supervisores };
 }
 
 module.exports = { asegurarTablas, sincronizar, leer, _t: { val, doc, coleccion } };

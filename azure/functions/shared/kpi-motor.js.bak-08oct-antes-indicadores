@@ -159,9 +159,8 @@ function calcular(E) {
     const enlace = { rrll: !!uSis, rrll_nombre: uSis ? uSis.nombre : '', eti_cuenta: !!cEti, eti_activa: !!etiNombre, eti_nombre: cEti ? cEti.nombre : '',
       eti_sectores: ((E.eti && E.eti.supervisores) || []).filter(x => etiNombre ? normN(x.nombre) === normN(etiNombre) : esPersona(x.nombre, p, u.nombre)).map(x => x.sector || ''),
       programaciones: progsP.length, aplica_eti: p.tipo === 'SUP' };
-    const complementarios = p.tipo === 'SUP' ? compl(p, u, desde, etiNombre) : [];   /* _IND_COMPL_V1: informativos, NO suman a la nota */
     return { usuario: u.usuario, nombre: p.nombre, empresa: p.empresa, tipo: p.tipo, puesto: p.puesto, dni: p.dni, ingreso: p.ingreso,
-      desde, ausencias, usuario_encontrado: !!uSis, enlace, kpis, complementarios, nota: sw ? Math.round(sp / sw * 100) / 100 : null, peso_evaluado: Math.round(sw * 100) / 100,
+      desde, ausencias, usuario_encontrado: !!uSis, enlace, kpis, nota: sw ? Math.round(sp / sw * 100) / 100 : null, peso_evaluado: Math.round(sw * 100) / 100,
       cumpl: cw ? Math.round(cp / cw * 1000) / 1000 : null, sectores: enlace.eti_sectores.length ? enlace.eti_sectores : [p.tipo === 'ASIST' ? 'COORDINACIÓN RR.LL.' : 'SIN SECTOR'] };
   });
   return { hoy: hoyS, periodo: PERIODO, rango: R, personas: salida, avisos };
@@ -186,11 +185,7 @@ function calcular(E) {
       const inf = E.informes && E.informes[String(c.nro)];
       let fi = null, fuente = '';
       const fUrl = fechaDeUrl(c.enlace_informe);   /* hora exacta de subida del PDF (va en el nombre del archivo en Azure Blob) */
-      if (fUrl) {
-        fi = aFecha(fUrl); fuente = 'hora de subida del archivo';
-        /* _IND_FIX_V1 (08-oct-2026): cuenta el PRIMER informe; si se volvio a subir corregido, antes valia la fecha del ultimo */
-        if (inf && inf.fecha) { const f2 = aFecha(inf.fecha); if (f2 && fi && f2 < fi) { fi = f2; fuente = inf.fuente || 'primer registro del informe'; } }
-      }
+      if (fUrl) { fi = aFecha(fUrl); fuente = 'hora de subida del archivo'; }
       else if (c.enlace_informe && inf && inf.fecha) { fi = aFecha(inf.fecha); fuente = inf.fuente || ''; }
       else if (!c.enlace_informe && M.concluido(c) && c.fecha_cierre) { fi = c.fecha_cierre; fuente = 'cierre sin informe'; }
       out.push({ c, ref, base, lim5, lim3, limInt, fi, fuente, cubre: !propio, sinFecha: !!(c.enlace_informe && !fi) });
@@ -321,14 +316,8 @@ function calcular(E) {
       fechas.forEach(f => {
         if (f < desde || !enR(f)) return;
         const e = { ref: tema + ' · ' + (g.sector || ''), fecha: f, prog: g.id };
-        /* _IND_FIX_V1: programada en dias de AUSENCIA con reemplazo y no ejecutada -> no cuenta para el titular */
-        const _aus = M.AUS && M.AUS.ausencia ? M.AUS.ausencia(u, f) : null, _rmp = _aus && M.AUS.reemp(_aus);
-        if (_rmp && !ejec.has(f) && g.estado !== 'ejecutada') {
-          e.ok = null; e.detalle = 'Programada el ' + dm(f) + ' durante su ausencia (' + String(_aus.tipo || 'ausencia').toLowerCase() + '; reemplazo: ' + (_rmp.nombre || _rmp.usuario) + '). No cuenta para su KPI.';
-          ev.push(e); return;
-        }
         if (sustento) e.sustento = sustento;
-        const hecha = ejec.has(f) || (g.estado === 'ejecutada' && f <= hoyS);   /* _IND_FIX_V1: el estado global no da por hechas fechas futuras */
+        const hecha = ejec.has(f) || g.estado === 'ejecutada';
         if (hecha) {
           const tarde = !ejec.has(f) && fReg && fReg > fin;
           e.ok = !tarde;
@@ -359,71 +348,6 @@ function calcular(E) {
     return { estado: den ? 'ok' : 'sin_datos', num, den, evidencia: ev };
   }
 
-  /* ═════ _IND_COMPL_V1 (08-oct-2026) — INDICADORES COMPLEMENTARIOS (decision de Joel) ═════
-     Se muestran por supervisor pero NO suman a la nota oficial (sus pesos los define la gerencia).
-     C1 Actas ETI: acta enviada hasta su fecha limite (o 3 dias habiles despues de la ejecucion).
-     C2 Evaluaciones checklist: grupos evaluados con resultado >= 60% (APROBADO).
-     C3 Evaluacion 360: puntaje promedio del supervisor en los periodos del rango.
-     C4 Capacitaciones registradas: cuantas registro en el sistema y a cuantas personas (dato, sin meta). */
-  function compl(p, u, desde, etiNombre) {
-    const X = E.compl || {}, out = [];
-    const base = (codigo, corto, unidad, texto) => ({ codigo, corto, unidad, texto, informativo: true, peso: 0 });
-    /* C1 actas */
-    (function () {
-      const o = base('C1', 'Actas ETI a tiempo', 'actas', 'Enviar el acta de cada capacitación ETI ejecutada dentro de su plazo (fecha límite o 3 días hábiles después de la ejecución).');
-      const L = ((E.eti && E.eti.actas) || []).filter(a => a.ejecucion && a.ejecucion >= desde && enR(a.ejecucion) && esPersonaEti(a.supervisor, p, u.nombre, etiNombre));
-      const ev = []; let num = 0, den = 0;
-      L.forEach(a => {
-        const lim = a.limite || ymd(M.sumarHabiles(aFecha(a.ejecucion), 3));
-        const e = { ref: (a.tema || 'Capacitación ETI') + ' · ' + (a.sector || ''), fecha: a.ejecucion };
-        if (a.envio) { den++; e.ok = a.envio <= lim; if (e.ok) num++; e.detalle = 'Ejecutada el ' + dm(a.ejecucion) + ' · acta enviada el ' + dm(a.envio) + (e.ok ? ' (a tiempo)' : ' · fuera de plazo (límite ' + dm(lim) + ')'); }
-        else if (lim < hoyS) { den++; e.ok = false; e.detalle = 'Ejecutada el ' + dm(a.ejecucion) + ' · acta SIN ENVIAR (límite ' + dm(lim) + ')'; }
-        else { e.ok = null; e.pendiente = true; e.detalle = 'Ejecutada el ' + dm(a.ejecucion) + ' · acta por enviar hasta el ' + dm(lim); }
-        ev.push(e);
-      });
-      out.push(Object.assign(o, { estado: den ? 'ok' : 'sin_datos', num, den, pct: den ? num / den : null, evidencia: ev.sort((x, y) => String(x.fecha).localeCompare(String(y.fecha))) }));
-    })();
-    /* C2 evaluaciones checklist */
-    (function () {
-      const o = base('C2', 'Evaluaciones checklist', 'grupos evaluados', 'Grupos evaluados en el checklist ETI con resultado de 60% o más (APROBADO). Bajo 60% = REFUERZO.');
-      if (!X.evaluaciones) { out.push(Object.assign(o, { estado: 'sin_datos', num: 0, den: 0, evidencia: [], nota_def: 'Aún no hay evaluaciones registradas en Azure.' })); return; }
-      const vistos = {}, ev = []; let num = 0, den = 0;
-      X.evaluaciones.filter(x => x.fecha && x.fecha >= desde && enR(x.fecha) && (usr(x.usuario) === u.usuario || esPersona(x.supervisor, p, u.nombre)))
-        .forEach(x => {   /* un mismo grupo (fecha+ruta+codigo) cuenta una vez: vale la ultima evaluacion */
-          const k = x.fecha + '|' + usr(x.ruta) + '|' + usr(x.codigo) + '|' + usr(x.sector); vistos[k] = x; });
-      Object.keys(vistos).forEach(k => {
-        const x = vistos[k], r = Number(x.resultado) || 0, ok = String(x.estado || '').toUpperCase() === 'APROBADO' || r >= 0.6;
-        den++; if (ok) num++;
-        ev.push({ ref: (x.sector || '') + (x.ruta ? ' · ruta ' + x.ruta : '') + (x.codigo ? ' · ' + x.codigo : ''), fecha: x.fecha, ok,
-          detalle: Math.round(r * 100) + '% · ' + (ok ? 'APROBADO' : 'REFUERZO') + (x.evaluados ? ' · ' + x.evaluados + ' evaluado(s)' : '') });
-      });
-      out.push(Object.assign(o, { estado: den ? 'ok' : 'sin_datos', num, den, pct: den ? num / den : null, evidencia: ev.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha))) }));
-    })();
-    /* C3 evaluacion 360 */
-    (function () {
-      const o = base('C3', 'Evaluación 360', 'puntaje', 'Puntaje promedio obtenido en la Evaluación 360 en los periodos del rango.');
-      if (!X.e360) { out.push(Object.assign(o, { estado: 'sin_datos', num: 0, den: 0, evidencia: [], nota_def: 'Aún no hay evaluaciones 360 en Azure.' })); return; }
-      const m0 = R.desde.slice(0, 7), m1 = R.hasta.slice(0, 7);
-      const L = X.e360.filter(x => x.periodo >= m0 && x.periodo <= m1 && esPersona(x.supervisor, p, u.nombre) && !isNaN(x.porcentaje));
-      if (!L.length) { out.push(Object.assign(o, { estado: 'sin_datos', num: 0, den: 0, evidencia: [] })); return; }
-      const pc = v => (v <= 1 ? v * 100 : v);
-      const prom = L.reduce((s, x) => s + pc(x.porcentaje), 0) / L.length;
-      out.push(Object.assign(o, { estado: 'ok', num: Math.round(prom), den: 100, pct: prom / 100,
-        evidencia: L.map(x => ({ ref: 'Periodo ' + x.periodo, fecha: x.periodo + '-01', ok: pc(x.porcentaje) >= 70, detalle: Math.round(pc(x.porcentaje)) + '%' + (x.nivel ? ' · ' + x.nivel : '') })) }));
-    })();
-    /* C4 capacitaciones registradas (dato) */
-    (function () {
-      const o = base('C4', 'Capacitaciones registradas', 'capacitaciones', 'Capacitaciones registradas en el Sistema RR.LL. (módulo Capacitaciones) con fecha dentro del rango, y personas capacitadas.');
-      if (!X.capacitaciones) { out.push(Object.assign(o, { estado: 'sin_datos', num: 0, den: 0, evidencia: [] })); return; }
-      const L = X.capacitaciones.filter(x => x.creada_por === u.usuario && x.fecha && x.fecha >= desde && enR(x.fecha));
-      const pers = L.reduce((s, x) => s + x.asistentes, 0);
-      out.push(Object.assign(o, { estado: L.length ? 'dato' : 'sin_datos', num: L.length, den: 0, pct: null, personas: pers,
-        nota_def: L.length + ' capacitación(es) registradas · ' + pers + ' persona(s) capacitadas (sin meta: es un dato informativo).',
-        evidencia: L.sort((a, b) => a.fecha.localeCompare(b.fecha)).map(x => ({ ref: String(x.tema || '').slice(0, 70), fecha: x.fecha, ok: true, detalle: x.asistentes + ' persona(s) · ' + (x.empresa || '') })) }));
-    })();
-    return out;
-  }
-
   function k4(p) {
     const n = E.notas && E.notas[usr(p.usuario)];
     if (n && n.nota !== null && n.nota !== undefined && n.nota !== '') {
@@ -446,13 +370,13 @@ function calcular(E) {
     ats.forEach(a => {
       const f = String(a.fecha_atencion).slice(0, 10), est = String(a.estado || '').toUpperCase();
       if (!enR(f)) return;
-      if (est.indexOf('FINALIZ') === 0 || est.indexOf('DERIV') === 0 || est.indexOf('ATENDID') === 0 || est.indexOf('ENVIAD') === 0) { num++; den++; return; }   /* _IND_ENVIADO_V1: ENVIADO = atendido (decision de Joel, 08-oct) */
+      if (est.indexOf('FINALIZ') === 0 || est.indexOf('DERIV') === 0 || est.indexOf('ATENDID') === 0) { num++; den++; return; }
       const d = M.habilesEntre(aFecha(f), hoy);
       if (d > DIAS_CONSULTA) { den++; ev.push({ ref: 'Atención N° ' + a.nro + ' (' + a.anio + ')', fecha: f, trabajador: a.nombre, ok: false,
         detalle: 'Sigue "' + (a.estado || 'EN PROCESO') + '" desde el ' + dm(f) + ' (' + d + ' días hábiles)' }); }
       else pend++;
     });
-    if (den) ev.unshift({ ref: 'Consultas atendidas o derivadas', ok: true, resumen: true, detalle: num + ' de ' + den + ' consultas cerradas (FINALIZADO / ENVIADO / derivadas).' });
+    if (den) ev.unshift({ ref: 'Consultas atendidas o derivadas', ok: true, resumen: true, detalle: num + ' de ' + den + ' consultas cerradas (FINALIZADO / derivadas).' });
     if (pend) ev.push({ ref: 'Consultas recientes', ok: null, resumen: true, detalle: pend + ' consulta(s) en proceso dentro de los ' + DIAS_CONSULTA + ' días hábiles: aún no cuentan.' });
     return { estado: den ? 'ok' : 'sin_datos', num, den, evidencia: ev };
   }

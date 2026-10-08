@@ -530,11 +530,11 @@ with sync_playwright() as pw:
         window._atFiltradas = [{nro: 1, dni: '11111111'}]; exportarAtenciones(); window._consultaDNIResultados = [{nro: 1}]; exportarConsultaDNI(); window.exportarExcelGen = orig; return cap; }""")
     at = r[0] if r else ''; cd = r[1] if len(r) > 1 else ''
     faltan = [k for k in ['nro','fecha_atencion','hora_inicio','hora_termino','nro_semana','mes','anio','dni','nombre','sexo','fecha_inicio_periodo','empresa','fundo','cargo','ruta','codigo','fundo_actual','celular','supervisor','detalle_documento','fecha_inicio_doc','fecha_termino_doc','dias_transcurridos','responsable_recepcion','observaciones','estado','fecha_registro','usuario_sistema','nro_licencia','parentesco'] if k not in at.split(':')[-1].split('|') or k not in cd.split(':')[-1].split('|')]
-    ok('Excel de Mis Atenciones y de Consulta por DNI llevan TODAS las columnas (32 / 33 con cumpleaños)', at.startswith('Atenciones:32:') and cd.startswith('ConsultaDNI:33:') and not faltan, at[:40] + ' | ' + cd[:40] + ' | faltan: ' + ','.join(faltan))
+    ok('Excel de Mis Atenciones y de Consulta por DNI llevan TODAS las columnas (33 / 34 con cumpleaños; + Tipo de Licencia)', at.startswith('Atenciones:33:') and cd.startswith('ConsultaDNI:34:') and 'tipo_licencia' in at and not faltan, at[:40] + ' | ' + cd[:40] + ' | faltan: ' + ','.join(faltan))
     pag.evaluate("() => { document.getElementById('cDNI').value = '11111111'; }")
     pag.evaluate("async () => { await consultarDNI(); }"); pag.wait_for_timeout(800)
     r = pag.evaluate("() => { const t = document.querySelector('#consultaResult table'); if (!t) return 'sin tabla: ' + document.getElementById('consultaResult').innerText.slice(0, 120); return t.querySelectorAll('thead th').length + ':' + t.querySelectorAll('tbody tr').length + ':' + (t.querySelector('tbody tr') ? t.querySelector('tbody tr').children.length : 0) + ':' + Array.from(t.querySelectorAll('thead th')).map(x => x.textContent).slice(0, 6).join('|'); }")
-    ok('Consulta por DNI: la tabla muestra TODAS las columnas (33) en cada fila', re.match(r'^33:[1-9]\d*:33:', str(r)) is not None, str(r))
+    ok('Consulta por DNI: la tabla muestra TODAS las columnas (34) en cada fila', re.match(r'^34:[1-9]\d*:34:', str(r)) is not None, str(r))   # _AT_TIPO_LIC_V1: + Tipo de Licencia
     # ── _CAPAS_V1: 'Eliminar caso' se abre ENCIMA del formulario del caso · _PROGRESO_V1: circulo y ✓ ──
     pag.evaluate("() => { const n = document.getElementById('rlNovOv'); if (n) n.remove(); }")
     pag.wait_for_function("() => { const c = document.getElementById('rlProg'); return !c || c.style.display !== 'flex'; }", timeout=8000)

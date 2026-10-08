@@ -82,7 +82,7 @@ function armar(agg, q) {
   B.forEach(r => {
     const n = Number(r.n) || 0, e = nrm(r.estado);
     g.total += n; g.hoy += Number(r.hoy) || 0; g.este_mes += Number(r.este_mes) || 0; g.este_anio += Number(r.este_anio) || 0;
-    if (e === 'EN PROCESO') g.en_proceso += n; else if (e === 'FINALIZADO' || e === 'ENVIADO') g.finalizados += n;   /* _IND_ENVIADO_V1: ENVIADO = atendido */
+    if (e === 'EN PROCESO') g.en_proceso += n; else if (e === 'FINALIZADO') g.finalizados += n;
   });
   const mesMap = new Map(), anioMap = new Map();
   B.forEach(r => {

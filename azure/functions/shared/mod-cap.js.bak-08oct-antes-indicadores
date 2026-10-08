@@ -1,0 +1,176 @@
+/* _MOD_AZURE_V1 — CAPACITACIONES: copia fiel de capListar y capEstadisticas (Apps Script).
+   D.hdr / D.bbdd = hojas CAPACITACIONES_HDR y BD_Capacitaciones completas (con encabezado).
+   Las celdas con fecha llegan como { $d: ISO, $s: texto }: $s es exactamente lo que da
+   String(fecha) en Google (asi las comparaciones de texto dan lo mismo) y $d es lo que
+   Google devuelve a la pantalla en el JSON. El export sigue por Google. */
+'use strict';
+const esD = (v) => !!(v && typeof v === 'object' && typeof v.$d === 'string');
+const T = (v) => esD(v) ? v.$s : String(v);
+const J = (v) => esD(v) ? v.$d : v;
+const pInt = (v) => parseInt(esD(v) ? v.$s : v);
+const ROLES_ADMIN = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl', 'jefe_rl'];
+const camel = (s) => s.toString().toLowerCase().replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+function limaYM() {
+  const p = {};
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit' }).formatToParts(new Date()).forEach(x => { p[x.type] = x.value; });
+  return { y: +p.year, m: +p.month - 1 };
+}
+/* _CAP_EXPORT_AZURE_V1 (03-oct-2026): capFecha_/capHora_ del Apps Script (formatDate en America/Lima) */
+const S = (v) => (v === null || v === undefined) ? '' : T(v);
+function limaFmt(iso, conHora, soloHora) {
+  const d = new Date(iso); if (isNaN(d.getTime())) return '';
+  const p = {}; new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+    .formatToParts(d).forEach(x => { p[x.type] = x.value; });
+  const f = p.year + '-' + p.month + '-' + p.day, h = p.hour + ':' + p.minute;
+  return soloHora ? h : (conHora ? f + ' ' + h : f);
+}
+const capFecha_ = (v) => esD(v) ? limaFmt(v.$d) : S(v).substring(0, 10);
+const capHora_ = (v) => esD(v) ? limaFmt(v.$d, false, true) : S(v).trim();
+const ym = (y, m) => { const d = new Date(Date.UTC(y, m, 1)); return d.getUTCFullYear() + '-' + ('0' + (d.getUTCMonth() + 1)).slice(-2); };
+
+function crear(D) {
+  function capListar(body) {
+    try {
+      const f0 = body || {};
+      const rol = String(f0.rol || '').toLowerCase().trim(), esAdmin = ROLES_ADMIN.includes(rol);
+      const usuario = String(f0.usuario || '').toLowerCase().trim(), supervisor = String(f0.supervisor || '').toLowerCase().trim();
+      const datos = D.hdr;
+      if (!datos) return { success: true, capacitaciones: [], total: 0, esAdmin };
+      if (datos.length < 2) return { success: true, capacitaciones: [], total: 0, esAdmin };
+      const headers = datos[0], desde = f0.desde || '', hasta = f0.hasta || '', empresa = f0.empresa || '';
+      const res = [];
+      for (let r = 1; r < datos.length; r++) {
+        const obj = {};
+        headers.forEach((h, i) => { obj[camel(T(h))] = datos[r][i]; });
+        /* _CAP_REG_V2 (03-oct): antes comparaba el texto de la fecha ("Thu Oct 02 2026 ...") con
+           "2026-10-01" y el filtro Desde/Hasta nunca funciono (ni en Google). Ahora fecha de Lima. */
+        const f = esD(obj.fecha) ? capFecha_(obj.fecha) : T(obj.fecha || '').split('T')[0];
+        if (desde && f < desde) continue;
+        if (hasta && f > hasta) continue;
+        if (empresa && empresa !== 'AMBAS' && J(obj.empresa) !== empresa) continue;
+        if (!esAdmin && usuario && T(obj.creadaPor || '').toLowerCase().trim() !== usuario) continue;
+        if (esAdmin && supervisor && T(obj.creadaPor || '').toLowerCase().trim() !== supervisor) continue;
+        res.push(obj);
+      }
+      res.sort((a, b) => T(b.fechaRegistro || b.fecha || '').localeCompare(T(a.fechaRegistro || a.fecha || '')));
+      const out = res.map(o => { const x = {}; Object.keys(o).forEach(k => { x[k] = J(o[k]); }); return x; });
+      return { success: true, capacitaciones: out, total: out.length, esAdmin };
+    } catch (err) { return { success: false, error: err.message }; }
+  }
+
+  function capEstadisticas(body) {
+    try {
+      const f0 = body || {};
+      const esAdmin = ROLES_ADMIN.includes(String(f0.rol || '').toLowerCase().trim());
+      if (!esAdmin) return { success: true, esAdmin: false, stats: {} };
+      if (!D.hdr || !D.bbdd) return { success: true, esAdmin: true, stats: {} };
+      const filasHdr = D.hdr.slice(1).filter(r => r[0]);
+      const filasBdd = D.bbdd.slice(1).filter(r => r[0]);
+      const L = limaYM(), mesAct = ym(L.y, L.m);
+      const esteMes = filasHdr.filter(r => T(r[8] || '').substring(0, 7) === mesAct);
+      const asistentesEsteMes = filasBdd.filter(r => T(r[5] || '').substring(0, 7) === mesAct).length;
+      const porEmpresa = { RAPEL: 0, VERFRUT: 0 };
+      filasBdd.forEach(r => { const e = T(r[2] || '').toUpperCase(); if (e.indexOf('RAPEL') !== -1) porEmpresa.RAPEL++; else if (e.indexOf('VERFRUT') !== -1) porEmpresa.VERFRUT++; });
+      const porSup = {};
+      esteMes.forEach(r => {
+        const sup = T(r[19] || 'sin_asignar');
+        if (!porSup[sup]) porSup[sup] = { nombre: T(r[20] || r[19] || sup), capacitaciones: 0, asistentes: 0 };
+        porSup[sup].capacitaciones++; porSup[sup].asistentes += pInt(r[16]) || 0;
+      });
+      const topSupervisores = Object.keys(porSup).sort((a, b) => porSup[b].asistentes - porSup[a].asistentes).slice(0, 5)
+        .map(u => ({ usuario: u, nombre: porSup[u].nombre, capacitaciones: porSup[u].capacitaciones, asistentes: porSup[u].asistentes }));
+      const tm = {};
+      for (let i = 5; i >= 0; i--) tm[ym(L.y, L.m - i)] = { capacitaciones: 0, asistentes: 0 };
+      filasHdr.forEach(r => { const f = T(r[8] || '').substring(0, 7); if (tm[f]) { tm[f].capacitaciones++; tm[f].asistentes += pInt(r[16]) || 0; } });
+      const tendencia = Object.keys(tm).map(mes => ({ mes, capacitaciones: tm[mes].capacitaciones, asistentes: tm[mes].asistentes }));
+      const porTema = {};
+      filasHdr.forEach(r => { const t = T(r[4] || 'Sin especificar').substring(0, 60); porTema[t] = (porTema[t] || 0) + 1; });
+      const topTemas = Object.keys(porTema).sort((a, b) => porTema[b] - porTema[a]).slice(0, 5).map(t => ({ tema: t, count: porTema[t] }));
+      const act = new Set(); esteMes.forEach(r => { if (r[19]) act.add(T(r[19])); });
+      return { success: true, esAdmin: true, stats: { totalCapacitaciones: filasHdr.length, totalAsistentes: filasBdd.length,
+        capacitacionesEsteMes: esteMes.length, asistentesEsteMes, supervisoresActivosMes: act.size, porEmpresa, topSupervisores, tendencia, topTemas } };
+    } catch (e) { return { success: false, error: e.toString() }; }
+  }
+  /* _CAP_EXPORT_AZURE_V1 (03-oct-2026): copia fiel de capExportarV2 (Apps Script).
+     Lo usan Exportar y "Fecha anterior". Antes iba solo por Google (lento). */
+  function capExportar(body) {
+    try {
+      const b = body || {};
+      const desde = b.desde, hasta = b.hasta;
+      if (!desde || !hasta) return { success: false, error: 'Falta el rango de fechas' };
+      const esAdmin = ROLES_ADMIN.includes(String(b.rol || '').toLowerCase().trim());
+      const usuario = String(b.usuario || '').toLowerCase().trim();
+      const empresa = b.empresa || '';
+      const col = (hs, n) => { for (let i = 0; i < hs.length; i++) if (S(hs[i]).trim().toUpperCase() === n) return i; return -1; };
+      const H = D.hdr || [], Hh = H[0] || [];
+      let hId = col(Hh, 'ID_CAPACITACION'); if (hId < 0) hId = 0;
+      const cabPorId = {};
+      for (let r = 1; r < H.length; r++) {
+        const o = {}; Hh.forEach((h, i) => { o[S(h).trim()] = H[r][i]; });
+        cabPorId[S(H[r][hId]).trim()] = o;
+      }
+      const EXTRA = ['FUENTE', 'TOTAL_HORAS', 'FRECUENCIA', 'CAPACITADOR_DNI', 'CAPACITADOR_CARGO', 'TOTAL_ASISTENTES', 'HOMBRES', 'MUJERES', 'PRODUCTOR', 'CREADA_POR_NOMBRE', 'LABOR', 'SERVICIO'];   /* _CAP_EDITAR_V1 */
+      const B = D.bbdd || [];
+      if (B.length < 2) return { success: true, data: [], total: 0 };
+      const Bh = B[0];
+      let bId = col(Bh, 'ID_CAPACITACION'); if (bId < 0) bId = 0;
+      const data = [];
+      for (let r = 1; r < B.length; r++) {
+        const fila = B[r], obj = {};
+        Bh.forEach((h, i) => { obj[S(h).trim()] = fila[i] === undefined ? '' : fila[i]; });
+        const fechaCap = capFecha_(obj['FECHA_CAPACITACION'] || obj['FECHA']);
+        if (!fechaCap) continue;
+        if (fechaCap < desde || fechaCap > hasta) continue;
+        if (empresa && empresa !== 'AMBAS' && J(obj['EMPRESA']) !== empresa) continue;
+        const quien = S(obj['CREADA_POR'] || '').toLowerCase().trim();
+        if (!esAdmin && usuario && quien && quien !== usuario) continue;
+        if (esAdmin && b.supervisor && quien !== String(b.supervisor).toLowerCase().trim()) continue;
+        obj['FECHA_CAPACITACION'] = fechaCap;
+        obj['HORA_INICIO'] = capHora_(obj['HORA_INICIO']);
+        obj['HORA_FIN'] = capHora_(obj['HORA_FIN']);
+        if (esD(obj['FECHA_REGISTRO'])) obj['FECHA_REGISTRO'] = limaFmt(obj['FECHA_REGISTRO'].$d, true);
+        const cab = cabPorId[S(fila[bId]).trim()];
+        EXTRA.forEach(c => {
+          if (obj[c] === undefined) { const v = cab ? cab[c] : ''; obj[c] = esD(v) ? capFecha_(v) : (v == null ? '' : v); }
+        });
+        const x = {}; Object.keys(obj).forEach(k => { x[k] = J(obj[k]); });
+        data.push(x);
+      }
+      return { success: true, data, total: data.length, esAdmin };
+    } catch (e) { return { success: false, error: e.message }; }
+  }
+  return { capListar, capEstadisticas, capExportar };
+}
+/* _CAP_EXPORT_SQL_V1 (03-oct-2026): la 1ra version armaba el export sobre las DOS tablas
+   completas en memoria y Azure se caia (HTTP 500 / 504 en la comparacion). Ahora SQL trae
+   solo los asistentes del rango de fechas (con 1 dia de margen) y el mismo capExportar
+   filtra exacto. La cabecera (pocas filas) sale de la memoria de tablas-hoja. */
+async function capExportarSql(pool, body) {
+  const { sql } = require('./db');
+  const TH = require('./tablas-hoja');
+  const b = body || {};
+  if (!b.desde || !b.hasta) return { success: false, error: 'Falta el rango de fechas' };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(b.desde)) || !/^\d{4}-\d{2}-\d{2}$/.test(String(b.hasta))) return { success: false, error: 'Rango de fechas invalido' };
+  await TH.asegurar(pool, 'cap_asistentes');
+  const e = await pool.request().input('k', sql.NVarChar(40), 'cap_asistentes').query('SELECT encabezado, ancho, marca FROM dbo.TH_Estado WHERE clave = @k');
+  const est = e.recordset[0];
+  if (!est || !est.marca) return null;
+  const cab = await TH.leer(pool, 'cap_cabeceras');
+  if (!cab) return null;
+  const d0 = new Date(Date.parse(b.desde + 'T00:00:00Z') - 86400e3), d1 = new Date(Date.parse(b.hasta + 'T00:00:00Z') + 2 * 86400e3);
+  /* _CAP_EXPORT_SQL_V2 (03-oct-2026): SQL tambien recorta por usuario/supervisor/empresa (sin
+     perder nada: las celdas vacias o raras pasan y el filtro exacto de capExportar decide). */
+  const rq = pool.request().input('d0', sql.DateTime2(3), d0).input('d1', sql.DateTime2(3), d1);
+  let w = '((fecha_capacitacion >= @d0 AND fecha_capacitacion < @d1) OR fecha_capacitacion IS NULL)';
+  const esAdm = ROLES_ADMIN.includes(String(b.rol || '').toLowerCase().trim());
+  const usu = String(b.usuario || '').toLowerCase().trim(), sup = String(b.supervisor || '').toLowerCase().trim();
+  const quien = 'LOWER(LTRIM(RTRIM(creada_por)))';
+  if (!esAdm && usu) { rq.input('u', sql.NVarChar(60), usu); w += " AND (creada_por IS NULL OR LTRIM(RTRIM(creada_por)) = '' OR " + quien + ' = @u)'; }
+  if (esAdm && sup) { rq.input('s', sql.NVarChar(60), sup); w += ' AND (creada_por IS NULL OR ' + quien + ' = @s)'; }
+  if (b.empresa && b.empresa !== 'AMBAS') { rq.input('e', sql.NVarChar(20), String(b.empresa)); w += ' AND (empresa IS NULL OR empresa = @e)'; }
+  const r = await rq.query('SELECT * FROM dbo.Cap_Asistentes WHERE ' + w + ' ORDER BY fila');
+  const filas = r.recordset.map(x => TH.aCeldas('cap_asistentes', x, est.ancho));
+  const D = { hdr: [cab.encabezado].concat(cab.filas), bbdd: [JSON.parse(est.encabezado || '[]')].concat(filas) };
+  return crear(D).capExportar(b);
+}
+module.exports = { crear, capExportarSql };

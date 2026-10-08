@@ -48,7 +48,7 @@ function crear(D) {
     const at = applyFilters(await atencionesAgrupadas()), vi = applyFilters(vis), ca = applyFilters(cas), fu = applyFilters(fus);
     const refAnio = filtroAnio || anioActual;
     const esteMes = x => x.mes === mesActual && x.anio === refAnio;
-    const fin = x => x.estado === 'FINALIZADO' || x.estado === 'RESUELTO' || x.estado === 'ENVIADO';   /* _IND_ENVIADO_V1: ENVIADO = atendido */
+    const fin = x => x.estado === 'FINALIZADO' || x.estado === 'RESUELTO';
     const ret = x => x.estado.indexOf('RETRAS') !== -1;
     const stats = {
       atenciones: { total: cuenta(at, () => true), enProceso: cuenta(at, x => x.estado === 'EN PROCESO'), finalizados: cuenta(at, fin), esteMes: cuenta(at, esteMes) },

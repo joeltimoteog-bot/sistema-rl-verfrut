@@ -303,7 +303,7 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
       '<div class="kc"><div class="v">' + avance + '%</div><div class="l">Avance del periodo</div></div>' +
       '<div class="kc"><div class="v">' + (D.alertas || []).filter(function (a) { return !a.inicial; }).length + '</div><div class="l">Alertas enviadas' + (sinEnviar ? ' (' + sinEnviar + ' por salir)' : '') + '</div></div>';
     var orden = P.slice().sort(function (a, b) { return (b.nota == null ? -1 : b.nota) - (a.nota == null ? -1 : a.nota); });
-    var t = '<tr><th>Colaborador</th><th class="c">Conflictos ≤5 días<br>(20%)</th><th class="c">Gestión documentaria<br>(10%)</th><th class="c">Capacitaciones ETI<br>(10%)</th><th class="c">Curso Legislación<br>(10%)</th><th class="c">Nota parcial</th></tr>';
+    var t = '<tr><th>Colaborador</th><th class="c">Conflictos ≤5 días<br>(20%)</th><th class="c">Gestión documentaria<br>(10%)</th><th class="c">Capacitaciones ETI<br>(10%)</th><th class="c">Curso Legislación<br>(10%)</th><th class="c">Complementarios<br><small style="font-weight:600">(informativos)</small></th><th class="c">Nota parcial</th></tr>';
     orden.forEach(function (p) {
       var i = P.indexOf(p);
       var celdas;
@@ -312,6 +312,7 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
           return '<div style="text-align:center">' + chip(k) + '<div class="sub" style="font-size:10.5px;max-width:120px">' + esc(k.corto) + ' (' + Math.round(k.peso * 100) + '%)</div></div>'; }).join('') + '</div></td>';
       } else celdas = p.kpis.map(function (k) { return '<td class="c">' + chip(k) + (k.codigo === 'K1' && k.estrellas ? '<div class="sub">⭐ ' + k.estrellas + ' en ≤3 días</div>' : '') + '</td>'; }).join('');
       t += '<tr class="fila" data-i="' + i + '"><td><div class="nm">' + esc(p.nombre) + '</div><div class="sub">' + esc(p.empresa) + ' · ' + esc(p.puesto) + '</div>' + tags(p) + '</td>' + celdas +
+        '<td class="c">' + chipsC(p) + '</td>' +
         '<td class="c"><div class="nota" style="color:' + colorNota(p.nota) + '">' + (p.nota == null ? '—' : p.nota.toFixed(2)) + '</div>' +
         '<div class="bar"><i style="width:' + ((p.nota || 0) / 5 * 100) + '%;background:' + colorNota(p.nota) + '"></i></div><div class="sub">' + (p.nota == null ? 'sin datos' : NOM[Math.floor(p.nota)]) + '</div></td></tr>';
     });
@@ -324,6 +325,19 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
     detalle(); alertas(); reglas(); enlaces();
   }
 
+  /* _IND_COMPL_V1 */
+  function clsC(v) { return v == null ? 'np' : v >= 0.9 ? 'n5' : v >= 0.8 ? 'n4' : v >= 0.7 ? 'n3' : v >= 0.6 ? 'n2' : 'n1'; }
+  function chipC(c) {
+    if (c.estado === 'dato') return '<span class="chip np" style="color:#0a2463">' + c.num + '<small>' + (c.personas != null ? c.personas + ' personas' : esc(c.unidad)) + '</small></span>';
+    if (c.estado !== 'ok') return '<span class="chip np">—<small>sin datos</small></span>';
+    return '<span class="chip ' + clsC(c.pct) + '">' + pct(c.pct) + '<small>' + (c.codigo === 'C3' ? 'puntaje' : c.num + '/' + c.den) + '</small></span>';
+  }
+  function chipsC(p) {
+    var L = p.complementarios || [];
+    if (!L.length) return '<span class="sub">—</span>';
+    return '<div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:center">' + L.map(function (c) {
+      return '<div style="text-align:center">' + chipC(c) + '<div class="sub" style="font-size:9.5px;max-width:78px">' + esc(c.corto) + '</div></div>'; }).join('') + '</div>';
+  }
   function detalle() {
     var p = D.personas[SEL]; if (!p) return;
     var h = '<div class="card"><h2>' + esc(p.nombre) + '</h2><div class="sub">' + esc(p.empresa) + ' · ' + esc(p.puesto) + ' · DNI ' + esc(p.dni) + ' · usuario ' + esc(p.usuario) +
@@ -350,6 +364,19 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
       }
       h += '</div>';
     });
+    /* _IND_COMPL_V1: indicadores complementarios (informativos, no suman a la nota) */
+    if ((p.complementarios || []).length) {
+      h += '</div><div class="card" style="margin-top:12px"><h2 style="font-size:16px">Indicadores complementarios <span class="sub">· informativos: NO suman a la nota oficial (la gerencia define si tendrán peso)</span></h2></div><div class="dgrid">';
+      p.complementarios.forEach(function (c) {
+        h += '<div class="kb"><h3>' + esc(c.corto) + ' <span class="sub">· informativo</span></h3>' + chipC(c) +
+          (c.estado === 'ok' && c.den ? '<div class="f"><b>' + c.num + ' de ' + c.den + '</b> ' + esc(c.unidad) + (c.codigo === 'C3' ? ' (promedio)' : ' cumplen') + ' → ' + pct(c.pct) + '</div>' : '') +
+          (c.nota_def ? '<div class="f">' + esc(c.nota_def) + '</div>' : '') + '<div class="txt">' + esc(c.texto) + '</div>';
+        if ((c.evidencia || []).length) h += '<div class="ev">' + c.evidencia.map(function (e) {
+          var ic = e.ok === true ? '✅' : e.ok === false ? '❌' : '⏳';
+          return '<div class="it"><span class="ico">' + ic + '</span><span><b>' + esc(e.ref) + '</b>' + (e.fecha ? ' · ' + dmy(e.fecha) : '') + '<br>' + esc(e.detalle) + '</span></div>'; }).join('') + '</div>';
+        h += '</div>';
+      });
+    }
     h += '</div><div class="sub" style="margin-top:10px">🔒 Todo se calcula solo desde los registros del sistema (Casos, Mis Atenciones, historial de Cumplimiento y la programación de ETI). Nadie puede cambiar un porcentaje a mano; la única carga manual es la nota del curso, con constancia y autor.</div>';
     $('detalle').innerHTML = h;
   }

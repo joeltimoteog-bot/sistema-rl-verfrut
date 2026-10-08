@@ -44,7 +44,7 @@ async function calcularOriginal(context, req) {
         SUM(CASE WHEN YEAR(fecha_atencion) = YEAR(SWITCHOFFSET(SYSDATETIMEOFFSET(), '-05:00')) AND MONTH(fecha_atencion) = MONTH(SWITCHOFFSET(SYSDATETIMEOFFSET(), '-05:00')) THEN 1 ELSE 0 END) AS este_mes,
         SUM(CASE WHEN YEAR(fecha_atencion) = YEAR(SWITCHOFFSET(SYSDATETIMEOFFSET(), '-05:00')) THEN 1 ELSE 0 END) AS este_anio,
         SUM(CASE WHEN estado = 'EN PROCESO' THEN 1 ELSE 0 END) AS en_proceso,
-        SUM(CASE WHEN estado IN ('FINALIZADO', 'ENVIADO') THEN 1 ELSE 0 END) AS finalizados   -- _IND_ENVIADO_V1: ENVIADO = atendido
+        SUM(CASE WHEN estado = 'FINALIZADO' THEN 1 ELSE 0 END) AS finalizados
       FROM Atenciones WITH (NOLOCK)
       WHERE ${whereClause}
     `);

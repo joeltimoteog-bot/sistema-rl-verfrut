@@ -149,31 +149,15 @@ async function notas(pool) {
 
 /* Calcula todo. hoy opcional ('aaaa-mm-dd'). */
 /* Lee TODO una vez (para calcular varios rangos seguidos sin volver a la base) */
-/* _IND_COMPL_V1 (08-oct-2026): datos de los indicadores COMPLEMENTARIOS (informativos: no suman a la nota oficial).
-   Cada lectura es independiente: si una tabla aun no existe o falla, ese indicador sale "sin datos" y lo demas sigue. */
-async function complementarios(pool) {
-  const q = async (sqlTxt) => { try { return (await pool.request().query(sqlTxt)).recordset; } catch (e) { return null; } };
-  const [ev, e360, caps] = await Promise.all([
-    q("SELECT id, CONVERT(CHAR(10), fecha, 120) AS fecha, supervisor, usuario, sector, ruta, codigo, evaluados, resultado, estado FROM dbo.ETI_Evaluaciones WHERE fecha >= '2026-08-01'"),
-    q('SELECT supervisor, periodo, porcentaje, nivel, total, fecha FROM dbo.E360_Evaluaciones'),
-    q("SELECT id_capacitacion, creada_por, fecha, total_asistentes, tema, empresa FROM dbo.Cap_Cabeceras WHERE fecha >= '2026-08-01'")
-  ]);
-  const ymd = v => v instanceof Date ? new Date(v.getTime() - 5 * 3600e3).toISOString().slice(0, 10) : String(v || '').slice(0, 10);
-  return {
-    evaluaciones: ev,
-    e360: e360 ? e360.map(x => ({ supervisor: x.supervisor, periodo: String(x.periodo || ymd(x.fecha).slice(0, 7)), porcentaje: Number(x.porcentaje), nivel: x.nivel })) : null,
-    capacitaciones: caps ? caps.map(x => ({ id: x.id_capacitacion, creada_por: String(x.creada_por || '').toLowerCase().trim(), fecha: ymd(x.fecha), asistentes: Number(x.total_asistentes) || 0, tema: x.tema, empresa: x.empresa })) : null
-  };
-}
 async function cargar(pool) {
   await asegurarTablas(pool);
   const D = await datosCumpl(pool);
   if (!D) throw new Error('Cumplimiento aun no tiene datos en Azure');
   const m = crearMotor(D);
-  const [inf, ats, per, nts, eti, compl] = await Promise.all([fechasInforme(pool), atenciones(pool), personas(pool), notas(pool), ETI.leer(pool), complementarios(pool)]);   /* _IND_COMPL_V1 */
+  const [inf, ats, per, nts, eti] = await Promise.all([fechasInforme(pool), atenciones(pool), personas(pool), notas(pool), ETI.leer(pool)]);
   let sync = null;
   try { const s = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'kpi_eti_sync'"); sync = s.recordset.length ? s.recordset[0].valor : null; } catch (e) {}
-  return { M: m._kpi, personas: per, informes: inf, atenciones: ats, eti, notas: nts, eti_sync: sync, compl };
+  return { M: m._kpi, personas: per, informes: inf, atenciones: ats, eti, notas: nts, eti_sync: sync };
 }
 function calcularCon(B, hoy, desde, hasta) {
   const res = K.calcular(Object.assign({}, B, { hoy: hoy || hoyLima(), desde, hasta }));
