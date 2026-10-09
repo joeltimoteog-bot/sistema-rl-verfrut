@@ -22,7 +22,8 @@ const COLS = {
     ['nombre_reporte', 22, 't500'], ['enlace_reporte', 23, 't1000'], ['registrado_por', 24, 't150'], ['gravedad', 25, 't20'],
     ['estado_gestion', 26, 't30'], ['tipo_sancion', 27, 't100'], ['sancion_fecha_inicio', 28, 'fecha'], ['sancion_fecha_fin', 29, 'fecha'],
     ['sancion_dias', 30, 'num'], ['ultima_alerta', 31, 'tfecha100'],
-    ['fecha_cierre', 32, 'fechaflex']   /* _COL_CIERRE_V1: la fecha de cierre ya no comparte columna con las alertas */
+    ['fecha_cierre', 32, 'fechaflex']   /* _COL_CIERRE_V1: la fecha de cierre ya no comparte columna con las alertas */,
+    ['fecha_envio_informe', 33, 'fechaflex']   /* _ENVIO_INFORME_V1 (09-oct): fecha en que el supervisor envio el informe por correo */
   ],
   visitas: [
     ['nro', 0, 'int'], ['fecha_reg', 1, 'fecha'], ['empresa', 2, 't20'], ['supervisor', 3, 't150'], ['dni', 4, 'dni'],
@@ -136,7 +137,8 @@ function casoDeFila(r) {
     estado_gestion: r.estado_gestion || 'PENDIENTE', tipo_sancion: txt(r.tipo_sancion),
     sancion_fecha_inicio: r.sancion_fecha_inicio ? limaYmd(r.sancion_fecha_inicio) : '',
     sancion_fecha_fin: r.sancion_fecha_fin ? limaYmd(r.sancion_fecha_fin) : '',
-    sancion_dias: Number(r.sancion_dias) || 0
+    sancion_dias: Number(r.sancion_dias) || 0,
+    fecha_envio_informe: r.fecha_envio_informe ? limaYmd(r.fecha_envio_informe) : ''   /* _ENVIO_INFORME_V1 */
   };
 }
 function visitaDeFila(r) {

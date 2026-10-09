@@ -28,7 +28,8 @@ function asegurarTablas(pool) {
     const elim = t => {
       const cols = TC.COLS[t].map(c => c[2] === 'fotos' ? 'fotos NVARCHAR(MAX) NULL, fotos_n FLOAT NULL' : c[0] + ' ' + tipoSql(c[2])).join(', ');
       return `IF OBJECT_ID('${ELIM[t]}', 'U') IS NULL CREATE TABLE ${ELIM[t]} (id INT IDENTITY(1,1) NOT NULL PRIMARY KEY, ${cols},
-        eliminado_por NVARCHAR(100) NULL, fecha_eliminacion DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(), motivo_eliminacion NVARCHAR(1000) NULL);`;
+        eliminado_por NVARCHAR(100) NULL, fecha_eliminacion DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(), motivo_eliminacion NVARCHAR(1000) NULL);
+      ${TC.COLS[t].filter(c => c[2] !== 'fotos').map(c => `IF COL_LENGTH('${ELIM[t]}', '${c[0]}') IS NULL ALTER TABLE ${ELIM[t]} ADD ${c[0]} ${tipoSql(c[2])};`).join('\n      ')}`;   /* _ENVIO_INFORME_V1: columnas nuevas tambien en eliminados (si no, archivar fallaria) */
     };
     await pool.request().query(`
       IF OBJECT_ID('dbo.CV_Contador', 'U') IS NULL
@@ -124,7 +125,7 @@ function filaNuevoCaso(d, nro, ahora) {
     18: d.motivo_retraso || '', 19: d.redaccion || '', 20: d.nombre_informe || '', 21: d.enlace_informe || '',
     22: d.nombre_reporte || '', 23: d.enlace_reporte || '', 24: d.registrado_por || '', 25: d.gravedad || 'BAJO',
     26: d.estado_gestion || 'PENDIENTE', 27: d.tipo_sancion || '', 28: d.sancion_fecha_inicio || '',
-    29: d.sancion_fecha_fin || '', 30: d.sancion_dias || 0 };
+    29: d.sancion_fecha_fin || '', 30: d.sancion_dias || 0, 33: d.fecha_envio_informe || '' };   /* _ENVIO_INFORME_V1 */
 }
 function cambiosCaso(d) {
   const c = {};
@@ -136,6 +137,7 @@ function cambiosCaso(d) {
   si('motivo_retraso', 18); si('redaccion', 19); si('nombre_informe', 20); si('enlace_informe', 21); si('nombre_reporte', 22);
   si('enlace_reporte', 23); si('gravedad', 25); si('estado_gestion', 26); si('tipo_sancion', 27);
   si('sancion_fecha_inicio', 28); si('sancion_fecha_fin', 29); si('sancion_dias', 30);
+  if (d.fecha_envio_informe) c[33] = d.fecha_envio_informe;   /* _ENVIO_INFORME_V1: solo si viene (nunca se borra) */
   return c;
 }
 /* estado de la visita: mismos calculos que saveVisita (dias sin domingos desde fecha_fin, en hora de Lima) */

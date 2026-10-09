@@ -116,13 +116,14 @@ function casosAzure(D, T) {
       if (a.estado) c.estado = a.estado;
       if (a.estado_gestion && a.estado_gestion !== 'PENDIENTE') c.estado_gestion = String(a.estado_gestion).toUpperCase();
       if (!c.supervisor && a.supervisor) c.supervisor = String(a.supervisor).trim();
+      if (a.fecha_envio_informe) c.fecha_envio_informe = a.fecha_envio_informe;   /* _ENVIO_INFORME_V1 */
       return;
     }
     const n = { nro: a.nro, fecha_registro: a.fecha_reg || '', dni: a.dni, nombre: a.nombre, empresa: a.empresa, sector: a.sector,
       supervisor: String(a.supervisor || '').trim(), motivo: a.motivo, motivo_extra: a.motivo_extra,
       fecha_reporte: _ymd10(a.fecha_reporte), fecha_limite: _ymd10(a.fecha_limite), estado: a.estado,
       enlace_informe: a.enlace_informe, enlace_reporte: a.enlace_reporte, registrado_por: a.registrado_por,
-      gravedad: a.gravedad, estado_gestion: String(a.estado_gestion || '').toUpperCase(), fecha_cierre: '' };
+      gravedad: a.gravedad, estado_gestion: String(a.estado_gestion || '').toUpperCase(), fecha_cierre: '', fecha_envio_informe: a.fecha_envio_informe || '' };
     if (!n.fecha_registro && !n.fecha_reporte) return;
     D.casos.push(n); idx[String(a.nro)] = n;
   });

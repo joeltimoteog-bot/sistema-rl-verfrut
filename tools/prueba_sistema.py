@@ -570,6 +570,15 @@ with sync_playwright() as pw:
     ok('Casos: caso NUEVO vence a los 3 dias habiles (01/10 → 06/10); un caso registrado antes del cambio conserva sus 5 dias (→ 09/10, 8/10 feriado)', r == '2026-10-06|2026-10-09|5|3', str(r))
     r = pag.evaluate("""() => { const tb = document.getElementById('tbCasos'); if (!tb) return 'sin tabla'; renderTablaCasos([{nro: 1, nombre: 'A', estado_caso: 'CONCLUIDO_CON_RETRASO', estado_gestion: 'CERRADO', fecha_limite: '2026-09-01'}, {nro: 2, nombre: 'B', estado_caso: 'CONCLUIDO_DENTRO_PLAZO', estado_gestion: 'CERRADO', fecha_limite: '2026-09-01'}]); return tb.innerText; }""")
     ok('Casos: el concluido fuera de plazo sale como OBSERVADO POR RETRASO (el concluido a tiempo, CONCLUIDO)', 'OBSERVADO POR RETRASO' in str(r) and 'CONCLUIDO' in str(r), ' '.join(str(r).split())[:200])
+    # _ENVIO_INFORME_V1: el plazo del informe se cuenta hasta la fecha en que se envio por correo
+    r = pag.evaluate("""() => { const fe = document.getElementById('cFechaEnvioInf'), fr = document.getElementById('cFechaReporte'), fl = document.getElementById('cFechaLimite');
+        if (!fe || !fr || !fl) return 'sin campo';
+        const prev = _modoCaso; _modoCaso = 'concluido'; _editandoCasoNro = null;
+        fr.value = '2026-09-25'; fl.value = '2026-10-02';
+        fe.value = '2026-10-01'; fe.dispatchEvent(new Event('change')); const a = document.getElementById('cEnvioInfRes').textContent + '#' + document.getElementById('cEstadoCaso').value;
+        fe.value = '2026-10-06'; fe.dispatchEvent(new Event('change')); const b = document.getElementById('cEnvioInfRes').textContent + '#' + document.getElementById('cEstadoCaso').value;
+        fe.value = ''; _modoCaso = prev; return a + ' || ' + b; }""")
+    ok('Casos: fecha de envio del informe dentro del plazo = CONCLUIDO a tiempo; fuera de plazo = retraso', 'Dentro del plazo' in str(r) and 'CONCLUIDO_DENTRO_PLAZO' in str(r) and 'Fuera de plazo' in str(r) and 'CONCLUIDO_CON_RETRASO' in str(r), str(r)[:300])
     r = pag.evaluate("() => COLS_AT_TODAS.map(c => c.label).join('|') + ' || ' + COLS_CONSULTA_DNI.map(c => c.key).join(',')")
     ok('Excel de atenciones: trae Parentesco, N° Licencia, Autorizado por y F. Término Periodo; Consulta DNI mantiene Cumpleaños despues de Código', all(x in r for x in ['|Parentesco', '|N° Licencia', '|Autorizado por', 'F. Término Periodo']) and 'codigo,cumpleanos,fundo_actual' in r, r[:400])
     r = pag.evaluate("""async () => { atTodas.push({nro: 4242, dni: '12345678', nombre: 'EDIT PRUEBA', empresa: 'RAPEL', detalle_documento: '34 LICENCIA POR MATERNIDAD', nro_licencia: 'LIC-99', autorizado_por: 'ESSALUD', parentesco: '', fecha_termino_periodo: '2026-12-31'});

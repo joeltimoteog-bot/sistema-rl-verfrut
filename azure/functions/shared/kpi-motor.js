@@ -193,7 +193,15 @@ function calcular(E) {
       }
       else if (c.enlace_informe && inf && inf.fecha) { fi = aFecha(inf.fecha); fuente = inf.fuente || ''; }
       else if (!c.enlace_informe && M.concluido(c) && c.fecha_cierre) { fi = c.fecha_cierre; fuente = 'cierre sin informe'; }
-      out.push({ c, ref, base, lim5, lim3, limInt, fi, fuente, cubre: !propio, sinFecha: !!(c.enlace_informe && !fi) });
+      /* _ENVIO_INFORME_V1 (09-oct-2026): si el supervisor registro la FECHA EN QUE ENVIO EL INFORME POR CORREO,
+         el plazo se cuenta hasta esa fecha (aunque lo haya subido al sistema despues). Nunca puede ser
+         posterior a la subida ni anterior al reporte; la fecha de subida queda como evidencia. */
+      let fSubida = null;
+      if (c.enlace_informe && c.fecha_envio_informe) {
+        const fe = aFecha(c.fecha_envio_informe);
+        if (fe && (!base || fe >= aFecha(ymd(base))) && (!fi || fe <= fi)) { fSubida = fi; fi = fe; fuente = 'envío por correo'; }
+      }
+      out.push({ c, ref, base, lim5, lim3, limInt, fi, fuente, fSubida, cubre: !propio, sinFecha: !!(c.enlace_informe && !fi) });
     });
     return out;
   }
@@ -209,7 +217,8 @@ function calcular(E) {
       if (x.fi) {
         const d = M.habilesEntre(x.base, x.fi);
         e.ok = x.fi <= x.lim5; e.estrella = x.fi <= x.lim3; e.dias = d;
-        e.detalle = (x.fuente === 'cierre sin informe' ? 'Cerrado sin informe el ' : 'Informe subido el ') + dm(ymd(x.fi)) + ' (' + d + ' día' + (d === 1 ? '' : 's') + ' hábil' + (d === 1 ? '' : 'es') + ')' +
+        e.detalle = (x.fuente === 'cierre sin informe' ? 'Cerrado sin informe el ' : x.fuente === 'envío por correo' ? 'Informe enviado por correo el ' : 'Informe subido el ') + dm(ymd(x.fi)) + ' (' + d + ' día' + (d === 1 ? '' : 's') + ' hábil' + (d === 1 ? '' : 'es') + ')' +
+          (x.fSubida && ymd(x.fSubida) !== ymd(x.fi) ? ' · subido al sistema el ' + dm(ymd(x.fSubida)) : '') +
           (e.ok ? (e.estrella ? ' ⭐ dentro del plazo interno de 3 días' : ' · dentro de los 5 días') : ' · fuera de los 5 días (vencía el ' + dm(ymd(x.lim5)) + ')');
         den++; if (e.ok) num++;
       } else if (hoy > x.lim5) {
@@ -289,7 +298,7 @@ function calcular(E) {
       const e = { ref: 'Informe del caso N° ' + c.nro, fecha: ymd(x.base), trabajador: c.nombre };
       if (x.fi && x.fuente !== 'cierre sin informe') {
         e.ok = x.fi <= x.limInt; den++; if (e.ok) num++;
-        e.detalle = 'Subido el ' + dm(ymd(x.fi)) + ' · plazo interno ' + pz + ' días (hasta el ' + dm(ymd(x.limInt)) + ')' + (e.ok ? '' : ' → fuera de plazo');
+        e.detalle = (x.fuente === 'envío por correo' ? 'Enviado por correo el ' : 'Subido el ') + dm(ymd(x.fi)) + ' · plazo interno ' + pz + ' días (hasta el ' + dm(ymd(x.limInt)) + ')' + (e.ok ? '' : ' → fuera de plazo');
       } else if (!x.fi && hoy > x.limInt) {
         e.ok = false; den++;
         e.detalle = 'Sin informe · el plazo interno (' + pz + ' días) venció el ' + dm(ymd(x.limInt));
