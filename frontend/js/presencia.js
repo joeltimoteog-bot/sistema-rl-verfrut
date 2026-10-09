@@ -34,6 +34,34 @@
     var CADA_MS  = 5 * 60 * 1000;
     var avisado  = false;
 
+    /* _FERIADOS_SESION_V2 (09-oct-2026): feriado no canjeado o descanso por canje
+       (panel 📅 Feriados del Monitor, Firestore config_rl/feriados) = dia no laborable:
+       la sesion se cierra igual que fuera de horario. El horario propio NO abre ese dia;
+       solo un acceso temporal aprobado a mano. Misma regla que el login (index.html). */
+    var FER_FIJOS = ['01-01','05-01','06-07','06-29','07-23','07-28','07-29','08-06','08-30','10-08','11-01','12-08','12-09','12-25'];
+    var FER_MOV = { 2026: ['04-02','04-03'], 2027: ['03-25','03-26'], 2028: ['04-13','04-14'] };
+    function ferRefrescar() {
+      try {
+        fetch('https://firestore.googleapis.com/v1/projects/sistema-eti-verfrut/databases/(default)/documents/config_rl/feriados?key=AIzaSyAv-1VcbT8VCerClNAeVtVXzOxhSffeDpc', { cache: 'no-store' })
+          .then(function (r) { return r.json(); }).then(function (d) {
+            if (!d || !d.fields) return;
+            var arr = function (v) { return ((v && v.arrayValue && v.arrayValue.values) || []).map(function (x) { return x.stringValue || ''; }).filter(Boolean); };
+            try { localStorage.setItem('rl_feriados_cfg', JSON.stringify({ ts: Date.now(), canjeados: arr(d.fields.canjeados), descansos: arr(d.fields.descansos) })); } catch (e) {}
+          }).catch(function () {});
+      } catch (e) {}
+    }
+    ferRefrescar();
+    setInterval(ferRefrescar, 10 * 60 * 1000);
+    function hoyNoLaborable() {
+      try {
+        var a = new Date(), md = ('0' + (a.getMonth() + 1)).slice(-2) + '-' + ('0' + a.getDate()).slice(-2), iso = a.getFullYear() + '-' + md;
+        var c = JSON.parse(localStorage.getItem('rl_feriados_cfg') || 'null') || {};
+        if ((c.descansos || []).indexOf(iso) >= 0) return true;
+        var fer = FER_FIJOS.indexOf(md) >= 0 || (FER_MOV[a.getFullYear()] || []).indexOf(md) >= 0;
+        return fer && (c.canjeados || []).indexOf(iso) < 0;
+      } catch (e) { return false; }
+    }
+
     // Misma regla que verificarHorarioLogin() de index.html
     function fueraDeHorario(user) {
       var usuario = String((user && user.usuario) || '').toLowerCase().trim();
@@ -45,6 +73,7 @@
       var h = a.getHours() + a.getMinutes() / 60;
       var esAlta = mes > 6 || (mes === 6 && dia >= 27);
 
+      if (hoyNoLaborable()) return true;          // _FERIADOS_SESION_V2
       if (dow === 0 || dow === 6) return true;   // _LUNVIE_V1 (26-set-2026): Lun-Vie en toda temporada
       return (h < HORA_INI || h >= HORA_FIN);
     }
@@ -55,6 +84,7 @@
         if (!raw) return false;
         var a = JSON.parse(raw);
         if (!a || !a.activo) return false;
+        if (a.fuente === 'horario_propio' && hoyNoLaborable()) return false;   // _FERIADOS_SESION_V2
         if (!a.expiraEn) return true;                 // sin fecha de fin: no expulsar
         return Number(a.expiraEn) > Date.now();
       } catch (e) { return true; }                    // ante la duda, NO expulsar
@@ -69,6 +99,7 @@
     var AH_API = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
     var _ahEnCurso = null, _ahUltimo = 0, _ahRes = null;
     function horarioPropio(usuario) {
+      if (hoyNoLaborable()) return Promise.resolve(false);   // _FERIADOS_SESION_V2: ese dia el horario propio no abre
       if (_ahEnCurso) return _ahEnCurso;
       if (Date.now() - _ahUltimo < 60000) return Promise.resolve(_ahRes);   // max 1 consulta por minuto: se reusa la ultima respuesta
       _ahUltimo = Date.now();
@@ -120,8 +151,8 @@
     /* fin real = lo que llegue mas tarde entre el horario general (L-V hasta las 17:00, si aun estamos dentro) y su acceso vigente */
     function finSesion() {
       var a = new Date(), dow = a.getDay(), h = a.getHours() + a.getMinutes() / 60, gen = 0, acc = 0;
-      if (dow !== 0 && dow !== 6 && h >= HORA_INI && h < HORA_FIN) { var f = new Date(a); f.setHours(Math.floor(HORA_FIN), Math.round((HORA_FIN % 1) * 60), 0, 0); gen = f.getTime(); }
-      try { var t = JSON.parse(sessionStorage.getItem('accesoTemporal') || 'null'); if (t && t.activo && t.expiraEn && Number(t.expiraEn) > Date.now()) acc = Number(t.expiraEn); } catch (e) {}
+      if (dow !== 0 && dow !== 6 && !hoyNoLaborable() && h >= HORA_INI && h < HORA_FIN) { var f = new Date(a); f.setHours(Math.floor(HORA_FIN), Math.round((HORA_FIN % 1) * 60), 0, 0); gen = f.getTime(); }
+      try { var t = JSON.parse(sessionStorage.getItem('accesoTemporal') || 'null'); if (t && t.activo && t.expiraEn && Number(t.expiraEn) > Date.now() && !(t.fuente === 'horario_propio' && hoyNoLaborable())) acc = Number(t.expiraEn); } catch (e) {}
       return Math.max(gen, acc);
     }
     function estilos() {

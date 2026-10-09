@@ -556,6 +556,56 @@ function updateDots(){
 }
 
 // ── Verificación de horario para login ────────────────────────────
+/* ═══ _FERIADOS_LOGIN_V2 (09-oct-2026) — feriados y canjes vuelven a aplicarse ═══
+   El panel 📅 Feriados del Monitor guarda en Firestore (config_rl/feriados):
+     canjeados = feriados que SI se trabajan · descansos = dias entregados a cambio.
+   El 14-ago, al pasar la excepcion de horario a "por usuario", se quito por error
+   esta revision del login y de presencia.js: el panel guardaba, pero nadie lo leia.
+   Hoy: feriado no canjeado o dia de descanso = dia no laborable -> no se entra
+   (salvo jtimoteo / sin_restriccion, o un ACCESO TEMPORAL aprobado a mano).
+   El horario propio de Acceso a Modulos NO abre esos dias.
+   Si no se puede leer la nube, se usa lo ultimo guardado; nunca rompe el login. */
+const RL_FERIADOS_FIJOS = {
+  '01-01':'Año Nuevo','05-01':'Día del Trabajo','06-07':'Batalla de Arica',
+  '06-29':'San Pedro y San Pablo','07-23':'Día de la Fuerza Aérea',
+  '07-28':'Fiestas Patrias','07-29':'Fiestas Patrias','08-06':'Batalla de Junín',
+  '08-30':'Santa Rosa de Lima','10-08':'Combate de Angamos','11-01':'Todos los Santos',
+  '12-08':'Inmaculada Concepción','12-09':'Batalla de Ayacucho','12-25':'Navidad'
+};
+const RL_FERIADOS_MOVILES = {
+  2026:{'04-02':'Jueves Santo','04-03':'Viernes Santo'},
+  2027:{'03-25':'Jueves Santo','03-26':'Viernes Santo'},
+  2028:{'04-13':'Jueves Santo','04-14':'Viernes Santo'}
+};
+function rlFeriadosCfg() {
+  try { const c = JSON.parse(localStorage.getItem('rl_feriados_cfg')||'null');
+        return { canjeados: (c&&c.canjeados)||[], descansos: (c&&c.descansos)||[] }; }
+  catch(e) { return { canjeados: [], descansos: [] }; }
+}
+function rlFeriadosRefrescar() {
+  try {
+    return fetch('https://firestore.googleapis.com/v1/projects/sistema-eti-verfrut/databases/(default)/documents/config_rl/feriados?key=AIzaSyAv-1VcbT8VCerClNAeVtVXzOxhSffeDpc', {cache:'no-store'})
+      .then(r=>r.json()).then(d=>{
+        if (!d || !d.fields) return;
+        const f=d.fields;
+        const arr=v=>((v&&v.arrayValue&&v.arrayValue.values)||[]).map(x=>x.stringValue||'').filter(Boolean);
+        try { localStorage.setItem('rl_feriados_cfg', JSON.stringify({ts:Date.now(),canjeados:arr(f.canjeados),descansos:arr(f.descansos)})); } catch(e) {}
+      }).catch(()=>{});
+  } catch(e) { return Promise.resolve(); }
+}
+rlFeriadosRefrescar();
+function rlHoyNoLaborable(d) {   // -> {no:true, nombre} si hoy no se trabaja
+  try {
+    const md  = ('0'+(d.getMonth()+1)).slice(-2) + '-' + ('0'+d.getDate()).slice(-2);
+    const iso = d.getFullYear() + '-' + md;
+    const cfg = rlFeriadosCfg();
+    if (cfg.descansos.indexOf(iso) >= 0) return { no:true, nombre:'Descanso por canje de feriado' };
+    const nom = RL_FERIADOS_FIJOS[md] || (RL_FERIADOS_MOVILES[d.getFullYear()]||{})[md] || null;
+    if (nom && cfg.canjeados.indexOf(iso) < 0) return { no:true, nombre:'Feriado — '+nom };
+  } catch(e) {}
+  return { no:false };
+}
+
 function verificarHorarioLogin(user) {
   /* _HORARIO_SOLO_ADMIN_V1: la excepción es por USUARIO, no por rol. */
   const usuario = (user.usuario||'').toLowerCase().trim();
@@ -570,6 +620,10 @@ function verificarHorarioLogin(user) {
 
   // Temporada alta: 27 jun - 31 dic
   const esAlta = mes > 6 || (mes === 6 && dia >= 27);
+
+  /* _FERIADOS_LOGIN_V2: feriado no canjeado o descanso por canje = no laborable */
+  const fer = rlHoyNoLaborable(ahora);
+  if (fer.no) { try { window._rlHoyNoLab = fer.nombre; } catch(e) {} return { permitido: false, temporada: esAlta ? 'alta' : 'baja', feriado: fer.nombre }; }
 
   /* _LUNVIE_V1 (26-set-2026): pedido de Joel — TODO usuario ingresa solo de
      LUNES a VIERNES, 05:30-17:00, en cualquier temporada (antes, en temporada
@@ -607,6 +661,7 @@ function mostrarPantallaBloqueo(user, bloqueo) {
 
   document.getElementById('blNombre').textContent = 'Usuario: ' + (user.nombre || user.usuario);
   document.getElementById('blHorario').innerHTML =
+    (bloqueo && bloqueo.feriado ? `🎌 Hoy es <b>${bloqueo.feriado}</b> — día no laborable.<br>` : '') +   /* _FERIADOS_LOGIN_V2 */
     `⏰ Hora actual: <b>${hora}</b><br>` +
     `📅 Temporada ${tempTexto}<br>` +
     `✅ Horario permitido: ${diasTexto} de <b>05:30</b> a <b>17:00</b>`;
@@ -1198,6 +1253,14 @@ checkSessionCache();
   }
 
   window.verificarAccesoTemporal = async function (usuario) {
+    /* _FERIADOS_LOGIN_V2: en feriado / descanso por canje el horario propio NO abre;
+       solo un acceso temporal aprobado a mano (mecanismo de siempre) */
+    try {
+      if (typeof rlHoyNoLaborable === 'function' && rlHoyNoLaborable(new Date()).no) {
+        console.log('[_FERIADOS_LOGIN_V2] hoy no laborable: se omite el horario propio de ' + usuario);
+        return _accesoTemporalPrevio.apply(this, arguments);
+      }
+    } catch (eF) {}
     try {
       var d = await _consultarHorarioPropio(usuario);
       if (d && d.tieneAcceso) {

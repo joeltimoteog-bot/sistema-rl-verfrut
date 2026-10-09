@@ -292,7 +292,7 @@
     <div style="padding:12px 16px;color:var(--mut);font-size:12px">
       Los feriados restringen el ingreso de supervisores (igual que un domingo).
       Marca <b>"Se trabaja"</b> cuando la empresa canjee un feriado, y registra abajo el día de descanso entregado a cambio.
-      El cambio aplica a login y cierre automático en minutos.
+      El cambio aplica a login y cierre automático en minutos. Ese día no entra nadie (ni con horario propio), salvo con un acceso temporal aprobado.
     </div>
     <div style="overflow:auto;padding:0 16px 16px">
       <div id="ferLista"></div>
@@ -1282,6 +1282,9 @@ function arrancar(){
   const bfea=$('ferAddDesc'); if(bfea) bfea.addEventListener('click', ()=>{
     const v=$('ferNuevoDesc').value;
     if(!v){ toast('Elige la fecha del descanso primero', true); return; }
+    /* _FERIADOS_LOGIN_V2: confirmar la fecha con el dia escrito (el 09-oct se guardo 09-ene por error) */
+    const hoyIso=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+    if(!confirm('Día de descanso: '+_ferFmt(v)+' '+v.slice(0,4)+(v<hoyIso?'\n\n⚠️ Es una fecha PASADA.':'')+'\n\n¿Es correcto?')) return;
     if(_ferCfg.descansos.indexOf(v)<0) _ferCfg.descansos.push(v);
     $('ferNuevoDesc').value=''; pintarFeriados();
   });
