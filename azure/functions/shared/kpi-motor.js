@@ -308,6 +308,10 @@ function calcular(E) {
       if (!opcional && TEMAS_ETI.indexOf(tema) < 0) return;
       const fechas = (g.fechas || []).slice().sort();
       const ejec = new Set(g.fechas_ejecutadas || []);
+      /* _KPI_AJUSTES_V2 (09-oct): si ETI anoto fecha por fecha lo ejecutado, SOLO esas fechas cuentan.
+         El estado global 'ejecutada' da por hechas las fechas pasadas solo si no hay detalle por fecha
+         (programaciones antiguas). Antes: 'ejecutada' con 1 de 2 fechas hechas salia 2/2. */
+      const globalEjec = g.estado === 'ejecutada' && ejec.size === 0;
       const reg = g.registro_id && E.eti.registros ? E.eti.registros[g.registro_id] : null;
       const fReg = reg && reg.fecha_ejecucion ? String(reg.fecha_ejecucion).slice(0, 10) : (g.ejecutada_en ? String(g.ejecutada_en).slice(0, 10) : '');
       const fin = fechas[fechas.length - 1] || '';
@@ -323,12 +327,12 @@ function calcular(E) {
         const e = { ref: tema + ' · ' + (g.sector || ''), fecha: f, prog: g.id };
         /* _IND_FIX_V1: programada en dias de AUSENCIA con reemplazo y no ejecutada -> no cuenta para el titular */
         const _aus = M.AUS && M.AUS.ausencia ? M.AUS.ausencia(u, f) : null, _rmp = _aus && M.AUS.reemp(_aus);
-        if (_rmp && !ejec.has(f) && g.estado !== 'ejecutada') {
+        if (_rmp && !ejec.has(f) && !globalEjec) {
           e.ok = null; e.detalle = 'Programada el ' + dm(f) + ' durante su ausencia (' + String(_aus.tipo || 'ausencia').toLowerCase() + '; reemplazo: ' + (_rmp.nombre || _rmp.usuario) + '). No cuenta para su KPI.';
           ev.push(e); return;
         }
         if (sustento) e.sustento = sustento;
-        const hecha = ejec.has(f) || (g.estado === 'ejecutada' && f <= hoyS);   /* _IND_FIX_V1: el estado global no da por hechas fechas futuras */
+        const hecha = ejec.has(f) || (globalEjec && f <= hoyS);   /* _IND_FIX_V1: el estado global no da por hechas fechas futuras */
         if (hecha) {
           const tarde = !ejec.has(f) && fReg && fReg > fin;
           e.ok = !tarde;
@@ -385,14 +389,22 @@ function calcular(E) {
     })();
     /* C2 evaluaciones checklist */
     (function () {
-      const o = base('C2', 'Evaluaciones checklist', 'grupos evaluados', 'Grupos evaluados en el checklist ETI con resultado de 60% o más (APROBADO). Bajo 60% = REFUERZO.');
+      const o = base('C2', 'Evaluaciones checklist', 'grupos evaluados', 'Grupos evaluados en el checklist ETI con resultado de 70% o más (APROBADO, mismo criterio que ETI). Bajo 70% = REFUERZO.');
       if (!X.evaluaciones) { out.push(Object.assign(o, { estado: 'sin_datos', num: 0, den: 0, evidencia: [], nota_def: 'Aún no hay evaluaciones registradas en Azure.' })); return; }
       const vistos = {}, ev = []; let num = 0, den = 0;
       X.evaluaciones.filter(x => x.fecha && x.fecha >= desde && enR(x.fecha) && (usr(x.usuario) === u.usuario || esPersona(x.supervisor, p, u.nombre)))
-        .forEach(x => {   /* un mismo grupo (fecha+ruta+codigo) cuenta una vez: vale la ultima evaluacion */
-          const k = x.fecha + '|' + usr(x.ruta) + '|' + usr(x.codigo) + '|' + usr(x.sector); vistos[k] = x; });
+        .forEach(x => {   /* un mismo grupo (fecha+ruta+codigo+sector) cuenta una vez */
+          const k = x.fecha + '|' + usr(x.ruta) + '|' + usr(x.codigo) + '|' + usr(x.sector); (vistos[k] = vistos[k] || []).push(x); });
       Object.keys(vistos).forEach(k => {
-        const x = vistos[k], r = Number(x.resultado) || 0, ok = String(x.estado || '').toUpperCase() === 'APROBADO' || r >= 0.6;
+        /* _KPI_AJUSTES_V2: antes quedaba UNA fila al azar (por QR hay una fila por trabajador);
+           ahora el resultado del grupo es el PROMEDIO de sus filas */
+        const filas = vistos[k], x = Object.assign({}, filas[filas.length - 1]);
+        if (filas.length > 1) {
+          x.resultado = filas.reduce((s2, f) => s2 + (Number(f.resultado) || 0), 0) / filas.length;
+          x.evaluados = filas.reduce((s2, f) => s2 + (Number(f.evaluados) || 1), 0);
+          x.estado = x.resultado >= 0.7 ? 'APROBADO' : 'REFUERZO';
+        }
+        const r = Number(x.resultado) || 0, ok = String(x.estado || '').toUpperCase() === 'APROBADO' || r >= 0.7;   /* _KPI_AJUSTES_V2: 70% = criterio de ETI (antes 60%) */
         den++; if (ok) num++;
         ev.push({ ref: (x.sector || '') + (x.ruta ? ' · ruta ' + x.ruta : '') + (x.codigo ? ' · ' + x.codigo : ''), fecha: x.fecha, ok,
           detalle: Math.round(r * 100) + '% · ' + (ok ? 'APROBADO' : 'REFUERZO') + (x.evaluados ? ' · ' + x.evaluados + ' evaluado(s)' : '') });

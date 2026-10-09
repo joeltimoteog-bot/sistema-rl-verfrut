@@ -17,6 +17,7 @@ const CUW = require('./cumpl-guardar');
 const ETI = require('./kpi-eti');
 const K = require('./kpi-motor');
 const { crearMotor } = require('./cumpl-motor');
+const TC = require('./tablas-cv');   /* _KPI_CASOS_AZURE_V1 */
 
 let listo = null;
 function asegurarTablas(pool) {
@@ -90,8 +91,41 @@ async function datosCumpl(pool) {
   r.recordset.forEach(f => { D[f.clave] = JSON.parse(f.datos); });
   if (!D.casos || !D.config) return null;
   try { const m = await TH.marcas(pool, ['cumpl_config', 'cumpl_restricc']); if (m) { const w = await CUW.paraMotor(pool); if (w) { D.config = w.config; D.restricc = w.restricc; } } } catch (e) {}
+  try { casosAzure(D, await TC.leerCV(pool)); } catch (e) {}   /* _KPI_CASOS_AZURE_V1 */
   D.visitas = [];
   return D;
+}
+
+/* _KPI_CASOS_AZURE_V1 (09-oct-2026): los casos venian SOLO de la copia que manda Google
+   (CUMPL_Datos, cada ~10 min). Un informe recien subido en Azure figuraba "sin informe"
+   hasta la siguiente copia. Ahora se completa con la tabla real dbo.Casos (Azure):
+     · caso que ya esta en la copia -> se toman de Azure el enlace del informe/reporte y el
+       estado si Azure los tiene (nunca se borra un dato que la copia ya tenia);
+     · caso nuevo que la copia aun no trae -> se agrega con sus fechas.
+   Si la tabla no esta disponible, todo queda como antes. */
+const _ymd10 = v => { const s = String(v || ''); const m = s.match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : ''; };
+function casosAzure(D, T) {
+  if (!T || !Array.isArray(T.casos) || !Array.isArray(D.casos)) return;
+  const idx = {};
+  D.casos.forEach(c => { if (c && c.nro !== '' && c.nro !== null && c.nro !== undefined) idx[String(c.nro)] = c; });
+  T.casos.forEach(a => {
+    if (!a || a.nro === '' || a.nro === null || a.nro === undefined) return;
+    const c = idx[String(a.nro)];
+    if (c) {
+      ['enlace_informe', 'enlace_reporte'].forEach(k => { if (a[k]) c[k] = a[k]; });
+      if (a.estado) c.estado = a.estado;
+      if (a.estado_gestion && a.estado_gestion !== 'PENDIENTE') c.estado_gestion = String(a.estado_gestion).toUpperCase();
+      if (!c.supervisor && a.supervisor) c.supervisor = String(a.supervisor).trim();
+      return;
+    }
+    const n = { nro: a.nro, fecha_registro: a.fecha_reg || '', dni: a.dni, nombre: a.nombre, empresa: a.empresa, sector: a.sector,
+      supervisor: String(a.supervisor || '').trim(), motivo: a.motivo, motivo_extra: a.motivo_extra,
+      fecha_reporte: _ymd10(a.fecha_reporte), fecha_limite: _ymd10(a.fecha_limite), estado: a.estado,
+      enlace_informe: a.enlace_informe, enlace_reporte: a.enlace_reporte, registrado_por: a.registrado_por,
+      gravedad: a.gravedad, estado_gestion: String(a.estado_gestion || '').toUpperCase(), fecha_cierre: '' };
+    if (!n.fecha_registro && !n.fecha_reporte) return;
+    D.casos.push(n); idx[String(a.nro)] = n;
+  });
 }
 
 /* fecha en que se subio el informe de cada caso: operaciones de Azure (desde el 26-set) + historial de Cumplimiento */
@@ -154,7 +188,7 @@ async function notas(pool) {
 async function complementarios(pool) {
   const q = async (sqlTxt) => { try { return (await pool.request().query(sqlTxt)).recordset; } catch (e) { return null; } };
   const [ev, e360, caps] = await Promise.all([
-    q("SELECT id, CONVERT(CHAR(10), fecha, 120) AS fecha, supervisor, usuario, sector, ruta, codigo, evaluados, resultado, estado FROM dbo.ETI_Evaluaciones WHERE fecha >= '2026-08-01'"),
+    q("SELECT id, CONVERT(CHAR(10), fecha, 120) AS fecha, supervisor, usuario, sector, ruta, codigo, evaluados, resultado, estado FROM dbo.ETI_Evaluaciones WHERE fecha >= '2026-08-01' ORDER BY fecha, id"),
     q('SELECT supervisor, periodo, porcentaje, nivel, total, fecha FROM dbo.E360_Evaluaciones'),
     q("SELECT id_capacitacion, creada_por, fecha, total_asistentes, tema, empresa FROM dbo.Cap_Cabeceras WHERE fecha >= '2026-08-01'")
   ]);

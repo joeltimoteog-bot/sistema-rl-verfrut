@@ -180,7 +180,7 @@
       var terminado = finMes(+mes.slice(0, 4), +mes.slice(5, 7)) < h;
       $('infCerrar').style.display = (D.puedeEditar && terminado && !c) ? '' : 'none';
       $('infNota').textContent = c ? 'Cerrado el ' + new Date(c.cerrado + (/Z$/.test(c.cerrado) ? '' : 'Z')).toLocaleString('es-PE') + ' por ' + c.cerrado_por + ' · foto congelada' :
-        (terminado ? 'Mes terminado: se cierra solo a las 00:05 del día 1 (o ciérralo ahora).' : 'Mes en curso: el informe muestra el AVANCE a hoy.');
+        (terminado ? 'Mes terminado: se cierra solo el día 1 en la primera revisión de la mañana (o ciérralo ahora).' : 'Mes en curso: el informe muestra el AVANCE a hoy.');
     }
     sel.onchange = estadoBtn; estadoBtn();
     $('infVer').onclick = function () { verInforme(); };
