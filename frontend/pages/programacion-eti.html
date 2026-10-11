@@ -300,7 +300,7 @@ const EMPRESAS={
   RAPEL:  {nom:'SOCIEDAD AGRÍCOLA RAPEL S.A.C.', logo:'Rapel',
            cols:['EL PAPAYO','LIMONES','LOS OLIVARES','APROA','ALGARROBOS','SAN VICENTE']},
   VERFRUT:{nom:'SOCIEDAD EXPORTADORA VERFRUT S.A.C.', logo:'Verfrut',
-           cols:['PUNTA ARENAS','SANTA ROSA','SANTA ROSA II','OLIVARES BAJO']}
+           cols:['PUNTA ARENAS','SANTA ROSA','OLIVARES BAJO']}
 };
 /* Proyección 2026 tal como está en PROYECCION_DE_CAPACITACIONES_ETI.xlsx (hojas "Eti - Rapel" / "Eti - Verfrut") */
 const SEED_2026={
@@ -313,7 +313,9 @@ const EMP_SECTOR={
   'ALGARROBOS':'RAPEL','SAN VICENTE':'RAPEL','PLANTA RAPEL':'RAPEL','PLANTA':'RAPEL',
   'OLIVARES BAJO':'VERFRUT','SANTA ROSA':'VERFRUT','SANTA ROSA II':'VERFRUT','SANTA ROSA 1':'VERFRUT','SANTA ROSA 2':'VERFRUT','PUNTA ARENAS':'VERFRUT','SAN RAFAEL':'VERFRUT'
 };
-const ALIAS={'PAPAYO':'EL PAPAYO','OLIVARES APROA':'APROA','PLANTA':'PLANTA RAPEL','SANTA ROSA 2':'SANTA ROSA II'};
+const ALIAS={'PAPAYO':'EL PAPAYO','OLIVARES APROA':'APROA','PLANTA':'PLANTA RAPEL',
+  /* Santa Rosa I y II se unificaron: ahora es un solo sector SANTA ROSA */
+  'SANTA ROSA I':'SANTA ROSA','SANTA ROSA II':'SANTA ROSA','SANTA ROSA 1':'SANTA ROSA','SANTA ROSA 2':'SANTA ROSA'};
 const normSect=s=>{const x=String(s||'').toUpperCase().replace(/^SECTOR\s+/,'').replace(/\s+/g,' ').trim();return ALIAS[x]||x;};
 const empresaDe=s=>EMP_SECTOR[normSect(s)]||'';
 const colLbl=s=>s==='PLANTA RAPEL'?'PLANTA':s;
@@ -435,7 +437,8 @@ function columnasDe(emp){
   return [...base,...extra];
 }
 const planKey=(y,e)=>y+'_'+e;
-const planDe=(y,e)=>(PLAN[planKey(y,e)]&&PLAN[planKey(y,e)].celdas)||{};
+const planDe=(y,e)=>{const c=(PLAN[planKey(y,e)]&&PLAN[planKey(y,e)].celdas)||{},o={};
+  Object.keys(c).forEach(k=>{const [sec,w]=k.split('|');o[normSect(sec)+'|'+w]=c[k];});return o;}; /* normaliza nombres (p.ej. SANTA ROSA II → SANTA ROSA) */
 function renderAnual(){
   const y=+$('fAnio').value, f=$('fEmp').value;
   $('aTit').textContent='CRONOGRAMA ANUAL ETI '+y;
