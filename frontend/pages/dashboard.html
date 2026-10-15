@@ -15282,6 +15282,136 @@ setTimeout(decorar,1500);
 console.log('[_CASOS_UI_V2] listo');
 })();
 </script>
+<!-- ══════ _CASOS_UI_V3 (15-oct-2026) — Registro de Casos COMPACTO (pedido de Joel) ══════
+     · Filtros: buscador + empresa + motivo + supervisor en UNA fila; chips de estado y botones debajo. Sin titulos.
+     · KPI: tarjetas bajas (franja de color, numero y etiqueta), sin icono grande.
+     · Periodo: año como lista desplegable y los 12 meses en una tira con su cantidad debajo.
+     · Tabla: filas bajas; "% Avance" = barra + numero; Accion = iconos (Ver / Editar / Concluir / Informe / Descargo).
+     Bloque aditivo: solo CSS + reordenar/transformar lo ya pintado. NO cambia ninguna funcion ni onclick. -->
+<style id="casosUi3Css">
+#sec-casos .sec-hd{margin-bottom:10px}
+#sec-casos .sec-hd h2{font-size:17px}
+/* ── filtros en una fila ── */
+#sec-casos .filtros{display:grid;grid-template-columns:minmax(220px,2fr) minmax(150px,1fr) minmax(150px,1fr) minmax(150px,1fr);gap:8px;align-items:center;padding:10px 12px;border-radius:12px;margin-bottom:8px!important}
+#sec-casos .filtros>#cBuscarWrap{position:relative;grid-column:1}
+#sec-casos .filtros>#cBuscarWrap #cBuscar{width:100%;padding:7px 10px 7px 32px!important;border:1.5px solid var(--bd)!important;border-radius:8px!important;font-size:12px!important;background:#f8fafc}
+#sec-casos .filtros>#cBuscarWrap>span:first-child{left:10px;font-size:13px}
+#sec-casos .filtros select,#sec-casos .filtros input{width:100%;box-sizing:border-box;margin:0}
+#sec-casos .filtros .btn-a,#sec-casos .filtros>button{display:none}   /* se reubican en la fila de chips */
+#sec-casos .filtros+div{padding:8px 12px!important;margin-bottom:8px!important;border-radius:12px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+#sec-casos .filtros+div>div:first-child{display:none!important}           /* la caja del buscador se movio arriba */
+#sec-casos .filtros+div>div:nth-child(2){margin:0!important;order:2}
+#sec-casos .filtros+div>div:nth-child(2)>span:first-child{display:none}
+#sec-casos .filtros+div #cChipMotivo{padding:5px 10px!important;font-size:11.5px!important;min-width:0!important;border-width:1.5px!important}
+#sec-casos .filtros+div #cChips{order:1;flex:1;gap:5px!important}
+#sec-casos .filtros+div #cChips>span:first-child{display:none}
+#sec-casos .filtros+div #cChips button,#sec-casos .filtros+div #cChips>*{font-size:11px!important;padding:4px 10px!important}
+#cAccionesFiltro{order:3;display:flex;gap:6px;align-items:center}
+#cAccionesFiltro button{padding:5px 11px!important;font-size:11px!important;border-radius:7px!important;font-weight:700;cursor:pointer}
+/* ── KPI bajos ── */
+#statsCasos .cards{gap:10px;margin-bottom:8px!important}
+#statsCasos .cards .card{display:flex;flex-direction:column;justify-content:center;gap:0;padding:8px 14px 8px 16px;border-radius:10px;border:1px solid var(--bd);border-left:4px solid var(--k2,#2563eb);box-shadow:none;min-height:0;transform:none!important}
+#statsCasos .cards .card:hover{transform:none;box-shadow:0 2px 8px rgba(15,23,42,.08)}
+#statsCasos .cards .card::before,#statsCasos .cards .card::after{display:none}
+#statsCasos .cards .card .num{font-size:22px!important;line-height:1.1;align-self:auto;order:2}
+#statsCasos .cards .card>div:last-child:not(.num){order:1;font-size:11px;font-weight:700;color:var(--gr);letter-spacing:.3px;text-transform:uppercase}
+#statsCasos .cards .card{font-size:11px;font-weight:700;color:var(--gr);text-transform:uppercase;letter-spacing:.3px}
+/* ── Periodo en una linea ── */
+#cPeriodos{padding:8px 12px;margin-bottom:8px;border-radius:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#cPeriodos .cp-t{margin:0;font-size:10.5px;letter-spacing:.5px;white-space:nowrap}
+#cPeriodos .cp-t small{display:none}
+#cPeriodos .cp-row{margin:0;flex-wrap:nowrap}
+#cPeriodos .cp-row .cp-lbl{display:none}
+#cPeriodos #cpAnios{display:none}
+#cPeriodos #cpAnioSel{padding:5px 8px;border:1.5px solid var(--bd);border-radius:8px;font-size:12px;font-weight:700;background:#f8fafc;font-family:inherit;color:#334155;cursor:pointer}
+#cPeriodos .cp-row:last-child{flex:1;min-width:360px}
+#cPeriodos #cpMeses{display:flex;flex:1;gap:2px}
+#cPeriodos #cpMeses .cp-chip{flex:1;justify-content:center;flex-direction:column;gap:0;padding:3px 2px;border:1.5px solid transparent;background:transparent;border-radius:8px;font-size:11px;line-height:1.15;color:#334155}
+#cPeriodos #cpMeses .cp-chip b{background:transparent;color:var(--gr);padding:0;font-size:10.5px;min-width:0;font-weight:600}
+#cPeriodos #cpMeses .cp-chip:hover{background:#f1f5f9;border-color:transparent}
+#cPeriodos #cpMeses .cp-chip.on{background:#e0e7ff;border-color:#c7d2fe;color:#1e3a8a} #cPeriodos #cpMeses .cp-chip.on b{color:#1e3a8a}
+#cPeriodos #cpMeses .cp-chip.cero{opacity:.4}
+#cPeriodos #cpMeses .cp-chip.limpiar{flex:0 0 auto;flex-direction:row;padding:3px 8px;border:1.5px dashed var(--rojo);font-size:10.5px}
+#cPeriodos #cpInfo2{font-size:11px;color:var(--gr);white-space:nowrap;margin-left:auto}
+/* ── Tabla compacta ── */
+#sec-casos .cTablaWrap{border-radius:12px;max-height:calc(100vh - 230px)}
+#sec-casos .cTablaWrap table{min-width:1040px}
+#sec-casos .cTablaWrap thead th{padding:8px 10px;font-size:9.5px}
+#tbCasos td{padding:5px 10px;font-size:11.5px;white-space:nowrap}
+#tbCasos td:nth-child(4),#tbCasos td:nth-child(6){max-width:210px;overflow:hidden;text-overflow:ellipsis}
+#tbCasos td:nth-child(5){max-width:170px;overflow:hidden;text-overflow:ellipsis}
+#tbCasos td:nth-child(9){font-weight:500!important;color:#475569}
+#tbCasos td:nth-child(10) span{background:transparent!important;color:inherit;border:1px solid currentColor;font-weight:700;text-transform:capitalize}
+#tbCasos td[style*="display:flex"]{min-width:0!important;padding:3px 8px!important;flex-wrap:nowrap!important;gap:3px!important}
+#tbCasos td[style*="display:flex"]>button{width:28px;height:28px;padding:0!important;margin:0!important;border-radius:7px!important;font-size:14px!important;line-height:1;display:inline-flex;align-items:center;justify-content:center;box-shadow:none;border:1px solid var(--bd)!important;background:#fff!important;color:#334155!important}
+#tbCasos td[style*="display:flex"]>button:hover:not([disabled]){background:#eef4ff!important;border-color:#93c5fd!important}
+#tbCasos td[style*="display:flex"]>button[data-ui3="editar"]{color:#b45309!important}
+#tbCasos td[style*="display:flex"]>button[data-ui3="concluir"]{color:#15803d!important}
+#tbCasos td[style*="display:flex"]>button[data-ui3="informe"]{color:#b91c1c!important}
+#tbCasos td[style*="display:flex"]>button[data-ui3="descargo"]{color:#1d4ed8!important}
+#tbCasos td[style*="display:flex"]>button[disabled]{opacity:.3!important}
+#tbCasos .ui3-av{display:flex;align-items:center;gap:6px;min-width:84px}
+#tbCasos .ui3-av i{flex:1;height:5px;background:#e2e8f0;border-radius:3px;overflow:hidden;display:block}
+#tbCasos .ui3-av i b{display:block;height:100%}
+#tbCasos .ui3-av span{font-size:11px;font-weight:700;width:34px;text-align:right}
+@media(max-width:900px){#sec-casos .filtros{grid-template-columns:1fr 1fr} #sec-casos .filtros>#cBuscarWrap{grid-column:1/-1} #cPeriodos .cp-row:last-child{min-width:100%}}
+</style>
+<script>
+(function(){
+'use strict';
+if(window._casosUi3Listo)return; window._casosUi3Listo=true;
+var ICO={ver:'👁️',editar:'✏️',concluir:'✅',informe:'📄',descargo:'📋'};
+function reordenar(){
+  try{
+    var sec=document.getElementById('sec-casos'); if(!sec)return;
+    var filt=sec.querySelector('.filtros'), busc=document.getElementById('cBuscar');
+    /* 1) buscador a la primera fila de filtros (se mueve el mismo input: conserva su oninput) */
+    if(filt&&busc&&!document.getElementById('cBuscarWrap')){
+      var caja=busc.parentNode; caja.id='cBuscarWrap';
+      filt.insertBefore(caja,filt.firstChild);
+    }
+    /* 2) Excel + Limpiar a la fila de chips (mismos botones, mismo onclick) */
+    var chipsRow=filt&&filt.nextElementSibling;
+    if(filt&&chipsRow&&!document.getElementById('cAccionesFiltro')){
+      var acc=document.createElement('div'); acc.id='cAccionesFiltro';
+      var ex=filt.querySelector('.btn-a'), li=filt.querySelector('button:not(.btn-a)');
+      if(ex){var ex2=ex.cloneNode(true);ex2.textContent='📥 Excel';ex2.style.cssText='background:#1a7f4b;color:#fff;border:none';acc.appendChild(ex2);}
+      if(li){var li2=li.cloneNode(true);li2.textContent='🔄 Limpiar';acc.appendChild(li2);}
+      chipsRow.appendChild(acc);
+    }
+    /* 3) Periodo: año como lista desplegable (dispara el mismo clic del chip) */
+    var A=document.getElementById('cpAnios');
+    if(A){
+      var sel=document.getElementById('cpAnioSel');
+      if(!sel){sel=document.createElement('select');sel.id='cpAnioSel';A.parentNode.insertBefore(sel,A);
+        sel.onchange=function(){var ch=A.querySelectorAll('.cp-chip')[+this.value];if(ch)ch.click();};}
+      var chips=A.querySelectorAll('.cp-chip'), html='';
+      chips.forEach(function(ch,i){var t=ch.textContent.replace(/\s+/g,' ').trim().replace(/ (\d+)$/,' ($1)');html+='<option value="'+i+'"'+(ch.classList.contains('on')?' selected':'')+'>'+t+'</option>';});
+      if(sel.innerHTML!==html)sel.innerHTML=html;
+      var info=document.getElementById('cpInfo'), i2=document.getElementById('cpInfo2'), per=document.getElementById('cPeriodos');
+      if(per&&!i2){i2=document.createElement('span');i2.id='cpInfo2';per.appendChild(i2);}
+      if(info&&i2){var t2=info.textContent.replace(/^·\s*/,'').replace(/· elige un año o mes para filtrar/,'').trim();i2.textContent=t2;}
+    }
+    /* 4) Tabla: % avance -> barra; botones -> iconos con titulo (mismo onclick) */
+    var tb=document.getElementById('tbCasos'); if(!tb)return;
+    tb.querySelectorAll('tr').forEach(function(tr){
+      var tds=tr.children; if(tds.length<11||tr.dataset.ui3)return; tr.dataset.ui3='1';
+      var av=tds[7], m=(av.textContent||'').match(/(\d+)%/);
+      if(m){var p=Math.min(100,+m[1]),col=av.style.color||'#16a34a';av.innerHTML='<div class="ui3-av"><i><b style="width:'+p+'%;background:'+col+'"></b></i><span style="color:'+col+'">'+p+'%</span></div>';}
+      tds[10].querySelectorAll('button').forEach(function(b){
+        var t=(b.textContent||'').trim(), k=/Ver/.test(t)?'ver':/Editar/.test(t)?'editar':/Concluir/.test(t)?'concluir':/Informe/.test(t)?'informe':/Descargo/.test(t)?'descargo':'';
+        if(!k)return; b.dataset.ui3=k; b.textContent=ICO[k]; b.title=b.title||t.replace(/^[^A-Za-z]+/,''); b.setAttribute('aria-label',b.title);
+      });
+    });
+  }catch(e){console.warn('[_CASOS_UI_V3]',e);}
+}
+var _prev=window.renderTablaCasos;
+if(typeof _prev==='function'){window.renderTablaCasos=function(d){var r=_prev.apply(this,arguments);reordenar();return r;};}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',reordenar);else reordenar();
+setTimeout(reordenar,1800);
+console.log('[_CASOS_UI_V3] listo');
+})();
+</script>
 
 <script>
 /* ══════════════════ _SUP_ADMIN_V1 (23-set-2026) ══════════════════
