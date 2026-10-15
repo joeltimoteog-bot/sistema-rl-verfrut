@@ -12690,6 +12690,31 @@ function permCerrar() {
   if (o) o.style.display = 'none';
 }
 
+
+/* _PERM_USUARIOS_AZURE_V1 (15-oct-2026): la lista de usuarios para Acceso a Modulos sale primero de
+   AZURE (/usuarios/lista, con el login firmado); Google queda de respaldo. Antes solo iba a Google y
+   si Google respondia mal (p. ej. "Accion no reconocida: undefined" bajo carga) la lista quedaba vacia. */
+async function _permListaUsuarios() {
+  try {
+    var tk = sessionStorage.getItem('rl_token');
+    if (tk && typeof AZURE_FN_BASE !== 'undefined' && window.AbortController) {
+      var ctl = new AbortController(); var t = setTimeout(function () { ctl.abort(); }, 8000);
+      var r = await fetch(AZURE_FN_BASE + '/usuarios/lista', { method: 'GET', signal: ctl.signal, headers: { 'Authorization': 'Bearer ' + tk } });
+      clearTimeout(t);
+      var j = await r.json();
+      if (j && j.success && Array.isArray(j.data) && j.data.length) {
+        return { success: true, fuente: 'azure', usuarios: j.data.map(function (u) { return { usuario: u.usuario, nombre: u.nombre, rol: u.rol, activo: u.activo !== false }; })
+          .sort(function (a, b) { return String(a.usuario).localeCompare(String(b.usuario)); }) };
+      }
+    }
+  } catch (e) { console.warn('[_PERM_USUARIOS_AZURE_V1] Azure: ' + (e && e.message) + ' -> Google'); }
+  var d = await apiPost({ action: 'permisosUsuarios', usuario: USER.usuario, rol: USER.rol });
+  if ((!d || !d.success) ) {   /* Google respondio mal: un reintento */
+    await new Promise(function (r) { setTimeout(r, 1500); });
+    d = await apiPost({ action: 'permisosUsuarios', usuario: USER.usuario, rol: USER.rol });
+  }
+  return d;
+}
 async function permAbrir() {
   if (!_permEsAdmin()) { alert('Solo un administrador puede cambiar permisos.'); return; }
   permCrearModal();
@@ -12698,7 +12723,7 @@ async function permAbrir() {
   var sel = document.getElementById('permUsuario');
   sel.innerHTML = '<option value="">Cargando…</option>';
   try {
-    var d = await apiPost({ action: 'permisosUsuarios', usuario: USER.usuario, rol: USER.rol });
+    var d = await _permListaUsuarios();   /* _PERM_USUARIOS_AZURE_V1 */
     if (!d || !d.success) throw new Error((d && d.error) || 'No se pudo leer la lista');
     sel.innerHTML = '<option value="">— elige un usuario —</option>' +
       d.usuarios.map(function (u) {
@@ -13178,7 +13203,7 @@ async function horCargarUsuarios() {
   var sel = document.getElementById('horUsuario');
   sel.innerHTML = '<option value="">Cargando…</option>';
   try {
-    var d = await apiPost({ action: 'permisosUsuarios', usuario: USER.usuario, rol: USER.rol });
+    var d = await _permListaUsuarios();   /* _PERM_USUARIOS_AZURE_V1 */
     if (!d || !d.success) throw new Error((d && d.error) || 'No se pudo leer la lista');
     sel.innerHTML = '<option value="">— elige un usuario —</option>' +
       d.usuarios.map(function (u) {
