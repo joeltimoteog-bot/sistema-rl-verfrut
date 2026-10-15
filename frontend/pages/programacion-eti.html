@@ -260,8 +260,11 @@
   var U=null; try{U=JSON.parse(sessionStorage.getItem('user')||'null');}catch(e){}
   if(!U){ location.href='/sistema-rl-verfrut/index.html'; return; }
   var yo=String(U.usuario||'').trim().toLowerCase();
-  if(['jtimoteo'].indexOf(yo)<0){
-    document.getElementById('app').innerHTML='<div class="card" style="max-width:520px;margin:40px auto;text-align:center"><h2>🔒 Acceso restringido</h2><p style="margin-top:8px">La programación de capacitaciones ETI la realiza solo el administrador. Revisa tus fechas programadas en <b>Capacitaciones ETI → Mi Panel</b>.</p></div>';
+  /* _ETI_PERMISO_V1 (15-oct-2026): ademas de jtimoteo, entra quien tenga "Capacitaciones ETI (programar)"
+     en Acceso a Modulos (lo confirma Azure al iniciar sesion y queda en sessionStorage rl_app_eti) */
+  var conPermiso=false; try{ conPermiso=sessionStorage.getItem('rl_app_eti')==='1'; }catch(e){}
+  if(['jtimoteo'].indexOf(yo)<0 && !conPermiso){
+    document.getElementById('app').innerHTML='<div class="card" style="max-width:520px;margin:40px auto;text-align:center"><h2>🔒 Acceso restringido</h2><p style="margin-top:8px">La programación de capacitaciones ETI la realiza el administrador o quien tenga ese permiso en Acceso a Módulos. Revisa tus fechas programadas en <b>Capacitaciones ETI → Mi Panel</b>.</p></div>';
     window.__PROGETI_BLOQ=true; return;
   }
   document.getElementById('uName').textContent=U.nombre||U.usuario;
