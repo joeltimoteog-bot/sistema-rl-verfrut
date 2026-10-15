@@ -1022,7 +1022,8 @@ async function _ssoPrefetch(){
   _ssoPidiendo = false;
 }
 setInterval(() => {
-  try{ const pm = document.getElementById('pantallaModulo');
+  try{ if (document.hidden) return;   /* _CAIDAS_V2: pestana oculta = no pide pases */
+       const pm = document.getElementById('pantallaModulo');
        if (pm && pm.style.display !== 'none') _ssoPrefetch(); }catch(e){}
 }, 5000);
 ['pointerover','touchstart'].forEach(ev => document.addEventListener(ev, e => {

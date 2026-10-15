@@ -830,7 +830,7 @@
   function iniciarAlertaPendientes() {
     try {
       _pActualizar();
-      setInterval(_pActualizar, PEND_REFRESCO_MS);
+      setInterval(function () { if (!document.hidden) _pActualizar(); }, PEND_REFRESCO_MS);   /* _CAIDAS_V2: pestana oculta = no consulta */
     } catch (e) {}
   }
   if (!ES_ADMIN) setTimeout(iniciarAlertaPendientes, 8000);   /* _SEGUIMIENTO_V2: despues de cargar la pantalla */

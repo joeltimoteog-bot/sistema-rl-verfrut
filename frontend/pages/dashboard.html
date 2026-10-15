@@ -3399,8 +3399,12 @@ async function _redLlamar(hacer, accion, reintentar) {
         ultimo = new Error('respuesta no JSON (HTTP ' + r.status + '): ' + txt.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160));
       }
     } catch (e) { clearTimeout(reloj); ultimo = e; }
-    if (intento++ < (reintentar ? 2 : 0)) {   /* _ESTAB_V1 (23-set): lecturas 2 reintentos, 1.5 s y 4 s */
-      var _espera = intento === 1 ? 1500 : 4000;
+    /* _CAIDAS_V2 (15-oct-2026): si el servidor ya tardo el maximo (corte por tiempo), reintentar solo
+       lo sobrecarga mas: no se reintenta. Otros fallos (red, respuesta rota): 1 reintento, con espera
+       variable para que las pestanas no reintenten todas en el mismo segundo. Antes: 2 reintentos. */
+    var _fueCorte = !!(ultimo && (ultimo.name === 'AbortError' || /abort/i.test(String(ultimo.message || ''))));
+    if (!_fueCorte && intento++ < (reintentar ? 1 : 0)) {   /* _ESTAB_V1 (23-set) -> _CAIDAS_V2 */
+      var _espera = 1500 + Math.floor(Math.random() * 2500);
       console.warn('[api] fallo en', accion, '->', ultimo && ultimo.message, '| reintento ' + intento + ' en ' + (_espera / 1000) + ' s');
       await new Promise(function (res) { setTimeout(res, _espera); });
       continue;
@@ -11614,11 +11618,14 @@ async function _azRangoPedir(desde) {
   if (paginas > AZ_MAX_PAG) { paginas = AZ_MAX_PAG; truncado = true; }
 
   if (paginas > 1) {
-    var pend = [];
-    for (var p = 2; p <= paginas; p++) {
-      pend.push(_azFetch(_azUrl(params, p)).catch(function () { return null; }));
+    /* _CAIDAS_V2 (15-oct-2026): de 3 en 3 (antes las 11 juntas). Con varios usuarios a la vez,
+       11 consultas grandes simultaneas por persona saturaban la base. Sigue siendo rapido. */
+    var res = [], _pags = [];
+    for (var p = 2; p <= paginas; p++) _pags.push(p);
+    for (var _i = 0; _i < _pags.length; _i += 3) {
+      var _lote = await Promise.all(_pags.slice(_i, _i + 3).map(function (pg) { return _azFetch(_azUrl(params, pg)).catch(function () { return null; }); }));
+      res = res.concat(_lote);
     }
-    var res = await Promise.all(pend);          // TODAS JUNTAS, no una tras otra
     res.forEach(function (jp) {
       if (jp && jp.success) lista = lista.concat(jp.data || []);
     });

@@ -133,7 +133,7 @@ function casosAzure(D, T) {
 /* _KPI_LIVIANO_V1 (01-oct-2026): las fechas de informe salen de busquedas LIKE sobre tablas con JSON grande
    (CV_Ops, Cumpl_Historial). Se guardan 15 min en memoria para no cargar la base que usan todos. */
 let _infCache = null, _infEnCurso = null;
-const INF_TTL_MS = 15 * 60000;
+const INF_TTL_MS = 30 * 60000;   /* _CAIDAS_V2: 30 min (con 15 coincidia con el reloj y casi siempre se recalculaba; la fecha principal sale del nombre del archivo) */
 async function fechasInforme(pool) {
   if (_infCache && Date.now() - _infCache.ts < INF_TTL_MS) return _infCache.out;
   if (_infEnCurso) return _infEnCurso;

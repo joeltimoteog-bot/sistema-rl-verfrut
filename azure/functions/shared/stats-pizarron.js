@@ -33,7 +33,12 @@ const Q_TIPO = `
   WHERE detalle_documento IS NOT NULL AND detalle_documento != ''
   GROUP BY detalle_documento, supervisor, empresa, anio`;
 
-function invalidar() { _gen++; _agg = null; }
+/* _CAIDAS_V2 (15-oct-2026): antes cada atencion guardada borraba el pizarron y la siguiente lectura
+   recorria toda la tabla; con muchos guardando a la vez eran lecturas completas seguidas (y si se
+   guardaba mientras se leia, el resultado se descartaba y se volvia a leer). Ahora el pizarron se
+   renueva como maximo cada 10 s despues de un guardado: la cifra nueva aparece en segundos. */
+const REFRESCO_MIN_MS = 10000;
+function invalidar() { _gen++; if (_agg) _agg.ts = Math.min(_agg.ts, Date.now() - TTL_MS + REFRESCO_MIN_MS); }
 
 async function leer(pool) {
   if (_agg && Date.now() - _agg.ts < TTL_MS) return _agg;
@@ -43,7 +48,8 @@ async function leer(pool) {
     const t0 = Date.now();
     const [b, t] = await Promise.all([pool.request().query(Q_BASE), pool.request().query(Q_TIPO)]);
     const a = { ts: Date.now(), ms: Date.now() - t0, base: b.recordset, tipo: t.recordset };
-    if (gen === _gen) _agg = a;   /* si se guardo algo mientras se leia, no se fija (la proxima lectura sera nueva) */
+    _agg = a;
+    if (gen !== _gen) a.ts = Date.now() - TTL_MS + REFRESCO_MIN_MS;   /* se guardo algo mientras se leia: se renueva en 10 s */
     return a;
   })().finally(() => { _enCurso = null; });
   return _enCurso;
