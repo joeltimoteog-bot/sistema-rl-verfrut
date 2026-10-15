@@ -264,6 +264,16 @@
      en Acceso a Modulos (lo confirma Azure al iniciar sesion y queda en sessionStorage rl_app_eti) */
   var conPermiso=false; try{ conPermiso=sessionStorage.getItem('rl_app_eti')==='1'; }catch(e){}
   if(['jtimoteo'].indexOf(yo)<0 && !conPermiso){
+    /* sin marca en la sesion: se consulta a Azure (5 s). Si tiene Programacion ETI o Capacitaciones ETI (programar), se recarga con permiso */
+    try{
+      var _tk=sessionStorage.getItem('rl_token')||'';
+      var _ctl=new AbortController(); setTimeout(function(){ try{_ctl.abort();}catch(e){} },5000);
+      fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/acceso/permisosListar',{method:'POST',signal:_ctl.signal,
+        headers:Object.assign({'Content-Type':'application/json'},_tk?{'Authorization':'Bearer '+_tk}:{}),body:JSON.stringify({action:'permisosListar',usuario:yo})})
+        .then(function(r){return r.json();}).then(function(j){
+          if(j&&j.success&&j.permisos&&(j.permisos.navProgEti===true||j.permisos.navAppEti===true)){ sessionStorage.setItem('rl_app_eti','1'); location.reload(); }
+        }).catch(function(){});
+    }catch(e){}
     document.getElementById('app').innerHTML='<div class="card" style="max-width:520px;margin:40px auto;text-align:center"><h2>🔒 Acceso restringido</h2><p style="margin-top:8px">La programación de capacitaciones ETI la realiza el administrador o quien tenga ese permiso en Acceso a Módulos. Revisa tus fechas programadas en <b>Capacitaciones ETI → Mi Panel</b>.</p></div>';
     window.__PROGETI_BLOQ=true; return;
   }

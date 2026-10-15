@@ -12585,6 +12585,9 @@ function permAplicar() {
     if (m.boton.style.display !== deseado) m.boton.style.display = deseado;
   });
   _permIrPermitido();   /* _PERM_VELO_V1 */
+  /* _PERM_SOLO_ASIGNADO_V1: el boton Acceso a Modulos se crea aparte; si se lo quitaron, se oculta */
+  try { var _bp = document.getElementById('navPermisos'), _yo2 = String((USER && USER.usuario) || '').toLowerCase().trim();
+        if (_bp && _yo2 !== 'jtimoteo' && _permMios.navPermisos === false) _bp.style.display = 'none'; } catch (e) {}
 }
 
 function permObservar() {
@@ -12787,6 +12790,9 @@ async function permGuardar() {
 function permAgregarBoton() {
   try {
     if (!_permEsAdmin() || document.getElementById('navPermisos')) return;
+    /* _PERM_SOLO_ASIGNADO_V1 (15-oct-2026): "Acceso a Modulos" lo ve jtimoteo siempre; otro administrador
+       solo si no se lo quitaron en sus permisos (navPermisos = false lo oculta) */
+    try { var _yo = String((USER && USER.usuario) || '').toLowerCase().trim(); if (_yo !== 'jtimoteo' && _permMios && _permMios.navPermisos === false) return; } catch (e) {}
     var ref = document.getElementById('navUsr');            // junto a Gestion Usuarios
     if (!ref || !ref.parentNode) return;
     var b = document.createElement('button');
