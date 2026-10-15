@@ -391,7 +391,7 @@ async function _etiPermCargar(){
       { method:'POST', signal: ctl.signal, headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tk }, body: JSON.stringify({ action:'permisosListar' }) });
     clearTimeout(t);
     const j = await r.json();
-    if (j && j.success) { if (j.permisos && j.permisos.navAppEti === true) sessionStorage.setItem('rl_app_eti', '1'); else sessionStorage.removeItem('rl_app_eti'); }
+    if (j && j.success) { if (j.permisos && (j.permisos.navAppEti === true || j.permisos.navProgEti === true)) sessionStorage.setItem('rl_app_eti', '1');   /* Programacion ETI marcado = mismo permiso */ else sessionStorage.removeItem('rl_app_eti'); }
   } catch(e) { /* sin respuesta: se queda como estaba */ }
 }
 function puedeElegirSistema(rol){
