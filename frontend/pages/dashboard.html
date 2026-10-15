@@ -265,7 +265,7 @@ h3{font-size:16px !important}
     <img src="../images/logo-unifrutti.jpg" style="height:45px;width:auto;border-radius:6px;object-fit:contain;" alt="Unifrutti">
     <div class="tb-t" id="tbT">MI DASHBOARD</div>
     <button id="dmToggle" onclick="toggleDarkMode()" title="Modo oscuro" style="background:none;border:1.5px solid var(--bd);border-radius:8px;cursor:pointer;font-size:15px;padding:4px 10px;line-height:1;color:var(--gr);transition:all .2s;flex-shrink:0">🌙</button>
-    <div style="position:relative;flex:1;max-width:280px;margin:0 14px" id="globalSearchWrap">
+    <div style="position:relative;flex:1;max-width:280px;margin:0 14px;display:none" id="globalSearchWrap">   <!-- _SIN_BUSCADOR_V1 (15-oct-2026): oculto a pedido de Joel; se deja por si vuelve -->
       <input type="text" id="globalSearch" placeholder="🔍 Buscar..." autocomplete="off"
         oninput="busquedaGlobal(this.value)"
         onblur="setTimeout(()=>{const p=document.getElementById('globalResults');if(p)p.style.display='none'},220)"
