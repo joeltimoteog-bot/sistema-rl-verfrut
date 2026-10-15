@@ -25,7 +25,15 @@ function token(req) {
 /* cache corto en memoria: 200 personas entrando a la vez no leen 200 veces la base */
 let cache = { t: 0, D: null, recientes: null };
 const CACHE_MS = 30000;
-async function datos() {
+/* _CAIDAS_V1 (14-oct-2026): si 30 pantallas piden a la vez con la cache vencida, antes eran 30
+   lecturas completas de CUMPL_Datos/Casos/Visitas. Ahora comparten la misma lectura en curso. */
+let _datosEnCurso = null;
+function datos() {
+  if (_datosEnCurso) return _datosEnCurso;
+  _datosEnCurso = _datos().finally(() => { _datosEnCurso = null; });
+  return _datosEnCurso;
+}
+async function _datos() {
   const pool = await getPool();
   /* _CUMPL_W_V1: si cambio la config o una restriccion (guardado en Azure), no esperar los 30 s */
   let marcaW = null;

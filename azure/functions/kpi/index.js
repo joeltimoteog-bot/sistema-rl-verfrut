@@ -27,7 +27,7 @@ async function datosBase(pool, context, forzar) {
   try {
     const s = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'kpi_eti_sync'");
     const v = s.recordset.length ? Date.parse(String(s.recordset[0].valor).slice(0, 19) + 'Z') : 0;
-    if (forzar || !v || Date.now() - v > 180000) await ETI.sincronizar(pool);
+    if (forzar || !v || Date.now() - v > 600000) await ETI.sincronizar(pool);   /* _CAIDAS_V1: 10 min (antes 3): la copia completa de ETI pesa en la base */
   } catch (e) { context.log.warn('[kpi] ETI: ' + e.message); }
   base = { t: Date.now(), B: await KDB.cargar(pool) };
   return base;

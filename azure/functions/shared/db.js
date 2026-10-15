@@ -36,6 +36,17 @@ async function getPool() {
       console.log('Conectando a SQL Server:', config.server);
       pool = await sql.connect(config);
       console.log('SQL pool conectado');
+      /* _CAIDAS_V1 (14-oct-2026): sin quien escuche el evento 'error' del pool, un fallo de
+         conexion puede tumbar TODA la instancia (todas las peticiones fallan a la vez).
+         Ahora se registra y, si el pool quedo desconectado, la siguiente peticion reconecta. */
+      if (pool && !pool._rlErr) {
+        pool._rlErr = true;
+        const p0 = pool;
+        p0.on('error', (e) => {
+          console.error('SQL pool error:', e && e.message, 'code:', e && e.code);
+          if (pool === p0 && !p0.connected) pool = null;
+        });
+      }
       return pool;
     } catch (e) {
       console.error('SQL connection error:', e.message, 'code:', e.code);

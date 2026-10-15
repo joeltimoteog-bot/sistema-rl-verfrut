@@ -378,7 +378,24 @@ const ROLES_SELECCION = ['administrador','administrador 01','administrador 02','
    para 'administrador 01', pero solo se corrigio alla y no aca.
    Esto NO le da acceso a nadie: quien ve cada tarjeta lo sigue decidiendo
    aplicarVisibilidadModulos(). Aqui solo se decide quien llega a la pantalla. */
+/* _ETI_PERMISO_V1 (14-oct-2026): "Capacitaciones ETI (programar)" se asigna por usuario en
+   Acceso a Modulos (modulo 'navAppEti'). Se consulta a Azure al iniciar sesion (5 s maximo);
+   si no responde, todo queda como antes. Dentro del ETI el permiso lo vuelve a confirmar
+   el servidor (pase firmado en Azure), no esta marca del navegador. */
+function _etiPermitido(){ try { return sessionStorage.getItem('rl_app_eti') === '1'; } catch(e){ return false; } }
+async function _etiPermCargar(){
+  try {
+    const tk = sessionStorage.getItem('rl_token'); if (!tk || !window.AbortController) return;
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 5000);
+    const r = await fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/acceso/permisosListar',
+      { method:'POST', signal: ctl.signal, headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tk }, body: JSON.stringify({ action:'permisosListar' }) });
+    clearTimeout(t);
+    const j = await r.json();
+    if (j && j.success) { if (j.permisos && j.permisos.navAppEti === true) sessionStorage.setItem('rl_app_eti', '1'); else sessionStorage.removeItem('rl_app_eti'); }
+  } catch(e) { /* sin respuesta: se queda como estaba */ }
+}
 function puedeElegirSistema(rol){
+  if (_etiPermitido()) return true;   /* _ETI_PERMISO_V1 */
   var r = String(rol || '').toLowerCase().trim();
   if (!r) return false;
   if (ROLES_SELECCION.indexOf(r) >= 0) return true;
@@ -435,6 +452,8 @@ function aplicarVisibilidadModulos(user){
   // Sistema de Evaluaciones: oculto para usuarios de sector BIENESTAR SOCIAL (no admin)
   const evalCard = document.getElementById('modEval');
   if (evalCard) evalCard.style.display = (soloRRLL || (esBienestar && !esAdmin)) ? 'none' : '';
+  /* _ETI_PERMISO_V1: permiso dado en Acceso a Modulos -> ve la tarjeta de Capacitaciones ETI */
+  if (eti && _etiPermitido()) eti.style.display = '';
 }
 
 /* _AVISO_MIGRACION_V1 (15-ago-2026)
@@ -831,6 +850,7 @@ async function doLogin(){
         }).catch(function(eb){ console.warn('[login] SSO Bienestar fallo:', eb); });
       } catch(eSso) {}
       const rol=(d.user.rol||'').toLowerCase().trim();
+      try { sessionStorage.removeItem('rl_app_eti'); await _etiPermCargar(); } catch(eEP) {}   /* _ETI_PERMISO_V1 */
       // Precalentar caché del backend (fire & forget) — medir respuesta
       const _tPre=performance.now();
       console.time('[login] 2-preload-backend');

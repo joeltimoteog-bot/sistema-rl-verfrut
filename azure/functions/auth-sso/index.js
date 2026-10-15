@@ -18,6 +18,20 @@
 // ============================================================
 const jwt = require('jsonwebtoken');
 
+/* _ETI_PERMISO_V1 (14-oct-2026): ¿el administrador le dio "Capacitaciones ETI (programar)"
+   en Acceso a Modulos? (dbo.PermisosModulos, modulo 'navAppEti'). Si la base no responde
+   en 4 s o falla, se responde false: el pase sale igual, sin el permiso. */
+async function etiProg(usuario) {
+  try {
+    const { getPool, sql } = require('../shared/db');
+    const p = await Promise.race([getPool(), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 4000))]);
+    const q = p.request().input('u', sql.NVarChar(60), usuario)
+      .query("IF OBJECT_ID('dbo.PermisosModulos','U') IS NULL SELECT 0 AS ok ELSE SELECT COUNT(*) AS ok FROM dbo.PermisosModulos WHERE usuario = @u AND modulo = 'navAppEti' AND permitido = 1");
+    const r = await Promise.race([q, new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 4000))]);
+    return !!(r && r.recordset && r.recordset[0] && r.recordset[0].ok > 0);
+  } catch (e) { return false; }
+}
+
 const AUD_PASE   = 'eti-sso';
 const AUD_SESION = 'eti-sesion';
 
@@ -42,7 +56,9 @@ module.exports = async function (context, req) {
       catch (e) { return out(401, { success: false, error: 'Sesion invalida o vencida' }); }
       if (s.aud === AUD_PASE || !s.usuario) return out(401, { success: false, error: 'Token no valido para emitir' });
 
+      const _u = String(s.usuario).toLowerCase().trim();
       const pase = jwt.sign({
+        etiProg: await etiProg(_u),   /* _ETI_PERMISO_V1 */
         usuario: String(s.usuario).toLowerCase().trim(),
         rol:     String(s.rol || '').toLowerCase().trim(),
         empresa: String(s.empresa || ''),
@@ -59,7 +75,7 @@ module.exports = async function (context, req) {
                              secret, { expiresIn: '8h', audience: AUD_SESION });
       return out(200, {
         success: true,
-        user: { usuario: d.usuario, nombre: d.nombre || '', rol: d.rol || '', empresa: d.empresa || '' },
+        user: { usuario: d.usuario, nombre: d.nombre || '', rol: d.rol || '', empresa: d.empresa || '', etiProg: !!d.etiProg },   /* _ETI_PERMISO_V1 */
         token
       });
     }

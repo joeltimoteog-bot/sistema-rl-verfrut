@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3.9.6-red-lenta';   /* _SW_RED_LENTA_V1 (05-oct-2026) */
+const CACHE_VERSION = 'v3.9.7-caidas';   /* _SW_RED_LENTA_V1 (05-oct-2026) */
 const CACHE_NAME    = 'sistema-rl-' + CACHE_VERSION;
 const BASE          = '/sistema-rl-verfrut';
 // Solo lo mínimo para soporte offline básico — el resto se pide por red
@@ -87,7 +87,10 @@ self.addEventListener('fetch', (event) => {
         red.then((r) => { clearTimeout(reloj); dar(r); })
            .catch(() => {
              clearTimeout(reloj);
-             copiaGuardada.then((c) => c || caches.match(BASE + '/index.html'))
+             /* _CAIDAS_V1 (14-oct-2026): index.html solo como respaldo de una PAGINA. Antes tambien
+                se entregaba en lugar de un .js/.css y la pagina quedaba rota ("Unexpected token <"). */
+             const esPagina = event.request.destination === 'document' || url.pathname.endsWith('.html') || url.pathname.endsWith('/');
+             copiaGuardada.then((c) => c || (esPagina ? caches.match(BASE + '/index.html') : null))
                .then((c) => dar(c || Response.error()));
            });
       })

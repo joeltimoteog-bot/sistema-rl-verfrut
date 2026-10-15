@@ -172,17 +172,25 @@ function esReciente(r, total) {
    cambia la marca de carga (CV_Estado 'tablas_casos' / 'tablas_visitas'); si aun no hay
    marca devuelve null y quien llama usa el camino anterior. */
 let memoria = { ver: null, d: null };
+let _leyendo = { ver: null, p: null };   /* _CAIDAS_V1: una sola lectura completa en curso por version */
 async function leerCV(pool) {
   const e = await pool.request().query("SELECT clave, valor FROM dbo.CV_Estado WHERE clave IN ('tablas_casos', 'tablas_visitas') ORDER BY clave");
   if (e.recordset.length < 2) return null;
   const ver = e.recordset.map(x => x.valor).join('|');
   if (memoria.ver === ver) return memoria.d;
-  const c = (await pool.request().query('SELECT * FROM dbo.Casos ORDER BY fila')).recordset;
-  const v = (await pool.request().query('SELECT * FROM dbo.Visitas ORDER BY fila')).recordset;
-  const d = { casos: c.map(casoDeFila), recientes: c.filter(f => esReciente(f, c.length)).map(casoDeFila),
-              visitas: v.filter(f => f.nro !== null).map(visitaDeFila) };
-  memoria = { ver, d };
-  return d;
+  /* _CAIDAS_V1 (14-oct-2026): antes, 20 pedidos juntos hacian 20 lecturas COMPLETAS de Casos y
+     Visitas (saturaba la base S1). Ahora esperan la misma lectura. */
+  if (_leyendo.p && _leyendo.ver === ver) return _leyendo.p;
+  const p = (async () => {
+    const c = (await pool.request().query('SELECT * FROM dbo.Casos ORDER BY fila')).recordset;
+    const v = (await pool.request().query('SELECT * FROM dbo.Visitas ORDER BY fila')).recordset;
+    const d = { casos: c.map(casoDeFila), recientes: c.filter(f => esReciente(f, c.length)).map(casoDeFila),
+                visitas: v.filter(f => f.nro !== null).map(visitaDeFila) };
+    memoria = { ver, d };
+    return d;
+  })();
+  _leyendo = { ver, p };
+  try { return await p; } finally { if (_leyendo.p === p) _leyendo = { ver: null, p: null }; }
 }
 
 module.exports = { COLS, TABLA, asegurarTablas, armarCarga, casoDeFila, visitaDeFila, esReciente, leerCV };
