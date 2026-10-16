@@ -127,8 +127,10 @@ window.RLTrafico = window.RLTrafico || (function () {
       preaviso: 'Preavisos', inventario: 'Inventario', 'calculo-remunerativo': 'Cálculo remunerativo', 'consulta-masiva': 'Consulta masiva', estadisticas: 'Estadísticas',
       'estadisticas-atenciones': 'Estadísticas de atenciones', resumen: 'Resumen general', usuarios: 'Gestión usuarios', 'informe-gerencial': 'Informe gerencial' };
     if (NOMP[pag] && pag !== 'dashboard') {
-      var k = '_trf_pag_' + pag;
-      if (!sessionStorage.getItem(k)) { sessionStorage.setItem(k, '1'); setTimeout(function () { T.emit({ accion: 'Abrió ' + NOMP[pag], destino: 'Firebase' }); }, 1500); }
+      /* _TRAFICO_V3 (15-oct-2026): antes se anotaba UNA sola vez por sesion y el Monitor no veia los
+         movimientos reales. Ahora cada ingreso cuenta (con freno de 45 s por si recarga la pagina). */
+      var k = '_trf_pag_' + pag, ult = Number(sessionStorage.getItem(k) || 0);
+      if (Date.now() - ult > 45000) { sessionStorage.setItem(k, String(Date.now())); setTimeout(function () { T.emit({ accion: 'Entró a ' + NOMP[pag], destino: 'Firebase', tipo: 'nav' }); }, 1200); }
     }
   } catch (e) {}
 })();

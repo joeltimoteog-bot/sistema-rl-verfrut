@@ -88,7 +88,40 @@ async function datos(modulo) {
   cache[modulo] = { ver, m };
   return m;
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   _MOD_ENCURSO_V1 (15-oct-2026) — misma consulta en camino = UNA sola lectura
+   ---------------------------------------------------------------------------
+   A las 8:00 varios usuarios abren el Dashboard a la vez y cada pestaña pide
+   getFusiones, getSupervisores, mant, acc... Antes cada peticion identica leia
+   la base por su cuenta (N lecturas iguales al mismo tiempo = base saturada y
+   cortes a los 8 s). Ahora las peticiones iguales que llegan MIENTRAS una esta
+   en curso esperan esa respuesta y la comparten. No hay memoria entre llamadas:
+   apenas termina, la siguiente vuelve a leer (el que guarda ve su cambio igual).
+   ═══════════════════════════════════════════════════════════════════════════ */
+const _enCurso = new Map();
 module.exports = async function (context, req) {
+  const modulo = context.bindingData.modulo, accion = context.bindingData.accion;
+  let clave = '';
+  try { clave = modulo + '/' + accion + '|' + JSON.stringify(req.body || {}).slice(0, 2000); } catch (e) { clave = ''; }
+  if (clave && _enCurso.has(clave)) {
+    try {
+      const r = await _enCurso.get(clave);
+      if (r) { context.res = { status: r.status, headers: Object.assign({ 'X-Compartida': '1' }, r.headers || {}), body: r.body, isRaw: r.isRaw }; return; }
+    } catch (e) { /* si la compartida fallo, se calcula normal abajo */ }
+  }
+  let resolver;
+  if (clave) _enCurso.set(clave, new Promise(function (r) { resolver = r; }));
+  try {
+    await atender(context, req);
+    if (resolver) resolver(context.res && context.res.status === 200 ? context.res : null);
+  } catch (e) {
+    if (resolver) resolver(null);
+    throw e;
+  } finally {
+    if (clave) _enCurso.delete(clave);
+  }
+};
+async function atender(context, req) {
   const modulo = context.bindingData.modulo, accion = context.bindingData.accion;
   const h = HANDLERS[modulo], fn = h && h.acciones[accion];
   if (!fn) { context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }

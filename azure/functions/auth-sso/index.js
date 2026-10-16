@@ -26,7 +26,7 @@ async function etiProg(usuario) {
     const { getPool, sql } = require('../shared/db');
     const p = await Promise.race([getPool(), new Promise((_, r) => setTimeout(() => r(new Error('timeout')), 4000))]);
     const q = p.request().input('u', sql.NVarChar(60), usuario)
-      .query("IF OBJECT_ID('dbo.PermisosModulos','U') IS NULL SELECT 0 AS ok ELSE SELECT COUNT(*) AS ok FROM dbo.PermisosModulos WHERE usuario = @u AND modulo = 'navAppEti' AND permitido = 1");
+      .query("IF OBJECT_ID('dbo.PermisosModulos','U') IS NULL SELECT 0 AS ok ELSE SELECT COUNT(*) AS ok FROM dbo.PermisosModulos WHERE usuario = @u AND modulo IN ('navAppEti','navProgEti') AND permitido = 1");
     const r = await Promise.race([q, new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 4000))]);
     return !!(r && r.recordset && r.recordset[0] && r.recordset[0].ok > 0);
   } catch (e) { return false; }

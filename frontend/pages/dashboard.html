@@ -18,6 +18,7 @@
 <script src="../lib/html2pdf.bundle.min.js"></script>
 <script src="../js/modal-system.js"></script>
 <script src="../js/salud.js"></script>  <!-- _SALUD_V1 (23-set): registro de errores, mensajes en espanol, aviso de version nueva -->
+<script src="../js/cola-azure.js?v=1"></script>  <!-- _COLA_AZURE_V1 (15-oct): reparte las consultas a Azure (memoria 25 s, 1 sola en camino, max 4 a la vez) -->
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--azul:#0a2463;--azul-med:#1e3a8a;--azul-c:#3b82f6;--rojo:#dc2626;--bg:#f1f5f9;--bd:#e2e8f0;--tx:#0f172a;--gr:#64748b;--sw:262px}
@@ -14362,7 +14363,7 @@ console.log('[_CUMPL_UI_V1] listo');
 })();
 </script>
 
-<script src="../js/trafico.js?v=3"></script>
+<script src="../js/trafico.js?v=4"></script>  <!-- _TRAFICO_V3: cada ingreso a modulo -->
 <script>
 /* ══════ _TRAFICO_V1 (20-set-2026) — acciones de negocio del RR.LL al mapa de tráfico ══════ */
 (function(){
@@ -14387,7 +14388,9 @@ if(typeof prev==='function'){
 try{ if(!sessionStorage.getItem('_trf_in')){sessionStorage.setItem('_trf_in','1');setTimeout(function(){try{RLTrafico.emit({accion:'Entró al dashboard',destino:'Firebase'});}catch(e){}},1500);} }catch(e){}
 var _lo=window.logout; if(typeof _lo==='function'){window.logout=function(){try{RLTrafico.emit({accion:'Cerró sesión',destino:'Firebase'});}catch(e){}return _lo.apply(this,arguments);};}
 /* _TRAFICO_V2: al entrar a cada seccion del dashboard (una vez por sesion) */
-var _ir=window.ir; if(typeof _ir==='function'){window.ir=function(id){try{var k='_trf_sec_'+id;if(id&&id!=='dashboard'&&!sessionStorage.getItem(k)){sessionStorage.setItem(k,'1');var el=document.querySelector('[onclick*="ir(\''+id+'\'"]');var t=el?el.textContent.replace(/\s+/g,' ').trim():id;RLTrafico.emit({accion:'Abrió '+t.replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ]+/,''),destino:'Firebase'});}}catch(e){}return _ir.apply(this,arguments);};try{ir=window.ir;}catch(e){}}
+/* _TRAFICO_V3 (15-oct-2026): CADA ingreso a un modulo se anota (antes solo el primero de la sesion, por eso
+   el Monitor no mostraba los movimientos). Freno de 45 s por modulo para no repetir clics seguidos. */
+var _ir=window.ir; if(typeof _ir==='function'){window.ir=function(id){try{var k='_trf_sec_'+id;var ult=Number(sessionStorage.getItem(k)||0);if(id&&id!=='dashboard'&&(Date.now()-ult)>45000){sessionStorage.setItem(k,String(Date.now()));var el=document.querySelector('[onclick*="ir(\''+id+'\'"]');var t=el?el.textContent.replace(/\s+/g,' ').trim().replace(/[0-9]+\s*$/,'').trim():id;RLTrafico.emit({accion:'Entró a '+t.replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ]+/,''),destino:'Firebase',tipo:'nav'});}}catch(e){}return _ir.apply(this,arguments);};try{ir=window.ir;}catch(e){}}
 console.log('[_TRAFICO_V1] listo');
 })();
 </script>
@@ -16379,7 +16382,7 @@ function azure(p) {
   var cuerpo = {};
   try { new URLSearchParams(p).forEach(function (v, k) { if (k !== 'action') cuerpo[k] = v; }); } catch (e) {}   // mismos valores (texto) que recibe Google
   var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-  var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 8000);
+  var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 14000);   /* _CAIDAS_V3 (15-oct): 8 s cortaba la consulta justo cuando Azure estaba por responder y la pantalla caia a Google (doble carga) */
   var op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) };
   if (ctrl) op.signal = ctrl.signal;
   return fetch(AZURE_FN_BASE + '/cv/' + p.action, op).then(function (r) {
@@ -16436,7 +16439,7 @@ var POST = { cumplPendientes: 1, cumplPanel: 1 }, GET = { getCumplimiento: 1 };
 
 function azure(accion, cuerpo) {
   var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-  var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 8000);
+  var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 14000);   /* _CAIDAS_V3 (15-oct): 8 s cortaba la consulta justo cuando Azure estaba por responder y la pantalla caia a Google (doble carga) */
   var op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) };
   if (ctrl) op.signal = ctrl.signal;
   return fetch(AZURE_FN_BASE + '/cumpl/' + accion, op).then(function (r) {
@@ -16657,7 +16660,7 @@ console.log('[_EDIT_AZURE_PRIMERO_V1] listo: Editar atencion va primero a Azure'
     return (async function () {
       var cuerpo = {}; Object.keys(p).forEach(function (k) { if (k !== 'action') cuerpo[k] = p[k]; });
       var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 8000);
+      var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 14000);   /* _CAIDAS_V3 (15-oct): 8 s cortaba la consulta justo cuando Azure estaba por responder y la pantalla caia a Google (doble carga) */
       try {
         var op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) };
         if (ctrl) op.signal = ctrl.signal;
@@ -16691,7 +16694,7 @@ console.log('[_EDIT_AZURE_PRIMERO_V1] listo: Editar atencion va primero a Azure'
     return (async function () {
       var cuerpo = {}; Object.keys(p).forEach(function (k) { if (k !== 'action') cuerpo[k] = p[k]; });
       var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 8000);
+      var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 14000);   /* _CAIDAS_V3 (15-oct): 8 s cortaba la consulta justo cuando Azure estaba por responder y la pantalla caia a Google (doble carga) */
       try {
         var op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) };
         if (ctrl) op.signal = ctrl.signal;
@@ -16734,7 +16737,7 @@ var ADMIN = ['administrador', 'administrador 01', 'administrador 02', 'coordinad
 
 function pedir(ruta, cuerpo) {
   var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-  var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 8000);
+  var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 14000);   /* _CAIDAS_V3 (15-oct): 8 s cortaba la consulta justo cuando Azure estaba por responder y la pantalla caia a Google (doble carga) */
   var op = cuerpo ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo) } : { method: 'GET' };
   if (ctrl) op.signal = ctrl.signal;
   return fetch(AZURE_FN_BASE + ruta, op).then(function (r) {

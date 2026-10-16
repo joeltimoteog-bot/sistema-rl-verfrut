@@ -68,9 +68,24 @@ window.addEventListener('beforeunload', function () { _salidaTs = Date.now(); })
 window.addEventListener('pagehide', function () { _salidaFin = true; });
 window.addEventListener('pageshow', function () { _salidaFin = false; _salidaTs = 0; });
 function saliendo() { return _salidaFin || (_salidaTs && (Date.now() - _salidaTs) < 5000); }
+/* _SALUD_RUIDO_V1 (15-oct-2026): avisos que NO son fallas del sistema y llenaban LOG_ERRORES
+   (y disparaban el correo "se cayo el servidor"):
+     · HTTP 503 de azure:mod/mant|acc|resp = "Azure aun no es la fuente de este modulo" (respuesta
+       prevista: la pantalla sigue por Google, como siempre);
+     · "Failed to update a ServiceWorker": el navegador no pudo re-descargar sw.js (red del momento);
+       la pagina ya cargo y funciona igual. */
+function esRuido(tipo, accion, detalle) {
+  try {
+    var a = String(accion || ''), d = String(detalle || '');
+    if (tipo === 'azure_http' && /HTTP 503/.test(d) && /^azure:mod\/(mant|acc|resp)\//.test(a)) return true;
+    if (tipo === 'js_promesa' && /Failed to update a ServiceWorker/i.test(d)) return true;
+  } catch (e) {}
+  return false;
+}
 function registrar(tipo, accion, ms, detalle) {
   try {
     if ((/_falla$/.test(String(tipo)) || tipo === 'js_promesa') && saliendo()) return;   /* _SALUD_SALIENDO_V1 */
+    if (esRuido(tipo, accion, detalle)) return;   /* _SALUD_RUIDO_V1 */
     var clave = tipo + '|' + accion + '|' + String(detalle || '').slice(0, 60);
     var t = Date.now();
     if (_vistos[clave] && (t - _vistos[clave]) < 60000) return;   // mismo error en 60 s = 1 registro
