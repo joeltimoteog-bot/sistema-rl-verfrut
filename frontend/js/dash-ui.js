@@ -195,3 +195,89 @@
     if (n < 80) setTimeout(function () { esperar(n + 1); }, 150);
   })(0);
 })();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _DASH_CHARTS_V2 (15-oct-2026) — graficos de Mi Dashboard modernizados
+   Envuelve `new Chart(...)`: si el canvas esta dentro de #sec-dashboard, enriquece la
+   configuracion (degradados, barras redondeadas, grilla suave, tooltips, dona con total
+   al centro, valores sobre las barras, animacion). Los DATOS y el codigo que los arma no
+   cambian. Fuera del dashboard, Chart se comporta exactamente igual que antes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  if (window._DASH_CHARTS_V2 || typeof window.Chart !== 'function') return;
+  window._DASH_CHARTS_V2 = true;
+  var Orig = window.Chart;
+  function hex2rgb(h) { var m = String(h || '').match(/^#([0-9a-f]{6})$/i); if (!m) return null; var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+  function rgba(h, a) { var c = hex2rgb(h); return c ? 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')' : h; }
+  function fmt(v) { v = Number(v) || 0; return v >= 1000 ? v.toLocaleString('es-PE') : String(v); }
+  function enDashboard(el) { try { if (typeof el === 'string') el = document.getElementById(el); var c = el && (el.canvas || el); if (c && c.getContext === undefined && c.canvas) c = c.canvas; return !!(c && c.closest && c.closest('#sec-dashboard')); } catch (e) { return false; } }
+  function grad(base, vertical) {
+    return function (ctx) {
+      try {
+        var ch = ctx.chart, area = ch.chartArea; if (!area) return base;
+        var g = ch.ctx.createLinearGradient(0, area.top, 0, area.bottom);
+        g.addColorStop(0, base); g.addColorStop(1, rgba(base, vertical ? 0.55 : 0.05));
+        return g;
+      } catch (e) { return base; }
+    };
+  }
+  var centro = { id: 'd2Centro', afterDraw: function (ch) {
+    try {
+      if (ch.config.type !== 'doughnut') return;
+      var ds = ch.data.datasets[0]; if (!ds) return;
+      var tot = (ds.data || []).reduce(function (a, b) { return a + (Number(b) || 0); }, 0);
+      var meta = ch.getDatasetMeta(0), x = (ch.chartArea.left + ch.chartArea.right) / 2, y = (ch.chartArea.top + ch.chartArea.bottom) / 2;
+      var c = ch.ctx; c.save(); c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.font = '800 22px "Barlow Condensed",Barlow,sans-serif'; c.fillStyle = '#0a2463'; c.fillText(fmt(tot), x, y - 6);
+      c.font = '600 10.5px Barlow,sans-serif'; c.fillStyle = '#64748b';
+      var i = Number(ch.$d2hover); var sub = 'total';
+      if (!isNaN(i) && ds.data[i] != null && tot) sub = ch.data.labels[i] + ' · ' + Math.round(ds.data[i] / tot * 100) + '%';
+      c.fillText(sub, x, y + 12); c.restore();
+    } catch (e) {}
+  }, afterEvent: function (ch, args) { try { var els = ch.getElementsAtEventForMode(args.event, 'nearest', { intersect: true }, false); ch.$d2hover = els.length ? els[0].index : undefined; } catch (e) {} } };
+  var valores = { id: 'd2Valores', afterDatasetsDraw: function (ch) {
+    try {
+      if (ch.config.type !== 'bar') return;
+      var n = (ch.data.labels || []).length; if (!n || n > 14) return;
+      var c = ch.ctx; c.save(); c.font = '700 10.5px Barlow,sans-serif'; c.textAlign = 'center'; c.fillStyle = '#334155';
+      ch.data.datasets.forEach(function (ds, di) {
+        var meta = ch.getDatasetMeta(di); if (!meta || meta.hidden) return;
+        meta.data.forEach(function (bar, i) { var v = ds.data[i]; if (v == null || !Number(v)) return; c.fillText(fmt(v), bar.x, bar.y - 5); });
+      });
+      c.restore();
+    } catch (e) {}
+  } };
+  function mejorar(cfg) {
+    var t = cfg.type, o = cfg.options = cfg.options || {}, p = o.plugins = o.plugins || {};
+    o.animation = o.animation || { duration: 900, easing: 'easeOutQuart' };
+    o.interaction = o.interaction || { mode: 'index', intersect: false };
+    p.tooltip = Object.assign({ backgroundColor: '#0f172a', titleColor: '#fff', bodyColor: '#e2e8f0', padding: 10, cornerRadius: 10, displayColors: true, boxPadding: 4, titleFont: { family: 'Barlow', weight: '800', size: 12 }, bodyFont: { family: 'Barlow', size: 12 },
+      callbacks: { label: function (c) { var v = c.parsed.y != null ? c.parsed.y : c.parsed; return ' ' + (c.dataset.label ? c.dataset.label + ': ' : '') + fmt(v); } } }, p.tooltip || {});
+    if (p.legend && p.legend.display !== false) { p.legend.labels = Object.assign({ usePointStyle: true, pointStyle: 'circle', boxWidth: 8, padding: 14, font: { family: 'Barlow', weight: '700', size: 11.5 }, color: '#475569' }, p.legend.labels || {}); }
+    if (t === 'bar' || t === 'line') {
+      o.scales = o.scales || {}; o.scales.x = o.scales.x || {}; o.scales.y = o.scales.y || {};
+      o.scales.x.grid = Object.assign({ display: false }, o.scales.x.grid || {}); o.scales.x.border = { display: false };
+      o.scales.x.ticks = Object.assign({ font: { family: 'Barlow', weight: '700', size: 11 }, color: '#64748b' }, o.scales.x.ticks || {});
+      o.scales.y.grid = Object.assign({ color: 'rgba(100,116,139,.12)', drawTicks: false }, o.scales.y.grid || {}); o.scales.y.border = { display: false, dash: [4, 4] };
+      o.scales.y.ticks = Object.assign({ font: { family: 'Barlow', size: 10.5 }, color: '#94a3b8', padding: 6, callback: function (v) { return fmt(v); } }, o.scales.y.ticks || {});
+    }
+    (cfg.data && cfg.data.datasets || []).forEach(function (ds) {
+      if (t === 'bar' && typeof ds.backgroundColor === 'string') { var base = ds.backgroundColor; ds.backgroundColor = grad(base, true); ds.hoverBackgroundColor = base; ds.borderRadius = { topLeft: 10, topRight: 10, bottomLeft: 2, bottomRight: 2 }; ds.borderSkipped = false; ds.maxBarThickness = 54; }
+      if (t === 'line') { var bc = ds.borderColor || '#0a2463'; ds.borderWidth = 3; ds.tension = ds.tension || 0.4; ds.pointRadius = 4; ds.pointHoverRadius = 7; ds.pointBackgroundColor = '#fff'; ds.pointBorderColor = bc; ds.pointBorderWidth = 2.5; if (ds.fill) ds.backgroundColor = grad(typeof bc === 'string' && bc.charAt(0) === '#' ? bc : '#0a2463', false); }
+      if (t === 'doughnut') { ds.borderWidth = 3; ds.borderColor = '#fff'; ds.hoverOffset = 10; ds.borderRadius = 4; }
+    });
+    if (t === 'doughnut') { o.cutout = o.cutout || '70%'; cfg.plugins = (cfg.plugins || []).concat([centro]); }
+    if (t === 'bar') cfg.plugins = (cfg.plugins || []).concat([valores]);
+    return cfg;
+  }
+  function Wrap(el, cfg) {
+    try { if (cfg && enDashboard(el)) cfg = mejorar(cfg); } catch (e) {}
+    return new Orig(el, cfg);
+  }
+  Object.setPrototypeOf(Wrap, Orig); Wrap.prototype = Orig.prototype;
+  try { Object.getOwnPropertyNames(Orig).forEach(function (k) { if (!(k in Wrap)) { try { Wrap[k] = Orig[k]; } catch (e) {} } }); } catch (e) {}
+  try { Orig.defaults.font.family = 'Barlow, "Segoe UI", sans-serif'; Orig.defaults.color = '#64748b'; } catch (e) {}
+  window.Chart = Wrap;
+  console.log('[_DASH_CHARTS_V2] listo');
+})();
