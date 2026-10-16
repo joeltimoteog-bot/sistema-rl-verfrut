@@ -1301,5 +1301,92 @@ checkSessionCache();
 })();
 </script>
 
-  </body>
+  
+<!-- ══════ _HUB_UI_V2 (15-oct-2026) — tarjetas del hub modernizadas (misma navegacion: irA / irAConSSO) ══════
+     · Cada tarjeta muestra sus funciones como lista con iconos, cuantas personas estan DENTRO de ese sistema
+       ahora (presencia de Firebase, 1 lectura) y tu ultimo ingreso a ese sistema (memoria del navegador).
+     · Atajos de teclado 1 / 2 / 3 y entrada escalonada. No toca el login ni el SSO. -->
+<style>
+.mx-card{flex:0 1 300px;width:300px}
+.mx-in{padding:28px 24px 22px;align-items:stretch;text-align:left}
+.mx-top{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+.mx-ico{margin-bottom:0;width:62px;height:62px;border-radius:18px;font-size:30px;flex:none}
+.mx-t{margin-bottom:2px;font-size:22px;line-height:1.1}
+.mx-sub{font-size:11px;color:#93a7cb;letter-spacing:.3px}
+.mx-d{display:none}
+.mx-list{list-style:none;margin:0 0 14px;padding:0;display:flex;flex-direction:column;gap:6px}
+.mx-list li{display:flex;align-items:center;gap:9px;font-size:12.5px;color:#c7d3ea}
+.mx-list li i{flex:none;width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.08);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-style:normal}
+.mx-meta{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px}
+.mx-meta span{font-size:10.5px;font-weight:700;color:#aebbd8;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);border-radius:999px;padding:4px 9px;display:inline-flex;align-items:center;gap:5px}
+.mx-meta .on{color:#86efac}.mx-meta .on b{width:7px;height:7px;border-radius:50%;background:#22c55e;display:inline-block;box-shadow:0 0 0 0 rgba(34,197,94,.6);animation:mxpulse 1.8s infinite}
+@keyframes mxpulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.55)}70%{box-shadow:0 0 0 6px rgba(34,197,94,0)}100%{box-shadow:0 0 0 0 rgba(34,197,94,0)}}
+.mx-badge{width:100%;text-align:center;padding:11px 18px;font-size:12px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--grad);color:#fff;border:0;box-shadow:0 10px 24px var(--sombra)}
+.mx-badge .k{font-size:10px;opacity:.75;background:rgba(0,0,0,.25);border-radius:5px;padding:1px 6px;letter-spacing:0}
+.mx-badge .ar{transition:transform .25s}
+.mx-card:hover .mx-badge .ar{transform:translateX(5px)}
+#mxAtajos{text-align:center;font-size:11px;color:rgba(255,255,255,.4);margin:-14px 0 16px}
+#mxAtajos b{background:rgba(255,255,255,.1);border-radius:5px;padding:1px 6px;color:rgba(255,255,255,.75);font-weight:700}
+@media(max-width:600px){.mx-card{width:100%}#mxAtajos{display:none}}
+</style>
+<script>
+(function(){
+'use strict';
+if(window._HUB_UI_V2)return;window._HUB_UI_V2=true;
+var INFO={
+  modRRLL:{sub:'Relaciones Laborales',items:[['📋','Atenciones y consultas por DNI'],['⚖️','Registro de casos y visitas'],['🚌','Fusiones, horas y reportes']],k:'RR.LL',tecla:'1'},
+  modETI:{sub:'Ética e Integridad',items:[['🎓','Capacitaciones programadas'],['📈','Seguimiento y evidencias'],['📑','Reportes por sector']],k:'CAP',tecla:'2'},
+  modEval:{sub:'Evaluaciones ETI',items:[['⭐','Evaluación de ética social'],['🧮','Calificaciones por trabajador'],['📊','Reportes y estadísticas']],k:'EVAL',tecla:'3'}
+};
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function hace(ts){var m=Math.round((Date.now()-ts)/60000);if(m<1)return 'hace un momento';if(m<60)return 'hace '+m+' min';var h=Math.round(m/60);if(h<24)return 'hace '+h+' h';var d=Math.round(h/24);return d===1?'ayer':'hace '+d+' días';}
+function usuario(){try{var u=JSON.parse(sessionStorage.getItem('user')||'null');return u&&u.usuario?String(u.usuario).toLowerCase():'';}catch(e){return '';}}
+function armar(){
+  Object.keys(INFO).forEach(function(id){
+    var c=document.getElementById(id),inf=INFO[id];if(!c||c.querySelector('.mx-list'))return;
+    var inr=c.querySelector('.mx-in'),ico=c.querySelector('.mx-ico'),t=c.querySelector('.mx-t'),d=c.querySelector('.mx-d'),b=c.querySelector('.mx-badge');
+    if(!inr||!ico||!t||!b)return;
+    var top=document.createElement('div');top.className='mx-top';
+    var tx=document.createElement('div');
+    inr.insertBefore(top,ico);top.appendChild(ico);top.appendChild(tx);tx.appendChild(t);
+    var sub=document.createElement('div');sub.className='mx-sub';sub.textContent=inf.sub;tx.appendChild(sub);
+    var ul=document.createElement('ul');ul.className='mx-list';ul.innerHTML=inf.items.map(function(x){return '<li><i>'+x[0]+'</i>'+esc(x[1])+'</li>';}).join('');
+    inr.insertBefore(ul,d||b);
+    var meta=document.createElement('div');meta.className='mx-meta';meta.id=id+'Meta';
+    var ult=0;try{ult=Number(localStorage.getItem('rl_hub_ult_'+usuario()+'_'+id)||0);}catch(e){}
+    meta.innerHTML='<span class="on" data-on><b></b><span data-n>…</span> en línea</span>'+(ult?'<span>🕒 '+esc(hace(ult))+'</span>':'<span>🕒 primer ingreso</span>');
+    inr.insertBefore(meta,b);
+    b.innerHTML='ACCEDER <span class="ar">→</span><span class="k">'+inf.tecla+'</span>';
+    c.addEventListener('click',function(){try{localStorage.setItem('rl_hub_ult_'+usuario()+'_'+id,String(Date.now()));}catch(e){}},true);
+  });
+  var g=document.getElementById('pmGrid');
+  if(g&&!document.getElementById('mxAtajos')){var a=document.createElement('div');a.id='mxAtajos';a.innerHTML='Atajos: <b>1</b> RR.LL. &nbsp;·&nbsp; <b>2</b> ETI &nbsp;·&nbsp; <b>3</b> Evaluaciones';g.parentNode.insertBefore(a,g.nextSibling);}
+}
+/* cuantos estan dentro de cada sistema ahora (misma presencia que el Monitor) */
+function enLinea(){
+  var g=document.getElementById('pmGrid');if(!g||g.offsetParent===null)return;
+  fetch('https://sistema-rl-verfrut-default-rtdb.firebaseio.com/presencia.json',{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+    var ahora=Date.now(),c={modRRLL:0,modETI:0,modEval:0};
+    Object.keys(j||{}).forEach(function(k){var p=j[k];if(!p||!p.online||!p.ultimo_ping||ahora-p.ultimo_ping>120000)return;var s=String(p.modulo||'').toLowerCase();
+      if(/evaluaci/.test(s))c.modEval++;else if(/sistema eti|eti ·|eti -/.test(s))c.modETI++;else c.modRRLL++;});
+    Object.keys(c).forEach(function(id){var m=document.getElementById(id+'Meta');if(!m)return;var n=m.querySelector('[data-n]');if(n)n.textContent=c[id];});
+  }).catch(function(){Object.keys(INFO).forEach(function(id){var m=document.getElementById(id+'Meta');var n=m&&m.querySelector('[data-n]');if(n&&n.textContent==='…')n.textContent='–';});});
+}
+document.addEventListener('keydown',function(e){
+  try{
+    var g=document.getElementById('pmGrid');if(!g||g.offsetParent===null)return;
+    if(e.ctrlKey||e.altKey||e.metaKey)return;var t=e.target;if(t&&/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))return;
+    var id={'1':'modRRLL','2':'modETI','3':'modEval'}[e.key];if(!id)return;var c=document.getElementById(id);
+    if(c&&c.style.display!=='none'&&c.offsetParent!==null){e.preventDefault();c.click();}
+  }catch(err){}
+});
+function ini(){try{armar();enLinea();setInterval(enLinea,30000);}catch(e){console.warn('[_HUB_UI_V2]',e);}}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',ini);else ini();
+/* si el hub aparece despues del login (misma pagina), se vuelve a leer la presencia */
+try{new MutationObserver(function(){var g=document.getElementById('pmGrid');if(g&&g.offsetParent!==null&&!g._mxOn){g._mxOn=true;enLinea();}else if(g&&g.offsetParent===null)g._mxOn=false;}).observe(document.body,{attributes:true,subtree:true,attributeFilter:['style','class']});}catch(e){}
+console.log('[_HUB_UI_V2] listo');
+})();
+</script>
+
+</body>
 </html>
