@@ -127,6 +127,49 @@
   .kv{font-size:13px;margin:4px 0}.kv b{color:#475569}
   .estado-nube{font-size:12px;font-weight:700;color:var(--tx2)}
   .hidden{display:none!important}
+  /* ═══ _PROGETI_V2 (16-oct-2026): cronograma por año + calendario de ejecucion ═══ */
+  .topbar{background:linear-gradient(110deg,#07173f,#0a2463 50%,#1d4ed8);padding:14px 20px;flex-wrap:wrap}
+  .topbar h1{font-size:21px}
+  .kpis{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .kpi{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:11px;padding:6px 12px;min-width:86px;text-align:center;color:#fff}
+  .kpi b{display:block;font-size:18px;font-weight:800;line-height:1.1}.kpi span{font-size:10px;opacity:.85;white-space:nowrap}
+  .kpi.rojo b{color:#fca5a5}.kpi.amar b{color:#fde047}
+  .tabs{border-radius:12px}.tab{border-radius:9px}
+  .card{border-radius:14px}
+  .ptool{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;background:#f8fafc;border:1px solid var(--bd);border-radius:12px;padding:8px 10px}
+  .ptool .lbl{font-weight:800;color:var(--az);font-size:12.5px}
+  .pt{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--bd);border-radius:999px;padding:5px 11px;font-weight:800;font-size:12px;cursor:pointer;background:#fff;color:#334155}
+  .pt .sw{margin:0}
+  .pt.on{border-color:var(--az);box-shadow:0 0 0 3px rgba(10,36,99,.12);color:var(--az)}
+  .pt.borrar.on{border-color:#dc2626;color:#b91c1c;box-shadow:0 0 0 3px rgba(220,38,38,.12)}
+  .ptool .ghost{font-size:11.5px;color:var(--tx2);margin-left:auto}
+  .prog{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+  .pg{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:8px 10px}
+  .pg b{display:block;font-size:12px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pg .r{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--tx2);margin-top:2px}
+  .pg .r .sw{width:9px;height:9px;margin:0}
+  .pg .r em{margin-left:auto;font-style:normal;font-weight:800;color:#0f172a}
+  .pg .r.falta em{color:#b91c1c}
+  .ctab td.c{height:24px;min-width:74px;position:relative}
+  .ctab td.c small.dia{position:absolute;left:3px;bottom:0;font-size:8.5px;font-weight:800;color:#0f172a;opacity:.8}
+  .ctab tr.hoy td.sem{background:#dbeafe;color:var(--az2)}
+  .ctab tr.hoy td{border-top:2px solid var(--az2);border-bottom:2px solid var(--az2)}
+  body.pintando .ctab td.c{cursor:cell}
+  body.pintando .ctab td.sem{cursor:pointer;text-decoration:underline dotted}
+  .ctab td.c.preview{outline:2px dashed var(--az2);outline-offset:-2px}
+  .cal .d{border-radius:10px;min-height:110px;position:relative;padding-bottom:26px}
+  .cal .d .add{position:absolute;right:5px;bottom:5px;width:22px;height:22px;border-radius:50%;border:none;background:#eef2f8;color:var(--az);font-weight:900;cursor:pointer;font-size:14px;line-height:1}
+  .cal .d:hover .add{background:var(--az);color:#fff}
+  .gh{border:1.5px dashed #94a3b8;border-radius:7px;padding:3px 6px;font-size:10.5px;color:#475569;background:#fafbfe;display:flex;align-items:center;gap:5px;cursor:pointer;font-weight:700;line-height:1.2}
+  .gh .sw{width:8px;height:8px;margin:0;border:none}
+  .gh:hover{border-color:var(--az2);color:var(--az)}
+  .cal .n i.sem{color:#fff;background:var(--az);border-radius:5px;padding:1px 5px;font-weight:800}
+  .pop .it{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1.5px solid var(--bd);border-radius:10px;margin-bottom:6px;font-weight:700;cursor:pointer;font-size:12.5px}
+  .pop .it .sw{margin:0}
+  .pop .it.on{border-color:var(--az);background:#eef4ff}
+  .pop .it small{margin-left:auto;font-weight:600;color:var(--tx2);text-align:right}
+  .pop select{width:100%;margin:6px 0 10px}
+  .pop .acts{display:flex;gap:8px;justify-content:flex-end;margin-top:8px}
   @media print{
     @page{size:A4 portrait;margin:10mm}
     body{background:#fff}
@@ -147,13 +190,20 @@
   <a href="dashboard.html">← Volver</a>
   <h1>📅 PROGRAMACIÓN ETI · ÉTICA SOCIAL</h1>
   <span class="u" id="uName"></span>
+  <div class="kpis noprint" id="kpis">
+    <div class="kpi"><b id="kProy">–</b><span>semanas proyectadas</span></div>
+    <div class="kpi"><b id="kFecha">–</b><span>con fecha</span></div>
+    <div class="kpi"><b id="kEjec">–</b><span>ejecutadas</span></div>
+    <div class="kpi rojo"><b id="kVenc">–</b><span>vencidas</span></div>
+    <div class="kpi amar"><b id="kSin">–</b><span>proyectadas sin fecha</span></div>
+  </div>
 </div>
 
 <div class="wrap" id="app">
   <div class="bar">
     <div class="tabs">
       <button class="tab on" data-v="anual">🗓️ Cronograma anual</button>
-      <button class="tab" data-v="mes">📅 Calendario mensual</button>
+      <button class="tab" data-v="mes">📅 Calendario (ejecución)</button>
       <button class="tab" data-v="lista">📋 Lista</button>
       <button class="tab" data-v="enlace">🔗 Enlace con ETI</button>
     </div>
@@ -226,6 +276,16 @@
           <button class="btn bs" id="btnXls">⬇️ Excel</button>
           <button class="btn bs" onclick="window.print()" title="Imprimir / Guardar PDF">🖨️ PDF</button>
         </div>
+        <div class="ptool noprint" id="ptool">
+          <span class="lbl">🖌️ Proyectar:</span>
+          <button type="button" class="pt" data-pt="cap"><i class="sw t-cap"></i>Capacitación</button>
+          <button type="button" class="pt" data-pt="chk"><i class="sw t-chk"></i>Check List</button>
+          <button type="button" class="pt" data-pt="ref"><i class="sw t-ref"></i>Reforzamiento</button>
+          <button type="button" class="pt borrar" data-pt="x">✕ Borrar</button>
+          <span class="ghost" id="ptHint">Elige un color y haz clic o arrastra sobre las celdas · clic en el N° de semana pinta toda la fila · sin color, el clic abre el detalle</span>
+          <button type="button" class="btn bs" id="btnCopiar" title="Copia la proyección de este año al siguiente (solo si el siguiente está vacío)">📋 Copiar al año siguiente</button>
+        </div>
+        <div class="prog noprint" id="progSec"></div>
         <div id="anual"></div>
       </div>
       <div id="vMes" class="hidden">
@@ -252,6 +312,7 @@
 </div>
 
 <div class="modal" id="modal"><div class="box" id="mBox"></div></div>
+<div class="modal" id="pop"><div class="box pop" id="popBox"></div></div>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -475,14 +536,16 @@ function renderAnual(){
     sem.forEach((s,i)=>{
       const first=i===0||sem[i-1].mes!==s.mes;
       const span=sem.filter(x=>x.mes===s.mes).length;
-      h+='<tr>'+(first?`<td class="mes" rowspan="${span}">${MESES[s.mes]}</td>`:'')
+      const esHoy=(()=>{const hs=fmt(hoy);return hs>=s.desde&&hs<=s.hasta;})();   /* _PROGETI_V2 */
+      h+='<tr'+(esHoy?' class="hoy"':'')+'>'+(first?`<td class="mes" rowspan="${span}">${MESES[s.mes]}</td>`:'')
         +`<td class="sem">${s.w}</td><td>${dmy(s.desde)}</td><td>${dmy(s.hasta)}</td>`
         +cols.map(c=>{
           const it=(cel[c]||{})[s.w], pc=pl[c+'|'+s.w]||'';
           const tipos=it?[...new Set(it.map(i=>tipoDe(i.p.tema).c))]:[];
           const tip='SEM '+s.w+' · '+colLbl(c)+(pc?'\nProyección: '+tipoDe(TEMA_DE[pc]).t:'')
             +(it?'\nProgramado:\n'+it.map(i=>dmy(i.f)+' · '+tipoDe(i.p.tema).t+(i.p.turno?' · T'+i.p.turno:'')).join('\n'):'\n(clic para proyectar o programar)');
-          const marca=it?`<b class="pg">✔</b>`+tipos.filter(t=>t!==pc).map(t=>`<span class="t-${t}"></span>`).join(''):'';
+          const marca=(it?`<b class="pg">✔</b>`+tipos.filter(t=>t!==pc).map(t=>`<span class="t-${t}"></span>`).join(''):'')
+            +(it?`<small class="dia">${[...new Set(it.map(i=>dmy(i.f).slice(0,5)))].join(' ')}</small>`:'');   /* _PROGETI_V2: dia programado */
           return `<td class="c ${pc?'t-'+pc:''}" data-emp="${e}" data-sec="${esc(c)}" data-w="${s.w}" title="${esc(tip)}"><div>${marca}</div></td>`;
         }).join('')+'</tr>';
     });
@@ -494,6 +557,7 @@ function renderAnual(){
         <tr><td style="text-align:center">✔</td><td>Programado con fecha</td></tr></table></div></div>`;
     return h;
   }).join('');
+  try{ renderAvance(); }catch(e){}   /* _PROGETI_V2 */
 }
 async function guardarPlan(y,e,celdas){
   try{await setDoc(doc(db,COL_PLAN,planKey(y,e)),{celdas,anio:y,empresa:e,actualizado:new Date().toISOString(),por:USER.usuario||''});return true;}
@@ -508,7 +572,11 @@ $('anual').addEventListener('click',async e=>{
     if(await guardarPlan(y,emp,celdas))toast('📥 Proyección 2026 cargada');
     return;
   }
-  const c=e.target.closest('td.c'); if(c)abrirCelda(c.dataset.emp,c.dataset.sec,+c.dataset.w);
+  const c=e.target.closest('td.c');
+  if(c&&PINTAR){ pintarCeldas([c]); return; }   /* _PROGETI_V2: modo pintar */
+  const sm=e.target.closest('td.sem');
+  if(sm&&PINTAR){ const tr=sm.parentNode; pintarCeldas([...tr.querySelectorAll('td.c')]); return; }
+  if(c)abrirCelda(c.dataset.emp,c.dataset.sec,+c.dataset.w);
 });
 /* Celda semana × sector: proyectar (solo pinta) o programar con fecha (llega a los ETI) */
 function abrirCelda(emp,sec,w){
@@ -584,11 +652,13 @@ function renderMes(){
     if(i>=35&&d.getMonth()!==mMes)break;
     const s=fmt(d), out=d.getMonth()!==mMes, fer=esFestivo(d);
     const evs=(m[s]||[]).sort((a,b)=>(a.p.turno||'9').localeCompare(b.p.turno||'9'));
-    const w=d.getDay()===1?`<i>SEM ${pad(semanaETI(s).w)}</i>`:'<i></i>';
-    h+=`<div class="d ${out?'out':''} ${s===hs?'hoy':''} ${fer?'fer':''}"><div class="n"><span>${d.getDate()}</span>${w}</div>`
+    const w=d.getDay()===1?`<i class="sem">SEM ${pad(semanaETI(s).w)}</i>`:'<i></i>';
+    h+=`<div class="d ${out?'out':''} ${s===hs?'hoy':''} ${fer?'fer':''}" data-dia="${s}"><div class="n"><span>${d.getDate()}</span>${w}</div>`
       +(fer?'<div class="ferlbl">Feriado</div>':'')
+      +(!out&&!fer?fantasmasDe(s,d):'')   /* _PROGETI_V2: proyectado sin fecha */
       +evs.map(x=>{const t=tipoDe(x.p.tema),e=estadoDe(x.p);
-        return `<div class="ev ${t.c} ${e.k==='ok'?'ok':''}" data-id="${x.p.id}" title="${esc(t.t+' · '+x.p.sector+' · '+x.p.supervisor)}">${esc(colLbl(normSect(x.p.sector)))}${x.tot>1?` (${x.n}/${x.tot})`:''}<small>${esc(t.t)}${x.p.turno?' · T'+x.p.turno:''}</small></div>`;}).join('')
+        return `<div class="ev ${t.c} ${e.k==='ok'?'ok':''}" data-id="${x.p.id}" title="${esc(t.t+' · '+x.p.sector+' · '+x.p.supervisor)}">${esc(colLbl(normSect(x.p.sector)))}${x.tot>1?` (${x.n}/${x.tot})`:''}<small>${esc(t.t)}${x.p.turno?' · T'+x.p.turno:''}${x.p.supervisor?' · '+esc(String(x.p.supervisor).split(' ').slice(0,2).join(' ')):''}</small></div>`;}).join('')
+      +(!out&&!fer?`<button type="button" class="add noprint" data-add="${s}" title="Programar en este día">+</button>`:'')
       +'</div>';
   }
   $('cal').innerHTML=h;
@@ -623,6 +693,7 @@ function renderEnlace(){
 
 function render(){
   if(vista==='anual')renderAnual(); else if(vista==='mes')renderMes(); else if(vista==='lista')renderLista(); else renderEnlace();
+  try{ renderKpis(); }catch(e){}   /* _PROGETI_V2 */
 }
 
 /* ── Detalle ── */
@@ -695,16 +766,7 @@ $('btnGuardar').addEventListener('click',async()=>{
   const en=enlaceDe(supervisor);
   const btn=$('btnGuardar'); btn.disabled=true;
   try{
-    await addDoc(collection(db,COL_PROG),{
-      /* —— mismo formato que Capacitaciones ETI —— */
-      supervisor, sector, tema,
-      fechaProgramada:fechas[0], fechaFin:fechas[fechas.length-1], fechas, diasDesignados:fechas.length,
-      observaciones:$('pObs').value.trim(), estado:'pendiente', registroId:null,
-      creadoPor:USER.nombre||USER.usuario||'', creadoEn:new Date().toISOString(),
-      /* —— campos nuevos (opcionales, los ETI los ignoran) —— */
-      empresa:empresaDe(sector), turno:$('pTurno').value||'', anio:+fechas[0].slice(0,4),
-      semanas:[...new Set(fechas.map(f=>semanaETI(f).w))], origen:'SISTEMA_RRLL', creadoPorUsuario:USER.usuario||''
-    });
+    await crearProgramacion({supervisor,sector,tema,fechas,turno:$('pTurno').value||'',obs:$('pObs').value.trim()});   /* _PROGETI_V2: misma alta, una sola funcion */
     const dest=['Capacitaciones ETI'+(en.cap===false?' (⚠️ sin cuenta enlazada: no le saldrá en Mi Panel)':'')];
     if(tema==='EVALUACIONES DE CHECKLIST')dest.push('Evaluaciones ETI');
     toast(`📅 Programado ${fechas.length} día(s) · ${colLbl(normSect(sector))} → ${dest.join(' + ')}`,6000);
@@ -713,6 +775,147 @@ $('btnGuardar').addEventListener('click',async()=>{
   finally{btn.disabled=false;}
 });
 chips();
+
+/* ═══ _PROGETI_V2 (16-oct-2026) ═══════════════════════════════════════════
+   Cronograma anual = PROYECCION POR AÑO (pintar semanas) · Calendario = EJECUCION (fechas que
+   llegan a los ETI). Mismas colecciones y mismo formato de documento que antes. */
+const META={cap:7,chk:4,ref:4};   /* meta anual por sector (igual que la proyeccion del Excel 2026) */
+let PINTAR='';
+/* una sola funcion de alta: la usan el formulario y el popover del calendario */
+async function crearProgramacion(o){
+  const fechas=[...o.fechas].sort();
+  return addDoc(collection(db,COL_PROG),{
+    /* —— mismo formato que Capacitaciones ETI —— */
+    supervisor:o.supervisor, sector:o.sector, tema:o.tema,
+    fechaProgramada:fechas[0], fechaFin:fechas[fechas.length-1], fechas, diasDesignados:fechas.length,
+    observaciones:o.obs||'', estado:'pendiente', registroId:null,
+    creadoPor:USER.nombre||USER.usuario||'', creadoEn:new Date().toISOString(),
+    /* —— campos nuevos (opcionales, los ETI los ignoran) —— */
+    empresa:empresaDe(o.sector), turno:o.turno||'', anio:+fechas[0].slice(0,4),
+    semanas:[...new Set(fechas.map(f=>semanaETI(f).w))], origen:'SISTEMA_RRLL', creadoPorUsuario:USER.usuario||''
+  });
+}
+/* ¿esa celda (sector, semana, tipo) ya tiene programacion con fecha? */
+function progEn(sec,y,w,tipoC){
+  return PROGS.filter(p=>normSect(p.sector)===sec&&(!tipoC||tipoDe(p.tema).c===tipoC)&&fechasDe(p).some(f=>{const x=semanaETI(f);return x.y===y&&x.w===w;}));
+}
+/* KPIs de la cabecera */
+function renderKpis(){
+  const y=+$('fAnio').value, f=$('fEmp').value, emps=f?[f]:['RAPEL','VERFRUT'];
+  let proy=0,conF=0,sin=0;
+  emps.forEach(e=>{const pl=planDe(y,e);Object.keys(pl).forEach(k=>{const [sec,w]=k.split('|');proy++;if(progEn(sec,y,+w,pl[k]).length)conF++;else sin++;});});
+  let ejec=0,venc=0;
+  filtradas().forEach(p=>{if(!fechasDe(p).some(x=>x.slice(0,4)===String(y)))return;const e=estadoDe(p);if(e.k==='ok')ejec++;else if(e.k==='venc')venc++;});
+  $('kProy').textContent=proy;$('kFecha').textContent=conF;$('kEjec').textContent=ejec;$('kVenc').textContent=venc;$('kSin').textContent=sin;
+}
+/* avance por sector vs meta anual */
+function renderAvance(){
+  if(!_anual)return;const {y,emps}=_anual;let h='';
+  emps.forEach(({e,cols})=>{const pl=planDe(y,e);cols.forEach(c=>{
+    const n={cap:0,chk:0,ref:0};Object.keys(pl).forEach(k=>{if(k.split('|')[0]===c&&n[pl[k]]!=null)n[pl[k]]++;});
+    h+=`<div class="pg" title="${esc(EMPRESAS[e].logo)}"><b>${esc(colLbl(c))}</b>`+['cap','chk','ref'].map(t=>`<div class="r ${n[t]<META[t]?'falta':''}"><i class="sw t-${t}"></i>${tipoDe(TEMA_DE[t]).t}<em>${n[t]} / ${META[t]}</em></div>`).join('')+'</div>';
+  });});
+  $('progSec').innerHTML=h;
+}
+/* pintar celdas (clic o arrastre) → guarda la proyeccion por empresa/año */
+let _pintaT=null,_pend={};
+function pintarCeldas(tds){
+  const y=+$('fAnio').value, color=PINTAR;
+  tds.forEach(td=>{const e=td.dataset.emp,sec=td.dataset.sec,w=td.dataset.w;(_pend[e]=_pend[e]||{})[sec+'|'+w]=color;
+    td.className='c'+(color==='x'?'':' t-'+color);});   /* feedback inmediato */
+  clearTimeout(_pintaT);
+  _pintaT=setTimeout(async()=>{
+    const pend=_pend;_pend={};
+    for(const e of Object.keys(pend)){const pl={...planDe(y,e)};Object.keys(pend[e]).forEach(k=>{if(pend[e][k]==='x')delete pl[k];else pl[k]=pend[e][k];});
+      if(await guardarPlan(y,e,pl))toast(color==='x'?'🧽 Proyección quitada':`🎨 Proyectado: ${tipoDe(TEMA_DE[color]).t}`,1800);}
+  },350);
+}
+document.querySelectorAll('#ptool .pt').forEach(b=>b.addEventListener('click',()=>{
+  PINTAR=(PINTAR===b.dataset.pt)?'':b.dataset.pt;
+  document.querySelectorAll('#ptool .pt').forEach(x=>x.classList.toggle('on',x.dataset.pt===PINTAR));
+  document.body.classList.toggle('pintando',!!PINTAR);
+  $('ptHint').textContent=PINTAR?(PINTAR==='x'?'Modo borrar: clic o arrastra sobre las celdas proyectadas · vuelve a pulsar Borrar para salir':'Clic o arrastra sobre las celdas · clic en el N° de semana pinta toda la fila · vuelve a pulsar el color para salir'):'Elige un color y haz clic o arrastra sobre las celdas · clic en el N° de semana pinta toda la fila · sin color, el clic abre el detalle';
+}));
+/* arrastre */
+let _drag=false,_dragSet=null;
+$('anual').addEventListener('mousedown',e=>{if(!PINTAR)return;const c=e.target.closest('td.c');if(!c)return;e.preventDefault();_drag=true;_dragSet=new Set([c]);c.classList.add('preview');});
+$('anual').addEventListener('mouseover',e=>{if(!_drag)return;const c=e.target.closest('td.c');if(c&&!_dragSet.has(c)){_dragSet.add(c);c.classList.add('preview');}});
+document.addEventListener('mouseup',()=>{if(!_drag)return;_drag=false;const tds=[..._dragSet];_dragSet=null;tds.forEach(t=>t.classList.remove('preview'));if(tds.length>1)pintarCeldas(tds);});
+/* copiar proyeccion al año siguiente */
+$('btnCopiar').addEventListener('click',async()=>{
+  const y=+$('fAnio').value,y2=y+1,f=$('fEmp').value,emps=f?[f]:['RAPEL','VERFRUT'];
+  const vacios=emps.filter(e=>!Object.keys(planDe(y2,e)).length);
+  if(!vacios.length)return toast(`⚠️ ${y2} ya tiene proyección. Bórrala primero si quieres copiar.`,4500);
+  if(!confirm(`Copiar la proyección ${y} → ${y2} de ${vacios.map(e=>EMPRESAS[e].logo).join(' y ')} (mismas semanas y colores).\n\nSolo pinta el cronograma: NO crea programaciones ni envía alertas.`))return;
+  let n=0;for(const e of vacios){const pl=planDe(y,e);if(Object.keys(pl).length){if(await guardarPlan(y2,e,{...pl}))n++;}}
+  if(n){toast(`📋 Proyección copiada a ${y2}`);if([...$('fAnio').options].some(o=>+o.value===y2)){$('fAnio').value=y2;mAnio=y2;render();}}
+  else toast('⚠️ No hay nada proyectado en '+y+' para copiar');
+});
+/* calendario: sectores proyectados esa semana que aun no tienen fecha (se muestran el primer dia habil de la semana en el mes) */
+function pendientesSemana(fecha){
+  const x=semanaETI(fecha),f=$('fEmp').value,emps=f?[f]:['RAPEL','VERFRUT'],out=[];
+  emps.forEach(e=>{const pl=planDe(x.y,e);Object.keys(pl).forEach(k=>{const [sec,w]=k.split('|');if(+w!==x.w)return;const t=pl[k];
+    if(progEn(sec,x.y,x.w,t).length)return;const sup=SUPS.find(s=>normSect(s.sector)===sec);out.push({e,sec,t,sup});});});
+  return out.sort((a,b)=>a.sec.localeCompare(b.sec));
+}
+function esPrimerDiaDeSemanaEnMes(fecha){
+  const d=dt(fecha);if(d.getDay()===1)return true;
+  for(let i=1;i<=5;i++){const p=new Date(d);p.setDate(d.getDate()-i);if(p.getDay()===0)break;if(p.getMonth()===d.getMonth()&&esHabil(p))return false;}
+  return true;
+}
+function fantasmasDe(fecha,d){
+  if(!esPrimerDiaDeSemanaEnMes(fecha))return '';
+  const pend=pendientesSemana(fecha);if(!pend.length)return '';
+  const vis=pend.slice(0,3);
+  return vis.map(q=>`<div class="gh" data-gh="${fecha}" title="Proyectado esta semana · aún sin fecha. Clic para programar"><i class="sw t-${q.t}"></i>${esc(colLbl(q.sec))} <span style="opacity:.7">· proyectado</span></div>`).join('')
+    +(pend.length>3?`<div class="gh" data-gh="${fecha}">+${pend.length-3} más proyectados…</div>`:'');
+}
+/* popover: programar en un dia */
+let _popSel=null;
+function abrirDia(fecha){
+  if(!esHabil(dt(fecha))&&!confirm('Ese día no es hábil (domingo/feriado/sábado de temporada baja). ¿Programar igual?'))return;
+  const x=semanaETI(fecha),pend=pendientesSemana(fecha),d=dt(fecha);
+  const DIAS_T=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+  _popSel=pend.length?0:null;
+  $('popBox').innerHTML=`<h3>📅 Programar · ${DIAS_T[d.getDay()]} ${d.getDate()} de ${MESES_T[d.getMonth()].toLowerCase()}</h3>
+    <div class="kv" style="color:var(--tx2)">SEM ${x.w} · ${pend.length?'Proyectado esta semana y aún sin fecha. Elige el sector:':'No hay proyección pendiente esta semana: puedes programar otro sector/tipo.'}</div>
+    <div id="popLista">${pend.map((q,i)=>`<div class="it ${i===0?'on':''}" data-i="${i}"><i class="sw t-${q.t}"></i>${esc(colLbl(q.sec))}<small>${esc(tipoDe(TEMA_DE[q.t]).t)}<br>${q.sup?esc(q.sup.nombre):'<span style="color:#b45309">sin supervisor activo</span>'}</small></div>`).join('')}
+      <div class="it" data-i="otro"><i class="sw" style="background:#cbd5e1"></i>Otro sector / tipo…<small>abre el formulario con esta fecha</small></div></div>
+    <label>Turno</label><select id="popTurno"><option value="">Sin turno específico</option><option value="01">Turno 01 · 8:30 – 10:00</option><option value="02">Turno 02 · 11:00 – 12:30</option><option value="03">Turno 03 · 1:00 – 2:30</option></select>
+    <div id="popEnlace"></div>
+    <div class="acts"><button class="btn bs" id="popCerrar">Cancelar</button><button class="btn bp" id="popOk" ${_popSel===null?'disabled':''}>💾 Programar y enviar a ETI</button></div>`;
+  $('pop').style.display='flex';
+  const pintaEnlace=()=>{const q=_popSel!==null?pend[_popSel]:null;$('popEnlace').innerHTML=q&&q.sup?htmlEnlace(q.sup.nombre,TEMA_DE[q.t]):'';};
+  pintaEnlace();
+  $('popLista').querySelectorAll('.it').forEach(el=>el.onclick=()=>{
+    if(el.dataset.i==='otro'){$('pop').style.display='none';$('pIni').value=fecha;$('pFin').value='';regen();$('formCard').scrollIntoView({behavior:'smooth',block:'start'});toast('Completa supervisor y tipo en el formulario');return;}
+    _popSel=+el.dataset.i;$('popLista').querySelectorAll('.it').forEach(z=>z.classList.toggle('on',z===el));$('popOk').disabled=false;pintaEnlace();
+  });
+  $('popCerrar').onclick=()=>$('pop').style.display='none';
+  $('popOk').onclick=async()=>{
+    const q=pend[_popSel];if(!q)return;
+    if(!q.sup){toast(`⚠️ ${colLbl(q.sec)} no tiene supervisor activo. Agrégalo en Capacitaciones ETI → Supervisores.`,5000);return;}
+    const tema=TEMA_DE[q.t];
+    const dup=PROGS.filter(p=>normSect(p.sector)===q.sec&&p.tema===tema&&fechasDe(p).includes(fecha));
+    if(dup.length&&!confirm('Ya existe '+tipoDe(tema).t+' para '+colLbl(q.sec)+' ese día. ¿Guardar de todas formas?'))return;
+    const b=$('popOk');b.disabled=true;b.textContent='Guardando…';
+    try{
+      await crearProgramacion({supervisor:q.sup.nombre,sector:q.sup.sector,tema,fechas:[fecha],turno:$('popTurno').value||'',obs:''});
+      const en=enlaceDe(q.sup.nombre);
+      toast(`📅 ${colLbl(q.sec)} · ${tipoDe(tema).t} · ${dmy(fecha)} → Capacitaciones ETI${en.cap===false?' (⚠️ sin cuenta enlazada)':''}${q.t==='chk'?' + Evaluaciones ETI':''}`,6000);
+      $('pop').style.display='none';
+    }catch(err){console.error('[progeti] popover',err);toast('❌ Error al programar (revisa tu conexión)');b.disabled=false;b.textContent='💾 Programar y enviar a ETI';}
+  };
+}
+$('pop').addEventListener('click',e=>{if(e.target.id==='pop')$('pop').style.display='none';});
+$('cal').addEventListener('click',e=>{
+  const a=e.target.closest('[data-add]');if(a){abrirDia(a.dataset.add);return;}
+  const g=e.target.closest('[data-gh]');if(g){abrirDia(g.dataset.gh);return;}
+});
+$('cal').addEventListener('dblclick',e=>{
+  const dcel=e.target.closest('.d[data-dia]');
+  if(dcel&&!e.target.closest('.ev')&&!dcel.classList.contains('out')&&!dcel.classList.contains('fer'))abrirDia(dcel.dataset.dia);
+});
 
 /* ── Navegación ── */
 document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{
