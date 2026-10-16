@@ -41,7 +41,7 @@ td{padding:9px 12px;font-size:11.5px}\
 .empty{padding:36px;font-size:13px}\
 /* modales: titulo y botonera siempre visibles */\
 .modal{padding:0 28px 0;border-radius:18px;box-shadow:0 30px 80px rgba(0,0,0,.4)}\
-.modal>:first-child:not(.modal-t){margin-top:24px}.modal>:last-child:not(.modal-ft){margin-bottom:24px}\
+.modal:not([style*="padding:0"])>:first-child:not(.modal-t){margin-top:24px}.modal:not([style*="padding:0"])>:last-child:not(.modal-ft){margin-bottom:24px}\
 .modal-t{position:sticky;top:0;z-index:6;background:#fff;margin:0 -28px 16px;padding:18px 28px 12px;border-bottom:1px solid #e8edf5;font-size:21px;display:flex;align-items:center;gap:10px}\
 .modal-t:before{content:"";width:6px;height:22px;border-radius:4px;background:linear-gradient(180deg,#0a2463,#2563eb)}\
 .modal-ft{position:sticky;bottom:0;z-index:6;background:#fff;margin:20px -28px 0;padding:12px 28px 14px;border-top:1px solid #e8edf5;box-shadow:0 -8px 20px rgba(15,23,42,.04)}\
