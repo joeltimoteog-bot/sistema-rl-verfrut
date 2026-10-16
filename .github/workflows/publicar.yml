@@ -48,6 +48,20 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # _ACTUALIZAR_V3 (15-oct-2026): version.json se genera solo en cada publicacion
+      # (version = commit corto, fecha de Lima, titulo = mensaje del commit). Las pantallas
+      # lo consultan cada 3 min y avisan / actualizan solas (frontend/js/actualizar.js).
+      - name: Generar version.json
+        run: |
+          python3 - <<'EOF'
+          import json, subprocess, datetime, os
+          sha = os.environ.get('GITHUB_SHA', '')[:7] or 'local'
+          try: msg = subprocess.check_output(['git', 'log', '-1', '--pretty=%s']).decode('utf-8', 'ignore').strip()
+          except Exception: msg = ''
+          fecha = (datetime.datetime.utcnow() - datetime.timedelta(hours=5)).strftime('%d/%m/%Y %H:%M')
+          json.dump({'version': sha, 'fecha': fecha, 'titulo': msg[:140], 'notas': ''}, open('version.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+          print(open('version.json', encoding='utf-8').read())
+          EOF
       - name: Armar el sitio (mismos archivos que publicaba GitHub Pages)
         run: |
           mkdir _site
