@@ -804,6 +804,97 @@ async function guardarProgramacion(){
   <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Solicitud de Mantenimiento"></script>
 <script src="/sistema-rl-verfrut/frontend/js/trafico.js?v=2"></script>  <!-- _TRAFICO_V2: acciones de este modulo al Monitor en vivo -->
 <script src="../js/ui-toast.js?v=1"></script>  <!-- _UI_TOAST_V1 (15-oct): avisos unificados + esqueletos de carga -->
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _MANT_RAPIDO_V1 (16-oct-2026) — Mantenimiento carga al instante y confirma en segundo plano
+   ---------------------------------------------------------------------------
+   Antes: Panel Admin y Mis Solicitudes pedian la lista SOLO a Google (30-90 s con carga) y si se
+   cortaba salia "Error de conexion". Ahora:
+     1) primero AZURE (/api/mod/mant/listarSolicitudesMantenimiento, copia al dia de la hoja, ~1 s):
+        se pinta la tabla de inmediato, con fechas de Atendida/Cerrar incluidas;
+     2) luego GOOGLE en segundo plano (como siempre, hasta 90 s): si responde, se actualiza la tabla
+        (trae ademas el correo del solicitante para "Notificar"); si no responde, la tabla de Azure
+        se queda y solo se avisa con un texto chico (ya no se borra con "Error de conexion").
+   Guardar / Programar / Atendida / Cerrar NO cambian: siguen por el camino de siempre.
+   Si Azure no responde en 9 s, se usa Google exactamente como antes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function(){
+'use strict';
+if(window._MANT_RAPIDO_V1)return; window._MANT_RAPIDO_V1=true;
+var AZ='https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/mant/listarSolicitudesMantenimiento';
+function tk(){try{return sessionStorage.getItem('rl_token')||'';}catch(e){return '';}}
+function conTiempo(url,op,ms){var c=(typeof AbortController!=='undefined')?new AbortController():null;var t=setTimeout(function(){try{c&&c.abort();}catch(e){}},ms);op=op||{};if(c)op.signal=c.signal;return fetch(url,op).then(function(r){clearTimeout(t);return r;},function(e){clearTimeout(t);throw e;});}
+async function azure(params){
+  try{
+    var h={'Content-Type':'application/json'}; if(tk())h.Authorization='Bearer '+tk();
+    var r=await conTiempo(AZ,{method:'POST',headers:h,body:JSON.stringify(params||{})},9000);
+    if(!r.ok)return null; var j=await r.json();
+    return (j&&j.ok&&Array.isArray(j.data))?j:null;
+  }catch(e){console.warn('[_MANT_RAPIDO_V1] Azure no respondio:',e&&e.message);return null;}
+}
+async function google(params){
+  var r=await conTiempo(API+'?'+new URLSearchParams(params),{},90000); return r.json();
+}
+function nota(id,txt,color){var el=document.getElementById(id);if(!el)return;el.textContent=txt||'';el.style.color=color||'#64748b';el.style.display=txt?'block':'none';}
+function asegurarNota(tablaBodyId,notaId){
+  if(document.getElementById(notaId))return;
+  var tb=document.getElementById(tablaBodyId);var tabla=tb&&tb.closest('table');if(!tabla)return;
+  var n=document.createElement('div');n.id=notaId;n.style.cssText='display:none;font-size:11.5px;margin:6px 2px 0;font-weight:600';
+  tabla.parentNode.insertBefore(n,tabla.nextSibling);
+}
+/* ── Panel Admin ── */
+var _adminPrev=window.cargarAdmin;
+if(typeof _adminPrev==='function'){
+  window.cargarAdmin=async function(){
+    var body=document.getElementById('adminBody'); asegurarNota('adminBody','adminNota');
+    body.innerHTML='<tr><td colspan="10" class="empty">⏳ Cargando...</td></tr>';
+    var az=await azure({});
+    if(az){
+      _solicitudes=az.data; _estadosExtra=az.estadosExtra||{}; renderAdmin();
+      nota('adminNota','⚡ Datos al instante desde Azure · confirmando con Google…','#64748b');
+    }else{
+      /* Azure no respondio: camino de siempre (Google) con el mensaje de siempre */
+      try{
+        var res=await google({action:'listarSolicitudesMantenimiento'}); _solicitudes=(res&&res.ok&&res.data)?res.data:[];
+        try{var res2=await google({action:'getEstadosMantenimiento'});_estadosExtra=(res2&&res2.ok&&res2.data)?res2.data:{};}catch(e){_estadosExtra={};}
+        renderAdmin(); nota('adminNota','');
+      }catch(e){body.innerHTML='<tr><td colspan="10" class="empty">Error de conexión. <button class="btn btn-az btn-sm" onclick="cargarAdmin()">Reintentar</button></td></tr>';console.error('[mant] admin',e);}
+      return;
+    }
+    /* confirmacion con Google en segundo plano (trae el correo para Notificar) */
+    try{
+      var g=await google({action:'listarSolicitudesMantenimiento'});
+      if(g&&g.ok&&Array.isArray(g.data)){
+        _solicitudes=g.data;
+        try{var g2=await google({action:'getEstadosMantenimiento'});if(g2&&g2.ok&&g2.data)_estadosExtra=g2.data;}catch(e){}
+        renderAdmin(); nota('adminNota','');
+      }else nota('adminNota','ℹ️ Mostrando la copia de Azure (Google no confirmó). Los botones de correo aparecerán al actualizar.','#b45309');
+    }catch(e){nota('adminNota','ℹ️ Mostrando la copia de Azure (Google tardó demasiado). Pulsa Actualizar para reintentar.','#b45309');}
+  };
+}
+/* ── Mis Solicitudes ── */
+var _misPrev=window.cargarMis;
+if(typeof _misPrev==='function'){
+  window.cargarMis=async function(){
+    var body=document.getElementById('misBody'); asegurarNota('misBody','misNota');
+    body.innerHTML='<tr><td colspan="8" class="empty">⏳ Cargando tus solicitudes...</td></tr>';
+    function pintar(lista){
+      if(!lista||!lista.length){body.innerHTML='<tr><td colspan="8" class="empty">Todavía no tenés solicitudes registradas.</td></tr>';return;}
+      body.innerHTML=lista.map(function(s){return '<tr><td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'')+'</td><td>'+(s.unidad||'')+'</td>'+
+        '<td>'+(s.km||'')+'</td><td>'+(s.tipo||'')+'</td><td>'+badgeEstado(s.estado)+'</td>'+
+        '<td>'+(s.fechaProgramada?'<b style="color:var(--azul)">'+s.fechaProgramada+'</b>':'<span class="muted">— por definir</span>')+'</td>'+
+        '<td class="muted">'+(s.comentarioAdmin||'—')+'</td></tr>';}).join('');
+    }
+    var az=await azure({solicitante:USER.usuario});
+    if(az){pintar(az.data);nota('misNota','⚡ Al instante desde Azure · confirmando…');}
+    else{ return _misPrev.apply(this,arguments); }
+    try{var g=await google({action:'listarSolicitudesMantenimiento',solicitante:USER.usuario});if(g&&g.ok&&Array.isArray(g.data)){pintar(g.data);}nota('misNota','');}
+    catch(e){nota('misNota','');}
+  };
+}
+console.log('[_MANT_RAPIDO_V1] listo');
+})();
+</script>
 <script src="../js/tema-rl.js?v=1"></script>  <!-- _TEMA_RL_V1 (16-oct): piel moderna comun (solo presentacion) -->
 <script src="../js/actualizar.js?v=1"></script>  <!-- _ACTUALIZAR_V3 (15-oct): aviso y actualizacion automatica (unico) -->
 </body>

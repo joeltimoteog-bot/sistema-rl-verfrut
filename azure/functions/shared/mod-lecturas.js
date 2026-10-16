@@ -78,9 +78,14 @@ function solicitudesMant(T, p) {
     out.push({ id: s(0), fechaSolicitud: fM(cel(r, 1)), dni, nombre: s(3), empresa: s(4), codInterno: s(5), unidad: s(6),
       numLicencia: s(7), tipoLicencia: s(8), revalidacion: fM(cel(r, 9)), estadoLic: s(10), km: s(11), tipo: s(12),
       observaciones: s(13), estado: s(14) || 'PENDIENTE', fechaProgramada: fM(cel(r, 15)), comentarioAdmin: s(16),
-      solicitante: s(18), correo: '' });
+      solicitante: s(18), correo: '',
+      /* _MANT_RAPIDO_V1 (16-oct-2026): fechas de Atendida / Cerrar (= getEstadosMantenimiento del Apps Script) */
+      fechaAtencion: fM(cel(r, 19)), atendidoPor: s(20), fechaCierre: fM(cel(r, 21)), cerradoPor: s(22) });
   }
-  return { ok: true, data: out, sinCorreo: true };
+  /* _MANT_RAPIDO_V1: ademas el mapa id -> fechas, con la misma forma que getEstadosMantenimiento */
+  const estadosExtra = {};
+  out.forEach(x => { if (x.fechaAtencion || x.fechaCierre) estadosExtra[x.id] = { fechaAtencion: x.fechaAtencion, atendidoPor: x.atendidoPor, fechaCierre: x.fechaCierre, cerradoPor: x.cerradoPor }; });
+  return { ok: true, data: out, sinCorreo: true, estadosExtra };
 }
 
 const LECTURAS = {
@@ -109,9 +114,17 @@ async function responsablesEnRango(pool, p) {
 async function leer(pool, modulo, body) {
   if (modulo === 'resp') return responsablesEnRango(pool, body || {});   /* _RESP_AZURE_V1 */
   const L = LECTURAS[modulo];
-  if (!L || !(await azurePrimero(pool, L.interruptor))) return null;
+  if (!L) return null;
+  const primero = await azurePrimero(pool, L.interruptor);
+  /* _MANT_RAPIDO_V1 (16-oct-2026): Mantenimiento se entrega AUNQUE Azure no sea quien guarda primero.
+     La tabla dbo.Mant_Registro se sincroniza desde Google despues de cada guardado (horasCapTablasSync_),
+     asi que es una copia al dia; se marca preliminar:true y la pantalla la muestra al instante y luego
+     confirma con Google en segundo plano. Google tardaba 30-90 s y la pantalla daba "Error de conexion". */
+  if (!primero && modulo !== 'mant') return null;
   const T = await TH.leer(pool, L.tabla);
   if (!T) return null;
-  return L.fn(T, body || {});
+  const out = L.fn(T, body || {});
+  if (!primero && out) { out.preliminar = true; try { out.sincronizado = T.marca || T.actualizado || null; } catch (e) {} }
+  return out;
 }
 module.exports = { leer, LECTURAS, solicitudesAcceso, solicitudesMant, responsablesEnRango };
