@@ -1,6 +1,6 @@
 /* ===================================================================
    SISTEMA DE MODALES PERSONALIZADOS - Sistema RR.LL. Unifrutti
-   _MODAL_SYSTEM_V1 (07-jun-2026) — Joel Timoteo Gonza
+   _MODAL_SYSTEM_V1 (07-jun-2026) — Joel Timoteo Gonza · _MODAL_SYSTEM_V2 (15-oct-2026): nueva presentacion, misma API
 
    REEMPLAZA: alert(), confirm(), prompt() nativos del navegador
    (que muestran "joeltimoteog-bot.github.io dice")
@@ -24,53 +24,56 @@
   if (window.appAlert && window._MODAL_SYSTEM_LOADED) return;
   window._MODAL_SYSTEM_LOADED = true;
 
-  // ─── ESTILOS CSS (inyectados dinámicamente) ──────────────────────
+  // ─── _MODAL_SYSTEM_V2 (15-oct-2026) — nueva presentacion, misma API ─────
+  //   · Tarjeta centrada con franja e icono de color segun el tipo (exito, error,
+  //     alerta, informacion, pregunta); el titulo sale de la primera linea del
+  //     mensaje y las lineas "Clave: valor" se muestran como tabla.
+  //   · appAlert / appConfirm / appPrompt, las teclas (Enter/Esc), los botones
+  //     [data-action="ok|cancel"] y el #appmsys-input siguen IGUAL que en la V1.
   const CSS = `
-    .appmsys-overlay{position:fixed;inset:0;background:rgba(11,30,69,.6);
-      backdrop-filter:blur(2px);z-index:99999;display:flex;align-items:center;
-      justify-content:center;padding:16px;opacity:0;transition:opacity .15s;
-      font-family:-apple-system,'Segoe UI',Roboto,sans-serif}
+    .appmsys-overlay{position:fixed;inset:0;background:rgba(5,12,30,.62);
+      backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;
+      justify-content:center;padding:16px;opacity:0;transition:opacity .18s;
+      font-family:Barlow,-apple-system,'Segoe UI',Roboto,sans-serif}
     .appmsys-overlay.appmsys-on{opacity:1}
-    .appmsys-box{background:#fff;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.4);
-      max-width:480px;width:100%;overflow:hidden;transform:translateY(-12px);
-      transition:transform .2s;border:1px solid #e5e7eb}
-    .appmsys-overlay.appmsys-on .appmsys-box{transform:translateY(0)}
-    .appmsys-header{background:linear-gradient(135deg,#0B1E45 0%,#1e3a8a 100%);
-      color:#fff;padding:14px 18px;display:flex;align-items:center;gap:10px;
-      font-weight:600;font-size:14px;letter-spacing:.3px}
-    .appmsys-logo{width:24px;height:24px;background:#fff;border-radius:50%;
-      display:flex;align-items:center;justify-content:center;color:#0B1E45;
-      font-weight:800;font-size:11px;flex-shrink:0}
-    .appmsys-body{padding:22px 20px;font-size:14px;color:#1f2937;line-height:1.5;
-      white-space:pre-wrap;word-break:break-word}
-    .appmsys-body .appmsys-msg{margin-bottom:14px}
-    .appmsys-input{width:100%;padding:10px 12px;border:2px solid #d1d5db;
-      border-radius:8px;font-size:14px;font-family:inherit;outline:none;
-      transition:border-color .15s;box-sizing:border-box}
-    .appmsys-input:focus{border-color:#1e3a8a;box-shadow:0 0 0 3px rgba(30,58,138,.1)}
-    .appmsys-actions{padding:12px 18px;background:#f9fafb;border-top:1px solid #e5e7eb;
-      display:flex;gap:8px;justify-content:flex-end}
-    .appmsys-btn{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;
-      border:1px solid transparent;cursor:pointer;transition:all .15s;font-family:inherit;
-      min-width:90px}
-    .appmsys-btn-primary{background:#1e3a8a;color:#fff;border-color:#1e3a8a}
-    .appmsys-btn-primary:hover{background:#1e40af;transform:translateY(-1px);
-      box-shadow:0 4px 8px rgba(30,58,138,.3)}
-    .appmsys-btn-gray{background:#fff;color:#374151;border-color:#d1d5db}
-    .appmsys-btn-gray:hover{background:#f3f4f6}
-    .appmsys-btn-danger{background:#dc2626;color:#fff;border-color:#dc2626}
-    .appmsys-btn-danger:hover{background:#b91c1c}
-    .appmsys-icon{font-size:22px;flex-shrink:0;margin-top:-2px}
-    @keyframes appmsysShake{
-      0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)}
-      75%{transform:translateX(6px)}
-    }
+    .appmsys-box{--a:#1d4ed8;--b:#2563eb;--bg:#dbeafe;--halo:rgba(37,99,235,.18);
+      background:#fff;border-radius:20px;box-shadow:0 30px 80px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.08);
+      max-width:430px;width:100%;overflow:hidden;transform:translateY(14px) scale(.96);
+      transition:transform .28s cubic-bezier(.2,.9,.3,1.2)}
+    .appmsys-overlay.appmsys-on .appmsys-box{transform:none}
+    .appmsys-box.ok{--a:#16a34a;--b:#22c55e;--bg:#dcfce7;--halo:rgba(34,197,94,.18)}
+    .appmsys-box.err{--a:#dc2626;--b:#ef4444;--bg:#fee2e2;--halo:rgba(239,68,68,.18)}
+    .appmsys-box.warn{--a:#d97706;--b:#f59e0b;--bg:#fef3c7;--halo:rgba(245,158,11,.2)}
+    .appmsys-box.ask{--a:#0a2463;--b:#1e3a8a;--bg:#e0e7ff;--halo:rgba(30,58,138,.18)}
+    .appmsys-top{height:6px;background:linear-gradient(90deg,var(--a),var(--b))}
+    .appmsys-ic{width:64px;height:64px;border-radius:50%;margin:22px auto 10px;display:flex;align-items:center;
+      justify-content:center;font-size:30px;font-weight:800;background:var(--bg);color:var(--a);box-shadow:0 0 0 10px var(--halo);line-height:1}
+    .appmsys-tt{text-align:center;font-size:19px;font-weight:800;color:#0f172a;padding:0 24px;line-height:1.3;word-break:break-word}
+    .appmsys-ms{text-align:center;font-size:13.5px;color:#475569;padding:8px 26px 0;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+    .appmsys-ms:empty{display:none}
+    .appmsys-det{margin:14px 24px 0;background:#f6f8fc;border:1px solid #e6ebf4;border-radius:12px;overflow:hidden}
+    .appmsys-det div{display:flex;justify-content:space-between;gap:12px;padding:9px 14px;font-size:13px;border-bottom:1px solid #e6ebf4;text-align:left}
+    .appmsys-det div:last-child{border:0}
+    .appmsys-det span{color:#64748b}.appmsys-det b{color:#0f172a;font-variant-numeric:tabular-nums;text-align:right}
+    .appmsys-body{padding:0}
+    .appmsys-msg{display:contents}
+    .appmsys-input{display:block;width:calc(100% - 48px);margin:14px 24px 0;box-sizing:border-box;padding:12px 14px;
+      border:2px solid #dbe3f0;border-radius:12px;font-size:16px;font-family:inherit;text-align:center;outline:none;transition:border-color .15s}
+    .appmsys-input:focus{border-color:var(--a);box-shadow:0 0 0 4px var(--halo)}
+    .appmsys-actions{display:flex;gap:10px;padding:20px 24px 14px;background:#fff;border:0}
+    .appmsys-btn{flex:1;border:none;border-radius:12px;padding:12px 14px;font-weight:800;font-size:14px;cursor:pointer;
+      font-family:inherit;transition:transform .12s,box-shadow .12s;min-width:0}
+    .appmsys-btn-primary,.appmsys-btn-danger{background:linear-gradient(90deg,var(--a),var(--b));color:#fff;box-shadow:0 8px 18px var(--halo)}
+    .appmsys-btn-primary:hover,.appmsys-btn-danger:hover{transform:translateY(-2px)}
+    .appmsys-btn-gray{background:#f1f5f9;color:#334155}
+    .appmsys-btn-gray:hover{background:#e2e8f0}
+    .appmsys-btn:focus-visible{outline:3px solid var(--halo)}
+    .appmsys-ft{text-align:center;font-size:10.5px;color:#94a3b8;padding:0 0 14px;letter-spacing:.5px;font-weight:700;text-transform:uppercase}
+    .appmsys-ft b{display:inline-flex;width:16px;height:16px;border-radius:50%;background:#0a2463;color:#fff;font-size:8px;
+      align-items:center;justify-content:center;margin-right:5px;vertical-align:-3px}
+    @keyframes appmsysShake{0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)}}
     .appmsys-shake{animation:appmsysShake .3s}
-    @media(max-width:480px){
-      .appmsys-box{max-width:100%}
-      .appmsys-actions{flex-direction:column-reverse}
-      .appmsys-btn{width:100%}
-    }
+    @media(max-width:480px){.appmsys-box{max-width:100%}.appmsys-actions{flex-direction:column-reverse}}
   `;
   const styleEl = document.createElement('style');
   styleEl.id = 'appmsys-styles';
@@ -85,16 +88,43 @@
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
 
-
-  // ─── HELPER: DETECTAR TIPO DE MENSAJE (icono según contenido) ────
-  function _detectarIcono(msg) {
+  // ─── HELPER: TIPO DE MENSAJE (color + icono) ─────────────────────
+  //   Misma deteccion por contenido que la V1 (_detectarIcono), ahora devuelve tambien la clase.
+  function _tipoDe(msg, tipo) {
     const s = String(msg || '').toLowerCase();
-    if (s.includes('error') || s.includes('fallo') || s.includes('❌')) return '❌';
-    if (s.includes('eliminar') || s.includes('rechazar') || s.includes('borrar')) return '⚠️';
-    if (s.includes('exitoso') || s.includes('correctamente') || s.includes('✅')) return '✅';
-    if (s.includes('expirad') || s.includes('caducad')) return '⏰';
-    if (s.includes('dni') || s.includes('ingresa') || s.includes('escribe')) return '✏️';
-    return 'ℹ️';
+    if (s.includes('error') || s.includes('fallo') || s.includes('❌') || s.includes('no se pudo') || s.includes('incorrect') || s.includes('inválid') || s.includes('invalid')) return { c: 'err', i: '!' };
+    if (s.includes('eliminar') || s.includes('rechazar') || s.includes('borrar') || s.includes('⚠')) return { c: 'warn', i: '⚠' };
+    if (s.includes('exitoso') || s.includes('correctamente') || s.includes('✅') || s.includes('guardad') || s.includes('registrad') || s.includes('vigente')) return { c: 'ok', i: '✓' };
+    if (s.includes('expirad') || s.includes('caducad') || s.includes('fuera de horario') || s.includes('⏰')) return { c: 'warn', i: '⏰' };
+    if (tipo === 'prompt' || s.includes('dni') || s.includes('ingresa') || s.includes('escribe')) return { c: 'ask', i: '✎' };
+    if (tipo === 'confirm') return { c: 'ask', i: '?' };
+    return { c: 'info', i: 'i' };
+  }
+  function _detectarIcono(msg) { return _tipoDe(msg).i; }   // compatibilidad
+
+  // ─── HELPER: titulo / texto / tabla a partir del mensaje de siempre ─
+  //   1ra linea = titulo (sin el emoji inicial); "Clave: valor" = fila de tabla; el resto = texto.
+  const TIT = { alert: 'Aviso', confirm: '¿Confirmas?', prompt: 'Ingresa un dato' };
+  function _partes(mensaje, tipo) {
+    const lineas = String(mensaje == null ? '' : mensaje).split(/\r?\n/).map(l => l.trim());
+    let titulo = '', texto = [], filas = [];
+    const sinEmoji = l => l.replace(/^[^\wÁÉÍÓÚÑáéíóúñ¿¡"'(\[]+/, '').trim();
+    const primera = lineas.find(l => l);
+    if (primera && sinEmoji(primera).length <= 80 && !/^[^:]{2,40}:\s*\S/.test(sinEmoji(primera))) {
+      titulo = sinEmoji(primera);
+      lineas.splice(lineas.indexOf(primera), 1);
+    }
+    const ENCAB = /^(error|aviso|atenci[oó]n|nota|ojo|importante|alerta|listo|éxito|exito)$/i;
+    lineas.forEach(l => {
+      if (!l) return;
+      const m = l.match(/^([^:]{2,40}):\s*(.+)$/);
+      if (m && !titulo && ENCAB.test(sinEmoji(m[1]))) { titulo = sinEmoji(m[1]); texto.push(m[2].trim()); return; }   // "Error: ..." -> titulo Error
+      if (m && !/https?$/i.test(m[1]) && m[2].trim().length <= 60) filas.push([sinEmoji(m[1]) || m[1].trim(), m[2].trim()]); else texto.push(l);
+    });
+    if (!titulo) titulo = TIT[tipo] || 'Aviso';
+    if (titulo.length > 1) titulo = titulo.charAt(0).toUpperCase() + titulo.slice(1);
+    titulo = titulo.replace(/[.:]+$/, '');
+    return { titulo, texto: texto.join('\n'), filas };
   }
 
 
@@ -103,19 +133,21 @@
     const overlay = document.createElement('div');
     overlay.className = 'appmsys-overlay';
 
-    const titulo = opts.titulo || 'Sistema RR.LL. · Unifrutti';
-    const icono = opts.icono || _detectarIcono(opts.mensaje);
+    const marca = opts.titulo || 'Sistema RR.LL. · Unifrutti';
+    const esDanger = opts.tipo === 'confirm' && /elimin|borrar|rechaz|cancel/i.test(opts.mensaje || '');
+    const t = esDanger ? { c: 'warn', i: '⚠' } : _tipoDe(opts.mensaje, opts.tipo);
+    const icono = opts.icono || t.i;
+    const p = _partes(opts.mensaje, opts.tipo);
     const inputHTML = opts.tipo === 'prompt'
-      ? `<input type="text" class="appmsys-input" id="appmsys-input" 
-              value="${_esc(opts.valorDefault || '')}" 
+      ? `<input type="text" class="appmsys-input" id="appmsys-input"
+              value="${_esc(opts.valorDefault || '')}"
               placeholder="${_esc(opts.placeholder || '')}" autocomplete="off">`
       : '';
 
     let botonesHTML = '';
     if (opts.tipo === 'alert') {
-      botonesHTML = `<button class="appmsys-btn appmsys-btn-primary" data-action="ok">Aceptar</button>`;
+      botonesHTML = `<button class="appmsys-btn appmsys-btn-primary" data-action="ok">${t.c === 'err' ? 'Entendido' : 'Aceptar'}</button>`;
     } else if (opts.tipo === 'confirm') {
-      const esDanger = /elimin|borrar|rechaz|cancel/i.test(opts.mensaje || '');
       botonesHTML = `
         <button class="appmsys-btn appmsys-btn-gray" data-action="cancel">Cancelar</button>
         <button class="appmsys-btn ${esDanger ? 'appmsys-btn-danger' : 'appmsys-btn-primary'}" data-action="ok">${esDanger ? 'Sí, continuar' : 'Aceptar'}</button>
@@ -128,21 +160,21 @@
     }
 
     overlay.innerHTML = `
-      <div class="appmsys-box" role="dialog" aria-modal="true">
-        <div class="appmsys-header">
-          <div class="appmsys-logo">RL</div>
-          <span>${_esc(titulo)}</span>
-        </div>
+      <div class="appmsys-box ${t.c}" role="dialog" aria-modal="true" aria-label="${_esc(p.titulo)}">
+        <div class="appmsys-top"></div>
+        <div class="appmsys-ic" aria-hidden="true">${_esc(icono)}</div>
+        <div class="appmsys-tt">${_esc(p.titulo)}</div>
         <div class="appmsys-body">
           <div class="appmsys-msg">
-            <span class="appmsys-icon">${icono}</span>
-            <span style="margin-left:6px">${_esc(opts.mensaje)}</span>
+            <div class="appmsys-ms">${_esc(p.texto)}</div>
+            ${p.filas.length ? '<div class="appmsys-det">' + p.filas.map(f => '<div><span>' + _esc(f[0]) + '</span><b>' + _esc(f[1]) + '</b></div>').join('') + '</div>' : ''}
           </div>
           ${inputHTML}
         </div>
         <div class="appmsys-actions">
           ${botonesHTML}
         </div>
+        <div class="appmsys-ft"><b>RL</b>${_esc(marca)}</div>
       </div>
     `;
 
@@ -170,15 +202,12 @@
           e.preventDefault();
           cerrar(opts.tipo === 'confirm' ? false : null);
         } else if (e.key === 'Enter') {
-          // Solo en alert y prompt; en confirm Enter = OK
           if (opts.tipo === 'prompt' && document.activeElement === input) {
             e.preventDefault();
             cerrar(input.value);
           } else if (opts.tipo === 'alert') {
             e.preventDefault();
             cerrar(true);
-          } else if (opts.tipo === 'confirm' && document.activeElement.dataset.action) {
-            // dejar que el botón maneje el click
           }
         }
       };
@@ -191,14 +220,11 @@
             cerrar(opts.tipo === 'confirm' ? false : null);
           } else if (action === 'ok') {
             if (opts.tipo === 'prompt') cerrar(input ? input.value : '');
-            else if (opts.tipo === 'confirm') cerrar(true);
             else cerrar(true);
           }
         });
       });
-
       // NO cerrar al click fuera (igual que los modales del sistema)
-      // overlay.addEventListener('click', (e) => { if (e.target === overlay) cerrar(...); });
     });
   }
 
