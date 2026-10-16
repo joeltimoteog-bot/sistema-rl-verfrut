@@ -1388,5 +1388,95 @@ console.log('[_HUB_UI_V2] listo');
 })();
 </script>
 
+
+<!-- ══════ _BIENV_V2 (15-oct-2026) — pantalla de bienvenida modernizada ══════
+     Envuelve mostrarBienvenida(user, callback): mismo callback y misma duracion (1.5 s).
+     Dentro de #pantallaBienvenida se oculta la tarjeta anterior y se pinta la nueva con los datos que
+     el login YA recibio (nombre, rol, empresa); no agrega consultas. Si algo falla, se muestra la de siempre. -->
+<style>
+#pantallaBienvenida .mx-bienv.bv2-oculto{display:none}
+#bv2Fondo{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+#bv2Fondo:before,#bv2Fondo:after{content:"";position:absolute;border-radius:50%;filter:blur(60px);opacity:.35;animation:bv2fl 9s ease-in-out infinite alternate}
+#bv2Fondo:before{width:420px;height:420px;background:#3b82f6;left:-120px;top:-100px}
+#bv2Fondo:after{width:380px;height:380px;background:#dc2626;right:-100px;bottom:-120px;animation-delay:-4s}
+@keyframes bv2fl{to{transform:translate(60px,40px) scale(1.15)}}
+#bv2Grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:44px 44px;-webkit-mask-image:radial-gradient(circle at center,#000 20%,transparent 70%);mask-image:radial-gradient(circle at center,#000 20%,transparent 70%)}
+#bv2{position:relative;width:min(480px,92vw);background:rgba(10,22,52,.6);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,.12);border-radius:26px;padding:34px 34px 26px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.5);animation:bv2in .6s cubic-bezier(.2,.9,.3,1.2);color:#fff;font-family:Barlow,'Segoe UI',sans-serif}
+@keyframes bv2in{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1;transform:none}}
+#bv2 .av{position:relative;width:104px;height:104px;margin:0 auto 16px}
+#bv2 .av svg{position:absolute;inset:0;transform:rotate(-90deg)}
+#bv2 .av .b{stroke:rgba(255,255,255,.12)}
+#bv2 .av .p{stroke:url(#bv2g);stroke-linecap:round;stroke-dasharray:302;stroke-dashoffset:302;animation:bv2ring 1.5s ease-out forwards}
+@keyframes bv2ring{to{stroke-dashoffset:0}}
+#bv2 .av .in{position:absolute;inset:10px;border-radius:50%;background:linear-gradient(135deg,#dc2626,#7f1d1d);display:flex;align-items:center;justify-content:center;font-family:'Barlow Condensed',Barlow,sans-serif;font-size:38px;font-weight:900;box-shadow:inset 0 2px 0 rgba(255,255,255,.25),0 10px 30px rgba(220,38,38,.4)}
+#bv2 .av .ok{position:absolute;right:2px;bottom:2px;width:30px;height:30px;border-radius:50%;background:#22c55e;border:3px solid #0b1e45;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;transform:scale(0);animation:bv2pop .35s .9s cubic-bezier(.2,.9,.3,1.4) forwards}
+@keyframes bv2pop{to{transform:scale(1)}}
+#bv2 .hola{font-size:11.5px;letter-spacing:2px;text-transform:uppercase;color:#93a7cb;font-weight:700}
+#bv2 h1{font-family:'Barlow Condensed',Barlow,sans-serif;font-size:36px;font-weight:900;margin:4px 0 6px;letter-spacing:.3px;color:#fff}
+#bv2 h1 span{display:inline-block;animation:bv2wave 1.6s .3s ease-in-out 2;transform-origin:70% 70%}
+@keyframes bv2wave{0%,100%{transform:rotate(0)}25%{transform:rotate(18deg)}50%{transform:rotate(-8deg)}75%{transform:rotate(14deg)}}
+#bv2 .sub{font-size:13.5px;color:#c7d3ea}
+#bv2 .chips{display:flex;gap:7px;justify-content:center;flex-wrap:wrap;margin:14px 0 18px}
+#bv2 .chip{font-size:11.5px;font-weight:700;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:5px 11px;color:#dbe4f5;display:inline-flex;gap:6px;align-items:center}
+#bv2 .chip.ok{color:#86efac;border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.12)}
+#bv2 .steps{text-align:left;display:flex;flex-direction:column;gap:7px;margin:0 auto;max-width:330px}
+#bv2 .st{display:flex;align-items:center;gap:10px;font-size:13px;color:#93a7cb;opacity:0;animation:bv2st .4s forwards}
+#bv2 .st i{width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.25);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-style:normal;flex:none}
+#bv2 .st.done{color:#e5eefc}#bv2 .st.done i{background:#22c55e;border-color:#22c55e;color:#06220f;font-weight:900}
+#bv2 .st:nth-child(1){animation-delay:.1s}#bv2 .st:nth-child(2){animation-delay:.5s}#bv2 .st:nth-child(3){animation-delay:.9s}
+@keyframes bv2st{to{opacity:1}}
+#bv2 .bar{height:5px;border-radius:999px;background:rgba(255,255,255,.1);margin:20px 0 10px;overflow:hidden}
+#bv2 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#dc2626,#3b82f6);animation:bv2bar 1.5s ease-out forwards}
+@keyframes bv2bar{to{width:100%}}
+#bv2 .foot{font-size:11px;color:rgba(255,255,255,.4)}#bv2 .foot b{color:rgba(255,255,255,.7)}
+@media(max-width:480px){#bv2{padding:26px 20px 20px}#bv2 h1{font-size:30px}}
+</style>
+<script>
+(function(){
+'use strict';
+if(window._BIENV_V2||typeof window.mostrarBienvenida!=='function')return;window._BIENV_V2=true;
+var previo=window.mostrarBienvenida;
+var MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre'],DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function cap(s){s=String(s||'');return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase();}
+function rolTxt(r){r=String(r||'').toLowerCase().replace(/_/g,' ');if(!r)return 'Usuario';if(r.indexOf('admin')===0)return '🛡️ Administrador';if(r.indexOf('coord')===0)return '🧭 Coordinación';if(r.indexOf('jefa')===0)return '🏛️ Jefatura RR.LL.';if(r.indexOf('super')===0)return '👩‍💼 Supervisión';return '👤 '+cap(r);}
+function ultimo(u){try{var t=Number(localStorage.getItem('rl_bv2_ult_'+u)||0);if(!t)return 'primer ingreso en este equipo';var d=new Date(t),hoy=new Date();var hm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);var dias=Math.round((new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate())-new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000);return (dias===0?'hoy':dias===1?'ayer':d.getDate()+' de '+MESES[d.getMonth()])+' '+hm;}catch(e){return '';}}
+function pintar(user){
+  var pb=document.getElementById('pantallaBienvenida');if(!pb)return false;
+  var vieja=pb.querySelector('.mx-bienv');if(vieja)vieja.classList.add('bv2-oculto');
+  var ant=document.getElementById('bv2Wrap');if(ant)ant.remove();
+  var usu=String(user.usuario||'').toLowerCase().trim(),nom=String(user.nombre||user.usuario||'').trim();
+  var esJoel=usu==='jtimoteo'||nom.toUpperCase().indexOf('JOEL')>=0;
+  var primer=cap(nom.split(' ')[0]||usu),ini=(primer.charAt(0)||'R').toUpperCase();
+  var d=new Date(),h=d.getHours(),sal=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
+  var ult=ultimo(usu);
+  var wrap=document.createElement('div');wrap.id='bv2Wrap';wrap.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px';
+  wrap.innerHTML='<div id="bv2Fondo"></div><div id="bv2Grid"></div>'+
+    '<div id="bv2"><div class="av"><svg width="104" height="104"><defs><linearGradient id="bv2g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e23c3c"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><circle class="b" cx="52" cy="52" r="48" fill="none" stroke-width="5"/><circle class="p" cx="52" cy="52" r="48" fill="none" stroke-width="5"/></svg><div class="in">'+esc(ini)+'</div><div class="ok">✓</div></div>'+
+    '<div class="hola">'+esc(DIAS[d.getDay()]+' '+d.getDate()+' de '+MESES[d.getMonth()]+' · '+sal)+'</div>'+
+    '<h1>'+(esJoel?'¡Hola, Joel! <span>👨‍💻</span>':'¡Hola, '+esc(primer)+'! <span>👋</span>')+'</h1>'+
+    '<div class="sub">'+(esJoel?'Creador del sistema — trabajemos en las actualizaciones 🚀':'Te damos la bienvenida al Sistema de Relaciones Laborales')+'</div>'+
+    '<div class="chips"><span class="chip">'+esc(rolTxt(user.rol))+(user.empresa?' · '+esc(user.empresa):'')+'</span>'+(user.sector?'<span class="chip">📍 '+esc(user.sector)+'</span>':'')+'<span class="chip ok">● Sistema operativo</span></div>'+
+    '<div class="steps"><div class="st done"><i>✓</i>Sesión verificada y horario de acceso en regla</div><div class="st done"><i>✓</i>Permisos y módulos cargados</div><div class="st" id="bv2S3"><i></i>Preparando tu dashboard…</div></div>'+
+    '<div class="bar"><i></i></div>'+
+    '<div class="foot">Último ingreso: <b>'+esc(ult)+'</b> · Sistema RL v3.0 · Unifrutti</div></div>';
+  pb.appendChild(wrap);
+  setTimeout(function(){var s=document.getElementById('bv2S3');if(s){s.classList.add('done');s.querySelector('i').textContent='✓';s.lastChild.textContent='Dashboard listo';}},1250);
+  try{localStorage.setItem('rl_bv2_ult_'+usu,String(Date.now()));}catch(e){}
+  return true;
+}
+window.mostrarBienvenida=function(user,callback){
+  var ok=false;
+  try{ok=pintar(user||{});}catch(e){console.warn('[_BIENV_V2]',e);ok=false;}
+  if(!ok){return previo.apply(this,arguments);}
+  /* igual que antes: muestra la pantalla y llama al callback a los 1.5 s */
+  try{var pb=document.getElementById('pantallaBienvenida');pb.style.display='flex';}catch(e){}
+  setTimeout(callback,1500);
+};
+try{mostrarBienvenida=window.mostrarBienvenida;}catch(e){}
+console.log('[_BIENV_V2] listo');
+})();
+</script>
+
 </body>
 </html>
