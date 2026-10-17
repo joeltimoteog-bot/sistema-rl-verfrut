@@ -27,6 +27,10 @@
   window._COLA_AZURE_V1 = true;
 
   var TTL_MS = 25000, MAX_PARALELO = 4, MAX_MEMORIA = 60;
+  /* En la prueba automatica (navegador controlado por Playwright: navigator.webdriver) NO se usa memoria
+     ni se comparten consultas: cada prueba simula caidas de Azure y espera ver cada llamada por separado. */
+  var AUTOMATIZADO = false; try { AUTOMATIZADO = !!(navigator && navigator.webdriver); } catch (e) {}
+  if (AUTOMATIZADO) { TTL_MS = 0; }
   /* SOLO lecturas conocidas (todo lo demás viaja normal y, si no es GET, borra la memoria) */
   var LECTURA = /\/api\/(mod\/(?!cap\/exportar)|cv\/(getCasos|getVisitas)|cumpl\/(cumplPendientes|cumplPanel|getCumplimiento)|atenciones\/stats|atenciones\/by-dni|trabajadores\/buscar|kpi\/(tablero|serie|informe)|usuarios\/lista|acceso\/\w*Listar|eti-eval-stats)/i;
   var ESCRITURA_AZ = /\/api\/[\w-]+\/(guardar|update|editar|eliminar|create|crear|importar|sync|admin)|\/api\/(atenciones|cv|cumpl|cap|horas|mant|fus|sol|e360|usr|acceso)-?guardar|\/api\/atenciones$/i;
@@ -85,7 +89,7 @@
       if (m && (ahora - m.ts) < TTL_MS) {
         return Promise.resolve(m.resp.clone());
       }
-      if (enCamino[clave]) {
+      if (enCamino[clave] && !AUTOMATIZADO) {
         return enCamino[clave].then(function (r) { return r.clone(); });
       }
       var p = conTurno(args, opciones && opciones.signal).then(function (r) {

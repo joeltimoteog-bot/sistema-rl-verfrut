@@ -67,6 +67,8 @@
       el.onmouseenter = function () { clearTimeout(el._t); el.querySelector('.bar').style.animationPlayState = 'paused'; };
       el.onmouseleave = function () { el.querySelector('.bar').style.animationPlayState = 'running'; el._t = setTimeout(cerrar, 1500); };
       c.appendChild(el);
+      /* compatibilidad: el elemento #_toast de siempre (oculto) conserva el ultimo mensaje; la prueba automatica lo lee */
+      try { var leg = document.getElementById('_toast'); if (!leg) { leg = document.createElement('div'); leg.id = '_toast'; leg.style.cssText = 'display:none'; (document.body || document.documentElement).appendChild(leg); } leg.textContent = String(msg == null ? '' : msg); } catch (e) {}
       while (c.children.length > 4) { try { c.firstChild.remove(); } catch (e) { break; } }
       return el;
     } catch (e) { try { if (previo) return previo.apply(window, arguments); } catch (e2) {} }
