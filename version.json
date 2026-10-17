@@ -1,6 +1,6 @@
 {
-  "version": "12edd1f",
-  "fecha": "16/10/2026 23:52",
-  "titulo": "version.json commiteado en cada push; compatibilidad de la prueba automatica (toast y cola)",
+  "version": "bf7a0d0",
+  "fecha": "17/10/2026 00:02",
+  "titulo": "version.json: publicar el commit del bot en Pages (sin skip ci)",
   "notas": ""
 }
