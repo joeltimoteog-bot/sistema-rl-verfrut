@@ -13,7 +13,7 @@ let escaneando = false;
 let asistentes = []; // [{ n, dni, nombre, empresa, cargo, sexo }]
 let _dniCooldown = {}; // { dni: timestamp } — anti-duplicado 3s
 
-const COOLDOWN_MS       = 3000;
+const COOLDOWN_MS       = 1200;   /* _CAP_FIRMA_DIGITAL_V1 (16-oct): 3 s -> 1.2 s, lectura mas fluida */
 const FILAS_POR_FORMATO = 12;   /* _FIRMA_HUELLA_V4: 20 -> 12 filas, para que la celda de firma sea mas alta y el formato siga entrando en UNA hoja */
 
 /* ─── Paso previo + retroactivo ─── */
@@ -914,7 +914,10 @@ function iniciarScanner() {
       const cam = cameras.find(c => /back|rear|environment/i.test(c.label)) || cameras[cameras.length - 1];
       return scanner.start(
         cam.id,
-        { fps: 10, qrbox: { width: 240, height: 240 } },
+        /* _CAP_FIRMA_DIGITAL_V1 (16-oct-2026): lectura mas rapida — detector nativo del navegador cuando
+           existe (Chrome/Android), 15 cuadros por segundo, recuadro mas grande y sin voltear la imagen */
+        { fps: 15, qrbox: function (w, h) { var m = Math.min(w, h); return { width: Math.round(m * 0.75), height: Math.round(m * 0.75) }; },
+          disableFlip: true, experimentalFeatures: { useBarCodeDetectorIfSupported: true } },
         texto => procesarQR(texto),
         () => {}
       );
@@ -984,7 +987,7 @@ async function procesarDni(dni) {
 
     if (d.success && d.data && d.data.length) {
       const t = d.data[0];
-      agregarAsistente({ dni, nombre: t.nombre || '', empresa: t.empresa || '', cargo: t.cargo || '', sexo: t.sexo || '' });
+      agregarAsistente({ dni, nombre: t.nombre || '', empresa: t.empresa || '', cargo: t.cargo || '', sexo: t.sexo || '', codigo: t.codigo || '' });   /* _CAP_FIRMA_DIGITAL_V1: + codigo */
       mostrarFeedback('ok', `✅ ${t.nombre || dni}  ·  ${t.empresa || ''}  ·  ${t.cargo || ''}` + _capAvisoTope());
     } else {
       // Registrar solo con DNI si no se encuentra en la BD de trabajadores
@@ -1051,7 +1054,8 @@ async function buscarTrabajadorAzure(dni) {
         nombre:  t.nombre_completo || '',
         empresa: t.empresa || '',
         cargo:   t.oficio || '',
-        sexo:    t.sexo || ''
+        sexo:    t.sexo || '',
+        codigo:  String(t.codigo_trab || '').trim()   /* _CAP_FIRMA_DIGITAL_V1: codigo del fotocheck (columna "codigo de trabajador") */
       };
     });
     return { success: true, data: arr };
@@ -1105,7 +1109,7 @@ function renderLista() {
   if (!tb) return;
 
   if (!asistentes.length) {
-    tb.innerHTML = '<tr><td colspan="6" class="empty">Sin asistentes registrados</td></tr>';
+    tb.innerHTML = '<tr><td colspan="7" class="empty">Sin asistentes registrados</td></tr>';
     return;
   }
 
@@ -1116,6 +1120,7 @@ function renderLista() {
       <td>${a.nombre || '<span style="color:#94a3b8;font-style:italic">Sin nombre</span>'}</td>
       <td>${a.empresa ? `<span class="badge-emp ${a.empresa.includes('RAPEL') ? 'badge-rap' : 'badge-vrf'}">${a.empresa}</span>` : ''}</td>
       <td style="font-size:12px;color:#475569">${a.cargo || '—'}</td>
+      <td>${typeof window._capFirmaBadge === 'function' ? window._capFirmaBadge(a) : ''}</td>
       <td><button onclick="eliminarAsistente('${a.dni}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:5px;padding:3px 9px;cursor:pointer;font-size:11px;font-weight:700">✕</button></td>
     </tr>`).join('');
 }
@@ -1650,7 +1655,9 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '', docExist
     y = doc.lastAutoTable.finalY;
 
     const filasPart = partList.map((p, i) => [
-      String(i + 1), p.dni || '', p.nombre || '', p.cargo || '', '', p.obs || ''
+      String(i + 1), p.dni || '', p.nombre || '', p.cargo || '',
+      (typeof window._capFirmaCelda === 'function' ? window._capFirmaCelda(p) : ''),   /* _CAP_FIRMA_DIGITAL_V1: "FIRMADO DIGITALMENTE / Cod." o vacio para firmar a mano */
+      p.obs || ''
     ]);
 
     doc.autoTable({
@@ -1674,6 +1681,8 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '', docExist
         if (d.section === 'head' && d.column.index === 5) { d.cell.styles.fontSize = 8; d.cell.styles.cellPadding = 0.3; }   /* _RSC01_IDENTICO_V1: ahora la columna es ancha como el oficial */   /* _FORMATO_RSC01_2026_V1: "OBSERVACIONES" cabe en 20 mm */
         if (d.section === 'body') {
           d.cell.styles.textColor = String(d.cell.raw || '').trim() ? C.negro : [200, 200, 200];
+          /* _CAP_FIRMA_DIGITAL_V1: la firma digital va en letra chica y azul dentro de la MISMA celda */
+          if (d.column.index === 4 && /FIRMADO DIGITALMENTE/.test(String(d.cell.raw || ''))) { d.cell.styles.fontSize = 5.6; d.cell.styles.fontStyle = 'bold'; d.cell.styles.textColor = [10, 36, 99]; d.cell.styles.cellPadding = 0.4; }
         }
       }
     });
