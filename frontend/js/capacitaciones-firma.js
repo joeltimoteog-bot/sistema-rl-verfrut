@@ -195,7 +195,16 @@
 #capLote .op{border:1.5px solid #e2e8f0;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#475569}#capLote .op.on{border-color:#16a34a;background:#dcfce7;color:#166534}\
 #capLote .pg{height:8px;background:#eef2f8;border-radius:999px;overflow:hidden;margin-top:8px}#capLote .pg b{display:block;height:100%;width:0;background:linear-gradient(90deg,#0a2463,#2563eb);transition:width .2s}\
 #capLote .est{font-size:12px;color:#475569;margin-top:6px;min-height:16px}\
-#capFirmaRes{font-size:11.5px;color:#475569;margin:4px 0 0}';
+#capFirmaRes{font-size:11.5px;color:#475569;margin:4px 0 0}\
+#capCols{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;align-items:start;margin-bottom:14px}\
+#capCols>div{background:#fff;border:1px solid #e3e9f3;border-radius:14px;padding:14px}\
+#capCols .ct{font-size:13px;font-weight:800;color:#0a2463;margin-bottom:10px;display:flex;align-items:center;gap:8px}\
+#capCols .ct .tg{margin-left:auto;font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#166534}\
+#capCols #capLote{display:block;border:0;padding:0;margin:0}\
+#capCols #qr-reader{max-width:100%}\
+#capNovedad{display:flex;gap:10px;align-items:center;background:linear-gradient(90deg,#f0fdf4,#eef4ff);border:1px solid #bbf7d0;border-radius:12px;padding:9px 14px;margin:0 0 12px;font-size:12.5px;color:#0f172a}\
+#capNovedad b{color:#166534}#capNovedad small{color:#64748b}\
+@media(max-width:900px){#capCols{grid-template-columns:1fr}}';
   function ui() {
     var manual = $('dniManual'); var fila = manual && manual.parentNode; if (!fila || $('capFirmaSw')) return;
     var st = document.createElement('style'); st.textContent = CSS; document.head.appendChild(st);
@@ -218,6 +227,33 @@
     $('capLoteTxt').addEventListener('input', contar);
     $('capLoteOk').onclick = lote;
     function elegir(f) { panel.querySelectorAll('.op').forEach(function (o) { o.classList.toggle('on', o.getAttribute('data-f') === f); }); }
+    /* ── layout en 2 columnas (como la maqueta): izquierda lector QR + firma, derecha DNIs en lote ── */
+    try {
+      var card = $('qr-reader') && $('qr-reader').closest('.card');
+      var qrWrap = $('qr-reader') && $('qr-reader').parentNode, btnsQR = $('btnIniciarQR') && $('btnIniciarQR').parentNode;
+      if (card && qrWrap && btnsQR && !$('capCols')) {
+        var cols = document.createElement('div'); cols.id = 'capCols';
+        var izq = document.createElement('div'); izq.innerHTML = '<div class="ct">📷 Lector QR de fotochecks <span class="tg">⚡ lectura rápida</span></div>';
+        var der = document.createElement('div'); der.innerHTML = '<div class="ct">📋 Agregar DNIs en lote <span class="tg" style="background:#dbeafe;color:#1e40af">hasta ' + MAX_LOTE + '</span></div>';
+        card.insertBefore(cols, qrWrap);
+        cols.appendChild(izq); cols.appendChild(der);
+        izq.appendChild(sw); izq.appendChild(qrWrap); izq.appendChild(btnsQR);
+        var hr = fila.previousElementSibling; if (hr && hr.tagName === 'HR') hr.remove();
+        izq.appendChild(fila);
+        panel.style.display = 'block'; panel.querySelector('div').style.display = 'none';   /* el titulo ya esta en la columna */
+        der.appendChild(panel);
+        b.style.display = 'none';   /* ya no hace falta el boton: el panel esta siempre visible */
+        $('capLoteCancel').style.display = 'none';
+      }
+    } catch (e) { console.warn('[_CAP_FIRMA_DIGITAL_V1] columnas', e); }
+    /* ── aviso en el paso 0 para que se vea la novedad desde el inicio ── */
+    try {
+      var p0 = $('paso0'); if (p0 && !$('capNovedad')) {
+        var nov = document.createElement('div'); nov.id = 'capNovedad';
+        nov.innerHTML = '<span style="font-size:20px">✍️</span><div><b>Firma digital con fotocheck</b> y <b>carga de DNIs en lote</b> ya están disponibles en el paso <b>2 · Asistentes</b>. <small>Cada QR escaneado queda firmado con el código del trabajador; en el formato R-SC-01 sale "Firmado digitalmente".</small></div>';
+        p0.insertBefore(nov, p0.firstChild);
+      }
+    } catch (e) {}
   }
   function dnisDe(txt) { var out = [], v = {}; (String(txt || '').match(/\d{7,8}/g) || []).forEach(function (d) { if (d.length === 7) d = '0' + d; if (!v[d]) { v[d] = 1; out.push(d); } }); return out; }
   function contar() { var l = dnisDe($('capLoteTxt').value), rep = (String($('capLoteTxt').value).match(/\d{7,8}/g) || []).length - l.length, ya = l.filter(function (d) { return lista().some(function (a) { return String(a.dni) === d; }); }).length; $('capLoteN').textContent = l.length ? l.length + ' DNIs' + (rep ? ' · ' + rep + ' repetidos' : '') + (ya ? ' · ' + ya + ' ya en la lista' : '') : ''; $('capLoteOk').textContent = '➕ Agregar' + (l.length ? ' ' + l.length : ''); }
