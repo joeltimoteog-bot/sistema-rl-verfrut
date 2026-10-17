@@ -546,6 +546,11 @@ function renderEstadisticasAdmin(data) {
   const { stats, porSupervisor } = data;
   const tendencia = data.tendencia || (CACHE.estadisticasAdmin && CACHE.estadisticasAdmin.tendencia) || [];
   if (!stats || !porSupervisor) { console.error('renderEstadisticasAdmin: datos incompletos', data); return; }
+  /* _EST_PEND_V1 (17-oct-2026): el servidor (Azure y Google) entrega atEnProceso/atFinalizados y la tabla,
+     el Excel y el PDF leian atPendientes/atResueltos -> salia "undefined". Se completan los dos nombres. */
+  try { Object.values(porSupervisor).forEach(function (o) { if (!o || typeof o !== 'object') return;
+    if (o.atPendientes == null) o.atPendientes = o.atEnProceso != null ? o.atEnProceso : 0;
+    if (o.atResueltos == null) o.atResueltos = o.atFinalizados != null ? o.atFinalizados : 0; }); } catch (e) {}
   const tb = document.getElementById('tbEstSupervisores');
 
   const set = (id, val) => {

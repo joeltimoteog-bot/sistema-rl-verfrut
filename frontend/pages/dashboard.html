@@ -12399,7 +12399,7 @@ console.log('[_LIC_EN_PROCESO_V1] el N de licencia no se pide cuando esta EN PRO
    respaldo por hoja de calculo, que es MAS lento todavia. 9 s deja pasar el
    frio y aun asi corta de golpe cuando Azure esta caido de verdad — hoy esos
    casos se quedan colgados 30 segundos o dos minutos. */
-var AZ_RELOJ_MS = 9000;
+var AZ_RELOJ_MS = 14000;   /* _CAIDAS_V4 (17-oct): 9 s cortaba /atenciones/stats en horas punta (LOG_ERRORES 16-oct: 32 cortes a los 9-10 s) y la pantalla caia a Google; mismo criterio que _CAIDAS_V3 (14 s) */
 var AZ_MARCA    = 'azurewebsites.net/api';
 
 var _fetchPrevio = window.fetch;
