@@ -1,6 +1,6 @@
 {
-  "version": "3.8.0",
-  "fecha": "2026-09-19",
-  "titulo": "Control de Cumplimiento de Supervisores GH",
-  "notas": "Nuevo: campana de notificaciones con tus casos y visitas por vencer, vencidos y criticos; semaforo de plazos en Registro de Casos; Indice de Cumplimiento mensual en tu dashboard; justificacion obligatoria al cerrar un caso fuera de plazo. Para coordinacion: panel Control de Cumplimiento con plazos configurables, historial y escalamiento automatico."
+  "version": "12edd1f",
+  "fecha": "16/10/2026 23:52",
+  "titulo": "version.json commiteado en cada push; compatibilidad de la prueba automatica (toast y cola)",
+  "notas": ""
 }
