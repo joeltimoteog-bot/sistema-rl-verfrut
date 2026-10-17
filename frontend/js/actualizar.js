@@ -60,9 +60,27 @@
 @media(max-width:520px){#rlUpd{flex-wrap:wrap}#rlUpd .tx{flex-basis:100%}}';
   try { var st = document.createElement('style'); st.id = 'rlUpdCss'; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); } catch (e) {}
 
-  /* ── leer version ── */
+  /* ── leer version ──
+     _ACTUALIZAR_V3b (17-oct-2026): GitHub Pages publica desde la rama y los commits del robot no llegan al sitio,
+     asi que version.json puede quedarse viejo. La version REAL se arma con los ETag (huella del contenido) que el
+     servidor da a los archivos clave: si cualquiera cambio, hay version nueva. Son 8 peticiones HEAD (sin cuerpo)
+     cada 3 min por pestaña. version.json se sigue leyendo para el titulo/fecha del aviso. */
+  var ARCHIVOS = ['index.html', 'frontend/pages/dashboard.html', 'frontend/pages/capacitaciones.html', 'frontend/js/capacitaciones.js',
+                  'frontend/js/dash-ui.js', 'frontend/js/ui-piel.js', 'frontend/js/tema-rl.js', 'frontend/js/actualizar.js'];
+  function huella(txt) { var h = 5381; for (var i = 0; i < txt.length; i++) h = ((h << 5) + h + txt.charCodeAt(i)) >>> 0; return h.toString(36); }
+  function etag(ruta) {
+    return fetch(BASE + '/' + ruta + '?h=' + Math.floor(Date.now() / 60000), { method: 'HEAD', cache: 'no-store' })
+      .then(function (r) { if (!r.ok) return ruta + ':' + r.status; return ruta + ':' + (r.headers.get('etag') || r.headers.get('last-modified') || '?'); })
+      .catch(function () { return ruta + ':x'; });
+  }
   function leer() {
-    return fetch(URL_VERSION + '?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); });
+    return Promise.all(ARCHIVOS.map(etag)).then(function (tags) {
+      var falt = tags.filter(function (t) { return /:x$/.test(t); }).length;
+      if (falt > ARCHIVOS.length / 2) throw new Error('sin red');          /* sin conexion: no se decide nada */
+      var v = 'v' + huella(tags.join('|'));
+      return fetch(URL_VERSION + '?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
+        .then(function (j) { j = j || {}; var fresco = j.version && String(j.version) !== '3.8.0'; return { version: v, fecha: fresco ? (j.fecha || '') : '', titulo: fresco ? (j.titulo || '') : '', notas: fresco ? (j.notas || '') : '' }; });
+    });
   }
   var revisando = false;
   function revisar() {

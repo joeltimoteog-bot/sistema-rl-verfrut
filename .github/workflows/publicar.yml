@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   pages: write
   id-token: write
 
@@ -23,37 +23,11 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # _ACTUALIZAR_V3 (16-oct-2026): GitHub Pages publica desde la rama main, asi que version.json tiene que
-  # estar COMMITEADO. Este trabajo lo genera (version = commit corto, fecha de Lima, titulo = mensaje del
-  # commit) y lo sube. El commit del bot NO vuelve a correr estos trabajos (if: actor), pero SI dispara la
-  # publicacion de GitHub Pages (con [skip ci] tambien se saltaba Pages y version.json nunca se publicaba).
-  version:
-    name: Actualizar version.json
-    runs-on: ubuntu-latest
-    if: github.actor != 'github-actions[bot]'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Generar y subir version.json
-        run: |
-          python3 - <<'EOF'
-          import json, subprocess, datetime, os
-          sha = os.environ.get('GITHUB_SHA', '')[:7] or 'local'
-          try: msg = subprocess.check_output(['git', 'log', '-1', '--pretty=%s']).decode('utf-8', 'ignore').strip()
-          except Exception: msg = ''
-          fecha = (datetime.datetime.utcnow() - datetime.timedelta(hours=5)).strftime('%d/%m/%Y %H:%M')
-          json.dump({'version': sha, 'fecha': fecha, 'titulo': msg[:140], 'notas': ''}, open('version.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
-          print(open('version.json', encoding='utf-8').read())
-          EOF
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add version.json
-          git diff --cached --quiet && echo "sin cambios" || (git commit -m "version.json ${GITHUB_SHA::7}" && git push)
-
+  # NOTA (17-oct-2026): el trabajo que commiteaba version.json se quito: los commits hechos con GITHUB_TOKEN
+  # no disparan la publicacion de GitHub Pages, asi que nunca llegaba al sitio. La deteccion de version nueva
+  # ahora la hace frontend/js/actualizar.js comparando los ETag de los archivos publicados (sin depender del CI).
   probar:
     name: Prueba automatica del sistema
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
