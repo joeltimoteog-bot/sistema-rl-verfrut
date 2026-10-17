@@ -25,11 +25,12 @@ concurrency:
 jobs:
   # _ACTUALIZAR_V3 (16-oct-2026): GitHub Pages publica desde la rama main, asi que version.json tiene que
   # estar COMMITEADO. Este trabajo lo genera (version = commit corto, fecha de Lima, titulo = mensaje del
-  # commit) y lo sube con [skip ci] para no volver a disparar las pruebas. No depende de la prueba.
+  # commit) y lo sube. El commit del bot NO vuelve a correr estos trabajos (if: actor), pero SI dispara la
+  # publicacion de GitHub Pages (con [skip ci] tambien se saltaba Pages y version.json nunca se publicaba).
   version:
     name: Actualizar version.json
     runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    if: github.actor != 'github-actions[bot]'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,10 +49,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add version.json
-          git diff --cached --quiet && echo "sin cambios" || (git commit -m "version.json ${GITHUB_SHA::7} [skip ci]" && git push)
+          git diff --cached --quiet && echo "sin cambios" || (git commit -m "version.json ${GITHUB_SHA::7}" && git push)
 
   probar:
     name: Prueba automatica del sistema
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
