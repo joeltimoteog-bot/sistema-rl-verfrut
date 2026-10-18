@@ -16,6 +16,8 @@ try {
   $r = Invoke-WebRequest -Uri "https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/horas/horasListarMotivos" -Method Post -Body '{}' -ContentType 'application/json' -UseBasicParsing
   Write-Host "OK: Azure responde (HTTP $($r.StatusCode))" -ForegroundColor Green
 } catch {
-  Write-Host "ATENCION: Azure respondio con error: $($_.Exception.Message)" -ForegroundColor Red
-  Write-Host "Revisa el portal (Secuencia de registro) antes de seguir." -ForegroundColor Red
+  $code = 0; try { $code = $_.Exception.Response.StatusCode.value__ } catch {}
+  if ($code -eq 401) { Write-Host "OK: Azure responde y esta protegido (HTTP 401 sin sesion, como debe ser desde el 18-oct)" -ForegroundColor Green }
+  else { Write-Host "ATENCION: Azure respondio con error: $($_.Exception.Message)" -ForegroundColor Red
+  Write-Host "Revisa el portal (Secuencia de registro) antes de seguir." -ForegroundColor Red }
 }

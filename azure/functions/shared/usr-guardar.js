@@ -53,9 +53,14 @@ async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
   if (accion !== 'saveSolicitudAcceso' && DUENOS.indexOf(op) < 0)
     return no(accion === 'resolverAccesoTemporal' ? 'Solo el administrador del sistema puede aprobar o rechazar accesos temporales.' : 'Solo el administrador del sistema puede crear o modificar usuarios.');
   const ms = prueba && ahoraMs ? +ahoraMs : Date.now(), ahora = new Date(ms);
-  let hash = null;
+  let hash = null, hashHoja = null;
   if (accion === 'saveUsuario' && String(b.password || '').trim()) hash = await bcrypt.hash(String(b.password).trim(), 10);
   if (accion === 'updateUsuario' && b.password) hash = await bcrypt.hash(String(b.password), 10);
+  /* _CLAVE_HOJA_SHA_V1 (18-oct-2026): a la hoja de Google va 'sha256$sal$hex' (Apps Script puede verificarla con
+     Utilities.computeDigest para el login de respaldo); en Azure sigue bcrypt. Nunca texto legible. */
+  if (hash) { const crypto = require('crypto'); const sal = crypto.randomBytes(8).toString('hex');
+    const txt = accion === 'saveUsuario' ? String(b.password).trim() : String(b.password);
+    hashHoja = 'sha256$' + sal + '$' + crypto.createHash('sha256').update(sal + txt, 'utf8').digest('hex'); }
 
   const tx = new sql.Transaction(pool);
   await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
@@ -77,7 +82,7 @@ async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
         .input('f', sql.DateTime2, ahora).input('c', sql.NVarChar(200), fila[8] || null)
         .query(`INSERT INTO dbo.usuarios (id_sistema, usuario, password, nombre, rol, empresa, activo, fecha_creacion, correo, fecha_sync)
                 VALUES (@id, @u, @p, @n, @r, @e, 1, @f, @c, GETDATE())`);
-      cuerpo.fila = fila;
+      cuerpo.fila = fila.slice(); cuerpo.fila[2] = hashHoja || hash;   /* _CLAVE_HOJA_SHA_V1 */
       resp = { success: true };
       extra._clave_ok = await bcrypt.compare(String(b.password).trim(), hash);
 
@@ -88,7 +93,7 @@ async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
       const r = tx.request().input('id', sql.NVarChar(50), String(u.id_sistema)), sets = [];
       cuerpo.usuario = String(b.usuario).trim();
       if (b.activo !== undefined) { r.input('a', sql.Bit, String(b.activo).trim().toUpperCase() === 'TRUE' ? 1 : 0); sets.push('activo = @a'); cuerpo.activo = b.activo; }
-      if (b.password) { r.input('p', sql.NVarChar(255), hash); sets.push('password = @p'); cuerpo.password = hash; }
+      if (b.password) { r.input('p', sql.NVarChar(255), hash); sets.push('password = @p'); cuerpo.password = hashHoja || hash; }   /* _CLAVE_HOJA_SHA_V1 */
       if (b.correo) { r.input('c', sql.NVarChar(200), String(b.correo)); sets.push('correo = @c'); cuerpo.correo = b.correo; }
       if (sets.length) await r.query(`UPDATE dbo.usuarios SET ${sets.join(', ')}, fecha_sync = GETDATE() WHERE id_sistema = @id`);
       resp = { success: true };

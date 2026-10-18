@@ -86,11 +86,14 @@ module.exports = async function (context, req) {
        en texto plano, se conserva la cifrada (antes cada sincronizacion la volvia a dejar legible). */
     try {
       const bcrypt = require('bcryptjs');
-      const act = await pool.request().query("SELECT id_sistema, password FROM dbo.usuarios WHERE password LIKE '$2%'");
+      const act = await pool.request().query("SELECT id_sistema, password FROM dbo.usuarios");
       const hashDe = {}; act.recordset.forEach(function (x) { hashDe[String(x.id_sistema)] = String(x.password || ''); });
       for (const u of validos) {
         const h = hashDe[String(u.id_sistema)], p = String(u.password || '');
-        if (h && p && p.indexOf('$2') !== 0 && await bcrypt.compare(p, h)) u.password = h;
+        /* _CLAVE_HOJA_SHA_V1 (18-oct-2026): la hoja ya no guarda claves legibles sino 'sha256$sal$hex' (o bcrypt);
+           esas no sirven para entrar a Azure: se conserva la clave que Azure ya tiene. */
+        if (p.indexOf('sha256$') === 0 || p.indexOf('$2') === 0) { if (h) u.password = h; continue; }
+        if (h && h.indexOf('$2') === 0 && p && await bcrypt.compare(p, h)) u.password = h;
       }
     } catch (eHash) { context.log.warn('[_USR_HASH_V1] ' + eHash.message); }
     let loteOk = false;
