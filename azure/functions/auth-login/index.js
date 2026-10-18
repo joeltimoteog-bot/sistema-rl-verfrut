@@ -85,7 +85,7 @@ module.exports = async function (context, req) {
         if (e.bloqueadoMin > 0) {
           context.log('Login bloqueado por intentos →', usuario, e.bloqueadoMin + ' min');
           context.res = { status: 429, body: { success: false, rechazado: true, bloqueado: true, minutos: e.bloqueadoMin,
-            error: 'Demasiados intentos fallidos. Espera ' + e.bloqueadoMin + ' minuto(s) e intenta de nuevo, o pide ayuda a Coordinación RR.LL.' } };
+            error: 'Demasiados intentos fallidos. Espera ' + e.bloqueadoMin + ' minuto(s) e intenta de nuevo, o comunícate con el administrador del sistema, Joel Timoteo, para que te desbloquee y te asigne una contraseña nueva.' } };
           return;
         }
       } catch (eI) { intentosOn = false; context.log.warn('[_LOGIN_INTENTOS_V1] ' + eI.message); }
@@ -144,7 +144,7 @@ module.exports = async function (context, req) {
       context.log('Login fallido: password incorrecto →', usuario);
       let extra = {};
       if (intentosOn) { try { const f = await intentosFallo(pool, usuario.toLowerCase(), ipDe(req)); extra = f.bloqueadoMin > 0
-        ? { bloqueado: true, minutos: f.bloqueadoMin, error: 'Demasiados intentos fallidos. Espera ' + f.bloqueadoMin + ' minuto(s) e intenta de nuevo, o pide ayuda a Coordinación RR.LL.' }
+        ? { bloqueado: true, minutos: f.bloqueadoMin, error: 'Demasiados intentos fallidos. Espera ' + f.bloqueadoMin + ' minuto(s) e intenta de nuevo, o comunícate con el administrador del sistema, Joel Timoteo, para que te desbloquee y te asigne una contraseña nueva.' }
         : { intentosRestantes: Math.max(0, INT_MAX - f.fallos) }; } catch (e) {} }
       /* rechazado: la clave es incorrecta en Azure -> la pantalla NO debe probar por Google (evitaria el limite) */
       context.res = {
@@ -156,7 +156,10 @@ module.exports = async function (context, req) {
     if (intentosOn) { try { await intentosLimpiar(pool, usuario.toLowerCase()); } catch (e) {} }
     /* _CLAVE_POLITICA_V1: ¿la clave cumple la regla minima? (solo se informa; el cambio lo hace el usuario) */
     const pol = POL.evaluar(password, usuario);
-    const cambioObligatorio = process.env.CLAVE_CAMBIO_OBLIGATORIO === '1';
+    /* _CLAVE_TEMPORAL_V1: clave puesta por el administrador -> debe cambiarla ahora (obligatorio para ese usuario) */
+    let claveTemporal = false;
+    try { const ct = await pool.request().input('u', sql.NVarChar, usuario).query("IF COL_LENGTH('dbo.usuarios','clave_temporal') IS NOT NULL SELECT clave_temporal AS ct FROM dbo.usuarios WHERE usuario = @u ELSE SELECT CAST(0 AS BIT) AS ct"); claveTemporal = !!(ct.recordset[0] && ct.recordset[0].ct); } catch (e) {}
+    const cambioObligatorio = process.env.CLAVE_CAMBIO_OBLIGATORIO === '1' || claveTemporal;
     /* _SEG_USUARIOS_V1: columnas clave_fuerte / clave_cambiada en dbo.usuarios (se crean solas) para el panel del administrador */
     try {
       await pool.request().query("IF COL_LENGTH('dbo.usuarios','clave_fuerte') IS NULL ALTER TABLE dbo.usuarios ADD clave_fuerte BIT NULL, clave_cambiada DATETIME2(0) NULL");
@@ -178,8 +181,9 @@ module.exports = async function (context, req) {
         usuario: u.usuario,
         rol:     (u.rol || '').trim().toLowerCase(),
         empresa: (u.empresa || '').trim().toUpperCase(),
-        cd:      pol.ok ? 0 : 1,              /* _CLAVE_POLITICA_V1: clave debil (la pantalla lo lee del token) */
-        co:      cambioObligatorio ? 1 : 0    /* cambio obligatorio (CLAVE_CAMBIO_OBLIGATORIO=1) */
+        cd:      (pol.ok && !claveTemporal) ? 0 : 1,   /* _CLAVE_POLITICA_V1: clave debil o temporal (la pantalla lo lee del token) */
+        co:      cambioObligatorio ? 1 : 0,   /* cambio obligatorio (CLAVE_CAMBIO_OBLIGATORIO=1 o clave temporal) */
+        ct:      claveTemporal ? 1 : 0        /* clave temporal puesta por el administrador */
       });
     } catch (tErr) {
       context.log.warn('No se pudo firmar JWT (¿falta JWT_SECRET?):', tErr.message);
@@ -190,7 +194,7 @@ module.exports = async function (context, req) {
       body: {
         success: true,
         token: token,
-        claveDebil: !pol.ok, claveMotivos: pol.motivos, cambioObligatorio: cambioObligatorio,   /* _CLAVE_POLITICA_V1 */
+        claveDebil: !pol.ok, claveMotivos: pol.motivos, cambioObligatorio: cambioObligatorio, claveTemporal: claveTemporal,   /* _CLAVE_POLITICA_V1 */
         user: {
           id:                  u.id_sistema,
           usuario:             u.usuario,

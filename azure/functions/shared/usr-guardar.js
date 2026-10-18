@@ -114,7 +114,12 @@ async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
       if (b.activo !== undefined) { r.input('a', sql.Bit, String(b.activo).trim().toUpperCase() === 'TRUE' ? 1 : 0); sets.push('activo = @a'); cuerpo.activo = b.activo; }
       if (b.password) { r.input('p', sql.NVarChar(255), hash); sets.push('password = @p'); cuerpo.password = hashHoja || hash;   /* _CLAVE_HOJA_SHA_V1 */
         try { await tx.request().query("IF COL_LENGTH('dbo.usuarios','clave_fuerte') IS NULL ALTER TABLE dbo.usuarios ADD clave_fuerte BIT NULL, clave_cambiada DATETIME2(0) NULL"); } catch (eC) {}
-        r.input('cf', sql.Bit, POL.evaluar(String(b.password), String(b.usuario)).ok ? 1 : 0); sets.push('clave_fuerte = @cf'); sets.push('clave_cambiada = SYSUTCDATETIME()'); }   /* _SEG_USUARIOS_V1 */
+        try { await tx.request().query("IF COL_LENGTH('dbo.usuarios','clave_temporal') IS NULL ALTER TABLE dbo.usuarios ADD clave_temporal BIT NULL"); } catch (eC) {}
+        r.input('cf', sql.Bit, POL.evaluar(String(b.password), String(b.usuario)).ok ? 1 : 0); sets.push('clave_fuerte = @cf'); sets.push('clave_cambiada = SYSUTCDATETIME()');
+        /* _CLAVE_TEMPORAL_V1: si la pone el administrador es temporal (el usuario debe cambiarla al entrar); si la cambia el propio usuario, deja de serlo */
+        r.input('ct', sql.Bit, propia ? 0 : 1); sets.push('clave_temporal = @ct');
+        /* y se levanta cualquier bloqueo por intentos */
+        try { await tx.request().input('lu', sql.NVarChar(100), String(b.usuario).trim().toLowerCase()).query("IF OBJECT_ID('dbo.Login_Intentos','U') IS NOT NULL DELETE FROM dbo.Login_Intentos WHERE usuario = @lu"); } catch (eL) {} }   /* _SEG_USUARIOS_V1 */
       if (b.correo) { r.input('c', sql.NVarChar(200), String(b.correo)); sets.push('correo = @c'); cuerpo.correo = b.correo; }
       if (sets.length) await r.query(`UPDATE dbo.usuarios SET ${sets.join(', ')}, fecha_sync = GETDATE() WHERE id_sistema = @id`);
       resp = { success: true };

@@ -43,3 +43,14 @@ git push
 ## Volver atrás
 `LOGIN_INTENTOS_MAX=0` apaga el límite; quitar `<script seguridad-ui.js>` quita la pantalla; los `.bak` tienen
 el código anterior.
+
+## Actualización (18-oct, tarde): usuario bloqueado → desbloqueo y clave temporal por el administrador
+- **Pantalla de login**: el límite visible pasa de 3 a 5 (igual que el servidor) y usa el contador real de Azure.
+  Al agotar los 5 intentos aparece una ventana "Usuario bloqueado temporalmente" (15 min) que indica comunicarse
+  con el administrador del sistema, Joel Timoteo, con botón **💬 Escribir a Joel por WhatsApp** (mensaje con su usuario).
+- **Mi cuenta → 🛡️ Seguridad de usuarios** (solo jtimoteo): en cada fila **🔓 Desbloquear** (si tiene fallos) y
+  **🔑 Nueva clave**: genera una contraseña temporal válida (editable, 🎲 para otra), la asigna, levanta el bloqueo
+  y deja listo el mensaje para copiar y enviar por WhatsApp. La fila pasa a "Temporal · debe cambiarla".
+- **Al entrar con la clave temporal** el usuario ve "Crea tu contraseña" sin opción "Más tarde" (obligatorio), y la
+  nueva clave sirve en el RR.LL., Capacitaciones ETI y Evaluaciones ETI (todas validan contra Azure).
+- Azure: columnas nuevas en `dbo.usuarios` (`clave_fuerte`, `clave_cambiada`, `clave_temporal`, se crean solas).

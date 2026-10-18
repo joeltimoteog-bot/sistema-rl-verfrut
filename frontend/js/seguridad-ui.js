@@ -156,7 +156,20 @@
 #segConf .f{padding:12px 22px 18px;display:flex;gap:10px;justify-content:flex-end}\
 #segConf button{border:none;border-radius:10px;padding:10px 18px;font:800 13px Barlow,"Segoe UI",system-ui,sans-serif;cursor:pointer}\
 #segConf .no{background:#e2e8f0;color:#334155}#segConf .si{background:#dc2626;color:#fff}\
-@media(max-width:600px){#segToasts{left:10px;right:10px;max-width:none}}';
+@media(max-width:600px){#segToasts{left:10px;right:10px;max-width:none}}\
+#ncOv{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:2147483120;display:flex;align-items:center;justify-content:center;padding:16px;font:14px Barlow,"Segoe UI",system-ui,sans-serif;color:#0f172a}\
+#ncOv .md{background:#fff;border-radius:18px;width:min(520px,100%);box-shadow:0 30px 80px rgba(2,6,23,.45);overflow:hidden;animation:segIn .25s}\
+#ncOv .h{padding:16px 22px;border-bottom:1px solid #e2e8f0;display:flex;gap:12px;align-items:center}\
+#ncOv .h .ic{width:44px;height:44px;border-radius:12px;background:#eff6ff;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}\
+#ncOv .h b{font-size:16px;color:#0a2463;display:block}#ncOv .h small{color:#64748b;font-size:12px}\
+#ncOv .b{padding:14px 22px}\
+#ncOv .clave{display:flex;gap:8px;align-items:center;margin:8px 0}\
+#ncOv .clave input{flex:1;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px 12px;font:700 17px "Consolas",monospace;letter-spacing:1px;color:#0a2463}\
+#ncOv .req{font-size:11.5px;color:#475569;line-height:1.7}#ncOv .req .ok{color:#16a34a;font-weight:800}#ncOv .req .no{color:#94a3b8}\
+#ncOv .msg{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;font-size:12.5px;white-space:pre-line;margin-top:10px;color:#334155}\
+#ncOv .f{padding:12px 22px 18px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}\
+#ncOv button{border:none;border-radius:10px;padding:10px 16px;font:800 13px Barlow,"Segoe UI",system-ui,sans-serif;cursor:pointer;color:#fff;background:#0a2463}\
+#ncOv button.s{background:#e2e8f0;color:#334155}#ncOv button.g{background:#16a34a}#ncOv button:disabled{opacity:.45;cursor:not-allowed}';
   try { var st = document.createElement('style'); st.id = 'segCss'; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); } catch (e) {}
 
   function textoHtml() {
@@ -292,8 +305,51 @@
       c.querySelectorAll('.mc-avisar').forEach(function (a) { a.onclick = function () { try { if (typeof window.rlReportar === 'function') { window.rlReportar(); } else { var b = $('_rlChatBtn'); if (b) b.click(); } } catch (e) {} avisar('Cuéntale a Coordinación el ingreso que no reconoces (fecha ' + fecha(new Date(+a.getAttribute('data-ts')).toISOString()) + ')', 'warn'); }; });
     }).catch(function () { c.innerHTML = '<div style="color:#64748b">No se pudo consultar</div>'; });
   }
+  /* ── 4) Administrador: asignar una clave temporal (y desbloquear) a un usuario ── */
+  function claveTemporalNueva() {
+    var pal = ['Campo', 'Fundo', 'Norte', 'Sol', 'Valle', 'Rio', 'Uva', 'Mango', 'Palta', 'Olivo', 'Arena', 'Mar'];
+    var w = pal[Math.floor(Math.random() * pal.length)], n = Math.floor(1000 + Math.random() * 9000), abc = 'abcdefghjkmnpqrstuvwxyz', t = '';
+    for (var i = 0; i < 3; i++) t += abc.charAt(Math.floor(Math.random() * abc.length));
+    return w + '-' + n + '-' + t;   /* ej. Valle-4821-kqs: 14 caracteres, mayúscula, minúscula, número */
+  }
+  function nuevaClave(usuarioDestino, nombreDestino, alTerminar) {
+    var ov = document.createElement('div'); ov.id = 'ncOv';
+    ov.innerHTML = '<div class="md" role="dialog"><div class="h"><div class="ic">🔑</div><div><b>Nueva contraseña para ' + esc(usuarioDestino) + '</b><small>' + esc(nombreDestino || '') + ' · se le asigna una clave temporal; al entrar deberá cambiarla</small></div></div>' +
+      '<div class="b"><label style="display:block;font-size:10.5px;font-weight:800;color:#475569;text-transform:uppercase">Contraseña temporal (puedes editarla)</label>' +
+      '<div class="clave"><input id="ncClave" value="' + esc(claveTemporalNueva()) + '"><button type="button" class="s" id="ncOtra" title="Generar otra">🎲</button></div><div class="req" id="ncReq"></div>' +
+      '<div class="msg" id="ncMsg"></div><div class="err" id="ncErr" style="color:#b91c1c;font-size:12px;font-weight:700;margin-top:6px"></div></div>' +
+      '<div class="f"><button type="button" class="s" id="ncCancel">Cancelar</button><button type="button" id="ncCopiar">📋 Copiar mensaje</button><button type="button" class="g" id="ncGuardar">💾 Asignar y desbloquear</button></div></div>';
+    document.body.appendChild(ov);
+    var inp = $('ncClave');
+    function texto() { return 'Hola ' + (nombreDestino ? nombreDestino.split(' ')[0] : usuarioDestino) + ', tu acceso al Sistema RR.LL. fue restablecido.\nUsuario: ' + usuarioDestino + '\nContraseña temporal: ' + inp.value + '\nAl entrar el sistema te pedirá crear tu propia contraseña (8+ caracteres, mayúscula, minúscula y número). Sirve también para Capacitaciones ETI y Evaluaciones ETI.'; }
+    function pintar() {
+      var r = evaluarClave(inp.value, usuarioDestino);
+      $('ncReq').innerHTML = [['largo', 'Mínimo 8'], ['mayus', 'Mayúscula'], ['minus', 'Minúscula'], ['num', 'Número'], ['usuario', 'Sin el usuario'], ['comun', 'No común']].map(function (x) { return '<span class="' + (r[x[0]] ? 'ok' : 'no') + '" style="margin-right:10px">' + (r[x[0]] ? '✓' : '○') + ' ' + x[1] + '</span>'; }).join(' ');
+      $('ncGuardar').disabled = !r.ok; $('ncMsg').textContent = texto();
+    }
+    inp.addEventListener('input', pintar); $('ncOtra').onclick = function () { inp.value = claveTemporalNueva(); pintar(); }; pintar();
+    $('ncCancel').onclick = function () { ov.remove(); };
+    $('ncCopiar').onclick = function () { try { navigator.clipboard.writeText(texto()).then(function () { avisar('Mensaje copiado: pégalo en WhatsApp al usuario.', 'ok'); }, function () { avisar('No se pudo copiar; selecciona el texto y cópialo.', 'warn'); }); } catch (e) { avisar('No se pudo copiar; selecciona el texto y cópialo.', 'warn'); } };
+    $('ncGuardar').onclick = function () {
+      var b = $('ncGuardar'); b.disabled = true; b.textContent = 'Guardando…'; $('ncErr').textContent = '';
+      var cuerpo = { usuario: usuarioDestino, password: inp.value, client_id: 'nc-' + Date.now().toString(36) };
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 15000);
+      var op = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() }, body: JSON.stringify(cuerpo) }; if (ctrl) op.signal = ctrl.signal;
+      fetch(AZ + '/usr/guardar/updateUsuario', op).then(function (r) { clearTimeout(reloj); return r.json().catch(function () { return {}; }).then(function (j) { j._status = r.status; return j; }); }).then(function (j) {
+        if (j && j.success) {
+          b.textContent = '✓ Asignada'; $('ncCancel').textContent = 'Cerrar';
+          avisar('Contraseña temporal asignada a ' + usuarioDestino + ' y bloqueo levantado. Envíale el mensaje.', 'ok');
+          try { if (window.RLTrafico && window.RLTrafico.emit) window.RLTrafico.emit({ accion: 'Asignó clave temporal a ' + usuarioDestino, destino: 'Azure SQL', tipo: 'ok' }); } catch (e) {}
+          if (alTerminar) alTerminar();
+          return;
+        }
+        $('ncErr').textContent = (j && j.error) || (j && j._status === 503 ? 'Azure en mantenimiento; intenta en unos minutos.' : 'No se pudo guardar.'); b.disabled = false; b.textContent = '💾 Asignar y desbloquear';
+      }).catch(function () { clearTimeout(reloj); $('ncErr').textContent = 'Sin conexión con el servidor.'; b.disabled = false; b.textContent = '💾 Asignar y desbloquear'; });
+    };
+  }
   function listaAdmin() {
     var res = $('mcListaRes'), t = $('mcTabla'); if (!t) return;
+    var yo = String(((usuario() || {}).usuario) || '').toLowerCase();
     res.textContent = 'Consultando…'; t.innerHTML = '';
     post('lista', {}, 15000).then(function (j) {
       if (!j || !j.success) { res.textContent = (j && j.error) || 'No se pudo consultar'; return; }
@@ -309,11 +365,13 @@
       t.innerHTML = '<table><thead><tr><th>Usuario</th><th>Nombre</th><th>Compromiso</th><th>Contraseña</th><th>Intentos</th><th></th></tr></thead><tbody>' +
         f.map(function (x) {
           var comp = x.aceptado ? '<span class="pill" title="' + esc(fecha(x.fecha)) + ' · ' + esc(x.navegador || '') + '">Aceptado ' + esc(fecha(x.fecha).slice(0, 5)) + '</span>' : '<span class="pill p">Pendiente</span>';
-          var cl = x.claveFuerte === true ? '<span class="pill">Fuerte' + (x.claveCambiada ? ' · ' + esc(fecha(x.claveCambiada).slice(0, 5)) : '') + '</span>' : (x.claveFuerte === false ? '<span class="pill p">Débil · pendiente</span>' : '<span class="pill p" style="background:#f1f5f9;color:#64748b">Sin ingreso aún</span>');
+          var cl = x.claveTemporal ? '<span class="pill p" style="background:#dbeafe;color:#1e40af">Temporal · debe cambiarla</span>' : (x.claveFuerte === true ? '<span class="pill">Fuerte' + (x.claveCambiada ? ' · ' + esc(fecha(x.claveCambiada).slice(0, 5)) : '') + '</span>' : (x.claveFuerte === false ? '<span class="pill p">Débil · pendiente</span>' : '<span class="pill p" style="background:#f1f5f9;color:#64748b">Sin ingreso aún</span>'));
           var it = x.bloqueadoHasta ? '<span class="pill" style="background:#fee2e2;color:#991b1b">Bloqueado hasta ' + esc(fecha(x.bloqueadoHasta).slice(11)) + '</span>' : (x.fallos ? '<span class="pill p">' + x.fallos + ' fallido(s)</span>' : '<span style="color:#94a3b8">—</span>');
-          var acc = (x.bloqueadoHasta || x.fallos) ? '<button type="button" class="btn s mc-desb" data-u="' + esc(x.usuario) + '" style="padding:5px 9px;font-size:11px">🔓 Desbloquear</button>' : '';
+          var acc = ((x.bloqueadoHasta || x.fallos) ? '<button type="button" class="btn s mc-desb" data-u="' + esc(x.usuario) + '" style="padding:5px 9px;font-size:11px">🔓 Desbloquear</button> ' : '') +
+                    (yo === 'jtimoteo' ? '<button type="button" class="btn mc-nueva" data-u="' + esc(x.usuario) + '" data-n="' + esc(x.nombre || '') + '" style="padding:5px 9px;font-size:11px;white-space:nowrap">🔑 Nueva clave</button>' : '');
           return '<tr><td>' + esc(x.usuario) + '</td><td>' + esc(x.nombre) + '</td><td>' + comp + '</td><td>' + cl + '</td><td>' + it + '</td><td>' + acc + '</td></tr>'; }).join('') + '</tbody></table>' +
-        '<div style="font-size:11.5px;color:#64748b;margin-top:8px">Para asignar una contraseña nueva a quien la olvidó: Gestión de Usuarios → editar → nueva contraseña (queda cifrada en Azure y en la hoja).</div>';
+        '<div style="font-size:11.5px;color:#64748b;margin-top:8px">🔑 Nueva clave: asigna una contraseña temporal (y levanta el bloqueo); el usuario deberá crear la suya al entrar. Queda cifrada en Azure y en la hoja; nadie la ve después.</div>';
+      t.querySelectorAll('.mc-nueva').forEach(function (b) { b.onclick = function () { nuevaClave(b.getAttribute('data-u'), b.getAttribute('data-n'), listaAdmin); }; });
       t.querySelectorAll('.mc-desb').forEach(function (b) { b.onclick = function () {
         var uu = b.getAttribute('data-u'); b.disabled = true; b.textContent = '…';
         post('desbloquear', { usuario: uu }, 12000).then(function (r) { if (r && r.success) { avisar('Usuario ' + uu + ' desbloqueado: ya puede volver a intentar.', 'ok'); listaAdmin(); } else { avisar((r && r.error) || 'No se pudo desbloquear', 'error'); b.disabled = false; b.textContent = '🔓 Desbloquear'; } }).catch(function () { avisar('Sin conexión con el servidor', 'error'); b.disabled = false; b.textContent = '🔓 Desbloquear'; });
@@ -377,7 +435,9 @@
   function mostrarClave(obligatorio, desdeCuenta) {
     var ov = ventanaClave();
     $('pwTit').textContent = desdeCuenta ? 'Cambiar mi contraseña' : 'Actualiza tu contraseña';
-    $('pwSub').textContent = desdeCuenta ? 'Elige una nueva contraseña que solo tú conozcas.' : 'Tu contraseña actual es fácil de adivinar. Elige una nueva que solo tú conozcas.';
+    var temporal = (tokenPayload().ct === 1);
+    $('pwTit').textContent = desdeCuenta ? 'Cambiar mi contraseña' : (temporal ? 'Crea tu contraseña' : 'Actualiza tu contraseña');
+    $('pwSub').textContent = desdeCuenta ? 'Elige una nueva contraseña que solo tú conozcas.' : (temporal ? 'Entraste con una contraseña temporal que te dio Coordinación. Escríbela como "actual" y crea la tuya.' : 'Tu contraseña actual es fácil de adivinar. Elige una nueva que solo tú conozcas.');
     $('pwLuego').style.display = (obligatorio && !desdeCuenta) ? 'none' : '';
     $('pwLuego').textContent = desdeCuenta ? 'Cancelar' : 'Más tarde';
     ov.classList.add('on'); setTimeout(function () { try { $('pwActual').focus(); } catch (e) {} }, 60);
