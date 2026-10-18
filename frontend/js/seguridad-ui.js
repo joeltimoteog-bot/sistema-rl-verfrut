@@ -103,7 +103,7 @@
 #navMiCuenta{display:flex;align-items:center;gap:8px}\
 #mcOv{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:1300;display:none;align-items:center;justify-content:center;padding:16px;font:14px Barlow,"Segoe UI",system-ui,sans-serif;color:#0f172a}\
 #mcOv.on{display:flex}\
-#mcOv .md{background:#fff;border-radius:18px;width:min(720px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(2,6,23,.45)}\
+#mcOv .md{background:#fff;border-radius:18px;width:min(980px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(2,6,23,.45)}\
 #mcOv .h{padding:14px 20px;border-bottom:1px solid #e2e8f0;display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,#0a2463,#1e40af);color:#fff}\
 #mcOv .h .mc-av{width:42px;height:42px;border-radius:50%;background:#fff;color:#0a2463;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px}\
 #mcOv .h b{font-size:15px;display:block}#mcOv .h small{opacity:.85;font-size:12px}\
@@ -270,6 +270,15 @@
     return ov;
   }
   function abrirCuenta() { var ov = ventanaCuenta(); ov.classList.add('on'); pintarCuenta(); ingresos(); }
+  function abrirSeguridad() { abrirCuenta(); setTimeout(function () { var b = $('mcLista'); if (b) { b.click(); try { b.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {} } }, 80); }
+  function crearAccesoSeguridad() {
+    var u = usuario(); if (!esAdmin(u) || $('navSegUsuarios')) return;
+    var ref = $('navUsr') || document.querySelector('nav button.ni[onclick*="ir(\'usuarios\'"]'); if (!ref || !ref.parentNode) return;
+    var b = document.createElement('button'); b.type = 'button'; b.id = 'navSegUsuarios'; b.className = ref.className.replace(/\bon\b/, '').trim();
+    b.innerHTML = '<span class="ic">🛡️</span>Seguridad de usuarios'; b.title = 'Compromiso, contraseñas, bloqueos: desbloquear y asignar clave temporal';
+    b.onclick = abrirSeguridad;
+    ref.parentNode.insertBefore(b, ref.nextSibling);
+  }
   function pintarCuenta() {
     var ov = $('mcOv'); if (!ov || !ov.classList.contains('on')) return;
     var u = usuario() || {};
@@ -284,7 +293,7 @@
       '<div><span>Sesión</span>Dura 14 horas · iniciada en este navegador (' + esc(navegador()) + ')</div>' +
       '<div><span>Módulos asignados</span>' + mods + ' en tu menú</div></div>' +
       '<h4>Últimos ingresos</h4><div class="ses" id="mcSes"><div style="color:#64748b">Consultando…</div></div>' +
-      (esAdmin(u) ? '<h4>Administración</h4><button type="button" class="btn" id="mcLista">🛡️ Seguridad de usuarios (compromiso · contraseña · bloqueos)</button> <span id="mcListaRes" style="font-size:12px;color:#64748b"></span><div id="mcTabla" style="margin-top:10px;max-height:320px;overflow:auto"></div>' : '');
+      (esAdmin(u) ? '<h4>Administración</h4><button type="button" class="btn" id="mcLista">🛡️ Seguridad de usuarios (compromiso · contraseña · bloqueos)</button> <span id="mcListaRes" style="font-size:12px;color:#64748b"></span><div id="mcTabla" style="margin-top:10px;max-height:420px;overflow:auto"></div>' : '');
     $('mcBody').innerHTML = html;
     $('mcVerTxt').onclick = function () { var d = document.createElement('div'); d.className = 'txt'; d.style.cssText = 'border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.55;background:#f8fafc;margin-top:10px'; d.innerHTML = textoHtml(); $('mcBody').insertBefore(d, $('mcBody').children[1]); this.remove(); };
     if (esAdmin(u)) $('mcLista').onclick = listaAdmin;
@@ -362,15 +371,17 @@
         var b = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); var l = document.createElement('a'); l.href = URL.createObjectURL(b); l.download = 'aceptaciones_compromiso_v' + j.version + '_' + new Date().toISOString().slice(0, 10) + '.csv'; document.body.appendChild(l); l.click(); l.remove();
       };
       res.appendChild(a);
-      t.innerHTML = '<table><thead><tr><th>Usuario</th><th>Nombre</th><th>Compromiso</th><th>Contraseña</th><th>Intentos</th><th></th></tr></thead><tbody>' +
+      t.innerHTML = '<input id="mcBuscar" placeholder="🔍 Buscar usuario o nombre…" style="width:100%;box-sizing:border-box;border:1.5px solid #e2e8f0;border-radius:10px;padding:9px 12px;margin-bottom:8px;font:500 13px Barlow,\'Segoe UI\',system-ui,sans-serif">' +
+        '<table style="table-layout:auto"><thead><tr><th>Usuario</th><th>Compromiso</th><th>Contraseña</th><th>Intentos</th><th style="text-align:right">Acciones</th></tr></thead><tbody>' +
         f.map(function (x) {
           var comp = x.aceptado ? '<span class="pill" title="' + esc(fecha(x.fecha)) + ' · ' + esc(x.navegador || '') + '">Aceptado ' + esc(fecha(x.fecha).slice(0, 5)) + '</span>' : '<span class="pill p">Pendiente</span>';
           var cl = x.claveTemporal ? '<span class="pill p" style="background:#dbeafe;color:#1e40af">Temporal · debe cambiarla</span>' : (x.claveFuerte === true ? '<span class="pill">Fuerte' + (x.claveCambiada ? ' · ' + esc(fecha(x.claveCambiada).slice(0, 5)) : '') + '</span>' : (x.claveFuerte === false ? '<span class="pill p">Débil · pendiente</span>' : '<span class="pill p" style="background:#f1f5f9;color:#64748b">Sin ingreso aún</span>'));
           var it = x.bloqueadoHasta ? '<span class="pill" style="background:#fee2e2;color:#991b1b">Bloqueado hasta ' + esc(fecha(x.bloqueadoHasta).slice(11)) + '</span>' : (x.fallos ? '<span class="pill p">' + x.fallos + ' fallido(s)</span>' : '<span style="color:#94a3b8">—</span>');
           var acc = ((x.bloqueadoHasta || x.fallos) ? '<button type="button" class="btn s mc-desb" data-u="' + esc(x.usuario) + '" style="padding:5px 9px;font-size:11px">🔓 Desbloquear</button> ' : '') +
                     (yo === 'jtimoteo' ? '<button type="button" class="btn mc-nueva" data-u="' + esc(x.usuario) + '" data-n="' + esc(x.nombre || '') + '" style="padding:5px 9px;font-size:11px;white-space:nowrap">🔑 Nueva clave</button>' : '');
-          return '<tr><td>' + esc(x.usuario) + '</td><td>' + esc(x.nombre) + '</td><td>' + comp + '</td><td>' + cl + '</td><td>' + it + '</td><td>' + acc + '</td></tr>'; }).join('') + '</tbody></table>' +
+          return '<tr data-q="' + esc((x.usuario + ' ' + (x.nombre || '')).toLowerCase()) + '"><td><b>' + esc(x.usuario) + '</b><div style="font-size:11px;color:#64748b;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(x.nombre) + '">' + esc(x.nombre) + '</div></td><td>' + comp + '</td><td>' + cl + '</td><td>' + it + '</td><td style="text-align:right;white-space:nowrap">' + acc + '</td></tr>'; }).join('') + '</tbody></table>' +
         '<div style="font-size:11.5px;color:#64748b;margin-top:8px">🔑 Nueva clave: asigna una contraseña temporal (y levanta el bloqueo); el usuario deberá crear la suya al entrar. Queda cifrada en Azure y en la hoja; nadie la ve después.</div>';
+      var bq = $('mcBuscar'); if (bq) bq.oninput = function () { var q = bq.value.trim().toLowerCase(); t.querySelectorAll('tbody tr').forEach(function (tr) { tr.style.display = (!q || (tr.getAttribute('data-q') || '').indexOf(q) >= 0) ? '' : 'none'; }); };
       t.querySelectorAll('.mc-nueva').forEach(function (b) { b.onclick = function () { nuevaClave(b.getAttribute('data-u'), b.getAttribute('data-n'), listaAdmin); }; });
       t.querySelectorAll('.mc-desb').forEach(function (b) { b.onclick = function () {
         var uu = b.getAttribute('data-u'); b.disabled = true; b.textContent = '…';
@@ -451,12 +462,12 @@
       mostrarClave(cambioObligatorio(), false);
     } catch (e) {}
   }
-  window.rlSeguridad = { revisar: revisar, mostrar: mostrarCompromiso, miCuenta: abrirCuenta, version: VERSION, cambiarClave: function () { mostrarClave(false, true); }, evaluarClave: evaluarClave };
+  window.rlSeguridad = { seguridad: function () { abrirSeguridad(); }, revisar: revisar, mostrar: mostrarCompromiso, miCuenta: abrirCuenta, version: VERSION, cambiarClave: function () { mostrarClave(false, true); }, evaluarClave: evaluarClave };
 
   /* ── arranque: espera a que exista la sesión (en el hub se crea tras el login) ── */
   function iniciar() {
-    crearMiCuenta();
-    var n = 0, t = setInterval(function () { crearMiCuenta(); if (usuario() && token()) { revisar(); revisarClave(); } if (++n > 240) clearInterval(t); }, 1500);
+    crearMiCuenta(); crearAccesoSeguridad();
+    var n = 0, t = setInterval(function () { crearMiCuenta(); crearAccesoSeguridad(); if (usuario() && token()) { revisar(); revisarClave(); } if (++n > 240) clearInterval(t); }, 1500);
     revisar();
     console.log('[_SEGURIDAD_UI_V1] listo (compromiso v' + VERSION + ')');
   }
