@@ -12441,7 +12441,10 @@ function _despertarAzure() {
   try {
     if (typeof AZURE_FN_BASE === 'undefined' || !AZURE_FN_BASE) return;
     var t0 = (window.performance && performance.now()) || Date.now();
-    _fetchPrevio(AZURE_FN_BASE + '/trabajadores/buscar?dni=00000000', { method: 'GET' })   /* _DESPERTAR_LIVIANO (24-set): antes /atenciones/stats = 7 recorridos de la tabla en cada carga */
+    /* _DESPERTAR_LIVIANO (24-set): antes /atenciones/stats = 7 recorridos de la tabla en cada carga.
+       _DESPERTAR_200 (18-oct): antes trabajadores/buscar?dni=00000000, que respondia 404 y Chrome lo pintaba en rojo en la consola;
+       ahora mod/sup/getSupervisores (200, ~380 ms, lista corta) que ademas calienta la misma funcion 'mod' que usa el Dashboard. */
+    _fetchPrevio(AZURE_FN_BASE + '/mod/sup/getSupervisores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       .then(function () {
         var ms = Math.round((((window.performance && performance.now()) || Date.now())) - t0);
         console.log('[_AZURE_RELOJ_V1] Azure despierto en ' + ms + ' ms');
