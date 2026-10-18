@@ -14,6 +14,7 @@ DASH_ALT = sys.argv[2] if len(sys.argv) > 2 else None
 BASE = 'https://joeltimoteog-bot.github.io/sistema-rl-verfrut/'
 RED = {'google': [], 'azure': [], 'gurl': []}
 AZ_CAIDO = {'si': False}
+COMP = {'aceptado': True, 'llamadas': [], 'cuerpos': []}   # _SEGURIDAD_UI_V1: compromiso de confidencialidad
 G404 = {'n': 0}
 ACC = {'modo': 'ok', 'llamadas': []}   # ok | caido | 403
 CV = {'caido': False, 'llamadas': []}
@@ -75,6 +76,12 @@ def resp_google(a):
     return {'success': True, 'ok': True, 'nro': 9999, 'data': [], 'hoja': 'TEST', 'fecha_registro': '2026-09-24'}
 
 def resp_azure(url, post=''):
+    if '/api/compromiso/' in url:   # _SEGURIDAD_UI_V1
+        acc = url.split('/api/compromiso/')[1].split('?')[0]
+        COMP['llamadas'].append(acc); COMP['cuerpos'].append(post or '')
+        if acc == 'aceptar': COMP['aceptado'] = True; return {'success': True, 'version': '1.0', 'fecha': '2026-10-19T12:42:00Z'}
+        if acc == 'lista': return {'success': True, 'version': '1.0', 'filas': [{'usuario': 'ptamayo', 'nombre': 'POOL', 'rol': 'supervisor', 'activo': True, 'aceptado': True, 'fecha': '2026-10-19T12:42:00Z', 'navegador': 'Chrome / Windows'}, {'usuario': 'jborrero', 'nombre': 'J', 'rol': 'supervisor', 'activo': True, 'aceptado': False}]}
+        return {'success': True, 'version': '1.0', 'aceptado': COMP['aceptado'], 'fecha': '2026-10-19T12:42:00Z' if COMP['aceptado'] else None}
     if '/api/mod/' in url:
         partes = url.split('/api/mod/')[1].split('?')[0].split('/')
         MODX['llamadas'].append('/'.join(partes))
@@ -368,6 +375,18 @@ with sync_playwright() as pw:
     # ── Carga al entrar desde Azure (_PRELOAD_AZURE_V1) ──
     r = pag.evaluate("() => [CACHE.stats && CACHE.stats.hoy, (CACHE.supervisores || []).length, Array.isArray(CACHE.fusiones), Array.isArray(CACHE.solicitudes)].join('|')")
     ok('Carga al entrar (admin): sale de Azure (cifras, fusiones, solicitudes, supervisores) y NO pide getPreloadOptimizado a Google', not pre and r == '1|3|true|true' and all(m in MODX['llamadas'] for m in ['fus/getFusiones', 'sup/getSupervisores', 'sol/getSolicitudes']), r + ' | mod: ' + ','.join(sorted(set(MODX['llamadas']))))
+    # ── _SEGURIDAD_UI_V1: compromiso de confidencialidad + Mi cuenta ──
+    ok('Compromiso: con aceptacion vigente NO aparece la ventana y hay item "Mi cuenta"', 'estado' in COMP['llamadas'] and pag.evaluate("() => !document.getElementById('segOv') && !!document.getElementById('navMiCuenta')"), ','.join(COMP['llamadas']))
+    COMP['aceptado'] = False; COMP['llamadas'].clear()
+    pag.evaluate("() => { sessionStorage.removeItem('rl_comp_ok_1.0_jtimoteo'); window.rlSeguridad.revisar(); }"); pag.wait_for_timeout(900)
+    ok('Compromiso: sin aceptacion aparece la ventana bloqueante con el texto y el boton Acepto deshabilitado', pag.evaluate("() => { const o = document.getElementById('segOv'); return !!o && /29733/.test(o.textContent) && document.getElementById('segSi').disabled; }"))
+    pag.evaluate("() => { document.getElementById('segC1').click(); document.getElementById('segC2').click(); document.getElementById('segSi').click(); }"); pag.wait_for_timeout(900)
+    cu = ''.join(COMP['cuerpos'])
+    ok('Compromiso: al aceptar se guarda en Azure (version 1.0 + navegador) y la ventana se cierra', 'aceptar' in COMP['llamadas'] and '"version":"1.0"' in cu and 'navegador' in cu and pag.evaluate("() => !document.getElementById('segOv') && !!sessionStorage.getItem('rl_comp_ok_1.0_jtimoteo')"), ','.join(COMP['llamadas']) + ' | ' + cu[:120])
+    pag.evaluate("() => { document.getElementById('navMiCuenta').click(); }"); pag.wait_for_timeout(500)
+    pag.evaluate("() => { const b = document.getElementById('mcLista'); if (b) b.click(); }"); pag.wait_for_timeout(700)
+    ok('Mi cuenta (admin): datos de sesion, compromiso aceptado y lista de aceptaciones (1 de 2)', pag.evaluate("() => { const t = document.getElementById('mcBody').textContent; return /jtimoteo/.test(t) && /Aceptado el/.test(t) && /1 de 2 usuarios activos/.test(t); }"))
+    pag.evaluate("() => { document.getElementById('mcOv').classList.remove('on'); }")
     PRE = {'action': 'getPreloadOptimizado', 'usuario': 'jtimoteo', 'nombre': 'JOEL', 'rol': 'administrador', 'empresa': '', 'cvAzure': '1'}
     RED['google'].clear()
     r = pag.evaluate("""async (p) => { const d = await apiGet(p); return [d && d.fuente, d && d.data && d.data.usuarios && d.data.usuarios.length, d && d.data && d.data.stats && d.data.stats.anio].join('|'); }""", PRE)
