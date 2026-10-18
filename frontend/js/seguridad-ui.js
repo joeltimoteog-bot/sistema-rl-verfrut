@@ -52,6 +52,32 @@
     return fetch(AZ + '/compromiso/' + accion, op).then(function (r) { clearTimeout(reloj); return r.json().catch(function () { return {}; }).then(function (j) { j._status = r.status; return j; }); }, function (e) { clearTimeout(reloj); throw e; });
   }
 
+  /* avisos modernos: usa los del sistema si existen (mostrarToast / appConfirm); si no, los propios */
+  function avisar(msg, tipo) {
+    try { if (typeof window.mostrarToast === 'function') return window.mostrarToast(msg, tipo || 'ok'); } catch (e) {}
+    try {
+      var c = $('segToasts'); if (!c) { c = document.createElement('div'); c.id = 'segToasts'; document.body.appendChild(c); }
+      var t = document.createElement('div'); t.className = 'seg-toast ' + (tipo || 'ok');
+      var ICO = { ok: '✓', error: '!', warn: '⚠', info: 'i' };
+      t.innerHTML = '<span class="ic">' + (ICO[tipo || 'ok'] || '✓') + '</span><div style="flex:1;line-height:1.4"></div>';
+      t.lastChild.textContent = String(msg).replace(/^\s*(✅|❌|⚠️|ℹ️)\s*/, '');
+      t.onclick = function () { try { t.remove(); } catch (e) {} };
+      c.appendChild(t); setTimeout(function () { try { t.remove(); } catch (e) {} }, tipo === 'error' ? 6500 : 4000);
+    } catch (e) {}
+  }
+  function confirmar(titulo, msg, siTxt, noTxt) {
+    return new Promise(function (resolver) {
+      try { if (typeof window.appConfirm === 'function') { Promise.resolve(window.appConfirm(titulo + '\n\n' + msg)).then(function (r) { resolver(!!r); }, function () { resolver(false); }); return; } } catch (e) {}
+      var ov = document.createElement('div'); ov.id = 'segConf';
+      ov.innerHTML = '<div class="md" role="alertdialog"><div class="h"></div><div class="b"><b></b><span></span></div><div class="f"><button type="button" class="no"></button><button type="button" class="si"></button></div></div>';
+      ov.querySelector('b').textContent = titulo; ov.querySelector('.b span').textContent = msg;
+      ov.querySelector('.no').textContent = noTxt || 'Cancelar'; ov.querySelector('.si').textContent = siTxt || 'Sí, continuar';
+      ov.querySelector('.no').onclick = function () { ov.remove(); resolver(false); };
+      ov.querySelector('.si').onclick = function () { ov.remove(); resolver(true); };
+      document.body.appendChild(ov);
+    });
+  }
+
   var CSS = '\
 #segOv{position:fixed;inset:0;background:linear-gradient(160deg,rgba(10,36,99,.92),rgba(30,58,138,.92));z-index:2147483100;display:flex;align-items:center;justify-content:center;padding:16px;font:14px Barlow,"Segoe UI",system-ui,sans-serif;color:#0f172a}\
 #segOv .md{background:#fff;border-radius:18px;width:min(660px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.45);animation:segIn .3s cubic-bezier(.2,.9,.3,1.1)}\
@@ -117,7 +143,20 @@
 #pwOv .f small{flex:1 1 200px;color:#64748b;font-size:11.5px}\
 #pwOv .btn{border:none;border-radius:10px;padding:10px 18px;font:800 13px Barlow,"Segoe UI",system-ui,sans-serif;color:#fff;background:#0a2463;cursor:pointer}\
 #pwOv .btn.s{background:#e2e8f0;color:#334155}#pwOv .btn:disabled{opacity:.45;cursor:not-allowed}\
-#pwOv .err{color:#b91c1c;font-size:12px;font-weight:700;width:100%}';
+#pwOv .err{color:#b91c1c;font-size:12px;font-weight:700;width:100%}\
+/* avisos propios (cuando la pagina no tiene mostrarToast/appConfirm) */\
+#segToasts{position:fixed;right:20px;bottom:20px;z-index:2147483200;display:flex;flex-direction:column;gap:8px;max-width:min(380px,calc(100vw - 32px))}\
+.seg-toast{--a:#16a34a;display:flex;align-items:flex-start;gap:10px;background:#fff;border:1px solid #e2e8f0;border-left:4px solid var(--a);border-radius:12px;padding:11px 12px;box-shadow:0 12px 32px rgba(15,23,42,.18);font:600 13px Barlow,"Segoe UI",system-ui,sans-serif;color:#0f172a;animation:segIn .25s}\
+.seg-toast.error{--a:#dc2626}.seg-toast.warn{--a:#d97706}.seg-toast.info{--a:#2563eb}\
+.seg-toast .ic{flex:none;width:26px;height:26px;border-radius:50%;background:color-mix(in srgb,var(--a) 15%,#fff);color:var(--a);display:flex;align-items:center;justify-content:center;font-weight:800}\
+#segConf{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:2147483150;display:flex;align-items:center;justify-content:center;padding:16px;font:14px Barlow,"Segoe UI",system-ui,sans-serif;color:#0f172a}\
+#segConf .md{background:#fff;border-radius:16px;width:min(440px,100%);box-shadow:0 30px 80px rgba(2,6,23,.45);overflow:hidden;animation:segIn .25s}\
+#segConf .h{height:6px;background:linear-gradient(90deg,#dc2626,#f59e0b)}\
+#segConf .b{padding:18px 22px 6px;font-size:14px;line-height:1.5;white-space:pre-line}#segConf .b b{display:block;font-size:16px;color:#0a2463;margin-bottom:6px}\
+#segConf .f{padding:12px 22px 18px;display:flex;gap:10px;justify-content:flex-end}\
+#segConf button{border:none;border-radius:10px;padding:10px 18px;font:800 13px Barlow,"Segoe UI",system-ui,sans-serif;cursor:pointer}\
+#segConf .no{background:#e2e8f0;color:#334155}#segConf .si{background:#dc2626;color:#fff}\
+@media(max-width:600px){#segToasts{left:10px;right:10px;max-width:none}}';
   try { var st = document.createElement('style'); st.id = 'segCss'; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); } catch (e) {}
 
   function textoHtml() {
@@ -145,10 +184,12 @@
     function habil() { si.disabled = !(c1.checked && c2.checked); }
     c1.onchange = habil; c2.onchange = habil;
     $('segNo').onclick = function () {
-      if (!confirm('Si no aceptas el compromiso no puedes usar el sistema y se cerrará tu sesión.\n\n¿Confirmas que NO aceptas?')) return;
-      try { sessionStorage.clear(); localStorage.removeItem('rl_session'); } catch (e) {}
-      var raiz = /\/frontend\/pages\//.test(location.pathname) ? '../../index.html' : 'index.html';
-      location.href = raiz + '?sin_compromiso=1';
+      confirmar('¿No aceptas el compromiso?', 'Sin aceptarlo no puedes usar el sistema y se cerrará tu sesión. Si tienes dudas sobre el texto, consulta con Coordinación RR.LL. antes de decidir.', 'No acepto, cerrar sesión', 'Volver a leer').then(function (si) {
+        if (!si) return;
+        try { sessionStorage.clear(); localStorage.removeItem('rl_session'); } catch (e) {}
+        var raiz = /\/frontend\/pages\//.test(location.pathname) ? '../../index.html' : 'index.html';
+        location.href = raiz + '?sin_compromiso=1';
+      });
     };
     si.onclick = function () {
       si.disabled = true; si.textContent = 'Guardando…'; $('segErr').textContent = '';
@@ -168,7 +209,7 @@
     estadoCache = { aceptado: true, fecha: f, version: VERSION, pendiente: !!pendiente };
     try { sessionStorage.setItem(claveOk(), f); } catch (e) {}
     var ov = $('segOv'); if (ov) { ov.style.transition = 'opacity .25s'; ov.style.opacity = '0'; setTimeout(function () { try { ov.remove(); } catch (e) {} }, 260); }
-    try { if (typeof window.mostrarToast === 'function') window.mostrarToast(pendiente ? '✅ Compromiso aceptado (se registrará en cuanto el servidor responda)' : '✅ Compromiso aceptado y registrado', 'ok'); } catch (e) {}
+    avisar(pendiente ? 'Compromiso aceptado (se registrará en cuanto el servidor responda)' : 'Compromiso aceptado y registrado', 'ok');
     try { if (window.RLTrafico && window.RLTrafico.emit) window.RLTrafico.emit({ accion: 'Aceptó compromiso de confidencialidad', destino: 'Azure SQL', tipo: 'ok' }); } catch (e) {}
     pintarCuenta();
     setTimeout(revisarClave, 600);
@@ -230,7 +271,7 @@
       '<div><span>Sesión</span>Dura 14 horas · iniciada en este navegador (' + esc(navegador()) + ')</div>' +
       '<div><span>Módulos asignados</span>' + mods + ' en tu menú</div></div>' +
       '<h4>Últimos ingresos</h4><div class="ses" id="mcSes"><div style="color:#64748b">Consultando…</div></div>' +
-      (esAdmin(u) ? '<h4>Administración</h4><button type="button" class="btn" id="mcLista">📋 Aceptaciones de todos los usuarios</button> <span id="mcListaRes" style="font-size:12px;color:#64748b"></span><div id="mcTabla" style="margin-top:10px;max-height:300px;overflow:auto"></div>' : '');
+      (esAdmin(u) ? '<h4>Administración</h4><button type="button" class="btn" id="mcLista">🛡️ Seguridad de usuarios (compromiso · contraseña · bloqueos)</button> <span id="mcListaRes" style="font-size:12px;color:#64748b"></span><div id="mcTabla" style="margin-top:10px;max-height:320px;overflow:auto"></div>' : '');
     $('mcBody').innerHTML = html;
     $('mcVerTxt').onclick = function () { var d = document.createElement('div'); d.className = 'txt'; d.style.cssText = 'border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.55;background:#f8fafc;margin-top:10px'; d.innerHTML = textoHtml(); $('mcBody').insertBefore(d, $('mcBody').children[1]); this.remove(); };
     if (esAdmin(u)) $('mcLista').onclick = listaAdmin;
@@ -248,7 +289,7 @@
       arr.forEach(function (e) { var k = Math.floor((e.ts || 0) / 600000); if (vistos[k] || filas.length >= 6) return; vistos[k] = 1; filas.push(e); });
       if (!filas.length) { c.innerHTML = '<div style="color:#64748b">Sin registros recientes</div>'; return; }
       c.innerHTML = filas.map(function (e, i) { return '<div><span class="ok">●</span> ' + esc(fecha(new Date(e.ts).toISOString())) + ' · ' + esc(e.accion || '') + (i === 0 ? ' · <b>más reciente</b>' : '') + (i > 0 ? '<span class="mc-avisar" data-ts="' + e.ts + '">¿no fuiste tú? avisar</span>' : '') + '</div>'; }).join('');
-      c.querySelectorAll('.mc-avisar').forEach(function (a) { a.onclick = function () { try { if (typeof window.rlReportar === 'function') { window.rlReportar(); } else { var b = $('_rlChatBtn'); if (b) b.click(); } } catch (e) {} try { if (typeof window.mostrarToast === 'function') window.mostrarToast('Cuéntale a Coordinación el ingreso que no reconoces (fecha ' + fecha(new Date(+a.getAttribute('data-ts')).toISOString()) + ')', 'warn'); } catch (e) {} }; });
+      c.querySelectorAll('.mc-avisar').forEach(function (a) { a.onclick = function () { try { if (typeof window.rlReportar === 'function') { window.rlReportar(); } else { var b = $('_rlChatBtn'); if (b) b.click(); } } catch (e) {} avisar('Cuéntale a Coordinación el ingreso que no reconoces (fecha ' + fecha(new Date(+a.getAttribute('data-ts')).toISOString()) + ')', 'warn'); }; });
     }).catch(function () { c.innerHTML = '<div style="color:#64748b">No se pudo consultar</div>'; });
   }
   function listaAdmin() {
@@ -257,16 +298,26 @@
     post('lista', {}, 15000).then(function (j) {
       if (!j || !j.success) { res.textContent = (j && j.error) || 'No se pudo consultar'; return; }
       var f = (j.filas || []).filter(function (x) { return x.activo !== false; });
-      var ok = f.filter(function (x) { return x.aceptado; }).length;
-      res.textContent = ok + ' de ' + f.length + ' usuarios activos aceptaron la v' + j.version + '. ';
+      var ok = f.filter(function (x) { return x.aceptado; }).length, fuertes = f.filter(function (x) { return x.claveFuerte === true; }).length, bloq = f.filter(function (x) { return x.bloqueadoHasta; }).length;
+      res.textContent = ok + ' de ' + f.length + ' aceptaron el compromiso v' + j.version + ' · ' + fuertes + ' con contraseña fuerte · ' + bloq + ' bloqueado(s). ';
       var a = document.createElement('a'); a.textContent = '⬇️ Descargar CSV'; a.style.cssText = 'color:#2563eb;font-weight:700;cursor:pointer';
       a.onclick = function () {
-        var csv = 'usuario,nombre,rol,empresa,aceptado,fecha,version,navegador\n' + f.map(function (x) { return [x.usuario, x.nombre, x.rol, x.empresa, x.aceptado ? 'SI' : 'NO', x.fecha ? fecha(x.fecha) : '', x.aceptado ? j.version : '', x.navegador].map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+        var csv = 'usuario,nombre,rol,empresa,compromiso,fecha_compromiso,version,equipo,contrasena,clave_cambiada,bloqueado_hasta,intentos_fallidos\n' + f.map(function (x) { return [x.usuario, x.nombre, x.rol, x.empresa, x.aceptado ? 'SI' : 'NO', x.fecha ? fecha(x.fecha) : '', x.aceptado ? j.version : '', x.navegador, x.claveFuerte === true ? 'FUERTE' : (x.claveFuerte === false ? 'DEBIL' : 'sin dato'), x.claveCambiada ? fecha(x.claveCambiada) : '', x.bloqueadoHasta ? fecha(x.bloqueadoHasta) : '', x.fallos || 0].map(function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
         var b = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }); var l = document.createElement('a'); l.href = URL.createObjectURL(b); l.download = 'aceptaciones_compromiso_v' + j.version + '_' + new Date().toISOString().slice(0, 10) + '.csv'; document.body.appendChild(l); l.click(); l.remove();
       };
       res.appendChild(a);
-      t.innerHTML = '<table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compromiso</th><th>Fecha</th><th>Equipo</th></tr></thead><tbody>' +
-        f.map(function (x) { return '<tr><td>' + esc(x.usuario) + '</td><td>' + esc(x.nombre) + '</td><td>' + esc(x.rol) + '</td><td>' + (x.aceptado ? '<span class="pill">Aceptado</span>' : '<span class="pill p">Pendiente</span>') + '</td><td>' + (x.fecha ? esc(fecha(x.fecha)) : '—') + '</td><td>' + esc(x.navegador || '') + '</td></tr>'; }).join('') + '</tbody></table>';
+      t.innerHTML = '<table><thead><tr><th>Usuario</th><th>Nombre</th><th>Compromiso</th><th>Contraseña</th><th>Intentos</th><th></th></tr></thead><tbody>' +
+        f.map(function (x) {
+          var comp = x.aceptado ? '<span class="pill" title="' + esc(fecha(x.fecha)) + ' · ' + esc(x.navegador || '') + '">Aceptado ' + esc(fecha(x.fecha).slice(0, 5)) + '</span>' : '<span class="pill p">Pendiente</span>';
+          var cl = x.claveFuerte === true ? '<span class="pill">Fuerte' + (x.claveCambiada ? ' · ' + esc(fecha(x.claveCambiada).slice(0, 5)) : '') + '</span>' : (x.claveFuerte === false ? '<span class="pill p">Débil · pendiente</span>' : '<span class="pill p" style="background:#f1f5f9;color:#64748b">Sin ingreso aún</span>');
+          var it = x.bloqueadoHasta ? '<span class="pill" style="background:#fee2e2;color:#991b1b">Bloqueado hasta ' + esc(fecha(x.bloqueadoHasta).slice(11)) + '</span>' : (x.fallos ? '<span class="pill p">' + x.fallos + ' fallido(s)</span>' : '<span style="color:#94a3b8">—</span>');
+          var acc = (x.bloqueadoHasta || x.fallos) ? '<button type="button" class="btn s mc-desb" data-u="' + esc(x.usuario) + '" style="padding:5px 9px;font-size:11px">🔓 Desbloquear</button>' : '';
+          return '<tr><td>' + esc(x.usuario) + '</td><td>' + esc(x.nombre) + '</td><td>' + comp + '</td><td>' + cl + '</td><td>' + it + '</td><td>' + acc + '</td></tr>'; }).join('') + '</tbody></table>' +
+        '<div style="font-size:11.5px;color:#64748b;margin-top:8px">Para asignar una contraseña nueva a quien la olvidó: Gestión de Usuarios → editar → nueva contraseña (queda cifrada en Azure y en la hoja).</div>';
+      t.querySelectorAll('.mc-desb').forEach(function (b) { b.onclick = function () {
+        var uu = b.getAttribute('data-u'); b.disabled = true; b.textContent = '…';
+        post('desbloquear', { usuario: uu }, 12000).then(function (r) { if (r && r.success) { avisar('Usuario ' + uu + ' desbloqueado: ya puede volver a intentar.', 'ok'); listaAdmin(); } else { avisar((r && r.error) || 'No se pudo desbloquear', 'error'); b.disabled = false; b.textContent = '🔓 Desbloquear'; } }).catch(function () { avisar('Sin conexión con el servidor', 'error'); b.disabled = false; b.textContent = '🔓 Desbloquear'; });
+      }; });
     }).catch(function (e) { res.textContent = 'No se pudo consultar: ' + (e && e.message); });
   }
   /* ── 3) Contraseña: regla mínima, aviso si es débil (viene en el token) y cambio por el propio usuario ── */
@@ -296,7 +347,7 @@
     function pintar(sinError) {
       var n = $('pwNueva').value, r = evaluarClave(n, u.usuario), pts = [r.largo, r.mayus, r.minus, r.num, r.usuario, r.comun].filter(Boolean).length;
       $('pwBar').style.width = (pts / 6 * 100) + '%'; $('pwBar').style.background = pts <= 2 ? '#dc2626' : pts <= 4 ? '#f59e0b' : '#16a34a';
-      $('pwReq').innerHTML = [['largo', 'Mínimo 8 caracteres'], ['mayus', 'Una mayúscula'], ['minus', 'Una minúscula'], ['num', 'Un número'], ['usuario', 'Sin tu usuario'], ['comun', 'No común']].map(function (x) { return '<span class="' + (r[x[0]] ? 'ok' : 'no') + '">' + (r[x[0]] ? '✓' : '○') + ' ' + x[1] + '</span>'; }).join('');
+      $('pwReq').innerHTML = [['largo', 'Mínimo 8 caracteres'], ['mayus', 'Una mayúscula'], ['minus', 'Una minúscula'], ['num', 'Un número'], ['usuario', 'Sin tu usuario'], ['comun', 'No común']].map(function (x) { return '<span class="' + (r[x[0]] ? 'ok' : 'no') + '">' + (r[x[0]] ? '✓' : '○') + ' ' + x[1] + '</span>'; }).join(' ');
       var igual = n && n === $('pwRep').value, distinta = n !== $('pwActual').value;
       $('pwGuardar').disabled = !(r.ok && igual && distinta && $('pwActual').value);
       if (sinError !== true) $('pwErr').textContent = (n && $('pwRep').value && !igual) ? 'Las dos contraseñas nuevas no coinciden.' : (n && !distinta ? 'La nueva debe ser distinta a la actual.' : '');
@@ -313,7 +364,7 @@
           try { sessionStorage.setItem(claveClaveOk(), '1'); } catch (e) {}
           try { var ses = JSON.parse(localStorage.getItem('rl_session') || 'null'); if (ses) { ses.claveCambiada = Date.now(); localStorage.setItem('rl_session', JSON.stringify(ses)); } } catch (e) {}
           ov.classList.remove('on'); $('pwActual').value = ''; $('pwNueva').value = ''; $('pwRep').value = ''; pintar();
-          try { if (typeof window.mostrarToast === 'function') window.mostrarToast('✅ Contraseña actualizada. Úsala en tu próximo ingreso.', 'ok'); else alert('Contraseña actualizada.'); } catch (e) {}
+          avisar('Contraseña actualizada. Úsala en tu próximo ingreso, también en Capacitaciones ETI y Evaluaciones ETI.', 'ok');
           try { if (window.RLTrafico && window.RLTrafico.emit) window.RLTrafico.emit({ accion: 'Cambió su contraseña', destino: 'Azure SQL', tipo: 'ok' }); } catch (e) {}
           pintarCuenta(); return;
         }

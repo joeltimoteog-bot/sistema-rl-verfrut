@@ -157,6 +157,11 @@ module.exports = async function (context, req) {
     /* _CLAVE_POLITICA_V1: ¿la clave cumple la regla minima? (solo se informa; el cambio lo hace el usuario) */
     const pol = POL.evaluar(password, usuario);
     const cambioObligatorio = process.env.CLAVE_CAMBIO_OBLIGATORIO === '1';
+    /* _SEG_USUARIOS_V1: columnas clave_fuerte / clave_cambiada en dbo.usuarios (se crean solas) para el panel del administrador */
+    try {
+      await pool.request().query("IF COL_LENGTH('dbo.usuarios','clave_fuerte') IS NULL ALTER TABLE dbo.usuarios ADD clave_fuerte BIT NULL, clave_cambiada DATETIME2(0) NULL");
+      await pool.request().input('u', sql.NVarChar, usuario).input('f', sql.Bit, pol.ok ? 1 : 0).query('UPDATE dbo.usuarios SET clave_fuerte = @f WHERE usuario = @u');
+    } catch (eC) { context.log.warn('[_SEG_USUARIOS_V1] ' + eC.message); }
 
     // 6. Armar respuesta (mismo formato que GAS login())
     const fundos = FUNDOS_SUPERVISOR[usuario] || [];

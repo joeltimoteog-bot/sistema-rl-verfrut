@@ -112,7 +112,9 @@ async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
       const r = tx.request().input('id', sql.NVarChar(50), String(u.id_sistema)), sets = [];
       cuerpo.usuario = String(b.usuario).trim();
       if (b.activo !== undefined) { r.input('a', sql.Bit, String(b.activo).trim().toUpperCase() === 'TRUE' ? 1 : 0); sets.push('activo = @a'); cuerpo.activo = b.activo; }
-      if (b.password) { r.input('p', sql.NVarChar(255), hash); sets.push('password = @p'); cuerpo.password = hashHoja || hash; }   /* _CLAVE_HOJA_SHA_V1 */
+      if (b.password) { r.input('p', sql.NVarChar(255), hash); sets.push('password = @p'); cuerpo.password = hashHoja || hash;   /* _CLAVE_HOJA_SHA_V1 */
+        try { await tx.request().query("IF COL_LENGTH('dbo.usuarios','clave_fuerte') IS NULL ALTER TABLE dbo.usuarios ADD clave_fuerte BIT NULL, clave_cambiada DATETIME2(0) NULL"); } catch (eC) {}
+        r.input('cf', sql.Bit, POL.evaluar(String(b.password), String(b.usuario)).ok ? 1 : 0); sets.push('clave_fuerte = @cf'); sets.push('clave_cambiada = SYSUTCDATETIME()'); }   /* _SEG_USUARIOS_V1 */
       if (b.correo) { r.input('c', sql.NVarChar(200), String(b.correo)); sets.push('correo = @c'); cuerpo.correo = b.correo; }
       if (sets.length) await r.query(`UPDATE dbo.usuarios SET ${sets.join(', ')}, fecha_sync = GETDATE() WHERE id_sistema = @id`);
       resp = { success: true };
