@@ -28,6 +28,8 @@
 
   var CSS = '\
 #navCorreo,#navRes{display:none !important}\
+#sec-atenciones .card-h{justify-content:flex-start;gap:10px}\
+#sec-atenciones .card-h .card-t{flex:1 1 auto}\
 #msEnviarRep{background:linear-gradient(135deg,#d97706,#b45309);color:#fff;border:none;border-radius:9px;padding:8px 13px;font:700 12px Barlow,"Segoe UI",system-ui,sans-serif;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 4px 12px rgba(217,119,6,.28);position:relative}\
 #msEnviarRep:hover{filter:brightness(1.07)}\
 #msEnviarRep.ms-lock{opacity:.6}\
