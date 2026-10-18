@@ -1058,7 +1058,7 @@ with sync_playwright() as pw:
     ok('Usuarios: con Azure caido, la ausencia se guarda por Google', 'cumplAusencia' in RED['google'], ','.join(RED['google']))
     CUMPLW['modo'] = 'ok'
     trf = [json.loads(x) for x in RED.get('trf', []) if x]
-    ok('Monitor en vivo: en Gestion Usuarios se ve "Abrió Gestión usuarios" y el registro de ausencia (Azure SQL)', any(t.get('accion') == 'Abrió Gestión usuarios' for t in trf) and any(t.get('accion') == 'Registró ausencia / reemplazo' and t.get('destino') == 'Azure SQL' for t in trf) and any(t.get('accion') == 'Registró ausencia / reemplazo' and t.get('destino') == 'Google Sheets' for t in trf), ', '.join(sorted(set(t.get('accion', '') + '@' + t.get('destino', '') for t in trf)))[:400])
+    ok('Monitor en vivo: en Gestion Usuarios se ve "Entró a Gestión usuarios" y el registro de ausencia (Azure SQL)', any(t.get('accion') in ('Entró a Gestión usuarios', 'Abrió Gestión usuarios') for t in trf) and any(t.get('accion') == 'Registró ausencia / reemplazo' and t.get('destino') == 'Azure SQL' for t in trf) and any(t.get('accion') == 'Registró ausencia / reemplazo' and t.get('destino') == 'Google Sheets' for t in trf), ', '.join(sorted(set(t.get('accion', '') + '@' + t.get('destino', '') for t in trf)))[:400])
     ok('Gestion Usuarios sin errores de JavaScript', not errores, '; '.join(errores[:3]))
     pag.close()
     for nombre, ruta in [('Calculo Remunerativo', 'frontend/pages/calculo-remunerativo.html'), ('Login (index)', 'index.html')]:
