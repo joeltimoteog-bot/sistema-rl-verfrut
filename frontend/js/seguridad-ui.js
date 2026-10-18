@@ -99,7 +99,25 @@
 #mcOv .btn{border:none;border-radius:9px;padding:8px 14px;font:800 12px Barlow,"Segoe UI",system-ui,sans-serif;color:#fff;background:#0a2463;cursor:pointer}\
 #mcOv .btn.s{background:#e2e8f0;color:#334155}\
 #mcOv .pie{padding:10px 20px;border-top:1px solid #e2e8f0;font-size:11px;color:#64748b;background:#f8fafc;text-align:center}\
-@media(max-width:600px){#mcOv .kv{grid-template-columns:1fr}}';
+@media(max-width:600px){#mcOv .kv{grid-template-columns:1fr}}\
+/* cambio de contraseña */\
+#pwOv{position:fixed;inset:0;background:rgba(15,23,42,.6);z-index:2147483050;display:none;align-items:center;justify-content:center;padding:16px;font:14px Barlow,"Segoe UI",system-ui,sans-serif;color:#0f172a}\
+#pwOv.on{display:flex}\
+#pwOv .md{background:#fff;border-radius:18px;width:min(520px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(2,6,23,.45);animation:segIn .3s cubic-bezier(.2,.9,.3,1.1)}\
+#pwOv .h{padding:16px 22px;border-bottom:1px solid #e2e8f0;display:flex;gap:12px;align-items:center}\
+#pwOv .h .ic{width:44px;height:44px;border-radius:12px;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:22px;flex:none}\
+#pwOv .h b{font-size:16px;color:#0a2463;display:block}#pwOv .h small{color:#64748b;font-size:12px}\
+#pwOv .b{padding:14px 22px;overflow:auto}\
+#pwOv label{display:block;font-size:10.5px;font-weight:800;color:#475569;text-transform:uppercase;margin:10px 0 4px}\
+#pwOv input{width:100%;box-sizing:border-box;border:1.5px solid #e2e8f0;border-radius:10px;padding:10px 12px;font:500 14px Barlow,"Segoe UI",system-ui,sans-serif;color:#0f172a}\
+#pwOv input:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}\
+#pwOv .bar{height:6px;border-radius:999px;background:#e2e8f0;margin-top:6px;overflow:hidden}#pwOv .bar i{display:block;height:100%;width:0;background:#dc2626;transition:width .25s,background .25s}\
+#pwOv .req{font-size:11.5px;color:#475569;margin-top:6px;line-height:1.7}#pwOv .req span{margin-right:10px;white-space:nowrap}#pwOv .req .ok{color:#16a34a;font-weight:800}#pwOv .req .no{color:#94a3b8}\
+#pwOv .f{padding:14px 22px;border-top:1px solid #e2e8f0;display:flex;gap:10px;align-items:center;background:#f8fafc;flex-wrap:wrap}\
+#pwOv .f small{flex:1 1 200px;color:#64748b;font-size:11.5px}\
+#pwOv .btn{border:none;border-radius:10px;padding:10px 18px;font:800 13px Barlow,"Segoe UI",system-ui,sans-serif;color:#fff;background:#0a2463;cursor:pointer}\
+#pwOv .btn.s{background:#e2e8f0;color:#334155}#pwOv .btn:disabled{opacity:.45;cursor:not-allowed}\
+#pwOv .err{color:#b91c1c;font-size:12px;font-weight:700;width:100%}';
   try { var st = document.createElement('style'); st.id = 'segCss'; st.textContent = CSS; (document.head || document.documentElement).appendChild(st); } catch (e) {}
 
   function textoHtml() {
@@ -153,6 +171,7 @@
     try { if (typeof window.mostrarToast === 'function') window.mostrarToast(pendiente ? '✅ Compromiso aceptado (se registrará en cuanto el servidor responda)' : '✅ Compromiso aceptado y registrado', 'ok'); } catch (e) {}
     try { if (window.RLTrafico && window.RLTrafico.emit) window.RLTrafico.emit({ accion: 'Aceptó compromiso de confidencialidad', destino: 'Azure SQL', tipo: 'ok' }); } catch (e) {}
     pintarCuenta();
+    setTimeout(revisarClave, 600);
   }
   function reenviarPendiente() {
     var p = null; try { p = JSON.parse(localStorage.getItem(clavePend()) || 'null'); } catch (e) {}
@@ -207,6 +226,7 @@
     var html = '<div class="kv">' +
       '<div><span>Usuario</span>' + esc(u.usuario || '') + ' · ' + esc(u.rol || '') + (u.empresa ? ' · ' + esc(u.empresa) : '') + '</div>' +
       '<div><span>Compromiso de confidencialidad</span>' + esc(comp) + ' · <a id="mcVerTxt">ver texto</a></div>' +
+      '<div><span>Contraseña</span>' + (sessionStorage.getItem(claveClaveOk()) ? 'Actualizada en esta sesión' : (claveDebil() ? '<b style="color:#b45309">Débil: conviene cambiarla</b>' : 'Cumple la regla mínima')) + ' · <a id="mcCambiarPw">cambiar</a></div>' +
       '<div><span>Sesión</span>Dura 14 horas · iniciada en este navegador (' + esc(navegador()) + ')</div>' +
       '<div><span>Módulos asignados</span>' + mods + ' en tu menú</div></div>' +
       '<h4>Últimos ingresos</h4><div class="ses" id="mcSes"><div style="color:#64748b">Consultando…</div></div>' +
@@ -214,6 +234,7 @@
     $('mcBody').innerHTML = html;
     $('mcVerTxt').onclick = function () { var d = document.createElement('div'); d.className = 'txt'; d.style.cssText = 'border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.55;background:#f8fafc;margin-top:10px'; d.innerHTML = textoHtml(); $('mcBody').insertBefore(d, $('mcBody').children[1]); this.remove(); };
     if (esAdmin(u)) $('mcLista').onclick = listaAdmin;
+    var cp = $('mcCambiarPw'); if (cp) cp.onclick = function () { mostrarClave(false, true); };
   }
   function ingresos() {
     var c = $('mcSes'); if (!c) return;
@@ -248,12 +269,83 @@
         f.map(function (x) { return '<tr><td>' + esc(x.usuario) + '</td><td>' + esc(x.nombre) + '</td><td>' + esc(x.rol) + '</td><td>' + (x.aceptado ? '<span class="pill">Aceptado</span>' : '<span class="pill p">Pendiente</span>') + '</td><td>' + (x.fecha ? esc(fecha(x.fecha)) : '—') + '</td><td>' + esc(x.navegador || '') + '</td></tr>'; }).join('') + '</tbody></table>';
     }).catch(function (e) { res.textContent = 'No se pudo consultar: ' + (e && e.message); });
   }
-  window.rlSeguridad = { revisar: revisar, mostrar: mostrarCompromiso, miCuenta: abrirCuenta, version: VERSION };
+  /* ── 3) Contraseña: regla mínima, aviso si es débil (viene en el token) y cambio por el propio usuario ── */
+  function tokenPayload() { try { var t = token(); if (!t) return {}; var p = t.split('.')[1]; p = p.replace(/-/g, '+').replace(/_/g, '/'); while (p.length % 4) p += '='; return JSON.parse(decodeURIComponent(Array.prototype.map.call(atob(p), function (c) { return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2); }).join(''))); } catch (e) { return {}; } }
+  function claveDebil() { var p = tokenPayload(); return p.cd === 1; }
+  function cambioObligatorio() { var p = tokenPayload(); return p.co === 1; }
+  function claveClaveOk() { var u = usuario(); return 'rl_clave_ok_' + String((u && u.usuario) || '').toLowerCase(); }
+  function evaluarClave(c, u) {   /* misma regla que shared/clave-politica.js */
+    c = String(c || ''); u = String(u || '').trim().toLowerCase(); var cl = c.toLowerCase();
+    var r = { largo: c.length >= 8, mayus: /[A-ZÁÉÍÓÚÑ]/.test(c), minus: /[a-záéíóúñ]/.test(c), num: /\d/.test(c), usuario: !(u && u.length >= 3 && cl.indexOf(u) >= 0) };
+    var comunes = ['123456', '12345678', 'password', 'contrasena', 'contraseña', 'qwerty', 'abc123', 'verfrut', 'rapel', 'unifrutti', 'admin'];
+    r.comun = !comunes.some(function (x) { return cl === x || cl === x + '2025' || cl === x + '2026'; });
+    r.ok = r.largo && r.mayus && r.minus && r.num && r.usuario && r.comun;
+    return r;
+  }
+  var pwPospuesta = false;
+  function ventanaClave() {
+    var ov = $('pwOv'); if (ov) return ov;
+    ov = document.createElement('div'); ov.id = 'pwOv'; ov.className = 'ov';
+    ov.innerHTML = '<div class="md" role="dialog" aria-modal="true"><div class="h"><div class="ic">🔑</div><div><b id="pwTit">Actualiza tu contraseña</b><small id="pwSub">Tu contraseña actual es fácil de adivinar. Elige una nueva que solo tú conozcas.</small></div></div>' +
+      '<div class="b"><label>Contraseña actual</label><input type="password" id="pwActual" autocomplete="current-password">' +
+      '<label>Nueva contraseña</label><input type="password" id="pwNueva" autocomplete="new-password"><div class="bar"><i id="pwBar"></i></div><div class="req" id="pwReq"></div>' +
+      '<label>Repetir nueva contraseña</label><input type="password" id="pwRep" autocomplete="new-password"></div>' +
+      '<div class="f"><small>Se guarda cifrada; nadie, ni Coordinación, podrá verla. Si la olvidas, Coordinación te asigna una nueva.</small><button type="button" class="btn s" id="pwLuego">Más tarde</button><button type="button" class="btn" id="pwGuardar" disabled>💾 Guardar nueva contraseña</button><div class="err" id="pwErr"></div></div></div>';
+    document.body.appendChild(ov);
+    var u = usuario() || {};
+    function pintar(sinError) {
+      var n = $('pwNueva').value, r = evaluarClave(n, u.usuario), pts = [r.largo, r.mayus, r.minus, r.num, r.usuario, r.comun].filter(Boolean).length;
+      $('pwBar').style.width = (pts / 6 * 100) + '%'; $('pwBar').style.background = pts <= 2 ? '#dc2626' : pts <= 4 ? '#f59e0b' : '#16a34a';
+      $('pwReq').innerHTML = [['largo', 'Mínimo 8 caracteres'], ['mayus', 'Una mayúscula'], ['minus', 'Una minúscula'], ['num', 'Un número'], ['usuario', 'Sin tu usuario'], ['comun', 'No común']].map(function (x) { return '<span class="' + (r[x[0]] ? 'ok' : 'no') + '">' + (r[x[0]] ? '✓' : '○') + ' ' + x[1] + '</span>'; }).join('');
+      var igual = n && n === $('pwRep').value, distinta = n !== $('pwActual').value;
+      $('pwGuardar').disabled = !(r.ok && igual && distinta && $('pwActual').value);
+      if (sinError !== true) $('pwErr').textContent = (n && $('pwRep').value && !igual) ? 'Las dos contraseñas nuevas no coinciden.' : (n && !distinta ? 'La nueva debe ser distinta a la actual.' : '');
+    }
+    ['pwActual', 'pwNueva', 'pwRep'].forEach(function (id) { $(id).addEventListener('input', function () { pintar(); }); });
+    $('pwLuego').onclick = function () { pwPospuesta = true; ov.classList.remove('on'); };
+    $('pwGuardar').onclick = function () {
+      var b = $('pwGuardar'); b.disabled = true; b.textContent = 'Guardando…'; $('pwErr').textContent = '';
+      var cuerpo = { actual: $('pwActual').value, nueva: $('pwNueva').value, client_id: 'pw-' + Date.now().toString(36) };
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null; var reloj = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 15000);
+      var op = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token() }, body: JSON.stringify(cuerpo) }; if (ctrl) op.signal = ctrl.signal;
+      fetch(AZ + '/usr/guardar/cambiarMiClave', op).then(function (r) { clearTimeout(reloj); return r.json().catch(function () { return {}; }).then(function (j) { j._status = r.status; return j; }); }).then(function (j) {
+        if (j && j.success) {
+          try { sessionStorage.setItem(claveClaveOk(), '1'); } catch (e) {}
+          try { var ses = JSON.parse(localStorage.getItem('rl_session') || 'null'); if (ses) { ses.claveCambiada = Date.now(); localStorage.setItem('rl_session', JSON.stringify(ses)); } } catch (e) {}
+          ov.classList.remove('on'); $('pwActual').value = ''; $('pwNueva').value = ''; $('pwRep').value = ''; pintar();
+          try { if (typeof window.mostrarToast === 'function') window.mostrarToast('✅ Contraseña actualizada. Úsala en tu próximo ingreso.', 'ok'); else alert('Contraseña actualizada.'); } catch (e) {}
+          try { if (window.RLTrafico && window.RLTrafico.emit) window.RLTrafico.emit({ accion: 'Cambió su contraseña', destino: 'Azure SQL', tipo: 'ok' }); } catch (e) {}
+          pintarCuenta(); return;
+        }
+        $('pwErr').textContent = (j && j.error) || (j && j._status === 503 ? 'El servidor está en mantenimiento; intenta en unos minutos.' : 'No se pudo guardar. Intenta de nuevo.');
+      }).catch(function () { clearTimeout(reloj); $('pwErr').textContent = 'Sin conexión con el servidor. Intenta de nuevo en un momento.'; })
+        .then(function () { b.textContent = '💾 Guardar nueva contraseña'; pintar(true); });
+    };
+    return ov;
+  }
+  function mostrarClave(obligatorio, desdeCuenta) {
+    var ov = ventanaClave();
+    $('pwTit').textContent = desdeCuenta ? 'Cambiar mi contraseña' : 'Actualiza tu contraseña';
+    $('pwSub').textContent = desdeCuenta ? 'Elige una nueva contraseña que solo tú conozcas.' : 'Tu contraseña actual es fácil de adivinar. Elige una nueva que solo tú conozcas.';
+    $('pwLuego').style.display = (obligatorio && !desdeCuenta) ? 'none' : '';
+    $('pwLuego').textContent = desdeCuenta ? 'Cancelar' : 'Más tarde';
+    ov.classList.add('on'); setTimeout(function () { try { $('pwActual').focus(); } catch (e) {} }, 60);
+  }
+  function revisarClave() {
+    try {
+      if (!usuario() || !token() || pwPospuesta) return;
+      if (sessionStorage.getItem(claveClaveOk())) return;
+      if (!claveDebil()) return;
+      if ($('segOv') || ($('pwOv') && $('pwOv').classList.contains('on'))) return;   /* primero el compromiso */
+      mostrarClave(cambioObligatorio(), false);
+    } catch (e) {}
+  }
+  window.rlSeguridad = { revisar: revisar, mostrar: mostrarCompromiso, miCuenta: abrirCuenta, version: VERSION, cambiarClave: function () { mostrarClave(false, true); }, evaluarClave: evaluarClave };
 
   /* ── arranque: espera a que exista la sesión (en el hub se crea tras el login) ── */
   function iniciar() {
     crearMiCuenta();
-    var n = 0, t = setInterval(function () { crearMiCuenta(); if (usuario() && token()) { revisar(); } if (++n > 240) clearInterval(t); }, 1500);
+    var n = 0, t = setInterval(function () { crearMiCuenta(); if (usuario() && token()) { revisar(); revisarClave(); } if (++n > 240) clearInterval(t); }, 1500);
     revisar();
     console.log('[_SEGURIDAD_UI_V1] listo (compromiso v' + VERSION + ')');
   }

@@ -815,7 +815,8 @@ async function doLogin(){
       const r=await _conReloj(AZURE_LOGIN_URL,{method:'POST',body:JSON.stringify({usuario:u,password:p}),headers:{'Content-Type':'application/json'}},12000);
       d=await r.json();
     }catch(eAz){ console.warn('[login] Azure no respondio:', eAz&&eAz.name); }
-    if(!d||!d.success){
+    /* _LOGIN_INTENTOS_V1 (18-oct): si Azure RECHAZO la clave (o bloqueo por intentos), no se prueba por Google */
+    if((!d||!d.success) && !(d&&d.rechazado)){
       try{
         const rg=await _conReloj(API,{method:'POST',body:JSON.stringify({action:'login',usuario:u,password:p}),headers:{'Content-Type':'text/plain'}},25000);
         const dg=await rg.json();
@@ -1480,6 +1481,6 @@ console.log('[_BIENV_V2] listo');
 </script>
 
 <script src="frontend/js/actualizar.js?v=1"></script>  <!-- _ACTUALIZAR_V3 (15-oct): aviso y actualizacion automatica (unico) -->
-<script src="frontend/js/seguridad-ui.js?v=2"></script>  <!-- _SEGURIDAD_UI_V1 (18-oct): compromiso de confidencialidad tras el login -->
+<script src="frontend/js/seguridad-ui.js?v=3"></script>  <!-- _SEGURIDAD_UI_V1 (18-oct): compromiso de confidencialidad tras el login -->
 </body>
 </html>

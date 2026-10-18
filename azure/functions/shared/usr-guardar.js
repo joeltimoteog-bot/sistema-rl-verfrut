@@ -17,7 +17,8 @@ const TH = require('./tablas-hoja');
 const CG = require('./cv-guardar');
 const CAP = require('./cap-guardar');
 
-const ACCIONES = ['saveUsuario', 'updateUsuario', 'saveSolicitudAcceso', 'resolverAccesoTemporal', 'aprobarAccesoTemporal'];
+const ACCIONES = ['saveUsuario', 'updateUsuario', 'saveSolicitudAcceso', 'resolverAccesoTemporal', 'aprobarAccesoTemporal', 'cambiarMiClave'];   /* _CLAVE_POLITICA_V1 */
+const POL = require('./clave-politica');
 const DUENOS = ['jtimoteo'];
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
 const S = v => esD(v) ? v.$s : String(v == null ? '' : v);
@@ -50,7 +51,25 @@ async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
     if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
   }
   const no = e => ({ status: 200, body: { success: false, error: e } });
-  if (accion !== 'saveSolicitudAcceso' && DUENOS.indexOf(op) < 0)
+  /* _CLAVE_POLITICA_V1 (18-oct-2026): cualquier usuario cambia SU propia clave: verifica la actual (bcrypt),
+     exige la regla minima y sigue por el mismo camino que updateUsuario (bcrypt en Azure, sha256 en la hoja). */
+  let propia = false;
+  if (accion === 'cambiarMiClave') {
+    if (!op) return no('Sin sesion valida.');
+    const actual = String(b.actual || ''), nueva = String(b.nueva || '');
+    if (!actual || !nueva) return no('Escribe tu contraseña actual y la nueva.');
+    const pol = POL.evaluar(nueva, op);
+    if (!pol.ok) return no('La nueva contraseña no cumple la regla: ' + pol.motivos.join('; ') + '.');
+    if (nueva === actual) return no('La nueva contraseña debe ser distinta a la actual.');
+    const ru = await pool.request().input('u', sql.NVarChar(100), op).query('SELECT password FROM dbo.usuarios WHERE LOWER(usuario) = @u AND activo = 1');
+    if (!ru.recordset.length) return no('Usuario no encontrado.');
+    const stored = String(ru.recordset[0].password || '');
+    const okActual = /^\$2[aby]\$/.test(stored) ? await bcrypt.compare(actual, stored) : stored === actual;
+    if (!okActual) return no('La contraseña actual no es correcta.');
+    b = { usuario: op, password: nueva, client_id: b.client_id };
+    accion = 'updateUsuario'; propia = true;
+  }
+  if (accion !== 'saveSolicitudAcceso' && !propia && DUENOS.indexOf(op) < 0)
     return no(accion === 'resolverAccesoTemporal' ? 'Solo el administrador del sistema puede aprobar o rechazar accesos temporales.' : 'Solo el administrador del sistema puede crear o modificar usuarios.');
   const ms = prueba && ahoraMs ? +ahoraMs : Date.now(), ahora = new Date(ms);
   let hash = null, hashHoja = null;
