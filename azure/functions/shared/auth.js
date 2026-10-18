@@ -31,6 +31,14 @@ function verificarRequest(context, req) {
   const auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : null;
 
+  /* _LECTURAS_SESION_V1 (18-oct-2026): el servidor de Google (Apps Script) llama a Azure con la clave de
+     funciones (x-functions-key), no con un token de usuario. Si esa clave coincide con INTERNAL_API_KEY
+     (misma clave que guarda el Apps Script en AZURE_API_KEY) se acepta como llamada interna del sistema. */
+  if (!token) {
+    const interna = esLlamadaInterna(req);
+    if (interna) return { ok: true, user: interna, error: null };
+  }
+
   if (!token) {
     anotarSinToken(req, 'sin-token');
     if (requerido) return { ok: false, user: null, error: 'Token requerido' };
@@ -99,4 +107,47 @@ async function guardarSinToken() {
   } catch (e) { /* solo es un contador: si falla, no afecta la consulta */ }
 }
 
-module.exports = { firmarToken, verificarRequest, exigirAuth, anotarSinToken };
+/* _LECTURAS_SESION_V1: ¿viene del Apps Script con la clave interna? */
+function esLlamadaInterna(req) {
+  try {
+    /* INTERNAL_API_KEY puede traer varias claves separadas por coma (el Apps Script usa AZURE_API_KEY,
+       AZURE_HOST_KEY y una clave fija; todas son claves de funciones de esta misma app) */
+    const lista = String(process.env.INTERNAL_API_KEY || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!lista.length) return null;
+    const h = (req && req.headers) || {};
+    const k = String(h['x-functions-key'] || h['X-Functions-Key'] || '').trim();
+    if (!k) return null;
+    for (const esperada of lista) {
+      if (k.length !== esperada.length) continue;
+      let d = 0; for (let i = 0; i < k.length; i++) d |= k.charCodeAt(i) ^ esperada.charCodeAt(i);   /* tiempo constante */
+      if (d === 0) return { usuario: 'servidor-google', rol: 'sistema', interno: true };
+    }
+    return null;
+  } catch (e) { return null; }
+}
+
+/* _LECTURAS_SESION_V1: candado para las LECTURAS que hoy no exigen sesion (mod/*, cv/*, cumpl/*).
+   Con LECTURAS_CON_SESION=1 responde 401 si no hay token valido ni clave interna; sin la variable
+   (o "0") deja pasar como siempre y solo anota en Auth_SinToken. Devuelve el usuario (o {}) o null si corto. */
+function exigirSesionLectura(context, req) {
+  const activo = process.env.LECTURAS_CON_SESION === '1';
+  const auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : null;
+  const interna = token ? null : esLlamadaInterna(req);
+  if (interna) return interna;
+  if (!token) {
+    anotarSinToken(req, 'sin-token');
+    if (activo) { context.res = { status: 401, body: { success: false, error: 'Sin sesion valida' } }; return null; }
+    return {};
+  }
+  const secret = process.env.JWT_SECRET;
+  if (!secret) return activo ? (context.res = { status: 401, body: { success: false, error: 'Servidor sin JWT_SECRET' } }, null) : {};
+  try { return jwt.verify(token, secret) || {}; }
+  catch (e) {
+    anotarSinToken(req, 'token-invalido');
+    if (activo) { context.res = { status: 401, body: { success: false, error: 'Token inválido o expirado' } }; return null; }
+    return {};
+  }
+}
+
+module.exports = { firmarToken, verificarRequest, exigirAuth, anotarSinToken, esLlamadaInterna, exigirSesionLectura };

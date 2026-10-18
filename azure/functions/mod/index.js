@@ -100,6 +100,8 @@ async function datos(modulo) {
    ═══════════════════════════════════════════════════════════════════════════ */
 const _enCurso = new Map();
 module.exports = async function (context, req) {
+  /* _LECTURAS_SESION_V1 (18-oct-2026): con LECTURAS_CON_SESION=1 las lecturas exigen sesion (o clave interna del Apps Script) */
+  if (require('../shared/auth').exigirSesionLectura(context, req) === null) return;
   const modulo = context.bindingData.modulo, accion = context.bindingData.accion;
   let clave = '';
   try { clave = modulo + '/' + accion + '|' + JSON.stringify(req.body || {}).slice(0, 2000); } catch (e) { clave = ''; }

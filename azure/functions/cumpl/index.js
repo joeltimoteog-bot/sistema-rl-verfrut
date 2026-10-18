@@ -59,6 +59,8 @@ async function _datos() {
 }
 
 module.exports = async function (context, req) {
+  /* _LECTURAS_SESION_V1 (18-oct-2026): con LECTURAS_CON_SESION=1 las lecturas exigen sesion (o clave interna del Apps Script) */
+  if (require('../shared/auth').exigirSesionLectura(context, req) === null) return;
   const accion = context.bindingData && context.bindingData.accion;
   if (['cumplPendientes', 'cumplPanel', 'getCumplimiento', 'cumplAusencias'].indexOf(accion) < 0) {   /* _AUSENCIAS_V1: + cumplAusencias */
     context.res = { status: 404, body: { success: false, error: 'Accion desconocida: ' + accion } }; return;
