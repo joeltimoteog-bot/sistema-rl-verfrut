@@ -2,10 +2,11 @@
 #  seguridad-etapa-BD.ps1 (18-oct-2026) — Etapas B y D del candado del servidor
 #  B) INTERNAL_API_KEY = todas las claves de funciones de la app (las que usa el Apps Script)
 #  D) LECTURAS_CON_SESION = 1  (las lecturas exigen sesion o clave interna)
+#  E) -EtapaE : JWT_REQUIRED = 1 (stats, buscar, by-dni, cap-firmas, blob-sas exigen sesion)  |  -ApagarE lo revierte
 #  No toca codigo. Para volver atras: .\seguridad-etapa-BD.ps1 -Apagar
 #  Requiere Azure CLI con sesion iniciada (la misma que usa publicar-azure.ps1).
 # ═══════════════════════════════════════════════════════════════════════════
-param([switch]$Apagar, [switch]$SoloVer)
+param([switch]$Apagar, [switch]$SoloVer, [switch]$EtapaE, [switch]$ApagarE)
 
 $app = 'rl-functions-verfrut'
 $ErrorActionPreference = 'Continue'   # az imprime avisos por stderr (Python 32 bits): no son errores
@@ -26,6 +27,19 @@ if ($SoloVer) {
   exit 0
 }
 
+if ($EtapaE) {
+  Write-Host "Etapa E: JWT_REQUIRED=1 (todas las funciones con exigirAuth piden sesion o clave interna)..." -ForegroundColor Cyan
+  & az functionapp config appsettings set -n $app -g $rg --settings JWT_REQUIRED=1 -o none 2>$null
+  Start-Sleep -Seconds 35
+  try { $r = Invoke-WebRequest -Uri "https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/atenciones/stats" -UseBasicParsing -TimeoutSec 30; Write-Host ("atenciones/stats sin sesion respondio HTTP " + $r.StatusCode + " (espera 1 min y prueba -SoloVer)") -ForegroundColor Yellow }
+  catch { $code = $_.Exception.Response.StatusCode.value__; if ($code -eq 401) { Write-Host "OK: HTTP 401 sin sesion en atenciones/stats. Etapa E activa." -ForegroundColor Green } else { Write-Host ("Respondio HTTP " + $code) -ForegroundColor Yellow } }
+  exit 0
+}
+if ($ApagarE) {
+  & az functionapp config appsettings set -n $app -g $rg --settings JWT_REQUIRED=0 -o none 2>$null
+  Write-Host "Listo: JWT_REQUIRED=0 (etapa E apagada)" -ForegroundColor Green
+  exit 0
+}
 if ($Apagar) {
   Write-Host "Apagando LECTURAS_CON_SESION (se vuelve al comportamiento anterior en ~30 s)..." -ForegroundColor Yellow
   & az functionapp config appsettings set -n $app -g $rg --settings LECTURAS_CON_SESION=0 -o none 2>$null
