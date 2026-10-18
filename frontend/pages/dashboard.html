@@ -14494,12 +14494,13 @@ var MODS=[
   ['¿Cómo envío el recordatorio por WhatsApp 📲?','En atenciones EN PROCESO con celular registrado aparece el botón 📲. Al pulsarlo se abre WhatsApp con el mensaje listo; solo confirmas el envío desde tu teléfono o WhatsApp Web.'],
   ['Guardé y no aparece en la lista','La lista se refresca sola al guardar y cada 90 s. Si no aparece, revisa el filtro de fecha/estado. Si salió "Sin conexión", NO la registres de nuevo: queda guardada en tu equipo (aviso naranja ⏳ abajo a la izquierda) y se envía sola apenas vuelve internet.'],
   ['¿Qué es el aviso naranja ⏳ "atención pendiente de envío"?','Aparece cuando guardaste sin conexión. Tu atención está a salvo en tu equipo y se envía sola cada 45 s o apenas vuelve internet; al enviarse verás ✅ con su N°. Puedes hacer clic en el aviso para reintentar ya. No cierres sesión en otro equipo esperando verla: se envía desde este.']]},
- {k:'trabajadores',t:'👷 Buscar Trabajador / Consulta por DNI',nav:'trabajadores',kw:'buscar trabajador consulta dni nombre masiva excel datos personal',q:[
-  ['¿Cómo busco a un trabajador?','En Buscar Trabajador escribe nombre, apellido o DNI (mínimo 3 caracteres). En Consulta por DNI ingresas solo el número y ves su ficha completa con historial de atenciones.'],
+ {k:'trabajadores',t:'👷 Trabajadores',nav:'trabajadores',kw:'buscar trabajador trabajadores consulta dni nombre masiva excel datos personal historial ficha',q:[
+  ['¿Cómo busco a un trabajador?','En 👷 Trabajadores escribe el DNI o el nombre (mínimo 2 caracteres) y pulsa Buscar. Verás dos pestañas: 👤 Datos del trabajador (empresa, cargo, fundo, ruta, código, periodo) e 📋 Historial de atenciones. Si escribes un DNI, las dos se llenan de una vez; en cada fila tienes + Atención y 📋 Historial.'],
+  ['¿Dónde quedó Consulta por DNI?','Ahora está dentro de 👷 Trabajadores, en la pestaña 📋 Historial de atenciones. Para consultar por fechas o responsable de recepción (sin DNI) abre ahí "Búsqueda avanzada"; el Excel del historial sigue en el mismo lugar.'],
   ['¿Cómo consulto varios DNI a la vez?','Usa Consulta Masiva (Excel): sube un archivo con una columna de DNI y el sistema devuelve un Excel con los datos y atenciones de cada uno.'],
   ['No encuentro al trabajador','Revisa que el DNI tenga 8 dígitos sin espacios. Si el trabajador es nuevo puede no estar aún en la base; avisa a Joel por 💬 indicando DNI y empresa.']]},
  {k:'correo',t:'📧 Enviar Reporte',nav:'navCorreo',kw:'correo reporte enviar excel exportar email',q:[
-  ['¿Cómo envío mi reporte?','En Enviar Reporte elige el rango de fechas y los destinatarios; el sistema arma el correo con tus atenciones y el Excel adjunto. Revisa la vista previa antes de enviar.'],
+  ['¿Cómo envío mi reporte?','Enviar Reporte ya no está en el menú: es el botón naranja 📧 Enviar reporte dentro de 📋 Mis Atenciones. Elige el rango de fechas y los destinatarios; el sistema arma el correo con tus atenciones y el Excel adjunto. Revisa la vista previa antes de enviar.'],
   ['Me sale "restringido por cumplimiento"','Enviar Reporte y la exportación a Excel se restringen cuando tienes tareas vencidas. Regulariza lo pendiente (campana 🔔) y la restricción se levanta sola; si necesitas enviar de urgencia, pide a Joel que la levante por 💬.']]},
  {k:'visitas',t:'🏕️ Visitas de Campo',nav:'navVisitas',kw:'visita campo sector plazo pendiente registrar',q:[
   ['¿Cómo registro una visita?','En Visitas de Campo pulsa Nueva visita, elige fecha, empresa/sector y describe lo observado y los acuerdos. Guarda y quedará en tu historial con semáforo de plazo.'],
@@ -14548,6 +14549,7 @@ var MODS=[
 ];
 // Temas siempre disponibles (no dependen de permisos)
 var GENERAL={k:'general',t:'🧭 Uso general del sistema',kw:'sesion clave contraseña ingresar salir cerrar sin conexion error lento recargar celular movil',q:[
+  ['¿Qué cambió en el menú? (18-oct)','Tres cosas: 1) 👷 Buscar Trabajador y Consulta por DNI ahora son un solo módulo, Trabajadores, con pestañas Datos e Historial. 2) 📧 Enviar Reporte salió del menú y es el botón naranja dentro de Mis Atenciones. 3) Resumen General se retiró (sus cifras están en Estadísticas Admin). Nada de tu información cambió.'],
   ['Me sale "Sin conexión con el servidor"','Suele ser una caída momentánea. Las consultas se reintentan solas; espera unos segundos. Si fue al guardar una atención, no la repitas: queda en tu equipo (aviso ⏳) y se envía sola. Si se repite seguido, usa 🆘 Reportar para que Joel lo vea con el detalle técnico.'],
   ['¿Cómo reporto un problema del sistema?','Usa la pestaña roja 🆘 Reportar en el borde derecho de la pantalla. Escribe qué pasó y envía: llega a Joel con tu usuario, el módulo y los últimos errores de tu equipo, sin que tengas que explicar lo técnico.'],
   ['Me salió "Hay una versión nueva del sistema"','Significa que se publicó una mejora. Termina y guarda lo que estás haciendo y pulsa Actualizar. Si eliges Después, te vuelve a avisar en 30 min.'],
@@ -18095,5 +18097,6 @@ try {
 <script src="../js/menu-simple.js?v=1"></script>  <!-- _MENU_SIMPLE_V1 (18-oct): Enviar reporte como boton en Mis Atenciones; Resumen General fuera del menu -->
 <script src="../js/trabajadores-ui.js?v=1"></script>  <!-- _TRAB_UI_V1 (18-oct): Buscar Trabajador + Consulta por DNI en una pantalla con pestañas -->
 <script src="../js/novedades.js?v=1"></script>  <!-- _NOVEDADES_V1 (18-oct): aviso flotante "que cambio" una sola vez por usuario -->
+<script src="../js/asistente-ui.js?v=1"></script>  <!-- _ASIS_UI_V1 (18-oct): Asistente RR.LL. modernizado (solo presentacion) -->
 </body>
 </html>
