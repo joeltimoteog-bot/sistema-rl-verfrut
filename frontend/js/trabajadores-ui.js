@@ -184,10 +184,13 @@ nav button.ni[onclick*="ir(\'consulta\'"]{display:none !important}\
     var dni = txt(tr, 0), nom = txt(tr, 1), sexo = txt(tr, 2), emp = txt(tr, 3), cargo = txt(tr, 4), fundo = txt(tr, 5), fundoAct = txt(tr, 6), ruta = txt(tr, 7), cod = txt(tr, 8), cumple = txt(tr, 9), reg = txt(tr, 10), fi = txt(tr, 11), ft = txt(tr, 12);
     var ini = nom.split(/\s+/).filter(Boolean).slice(0, 2).map(function (p) { return p.charAt(0); }).join('').toUpperCase() || '👤';
     var chips = [];
-    if (ruta && ruta !== '-' && ruta !== '—') chips.push('🚌 Ruta ' + ruta);
-    if (cod && cod !== '-' && cod !== '—') chips.push('🪪 Cód. ' + cod);
+    function fmtF(x) { var m = String(x || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : (x || ''); }
+    fi = fmtF(fi); ft = fmtF(ft);
+    function vale(x) { return x && x !== '-' && x !== '—' && x !== '0'; }
+    if (vale(ruta)) chips.push('🚌 Ruta ' + ruta);
+    if (vale(cod)) chips.push('🪪 Cód. ' + cod);
     if (reg && reg !== '-' && reg !== '—') chips.push(reg);
-    if (fi || ft) chips.push('📅 Periodo ' + (fi || '…') + ' → ' + (ft || '…'));
+    if (fi || ft) chips.push('📅 Periodo ' + (fi || '…') + (ft ? ' → ' + ft : ' (vigente)'));
     if (cumple && cumple !== '-' && cumple !== '—') chips.push('🎂 ' + cumple);
     if (sexo) chips.push(sexo === 'F' || /^fem/i.test(sexo) ? '♀ Femenino' : (sexo === 'M' || /^mas/i.test(sexo) ? '♂ Masculino' : sexo));
     f.innerHTML = '<div class="av"></div><div><b></b><small></small><div class="chips"></div></div><div class="acts"></div>';
@@ -248,7 +251,7 @@ nav button.ni[onclick*="ir(\'consulta\'"]{display:none !important}\
     w._tuWrap = true;
     window.ir = w; try { ir = w; } catch (e) {}
   }
-  function titulo() { try { var t = $('tbT'); if (t && /BUSCAR TRABAJADOR|CONSULTA POR DNI/.test(t.textContent)) t.textContent = 'TRABAJADORES'; } catch (e) {} }
+  function titulo() { try { var t = $('tbT'); if (t && /BUSCAR TRABAJADOR|CONSULTA POR DNI/.test(t.textContent)) t.textContent = 'TRABAJADORES'; } catch (e) {} setTimeout(function () { try { var t2 = $('tbT'); if (t2 && /BUSCAR TRABAJADOR|CONSULTA POR DNI/.test(t2.textContent)) t2.textContent = 'TRABAJADORES'; } catch (e) {} }, 150); }
 
   function iniciar() {
     if (!armar()) return;
