@@ -105,7 +105,7 @@
     { ic: '🔍', t: 'Buscar por DNI', sel: 'nav button.ni[onclick*="ir(\'trabajadores\'"]' },
     { ic: '⚖️', t: 'Registrar caso', nav: 'navCasos', ghost: true },
     { ic: '🏕️', t: 'Visita de campo', nav: 'navVisitas', ghost: true },
-    { ic: '📧', t: 'Enviar reporte', nav: 'navCorreo', ghost: true },
+    { ic: '📧', t: 'Enviar reporte', nav: 'navCorreo', alt: 'msEnviarRep', ghost: true },   /* _MENU_SIMPLE_V1: el menu lo oculta; vale el boton de Mis Atenciones */
     { ic: '📚', t: 'Capacitaciones', sel: 'nav button.ni[onclick*="capacitaciones.html"]', ghost: true }
   ];
   function visible(b) { try { return !!b && b.style.display !== 'none' && getComputedStyle(b).display !== 'none'; } catch (e) { return !!b && b.style.display !== 'none'; } }
@@ -114,13 +114,14 @@
     var html = '';
     ACC.forEach(function (a, i) {
       var b = a.nav ? $(a.nav) : document.querySelector(a.sel);
+      if (!visible(b) && a.alt) b = $(a.alt);
       if (!visible(b)) return;
       html += '<button type="button" class="' + (a.ghost ? 'ghost' : '') + '" data-i="' + i + '">' + a.ic + ' ' + esc(a.t) + '</button>';
     });
     if (c.innerHTML !== html) {
       c.innerHTML = html;
       c.querySelectorAll('button').forEach(function (btn) {
-        btn.onclick = function () { var a = ACC[+btn.getAttribute('data-i')]; try { if (a.fn) a.fn(); else { var b = a.nav ? $(a.nav) : document.querySelector(a.sel); if (b) b.click(); } } catch (e) {} };
+        btn.onclick = function () { var a = ACC[+btn.getAttribute('data-i')]; try { if (a.fn) a.fn(); else { var b = a.nav ? $(a.nav) : document.querySelector(a.sel); if (!visible(b) && a.alt) b = $(a.alt); if (b) b.click(); } } catch (e) {} };
       });
     }
   }
