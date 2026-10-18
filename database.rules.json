@@ -11,13 +11,13 @@
     "actividad_reciente":   { ".read": "auth != null", ".write": "auth != null" },
 
     "bienestar": {
-      "senales": { ".read": "auth != null", ".write": true }
+      "senales": { ".read": "auth != null", ".write": "auth != null" }
     },
 
     "presencia": {
-      ".read": true,
+      ".read": "auth != null",
       "$uid": {
-        ".write": true,
+        ".write": "auth != null",
         ".validate": "newData.hasChildren(['usuario','online','ultimo_ping'])",
         "usuario":     { ".validate": "newData.isString() && newData.val().length < 60" },
         "nombre":      { ".validate": "newData.isString() && newData.val().length < 120" },
@@ -32,10 +32,10 @@
     },
 
     "mensajes": {
-      ".read": true,
+      ".read": "auth != null",
       "$uid": {
         "$msgId": {
-          ".write": true,
+          ".write": "auth != null",
           ".validate": "newData.hasChildren(['texto'])",
           "texto":      { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length < 1000" },
           "de":         { ".validate": "newData.isString() && newData.val().length < 120" },
@@ -49,9 +49,9 @@
     },
 
     "trafico": {
-      ".read": true,
+      ".read": "auth != null",
       "$id": {
-        ".write": "!data.exists() || !newData.exists()",
+        ".write": "auth != null && (!data.exists() || !newData.exists())",
         ".validate": "newData.hasChildren(['ts','u','sis','accion','destino'])",
         "ts":      { ".validate": "newData.isNumber()" },
         "u":       { ".validate": "newData.isString() && newData.val().length < 60" },
@@ -67,10 +67,10 @@
     },
 
     "historial": {
-      ".read": true,
+      ".read": "auth != null",
       "$uid": {
         "$id": {
-          ".write": "!data.exists()",
+          ".write": "auth != null && !data.exists()",
           ".validate": "newData.hasChildren(['ts','evento'])",
           "ts":      { ".validate": "newData.isNumber()" },
           "evento":  { ".validate": "newData.isString() && newData.val().length < 30" },

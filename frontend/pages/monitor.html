@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <script src="/sistema-rl-verfrut/frontend/js/azure-token.js"></script>  <!-- _AZ_TOKEN_V1: la sesion va en toda consulta a Azure (debe ser el primer script) -->
+<script src="/sistema-rl-verfrut/frontend/js/firebase-llave.js?v=1"></script> <!-- _FB_LLAVE_V1 (18-oct): llave anonima para presencia/mensajes/trafico (debe ir antes de trafico.js/presencia.js) -->
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Monitor en Vivo · Sistema RL</title>
@@ -387,6 +388,8 @@ function initFB(){
     const nombre = 'monitor-app';
     const app = getApps().find(a=>a.name===nombre) ? getApp(nombre) : initializeApp(firebaseConfig, nombre);
     db = getDatabase(app);
+    /* _FB_LLAVE_V1 (18-oct): las reglas exigen auth; el Monitor firma anonimo en su propia app (como presencia.js) */
+    try { import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js").then(function (a) { a.signInAnonymously(a.getAuth(app)).catch(function (e) { console.warn('[Monitor] auth anonima:', e && e.code); }); }); } catch (e) {}
     return true;
   }catch(e){ console.error('[Monitor] Firebase error', e); return false; }
 }
