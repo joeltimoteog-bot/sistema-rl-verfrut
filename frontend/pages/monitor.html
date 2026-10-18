@@ -389,7 +389,7 @@ function initFB(){
     const app = getApps().find(a=>a.name===nombre) ? getApp(nombre) : initializeApp(firebaseConfig, nombre);
     db = getDatabase(app);
     /* _FB_LLAVE_V1 (18-oct): las reglas exigen auth; el Monitor firma anonimo en su propia app (como presencia.js) */
-    try { import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js").then(function (a) { a.signInAnonymously(a.getAuth(app)).catch(function (e) { console.warn('[Monitor] auth anonima:', e && e.code); }); }); } catch (e) {}
+    try { window._monAuthLista = import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js").then(function (a) { return a.signInAnonymously(a.getAuth(app)); }).catch(function (e) { console.warn('[Monitor] auth anonima:', e && e.code); }); } catch (e) { window._monAuthLista = Promise.resolve(); }
     return true;
   }catch(e){ console.error('[Monitor] Firebase error', e); return false; }
 }
@@ -1261,7 +1261,10 @@ async function guardarFeriados(){
 
 function arrancar(){
   if(!initFB()){ iniciarREST(); return; }
-
+  /* _FB_LLAVE_V1: se suscribe recien cuando la firma anonima termino (si no, permission_denied y caia al respaldo REST) */
+  (window._monAuthLista || Promise.resolve()).then(function () { arrancarSDK(); });
+}
+function arrancarSDK(){
   let recibioSDK = false;
   try{
     onValue(ref(db,'presencia'), snap=>{
