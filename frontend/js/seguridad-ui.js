@@ -79,7 +79,7 @@
 #mcOv.on{display:flex}\
 #mcOv .md{background:#fff;border-radius:18px;width:min(720px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(2,6,23,.45)}\
 #mcOv .h{padding:14px 20px;border-bottom:1px solid #e2e8f0;display:flex;gap:12px;align-items:center;background:linear-gradient(135deg,#0a2463,#1e40af);color:#fff}\
-#mcOv .h .av{width:42px;height:42px;border-radius:50%;background:#fff;color:#0a2463;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px}\
+#mcOv .h .mc-av{width:42px;height:42px;border-radius:50%;background:#fff;color:#0a2463;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px}\
 #mcOv .h b{font-size:15px;display:block}#mcOv .h small{opacity:.85;font-size:12px}\
 #mcOv .x{margin-left:auto;border:none;background:rgba(255,255,255,.16);color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:15px}\
 #mcOv .b{padding:16px 20px;overflow:auto}\
@@ -91,7 +91,7 @@
 #mcOv .ses{border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}\
 #mcOv .ses div{display:flex;gap:10px;padding:9px 12px;font-size:12.5px;border-bottom:1px solid #f1f5f9;align-items:center}\
 #mcOv .ses div:last-child{border:none}#mcOv .ses .ok{color:#16a34a;font-weight:800}\
-#mcOv .ses .av{margin-left:auto;color:#b45309;font-weight:700;cursor:pointer;font-size:11.5px}\
+#mcOv .ses .mc-avisar{margin-left:auto;color:#b45309;font-weight:700;cursor:pointer;font-size:11.5px;white-space:nowrap;background:none;width:auto;height:auto;border-radius:0}\
 #mcOv table{width:100%;border-collapse:collapse;font-size:12.5px}\
 #mcOv td,#mcOv th{padding:7px 10px;border-bottom:1px solid #eef2f7;text-align:left}\
 #mcOv th{background:#f8fafc;font-size:10.5px;text-transform:uppercase;color:#475569;position:sticky;top:0}\
@@ -190,7 +190,7 @@
   function ventanaCuenta() {
     var ov = $('mcOv'); if (ov) return ov;
     ov = document.createElement('div'); ov.id = 'mcOv'; ov.className = 'ov';
-    ov.innerHTML = '<div class="md" role="dialog" aria-modal="true"><div class="h"><div class="av" id="mcAv"></div><div><b id="mcNom"></b><small id="mcSub"></small></div><button type="button" class="x" aria-label="Cerrar">✕</button></div><div class="b" id="mcBody"></div><div class="pie">Sistema RL v3.0 · Creado y administrado por Joel Timoteo Gonza · Coordinación de Relaciones Laborales</div></div>';
+    ov.innerHTML = '<div class="md" role="dialog" aria-modal="true"><div class="h"><div class="mc-av" id="mcAv"></div><div><b id="mcNom"></b><small id="mcSub"></small></div><button type="button" class="x" aria-label="Cerrar">✕</button></div><div class="b" id="mcBody"></div><div class="pie">Sistema RL v3.0 · Creado y administrado por Joel Timoteo Gonza · Coordinación de Relaciones Laborales</div></div>';
     document.body.appendChild(ov);
     ov.querySelector('.x').onclick = function () { ov.classList.remove('on'); };
     ov.addEventListener('click', function (e) { if (e.target === ov) ov.classList.remove('on'); });
@@ -226,8 +226,8 @@
       var vistos = {}, filas = [];
       arr.forEach(function (e) { var k = Math.floor((e.ts || 0) / 600000); if (vistos[k] || filas.length >= 6) return; vistos[k] = 1; filas.push(e); });
       if (!filas.length) { c.innerHTML = '<div style="color:#64748b">Sin registros recientes</div>'; return; }
-      c.innerHTML = filas.map(function (e, i) { return '<div><span class="ok">●</span> ' + esc(fecha(new Date(e.ts).toISOString())) + ' · ' + esc(e.accion || '') + (i === 0 ? ' · <b>más reciente</b>' : '') + (i > 0 ? '<span class="av" data-ts="' + e.ts + '">¿no fuiste tú? avisar</span>' : '') + '</div>'; }).join('');
-      c.querySelectorAll('.av').forEach(function (a) { a.onclick = function () { try { if (typeof window.rlReportar === 'function') { window.rlReportar(); } else { var b = $('_rlChatBtn'); if (b) b.click(); } } catch (e) {} try { if (typeof window.mostrarToast === 'function') window.mostrarToast('Cuéntale a Coordinación el ingreso que no reconoces (fecha ' + fecha(new Date(+a.getAttribute('data-ts')).toISOString()) + ')', 'warn'); } catch (e) {} }; });
+      c.innerHTML = filas.map(function (e, i) { return '<div><span class="ok">●</span> ' + esc(fecha(new Date(e.ts).toISOString())) + ' · ' + esc(e.accion || '') + (i === 0 ? ' · <b>más reciente</b>' : '') + (i > 0 ? '<span class="mc-avisar" data-ts="' + e.ts + '">¿no fuiste tú? avisar</span>' : '') + '</div>'; }).join('');
+      c.querySelectorAll('.mc-avisar').forEach(function (a) { a.onclick = function () { try { if (typeof window.rlReportar === 'function') { window.rlReportar(); } else { var b = $('_rlChatBtn'); if (b) b.click(); } } catch (e) {} try { if (typeof window.mostrarToast === 'function') window.mostrarToast('Cuéntale a Coordinación el ingreso que no reconoces (fecha ' + fecha(new Date(+a.getAttribute('data-ts')).toISOString()) + ')', 'warn'); } catch (e) {} }; });
     }).catch(function () { c.innerHTML = '<div style="color:#64748b">No se pudo consultar</div>'; });
   }
   function listaAdmin() {
