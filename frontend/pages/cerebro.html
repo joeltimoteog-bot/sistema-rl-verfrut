@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<script src="/sistema-rl-verfrut/frontend/js/azure-token.js"></script>  <!-- _AZ_TOKEN_V1: la sesion va en toda consulta a Azure -->
+<script src="/sistema-rl-verfrut/frontend/js/firebase-llave.js?v=1"></script> <!-- _FB_LLAVE_V1: llave anonima para leer trafico/presencia -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cerebro del Sistema · Sistema RL</title>
+<link rel="icon" href="/sistema-rl-verfrut/favicon.ico">
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     _CEREBRO_V1 (18-oct-2026) — Cerebro del Sistema RL (solo administración)
+     Mapa neuronal en vivo: usuarios → sistemas → módulos → servidores.
+     Cada acción registrada en Firebase /trafico viaja como un impulso por el camino
+     real que usó (Azure / Google / Firebase). SOLO LEE: /trafico y /presencia (Firebase,
+     con la llave anónima) y sondeos livianos de salud. No escribe nada.
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{--bg:#050b1f;--panel:#0b1533;--bd:#1c2a55;--tx:#dbe6ff;--mut:#7f93c7}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 700px at 50% 40%,#0c1a45 0%,var(--bg) 70%);color:var(--tx);font:14px Barlow,"Segoe UI",system-ui,sans-serif;min-height:100vh}
+header{display:flex;align-items:center;gap:14px;padding:12px 20px;border-bottom:1px solid var(--bd);background:rgba(5,11,31,.75);backdrop-filter:blur(6px);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+header .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#ef4444,#a855f7);display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 0 24px rgba(168,85,247,.5)}
+header b{font-size:18px;letter-spacing:.3px}header small{display:block;color:var(--mut);font-size:12px}
+.hbtns{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{border:1px solid var(--bd);background:#0f1c44;color:var(--tx);border-radius:10px;padding:8px 13px;font:700 12.5px Barlow,"Segoe UI",system-ui,sans-serif;cursor:pointer;text-decoration:none}
+.btn:hover{background:#16285e}.btn.on{background:#7c3aed;border-color:#7c3aed}
+.live{display:flex;gap:8px;align-items:center;font-weight:800;font-size:12px;color:#86efac}.live i{width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 10px #22c55e;animation:pl 1.4s infinite}
+.live.off{color:#fca5a5}.live.off i{background:#ef4444;box-shadow:0 0 10px #ef4444}
+@keyframes pl{50%{opacity:.35}}
+.kpis{display:flex;gap:10px;padding:12px 20px;flex-wrap:wrap}
+.kpi{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:10px 14px;min-width:140px}.kpi b{display:block;font-size:22px}.kpi span{font-size:11px;color:var(--mut);text-transform:uppercase;font-weight:700;letter-spacing:.5px}
+.wrap{display:grid;grid-template-columns:1fr 330px;gap:14px;padding:0 20px 20px}
+.mapa{position:relative;background:rgba(11,21,51,.55);border:1px solid var(--bd);border-radius:18px;overflow:hidden;min-height:640px}
+canvas{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
+.leyenda{position:absolute;left:14px;bottom:12px;display:flex;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--mut);background:rgba(5,11,31,.8);padding:8px 12px;border-radius:10px;border:1px solid var(--bd)}
+.leyenda span{display:flex;align-items:center;gap:6px}.leyenda i{width:22px;height:3px;border-radius:3px}
+.replay{position:absolute;right:14px;top:12px;background:rgba(5,11,31,.85);border:1px solid #7c3aed;border-radius:10px;padding:8px 12px;font-size:12px;display:none}
+.side{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid var(--bd);border-radius:14px;padding:12px 14px}
+.card h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);display:flex;align-items:center;gap:6px}
+.feed{max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.ev{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;line-height:1.35;animation:in .35s}
+.ev i{flex:none;width:8px;height:8px;border-radius:50%;margin-top:5px}.ev small{display:block;color:var(--mut);font-size:10.5px}
+@keyframes in{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+.salud div{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed var(--bd);font-size:12.5px}.salud div:last-child{border:none}
+.ok{color:#86efac;font-weight:800}.warn{color:#fcd34d;font-weight:800}.mal{color:#fca5a5;font-weight:800}
+.top div{display:flex;justify-content:space-between;font-size:12.5px;padding:3px 0}
+#det{display:none}#det .x{margin-left:auto;cursor:pointer;color:var(--mut);font-size:14px}
+#det ul{margin:4px 0 0;padding-left:16px;font-size:12.5px;line-height:1.5}
+.vacio{color:var(--mut);font-size:12.5px}
+.denegado{max-width:520px;margin:80px auto;text-align:center;background:var(--panel);border:1px solid var(--bd);border-radius:16px;padding:30px}
+@media(max-width:1000px){.wrap{grid-template-columns:1fr}.mapa{min-height:560px}}
+</style>
+</head>
+<body>
+<header><div class="logo">🧠</div><div><b>Cerebro del Sistema RL</b><small>Cómo se conecta todo · cada impulso es una acción real de un usuario</small></div>
+ <div class="hbtns"><span class="live" id="vivo"><i></i> EN VIVO</span><button class="btn" id="btnReplay" type="button">⏪ Reproducir el día</button><a class="btn" href="dashboard.html">← Dashboard</a></div></header>
+<div class="kpis">
+ <div class="kpi"><b id="kAct">–</b><span>Usuarios conectados</span></div>
+ <div class="kpi"><b id="kMin">0</b><span>Impulsos / minuto</span></div>
+ <div class="kpi"><b id="kHoy">–</b><span>Acciones hoy</span></div>
+ <div class="kpi"><b id="kAz" style="color:#93c5fd">Azure</b><span id="kAzS">midiendo…</span></div>
+ <div class="kpi"><b id="kGo" style="color:#86efac">Google</b><span id="kGoS">midiendo…</span></div>
+ <div class="kpi"><b id="kFb" style="color:#fcd34d">Firebase</b><span id="kFbS">midiendo…</span></div>
+</div>
+<div class="wrap">
+ <div class="mapa" id="mapa"><canvas id="c"></canvas>
+  <div class="replay" id="replayInfo">⏪ Reproduciendo el día · <b id="replayHora">--:--</b></div>
+  <div class="leyenda"><span><i style="background:#3b82f6"></i>Azure SQL (principal)</span><span><i style="background:#22c55e"></i>Google Sheets (respaldo)</span><span><i style="background:#f59e0b"></i>Firebase (vivo)</span><span><i style="background:#ef4444"></i>Error</span><span>● clic en una neurona = detalle</span></div>
+ </div>
+ <div class="side">
+  <div class="card" id="det"><h3><span id="detT">Neurona</span><span class="x" id="detX">✕</span></h3><div id="detB"></div></div>
+  <div class="card"><h3>⚡ Impulsos en vivo</h3><div class="feed" id="feed"><div class="vacio">Esperando actividad…</div></div></div>
+  <div class="card salud"><h3>🩺 Salud (se mide cada minuto)</h3>
+   <div><span>Azure Functions</span><span id="sAz">…</span></div>
+   <div><span>Google Apps Script</span><span id="sGo">…</span></div>
+   <div><span>Firebase (presencia/tráfico)</span><span id="sFb">…</span></div>
+   <div><span>Errores de usuarios (1 h)</span><span id="sErr">…</span></div>
+  </div>
+  <div class="card top"><h3>🔥 Neuronas más activas (1 h)</h3><div id="top"><div class="vacio">Calculando…</div></div></div>
+ </div>
+</div>
+<script>
+(function () {
+'use strict';
+/* ── acceso: solo administración ── */
+var USER = null; try { USER = JSON.parse(sessionStorage.getItem('user') || 'null'); } catch (e) {}
+var CEREBRO_ADMINS = ['jtimoteo'];   /* igual que el Monitor */
+if (!USER || CEREBRO_ADMINS.indexOf(String(USER.usuario || '').toLowerCase().trim()) < 0) {
+  document.body.innerHTML = '<div class="denegado"><div style="font-size:40px">🔒</div><h2>Solo administración</h2><p style="color:#7f93c7">El Cerebro del sistema es una vista del administrador.</p><a class="btn" href="' + (USER ? 'dashboard.html' : '../../index.html') + '">Volver</a></div>';
+  return;
+}
+var DB = 'https://sistema-rl-verfrut-default-rtdb.firebaseio.com';
+var AZ = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api';
+var GAS = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function hora(ts) { var d = new Date(ts); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2); }
+
+/* ── neuronas ── */
+var N = {
+  usr: { x: .07, y: .50, r: 30, ic: '👥', t: 'Usuarios', c: '#e2e8f0' },
+  rl:  { x: .25, y: .28, r: 30, ic: '🏢', t: 'Sistema RR.LL.', c: '#ef4444' },
+  eti: { x: .25, y: .62, r: 24, ic: '🎓', t: 'Capacitaciones ETI', c: '#a855f7' },
+  ev:  { x: .25, y: .84, r: 22, ic: '⭐', t: 'Evaluaciones ETI', c: '#06b6d4' },
+  m1:  { x: .47, y: .09, r: 16, ic: '📋', t: 'Mis Atenciones', c: '#fca5a5' },
+  m2:  { x: .47, y: .20, r: 15, ic: '👷', t: 'Trabajadores', c: '#fca5a5' },
+  m3:  { x: .47, y: .31, r: 14, ic: '⚖️', t: 'Casos', c: '#fca5a5' },
+  m4:  { x: .47, y: .42, r: 14, ic: '🏕️', t: 'Visitas', c: '#fca5a5' },
+  m5:  { x: .47, y: .53, r: 14, ic: '📚', t: 'Capacitaciones', c: '#fca5a5' },
+  m6:  { x: .47, y: .64, r: 13, ic: '🔧', t: 'Mantenimiento', c: '#fca5a5' },
+  m7:  { x: .47, y: .75, r: 13, ic: '✅', t: 'Cumplimiento', c: '#fca5a5' },
+  m8:  { x: .47, y: .86, r: 13, ic: '🧩', t: 'Otros módulos', c: '#fca5a5' },
+  az:  { x: .72, y: .28, r: 32, ic: '☁️', t: 'Azure Functions', c: '#3b82f6' },
+  sql: { x: .90, y: .28, r: 25, ic: '🗄️', t: 'Azure SQL', c: '#60a5fa' },
+  gas: { x: .72, y: .60, r: 25, ic: '📜', t: 'Apps Script', c: '#22c55e' },
+  sh:  { x: .90, y: .60, r: 21, ic: '📊', t: 'Hoja (respaldo)', c: '#4ade80' },
+  fb:  { x: .72, y: .87, r: 23, ic: '🔥', t: 'Firebase', c: '#f59e0b' },
+  mail:{ x: .90, y: .87, r: 17, ic: '✉️', t: 'Correo', c: '#fbbf24' }
+};
+var MODS = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'];
+var E = [['usr', 'rl', '#ef4444'], ['usr', 'eti', '#a855f7'], ['usr', 'ev', '#06b6d4'],
+  ['eti', 'az', '#3b82f6'], ['ev', 'az', '#3b82f6'], ['eti', 'fb', '#f59e0b'], ['ev', 'fb', '#f59e0b'], ['rl', 'fb', '#f59e0b'],
+  ['rl', 'az', '#3b82f6'], ['rl', 'gas', '#22c55e'], ['eti', 'gas', '#22c55e'], ['ev', 'gas', '#22c55e'],
+  ['az', 'sql', '#60a5fa'], ['gas', 'sh', '#4ade80'], ['gas', 'mail', '#fbbf24'], ['gas', 'az', '#64748b']];
+MODS.forEach(function (m) { E.push(['rl', m, '#fca5a5']); E.push([m, 'az', '#3b82f6']); E.push([m, 'gas', '#22c55e']); });
+
+/* ── clasificación de una acción de /trafico en un camino ── */
+function modulo(a) {
+  a = String(a || '').toLowerCase();
+  if (/atenci/.test(a)) return 'm1';
+  if (/trabajador|dni|historial|consulta masiva/.test(a)) return 'm2';
+  if (/caso|descargo|informe de caso/.test(a)) return 'm3';
+  if (/visita/.test(a)) return 'm4';
+  if (/capacit/.test(a)) return 'm5';
+  if (/manten/.test(a)) return 'm6';
+  if (/cumplim|ausencia|plazo/.test(a)) return 'm7';
+  if (/sesi[oó]n|dashboard|compromiso|contrase/.test(a)) return null;
+  return 'm8';
+}
+function camino(e) {
+  var sis = String(e.sis || ''), dest = String(e.destino || ''), p = ['usr'];
+  var origen = /evaluac/i.test(sis) ? 'ev' : (/capacit/i.test(sis) ? 'eti' : 'rl');
+  p.push(origen);
+  var m = origen === 'rl' ? modulo(e.accion) : null;
+  if (m) p.push(m);
+  if (/azure/i.test(dest)) { p.push('az'); p.push('sql'); }
+  else if (/google|sheet/i.test(dest)) { p.push('gas'); p.push('sh'); }
+  else if (/correo/i.test(dest)) { p.push('gas'); p.push('mail'); }
+  else if (/firebase|firestore/i.test(dest)) { if (p[p.length - 1] !== origen) { p = ['usr', origen]; if (m) p.push(m); } p.push('fb'); }
+  /* Firebase desde un módulo: el enlace modulo->fb no existe; se dibuja sistema->fb */
+  if (p[p.length - 1] === 'fb' && p.length > 3) { p = ['usr', origen, 'fb']; }
+  return p;
+}
+function colorDe(e) { if (e.tipo === 'error') return '#ef4444'; var d = String(e.destino || ''); return /azure/i.test(d) ? '#3b82f6' : /google|sheet/i.test(d) ? '#22c55e' : /correo/i.test(d) ? '#fbbf24' : '#f59e0b'; }
+
+/* ── lienzo ── */
+var cv = $('c'), cx = cv.getContext('2d'), W = 0, H = 0, dpr = window.devicePixelRatio || 1;
+function rs() { var r = cv.getBoundingClientRect(); W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; cx.setTransform(dpr, 0, 0, dpr, 0, 0); }
+window.addEventListener('resize', rs);
+function pos(k) { return { x: N[k].x * W, y: N[k].y * H }; }
+var P = [], act = {}, presMod = {}, errNodo = {}, eventos = [], cuentaMin = [], vistos = {};
+function impulso(e, rapido) {
+  var p = camino(e), col = colorDe(e), vel = rapido ? .05 : .018;
+  for (var i = 0; i < p.length - 1; i++) P.push({ a: p[i], b: p[i + 1], t: -i * (rapido ? .35 : .55), c: col, v: vel });
+  p.forEach(function (k) { act[k] = (act[k] || 0) + 1; });
+  if (e.tipo === 'error') errNodo[p[p.length - 1]] = Date.now();
+  if (P.length > 600) P.splice(0, P.length - 600);
+}
+function curva(a, b, t) { var mx = (a.x + b.x) / 2, u = 1 - t; return { x: u * u * u * a.x + 3 * u * u * t * mx + 3 * u * t * t * mx + t * t * t * b.x, y: u * u * u * a.y + 3 * u * u * t * a.y + 3 * u * t * t * b.y + t * t * t * b.y }; }
+function dib(ts) {
+  if (!W) rs();
+  cx.clearRect(0, 0, W, H);
+  E.forEach(function (e) { var a = pos(e[0]), b = pos(e[1]), g = cx.createLinearGradient(a.x, a.y, b.x, b.y); g.addColorStop(0, e[2] + '22'); g.addColorStop(1, e[2] + '55'); cx.strokeStyle = g; cx.lineWidth = 1.3; cx.beginPath(); var mx = (a.x + b.x) / 2; cx.moveTo(a.x, a.y); cx.bezierCurveTo(mx, a.y, mx, b.y, b.x, b.y); cx.stroke(); });
+  P.forEach(function (p) { p.t += p.v; }); P = P.filter(function (p) { return p.t < 1.05; });
+  P.forEach(function (p) { if (p.t < 0) return; var q = curva(pos(p.a), pos(p.b), Math.min(p.t, 1)); var g = cx.createRadialGradient(q.x, q.y, 0, q.x, q.y, 14); g.addColorStop(0, p.c); g.addColorStop(1, p.c + '00'); cx.fillStyle = g; cx.beginPath(); cx.arc(q.x, q.y, 14, 0, 7); cx.fill(); cx.fillStyle = '#fff'; cx.beginPath(); cx.arc(q.x, q.y, 2.4, 0, 7); cx.fill(); });
+  Object.keys(N).forEach(function (k) {
+    var n = N[k], p = pos(k), a = act[k] || 0, pr = presMod[k] || 0, pul = Math.sin(ts / 600 + p.x) * 2;
+    var r = n.r + Math.min(a, 30) * .25 + Math.min(pr, 10) * .8 + pul * .5;
+    var mal = (errNodo[k] && Date.now() - errNodo[k] < 60000) || (n.caido === true);
+    var col = mal ? (Math.floor(ts / 400) % 2 ? '#ef4444' : '#7f1d1d') : n.c;
+    var g = cx.createRadialGradient(p.x, p.y, r * .2, p.x, p.y, r * 2.2); g.addColorStop(0, col + 'aa'); g.addColorStop(1, col + '00'); cx.fillStyle = g; cx.beginPath(); cx.arc(p.x, p.y, r * 2.2, 0, 7); cx.fill();
+    cx.fillStyle = '#0b1533'; cx.strokeStyle = col; cx.lineWidth = 2.2; cx.beginPath(); cx.arc(p.x, p.y, r, 0, 7); cx.fill(); cx.stroke();
+    cx.font = Math.round(r * .9) + 'px "Segoe UI Emoji","Apple Color Emoji",sans-serif'; cx.textAlign = 'center'; cx.textBaseline = 'middle'; cx.fillText(n.ic, p.x, p.y + 1);
+    cx.font = '600 11.5px Barlow,"Segoe UI",sans-serif'; cx.fillStyle = '#c7d5ff'; cx.fillText(n.t + (pr ? ' · ' + pr : ''), p.x, p.y + r + 14);
+  });
+  Object.keys(act).forEach(function (k) { act[k] *= .996; });
+  requestAnimationFrame(dib);
+}
+
+/* ── panel lateral ── */
+function alFeed(e) {
+  var f = $('feed'); if (f.firstChild && f.firstChild.className === 'vacio') f.innerHTML = '';
+  var col = colorDe(e), d = document.createElement('div'); d.className = 'ev';
+  d.innerHTML = '<i style="background:' + col + ';box-shadow:0 0 8px ' + col + '"></i><div><b>' + esc(e.u || '') + '</b> · ' + esc(e.accion || '') + '<small>' + hora(e.ts) + ' · ' + esc(e.destino || '') + (e.sis && e.sis !== 'RR.LL' ? ' · ' + esc(e.sis) : '') + '</small></div>';
+  f.prepend(d); while (f.children.length > 25) f.lastChild.remove();
+}
+function recibir(e, rapido) {
+  impulso(e, rapido);
+  eventos.push(e); if (eventos.length > 4000) eventos.splice(0, eventos.length - 4000);
+  if (!rapido) { alFeed(e); cuentaMin.push(Date.now()); }
+}
+function resumen() {
+  var hace1h = Date.now() - 3600e3, hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
+  var cnt = {}, err = 0, hoy = 0;
+  eventos.forEach(function (e) { if (e.ts >= hoy0.getTime()) hoy++; if (e.ts < hace1h) return; if (e.tipo === 'error') err++; camino(e).forEach(function (k) { if (k !== 'usr') cnt[k] = (cnt[k] || 0) + 1; }); });
+  $('kHoy').textContent = hoy;
+  $('sErr').innerHTML = err ? '<span class="warn">' + err + '</span>' : '<span class="ok">0</span>';
+  var top = Object.keys(cnt).filter(function (k) { return MODS.indexOf(k) >= 0 || k === 'eti' || k === 'ev'; }).sort(function (a, b) { return cnt[b] - cnt[a]; }).slice(0, 5);
+  $('top').innerHTML = top.length ? top.map(function (k) { return '<div><span>' + N[k].ic + ' ' + esc(N[k].t) + '</span><b>' + cnt[k] + '</b></div>'; }).join('') : '<div class="vacio">Sin actividad en la última hora</div>';
+  cuentaMin = cuentaMin.filter(function (t) { return t > Date.now() - 60000; }); $('kMin').textContent = cuentaMin.length;
+}
+
+/* ── datos: tráfico (solo lo nuevo) y presencia ── */
+var ultimaClave = null, fbOk = null;
+function marcarVivo(ok) { var v = $('vivo'); v.className = 'live' + (ok ? '' : ' off'); v.innerHTML = '<i></i> ' + (ok ? 'EN VIVO' : 'SIN CONEXIÓN'); }
+function cargarTrafico() {
+  if (document.hidden || reproduciendo) return Promise.resolve();
+  var url = ultimaClave ? DB + '/trafico.json?orderBy=%22$key%22&startAt=%22' + encodeURIComponent(ultimaClave) + '%22&limitToFirst=200'
+                        : DB + '/trafico.json?orderBy=%22$key%22&startAt=%22' + (Date.now() - 3600e3) + '%22';
+  return fetch(url, { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).then(function (j) {
+    fbOk = true; marcarVivo(true);
+    var claves = Object.keys(j || {}).sort(), primera = !ultimaClave;
+    claves.forEach(function (k) {
+      if (vistos[k]) return; vistos[k] = 1; var e = j[k]; if (!e || !e.ts) return;
+      if (primera) { eventos.push(e); } else recibir(e, false);
+      ultimaClave = k;
+    });
+    if (primera) { eventos.slice(-12).forEach(alFeed); if (!claves.length) ultimaClave = String(Date.now()); }
+    resumen();
+  }).catch(function () { fbOk = false; marcarVivo(false); });
+}
+function cargarPresencia() {
+  if (document.hidden) return;
+  fetch(DB + '/presencia.json', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    var lim = Date.now() - 3 * 60e3, n = 0, pm = {}; window._pres = j || {};
+    Object.keys(j || {}).forEach(function (k) {
+      var x = j[k]; if (!x || !x.online || (x.ultimo_ping || 0) < lim) return; n++;
+      var txt = String((x.modulo || '') + ' ' + (x.pagina || '')).toLowerCase(), nodo = 'rl';
+      if (/eval/.test(txt)) nodo = 'ev'; else if (/eti|programaci/.test(txt) && !/dashboard/.test(txt)) nodo = 'eti';
+      else { var m = modulo(txt); if (m && m !== 'm8') nodo = m; }
+      pm[nodo] = (pm[nodo] || 0) + 1; pm.usr = (pm.usr || 0) + 1;
+    });
+    presMod = pm; $('kAct').textContent = n;
+  }).catch(function () {});
+}
+
+/* ── salud: sondeos livianos (cada minuto) ── */
+function medir(url, op) { var t0 = performance.now(), c = new AbortController(), to = setTimeout(function () { c.abort(); }, 15000); op = op || {}; op.signal = c.signal;
+  return fetch(url, op).then(function (r) { clearTimeout(to); return { ok: r.status < 500, st: r.status, ms: Math.round(performance.now() - t0) }; }, function () { clearTimeout(to); return { ok: false, st: 0, ms: Math.round(performance.now() - t0) }; }); }
+function pintarSalud(id, kId, r, nodos) {
+  var cls = !r.ok ? 'mal' : (r.ms > 4000 ? 'warn' : 'ok'), txt = !r.ok ? 'Sin respuesta' : (r.ms > 4000 ? 'Lento · ' : 'OK · ') + (r.ms < 1000 ? r.ms + ' ms' : (r.ms / 1000).toFixed(1) + ' s');
+  $(id).innerHTML = '<span class="' + cls + '">' + txt + '</span>'; $(kId).textContent = txt;
+  nodos.forEach(function (k) { N[k].caido = !r.ok; });
+}
+function salud() {
+  if (document.hidden) return;
+  medir(AZ + '/trabajadores/buscar?dni=00000000').then(function (r) { pintarSalud('sAz', 'kAzS', r, ['az', 'sql']); });
+  medir(GAS, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'ping' }) }).then(function (r) { pintarSalud('sGo', 'kGoS', r, ['gas', 'sh']); });
+  var t0 = performance.now(); setTimeout(function () { var r = { ok: fbOk !== false, ms: Math.round(performance.now() - t0) }; pintarSalud('sFb', 'kFbS', { ok: fbOk !== false, ms: 300 }, ['fb']); }, 50);
+}
+
+/* ── clic en una neurona: detalle ── */
+cv.addEventListener('click', function (ev) {
+  var r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, sel = null;
+  Object.keys(N).forEach(function (k) { var p = pos(k); if (Math.hypot(p.x - x, p.y - y) < N[k].r + 12) sel = k; });
+  if (!sel) return;
+  var n = N[sel], quien = [], ult = [];
+  Object.keys(window._pres || {}).forEach(function (k) { var x2 = window._pres[k]; if (!x2 || !x2.online || (x2.ultimo_ping || 0) < Date.now() - 3 * 60e3) return; var txt = String((x2.modulo || '') + ' ' + (x2.pagina || '')).toLowerCase(), m = modulo(txt); var nodo = /eval/.test(txt) ? 'ev' : (/eti|programaci/.test(txt) && !/dashboard/.test(txt) ? 'eti' : (m && m !== 'm8' ? m : 'rl')); if (sel === 'usr' || nodo === sel) quien.push((x2.nombre || x2.usuario || k) + ' · ' + (x2.modulo || x2.pagina || '')); });
+  for (var i = eventos.length - 1; i >= 0 && ult.length < 8; i--) { if (camino(eventos[i]).indexOf(sel) >= 0) ult.push(eventos[i]); }
+  $('detT').textContent = n.ic + ' ' + n.t;
+  $('detB').innerHTML = '<div style="font-size:12px;color:#7f93c7;font-weight:700;margin-bottom:2px">CONECTADOS AHORA (' + quien.length + ')</div>' + (quien.length ? '<ul>' + quien.slice(0, 10).map(function (q) { return '<li>' + esc(q) + '</li>'; }).join('') + '</ul>' : '<div class="vacio">Nadie en este momento</div>') +
+    '<div style="font-size:12px;color:#7f93c7;font-weight:700;margin:10px 0 2px">ÚLTIMAS ACCIONES</div>' + (ult.length ? '<ul>' + ult.map(function (e) { return '<li>' + hora(e.ts) + ' · <b>' + esc(e.u) + '</b> · ' + esc(e.accion) + '</li>'; }).join('') + '</ul>' : '<div class="vacio">Sin acciones registradas</div>');
+  $('det').style.display = 'block';
+});
+$('detX').onclick = function () { $('det').style.display = 'none'; };
+
+/* ── reproducir el día (desde las 00:00, acelerado ~60 s) ── */
+var reproduciendo = false;
+$('btnReplay').onclick = function () {
+  if (reproduciendo) return; var b = this; reproduciendo = true; b.classList.add('on'); b.textContent = '⏪ Cargando el día…';
+  var hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
+  fetch(DB + '/trafico.json?orderBy=%22$key%22&startAt=%22' + hoy0.getTime() + '%22', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) {
+    var lista = Object.keys(j || {}).sort().map(function (k) { return j[k]; }).filter(function (e) { return e && e.ts; });
+    if (!lista.length) { b.textContent = '⏪ Sin actividad hoy'; setTimeout(fin, 1500); return; }
+    b.textContent = '⏹ Reproduciendo…'; $('replayInfo').style.display = 'block';
+    var i = 0, porTick = Math.max(1, Math.ceil(lista.length / 400));
+    var iv = setInterval(function () {
+      for (var k = 0; k < porTick && i < lista.length; k++, i++) { impulso(lista[i], true); }
+      if (i > 0) $('replayHora').textContent = hora(lista[Math.min(i, lista.length) - 1].ts).slice(0, 5) + ' · ' + i + '/' + lista.length;
+      if (i >= lista.length) { clearInterval(iv); setTimeout(fin, 2500); }
+    }, 150);
+  }).catch(function () { b.textContent = '⏪ No se pudo cargar'; setTimeout(fin, 1500); });
+  function fin() { reproduciendo = false; b.classList.remove('on'); b.textContent = '⏪ Reproducir el día'; $('replayInfo').style.display = 'none'; }
+};
+
+/* ── arranque ── */
+rs(); requestAnimationFrame(dib);
+cargarTrafico(); cargarPresencia(); salud();
+setInterval(cargarTrafico, 4000);      /* solo trae lo nuevo desde la última clave */
+setInterval(cargarPresencia, 15000);
+setInterval(salud, 60000);
+setInterval(resumen, 5000);
+document.addEventListener('visibilitychange', function () { if (!document.hidden) { cargarTrafico(); cargarPresencia(); } });
+window.rlCerebro = { camino: camino, recibir: recibir, eventos: eventos };
+})();
+</script>
+</body>
+</html>

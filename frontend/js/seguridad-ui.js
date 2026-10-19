@@ -278,6 +278,13 @@
     b.innerHTML = '<span class="ic">🛡️</span>Seguridad de usuarios'; b.title = 'Compromiso, contraseñas, bloqueos: desbloquear y asignar clave temporal';
     b.onclick = abrirSeguridad;
     ref.parentNode.insertBefore(b, ref.nextSibling);
+    /* _CEREBRO_V1: acceso al mapa neuronal en vivo (solo el creador, igual que el Monitor) */
+    if (String(u.usuario || '').toLowerCase() === 'jtimoteo' && !$('navCerebro')) {
+      var c = document.createElement('button'); c.type = 'button'; c.id = 'navCerebro'; c.className = b.className;
+      c.innerHTML = '<span class="ic">🧠</span>Cerebro del sistema'; c.title = 'Mapa en vivo de cómo se conecta todo el sistema';
+      c.onclick = function () { location.href = 'cerebro.html'; };
+      b.parentNode.insertBefore(c, b.nextSibling);
+    }
   }
   function pintarCuenta() {
     var ov = $('mcOv'); if (!ov || !ov.classList.contains('on')) return;
