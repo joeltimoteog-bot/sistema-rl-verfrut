@@ -17176,7 +17176,7 @@ console.log('[_CV_AZURE_PRIMERO_V1] listo: Casos y Visitas se guardan primero en
     var r = await azure('cumplAusencias', { usuario: USER.usuario });
     var j = r && r.status === 200 && r.j && r.j.success ? r.j : null;
     if (!j) { try { j = await apiPost({ action: 'cumplAusencias', usuario: USER.usuario, rol: USER.rol }); } catch (e) { j = null; } }
-    if (j && j.success) { A.lista = j.ausencias || []; A.hoy = j.hoy || hoyL(); A.cargado = true; }
+    if (j && j.success) { A.lista = j.ausencias || []; A.hoy = j.hoy || hoyL(); A.cargado = true; try { window._ausPublicarEti && window._ausPublicarEti(A.lista); } catch (e) {} }   /* _COBERTURAS_ETI_V1 */
     pintarCard(); try { if (CACHE.usuarios) _renderUs(CACHE.usuarios); } catch (e) {}
     if (document.getElementById('mAus').classList.contains('on') && A.titular) pintarModal();
   }
@@ -17240,7 +17240,7 @@ console.log('[_CV_AZURE_PRIMERO_V1] listo: Casos y Visitas se guardan primero en
       var r = await azure('guardar/cumplAusencia', b), j = null;
       if (r && r.status === 200 && r.j) { j = r.j; if (j.success) { try { Promise.resolve(apiPost({ action: 'cvAplicarDesdeAzure' })).catch(function () {}); } catch (e) {} } }
       else { try { j = await apiPost(Object.assign({ action: 'cumplAusencia', usuario: USER.usuario, rol: USER.rol }, b)); } catch (e) { j = { success: false, error: 'Sin conexión' }; } }
-      if (j && j.success) { A.lista = j.ausencias || A.lista; A.cargado = true; mostrarToast('✅ ' + msgOk); A.editId = null; pintarCard(); pintarModal(); try { if (CACHE.usuarios) _renderUs(CACHE.usuarios); } catch (e) {} return true; }
+      if (j && j.success) { A.lista = j.ausencias || A.lista; A.cargado = true; try { window._ausPublicarEti && window._ausPublicarEti(A.lista); } catch (e) {} mostrarToast('✅ ' + msgOk); A.editId = null; pintarCard(); pintarModal(); try { if (CACHE.usuarios) _renderUs(CACHE.usuarios); } catch (e) {} return true; }
       mostrarToast('❌ ' + ((j && j.error) || 'No se pudo guardar'), 'error'); return false;
     } finally { ocupado = false; if (btn) btn.disabled = false; }
   }
@@ -18099,6 +18099,7 @@ try {
 <script src="../js/trabajadores-ui.js?v=1"></script>  <!-- _TRAB_UI_V1 (18-oct): Buscar Trabajador + Consulta por DNI en una pantalla con pestañas -->
 <script src="../js/novedades.js?v=1"></script>  <!-- _NOVEDADES_V1 (18-oct): aviso flotante "que cambio" una sola vez por usuario -->
 <script src="../js/asistente-ui.js?v=1"></script>  <!-- _ASIS_UI_V1 (18-oct): Asistente RR.LL. modernizado (solo presentacion) -->
-<script src="../js/seguridad-ui.js?v=8"></script>  <!-- _SEGURIDAD_UI_V1 (18-oct): compromiso de confidencialidad + Mi cuenta -->
+<script src="../js/seguridad-ui.js?v=8"></script>
+<script src="../js/coberturas-eti.js?v=1"></script>  <!-- _COBERTURAS_ETI_V1 (18-oct): reemplazos del RR.LL. -> Evaluaciones y Capacitaciones ETI -->  <!-- _SEGURIDAD_UI_V1 (18-oct): compromiso de confidencialidad + Mi cuenta -->
 </body>
 </html>
