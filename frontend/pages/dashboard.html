@@ -6919,10 +6919,37 @@ async function generarCorreo() {
     }
 
     // ── Intentar desde caché primero ──
-    const historial = CACHE.historialAtenciones || CACHE.atenciones || [];
+    let historial = CACHE.historialAtenciones || CACHE.atenciones || [];
+    /* _REPORTE_RANGO_V1 (20-oct-2026): la memoria de la pantalla solo guarda los ultimos dias (REFRESCO_AT_V1),
+       asi que un rango anterior salia "No se encontraron atenciones" y Google tardaba minutos. Si la memoria no
+       cubre la fecha inicio, se traen las atenciones del rango desde Azure (/atenciones?desde&hasta, solo lectura).
+       El filtro por supervisor, responsable y empresa de abajo es el mismo. Si Azure falla: camino de siempre. */
+    let _rangoAzOk = false;
+    try {
+      const _fechasMem = historial.map(a => String(a.fecha_atencion instanceof Date ? a.fecha_atencion.toISOString() : (a.fecha_atencion || '')).substring(0, 10)).filter(Boolean).sort();
+      if (!historial.length || !_fechasMem.length || _fechasMem[0] > fi) {
+        document.getElementById('correoPreview').innerHTML = '<div class="empty">⏳ Buscando atenciones del rango...</div>';
+        const _azTraer = async (pag) => {
+          let u = AZURE_FN_BASE + '/atenciones?limit=1000&page=' + pag + '&desde=' + encodeURIComponent(fi) + '&hasta=' + encodeURIComponent(ff);
+          if (typeof AZURE_FN_KEY_ATLIST !== 'undefined' && AZURE_FN_KEY_ATLIST) u += '&code=' + encodeURIComponent(AZURE_FN_KEY_ATLIST);
+          const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+          const to = setTimeout(() => { try { ctl && ctl.abort(); } catch (e) {} }, 25000);
+          try { const r = await fetch(u, ctl ? { signal: ctl.signal } : undefined); if (!r.ok) throw new Error('HTTP ' + r.status); const j = await r.json(); if (!j || !j.success) throw new Error('sin datos'); return j; }
+          finally { clearTimeout(to); }
+        };
+        const _j1 = await _azTraer(1);
+        let _lista = (_j1.data || []).slice();
+        const _pags = Math.min(Math.ceil(Number(_j1.total || _lista.length) / 1000), 12);
+        for (let _p = 2; _p <= _pags; _p++) { const _jp = await _azTraer(_p); _lista = _lista.concat(_jp.data || []); }
+        ['fecha_atencion', 'fecha_inicio_doc', 'fecha_termino_doc', 'fecha_inicio_periodo', 'fecha_termino_periodo', 'fecha_registro', 'fecha_creacion']
+          .forEach(c => _lista.forEach(a => { if (a && a[c]) a[c] = String(a[c]).substring(0, 10); }));
+        historial = _lista; _rangoAzOk = true;
+        console.log('[_REPORTE_RANGO_V1] ' + _lista.length + ' atenciones del ' + fi + ' al ' + ff + ' desde Azure');
+      }
+    } catch (eRango) { console.warn('[_REPORTE_RANGO_V1] Azure no respondio, se usa el camino de siempre:', eRango && eRango.message); }
     console.log('[reporte] Caché disponible:', historial.length, 'registros');
 
-    if (historial.length > 0) {
+    if (historial.length > 0 || _rangoAzOk) {   /* _REPORTE_RANGO_V1 */
       // Skeleton loading mientras filtra localmente (instantáneo tras render)
       document.getElementById('correoPreview').innerHTML = `
         <div style="margin-top:20px;background:#fff;border:1px solid var(--bd);border-radius:12px;padding:20px">
