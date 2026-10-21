@@ -837,7 +837,7 @@ async function doLogin(){
       try {
         fetch('https://script.google.com/macros/s/AKfycbyJIUtdpApEc35Jj4ZNP-3ONqGe64J1VhaRvkt87vVUNTgSagrOgOS0T99eIt0-w3Yi/exec', {
           method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ action: 'bs_login', usuario: u, password: p })
+          body: JSON.stringify({ action: 'bs_login', usuario: u, password: p, rl_token: d.token || '' })   /* _BS_LOGIN_RL_V1: si cambio su clave, Bienestar valida con este login firmado */
         }).then(function(rb){ return rb.json(); }).then(function(db){
           if (db && db.ok && db.user) {
             localStorage.setItem('bienestarSocialAuth', JSON.stringify({
