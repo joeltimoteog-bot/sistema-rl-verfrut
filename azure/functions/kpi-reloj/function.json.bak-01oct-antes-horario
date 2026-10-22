@@ -1,5 +1,0 @@
-{
-  "bindings": [
-    { "name": "reloj", "type": "timerTrigger", "direction": "in", "schedule": "30 */15 * * * *", "runOnStartup": false }
-  ]
-}
