@@ -11,3 +11,9 @@ Informe*.pdf
 # Carpetas de reglamentos locales
 REGLAMENTO*/
 backend/gas/codigo.gs
+
+# Mapa de Graphify (local, NO publicar)
+graphify-out/
+
+# Respaldos con fecha/sufijo (no publicar)
+*.bak-*
