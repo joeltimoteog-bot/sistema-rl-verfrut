@@ -77,7 +77,12 @@ const ESQ = {
     ['id_capacitacion', 't40'], ['fecha_registro', 'f'], ['empresa', 't20'], ['tipo', 't60'], ['tema', 't400'],
     ['fecha_capacitacion', 'f'], ['hora_inicio', 'f'], ['hora_fin', 'f'], ['n_orden', 'n'], ['dni', 'n'],
     ['apellidos_nombres', 't200'], ['cargo_area', 't150'], ['sexo', 't10'], ['fundo', 't100'], ['area', 't100'],
-    ['lugar', 't200'], ['capacitador', 't200'], ['creada_por', 't60']] }
+    ['lugar', 't200'], ['capacitador', 't200'], ['creada_por', 't60']] },
+  /* _PREAV_AZURE_V1 (21-oct-2026): Cartas de Preaviso = hoja BD_Preavisos (A..Q) */
+  preav_registro: { tabla: 'dbo.Preavisos', cols: [
+    ['nro', 'n'], ['fecha_registro', 'f'], ['dni', 'n'], ['nombre', 't200'], ['empresa', 't60'], ['cargo', 't200'], ['sector', 't200'],
+    ['tipo_falta', 't400'], ['hechos', 't4000'], ['fecha_emision', 'f'], ['plazo_dias', 'n'], ['fecha_limite', 'f'],
+    ['desenlace', 't200'], ['observacion', 't4000'], ['registrado_por', 't200'], ['fecha_desenlace', 'f'], ['apelado', 'f']] }
 };
 const tipoSql = t => t === 'f' ? 'DATETIME2(3) NULL' : t === 'n' ? 'FLOAT NULL' : 'NVARCHAR(' + t.slice(1) + ') NULL';
 const tipoMs = t => t === 'f' ? sql.DateTime2(3) : t === 'n' ? sql.Float : sql.NVarChar(parseInt(t.slice(1), 10));

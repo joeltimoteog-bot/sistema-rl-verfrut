@@ -351,11 +351,20 @@ function toast(msg, err){
 }
 
 /* ─────────── API (mismo patrón que capacitaciones) ─────────── */
+/* _PREAV_AZURE_V1 (21-oct-2026): primero Azure (preav-azure.js); Google queda de respaldo */
 async function apiGet(p){
+  if (window.rlPreavAzure) return window.rlPreavAzure.get(p, _apiGetGoogle);
+  return _apiGetGoogle(p);
+}
+async function apiPost(b){
+  if (window.rlPreavAzure) return window.rlPreavAzure.post(b, _apiPostGoogle);
+  return _apiPostGoogle(b);
+}
+async function _apiGetGoogle(p){
   const r = await fetch(API + '?' + new URLSearchParams(p));
   return r.json();
 }
-async function apiPost(b){
+async function _apiPostGoogle(b){
   const r = await fetch(API, { method:'POST', body:JSON.stringify(b), headers:{'Content-Type':'text/plain'} });
   return r.json();
 }

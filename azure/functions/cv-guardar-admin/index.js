@@ -24,6 +24,7 @@ const CUW = require('../shared/cumpl-guardar');   /* _CUMPL_W_V1 */
 const USR = require('../shared/usr-guardar');   /* _USR_AZURE_V1 */
 const MANT = require('../shared/mant-guardar');   /* _MANT_AZURE_V1 */
 const E360 = require('../shared/e360-guardar');   /* _E360_AZURE_V1 */
+const PREAV = require('../shared/preav-guardar');   /* _PREAV_AZURE_V1 */
 
 async function ponerEstado(pool, clave, valor) {
   await pool.request().input('k', sql.NVarChar(40), clave).input('v', sql.NVarChar(400), valor)
@@ -101,6 +102,9 @@ module.exports = async function (context, req) {
     if (accion === 'solApagar') { await ponerEstado(pool, 'sol_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
     if (accion === 'solSimular') { const r = await SOL.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true); return res(r.status, r.body); }
     /* _FUS_AZURE_V1 */
+    if (accion === 'preavEncender') { await ponerEstado(pool, 'preav_azure_primero', '1'); return res(200, { success: true, encendido: true }); }   /* _PREAV_AZURE_V1 */
+    if (accion === 'preavApagar') { await ponerEstado(pool, 'preav_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
+    if (accion === 'preavSimular') { const r = await PREAV.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true, b.ahora); return res(r.status, r.body); }
     if (accion === 'fusEncender') { await ponerEstado(pool, 'fus_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
     if (accion === 'fusApagar') { await ponerEstado(pool, 'fus_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
     if (accion === 'fusSimular') { const r = await FUS.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true); return res(r.status, r.body); }
