@@ -33,9 +33,23 @@ async function desdeTablas(pool, modulo, D) {
     return true;
   }
   if (modulo === 'cap') {
-    const h = await TH.leer(pool, 'cap_cabeceras'), b = await TH.leer(pool, 'cap_asistentes');
-    if (!h || !b) return false;
-    D.hdr = [h.encabezado].concat(h.filas); D.bbdd = [b.encabezado].concat(b.filas);
+    /* _MEMO_CAP_V1 (24-oct-2026): los asistentes (42 mil filas) YA NO se cargan en memoria (dejaban el host
+       en 320 MB de 512 y Azure lo mataba). Las 3 cifras que usan las estadisticas salen de SQL. */
+    const h = await TH.leer(pool, 'cap_cabeceras');
+    if (!h) return false;
+    const est = (await pool.request().input('k', sql.NVarChar(40), 'cap_asistentes').query('SELECT marca FROM dbo.TH_Estado WHERE clave = @k')).recordset[0];
+    if (!est || !est.marca) return false;
+    const r = await pool.request().query(`
+      SELECT COUNT(*) AS total,
+        SUM(CASE WHEN UPPER(ISNULL(empresa, '')) LIKE '%RAPEL%' THEN 1 ELSE 0 END) AS rapel,
+        SUM(CASE WHEN UPPER(ISNULL(empresa, '')) NOT LIKE '%RAPEL%' AND UPPER(ISNULL(empresa, '')) LIKE '%VERFRUT%' THEN 1 ELSE 0 END) AS verfrut
+      FROM dbo.Cap_Asistentes WHERE ISNULL(id_capacitacion, '') <> '';
+      SELECT CONVERT(varchar(7), DATEADD(hour, -5, fecha_capacitacion), 126) AS ym, COUNT(*) AS n
+      FROM dbo.Cap_Asistentes WHERE ISNULL(id_capacitacion, '') <> '' AND fecha_capacitacion IS NOT NULL
+      GROUP BY CONVERT(varchar(7), DATEADD(hour, -5, fecha_capacitacion), 126);`);
+    const porMes = {}; r.recordsets[1].forEach(x => { porMes[x.ym] = x.n; });
+    D.hdr = [h.encabezado].concat(h.filas); D.bbdd = null;
+    D.bbddAgg = { total: r.recordsets[0][0].total, rapel: r.recordsets[0][0].rapel, verfrut: r.recordsets[0][0].verfrut, porMes };
     return true;
   }
   if (modulo === 'fus') {   /* _FUS_AZURE_V1: Fusiones desde su tabla real (= getFusiones del Apps Script) */
@@ -80,7 +94,7 @@ async function datos(modulo) {
   if (TABLAS[modulo]) ver += '#' + (await TH.marcas(pool, TABLAS[modulo]));   /* _TABLAS_HC_V1 */
   const c = cache[modulo];
   if (c && c.ver === ver) return c.m;
-  const r = await pool.request().input('m', sql.NVarChar(40), modulo).query('SELECT clave, datos FROM dbo.MOD_Datos WHERE modulo = @m');
+  const r = await pool.request().input('m', sql.NVarChar(40), modulo).query("SELECT clave, datos FROM dbo.MOD_Datos WHERE modulo = @m AND NOT (modulo = 'cap' AND clave = 'bbdd')");   /* _MEMO_CAP_V1: el JSON de asistentes (15 MB) ya no se lee ni se guarda en memoria */
   const D = {}; r.recordset.forEach(x => { D[x.clave] = JSON.parse(x.datos); });
   if (TABLAS[modulo]) { try { D._tablas = await desdeTablas(pool, modulo, D); } catch (e) { D._tablas = false; } }   /* si las tablas no estan listas, sigue el bloque anterior */
   if ((M.CLAVES[modulo] || []).some(k => D[k] === undefined)) return null;

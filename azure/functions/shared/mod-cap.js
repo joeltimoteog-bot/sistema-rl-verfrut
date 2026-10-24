@@ -63,16 +63,16 @@ function crear(D) {
       const f0 = body || {};
       const esAdmin = ROLES_ADMIN.includes(String(f0.rol || '').toLowerCase().trim());
       if (!esAdmin) return { success: true, esAdmin: false, stats: {} };
-      if (!D.hdr || !D.bbdd) return { success: true, esAdmin: true, stats: {} };
+      if (!D.hdr || (!D.bbdd && !D.bbddAgg)) return { success: true, esAdmin: true, stats: {} };
       const filasHdr = D.hdr.slice(1).filter(r => r[0]);
-      const filasBdd = D.bbdd.slice(1).filter(r => r[0]);
+      const filasBdd = D.bbdd ? D.bbdd.slice(1).filter(r => r[0]) : null;   /* _MEMO_CAP_V1: sin asistentes en memoria, las cifras vienen de SQL (D.bbddAgg) */
       const L = limaYM(), mesAct = ym(L.y, L.m);
       /* _IND_FIX_V1 (08-oct-2026): la fecha llega como celda {$d,$s} ('Thu Oct 02 2026 ...'): T() nunca daba 'aaaa-mm' y el mes salia en 0 */
       const mesDe = v => capFecha_(v || '').substring(0, 7);
       const esteMes = filasHdr.filter(r => mesDe(r[8]) === mesAct);
-      const asistentesEsteMes = filasBdd.filter(r => mesDe(r[5]) === mesAct).length;
-      const porEmpresa = { RAPEL: 0, VERFRUT: 0 };
-      filasBdd.forEach(r => { const e = T(r[2] || '').toUpperCase(); if (e.indexOf('RAPEL') !== -1) porEmpresa.RAPEL++; else if (e.indexOf('VERFRUT') !== -1) porEmpresa.VERFRUT++; });
+      const asistentesEsteMes = filasBdd ? filasBdd.filter(r => mesDe(r[5]) === mesAct).length : (D.bbddAgg.porMes[mesAct] || 0);
+      const porEmpresa = filasBdd ? { RAPEL: 0, VERFRUT: 0 } : { RAPEL: D.bbddAgg.rapel || 0, VERFRUT: D.bbddAgg.verfrut || 0 };
+      if (filasBdd) filasBdd.forEach(r => { const e = T(r[2] || '').toUpperCase(); if (e.indexOf('RAPEL') !== -1) porEmpresa.RAPEL++; else if (e.indexOf('VERFRUT') !== -1) porEmpresa.VERFRUT++; });
       const porSup = {};
       esteMes.forEach(r => {
         const sup = T(r[19] || 'sin_asignar');
@@ -89,7 +89,7 @@ function crear(D) {
       filasHdr.forEach(r => { const t = T(r[4] || 'Sin especificar').substring(0, 60); porTema[t] = (porTema[t] || 0) + 1; });
       const topTemas = Object.keys(porTema).sort((a, b) => porTema[b] - porTema[a]).slice(0, 5).map(t => ({ tema: t, count: porTema[t] }));
       const act = new Set(); esteMes.forEach(r => { if (r[19]) act.add(T(r[19])); });
-      return { success: true, esAdmin: true, stats: { totalCapacitaciones: filasHdr.length, totalAsistentes: filasBdd.length,
+      return { success: true, esAdmin: true, stats: { totalCapacitaciones: filasHdr.length, totalAsistentes: filasBdd ? filasBdd.length : (D.bbddAgg.total || 0),
         capacitacionesEsteMes: esteMes.length, asistentesEsteMes, supervisoresActivosMes: act.size, porEmpresa, topSupervisores, tendencia, topTemas } };
     } catch (e) { return { success: false, error: e.toString() }; }
   }

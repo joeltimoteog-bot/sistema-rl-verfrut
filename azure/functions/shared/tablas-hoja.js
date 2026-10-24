@@ -199,7 +199,7 @@ async function leer(pool, clave) {
   if (memoria[clave] && memoria[clave].marca === est.marca) return memoria[clave].d;
   const r = await pool.request().query(`SELECT * FROM ${ESQ[clave].tabla} ORDER BY fila`);
   const d = { encabezado: JSON.parse(est.encabezado || '[]'), filas: r.recordset.map(x => aCeldas(clave, x, est.ancho)) };
-  memoria[clave] = { marca: est.marca, d };
+  if (r.recordset.length <= 20000) memoria[clave] = { marca: est.marca, d };   /* _MEMO_CAP_V1: las tablas enormes no se retienen (512 MB por instancia) */
   return d;
 }
 async function marcas(pool, claves) {

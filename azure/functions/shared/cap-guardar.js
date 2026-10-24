@@ -274,8 +274,12 @@ async function ejecutar(pool, accion, b, usuario, rol, prueba) {
     if (!id) return { status: 400, body: { success: false, error: 'Falta indicar que capacitacion se va a reutilizar.' } };
     if (!titulo) return { status: 400, body: { success: false, error: 'Escribe el titulo del nuevo registro.' } };
     if (titulo.length < 4) return { status: 400, body: { success: false, error: 'El titulo es muy corto. Escribe algo que se entienda.' } };
-    const Hd = await TH.leer(pool, 'cap_cabeceras'), Bd = await TH.leer(pool, 'cap_asistentes');
-    if (!Hd || !Bd) return { status: 503, body: { success: false, error: 'Tablas de capacitaciones aun no cargadas' } };
+    const Hd = await TH.leer(pool, 'cap_cabeceras');
+    /* _MEMO_CAP_V1 (24-oct-2026): solo los asistentes de ESA capacitacion (antes cargaba las 42 mil filas en memoria) */
+    const estB = (await pool.request().input('k', sql.NVarChar(40), 'cap_asistentes').query('SELECT encabezado, ancho, marca FROM dbo.TH_Estado WHERE clave = @k')).recordset[0];
+    if (!Hd || !estB || !estB.marca) return { status: 503, body: { success: false, error: 'Tablas de capacitaciones aun no cargadas' } };
+    const rowsB = (await pool.request().input('idc', sql.NVarChar(40), id).query('SELECT * FROM dbo.Cap_Asistentes WHERE LTRIM(RTRIM(ISNULL(id_capacitacion, \'\'))) = @idc ORDER BY fila')).recordset;
+    const Bd = { encabezado: JSON.parse(estB.encabezado || '[]'), filas: rowsB.map(x => TH.aCeldas('cap_asistentes', x, estB.ancho)) };
     let cId = capCol(Hd.encabezado, 'ID_CAPACITACION'); if (cId < 0) cId = 0;
     const cTema = capCol(Hd.encabezado, 'TEMA'); let cFecha = capCol(Hd.encabezado, 'FECHA_CAPACITACION'); if (cFecha < 0) cFecha = capCol(Hd.encabezado, 'FECHA');
     const cTipo = capCol(Hd.encabezado, 'TIPO'), cCreada = capCol(Hd.encabezado, 'CREADA_POR');
