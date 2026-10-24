@@ -86,7 +86,7 @@ const ESQ = {
   /* _SUP_AZURE_V1 (24-oct-2026): lista de supervisores (BD_Supervisores, 12 cols A..L) y motivos de casos (Motivos_Casos, 3 cols) */
   sup_registro: { tabla: 'dbo.Supervisores', cols: [
     ['dni', 'n'], ['nombre', 't200'], ['cargo', 't200'], ['sector', 't200'], ['empresa', 't60'], ['correo', 't200'],
-    ['reemplazo', 't10'], ['activo', 't10'], ['fecha_baja', 'f'], ['observacion', 't2000'], ['actualizado', 'f'], ['por', 't100']] },
+    ['reemplazo', 't10'], ['activo', 't10'], ['fecha_baja', 'f'], ['observacion', 't2000'], ['actualizado_hoja', 'f'], ['por', 't100']] },   /* actualizado_hoja: 'actualizado' ya es la columna de control de la tabla */
   casos_motivos: { tabla: 'dbo.Casos_Motivos', cols: [['motivo', 't200'], ['creado', 'f'], ['creado_por', 't100']] }
 };
 const tipoSql = t => t === 'f' ? 'DATETIME2(3) NULL' : t === 'n' ? 'FLOAT NULL' : 'NVARCHAR(' + t.slice(1) + ') NULL';
