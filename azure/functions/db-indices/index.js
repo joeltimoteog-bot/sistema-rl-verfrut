@@ -17,6 +17,10 @@ const INDICES = [
   ['IX_At_fecha_id',  'Atenciones', 'fecha_atencion', '(fecha_atencion DESC, id DESC)', ''],
   ['IX_At_dni_fecha', 'Atenciones', 'dni',            '(dni, fecha_atencion DESC)', 'INCLUDE (estado, nro)'],
   ['IX_At_nro_anio',  'Atenciones', 'nro',            '(nro, anio)', 'INCLUDE (dni)'],
+  /* _INDICES_V2 (24-oct-2026): los 3 filtros que atenciones-list usa a cada rato y recorrian la tabla entera */
+  ['IX_At_usuario_fecha',    'Atenciones', 'usuario_sistema', '(usuario_sistema, fecha_atencion DESC)', 'INCLUDE (id)'],
+  ['IX_At_modificado',       'Atenciones', 'modificado',      '(modificado DESC)', 'INCLUDE (id)'],
+  ['IX_At_supervisor_fecha', 'Atenciones', 'supervisor',      '(supervisor, fecha_atencion DESC)', 'INCLUDE (id)'],
   /* primera = null -> se revisa por NOMBRE: el indice (anio, mes) que ya existe no es
      "cubriente" y las estadisticas igual leen las filas completas */
   ['IX_At_stats',     'Atenciones', null,             '(anio, mes)', 'INCLUDE (fecha_atencion, estado, empresa, supervisor, detalle_documento, usuario_sistema)'],
@@ -41,7 +45,7 @@ async function informe(pool) {
     SELECT t.name AS tabla, c.name AS columna, ty.name AS tipo, c.max_length
     FROM sys.columns c JOIN sys.tables t ON t.object_id = c.object_id JOIN sys.types ty ON ty.user_type_id = c.user_type_id
     WHERE t.name IN ('Atenciones','Trabajadores_RAPEL','Trabajadores_VERFRUT')
-      AND c.name IN ('dni','fecha_atencion','nro','anio','mes','supervisor','usuario_sistema','estado','empresa','detalle_documento','id');
+      AND c.name IN ('dni','fecha_atencion','nro','anio','mes','supervisor','usuario_sistema','estado','empresa','detalle_documento','id','modificado');
     SELECT TOP 1 service_objective = DATABASEPROPERTYEX(DB_NAME(), 'ServiceObjective');
   `);
   const rs = r.recordsets;

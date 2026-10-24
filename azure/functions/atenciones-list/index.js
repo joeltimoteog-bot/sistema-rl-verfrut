@@ -63,22 +63,24 @@ module.exports = async function (context, req) {
 
     context.log('Ejecutando query: limite=' + lim + ', pagina=' + pag + ', offset=' + off);
 
+    /* _LIST_UNCOUNT_V1 (24-oct-2026): ANTES eran dos consultas por pagina (los datos y un COUNT(*)
+       aparte sobre toda la tabla filtrada). Ahora es UNA sola: el total viaja en cada fila con
+       COUNT(*) OVER() y se quita antes de responder. Misma respuesta (data + total), mitad de carga. */
     const result = await request.query(
-      'SELECT * FROM Atenciones WHERE ' + where.join(' AND ') +
+      'SELECT *, COUNT(*) OVER() AS __total FROM Atenciones WHERE ' + where.join(' AND ') +
       ' ORDER BY fecha_atencion DESC, id DESC' +
       ' OFFSET ' + off + ' ROWS FETCH NEXT ' + lim + ' ROWS ONLY'
     );
-
-    const countResult = await request.query(
-      'SELECT COUNT(*) AS total FROM Atenciones WHERE ' + where.join(' AND ')
-    );
+    const filas = result.recordset || [];
+    const total = filas.length ? Number(filas[0].__total) : 0;
+    filas.forEach(f => { delete f.__total; });
 
     context.res = {
       status: 200,
       body: {
         success: true,
-        data: result.recordset,
-        total: countResult.recordset[0].total,
+        data: filas,
+        total: total,
         ...(ahora ? { ahora: new Date(ahora).toISOString() } : {}),   /* _AT_CAMBIOS_V1 */
         pagina: pag,
         limite: lim
