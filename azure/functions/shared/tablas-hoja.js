@@ -209,4 +209,10 @@ async function marcas(pool, claves) {
   return claves.every(k => m[k]) ? claves.map(k => m[k]).join('|') : null;
 }
 
-module.exports = { ESQ, asegurar, aFila, aCeldas, tablaCarga, leer, marcas, textoGoogle };
+/* _MEMO_V1 (24-oct-2026): que tablas estan retenidas en memoria y cuanto pesan (solo informa) */
+function enMemoria() {
+  const out = {};
+  Object.keys(memoria).forEach(k => { let b = 0; try { b = JSON.stringify(memoria[k].d).length; } catch (e) {} out[k] = { filas: memoria[k].d.filas.length, aproxMB: Math.round(b / 1048576 * 10) / 10 }; });
+  return out;
+}
+module.exports = { ESQ, asegurar, aFila, aCeldas, tablaCarga, leer, marcas, textoGoogle, enMemoria };

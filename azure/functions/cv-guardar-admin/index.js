@@ -30,6 +30,7 @@ const ALM = require('../shared/alm-guardar');   /* _ALM_AZURE_V1 */
 const INF = require('../shared/inf-guardar');   /* _INF_AZURE_V1 */
 const INV = require('../shared/inv-guardar');   /* _INV_AZURE_V1 */
 const HORJ = require('../shared/hor-guardar');   /* _HOR_AZURE_V1 (horarios de jornada) */
+const TH = require('../shared/tablas-hoja');   /* _MEMO_V1 */
 
 async function ponerEstado(pool, clave, valor) {
   await pool.request().input('k', sql.NVarChar(40), clave).input('v', sql.NVarChar(400), valor)
@@ -125,6 +126,10 @@ module.exports = async function (context, req) {
     if (accion === 'horEncender') { await ponerEstado(pool, 'hor_azure_primero', '1'); return res(200, { success: true, encendido: true }); }   /* _HOR_AZURE_V1 */
     if (accion === 'horApagar') { await ponerEstado(pool, 'hor_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
     if (accion === 'horSimular') { const r = await HORJ.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true, b.ahora); return res(r.status, r.body); }
+    if (accion === 'memoria') {   /* _MEMO_V1: cuanto pesa el host y que retiene */
+      const m = process.memoryUsage(), MB = x => Math.round(x / 1048576);
+      return res(200, { success: true, rssMB: MB(m.rss), heapUsadoMB: MB(m.heapUsed), heapTotalMB: MB(m.heapTotal), externoMB: MB(m.external), node: process.version, vivoSeg: Math.round(process.uptime()), tablasEnMemoria: TH.enMemoria() });
+    }
     if (accion === 'invGetAllPrueba') { const T = await INV.leerTodo(pool); return T ? res(200, INV.getAll(T)) : res(503, { success: false, error: 'Tablas de inventario aun no cargadas' }); }   /* para comparar con Google antes de encender */
     if (accion === 'fusEncender') { await ponerEstado(pool, 'fus_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
     if (accion === 'fusApagar') { await ponerEstado(pool, 'fus_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
