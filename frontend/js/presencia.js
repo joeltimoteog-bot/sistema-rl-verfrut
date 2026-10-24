@@ -117,6 +117,20 @@
         .then(function (j) { if (!j || j.success !== true) throw new Error('sin respuesta valida'); return j; })
         .catch(function () { clearTimeout(_azT); return fetch(AH_API, op).then(function (r) { return r.json(); }); });
       _ahEnCurso = _pedir.then(function (d) {
+        /* _SESION_HORARIO_V3 (24-oct-2026): la hora de fin guardada se SINCRONIZA con el servidor cada minuto.
+           Si el administrador acorta/alarga el horario mientras el usuario esta activo, aqui se detecta. */
+        try {
+          var prev = JSON.parse(sessionStorage.getItem('accesoTemporal') || 'null');
+          var prevPropio = prev && prev.activo && (prev.fuente === 'horario_propio' || !prev.fuente);
+          if (d && d.success !== false) {
+            if (d.tieneAcceso && d.expiraEn) {
+              if (prevPropio && String(prev.hastaHora || '') && String(prev.hastaHora) !== String(d.hastaHora || d.hasta || '')) window.__rlHorarioCambio = { hasta: d.hastaHora || d.hasta || '', expiraEn: Number(d.expiraEn) };
+            } else if (prevPropio) {
+              sessionStorage.removeItem('accesoTemporal');   /* el servidor ya no lo deja: la hora guardada caduca */
+              window.__rlHorarioCambio = { hasta: '', expiraEn: 0, motivo: d.motivo || '' };
+            }
+          }
+        } catch (eC) {}
         if (d && d.tieneAcceso && d.expiraEn) {
           try { sessionStorage.setItem('accesoTemporal', JSON.stringify({ hastaHora: d.hastaHora || d.hasta || '', expiraEn: d.expiraEn, minutosRestantes: d.minutosRestantes || 0, activo: true, fuente: 'horario_propio' })); } catch (e) {}
           return true;
@@ -193,6 +207,15 @@
       document.body.appendChild(d);
       setTimeout(function () { quitar('rlh2-toast'); }, 60000);
     }
+    /* _SESION_HORARIO_V3: aviso cuando el administrador cambia la hora de fin */
+    function toastCambio(fin, hasta) {
+      estilos(); quitar('rlh2-toast');
+      var d = document.createElement('div'); d.id = 'rlh2-toast'; d.style.borderLeftColor = '#2563eb';
+      d.innerHTML = '<span style="font-size:22px">🔔</span><div><b>Tu horario de acceso fue actualizado</b><small>Ahora termina a las ' + (hasta || hhmm(fin)) + '. El sistema se cerrará solo a esa hora.</small></div><button class="rlh2-btn rlh2-pri">Entendido</button>';
+      d.querySelector('button').onclick = function () { quitar('rlh2-toast'); };
+      document.body.appendChild(d);
+      setTimeout(function () { quitar('rlh2-toast'); }, 45000);
+    }
     function modal(fin, user) {
       if (document.getElementById('rlh2-modal')) return;
       estilos(); quitar('rlh2-toast');
@@ -229,17 +252,21 @@
         if (r <= 5 * 60000 && !marca('m5_' + finActual)) { try { modal(finActual, JSON.parse(sessionStorage.getItem('user') || '{}')); } catch (e) {} }
       }, 1000);
     }
-    function finalizar(fin) {
+    function finalizar(fin, motivo, hastaTxt) {
       cerrando = true; quitarUI(); estilos();
       var f = document.createElement('div'); f.id = 'rlh2-fin';
-      f.innerHTML = '<div class="rlh2-card"><div style="font-size:30px">🔒</div><h3>Sesión finalizada</h3>' +
-        '<div>Tu horario de acceso al sistema terminó' + (fin ? ' a las <b>' + hhmm(fin) + '</b>' : '') + '.</div>' +
-        '<div style="margin-top:6px">Si necesitas continuar, solicita un acceso temporal al Administrador.</div>' +
-        '<div class="rlh2-reloj" style="font-size:28px;color:#0b1e45" id="rlh2-fin-s">10</div>' +
+      var titulo = motivo === 'cambio' ? 'Tu horario fue restablecido' : 'Sesión finalizada';
+      var texto = motivo === 'cambio'
+        ? 'El Administrador cambió tu horario de acceso' + (hastaTxt ? ' (ahora hasta las <b>' + hastaTxt + '</b>)' : '') + '. El sistema se cerrará de forma automática.'
+        : 'Tu horario de acceso al sistema terminó' + (fin ? ' a las <b>' + hhmm(fin) + '</b>' : '') + '.';
+      f.innerHTML = '<div class="rlh2-card"><div style="font-size:30px">🔒</div><h3>' + titulo + '</h3>' +
+        '<div>' + texto + '</div>' +
+        '<div style="margin-top:6px">Para volver a ingresar, solicita autorización al Administrador.</div>' +
+        '<div class="rlh2-reloj" style="font-size:28px;color:#0b1e45" id="rlh2-fin-s">5</div>' +
         '<div class="rlh2-acc"><button class="rlh2-btn rlh2-pri">Ir al inicio de sesión</button></div></div>';
       f.querySelector('button').onclick = salir;
       document.body.appendChild(f);
-      var n = 10, t = setInterval(function () { n--; var e = document.getElementById('rlh2-fin-s'); if (e) e.textContent = n; if (n <= 0) { clearInterval(t); salir(); } }, 1000);
+      var n = 5, t = setInterval(function () { n--; var e = document.getElementById('rlh2-fin-s'); if (e) e.textContent = n; if (n <= 0) { clearInterval(t); salir(); } }, 1000);   /* _SESION_HORARIO_V3: 5 -> 0 */
     }
     async function tick() {
       try {
@@ -247,6 +274,15 @@
         var raw = sessionStorage.getItem('user'); if (!raw) return;
         var user = JSON.parse(raw), usr = String((user && user.usuario) || '').toLowerCase().trim();
         if (USUARIOS_SIN_HORARIO.indexOf(usr) >= 0 || user.sin_restriccion) { quitarUI(); return; }
+        /* _SESION_HORARIO_V3: una consulta por minuto SIEMPRE (antes solo cerca del cierre: un cambio del administrador no se veia) */
+        try { var tA = JSON.parse(sessionStorage.getItem('accesoTemporal') || 'null'); if (!tA || tA.fuente === 'horario_propio' || !tA.fuente) await horarioPropio(usr); } catch (eS) {}
+        if (window.__rlHorarioCambio) {
+          var cmb = window.__rlHorarioCambio; window.__rlHorarioCambio = null;
+          try { Object.keys(sessionStorage).forEach(function (k) { if (k.indexOf(K2) === 0) sessionStorage.removeItem(k); }); } catch (eK) {}   /* los avisos de la hora vieja no valen */
+          var finNuevo = finSesion();
+          if (finNuevo <= Date.now() && (fueraDeHorario(user) && !accesoTemporalVigente())) { finalizar(0, 'cambio', cmb.hasta); return; }
+          if (cmb.hasta) toastCambio(finNuevo, cmb.hasta);
+        }
         var fin = finSesion(), resta = fin - Date.now();
         /* cerca del cierre (o ya fuera): ¿su horario propio llega mas tarde? (max 1 consulta por minuto) */
         if (!accesoTemporalVigente() && resta <= 16 * 60000) {
