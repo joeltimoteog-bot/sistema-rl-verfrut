@@ -82,7 +82,12 @@ const ESQ = {
   preav_registro: { tabla: 'dbo.Preavisos', cols: [
     ['nro', 'n'], ['fecha_registro', 'f'], ['dni', 'n'], ['nombre', 't200'], ['empresa', 't60'], ['cargo', 't200'], ['sector', 't200'],
     ['tipo_falta', 't400'], ['hechos', 't4000'], ['fecha_emision', 'f'], ['plazo_dias', 'n'], ['fecha_limite', 'f'],
-    ['desenlace', 't200'], ['observacion', 't4000'], ['registrado_por', 't200'], ['fecha_desenlace', 'f'], ['apelado', 'f']] }
+    ['desenlace', 't200'], ['observacion', 't4000'], ['registrado_por', 't200'], ['fecha_desenlace', 'f'], ['apelado', 'f']] },
+  /* _SUP_AZURE_V1 (24-oct-2026): lista de supervisores (BD_Supervisores, 12 cols A..L) y motivos de casos (Motivos_Casos, 3 cols) */
+  sup_registro: { tabla: 'dbo.Supervisores', cols: [
+    ['dni', 'n'], ['nombre', 't200'], ['cargo', 't200'], ['sector', 't200'], ['empresa', 't60'], ['correo', 't200'],
+    ['reemplazo', 't10'], ['activo', 't10'], ['fecha_baja', 'f'], ['observacion', 't2000'], ['actualizado', 'f'], ['por', 't100']] },
+  casos_motivos: { tabla: 'dbo.Casos_Motivos', cols: [['motivo', 't200'], ['creado', 'f'], ['creado_por', 't100']] }
 };
 const tipoSql = t => t === 'f' ? 'DATETIME2(3) NULL' : t === 'n' ? 'FLOAT NULL' : 'NVARCHAR(' + t.slice(1) + ') NULL';
 const tipoMs = t => t === 'f' ? sql.DateTime2(3) : t === 'n' ? sql.Float : sql.NVarChar(parseInt(t.slice(1), 10));
