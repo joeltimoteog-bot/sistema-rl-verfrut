@@ -714,7 +714,8 @@ h3{font-size:16px !important}
 </div>
 
 <script src="../js/modal-system.js"></script>  <!-- _MODALES_FIX (23-set): inventario.js usa appAlert/appConfirm -->
-<script src="../js/inventario.js"></script>
+<script src="../js/inv-azure.js?v=1"></script>  <!-- _INV_AZURE_V1 (24-oct): inventario se guarda y lee primero en Azure -->
+<script src="../js/inventario.js?v=24oct-azure"></script>
 <script>
 /* _MOD_SIMPLES_V1 (26-set-2026) — Inventario: la consulta sale de Azure (la misma respuesta
    que Google). Los guardados siguen por Google, que actualiza Azure al guardar.
@@ -729,6 +730,7 @@ h3{font-size:16px !important}
   if (typeof previo !== 'function') return;
   window.apiGet = function (p) {
     if (!p || !MODULO[p.action]) return previo.apply(this, arguments);
+    if (window.rlInvAzure && window.rlInvAzure.activo && window.rlInvAzure.activo()) return previo.apply(this, arguments);   /* _INV_AZURE_V1: con Azure primero, la lista sale de las tablas (al instante); la copia JSON queda de respaldo */
     var self = this, args = arguments;
     return (async function () {
       var cuerpo = {}; Object.keys(p).forEach(function (k) { if (k !== 'action') cuerpo[k] = p[k]; });

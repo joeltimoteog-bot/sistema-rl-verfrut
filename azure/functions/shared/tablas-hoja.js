@@ -100,7 +100,19 @@ const ESQ = {
     ['id', 't40'], ['fecha_creacion', 'f'], ['fecha_actualizacion', 'f'], ['supervisor', 't200'], ['periodo', 't100'],
     ['percepcion', 't4000'], ['com_colaboradores', 't4000'], ['com_jefaturas', 't4000'], ['com_supervisores', 't4000'],
     ['com_administrador', 't4000'], ['com_visitas', 't4000'], ['observaciones', 't4000'],
-    ['calificacion_global', 't100'], ['nivel', 't100'], ['generado_por', 't200']] }
+    ['calificacion_global', 't100'], ['nivel', 't100'], ['generado_por', 't200']] },
+  /* _INV_AZURE_V1 (24-oct-2026): Inventario de canastas (8 hojas INV_*) */
+  inv_productos:    { tabla: 'dbo.Inv_Productos',    cols: [['id', 't40'], ['nombre', 't200'], ['activo', 't10'], ['creado', 'f'], ['creado_por', 't100']] },
+  inv_receta:       { tabla: 'dbo.Inv_Receta',       cols: [['id', 't40'], ['producto', 't200'], ['unidad', 't50'], ['cantidad', 'n'], ['creado', 'f'], ['creado_por', 't100']] },
+  inv_responsables: { tabla: 'dbo.Inv_Responsables', cols: [['id', 't40'], ['nombre', 't200'], ['creado', 'f']] },
+  inv_meta:         { tabla: 'dbo.Inv_Meta',         cols: [['campo', 't50'], ['valor', 't400'], ['actualizado_hoja', 'f']] },
+  inv_ingresos:     { tabla: 'dbo.Inv_Ingresos',     cols: [['id', 't40'], ['fecha_registro', 'f'], ['producto', 't200'], ['cantidad', 'n'], ['unidad', 't50'], ['fecha_ingreso', 'f'], ['fecha_venc', 'f'],
+    ['lote', 't100'], ['responsable', 't200'], ['proveedor', 't200'], ['observaciones', 't2000'], ['usuario', 't100'], ['sector', 't100'], ['supervisor', 't200']] },
+  inv_armados:      { tabla: 'dbo.Inv_Armados',      cols: [['id', 't40'], ['fecha_registro', 'f'], ['fecha_armado', 'f'], ['cantidad', 'n'], ['responsable', 't200'], ['observaciones', 't2000'],
+    ['usuario', 't100'], ['sector', 't100'], ['supervisor', 't200'], ['tipo_item', 't20']] },
+  inv_entregas:     { tabla: 'dbo.Inv_Entregas',     cols: [['id', 't40'], ['fecha_registro', 'f'], ['fecha_entrega', 'f'], ['empresa', 't60'], ['sector', 't100'], ['cantidad', 'n'], ['responsable', 't200'],
+    ['documento', 't200'], ['observaciones', 't2000'], ['usuario', 't100'], ['supervisor', 't200'], ['exportadora', 't100'], ['motivo', 't200'], ['tipo_item', 't20'], ['solicitante', 't200']] },
+  inv_sectores:     { tabla: 'dbo.Inv_Sectores',     cols: [['id', 't40'], ['nombre', 't200'], ['activo', 't10'], ['creado', 'f'], ['creado_por', 't100']] }
 };
 const tipoSql = t => t === 'f' ? 'DATETIME2(3) NULL' : t === 'n' ? 'FLOAT NULL' : 'NVARCHAR(' + t.slice(1) + ') NULL';
 const tipoMs = t => t === 'f' ? sql.DateTime2(3) : t === 'n' ? sql.Float : sql.NVarChar(parseInt(t.slice(1), 10));
