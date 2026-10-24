@@ -598,8 +598,11 @@ function toast(msg, err){
 }
 
 /* ─────────── API ─────────── */
-async function apiGet(p){ const r = await fetch(API + '?' + new URLSearchParams(p)); return r.json(); }
-async function apiPost(b){ const r = await fetch(API, { method:'POST', body:JSON.stringify(b), headers:{'Content-Type':'text/plain'} }); return r.json(); }
+/* _ALM_AZURE_V1 (24-oct): Azure primero; si no esta o falla, Google como siempre */
+async function apiGet(p){ if (window.rlAlmAzure) return window.rlAlmAzure.get(p, _apiGetGoogle); return _apiGetGoogle(p); }
+async function apiPost(b){ if (window.rlAlmAzure) return window.rlAlmAzure.post(b, _apiPostGoogle); return _apiPostGoogle(b); }
+async function _apiGetGoogle(p){ const r = await fetch(API + '?' + new URLSearchParams(p)); return r.json(); }
+async function _apiPostGoogle(b){ const r = await fetch(API, { method:'POST', body:JSON.stringify(b), headers:{'Content-Type':'text/plain'} }); return r.json(); }
 
 /* ─────────── Poblar selects fijos (pestaña agregar) ─────────── */
 function poblarSelectsFijos(){

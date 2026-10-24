@@ -87,7 +87,14 @@ const ESQ = {
   sup_registro: { tabla: 'dbo.Supervisores', cols: [
     ['dni', 'n'], ['nombre', 't200'], ['cargo', 't200'], ['sector', 't200'], ['empresa', 't60'], ['correo', 't200'],
     ['reemplazo', 't10'], ['activo', 't10'], ['fecha_baja', 'f'], ['observacion', 't2000'], ['actualizado_hoja', 'f'], ['por', 't100']] },   /* actualizado_hoja: 'actualizado' ya es la columna de control de la tabla */
-  casos_motivos: { tabla: 'dbo.Casos_Motivos', cols: [['motivo', 't200'], ['creado', 'f'], ['creado_por', 't100']] }
+  casos_motivos: { tabla: 'dbo.Casos_Motivos', cols: [['motivo', 't200'], ['creado', 'f'], ['creado_por', 't100']] },
+  /* _ALM_AZURE_V1 (24-oct-2026): Programador de Almuerzos (libro aparte): lista maestra A..I y bitacora BB.ALMUERZOS */
+  alm_lista: { tabla: 'dbo.Almuerzos', cols: [
+    ['dni', 'n'], ['nombre', 't200'], ['cargo', 't200'], ['regimen', 't100'], ['comedor', 't100'],
+    ['tipo_comida', 't100'], ['estado', 't200'], ['observacion', 't1000'], ['empresa', 't60']] },
+  alm_bitacora: { tabla: 'dbo.Almuerzos_Bitacora', cols: [
+    ['fecha', 'f'], ['hora', 'f'], ['dni', 't20'], ['nombre', 't200'], ['comedor', 't100'],
+    ['tipo_comida', 't100'], ['taper', 't5'], ['empresa', 't60'], ['observacion', 't1000'], ['enviado_por', 't200']] }
 };
 const tipoSql = t => t === 'f' ? 'DATETIME2(3) NULL' : t === 'n' ? 'FLOAT NULL' : 'NVARCHAR(' + t.slice(1) + ') NULL';
 const tipoMs = t => t === 'f' ? sql.DateTime2(3) : t === 'n' ? sql.Float : sql.NVarChar(parseInt(t.slice(1), 10));
