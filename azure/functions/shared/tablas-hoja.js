@@ -94,7 +94,13 @@ const ESQ = {
     ['tipo_comida', 't100'], ['estado', 't200'], ['observacion', 't1000'], ['empresa', 't60']] },
   alm_bitacora: { tabla: 'dbo.Almuerzos_Bitacora', cols: [
     ['fecha', 'f'], ['hora', 'f'], ['dni', 't20'], ['nombre', 't200'], ['comedor', 't100'],
-    ['tipo_comida', 't100'], ['taper', 't5'], ['empresa', 't60'], ['observacion', 't1000'], ['enviado_por', 't200']] }
+    ['tipo_comida', 't100'], ['taper', 't5'], ['empresa', 't60'], ['observacion', 't1000'], ['enviado_por', 't200']] },
+  /* _INF_AZURE_V1 (24-oct-2026): Informes Integrales de Desempeno (Evaluacion 360), hoja Informes_Integrales, 15 cols */
+  inf_registro: { tabla: 'dbo.Informes_Integrales', cols: [
+    ['id', 't40'], ['fecha_creacion', 'f'], ['fecha_actualizacion', 'f'], ['supervisor', 't200'], ['periodo', 't100'],
+    ['percepcion', 't4000'], ['com_colaboradores', 't4000'], ['com_jefaturas', 't4000'], ['com_supervisores', 't4000'],
+    ['com_administrador', 't4000'], ['com_visitas', 't4000'], ['observaciones', 't4000'],
+    ['calificacion_global', 't100'], ['nivel', 't100'], ['generado_por', 't200']] }
 };
 const tipoSql = t => t === 'f' ? 'DATETIME2(3) NULL' : t === 'n' ? 'FLOAT NULL' : 'NVARCHAR(' + t.slice(1) + ') NULL';
 const tipoMs = t => t === 'f' ? sql.DateTime2(3) : t === 'n' ? sql.Float : sql.NVarChar(parseInt(t.slice(1), 10));
