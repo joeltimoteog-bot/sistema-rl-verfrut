@@ -29,6 +29,7 @@ const SUP = require('../shared/sup-guardar');   /* _SUP_AZURE_V1 */
 const ALM = require('../shared/alm-guardar');   /* _ALM_AZURE_V1 */
 const INF = require('../shared/inf-guardar');   /* _INF_AZURE_V1 */
 const INV = require('../shared/inv-guardar');   /* _INV_AZURE_V1 */
+const HORJ = require('../shared/hor-guardar');   /* _HOR_AZURE_V1 (horarios de jornada) */
 
 async function ponerEstado(pool, clave, valor) {
   await pool.request().input('k', sql.NVarChar(40), clave).input('v', sql.NVarChar(400), valor)
@@ -121,6 +122,9 @@ module.exports = async function (context, req) {
     if (accion === 'invEncender') { await ponerEstado(pool, 'inv_azure_primero', '1'); return res(200, { success: true, encendido: true }); }   /* _INV_AZURE_V1 */
     if (accion === 'invApagar') { await ponerEstado(pool, 'inv_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
     if (accion === 'invSimular') { const r = await INV.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true, b.ahora); return res(r.status, r.body); }
+    if (accion === 'horEncender') { await ponerEstado(pool, 'hor_azure_primero', '1'); return res(200, { success: true, encendido: true }); }   /* _HOR_AZURE_V1 */
+    if (accion === 'horApagar') { await ponerEstado(pool, 'hor_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
+    if (accion === 'horSimular') { const r = await HORJ.ejecutar(pool, b.accion, b.datos || {}, b.usuario || 'jtimoteo', true, b.ahora); return res(r.status, r.body); }
     if (accion === 'invGetAllPrueba') { const T = await INV.leerTodo(pool); return T ? res(200, INV.getAll(T)) : res(503, { success: false, error: 'Tablas de inventario aun no cargadas' }); }   /* para comparar con Google antes de encender */
     if (accion === 'fusEncender') { await ponerEstado(pool, 'fus_azure_primero', '1'); return res(200, { success: true, encendido: true }); }
     if (accion === 'fusApagar') { await ponerEstado(pool, 'fus_azure_primero', '0'); return res(200, { success: true, encendido: false }); }
