@@ -47,6 +47,9 @@ async function _datos() {
   let recientes;
   const T = await TC.leerCV(pool);   /* _TABLAS_CV_V2: tablas reales dbo.Casos / dbo.Visitas */
   if (T) { D.visitas = JSON.parse(JSON.stringify(T.visitas)); recientes = JSON.parse(JSON.stringify(T.recientes)); }   /* copia: el motor no toca la memoria compartida */
+  /* _ENVIO_INFORME_CUMPL_V1 (24-oct-2026): la copia CUMPL_Datos llega cada ~10 min; como ya hace KPIs, se completa con la
+     tabla viva dbo.Casos (informe, reporte, estado, fecha de envio por correo, cierre) para que el panel cambie al instante. */
+  if (T) { try { require('../shared/kpi-db').casosAzure(D, T); } catch (e) { console.warn('[cumpl] casosAzure: ' + e.message); } }
   else {
     const v = await pool.request().query('SELECT datos FROM dbo.CV_Visitas ORDER BY orden');
     D.visitas = v.recordset.map(x => JSON.parse(x.datos));

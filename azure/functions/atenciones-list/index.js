@@ -61,19 +61,36 @@ module.exports = async function (context, req) {
       where.push('modificado >= @cambiosDesde'); request.input('cambiosDesde', sql.DateTime2(3), cd);
     }
 
-    context.log('Ejecutando query: limite=' + lim + ', pagina=' + pag + ', offset=' + off);
+    const filtros = where.slice(1).map(w => w.split(' ')[0]).join(',') || 'ninguno';
+    context.log('Ejecutando query: limite=' + lim + ', pagina=' + pag + ', offset=' + off + ', filtros=' + filtros);
 
-    /* _LIST_UNCOUNT_V1 (24-oct-2026): ANTES eran dos consultas por pagina (los datos y un COUNT(*)
-       aparte sobre toda la tabla filtrada). Ahora es UNA sola: el total viaja en cada fila con
-       COUNT(*) OVER() y se quita antes de responder. Misma respuesta (data + total), mitad de carga. */
+    /* _LIST_V2 (24-oct-2026): _LIST_UNCOUNT_V1 usaba COUNT(*) OVER() en la misma consulta; con filtro
+       amplio o sin filtro SQL materializaba las 62 000 filas completas antes de devolver la pagina
+       (3 s, 49 % DTU). Ahora: la pagina sale por indice (TOP via OFFSET/FETCH) y el total se calcula
+       aparte: sin filtro, de las estadisticas de la tabla (instantaneo); con filtro, COUNT(*) que usa
+       el indice mas angosto. Misma respuesta (data + total). */
     const result = await request.query(
-      'SELECT *, COUNT(*) OVER() AS __total FROM Atenciones WHERE ' + where.join(' AND ') +
+      'SELECT * FROM Atenciones WHERE ' + where.join(' AND ') +
       ' ORDER BY fecha_atencion DESC, id DESC' +
       ' OFFSET ' + off + ' ROWS FETCH NEXT ' + lim + ' ROWS ONLY'
     );
     const filas = result.recordset || [];
-    const total = filas.length ? Number(filas[0].__total) : 0;
-    filas.forEach(f => { delete f.__total; });
+    let total;
+    if (where.length === 1) {
+      try {
+        const t = await pool.request().query(
+          "SELECT SUM(row_count) AS n FROM sys.dm_db_partition_stats WHERE object_id = OBJECT_ID('dbo.Atenciones') AND index_id IN (0,1)");
+        total = Number((t.recordset[0] || {}).n || 0);
+      } catch (e) {                                           /* sin permiso VIEW DATABASE STATE: contar normal */
+        const c = await pool.request().query('SELECT COUNT(*) AS n FROM Atenciones');
+        total = Number((c.recordset[0] || {}).n || 0);
+      }
+    } else if (filas.length < lim && off === 0) {
+      total = filas.length;                                   /* cabe en una pagina: no hace falta contar */
+    } else {
+      const c = await request.query('SELECT COUNT(*) AS n FROM Atenciones WHERE ' + where.join(' AND '));
+      total = Number((c.recordset[0] || {}).n || 0);
+    }
 
     context.res = {
       status: 200,

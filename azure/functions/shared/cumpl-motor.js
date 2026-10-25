@@ -214,8 +214,13 @@ function crearMotor(D) {
   const restricc = D.restricc || [];
   const casos = (D.casos || []).map(c => Object.assign({}, c, {
     fecha_registro: parse(c.fecha_registro), fecha_reporte: parse(c.fecha_reporte),
-    fecha_limite: parse(c.fecha_limite), fecha_cierre: parse(c.fecha_cierre)
+    fecha_limite: parse(c.fecha_limite), fecha_cierre: parse(c.fecha_cierre),
+    fecha_envio_informe: parse(c.fecha_envio_informe)   /* _ENVIO_INFORME_CUMPL_V1 (24-oct-2026) */
   }));
+  /* _ENVIO_INFORME_CUMPL_V1 (24-oct-2026, decision de Joel): la etapa "Investigacion e informe" se da por
+     ENTREGADA si el informe esta subido al sistema O si el administrador registro la fecha en que el
+     supervisor lo envio por correo. El PDF sigue figurando como documento pendiente (sin penalizar). */
+  const informeEntregado = (c) => !!(c.enlace_informe || c.fecha_envio_informe);
 
   /* _CALENDARIO_V1: dias laborables + feriados de la configuracion (antes: temporada alta L-V / baja L-Sab) */
   const CAL_DIAS = calParseDias(cfg.dias), CAL_FER = {};
@@ -286,11 +291,11 @@ function crearMotor(D) {
     if (!c.enlace_reporte) docs.push('Reporte/Descargo');
     let etapa, limite, plazo;
     const fReg = ymd(c.fecha_registro);   /* _PLAZO_VIGENTE_V1 */
-    if (!c.enlace_informe) { etapa = 'Investigación e informe'; plazo = plazoEn(cfg, 'plazo_investigacion', fReg); limite = sumarHabiles(base, plazo); }   /* _CALENDARIO_V1: siempre con el calendario vigente */
+    if (!informeEntregado(c)) { etapa = 'Investigación e informe'; plazo = plazoEn(cfg, 'plazo_investigacion', fReg); limite = sumarHabiles(base, plazo); }   /* _CALENDARIO_V1 · _ENVIO_INFORME_CUMPL_V1 */
     else if (!c.enlace_reporte) { etapa = 'Carga de reporte/descargo'; plazo = plazoEn(cfg, 'plazo_documentos', fReg); limite = sumarHabiles(base, plazo); }
     else { etapa = 'Cierre del caso'; plazo = plazoEn(cfg, 'plazo_cierre', fReg); limite = sumarHabiles(base, plazo); }
     const s = semaforo(limite, hoy);
-    const avance = c.enlace_informe && c.enlace_reporte ? 80 : c.enlace_informe ? 50 : 20;
+    const avance = informeEntregado(c) && c.enlace_reporte ? 80 : informeEntregado(c) ? 50 : 20;   /* _ENVIO_INFORME_CUMPL_V1 */
     const o = {
       tipo: 'CASO', clave: 'caso_' + c.nro, caso: c.nro, actividad: etapa, trabajador: c.nombre, empresa: c.empresa, sector: c.sector,
       motivo: c.motivo.toLowerCase() === 'otros' && c.motivo_extra ? c.motivo_extra : c.motivo, gravedad: c.gravedad,
@@ -299,6 +304,7 @@ function crearMotor(D) {
       porcentaje: avance, documentos_pendientes: docs, estado_gestion: c.estado_gestion || 'EN PROCESO',
       accion: docs.length ? 'Subir ' + docs.join(' y ') : 'Concluir el caso'
     };
+    if (!c.enlace_informe && c.fecha_envio_informe) o.informe_enviado_correo = ymd(c.fecha_envio_informe);   /* _ENVIO_INFORME_CUMPL_V1: entregado por correo, falta subir el PDF */
     const cb = AUS.cobCaso(c, ymd(hoy));   /* _AUSENCIAS_V1: el titular esta ausente -> lo responde el reemplazo */
     if (cb) { AUS.etiqueta(o, cb); o.responsable = AUS.reemp(cb).nombre; }
     return o;
@@ -383,7 +389,7 @@ function crearMotor(D) {
     const detalleVencidos = [];
     abiertos.forEach(c => {
       const a = actividadCaso(c, hoy); if (!a) return;
-      if (!c.enlace_informe) enInvest++;
+      if (!informeEntregado(c)) enInvest++;   /* _ENVIO_INFORME_CUMPL_V1 */
       docsPend += a.documentos_pendientes.length;
       if (a.dias_retraso > 0) { vencidos++; detalleVencidos.push({ caso: c.nro, trabajador: c.nombre, actividad: a.actividad, dias_retraso: a.dias_retraso, fecha_limite: a.fecha_limite }); }
     });
@@ -541,7 +547,7 @@ function crearMotor(D) {
     });
     const casosPendientes = [];
     (casosRecientes || []).forEach(c => {
-      const sinInforme = !String(c.enlace_informe || '').trim();
+      const sinInforme = !String(c.enlace_informe || '').trim() && !String(c.fecha_envio_informe || '').trim();   /* _ENVIO_INFORME_CUMPL_V1 */
       const sinReporte = !String(c.enlace_reporte || '').trim();
       if (sinInforme && sinReporte) casosPendientes.push({ nombre_mostrar: c.supervisor || c.registrado_por || '(sin asignar)', supervisor: c.supervisor || '', registrado_por: c.registrado_por || '', motivo: c.motivo || '', nro: c.nro });
     });

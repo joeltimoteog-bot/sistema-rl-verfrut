@@ -19,6 +19,10 @@ try {
   function dmy(s) { var m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[3] + '/' + m[2] + '/' + m[1] : s; }
   function val(id) { var e = document.getElementById(id); return e ? String(e.value || '').trim() : ''; }
   function caja() { return document.getElementById('cEnvioInfWrap'); }
+  /* _ENVIO_INFORME_ADMIN_V1 (24-oct-2026, decision de Joel): la fecha la registra SOLO un administrador.
+     El supervisor la ve (si ya existe) pero no la edita, y ya no se le exige al subir su informe. */
+  var ROLES_ADMIN_ENVIO = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'];
+  function esAdminEnvio() { try { var U = (typeof USER !== 'undefined' && USER) ? USER : (window.USER || {}); return ROLES_ADMIN_ENVIO.indexOf(String(U.rol || '').trim().toLowerCase()) >= 0; } catch (e) { return false; } }
 
   function crear() {
     if (document.getElementById(ID)) return;
@@ -36,6 +40,11 @@ try {
     panel.appendChild(d);
     var inp = document.getElementById(ID);
     inp.max = hoyYmd();
+    if (!esAdminEnvio()) {   /* _ENVIO_INFORME_ADMIN_V1: solo lectura para quien no es administrador */
+      inp.disabled = true; inp.style.background = '#f1f5f9';
+      var lb = d.querySelector('label'); if (lb) lb.innerHTML = '📅 Fecha en que se envió el informe por correo <span style="font-weight:400;color:#475569">(la registra el administrador)</span>';
+      var nt = d.querySelector('div[style*="line-height"]'); if (nt) nt.innerHTML = 'ℹ️ Envía tu informe por correo dentro del plazo; el administrador registrará aquí la fecha de ese envío.';
+    }
     inp.addEventListener('change', function () { refrescar(true); });
     var fr = document.getElementById('cFechaReporte');
     if (fr) fr.addEventListener('change', function () { setTimeout(function () { refrescar(false); }, 0); });
@@ -106,7 +115,8 @@ try {
         var c = null;
         try { c = (typeof _editandoCasoNro !== 'undefined' && _editandoCasoNro) ? (casosData || []).find(function (x) { return String(x.nro) === String(_editandoCasoNro); }) : null; } catch (e) {}
         var yaTiene = !!(c && c.fecha_envio_informe);
-        var exige = typeof _modoCaso !== 'undefined' && _modoCaso === 'concluido' && hayInformeNuevo() && !yaTiene;
+        var exige = esAdminEnvio() && typeof _modoCaso !== 'undefined' && _modoCaso === 'concluido' && hayInformeNuevo() && !yaTiene;   /* _ENVIO_INFORME_ADMIN_V1: solo se exige al administrador */
+        if (!esAdminEnvio()) fe = '';   /* el supervisor nunca la envia */
         if (exige && !fe) {
           var i = document.getElementById(ID); if (i) { i.focus(); i.style.borderColor = '#ef4444'; setTimeout(function () { i.style.borderColor = '#c0ceea'; }, 2500); }
           if (typeof mostrarToast === 'function') mostrarToast('❌ Indica la fecha en que enviaste el informe por correo', 'error');

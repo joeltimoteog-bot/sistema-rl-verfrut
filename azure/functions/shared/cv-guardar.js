@@ -17,6 +17,14 @@ const TC = require('./tablas-cv');
 const cvDb = require('./cv-db');
 
 const ADMINS_ELIMINAR = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas'];   /* = ADMINS_ELIMINAR_CASO / _VISITA del Apps Script */
+const ROLES_ADMIN_ENVIO = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'];   /* _ENVIO_INFORME_ADMIN_V1 */
+async function esAdminUsuario(pool, usuario) {
+  const u = String(usuario || '').trim().toLowerCase(); if (!u) return false;
+  try {
+    const r = await pool.request().input('u', sql.NVarChar(100), u).query('SELECT TOP 1 rol FROM dbo.usuarios WHERE LOWER(usuario) = @u AND activo = 1');
+    return !!(r.recordset.length && ROLES_ADMIN_ENVIO.indexOf(String(r.recordset[0].rol || '').trim().toLowerCase()) >= 0);
+  } catch (e) { return false; }
+}
 const TIPO = { saveCaso: 'casos', updateCaso: 'casos', eliminarCaso: 'casos', saveVisita: 'visitas', updateVisita: 'visitas', eliminarVisita: 'visitas' };
 const ELIM = { casos: 'dbo.Casos_Eliminados', visitas: 'dbo.Visitas_Eliminadas' };
 
@@ -200,6 +208,12 @@ async function ejecutar(pool, accion, b, usuario, prueba) {
     if (accion === 'eliminarCaso' && String(d.motivo || '').trim().length < 10) return { status: 400, body: { success: false, error: 'El motivo es obligatorio y debe tener al menos 10 caracteres' } };
   }
   if ((accion === 'updateCaso' || accion === 'updateVisita') && (d.nro === undefined || d.nro === '')) return { status: 400, body: { success: false, error: 'Falta el N°' } };
+  /* _ENVIO_INFORME_ADMIN_V1 (24-oct-2026, decision de Joel): la fecha en que se envio el informe por correo la registra
+     SOLO un administrador (administrador, administrador 01/02, coordinador, jefa_rl). Si la manda otro usuario, se ignora
+     (el caso se guarda igual, sin esa fecha). */
+  if ((accion === 'saveCaso' || accion === 'updateCaso') && d.fecha_envio_informe !== undefined && d.fecha_envio_informe !== '') {
+    if (!(await esAdminUsuario(pool, usuario))) delete d.fecha_envio_informe;
+  }
 
   const tx = new sql.Transaction(pool);
   await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);

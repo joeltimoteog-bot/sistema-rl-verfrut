@@ -117,6 +117,7 @@ function casosAzure(D, T) {
       if (a.estado_gestion && a.estado_gestion !== 'PENDIENTE') c.estado_gestion = String(a.estado_gestion).toUpperCase();
       if (!c.supervisor && a.supervisor) c.supervisor = String(a.supervisor).trim();
       if (a.fecha_envio_informe) c.fecha_envio_informe = a.fecha_envio_informe;   /* _ENVIO_INFORME_V1 */
+      if (a.fecha_cierre && !c.fecha_cierre) c.fecha_cierre = _ymd10(a.fecha_cierre);   /* _ENVIO_INFORME_CUMPL_V1: cierre recien guardado en Azure */
       return;
     }
     const n = { nro: a.nro, fecha_registro: a.fecha_reg || '', dni: a.dni, nombre: a.nombre, empresa: a.empresa, sector: a.sector,
@@ -354,4 +355,4 @@ async function alertas(pool, limite) {
   return r.recordset;
 }
 
-module.exports = { asegurarTablas, cargar, calcular, calcularCon, serie, cerrarMes, cierreAutomatico, cierres, informeMes, rangoMes, registrar, alertas, personas, hoyLima, _t: { fechasInforme, atenciones } };
+module.exports = { casosAzure, asegurarTablas, cargar, calcular, calcularCon, serie, cerrarMes, cierreAutomatico, cierres, informeMes, rangoMes, registrar, alertas, personas, hoyLima, _t: { fechasInforme, atenciones } };
