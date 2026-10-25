@@ -7,7 +7,7 @@
   var ESTADM_AZURE_ACTIVO = true;
   if (!ESTADM_AZURE_ACTIVO || window._rlEstAdmOk) return;
   window._rlEstAdmOk = true;
-  var URL_AZ = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/estadm/getEstadisticasAdmin';
+  var URL_AZ = 'https://rl-fn-verfrut.azurewebsites.net/api/mod/estadm/getEstadisticasAdmin';
   var previo = window.apiGet;
   if (typeof previo !== 'function') return;
   window.apiGet = function (p) {

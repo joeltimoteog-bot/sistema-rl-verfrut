@@ -26,7 +26,7 @@ func azure functionapp publish rl-functions-verfrut --build remote   # SIEMPRE c
 
 ## URL base
 
-https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net
+https://rl-fn-verfrut.azurewebsites.net
 
 ## Endpoints
 

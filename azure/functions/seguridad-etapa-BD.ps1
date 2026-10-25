@@ -8,7 +8,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 param([switch]$Apagar, [switch]$SoloVer, [switch]$EtapaE, [switch]$ApagarE)
 
-$app = 'rl-functions-verfrut'
+$app = 'rl-fn-verfrut'
 $ErrorActionPreference = 'Continue'   # az imprime avisos por stderr (Python 32 bits): no son errores
 $env:PYTHONWARNINGS = 'ignore'
 
@@ -31,7 +31,7 @@ if ($EtapaE) {
   Write-Host "Etapa E: JWT_REQUIRED=1 (todas las funciones con exigirAuth piden sesion o clave interna)..." -ForegroundColor Cyan
   & az functionapp config appsettings set -n $app -g $rg --settings JWT_REQUIRED=1 -o none 2>$null
   Start-Sleep -Seconds 35
-  try { $r = Invoke-WebRequest -Uri "https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/atenciones/stats" -UseBasicParsing -TimeoutSec 30; Write-Host ("atenciones/stats sin sesion respondio HTTP " + $r.StatusCode + " (espera 1 min y prueba -SoloVer)") -ForegroundColor Yellow }
+  try { $r = Invoke-WebRequest -Uri "https://rl-fn-verfrut.azurewebsites.net/api/atenciones/stats" -UseBasicParsing -TimeoutSec 30; Write-Host ("atenciones/stats sin sesion respondio HTTP " + $r.StatusCode + " (espera 1 min y prueba -SoloVer)") -ForegroundColor Yellow }
   catch { $code = $_.Exception.Response.StatusCode.value__; if ($code -eq 401) { Write-Host "OK: HTTP 401 sin sesion en atenciones/stats. Etapa E activa." -ForegroundColor Green } else { Write-Host ("Respondio HTTP " + $code) -ForegroundColor Yellow } }
   exit 0
 }
@@ -74,7 +74,7 @@ Write-Host "Guardado. La app se reinicia sola (~30 s)." -ForegroundColor Green
 Start-Sleep -Seconds 35
 Write-Host "Comprobando: una lectura SIN sesion debe responder 401..." -ForegroundColor Cyan
 try {
-  $r = Invoke-WebRequest -Uri "https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/sup/getSupervisores" -Method POST -ContentType 'application/json' -Body '{}' -UseBasicParsing -TimeoutSec 30
+  $r = Invoke-WebRequest -Uri "https://rl-fn-verfrut.azurewebsites.net/api/mod/sup/getSupervisores" -Method POST -ContentType 'application/json' -Body '{}' -UseBasicParsing -TimeoutSec 30
   Write-Host ("Respondio HTTP " + $r.StatusCode + " (aun abierto: espera 1 min y vuelve a probar con -SoloVer)") -ForegroundColor Yellow
 } catch {
   $code = $_.Exception.Response.StatusCode.value__

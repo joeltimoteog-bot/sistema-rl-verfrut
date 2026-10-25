@@ -12,7 +12,7 @@
   var USR_AZURE_PRIMERO = true;
   if (!USR_AZURE_PRIMERO || window._rlUsrAzOk) return;
   window._rlUsrAzOk = true;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/usr/guardar/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/usr/guardar/';
   var ACCIONES = { saveUsuario: 1, updateUsuario: 1, resolverAccesoTemporal: 1, aprobarAccesoTemporal: 1 };
   function h32(s, seed) { var h = seed >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   function huella(b) { var s = JSON.stringify(b); return 'usr-' + h32(s, 2166136261) + h32(s, 5381) + '-' + Date.now().toString(36); }

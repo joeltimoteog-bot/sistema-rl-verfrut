@@ -7,13 +7,13 @@
 #  Uso:  cd C:\sistema-rl-verfrut\azure\functions ;  .\publicar-azure.ps1
 # ═══════════════════════════════════════════════════════════════════════════
 Set-Location $PSScriptRoot
-func azure functionapp publish rl-functions-verfrut --build remote
+func azure functionapp publish rl-fn-verfrut --build remote
 if ($LASTEXITCODE -ne 0) { Write-Host "ERROR al publicar. Azure NO se actualizo." -ForegroundColor Red; exit 1 }
 
 Write-Host "`nComprobando que Azure responda..." -ForegroundColor Cyan
 Start-Sleep -Seconds 20
 try {
-  $r = Invoke-WebRequest -Uri "https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/horas/horasListarMotivos" -Method Post -Body '{}' -ContentType 'application/json' -UseBasicParsing
+  $r = Invoke-WebRequest -Uri "https://rl-fn-verfrut.azurewebsites.net/api/mod/horas/horasListarMotivos" -Method Post -Body '{}' -ContentType 'application/json' -UseBasicParsing
   Write-Host "OK: Azure responde (HTTP $($r.StatusCode))" -ForegroundColor Green
 } catch {
   $code = 0; try { $code = $_.Exception.Response.StatusCode.value__ } catch {}

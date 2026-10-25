@@ -345,7 +345,7 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
   console.time = noop; console.timeEnd = noop; console.table = noop;
 })();
 const API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
-const AZURE_LOGIN_URL='https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/auth/login';
+const AZURE_LOGIN_URL='https://rl-fn-verfrut.azurewebsites.net/api/auth/login';
 let intentos=0,MAX=5;   /* _LOGIN_INTENTOS_V1 (18-oct): mismo limite que el servidor (5) */
 
 // ── JWT: adjuntar Authorization a toda llamada a Azure Functions ──
@@ -388,7 +388,7 @@ async function _etiPermCargar(){
   try {
     const tk = sessionStorage.getItem('rl_token'); if (!tk || !window.AbortController) return;
     const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 5000);
-    const r = await fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/acceso/permisosListar',
+    const r = await fetch('https://rl-fn-verfrut.azurewebsites.net/api/acceso/permisosListar',
       { method:'POST', signal: ctl.signal, headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tk }, body: JSON.stringify({ action:'permisosListar' }) });
     clearTimeout(t);
     const j = await r.json();
@@ -970,7 +970,7 @@ async function doLogin(){
    Si algo fallara al firmar, se navega igual sin pase: el ETI mostrara su
    login de siempre. Nunca deja al usuario en blanco. */
 const SSO_SECRETO = 'RL-SSO-VERFRUT-2026';   // debe coincidir con el de los ETI
-const SSO_SERVIDOR_URL = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/auth/sso'; // _SSO_SERVIDOR_V1
+const SSO_SERVIDOR_URL = 'https://rl-fn-verfrut.azurewebsites.net/api/auth/sso'; // _SSO_SERVIDOR_V1
 
 async function irAConSSO(base){
   let destino = base;
@@ -1267,7 +1267,7 @@ checkSessionCache();
     try { _azCtrl = new AbortController(); _azReloj = setTimeout(function () { try { _azCtrl.abort(); } catch (e) {} }, 6000); } catch (e) {}
     var _azOp = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
     if (_azCtrl) _azOp.signal = _azCtrl.signal;
-    return fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/acceso/accesoHorarioDeUsuario', _azOp)
+    return fetch('https://rl-fn-verfrut.azurewebsites.net/api/acceso/accesoHorarioDeUsuario', _azOp)
       .then(function (r) { if (_azReloj) clearTimeout(_azReloj); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (j) { if (!j || j.success !== true) throw new Error('sin respuesta valida'); if (reloj) clearTimeout(reloj); return j; })
       .catch(function () {

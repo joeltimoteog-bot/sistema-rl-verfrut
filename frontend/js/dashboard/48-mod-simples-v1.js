@@ -7,7 +7,7 @@
   var MOD_SIMPLES_ACTIVO = true;
   if (!MOD_SIMPLES_ACTIVO || window._rlModSimpOk) return;
   window._rlModSimpOk = true;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/mod/';
   var MODULO = { getFusiones: 'fus', getSolicitudes: 'sol', getMotivosCasos: 'casosaux', getSupervisores: 'sup', getSolicitudesAcceso: 'acc', listarSolicitudesMantenimiento: 'mant', getResponsablesEnRango: 'resp' };   /* _PRELOAD_AZURE_V1: + Supervisores (antes ~22 s por Google) · _DASH_AZURE_V1 (05-oct): + accesos temporales y mantenimiento (Azure solo si es la fuente al dia; si no, Google) · _RESP_AZURE_V1 (06-oct): + lista de responsables de Consulta (Google tardaba hasta 90 s) */
   var previo = window.apiGet;
   if (typeof previo !== 'function') return;

@@ -12,7 +12,7 @@
   var FUS_AZURE_PRIMERO = true;
   if (!FUS_AZURE_PRIMERO || window._rlFusAzPrimOk) return;
   window._rlFusAzPrimOk = true;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/fus/guardar/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/fus/guardar/';
   var ACCIONES = { saveFusion: 1, updateFusion: 1 };
   function h32(s, seed) { var h = seed >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   function huella(b) { var s = JSON.stringify(b); return 'fus-' + h32(s, 2166136261) + h32(s, 5381) + '-' + s.length.toString(36); }

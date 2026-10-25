@@ -235,7 +235,7 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
 <script>
 (function () {
   'use strict';
-  var API = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/kpi/';
+  var API = 'https://rl-fn-verfrut.azurewebsites.net/api/kpi/';
   var VISORES = ['jtimoteo', 'lcovenas'];
   var USER = null; try { USER = JSON.parse(sessionStorage.getItem('user') || 'null'); } catch (e) {}
   if (!USER) { location.href = '/sistema-rl-verfrut/index.html'; return; }

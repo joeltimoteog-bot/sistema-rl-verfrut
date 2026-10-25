@@ -126,7 +126,7 @@ tr:hover td{background:#fafbfc}
   var MANT_AZURE_PRIMERO = true;
   if (!MANT_AZURE_PRIMERO || window._rlMantAzOk || typeof window.fetch !== 'function') return;
   window._rlMantAzOk = true;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mant/guardar/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/mant/guardar/';
   var ACCIONES = { guardarSolicitudMantenimiento: 1, programarMantenimiento: 1, actualizarEstadoMantenimiento: 1 };
   function h32(s, seed) { var h = seed >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   function huella(s) { return 'mant-' + h32(s, 2166136261) + h32(s, 5381) + '-' + Date.now().toString(36); }
@@ -822,7 +822,7 @@ async function guardarProgramacion(){
 (function(){
 'use strict';
 if(window._MANT_RAPIDO_V1)return; window._MANT_RAPIDO_V1=true;
-var AZ='https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/mant/listarSolicitudesMantenimiento';
+var AZ='https://rl-fn-verfrut.azurewebsites.net/api/mod/mant/listarSolicitudesMantenimiento';
 function tk(){try{return sessionStorage.getItem('rl_token')||'';}catch(e){return '';}}
 function conTiempo(url,op,ms){var c=(typeof AbortController!=='undefined')?new AbortController():null;var t=setTimeout(function(){try{c&&c.abort();}catch(e){}},ms);op=op||{};if(c)op.signal=c.signal;return fetch(url,op).then(function(r){clearTimeout(t);return r;},function(e){clearTimeout(t);throw e;});}
 async function azure(params){

@@ -112,7 +112,7 @@
       var _azT = setTimeout(function () { try { _azC && _azC.abort(); } catch (e) {} }, 6000);
       var _azO = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
       if (_azC) _azO.signal = _azC.signal;
-      var _pedir = fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/acceso/accesoHorarioDeUsuario', _azO)
+      var _pedir = fetch('https://rl-fn-verfrut.azurewebsites.net/api/acceso/accesoHorarioDeUsuario', _azO)
         .then(function (r) { clearTimeout(_azT); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (j) { if (!j || j.success !== true) throw new Error('sin respuesta valida'); return j; })
         .catch(function () { clearTimeout(_azT); return fetch(AH_API, op).then(function (r) { return r.json(); }); });
@@ -738,7 +738,7 @@
     var t = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 6000);
     var op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usuario: USER.usuario || '' }) };
     if (ctrl) op.signal = ctrl.signal;
-    return fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/cumpl/getCumplimiento', op)
+    return fetch('https://rl-fn-verfrut.azurewebsites.net/api/cumpl/getCumplimiento', op)
       .then(function (r) { clearTimeout(t); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
       .then(function (j) { if (!j || !j.success) throw new Error('sin datos'); return leer(j); })
       .catch(function () {

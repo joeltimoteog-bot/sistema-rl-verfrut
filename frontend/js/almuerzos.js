@@ -13,7 +13,7 @@ let USER = null;
 let colaboradores = [];
 let _trabajadorActual = null;
 
-const AZURE_DNI = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/trabajadores/buscar?dni=';
+const AZURE_DNI = 'https://rl-fn-verfrut.azurewebsites.net/api/trabajadores/buscar?dni=';
 
 // Destinatarios del correo de almuerzos
 const ALM_TO = 'lucia.castillo@unifrutti.com';                                  // Para:

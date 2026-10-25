@@ -14,7 +14,7 @@
 (function () {
   'use strict';
   if (window.rlLoginComun) return;
-  var AZ = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/auth/login';
+  var AZ = 'https://rl-fn-verfrut.azurewebsites.net/api/auth/login';
   var GAS = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 
   function conReloj(url, op, ms) {

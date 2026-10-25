@@ -13,7 +13,7 @@
   var CUMPL_AZURE_PRIMERO = true;
   if (!CUMPL_AZURE_PRIMERO || window._rlCumplWOk) return;
   window._rlCumplWOk = true;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/cumpl/guardar/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/cumpl/guardar/';
   var ACCIONES = { cumplJustificar: 1, cumplConfigGuardar: 1, cumplRestriccionLevantar: 1 };
   function h32(s, seed) { var h = seed >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   function huella(b) { var s = JSON.stringify(b); return 'cw-' + h32(s, 2166136261) + h32(s, 5381) + '-' + s.length.toString(36); }

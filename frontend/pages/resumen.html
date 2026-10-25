@@ -1150,7 +1150,7 @@ function _renderVersus(r,v){
 }
 (async function(){
   try{
-    const r=await fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/atenciones/stats');
+    const r=await fetch('https://rl-fn-verfrut.azurewebsites.net/api/atenciones/stats');
     if(!r.ok) return;
     const d=await r.json(); if(!d.success) return;
     const g=d.resumen_global||{};

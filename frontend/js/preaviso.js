@@ -13,7 +13,7 @@ let _trabajadorActual = null;
 let _desenlaceNro = null;
 
 const PLAZO_DEFAULT = 6;
-const AZURE_DNI = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/trabajadores/buscar?dni=';
+const AZURE_DNI = 'https://rl-fn-verfrut.azurewebsites.net/api/trabajadores/buscar?dni=';
 
 /* ─────────── Utilidades fecha (días naturales) ─────────── */
 function hoyISO(){ return new Date().toISOString().split('T')[0]; }

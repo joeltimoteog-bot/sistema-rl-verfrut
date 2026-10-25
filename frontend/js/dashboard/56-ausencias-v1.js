@@ -8,7 +8,7 @@
    · Mientras dure: casos, visitas semanales y alertas del titular pasan a su reemplazo; al volver regresan solos.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
-  var AZ = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/cumpl/';
+  var AZ = 'https://rl-fn-verfrut.azurewebsites.net/api/cumpl/';
   function esDueno() { try { return String((USER && USER.usuario) || '').trim().toLowerCase() === 'jtimoteo'; } catch (e) { return false; } }   /* se evalua al usarse: USER puede cargarse despues */
   var TIPO = { 'VACACIONES': '🏖️ Vacaciones', 'DESCANSO MEDICO': '🏥 Descanso médico', 'ACCIDENTE': '🚑 Accidente', 'LICENCIA': '📄 Licencia', 'OTRO': '📌 Otro' };
   var A = { lista: [], hoy: '', cargado: false, titular: null, editId: null };

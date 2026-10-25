@@ -10,7 +10,7 @@
   'use strict';
   var HOR_AZURE_PRIMERO = true;
   if (!HOR_AZURE_PRIMERO || window._rlHorAzOk) return;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/hor/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/hor/';
   var ACCIONES = { horariosListar: 1, horariosGuardar: 1, horariosEliminar: 1 };
   var apagadoHasta = 0, enCurso = {};
   function tok() { try { return sessionStorage.getItem('rl_token') || ''; } catch (e) { return ''; } }

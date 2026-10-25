@@ -19,7 +19,7 @@
   if (window._CAP_FIRMA_DIGITAL_V1) return;
   window._CAP_FIRMA_DIGITAL_V1 = true;
 
-  var AZ = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/cap-firmas/';
+  var AZ = 'https://rl-fn-verfrut.azurewebsites.net/api/cap-firmas/';
   var MAX_LOTE = 200, PARALELO = 4;
   function $(id) { return document.getElementById(id); }
   function lista() { try { return Array.isArray(asistentes) ? asistentes : []; } catch (e) { return []; } }   /* 'asistentes' es let global de capacitaciones.js */

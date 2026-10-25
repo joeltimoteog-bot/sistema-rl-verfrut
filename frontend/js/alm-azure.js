@@ -12,7 +12,7 @@
   'use strict';
   var ALM_AZURE_PRIMERO = true;
   if (window.rlAlmAzure) return;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/alm/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/alm/';
   var ESCRIBE = { addAlmuerzo: 1, updateAlmuerzo: 1, registrarEnvioAlmuerzos: 1 };
   var apagadoHasta = 0, enCurso = {};
   function tok() { try { return sessionStorage.getItem('rl_token') || ''; } catch (e) { return ''; } }

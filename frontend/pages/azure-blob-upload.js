@@ -6,7 +6,7 @@
 const AZURE_CONFIG = {
   storageUrl: 'https://sistemarlverfrut.blob.core.windows.net',
   // Endpoint que emite tokens SAS de corta duración (Function blob-sas)
-  sasEndpoint: 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/blob-sas',
+  sasEndpoint: 'https://rl-fn-verfrut.azurewebsites.net/api/blob-sas',
   // ⚠️ FALLBACK LEGADO: eliminar estos tokens y revocar la política
   // "sistemrl2027" en Azure Portal cuando la Function blob-sas esté deployada.
   sasTokens: {

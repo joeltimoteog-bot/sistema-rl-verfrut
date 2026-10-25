@@ -16,7 +16,7 @@ Joel administra el Sistema RL v3.0 que gestiona ~14-17 supervisores de campo en 
 - **Database 2 (nuevo):** Azure SQL `rapel-sql-server.database.windows.net` DB `sistema-rl-db`
 - **Realtime:** Firebase RTDB `sistema-rl-verfrut-default-rtdb`
 - **Storage:** Azure Blob `sistemarlverfrut` (containers: `casos-rl`, `visitas-campo`)
-- **Functions:** Azure Functions `rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api`
+- **Functions:** Azure Functions `rl-fn-verfrut.azurewebsites.net/api`
 
 **URL GAS deployment:**
 ```
@@ -130,7 +130,7 @@ Joel pidió esto explícitamente. Plan:
 
 1. **Frontend:** modificar `consultarDNI()` en dashboard.html para llamar directamente a:
    ```
-   https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/atenciones
+   https://rl-fn-verfrut.azurewebsites.net/api/atenciones
    ?dni=XXX&desde=YYYY-MM-DD&hasta=YYYY-MM-DD&supervisor=XXX
    ```
 2. El endpoint Azure `/api/atenciones` ya existe y soporta esos filtros (visto en `listAtencionesAzure`)

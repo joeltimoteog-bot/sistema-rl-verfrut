@@ -24,7 +24,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
-const BASE = process.env.CARGA_BASE || 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api';
+const BASE = process.env.CARGA_BASE || 'https://rl-fn-verfrut.azurewebsites.net/api';
 const KEY_LIST = 'mAcqIAfE5WQdqpcPxLvWmh6-FDk0rrIkQZyVIllZONO0AzFuaEOVBQ==';   // la misma llave de solo lectura que usa el dashboard
 const TOPE = Number(process.argv[2]) || 300;
 const ESCALONES = [25, 50, 100, 200, 300].filter(n => n <= TOPE);

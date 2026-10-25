@@ -1555,7 +1555,7 @@ async function guardarInformeEnAzure() {
 const API_URL_DEFAULT = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 
 // Azure Functions: búsqueda rápida de trabajador por DNI (reemplaza GAS para DNI exacto)
-const AZURE_FN_BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api';
+const AZURE_FN_BASE = 'https://rl-fn-verfrut.azurewebsites.net/api';
 
 // ── JWT: adjuntar Authorization a toda llamada a Azure Functions ──
 (function(){

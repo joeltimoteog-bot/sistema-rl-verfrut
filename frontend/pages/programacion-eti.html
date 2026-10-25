@@ -329,7 +329,7 @@
     try{
       var _tk=sessionStorage.getItem('rl_token')||'';
       var _ctl=new AbortController(); setTimeout(function(){ try{_ctl.abort();}catch(e){} },5000);
-      fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/acceso/permisosListar',{method:'POST',signal:_ctl.signal,
+      fetch('https://rl-fn-verfrut.azurewebsites.net/api/acceso/permisosListar',{method:'POST',signal:_ctl.signal,
         headers:Object.assign({'Content-Type':'application/json'},_tk?{'Authorization':'Bearer '+_tk}:{}),body:JSON.stringify({action:'permisosListar',usuario:yo})})
         .then(function(r){return r.json();}).then(function(j){
           if(j&&j.success&&j.permisos&&(j.permisos.navProgEti===true||j.permisos.navAppEti===true)){ sessionStorage.setItem('rl_app_eti','1'); location.reload(); }

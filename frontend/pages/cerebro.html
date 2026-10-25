@@ -91,7 +91,7 @@ if (!USER || CEREBRO_ADMINS.indexOf(String(USER.usuario || '').toLowerCase().tri
   return;
 }
 var DB = 'https://sistema-rl-verfrut-default-rtdb.firebaseio.com';
-var AZ = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api';
+var AZ = 'https://rl-fn-verfrut.azurewebsites.net/api';
 var GAS = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }

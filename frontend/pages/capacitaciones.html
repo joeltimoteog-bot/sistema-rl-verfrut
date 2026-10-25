@@ -646,7 +646,7 @@ h3{font-size:16px !important}
   var MOD_AZURE_ACTIVO = true;
   if (!MOD_AZURE_ACTIVO || window._rlModAzOk) return;
   window._rlModAzOk = true;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/cap/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/mod/cap/';
   var ACCIONES = { listarCapacitaciones: 1, estadisticasCapacitaciones: 1, exportarCapacitaciones: 1 };   /* _CAP_EXPORT_AZURE_V1 (03-oct): Exportar y Fecha anterior tambien desde Azure */
   var previo = window.apiPost;
   if (typeof previo !== 'function') return;
@@ -683,7 +683,7 @@ h3{font-size:16px !important}
   var CAP_AZURE_PRIMERO = true;
   if (!CAP_AZURE_PRIMERO || window._rlCapAzPrimOk) return;
   window._rlCapAzPrimOk = true;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/cap/guardar/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/cap/guardar/';
   var ACCIONES = { guardarCapacitacion: 1, duplicarCapacitacion: 1, eliminarCapacitacion: 1, editarCapacitacion: 1 };   /* _CAP_ELIMINAR_V1 · _CAP_EDITAR_V1 */
   function h32(s, seed) { var h = seed >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   function huella(b) { var s = JSON.stringify(b); return 'cap-' + h32(s, 2166136261) + h32(s, 5381) + '-' + s.length.toString(36); }

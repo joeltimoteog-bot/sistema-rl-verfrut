@@ -2019,7 +2019,7 @@ console.log('[_DEVOLUCION_V6] la devolucion pide horas a pagar, no horario');
    ═══════════════════════════════════════════════════════════════════════════ */
 async function _horasBuscarAzure(dni) {
   var d = String(dni || '').replace(/\D/g, '');
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/trabajadores/buscar?dni=';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/trabajadores/buscar?dni=';
   async function uno(x) {
     var c = (typeof AbortController !== 'undefined') ? new AbortController() : null;
     var t = setTimeout(function () { try { c && c.abort(); } catch (e) {} }, 10000);

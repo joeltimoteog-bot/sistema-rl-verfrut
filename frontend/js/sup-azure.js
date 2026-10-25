@@ -12,7 +12,7 @@
   'use strict';
   var SUP_AZURE_PRIMERO = true;
   if (!SUP_AZURE_PRIMERO || window._rlSupAzOk) return;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/sup/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/sup/';
   var ESCRIBE = { saveSupervisor: 1, addMotivoCaso: 1 }, LEE = { getSupervisores: 1, getMotivosCasos: 1 };
   var apagadoHasta = 0, enCurso = {};
   function tok() { try { return sessionStorage.getItem('rl_token') || ''; } catch (e) { return ''; } }

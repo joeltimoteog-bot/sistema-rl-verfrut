@@ -12,7 +12,7 @@
   'use strict';
   var INV_AZURE_PRIMERO = true;
   if (window.rlInvAzure) return;
-  var BASE = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/inv/';
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/inv/';
   var ESCRIBE = {}; ['invAgregarReceta', 'invEliminarReceta', 'invAgregarResponsable', 'invEliminarResponsable', 'invGuardarMeta', 'invRegistrarIngreso', 'invEditarIngreso', 'invEliminarIngreso', 'invRegistrarArmado', 'invEditarArmado', 'invEliminarArmado', 'invRegistrarEntrega', 'invEditarEntrega', 'invEliminarEntrega', 'invAgregarProducto', 'invEditarProducto', 'invEliminarProducto', 'invAgregarSector', 'invEditarSector', 'invEliminarSector'].forEach(function (a) { ESCRIBE[a] = 1; });
   var apagadoHasta = 0, enCurso = {};
   function tok() { try { return sessionStorage.getItem('rl_token') || ''; } catch (e) { return ''; } }

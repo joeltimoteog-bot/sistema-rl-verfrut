@@ -1043,7 +1043,7 @@ function _capAvisoTope() {
 async function buscarTrabajadorAzure(dni) {
   const d = String(dni || '').trim().replace(/\D/g, '');
   const dni8 = d.length === 7 ? '0' + d : d;
-  const URL = 'https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/trabajadores/buscar?dni=' + encodeURIComponent(dni8);
+  const URL = 'https://rl-fn-verfrut.azurewebsites.net/api/trabajadores/buscar?dni=' + encodeURIComponent(dni8);
   try {
     const r = await fetch(URL, { method: 'GET' });
     if (!r.ok) return { success: false, data: [] };
@@ -1821,7 +1821,7 @@ async function _capSupervisoresAzure() {
   try {
     const op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' };
     if (ctrl) op.signal = ctrl.signal;
-    const r = await fetch('https://rl-functions-verfrut-c0ctfjc0cjf5f0hz.brazilsouth-01.azurewebsites.net/api/mod/sup/getSupervisores', op);
+    const r = await fetch('https://rl-fn-verfrut.azurewebsites.net/api/mod/sup/getSupervisores', op);
     const j = await r.json();
     clearTimeout(reloj);
     if (r.status === 200 && j && j.success && Array.isArray(j.data)) { _capSupAzureCache = j; return j; }
