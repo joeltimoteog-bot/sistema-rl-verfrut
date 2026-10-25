@@ -40,8 +40,19 @@ const Q_TIPO = `
 const REFRESCO_MIN_MS = 10000;
 function invalidar() { _gen++; if (_agg) _agg.ts = Math.min(_agg.ts, Date.now() - TTL_MS + REFRESCO_MIN_MS); }
 
+/* _PIZARRON_FONDO_V1 (24-oct-2026): si ya hay un pizarron (aunque este vencido, hasta 15 min), se devuelve
+   AL INSTANTE y la renovacion corre en segundo plano: nadie espera los 2-5 s de la lectura agrupada.
+   Solo la primera lectura de la instancia (sin pizarron) espera. */
+const VIEJO_MAX_MS = 15 * 60000;
 async function leer(pool) {
   if (_agg && Date.now() - _agg.ts < TTL_MS) return _agg;
+  if (_agg && Date.now() - _agg.ts < VIEJO_MAX_MS) {
+    if (!_enCurso) { try { leerAhora(pool).catch(() => {}); } catch (e) {} }   /* renueva de fondo */
+    return _agg;
+  }
+  return leerAhora(pool);
+}
+async function leerAhora(pool) {
   if (_enCurso) return _enCurso;
   const gen = _gen;
   _enCurso = (async () => {
