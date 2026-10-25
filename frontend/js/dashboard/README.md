@@ -57,3 +57,4 @@ Cada archivo es un bloque <script> que antes vivia dentro de dashboard.html, ext
 59-at-aviso-regularizar-v1.js               3657 bytes  linea 17722
 60-at-tipo-lic-v1.js                        9058 bytes  linea 17781
 61-envio-informe-v1.js                      9523 bytes  linea 17962
+62-remitir-v1.js                            (nuevo 25-oct-2026) _KPI_A2_V1: boton Remitido a en Mis Atenciones (KPI A2)

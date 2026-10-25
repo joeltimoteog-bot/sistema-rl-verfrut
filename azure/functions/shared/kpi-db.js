@@ -31,6 +31,12 @@ function asegurarTablas(pool) {
         CREATE TABLE dbo.KPI_Notas (id INT IDENTITY(1,1) NOT NULL PRIMARY KEY, usuario NVARCHAR(60) NOT NULL, nota DECIMAL(4,1) NOT NULL,
           fecha_examen DATE NULL, constancia NVARCHAR(1000) NULL, observacion NVARCHAR(500) NULL,
           registrado_por NVARCHAR(60) NOT NULL, registrado_en DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());
+      /* _KPI_A2_V1 (25-oct-2026): "Remitido a" en la atencion (area + fecha/hora de Lima + quien) */
+      IF COL_LENGTH('dbo.Atenciones', 'remitido_a') IS NULL ALTER TABLE dbo.Atenciones ADD remitido_a NVARCHAR(60) NULL, remitido_en DATETIME2(0) NULL, remitido_por NVARCHAR(60) NULL;
+      /* _KPI_A4_V1 (25-oct-2026): plan de capacitaciones de la empresa para el personal de RR.LL. (lo registra el Coordinador) */
+      IF OBJECT_ID('dbo.KPI_CapPlan', 'U') IS NULL
+        CREATE TABLE dbo.KPI_CapPlan (id INT IDENTITY(1,1) NOT NULL PRIMARY KEY, fecha DATE NOT NULL, tema NVARCHAR(200) NOT NULL,
+          personas NVARCHAR(400) NOT NULL, anulado BIT NOT NULL DEFAULT 0, creado_por NVARCHAR(60) NOT NULL, creado DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());
       IF OBJECT_ID('dbo.KPI_AtRegistro', 'U') IS NULL
         CREATE TABLE dbo.KPI_AtRegistro (anio INT NOT NULL, nro INT NOT NULL, fecha_registro DATETIME2(0) NOT NULL,
           fuente NVARCHAR(20) NOT NULL, creado DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT PK_KPI_AtRegistro PRIMARY KEY (anio, nro));
@@ -164,12 +170,26 @@ async function atenciones(pool) {
   const ini = new Date(Date.parse(K.PERIODO.ini + 'T00:00:00Z') - 25 * 86400000).toISOString().slice(0, 10);   /* 25 dias antes: lo que vence dentro del periodo */
   const r = await pool.request().input('ini', sql.Date, ini).query(`
     SELECT a.anio, a.nro, CONVERT(CHAR(10), a.fecha_atencion, 120) AS fecha_atencion, a.hora_inicio, a.usuario_sistema, a.supervisor, a.estado, a.nombre,
-           CONVERT(CHAR(16), r.fecha_registro, 120) AS fecha_registro
+           CONVERT(CHAR(16), r.fecha_registro, 120) AS fecha_registro,
+           a.remitido_a, CONVERT(CHAR(16), a.remitido_en, 120) AS remitido_en   /* _KPI_A2_V1 */
     FROM dbo.Atenciones a LEFT JOIN dbo.KPI_AtRegistro r ON r.anio = a.anio AND r.nro = a.nro
     WHERE a.fecha_atencion >= @ini`);
   return r.recordset;
 }
 
+/* _KPI_A4_V1: plan de capacitaciones + asistencia real (Cap_Asistentes por DNI) de las personas evaluadas */
+async function capPlan(pool) {
+  const r = await pool.request().query('SELECT id, CONVERT(CHAR(10), fecha, 120) AS fecha, tema, personas, creado_por FROM dbo.KPI_CapPlan WHERE anulado = 0 ORDER BY fecha, id');
+  return r.recordset.map(x => ({ id: x.id, fecha: x.fecha, tema: x.tema, personas: String(x.personas || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean), por: x.creado_por }));
+}
+async function capAsistencias(pool, dnis) {
+  if (!dnis.length) return [];
+  try {
+    const req = pool.request(); const ph = dnis.map((d, i) => { req.input('d' + i, sql.NVarChar(15), String(d)); return '@d' + i; });
+    const r = await req.query("SELECT dni, CONVERT(CHAR(10), fecha_capacitacion, 120) AS fecha, tema, id_capacitacion FROM dbo.Cap_Asistentes WHERE dni IN (" + ph.join(',') + ")");
+    return r.recordset.map(x => ({ dni: String(x.dni), fecha: String(x.fecha || '').slice(0, 10), tema: x.tema, id: x.id_capacitacion }));
+  } catch (e) { return []; }
+}
 async function personas(pool) {
   const r = await pool.request().query('SELECT usuario, dni, nombre, empresa, tipo, puesto, CONVERT(CHAR(10), ingreso, 120) AS ingreso, alias, activo FROM dbo.KPI_Personas ORDER BY orden, nombre');
   return r.recordset.map(p => ({ usuario: p.usuario, dni: p.dni, nombre: p.nombre, empresa: p.empresa, tipo: p.tipo, puesto: p.puesto,
@@ -206,10 +226,11 @@ async function cargar(pool) {
   const D = await datosCumpl(pool);
   if (!D) throw new Error('Cumplimiento aun no tiene datos en Azure');
   const m = crearMotor(D);
-  const [inf, ats, per, nts, eti, compl] = await Promise.all([fechasInforme(pool), atenciones(pool), personas(pool), notas(pool), ETI.leer(pool), complementarios(pool)]);   /* _IND_COMPL_V1 */
+  const [inf, ats, per, nts, eti, compl, plan] = await Promise.all([fechasInforme(pool), atenciones(pool), personas(pool), notas(pool), ETI.leer(pool), complementarios(pool), capPlan(pool)]);   /* _IND_COMPL_V1 · _KPI_A4_V1 */
+  const asist = await capAsistencias(pool, per.map(x => x.dni).filter(Boolean));   /* _KPI_A4_V1 */
   let sync = null;
   try { const s = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'kpi_eti_sync'"); sync = s.recordset.length ? s.recordset[0].valor : null; } catch (e) {}
-  return { M: m._kpi, personas: per, informes: inf, atenciones: ats, eti, notas: nts, eti_sync: sync, compl };
+  return { M: m._kpi, personas: per, informes: inf, atenciones: ats, eti, notas: nts, eti_sync: sync, compl, capPlan: plan, capAsist: asist };
 }
 function calcularCon(B, hoy, desde, hasta) {
   const res = K.calcular(Object.assign({}, B, { hoy: hoy || hoyLima(), desde, hasta }));
@@ -355,4 +376,4 @@ async function alertas(pool, limite) {
   return r.recordset;
 }
 
-module.exports = { casosAzure, asegurarTablas, cargar, calcular, calcularCon, serie, cerrarMes, cierreAutomatico, cierres, informeMes, rangoMes, registrar, alertas, personas, hoyLima, _t: { fechasInforme, atenciones } };
+module.exports = { casosAzure, capPlan, asegurarTablas, cargar, calcular, calcularCon, serie, cerrarMes, cierreAutomatico, cierres, informeMes, rangoMes, registrar, alertas, personas, hoyLima, _t: { fechasInforme, atenciones } };

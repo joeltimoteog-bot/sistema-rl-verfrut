@@ -132,6 +132,7 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
     <button data-t="s-stats">📈 Estadísticas</button>
     <button data-t="s-informe">📄 Informe mensual</button>
     <button data-t="s-alertas">🚨 Alertas</button>
+    <button data-t="s-plan">📅 Plan de capacitaciones</button>   <!-- _KPI_A4_V1 -->
     <button data-t="s-reglas">🧩 Cómo se mide</button>
   </div>
   <div class="rango" id="rango" style="display:none">
@@ -209,6 +210,21 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
       </ul>
     </div>
     <div class="card"><h2>BITÁCORA</h2><div id="alertas"></div></div>
+  </section>
+
+  <!-- _KPI_A4_V1 (25-oct-2026): capacitaciones planificadas por la empresa para el personal de RR.LL. (KPI A4 de la asistente). -->
+  <section id="s-plan" class="sec">
+    <div class="card">
+      <h2>CAPACITACIONES PLANIFICADAS POR LA EMPRESA</h2>
+      <div class="sub" style="margin-bottom:10px">La asistencia se verifica sola: si el DNI de la persona figura como asistente en el módulo de Capacitaciones en esa fecha, cumple. Solo el Coordinador registra el plan.</div>
+      <div id="planForm" style="display:none;gap:8px;flex-wrap:wrap;align-items:end;margin-bottom:12px">
+        <label style="font-size:12px;font-weight:700">Fecha<br><input type="date" id="plFecha" class="sel" style="margin:0"></label>
+        <label style="font-size:12px;font-weight:700;flex:1;min-width:220px">Tema<br><input type="text" id="plTema" class="sel" style="margin:0;width:100%" maxlength="200" placeholder="Ej.: Taller de hostigamiento laboral"></label>
+        <label style="font-size:12px;font-weight:700">Para<br><select id="plPara" class="sel" style="margin:0"><option value="asist">Asistente de RR.LL.</option><option value="sup">Supervisores GH</option><option value="todos">Todo el equipo</option></select></label>
+        <button class="bt bt-a" id="plGuardar" style="padding:8px 12px">➕ Agregar</button>
+      </div>
+      <div class="tw"><table class="src" id="planTabla" style="min-width:600px"><tr><th>Fecha</th><th>Tema</th><th>Para</th><th>Registrado por</th><th></th></tr></table></div>
+    </div>
   </section>
 
   <section id="s-reglas" class="sec">
@@ -403,9 +419,9 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
       ['Supervisores', 'K3', 'Fechas programadas en ETI registradas como ejecutadas ÷ fechas programadas ya vencidas.', 'Programación de Capacitaciones ETI, Evaluaciones de Checklist e Ingresos masivos (ETI → Azure cada 15 min y al abrir esta página). Si no se hizo, el responsable informa el motivo en ETI y pide reprogramar; cuando el administrador asigna la nueva fecha, cuenta esa fecha (la anterior deja de contar) y el motivo queda como sustento. Reforzamiento: suma solo si se hace.'],
       ['Supervisores', 'K4', 'Nota del curso → escala 1–5 (15 = meta).', 'Registro manual del Coordinador de RR.LL. con constancia adjunta (no se edita ni se borra).'],
       ['Asistente', 'A1', 'Atenciones registradas el mismo día, hasta el cierre de la jornada (16:36) ÷ atenciones registradas (misma regla de días no laborables).', 'Mis Atenciones (hora exacta de registro).'],
-      ['Asistente', 'A2', 'Documentos remitidos el mismo día hábil ÷ registrados.', 'Pendiente: falta la marca "Remitido a…" en el sistema.'],
-      ['Asistente', 'A3', 'EN EVALUACIÓN por el Coordinador: se muestra un cálculo referencial (atenciones FINALIZADAS, ENVIADAS o DERIVADAS ÷ total) pero no suma a la nota.', 'Mis Atenciones (estado).'],
-      ['Asistente', 'A4', 'Capacitaciones asistidas ÷ convocadas.', 'Pendiente: falta la lista de convocatorias.']
+      ['Asistente', 'A2', 'Atenciones marcadas "Remitido a (área)" el mismo día hábil del registro (hasta las 16:36) ÷ registradas. Sin marca y pasado el plazo = no cumple.', 'Botón 📤 Remitir en Mis Atenciones (desde el 25-oct-2026).'],
+      ['Asistente', 'A3', 'Atenciones FINALIZADAS, ENVIADAS o DERIVADAS ÷ total; una atención EN PROCESO por más de 5 días hábiles cuenta como no atendida (activo desde el 25-oct-2026).', 'Mis Atenciones (estado).'],
+      ['Asistente', 'A4', 'Capacitaciones planificadas por la empresa a las que asistió (su DNI figura como asistente en el módulo de Capacitaciones ese día) ÷ planificadas.', 'El plan lo registra el Coordinador en la pestaña "Plan de capacitaciones".']
     ];
     var defs = {}; ['SUP', 'ASIST'].forEach(function (t) { (D.definiciones[t] || []).forEach(function (d) { defs[d.codigo] = d; }); });
     $('reglas').innerHTML = '<tr><th>Para</th><th>KPI (texto de la empresa)</th><th class="c">Peso</th><th>Fórmula</th><th>De dónde sale</th></tr>' + R.map(function (r) {
@@ -535,7 +551,8 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
   setInterval(function () { if (!document.hidden) cargar(); }, 5 * 60 * 1000);
 })();
 </script>
-<script src="kpi_stats.js?v=3"></script>   <!-- _KPI_STATS_V1: rango, estadisticas e informe mensual -->
+<script src="kpi_stats.js?v=4"></script>
+<script src="kpi_plan.js?v=1"></script>    <!-- _KPI_A4_V1: plan de capacitaciones (KPI A4) -->   <!-- _KPI_STATS_V1: rango, estadisticas e informe mensual -->
 <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="KPIs RR.LL."></script>
 <script src="/sistema-rl-verfrut/frontend/js/trafico.js?v=2"></script>
 <script src="../js/tema-rl.js?v=1"></script>  <!-- _TEMA_RL_V1 (16-oct): piel moderna comun (solo presentacion) -->

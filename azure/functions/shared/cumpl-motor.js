@@ -20,6 +20,9 @@ const ROLES_ADMIN = ['administrador', 'administrador 01', 'administrador 02', 'c
 /* _CUMPL_EXCLUIDOS_V1 (25-oct-2026, decision de Joel): usuarios que registran en el sistema pero NO pertenecen al equipo
    de Gestion Humana / RR.LL. y por eso no se evaluan en el panel de Control de Cumplimiento (si pueden usar el sistema). */
 const CUMPL_EXCLUIDOS = ['jsiancas', 'mmechato'];
+/* _CUMPL_SIN_VISITAS_V1 (25-oct-2026, decision de Joel): la asistente de RR.LL. no hace visitas de campo ni ETI;
+   se evalua solo por atenciones y casos. No se le exige el informe semanal de visitas. */
+const CUMPL_SIN_VISITAS = ['smiranda'];
 
 const fecha = (y, m, d) => new Date(Date.UTC(y, m, d));
 const copia = (d) => new Date(d.getTime());
@@ -212,7 +215,9 @@ function crearMotor(D) {
   const PLAZO_CASOS = K.plazo == null ? 5 : K.plazo;
   const cfg = D.config;
   const usuarios = D.usuarios || [];
-  const sups = D.sups || [];
+  const sups = (D.sups || []).filter(n => {   /* _CUMPL_SIN_VISITAS_V1: fuera de la lista de supervisores de campo */
+    const u = usuarioPor(D.usuarios || [], n); return !(u && CUMPL_SIN_VISITAS.indexOf(usr(u.usuario)) >= 0);
+  });
   const visitas = D.visitas || [];
   const restricc = D.restricc || [];
   const casos = (D.casos || []).map(c => Object.assign({}, c, {

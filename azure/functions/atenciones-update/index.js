@@ -16,6 +16,21 @@ module.exports = async function (context, req) {
     const estado = String(body.estado || '').trim();
     const usuario_actualiza = String(body.usuario_actualiza || '').trim();
 
+    /* _KPI_A2_V1 (25-oct-2026): { id, remitido_a } -> marca "Remitido a <area>" con fecha y hora de Lima y quien lo marco (KPI A2) */
+    if (body.remitido_a !== undefined) {
+      const area = String(body.remitido_a || '').trim().toUpperCase().slice(0, 60);
+      if (!id || !area) { context.res = { status: 400, body: { success: false, error: 'Faltan campos: id, remitido_a' } }; return; }
+      const quien = String((authUser && authUser.usuario) || usuario_actualiza || '').trim().toLowerCase().slice(0, 60);
+      const lima = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date()).replace('T', ' ');
+      const pool = await getPool();
+      try { await pool.request().query("IF COL_LENGTH('dbo.Atenciones', 'remitido_a') IS NULL ALTER TABLE dbo.Atenciones ADD remitido_a NVARCHAR(60) NULL, remitido_en DATETIME2(0) NULL, remitido_por NVARCHAR(60) NULL"); } catch (e) {}
+      const r = await pool.request().input('id', sql.Int, id).input('a', sql.NVarChar(60), area).input('f', sql.NVarChar(19), lima).input('q', sql.NVarChar(60), quien)
+        .query('UPDATE Atenciones SET remitido_a = @a, remitido_en = CAST(@f AS DATETIME2(0)), remitido_por = @q, modificado = SYSUTCDATETIME() WHERE id = @id; SELECT @@ROWCOUNT AS n;');
+      if (!r.recordset[0].n) { context.res = { status: 404, body: { success: false, error: 'Atencion no encontrada: id=' + id } }; return; }
+      context.res = { status: 200, body: { success: true, id, remitido_a: area, remitido_en: lima, remitido_por: quien } };
+      return;
+    }
+
     if (!id || !estado) {
       context.res = {
         status: 400,

@@ -251,7 +251,7 @@
     /* 2 por KPI */
     h += '<h3>2. Resultado por KPI (equipo)</h3><div class="tw"><table class="src"><tr><th>KPI</th><th class="c">Meta</th><th class="c">Cumplen / total</th><th class="c">% equipo</th><th class="c">Personas en meta</th></tr>' +
       codes.map(function (c) { var e = EQ[c]; return '<tr><td><b>' + esc(e.corto) + '</b></td><td class="c">' + Math.round(e.meta * 100) + '%</td><td class="c">' + e.num + ' / ' + e.den + '</td><td class="c"><b>' + p100(e.pct) + '</b></td><td class="c">' + e.enMeta + ' de ' + e.personas + '</td></tr>'; }).join('') +
-      '</table></div><div class="sub">Curso de Legislación Laboral: se evalúa en diciembre. Asistente: remisión y asistencia a capacitaciones aún sin datos; consultas atendidas en evaluación.</div>';
+      '</table></div><div class="sub">Curso de Legislación Laboral: se evalúa en diciembre. Asistente: remisión (botón Remitir) y asistencia a capacitaciones (plan del Coordinador) se miden desde el 25-oct-2026; consultas atendidas ya suma; antes estaba en evaluación.</div>';
     /* 3 ranking */
     var orden = P.slice().sort(function (a, b) { return (b.cumpl == null ? -1 : b.cumpl) - (a.cumpl == null ? -1 : a.cumpl); });
     h += '<h3>3. Semáforo por persona</h3><div class="tw"><table class="src"><tr><th>#</th><th>Persona</th><th>Sector(es)</th>' + ['K1', 'K2', 'K3'].map(function (c) { return '<th class="c">' + esc(NOMK[c]) + '</th>'; }).join('') + '<th class="c">% cumpl.</th><th class="c">Nota</th><th>Estado</th></tr>' +
@@ -281,7 +281,7 @@
       '<li>Atenciones sin hora de registro guardada: <b>' + sinHora + '</b> — no cuentan.</li>' +
       '<li>Informes de caso sin fecha verificable (subidos antes del registro automático): <b>' + sinFecha + '</b> — no cuentan.</li>' +
       '<li>Casos atendidos por reemplazo durante ausencias: <b>' + ausentes + '</b> — no cuentan para el titular.</li>' +
-      '<li>Asistente: "Remisión el mismo día" y "Asistencia a capacitaciones" aún sin datos en el sistema; "Consultas atendidas" en evaluación.</li>' +
+      '<li>Asistente: "Remisión el mismo día" se mide con el botón 📤 Remitir y "Asistencia a capacitaciones" con el plan registrado por el Coordinador (desde el 25-oct-2026); "Consultas atendidas" ya suma a la nota.</li>' +
       '<li>Enlace de usuarios: ' + P.filter(function (p) { return p.enlace && (!p.enlace.rrll || (p.enlace.aplica_eti && !(p.enlace.eti_sectores || []).length)); }).length + ' persona(s) con enlace incompleto.</li></ul>';
     h += '<p class="sub" style="margin-top:14px">Generado automáticamente por el Sistema RR.LL. a partir de Casos, Mis Atenciones, historial de Cumplimiento y la programación de Capacitaciones ETI / Evaluaciones ETI. Cada número tiene su evidencia en el módulo KPIs RR.LL.' + (R.cerrado ? ' Este cierre es inmutable.' : '') + '</p>';
     return h;

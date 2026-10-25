@@ -4441,6 +4441,7 @@ function renderAt(lista) {
         <td>
           <button class="btn-a bv" onclick="verDet('${a.nro}','at')">Ver</button>
           ${puedeMod?`<button class="btn-a be" onclick="editarAt('${a.nro}')">✏️</button>`:''}
+          ${(puedeMod&&a.id&&window._remitirBoton)?window._remitirBoton(a):''}   <!-- _KPI_A2_V1: Remitido a (area + fecha/hora) -->
           ${(String(a.estado||'').toUpperCase()==='EN PROCESO'&&String(a.celular||'').replace(/\D/g,'').length>=9)?`<button class="btn-a" style="background:#25d366;color:#fff;border-color:#25d366" title="Enviar recordatorio por WhatsApp" onclick="recordarWhatsApp('${a.nro}')">📲</button>`:''}
           <button class="btn-a bd" onclick="eliminarAt('${a.nro}')" title="Eliminar este registro">🗑️</button>
         </td>

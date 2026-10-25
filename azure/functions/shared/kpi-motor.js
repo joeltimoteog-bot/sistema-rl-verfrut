@@ -141,11 +141,10 @@ function calcular(E) {
       else if (d.codigo === 'K3') r = k3(p, u, desde, etiNombre);
       else if (d.codigo === 'K4') r = k4(p);
       else if (d.codigo === 'A1') r = a1(atencionesDe(p, u, desde));
-      else if (d.codigo === 'A3') {   /* Joel (30-set): se deja EN EVALUACION; se muestra el calculo pero no suma a la nota ni genera alertas */
-        r = a3(atencionesDe(p, u, desde));
-        r = Object.assign(r, { estado: 'en_evaluacion', calc_num: r.num, calc_den: r.den, num: 0, den: 0,
-          nota_def: 'En evaluación por el Coordinador de RR.LL.: aún no suma a la nota. Cálculo referencial: ' + r.num + ' de ' + r.den + ' atenciones FINALIZADAS (las EN PROCESO de más de ' + DIAS_CONSULTA + ' días hábiles cuentan como no atendidas).' });
-      }
+      else if (d.codigo === 'A2') r = a2(atencionesDe(p, u, desde));   /* _KPI_A2_V1 (25-oct-2026) */
+      else if (d.codigo === 'A3') r = a3(atencionesDe(p, u, desde));   /* _KPI_A3_ACTIVO_V1 (25-oct-2026, decision de Joel): ya suma a la nota (antes "en evaluacion") */
+      else if (d.codigo === 'A4') r = a4(p, u);                         /* _KPI_A4_V1 (25-oct-2026) */
+
       else r = { estado: 'sin_datos', num: 0, den: 0, evidencia: [], nota_def: d.codigo === 'A2'
         ? 'Aún no existe en el sistema la marca "Remitido a…" con fecha y hora. Se medirá cuando se habilite.'
         : 'Aún no existe la lista de capacitaciones a las que es convocada. Se medirá cuando se habilite.' };
@@ -464,6 +463,48 @@ function calcular(E) {
     return { estado: r.den ? 'ok' : 'sin_datos', num: r.num, den: r.den, evidencia: ev, fuera_horario: r.fuera };
   }
 
+  /* _KPI_A2_V1: remision el mismo dia habil del registro (misma regla de cierre 16:36 que A1).
+     Sin "Remitido a" y ya pasado el plazo = no cumple; dentro del plazo = pendiente (no cuenta). */
+  function a2(ats) {
+    const ev = []; let num = 0, den = 0, pend = 0;
+    ats.forEach(a => {
+      if (!a.fecha_registro) return;   /* sin hora de registro (antes de la migracion): no se evalua */
+      const fr = String(a.fecha_registro).slice(0, 10), hReg = String(a.fecha_registro).slice(11, 16);
+      const fd = aFecha(fr); if (!fd) return;
+      const limite = (!M.esHabil(fd) || (hReg && hReg > HORA_CIERRE)) ? ymd(M.sumarHabiles(fd, 1)) : fr;
+      if (!enR(limite)) return;   /* cuenta en el dia en que debia remitirse */
+      const e = { ref: 'Atención N° ' + a.nro + ' (' + a.anio + ')', fecha: fr, trabajador: a.nombre };
+      if (a.remitido_en) {
+        const rm = String(a.remitido_en).slice(0, 10), hm = String(a.remitido_en).slice(11, 16);
+        e.ok = rm < limite || (rm === limite && (!hm || hm <= HORA_CIERRE)); den++; if (e.ok) num++;
+        e.detalle = 'Remitida a ' + (a.remitido_a || '') + ' el ' + dm(rm) + (hm ? ' ' + hm : '') + (e.ok ? ' · el mismo día hábil' : ' · debía remitirse hasta el ' + dm(limite) + ' ' + HORA_CIERRE);
+      } else if (hoyS > limite) { e.ok = false; den++; e.detalle = 'Registrada el ' + dm(fr) + (hReg ? ' ' + hReg : '') + ' y no se marcó "Remitido a" (debía remitirse hasta el ' + dm(limite) + ' ' + HORA_CIERRE + ')'; }
+      else { pend++; return; }
+      ev.push(e);
+    });
+    if (den) ev.unshift({ ref: 'Documentación remitida el mismo día', ok: true, resumen: true, detalle: num + ' de ' + den + ' atenciones se remitieron a su área el mismo día hábil del registro (hasta las ' + HORA_CIERRE + ').' });
+    if (pend) ev.push({ ref: 'Pendientes de remitir', ok: null, resumen: true, detalle: pend + ' atención(es) registradas hoy, aún dentro del plazo para remitir.' });
+    return { estado: den ? 'ok' : 'sin_datos', num, den, evidencia: ev,
+      nota_def: den ? undefined : 'Aún no hay atenciones con "Remitido a". Se mide desde el ' + dm(hoyS) + ': cada atención debe marcarse "Remitido a (área)" el mismo día hábil.' };
+  }
+  /* _KPI_A4_V1: capacitaciones planificadas por la empresa (KPI_CapPlan, las registra el Coordinador) vs asistencia real
+     (dbo.Cap_Asistentes: su DNI figura como asistente en una capacitacion de esa fecha). */
+  function a4(p, u) {
+    const ev = []; let num = 0, den = 0;
+    const plan = (E.capPlan || []).filter(x => !x.personas.length || x.personas.indexOf(u.usuario) >= 0 || x.personas.indexOf('todos') >= 0 || x.personas.indexOf(String(p.tipo || '').toLowerCase()) >= 0);
+    const mias = (E.capAsist || []).filter(x => String(x.dni) === String(p.dni));
+    plan.forEach(x => {
+      if (!enR(x.fecha)) return;
+      const e = { ref: x.tema, fecha: x.fecha };
+      const asis = mias.find(y => y.fecha === x.fecha);
+      if (asis) { e.ok = true; den++; num++; e.detalle = 'Asistió (figura como asistente en "' + (asis.tema || '') + '" del ' + dm(x.fecha) + ')'; }
+      else if (x.fecha < hoyS) { e.ok = false; den++; e.detalle = 'Programada el ' + dm(x.fecha) + ' y no figura su asistencia en el módulo de Capacitaciones'; }
+      else { e.ok = null; e.pendiente = true; e.detalle = 'Programada para el ' + dm(x.fecha) + (x.fecha === hoyS ? ' (HOY)' : ''); }
+      ev.push(e);
+    });
+    return { estado: den ? 'ok' : 'sin_datos', num, den, evidencia: ev,
+      nota_def: den ? undefined : (plan.length ? 'Las capacitaciones planificadas aún no llegan a su fecha.' : 'Aún no hay capacitaciones planificadas por la empresa para esta persona (las registra el Coordinador en el módulo KPIs).') };
+  }
   function a3(ats) {
     const ev = []; let num = 0, den = 0, pend = 0;
     ats.forEach(a => {

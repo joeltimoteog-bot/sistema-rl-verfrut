@@ -67,7 +67,26 @@ module.exports = async function (context, req) {
       return res(200, Object.assign({ success: true }, inf));
     }
 
+    if (accion === 'capPlanListar') return res(200, { success: true, plan: await KDB.capPlan(pool), personas: (await KDB.personas(pool)).map(p => ({ usuario: p.usuario, nombre: p.nombre, tipo: p.tipo })) });   /* _KPI_A4_V1 */
+
     if (K.EDITORES.indexOf(quien) < 0) return res(403, { success: false, error: 'Solo el Coordinador de RR.LL. puede hacer este cambio' });
+
+    /* _KPI_A4_V1 (25-oct-2026): plan de capacitaciones de la empresa para el personal de RR.LL. */
+    if (accion === 'capPlanGuardar') {
+      const f = fechaOk(b.fecha); const tema = String(b.tema || '').trim().slice(0, 200);
+      const pers = String(b.personas || '').split(',').map(v => v.trim().toLowerCase()).filter(Boolean).join(',');
+      if (!f || !tema) return res(200, { success: false, error: 'Indica la fecha y el tema' });
+      await pool.request().input('f', sql.Date, f).input('t', sql.NVarChar(200), tema).input('p', sql.NVarChar(400), pers || 'asist').input('q', sql.NVarChar(60), quien)
+        .query('INSERT INTO dbo.KPI_CapPlan (fecha, tema, personas, creado_por) VALUES (@f, @t, @p, @q)');
+      base = { t: 0, B: null };
+      return res(200, { success: true });
+    }
+    if (accion === 'capPlanAnular') {
+      const id = parseInt(b.id, 10); if (!id) return res(200, { success: false, error: 'Falta el id' });
+      await pool.request().input('id', sql.Int, id).query('UPDATE dbo.KPI_CapPlan SET anulado = 1 WHERE id = @id');
+      base = { t: 0, B: null };
+      return res(200, { success: true });
+    }
 
     if (accion === 'guardarNota') {
       const b = req.body || {};
