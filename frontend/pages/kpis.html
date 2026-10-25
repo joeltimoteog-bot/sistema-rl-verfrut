@@ -48,6 +48,9 @@ table{width:100%;border-collapse:collapse}
 .tabla{min-width:900px}
 th{background:var(--azul);color:#fff;font-size:12px;text-align:left;padding:9px 8px;font-weight:700}
 th.c,td.c{text-align:center}
+/* _KPI_UI_V2 (25-oct-2026): el encabezado de la tabla del equipo queda fijo al bajar (debajo de la barra superior) */
+#tabla th{position:sticky;top:var(--topH,58px);z-index:5;box-shadow:0 1px 0 rgba(0,0,0,.15)}
+@media (min-width:1000px){ #tabla-wrap{overflow:visible} }
 td{border-bottom:1px solid var(--bd);padding:9px 8px;vertical-align:middle}
 tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
 .nm{font-weight:700}
@@ -160,7 +163,7 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
     </div>
     <div class="card">
       <h2>CUMPLIMIENTO POR PERSONA <span class="sub" style="font-family:Barlow;letter-spacing:0">· clic en una fila para ver la evidencia</span></h2>
-      <div class="tw"><table class="tabla" id="tabla"></table></div>
+      <div class="tw" id="tabla-wrap"><table class="tabla" id="tabla"></table></div>
     </div>
   </section>
 
@@ -328,9 +331,10 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
     orden.forEach(function (p) {
       var i = P.indexOf(p);
       var celdas;
-      if (p.tipo === 'ASIST') {
-        celdas = '<td colspan="4"><div style="display:flex;gap:8px;flex-wrap:wrap">' + p.kpis.map(function (k) {
-          return '<div style="text-align:center">' + chip(k) + '<div class="sub" style="font-size:10.5px;max-width:120px">' + esc(k.corto) + ' (' + Math.round(k.peso * 100) + '%)</div></div>'; }).join('') + '</div></td>';
+      if (p.tipo === 'ASIST') {   /* _KPI_UI_V2 (25-oct): un KPI por columna, alineado con el encabezado; cada uno lleva su propio nombre */
+        celdas = p.kpis.slice(0, 4).map(function (k) {
+          return '<td class="c">' + chip(k) + '<div class="sub" style="font-size:10.5px">' + esc(k.corto) + ' (' + Math.round(k.peso * 100) + '%)</div></td>'; }).join('');
+        for (var f = p.kpis.length; f < 4; f++) celdas += '<td></td>';
       } else celdas = p.kpis.map(function (k) { return '<td class="c">' + chip(k) + (k.codigo === 'K1' && k.estrellas ? '<div class="sub">⭐ ' + k.estrellas + ' en ≤3 días</div>' : '') + '</td>'; }).join('');
       t += '<tr class="fila" data-i="' + i + '"><td><div class="nm">' + esc(p.nombre) + '</div><div class="sub">' + esc(p.empresa) + ' · ' + esc(p.puesto) + '</div>' + tags(p) + '</td>' + celdas +
         '<td class="c">' + chipsC(p) + '</td>' +
@@ -552,7 +556,9 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
 })();
 </script>
 <script src="kpi_stats.js?v=4"></script>
-<script src="kpi_plan.js?v=1"></script>    <!-- _KPI_A4_V1: plan de capacitaciones (KPI A4) -->   <!-- _KPI_STATS_V1: rango, estadisticas e informe mensual -->
+<script src="kpi_plan.js?v=1"></script>
+<script>/* _KPI_UI_V2: el encabezado fijo se coloca justo debajo de la barra superior, mida lo que mida */
+(function(){ function f(){ var t=document.querySelector('.top'); if(t) document.documentElement.style.setProperty('--topH', t.offsetHeight+'px'); } f(); window.addEventListener('resize', f); setTimeout(f, 800); })();</script>    <!-- _KPI_A4_V1: plan de capacitaciones (KPI A4) -->   <!-- _KPI_STATS_V1: rango, estadisticas e informe mensual -->
 <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="KPIs RR.LL."></script>
 <script src="/sistema-rl-verfrut/frontend/js/trafico.js?v=2"></script>
 <script src="../js/tema-rl.js?v=1"></script>  <!-- _TEMA_RL_V1 (16-oct): piel moderna comun (solo presentacion) -->
