@@ -20,6 +20,7 @@ const ADMINS_ELIMINAR = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas'];
 const ROLES_ADMIN_ENVIO = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'];   /* _ENVIO_INFORME_ADMIN_V1 */
 async function esAdminUsuario(pool, usuario) {
   const u = String(usuario || '').trim().toLowerCase(); if (!u) return false;
+  if (ADMINS_ELIMINAR.indexOf(u) >= 0) return true;   /* administradores del sistema por usuario (jtimoteo, ...) */
   try {
     const r = await pool.request().input('u', sql.NVarChar(100), u).query('SELECT TOP 1 rol FROM dbo.usuarios WHERE LOWER(usuario) = @u AND activo = 1');
     return !!(r.recordset.length && ROLES_ADMIN_ENVIO.indexOf(String(r.recordset[0].rol || '').trim().toLowerCase()) >= 0);

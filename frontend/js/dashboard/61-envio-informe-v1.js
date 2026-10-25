@@ -22,7 +22,16 @@ try {
   /* _ENVIO_INFORME_ADMIN_V1 (24-oct-2026, decision de Joel): la fecha la registra SOLO un administrador.
      El supervisor la ve (si ya existe) pero no la edita, y ya no se le exige al subir su informe. */
   var ROLES_ADMIN_ENVIO = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'];
-  function esAdminEnvio() { try { var U = (typeof USER !== 'undefined' && USER) ? USER : (window.USER || {}); return ROLES_ADMIN_ENVIO.indexOf(String(U.rol || '').trim().toLowerCase()) >= 0; } catch (e) { return false; } }
+  var ADMINS_ENVIO = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas'];   /* = ADMINS_ELIMINAR_CASO: administradores del sistema por usuario */
+  function esAdminEnvio() {
+    try {
+      var U = (typeof USER !== 'undefined' && USER && USER.usuario) ? USER : null;
+      if (!U) { try { U = JSON.parse(sessionStorage.getItem('user') || 'null'); } catch (e2) { U = null; } }
+      if (!U || (!U.rol && !U.usuario)) return true;   /* sin datos de sesion: no bloquear; el servidor decide */
+      if (ADMINS_ENVIO.indexOf(String(U.usuario || '').trim().toLowerCase()) >= 0) return true;
+      return ROLES_ADMIN_ENVIO.indexOf(String(U.rol || '').trim().toLowerCase()) >= 0;
+    } catch (e) { return true; }
+  }
 
   function crear() {
     if (document.getElementById(ID)) return;
