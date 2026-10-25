@@ -465,11 +465,13 @@ function calcular(E) {
 
   /* _KPI_A2_V1: remision el mismo dia habil del registro (misma regla de cierre 16:36 que A1).
      Sin "Remitido a" y ya pasado el plazo = no cumple; dentro del plazo = pendiente (no cuenta). */
+  const A2_DESDE = '2026-10-26';   /* el boton "Remitir" existe desde el 25-oct-2026: se mide desde el lunes 26 */
   function a2(ats) {
     const ev = []; let num = 0, den = 0, pend = 0;
     ats.forEach(a => {
       if (!a.fecha_registro) return;   /* sin hora de registro (antes de la migracion): no se evalua */
       const fr = String(a.fecha_registro).slice(0, 10), hReg = String(a.fecha_registro).slice(11, 16);
+      if (fr < A2_DESDE) return;   /* antes no existia la marca "Remitido a": no se evalua */
       const fd = aFecha(fr); if (!fd) return;
       const limite = (!M.esHabil(fd) || (hReg && hReg > HORA_CIERRE)) ? ymd(M.sumarHabiles(fd, 1)) : fr;
       if (!enR(limite)) return;   /* cuenta en el dia en que debia remitirse */
@@ -485,7 +487,7 @@ function calcular(E) {
     if (den) ev.unshift({ ref: 'Documentación remitida el mismo día', ok: true, resumen: true, detalle: num + ' de ' + den + ' atenciones se remitieron a su área el mismo día hábil del registro (hasta las ' + HORA_CIERRE + ').' });
     if (pend) ev.push({ ref: 'Pendientes de remitir', ok: null, resumen: true, detalle: pend + ' atención(es) registradas hoy, aún dentro del plazo para remitir.' });
     return { estado: den ? 'ok' : 'sin_datos', num, den, evidencia: ev,
-      nota_def: den ? undefined : 'Aún no hay atenciones con "Remitido a". Se mide desde el ' + dm(hoyS) + ': cada atención debe marcarse "Remitido a (área)" el mismo día hábil.' };
+      nota_def: den ? undefined : 'Se mide desde el ' + dm(A2_DESDE) + ': cada atención registrada debe marcarse "Remitido a (área)" (botón 📤 en Mis Atenciones) el mismo día hábil, hasta las ' + HORA_CIERRE + '.' };
   }
   /* _KPI_A4_V1: capacitaciones planificadas por la empresa (KPI_CapPlan, las registra el Coordinador) vs asistencia real
      (dbo.Cap_Asistentes: su DNI figura como asistente en una capacitacion de esa fecha). */
