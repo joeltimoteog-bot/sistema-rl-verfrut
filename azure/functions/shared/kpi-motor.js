@@ -70,7 +70,9 @@ const PERSONAS = [
 const DIA = 86400000;
 const usr = (u) => String(u || '').trim().toLowerCase();
 const ymd = (d) => d ? d.toISOString().slice(0, 10) : '';
-const aFecha = (s) => { const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null; };
+const aFecha = (s) => {
+  if (s instanceof Date) return isNaN(s.getTime()) ? null : new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()));   /* _AFECHA_DATE_V1 (25-oct): el motor de cumplimiento ya entrega fecha_envio_informe como fecha */
+  const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])) : null; };
 const dm = (s) => s ? String(s).slice(8, 10) + '/' + String(s).slice(5, 7) : '';
 const max = (a, b) => (a > b ? a : b);
 const min = (a, b) => (a < b ? a : b);

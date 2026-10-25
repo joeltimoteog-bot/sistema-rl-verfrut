@@ -17,6 +17,9 @@ const DIA = 86400000;
 const MESES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const PESO = { EN_PLAZO: 0, PROXIMO: 1, VENCE_HOY: 2, VENCIDO: 3, CRITICO: 4 };
 const ROLES_ADMIN = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'];
+/* _CUMPL_EXCLUIDOS_V1 (25-oct-2026, decision de Joel): usuarios que registran en el sistema pero NO pertenecen al equipo
+   de Gestion Humana / RR.LL. y por eso no se evaluan en el panel de Control de Cumplimiento (si pueden usar el sistema). */
+const CUMPL_EXCLUIDOS = ['jsiancas', 'mmechato'];
 
 const fecha = (y, m, d) => new Date(Date.UTC(y, m, d));
 const copia = (d) => new Date(d.getTime());
@@ -486,6 +489,7 @@ function crearMotor(D) {
     const hoy = hoyLima();
     const vis = visitasPendientes(hoy);
     const lista = usuarios.filter(x => {
+      if (CUMPL_EXCLUIDOS.indexOf(usr(x.usuario)) >= 0) return false;   /* _CUMPL_EXCLUIDOS_V1 */
       if (x.activo && AUS.coberturas(x, ymd(hoy)).length) return true;   /* _AUSENCIAS_V1: el reemplazo entra al panel aunque no sea supervisor */
       if (!x.activo || x.rol !== 'supervisor') return false;
       if (esSupCampo(x)) return true;
