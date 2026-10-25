@@ -370,6 +370,33 @@ function calcular(E) {
         ev.push(e);
       });
     });
+    /* _K3_REALIZADAS_V1 (25-oct-2026, decision de Joel, opcion B): lo EJECUTADO aunque no estuviera programado
+       tambien cuenta como cumplido (suma al numerador y al denominador):
+         · capacitacion registrada en ETI Capacitaciones (coleccion capacitaciones) en el periodo, no ligada a una programacion;
+         · evaluacion de checklist registrada en Evaluaciones ETI (evaluaciones_conocimiento) en el periodo, en una fecha que
+           no este ya cubierta por una programacion de checklist contada arriba.
+       Lo programado y no hecho sigue restando. */
+    const fechasProg = {}; ev.forEach(e => { if (e.prog) fechasProg[String(e.ref).split(' ·')[0] + '|' + e.fecha] = 1; });
+    const ligados = {}; progs.forEach(g => { if (g.registro_id) ligados[g.registro_id] = 1; });
+    ((E.eti && E.eti.actas) || []).forEach(a => {
+      if (!a.ejecucion || !enR(a.ejecucion) || a.ejecucion < desde || ligados[a.id]) return;
+      if (!esPersonaEti(a.supervisor, p, u.nombre, etiNombre)) return;
+      const tema = String(a.tema || 'CAPACITACIONES ETI').toUpperCase().trim();
+      if (tema === TEMA_OPCIONAL) { ev.push({ ref: tema + ' · ' + (a.sector || ''), fecha: a.ejecucion, ok: null, detalle: 'Reforzamiento realizado el ' + dm(a.ejecucion) + ' (opcional: se muestra, no cambia la nota)' }); return; }
+      if (fechasProg[tema + '|' + a.ejecucion]) return;
+      den++; num++;
+      ev.push({ ref: tema + ' · ' + (a.sector || ''), fecha: a.ejecucion, ok: true, realizada: true, detalle: 'Realizada y registrada en ETI el ' + dm(a.ejecucion) + ' (sin programación previa: cuenta como cumplida)' });
+    });
+    ((E.eti && E.eti.evaluaciones) || []).forEach(x => {
+      if (!x.fecha || !enR(x.fecha) || x.fecha < desde) return;
+      const mia = (x.usuario && x.usuario === u.usuario) || esPersonaEti(x.nombre, p, u.nombre, etiNombre);
+      if (!mia) return;
+      const tema = 'EVALUACIONES DE CHECKLIST';
+      if (fechasProg[tema + '|' + x.fecha]) return;
+      const k = tema + '|' + x.fecha; if (fechasProg[k + '|eval']) return; fechasProg[k + '|eval'] = 1;   /* varias evaluaciones el mismo dia = 1 actividad */
+      den++; num++;
+      ev.push({ ref: tema + ' · ' + (x.sector || ''), fecha: x.fecha, ok: true, realizada: true, detalle: 'Evaluación de checklist realizada el ' + dm(x.fecha) + (x.tipo ? ' (' + x.tipo + ')' : '') + ' (sin programación previa: cuenta como cumplida)' });
+    });
     ev.sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
     return { estado: den ? 'ok' : 'sin_datos', num, den, evidencia: ev };
   }

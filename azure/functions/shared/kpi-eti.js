@@ -32,6 +32,10 @@ function asegurarTablas(pool) {
     IF COL_LENGTH('dbo.ETI_Programaciones', 'solicitudes') IS NULL ALTER TABLE dbo.ETI_Programaciones ADD solicitudes NVARCHAR(MAX) NULL;
     IF OBJECT_ID('dbo.ETI_Usuarios', 'U') IS NULL
       CREATE TABLE dbo.ETI_Usuarios (usuario NVARCHAR(60) NOT NULL, nombre NVARCHAR(150) NULL, estado NVARCHAR(20) NULL, sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());
+    IF OBJECT_ID('dbo.ETI_Evaluaciones', 'U') IS NULL
+      CREATE TABLE dbo.ETI_Evaluaciones (id NVARCHAR(60) NOT NULL PRIMARY KEY, usuario NVARCHAR(60) NULL, nombre NVARCHAR(150) NULL,
+        fecha DATE NULL, tipo NVARCHAR(60) NULL, sector NVARCHAR(150) NULL, empresa NVARCHAR(30) NULL, creado_en NVARCHAR(40) NULL,
+        sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());   /* _K3_REALIZADAS_V1 (25-oct-2026): evaluaciones de checklist del Sistema Evaluaciones ETI */
     IF OBJECT_ID('dbo.ETI_Supervisores', 'U') IS NULL
       CREATE TABLE dbo.ETI_Supervisores (nombre NVARCHAR(150) NOT NULL, sector NVARCHAR(150) NULL, sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());`)
     .catch(e => { listo = null; throw e; });
@@ -89,6 +93,7 @@ async function insertarLotes(tx, tabla, cols, filas) {
 /* Lee Firestore y reemplaza las tablas. Devuelve { programaciones, registros } */
 async function sincronizar(pool, fetchFn) {
   await asegurarTablas(pool);
+  const evals = await coleccion('evaluaciones_conocimiento', fetchFn).catch(() => null);   /* _K3_REALIZADAS_V1: si falla, se conserva lo anterior */
   const [pEti, pEval, regs, usus, sups] = await Promise.all([
     coleccion('programaciones_eti', fetchFn), coleccion('programaciones_eval', fetchFn)   /* _IND_FIX_V1 (08-oct-2026): antes .catch(() => []): si fallaba la lectura se BORRABAN las programaciones de checklist y el K3 subia; ahora se aborta y queda lo de la vuelta anterior */, coleccion('capacitaciones', fetchFn),
     coleccion('usuarios_eti', fetchFn), coleccion('supervisores_eti', fetchFn)]);
@@ -125,12 +130,17 @@ async function sincronizar(pool, fetchFn) {
       sups.filter(x => x.nombre || x.supervisor).map(x => [txt(x.nombre || x.supervisor, 150), txt(x.sector, 150)]));
     await insertarLotes(tx, 'dbo.ETI_Programaciones', colsP, filasP);
     await insertarLotes(tx, 'dbo.ETI_Registros', colsR, filasR);
+    if (evals) {   /* _K3_REALIZADAS_V1 */
+      await tx.request().query('DELETE FROM dbo.ETI_Evaluaciones;');
+      await insertarLotes(tx, 'dbo.ETI_Evaluaciones', [['id', sql.NVarChar(60)], ['usuario', sql.NVarChar(60)], ['nombre', sql.NVarChar(150)], ['fecha', sql.Date], ['tipo', sql.NVarChar(60)], ['sector', sql.NVarChar(150)], ['empresa', sql.NVarChar(30)], ['creado_en', sql.NVarChar(40)]],
+        evals.map(d => [txt(d._id, 60), txt(String(d.usuario || '').trim().toLowerCase(), 60), txt(d.nomUsuario || d.nombre, 150), dia(d.fecha || d.creadoEn), txt(d.tipo, 60), txt(d.sector, 150), txt(d.emp || d.empresa, 30), txt(d.creadoEn, 40)]));
+    }
     await tx.request().query(`MERGE dbo.CV_Estado AS x USING (SELECT 'kpi_eti_sync' AS clave) AS s ON x.clave = s.clave
       WHEN MATCHED THEN UPDATE SET valor = CONVERT(NVARCHAR(19), SYSUTCDATETIME(), 126), actualizado = SYSUTCDATETIME()
       WHEN NOT MATCHED THEN INSERT (clave, valor) VALUES ('kpi_eti_sync', CONVERT(NVARCHAR(19), SYSUTCDATETIME(), 126));`);
     await tx.commit();
   } catch (e) { try { await tx.rollback(); } catch (e2) {} throw e; }
-  return { programaciones: filasP.length, registros: filasR.length, usuarios: usus.length, supervisores: sups.length };
+  return { programaciones: filasP.length, registros: filasR.length, evaluaciones: evals ? evals.length : null, usuarios: usus.length, supervisores: sups.length };
 }
 
 /* Para el motor */
@@ -143,10 +153,12 @@ async function leer(pool) {
   const usuarios = {}; (await pool.request().query('SELECT usuario, nombre, estado FROM dbo.ETI_Usuarios')).recordset
     .forEach(x => { usuarios[String(x.usuario).toLowerCase()] = { nombre: x.nombre, estado: x.estado }; });
   const supervisores = (await pool.request().query('SELECT nombre, sector FROM dbo.ETI_Supervisores')).recordset;
+  let evaluaciones = [];   /* _K3_REALIZADAS_V1 */
+  try { evaluaciones = (await pool.request().query('SELECT id, usuario, nombre, CONVERT(CHAR(10), fecha, 120) AS fecha, tipo, sector, empresa FROM dbo.ETI_Evaluaciones')).recordset; } catch (e) {}
   return { programaciones: p.map(x => ({ id: x.id, origen: x.origen, supervisor: x.supervisor, sector: x.sector, tema: x.tema,
     fechas: J(x.fechas, []), fechas_ejecutadas: J(x.fechas_ejecutadas, []), estado: x.estado, registro_id: x.registro_id,
     ejecutada_en: x.ejecutada_en, veces_reprog: x.veces_reprog, reprogramaciones: J(x.reprogramaciones, []), solicitudes: J(x.solicitudes, []) })),
-    registros, usuarios, supervisores,
+    registros, usuarios, supervisores, evaluaciones,
     actas: r.map(x => ({ id: x.id, supervisor: x.supervisor, sector: x.sector, tema: x.tema, ejecucion: x.fecha_ejecucion, envio: x.fecha_envio, limite: x.fecha_limite })) };   /* _IND_COMPL_V1 */
 }
 
