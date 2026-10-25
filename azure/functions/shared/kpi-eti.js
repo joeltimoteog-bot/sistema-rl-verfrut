@@ -36,6 +36,8 @@ function asegurarTablas(pool) {
       CREATE TABLE dbo.ETI_Evaluaciones (id NVARCHAR(60) NOT NULL PRIMARY KEY, usuario NVARCHAR(60) NULL, nombre NVARCHAR(150) NULL,
         fecha DATE NULL, tipo NVARCHAR(60) NULL, sector NVARCHAR(150) NULL, empresa NVARCHAR(30) NULL, creado_en NVARCHAR(40) NULL,
         sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());   /* _K3_REALIZADAS_V1 (25-oct-2026): evaluaciones de checklist del Sistema Evaluaciones ETI */
+    IF COL_LENGTH('dbo.ETI_Evaluaciones', 'creado_en') IS NULL ALTER TABLE dbo.ETI_Evaluaciones ADD creado_en NVARCHAR(40) NULL;
+    IF COL_LENGTH('dbo.ETI_Evaluaciones', 'empresa') IS NULL ALTER TABLE dbo.ETI_Evaluaciones ADD empresa NVARCHAR(30) NULL;
     IF OBJECT_ID('dbo.ETI_Supervisores', 'U') IS NULL
       CREATE TABLE dbo.ETI_Supervisores (nombre NVARCHAR(150) NOT NULL, sector NVARCHAR(150) NULL, sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());`)
     .catch(e => { listo = null; throw e; });
