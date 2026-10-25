@@ -843,6 +843,7 @@ async function doLogin(){
             localStorage.setItem('bienestarSocialAuth', JSON.stringify({
               usuario: db.user.usuario, nombre: db.user.nombre, rol: db.user.rol,
               permisos: db.user.permisos, token: db.user.token,
+              rl_token: d.token || '',   /* _BS_AZURE_SESION_V1 (25-oct): Bienestar consulta Azure (trabajadores) con la sesion de RR.LL. */
               loginAt: new Date().toISOString(), source: 'sistema-rl-verfrut'
             }));
             console.log('[login] SSO Bienestar: token obtenido');
