@@ -221,6 +221,15 @@ function crearMotor(D) {
      ENTREGADA si el informe esta subido al sistema O si el administrador registro la fecha en que el
      supervisor lo envio por correo. El PDF sigue figurando como documento pendiente (sin penalizar). */
   const informeEntregado = (c) => !!(c.enlace_informe || c.fecha_envio_informe);
+  /* _INFORME_PLAZO_V1 (25-oct-2026, decision de Joel): si la fecha de envio por correo (la registra el administrador)
+     esta DENTRO del plazo de investigacion (5 dias habiles desde el reporte), el caso cuenta como CUMPLIDO:
+     cerrado -> "en plazo"; abierto -> no vencido ni critico (lo que falte subir es tramite, no incumplimiento). */
+  const informeEnPlazo = (c) => {
+    if (!c.fecha_envio_informe) return false;
+    const base = c.fecha_reporte || c.fecha_registro; if (!base) return false;
+    const lim = sumarHabiles(base, plazoEn(cfg, 'plazo_investigacion', ymd(c.fecha_registro)));
+    return c.fecha_envio_informe <= lim;
+  };
 
   /* _CALENDARIO_V1: dias laborables + feriados de la configuracion (antes: temporada alta L-V / baja L-Sab) */
   const CAL_DIAS = calParseDias(cfg.dias), CAL_FER = {};
@@ -294,7 +303,8 @@ function crearMotor(D) {
     if (!informeEntregado(c)) { etapa = 'Investigación e informe'; plazo = plazoEn(cfg, 'plazo_investigacion', fReg); limite = sumarHabiles(base, plazo); }   /* _CALENDARIO_V1 · _ENVIO_INFORME_CUMPL_V1 */
     else if (!c.enlace_reporte) { etapa = 'Carga de reporte/descargo'; plazo = plazoEn(cfg, 'plazo_documentos', fReg); limite = sumarHabiles(base, plazo); }
     else { etapa = 'Cierre del caso'; plazo = plazoEn(cfg, 'plazo_cierre', fReg); limite = sumarHabiles(base, plazo); }
-    const s = semaforo(limite, hoy);
+    let s = semaforo(limite, hoy);
+    if (informeEnPlazo(c)) s = { dias_restantes: s.dias_restantes, dias_retraso: 0, estado: 'EN_PLAZO' };   /* _INFORME_PLAZO_V1 */
     const avance = informeEntregado(c) && c.enlace_reporte ? 80 : informeEntregado(c) ? 50 : 20;   /* _ENVIO_INFORME_CUMPL_V1 */
     const o = {
       tipo: 'CASO', clave: 'caso_' + c.nro, caso: c.nro, actividad: etapa, trabajador: c.nombre, empresa: c.empresa, sector: c.sector,
@@ -305,6 +315,7 @@ function crearMotor(D) {
       accion: docs.length ? 'Subir ' + docs.join(' y ') : 'Concluir el caso'
     };
     if (!c.enlace_informe && c.fecha_envio_informe) o.informe_enviado_correo = ymd(c.fecha_envio_informe);   /* _ENVIO_INFORME_CUMPL_V1: entregado por correo, falta subir el PDF */
+    if (informeEnPlazo(c)) o.informe_en_plazo = true;   /* _INFORME_PLAZO_V1 */
     const cb = AUS.cobCaso(c, ymd(hoy));   /* _AUSENCIAS_V1: el titular esta ausente -> lo responde el reemplazo */
     if (cb) { AUS.etiqueta(o, cb); o.responsable = AUS.reemp(cb).nombre; }
     return o;
@@ -383,7 +394,7 @@ function crearMotor(D) {
       if (!AUS.duenoEn(c, u, ymd(fin))) return;   /* _AUSENCIAS_V1: de quien era el caso el dia del cierre */
       cerrados++; sumaDias += dias(base, fin);
       const lim = sumarHabiles(base, plazoEn(cfg, 'plazo_cierre', ymd(c.fecha_registro)));   /* _PLAZO_VIGENTE_V1 */
-      if (fin <= lim) enPlazo++; else fuera++;
+      if (fin <= lim || informeEnPlazo(c)) enPlazo++; else fuera++;   /* _INFORME_PLAZO_V1 */
     });
     let vencidos = 0, enInvest = 0, docsPend = 0;
     const detalleVencidos = [];
@@ -391,7 +402,7 @@ function crearMotor(D) {
       const a = actividadCaso(c, hoy); if (!a) return;
       if (!informeEntregado(c)) enInvest++;   /* _ENVIO_INFORME_CUMPL_V1 */
       docsPend += a.documentos_pendientes.length;
-      if (a.dias_retraso > 0) { vencidos++; detalleVencidos.push({ caso: c.nro, trabajador: c.nombre, actividad: a.actividad, dias_retraso: a.dias_retraso, fecha_limite: a.fecha_limite }); }
+      if (a.dias_retraso > 0 && !informeEnPlazo(c)) { vencidos++; detalleVencidos.push({ caso: c.nro, trabajador: c.nombre, actividad: a.actividad, dias_retraso: a.dias_retraso, fecha_limite: a.fecha_limite }); }
     });
     let semanas = 0, realizadas = 0, visEnPlazo = 0, primerLunesV = null;   /* _VISITA_PLAZO_V1 */
     const propio = esSupCampo(u);   /* _AUSENCIAS_V1: + semanas que cubre como reemplazo; - semanas en que estuvo ausente */

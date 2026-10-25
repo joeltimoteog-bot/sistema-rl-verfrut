@@ -1596,8 +1596,11 @@ async function buscarTrabajadorPorDniAzure(dni, empresa = '') {
     finally { clearTimeout(_relojDni); }
     const t1 = performance.now();
     if (resp.status === 404) {
-      console.log('[Trabajador] DNI ' + dni + ' no encontrado en Azure (' + Math.round(t1-t0) + 'ms) -> se confirma en Google');
-      throw new Error('NO_ENCONTRADO_AZURE');   /* _DNI404_V1 (24-set): trabajador nuevo aun no sincronizado -> respaldo Google */
+      /* _DNI404_V2 (25-oct-2026): Azure es la base oficial y la hoja de trabajadores se sincroniza al momento
+         (_SYNC_AL_CAMBIAR_V1). "No existe" en Azure es definitivo: ya no se vuelve a preguntar a Google (eso
+         era lo que demoraba). Solo si Azure FALLA (no responde / error) se usa Google de respaldo. */
+      console.log('[Trabajador] DNI ' + dni + ' no encontrado en Azure (' + Math.round(t1-t0) + 'ms)');
+      return null;
     }
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
 
