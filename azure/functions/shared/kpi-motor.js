@@ -313,6 +313,10 @@ function calcular(E) {
   function k3(p, u, desde, etiNombre) {
     const ev = []; let num = 0, den = 0;
     const progs = ((E.eti && E.eti.programaciones) || []).filter(g => esPersonaEti(g.supervisor, p, u.nombre, etiNombre));
+    /* _K3_REALIZADAS_V1: fechas en que SI hubo actividad registrada (capacitacion en ETI / evaluacion de checklist), por tema */
+    const hechasReal = {};
+    ((E.eti && E.eti.actas) || []).forEach(a => { if (a.ejecucion && esPersonaEti(a.supervisor, p, u.nombre, etiNombre)) hechasReal[String(a.tema || 'CAPACITACIONES ETI').toUpperCase().trim() + '|' + a.ejecucion] = 1; });
+    ((E.eti && E.eti.evaluaciones) || []).forEach(x => { if (x.fecha && ((x.usuario && x.usuario === u.usuario) || esPersonaEti(x.nombre, p, u.nombre, etiNombre))) hechasReal['EVALUACIONES DE CHECKLIST|' + x.fecha] = 1; });
     progs.forEach(g => {
       const tema = String(g.tema || '').toUpperCase().trim();
       const opcional = tema === TEMA_OPCIONAL;
@@ -343,9 +347,10 @@ function calcular(E) {
           ev.push(e); return;
         }
         if (sustento) e.sustento = sustento;
-        const hecha = ejec.has(f) || (globalEjec && f <= hoyS);   /* _IND_FIX_V1: el estado global no da por hechas fechas futuras */
+        const realEseDia = !!hechasReal[tema + '|' + f];   /* _K3_REALIZADAS_V1: registro real en la fecha programada = ejecutada ese dia */
+        const hecha = ejec.has(f) || realEseDia || (globalEjec && f <= hoyS);   /* _IND_FIX_V1: el estado global no da por hechas fechas futuras */
         if (hecha) {
-          const tarde = !ejec.has(f) && fReg && fReg > fin;
+          const tarde = !ejec.has(f) && !realEseDia && fReg && fReg > fin;
           e.ok = !tarde;
           e.detalle = tarde ? 'Programada el ' + dm(f) + ', ejecutada recién el ' + dm(fReg) + ' (fuera de la fecha programada)' : 'Programada el ' + dm(f) + ' · ejecutada' + (fReg ? ' (registro del ' + dm(fReg) + ')' : '');
           if (opcional) e.detalle += ' · reforzamiento (opcional)';
