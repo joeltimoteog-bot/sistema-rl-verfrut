@@ -32,12 +32,12 @@ function asegurarTablas(pool) {
     IF COL_LENGTH('dbo.ETI_Programaciones', 'solicitudes') IS NULL ALTER TABLE dbo.ETI_Programaciones ADD solicitudes NVARCHAR(MAX) NULL;
     IF OBJECT_ID('dbo.ETI_Usuarios', 'U') IS NULL
       CREATE TABLE dbo.ETI_Usuarios (usuario NVARCHAR(60) NOT NULL, nombre NVARCHAR(150) NULL, estado NVARCHAR(20) NULL, sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());
-    IF OBJECT_ID('dbo.ETI_Evaluaciones', 'U') IS NULL
-      CREATE TABLE dbo.ETI_Evaluaciones (id NVARCHAR(60) NOT NULL PRIMARY KEY, usuario NVARCHAR(60) NULL, nombre NVARCHAR(150) NULL,
+    IF OBJECT_ID('dbo.KPI_EtiEvaluaciones', 'U') IS NULL
+      CREATE TABLE dbo.KPI_EtiEvaluaciones (id NVARCHAR(60) NOT NULL PRIMARY KEY, usuario NVARCHAR(60) NULL, nombre NVARCHAR(150) NULL,
         fecha DATE NULL, tipo NVARCHAR(60) NULL, sector NVARCHAR(150) NULL, empresa NVARCHAR(30) NULL, creado_en NVARCHAR(40) NULL,
         sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());   /* _K3_REALIZADAS_V1 (25-oct-2026): evaluaciones de checklist del Sistema Evaluaciones ETI */
-    IF COL_LENGTH('dbo.ETI_Evaluaciones', 'creado_en') IS NULL ALTER TABLE dbo.ETI_Evaluaciones ADD creado_en NVARCHAR(40) NULL;
-    IF COL_LENGTH('dbo.ETI_Evaluaciones', 'empresa') IS NULL ALTER TABLE dbo.ETI_Evaluaciones ADD empresa NVARCHAR(30) NULL;
+    IF COL_LENGTH('dbo.KPI_EtiEvaluaciones', 'creado_en') IS NULL ALTER TABLE dbo.KPI_EtiEvaluaciones ADD creado_en NVARCHAR(40) NULL;
+    IF COL_LENGTH('dbo.KPI_EtiEvaluaciones', 'empresa') IS NULL ALTER TABLE dbo.KPI_EtiEvaluaciones ADD empresa NVARCHAR(30) NULL;
     IF OBJECT_ID('dbo.ETI_Supervisores', 'U') IS NULL
       CREATE TABLE dbo.ETI_Supervisores (nombre NVARCHAR(150) NOT NULL, sector NVARCHAR(150) NULL, sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());`)
     .catch(e => { listo = null; throw e; });
@@ -133,8 +133,8 @@ async function sincronizar(pool, fetchFn) {
     await insertarLotes(tx, 'dbo.ETI_Programaciones', colsP, filasP);
     await insertarLotes(tx, 'dbo.ETI_Registros', colsR, filasR);
     if (evals) {   /* _K3_REALIZADAS_V1 */
-      await tx.request().query('DELETE FROM dbo.ETI_Evaluaciones;');
-      await insertarLotes(tx, 'dbo.ETI_Evaluaciones', [['id', sql.NVarChar(60)], ['usuario', sql.NVarChar(60)], ['nombre', sql.NVarChar(150)], ['fecha', sql.Date], ['tipo', sql.NVarChar(60)], ['sector', sql.NVarChar(150)], ['empresa', sql.NVarChar(30)], ['creado_en', sql.NVarChar(40)]],
+      await tx.request().query('DELETE FROM dbo.KPI_EtiEvaluaciones;');
+      await insertarLotes(tx, 'dbo.KPI_EtiEvaluaciones', [['id', sql.NVarChar(60)], ['usuario', sql.NVarChar(60)], ['nombre', sql.NVarChar(150)], ['fecha', sql.Date], ['tipo', sql.NVarChar(60)], ['sector', sql.NVarChar(150)], ['empresa', sql.NVarChar(30)], ['creado_en', sql.NVarChar(40)]],
         evals.map(d => [txt(d._id, 60), txt(String(d.usuario || '').trim().toLowerCase(), 60), txt(d.nomUsuario || d.nombre, 150), dia(d.fecha || d.creadoEn), txt(d.tipo, 60), txt(d.sector, 150), txt(d.emp || d.empresa, 30), txt(d.creadoEn, 40)]));
     }
     await tx.request().query(`MERGE dbo.CV_Estado AS x USING (SELECT 'kpi_eti_sync' AS clave) AS s ON x.clave = s.clave
@@ -156,7 +156,7 @@ async function leer(pool) {
     .forEach(x => { usuarios[String(x.usuario).toLowerCase()] = { nombre: x.nombre, estado: x.estado }; });
   const supervisores = (await pool.request().query('SELECT nombre, sector FROM dbo.ETI_Supervisores')).recordset;
   let evaluaciones = [];   /* _K3_REALIZADAS_V1 */
-  try { evaluaciones = (await pool.request().query('SELECT id, usuario, nombre, CONVERT(CHAR(10), fecha, 120) AS fecha, tipo, sector, empresa FROM dbo.ETI_Evaluaciones')).recordset; } catch (e) {}
+  try { evaluaciones = (await pool.request().query('SELECT id, usuario, nombre, CONVERT(CHAR(10), fecha, 120) AS fecha, tipo, sector, empresa FROM dbo.KPI_EtiEvaluaciones')).recordset; } catch (e) {}
   return { programaciones: p.map(x => ({ id: x.id, origen: x.origen, supervisor: x.supervisor, sector: x.sector, tema: x.tema,
     fechas: J(x.fechas, []), fechas_ejecutadas: J(x.fechas_ejecutadas, []), estado: x.estado, registro_id: x.registro_id,
     ejecutada_en: x.ejecutada_en, veces_reprog: x.veces_reprog, reprogramaciones: J(x.reprogramaciones, []), solicitudes: J(x.solicitudes, []) })),
