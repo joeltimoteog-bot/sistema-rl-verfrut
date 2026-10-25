@@ -26,7 +26,8 @@ const EDITORES = ['jtimoteo'];                        /* registran la nota del c
 const TEMAS_ETI = ['CAPACITACIONES ETI', 'EVALUACIONES DE CHECKLIST', 'INGRESOS MASIVOS'];
 const TEMA_OPCIONAL = 'REFORZAMIENTO';
 const HORA_CIERRE = '16:36';                          /* cierre de la jornada: hasta esa hora se registra lo del dia (decision de Joel, 30-set) */
-const DIAS_CONSULTA = 5;                              /* A3: consulta EN PROCESO mas de 5 dias habiles = no atendida */
+const DIAS_CONSULTA = 5;
+const A2_DESDE = '2026-10-26';                        /* _KPI_A2_V1: el boton "Remitir" existe desde el 25-oct-2026; A2 se mide desde el lunes 26 */                              /* A3: consulta EN PROCESO mas de 5 dias habiles = no atendida */
 
 /* Definicion oficial (texto tal cual del archivo de la empresa) */
 const DEF = {
@@ -465,7 +466,6 @@ function calcular(E) {
 
   /* _KPI_A2_V1: remision el mismo dia habil del registro (misma regla de cierre 16:36 que A1).
      Sin "Remitido a" y ya pasado el plazo = no cumple; dentro del plazo = pendiente (no cuenta). */
-  const A2_DESDE = '2026-10-26';   /* el boton "Remitir" existe desde el 25-oct-2026: se mide desde el lunes 26 */
   function a2(ats) {
     const ev = []; let num = 0, den = 0, pend = 0;
     ats.forEach(a => {
