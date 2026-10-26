@@ -17,3 +17,14 @@ graphify-out/
 
 # Respaldos con fecha/sufijo (no publicar)
 *.bak-*
+
+# Copias locales con claves o material de trabajo (NUNCA publicar) - 26-oct-2026
+Codigo.gs
+Codigo_RESPALDO*.gs*
+Claude outputs/
+_harness_tmp/
+_to_delete/
+tools/__pycache__/
+*.xlsx
+data.csv
+azure-config.txt
