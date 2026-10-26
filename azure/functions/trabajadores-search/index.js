@@ -1,5 +1,12 @@
 const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
+/* _EMPRESAS_V1 (26-oct-2026): las tablas salen del catalogo central shared/empresas.js
+   (RAPEL, VERFRUT, OLMOS...). Solo se consultan las tablas que existen en la base. */
+const EMP = require('../shared/empresas');
+async function tablasEmpresa(pool, empresa) {
+  const ex = await EMP.tablasExistentes(pool, sql);
+  return EMP.EMPRESAS.filter(function (e) { return ex.has(e.tabla) && (EMP.esTodas(empresa) || e.codigo === empresa); });
+}
 
 module.exports = async function (context, req) {
   // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
@@ -22,10 +29,8 @@ module.exports = async function (context, req) {
       const poolQ = await getPool();
       const rq = poolQ.request();
       const conds = palabras.map(function (w, i) { rq.input('w' + i, sql.NVarChar(120), '%' + w + '%'); return 'nombre_completo LIKE @w' + i; }).join(' AND ') || '1=0';
-      const partes = [];
-      if (empresa !== 'VERFRUT') partes.push(`SELECT TOP 30 *, 'RAPEL' AS empresa_origen FROM dbo.Trabajadores_RAPEL WHERE ${conds}`);
-      if (empresa !== 'RAPEL')   partes.push(`SELECT TOP 30 *, 'VERFRUT' AS empresa_origen FROM dbo.Trabajadores_VERFRUT WHERE ${conds}`);
-      const rs = await rq.query(partes.map(function (x) { return '(' + x + ')'; }).join(' UNION ALL '));
+      const partes = (await tablasEmpresa(poolQ, empresa)).map(function (e) { return `SELECT TOP 30 *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE ${conds}`; });
+      const rs = partes.length ? await rq.query(partes.map(function (x) { return '(' + x + ')'; }).join(' UNION ALL ')) : { recordset: [] };
       const lista = (rs.recordset || []).slice(0, 30);
       context.res = { status: 200, body: { success: true, encontrados: lista.length, trabajadores: lista, elapsed_ms: Date.now() - startTime, fuente: 'AZURE_SQL' } };
       return;
@@ -55,20 +60,9 @@ module.exports = async function (context, req) {
     request.input('dni3', sql.NVarChar(20), dni8);
     const W = 'dni IN (@dni, @dni2, @dni3)';
 
-    let query;
-    if (empresa === 'RAPEL') {
-      query = `SELECT *, 'RAPEL' AS empresa_origen FROM dbo.Trabajadores_RAPEL WHERE ${W}`;
-    } else if (empresa === 'VERFRUT') {
-      query = `SELECT *, 'VERFRUT' AS empresa_origen FROM dbo.Trabajadores_VERFRUT WHERE ${W}`;
-    } else {
-      query = `
-        SELECT *, 'RAPEL' AS empresa_origen FROM dbo.Trabajadores_RAPEL WHERE ${W}
-        UNION ALL
-        SELECT *, 'VERFRUT' AS empresa_origen FROM dbo.Trabajadores_VERFRUT WHERE ${W}
-      `;
-    }
-
-    const result = await request.query(query);
+    const tablas = await tablasEmpresa(pool, empresa);
+    const query = tablas.map(function (e) { return `SELECT *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE ${W}`; }).join(' UNION ALL ');
+    const result = query ? await request.query(query) : { recordset: [] };
     (result.recordset || []).forEach(function (t) {
       const d = String(t.dni == null ? '' : t.dni).trim();
       if (/^\d{7}$/.test(d)) t.dni = '0' + d;   /* _DNI_CERO_V1: misma forma que Google */

@@ -202,15 +202,17 @@ module.exports = async function (context, req) {
 
   try {
     const body = req.body || {};
-    const rapel = Array.isArray(body.rapel) ? body.rapel : null;
-    const verfrut = Array.isArray(body.verfrut) ? body.verfrut : null;
+    /* _EMPRESAS_V1 (26-oct-2026): acepta un array por cada empresa del catalogo
+       (body.rapel, body.verfrut, body.olmos...). Las claves vienen de shared/empresas.js. */
+    const EMP = require('../shared/empresas');
+    const pendientes = EMP.EMPRESAS.filter(function (e) { return Array.isArray(body[e.clave]); });
 
-    if (!rapel && !verfrut) {
+    if (!pendientes.length) {
       context.res = {
         status: 400,
         body: {
           success: false,
-          error: 'Debe enviar al menos uno de los arrays: rapel o verfrut'
+          error: 'Debe enviar al menos uno de los arrays: ' + EMP.EMPRESAS.map(function (e) { return e.clave; }).join(', ')
         }
       };
       return;
@@ -219,8 +221,8 @@ module.exports = async function (context, req) {
     const pool = await getPool();
     const results = {};
 
-    if (rapel)   results.rapel   = await syncTabla(pool, 'Trabajadores_RAPEL', rapel, context.log);
-    if (verfrut) results.verfrut = await syncTabla(pool, 'Trabajadores_VERFRUT', verfrut, context.log);
+    for (const e of pendientes) results[e.clave] = await syncTabla(pool, e.tabla, body[e.clave], context.log);
+    EMP.invalidarTablas();   /* una tabla nueva (ej. OLMOS) entra a la busqueda de inmediato */
 
     const elapsed = Date.now() - startTime;
     context.log('Sync completado en', elapsed, 'ms');

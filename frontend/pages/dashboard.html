@@ -391,7 +391,7 @@ h3{font-size:16px !important}
         <input type="text" id="fAQ" placeholder="🔍 Buscar por DNI o nombre..." onkeyup="filtrarAt()" oninput="filtrarAt()" style="width:100%;padding:8px 12px;margin-bottom:10px;border:1.5px solid #cbd5e1;border-radius:6px;font-size:14px;font-family:inherit;box-sizing:border-box">
         <div class="filtros">
           <select class="fi" id="fAE" onchange="filtrarAt()"><option value="">Todos los estados</option><option>EN PROCESO</option><option>FINALIZADO</option></select>
-          <select class="fi" id="fAEmp" onchange="filtrarAt()"><option value="">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
+          <select class="fi" id="fAEmp" onchange="filtrarAt()"><option value="">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option><option value="OLMOS">OLMOS</option></select>
           <select class="fi" id="fAM" onchange="filtrarAt()">
             <option value="">Todos los meses</option>
             <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option><option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
@@ -416,7 +416,7 @@ h3{font-size:16px !important}
         <div class="card-h"><span class="card-t">Buscar Trabajador en Base de Datos</span></div>
         <div class="filtros">
           <input class="fi" id="fTQ" placeholder="🔍 Ingresa DNI o nombre completo..." style="flex:2" onkeydown="if(event.key==='Enter') buscarTrab()">
-          <select class="fi" id="fTE"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
+          <select class="fi" id="fTE"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option><option value="OLMOS">OLMOS</option></select>
           <button class="btn-bus" onclick="buscarTrab()">🔍 Buscar</button>
         </div>
         <div class="tw">
@@ -458,7 +458,7 @@ h3{font-size:16px !important}
           <div class="fc"><label>Fecha Inicio *</label><input type="date" id="cFI"></div>
           <div class="fc"><label>Fecha Fin *</label><input type="date" id="cFF"></div>
           <div class="fc"><label>Empresa</label>
-            <select id="cEmp"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select>
+            <select id="cEmp"><option value="AMBAS">Todas las empresas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option><option value="OLMOS">OLMOS</option></select>
           </div>
           <div class="fc" style="grid-column:1/-1">
             <label>Filtrar por Responsable de Recepción <span style="font-weight:400;color:#94a3b8">(opcional — sin selección incluye todos)</span></label>
@@ -520,7 +520,7 @@ h3{font-size:16px !important}
       <div class="filtros" style="margin-bottom:14px">
         <select id="vFiltroEmp" onchange="cargarVisitas()">
           <option value="">Todas las empresas</option>
-          <option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option>
+          <option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option><option value="OLMOS">OLMOS</option>
         </select>
         <select id="vFiltroMes" onchange="cargarVisitas()">
           <option value="">Todos los meses</option>
@@ -575,7 +575,7 @@ h3{font-size:16px !important}
         <select id="cFiltroEmp" onchange="cargarCasos()">
           <option value="">Todas las empresas</option>
           <option value="RAPEL">RAPEL S.A.C</option>
-          <option value="VERFRUT">VERFRUT S.A.C</option>
+          <option value="VERFRUT">VERFRUT S.A.C</option><option value="OLMOS">OLMOS</option>
         </select>
         <select id="cFiltroMotivo" onchange="cargarCasos()">
           <option value="">Todos los motivos</option>
@@ -781,7 +781,7 @@ h3{font-size:16px !important}
           <select id="estFiltroEmp" onchange="cargarEstadisticasAdmin()" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px">
             <option value="">Todas las empresas</option>
             <option value="RAPEL">RAPEL S.A.C</option>
-            <option value="VERFRUT">VERFRUT S.A.C</option>
+            <option value="VERFRUT">VERFRUT S.A.C</option><option value="OLMOS">OLMOS</option>
           </select>
           <select id="estFiltroMes" onchange="cargarEstadisticasAdmin()" style="padding:7px 10px;border:2px solid #e2e8f0;border-radius:7px;font-size:12px">
             <option value="">Todos los meses</option>
@@ -994,7 +994,7 @@ h3{font-size:16px !important}
         <label>Empresa *</label>
         <select id="vEmp">
           <option value="">— Empresa —</option>
-          <option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option>
+          <option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option><option value="OLMOS">OLMOS</option>
         </select>
       </div>
       <div class="fc"><label>Fundo/Sector *</label><input type="text" id="vFundo" placeholder="Ej: El Papayo"></div>
@@ -1128,7 +1128,7 @@ h3{font-size:16px !important}
       <div id="historialDniAlerta" style="display:none;margin-top:10px"></div>
     </div>
     <div class="fc"><label>Nombre Completo *</label><input type="text" id="at_nom" placeholder="Nombre del trabajador"></div>
-    <div class="fc"><label>Empresa *</label><select id="at_emp"><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select></div>
+    <div class="fc"><label>Empresa *</label><select id="at_emp"><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option><option value="OLMOS">OLMOS</option></select></div>
     <div class="fc"><label>Sexo</label><select id="at_sex"><option value="">--</option><option>M</option><option>F</option></select></div>
     <div class="fc"><label>Fecha Inicio Periodo</label><input type="date" id="at_fip"></div>
     <div class="fc"><label>Fecha Término Periodo</label><input type="date" id="at_ftp"></div>
@@ -1284,7 +1284,7 @@ h3{font-size:16px !important}
         <option value="supervisor" selected>Supervisor</option>
       </select>
     </div>
-    <div class="fc"><label>Empresa</label><select id="us_e"><option value="AMBAS">Ambas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option></select></div>
+    <div class="fc"><label>Empresa</label><select id="us_e"><option value="AMBAS">Todas</option><option value="RAPEL">RAPEL S.A.C</option><option value="VERFRUT">VERFRUT S.A.C</option><option value="OLMOS">OLMOS</option></select></div>
     <div class="fc"><label>Correo</label><input type="email" id="us_c" placeholder="usuario@verfrut.pe"></div>
   </div>
   <div class="modal-ft">
@@ -1324,7 +1324,7 @@ h3{font-size:16px !important}
 <!-- MODAL FUSIÓN DE BUSES -->
 
 
-<script src="../js/dashboard/04-nucleo-dashboard.js?v=2"></script>
+<script src="../js/dashboard/04-nucleo-dashboard.js?v=3"></script>
 <!-- FIREBASE SDK (módulo separado para exponer funciones al script principal) -->
 <script type="module" src="../js/dashboard/05-firebase-modulo.js?v=1"></script>
 

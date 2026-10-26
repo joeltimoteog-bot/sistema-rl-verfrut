@@ -1,3 +1,6 @@
+/* _EMPRESAS_V1 (26-oct-2026): catalogo de empresas del grupo (espejo de azure/functions/shared/empresas.js) */
+window.EMPRESAS_RL = ['RAPEL', 'VERFRUT', 'OLMOS'];
+window.FUNDOS_OLMOS = ['BOMAREA', 'PIRONA', 'MOSQUETA', 'HEFEI', 'LEFKADA'];
 /* dashboard.html · bloque 4 (antes en la linea 1327) · extraido el 24-oct-2026 sin cambios (_MODULAR_V1) */
 
 let USER={}, API='https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec', atTodas=[], resData=[], detNro='', modoEdicion=false;
@@ -7574,7 +7577,7 @@ function autoFillFundoReemplazo() {
   if (fundo) {
     const esRapel = ['El Papayo','Limones','Olivares Bajo','Olivares','Santa Rosa',
                      'Aproa','Punta Arenas','Algarrobos','San Vicente','Planta Rapel Packing'].includes(fundo);
-    emp.value = esRapel ? 'RAPEL' : 'VERFRUT';
+    emp.value = esRapel ? 'RAPEL' : (window.FUNDOS_OLMOS || []).includes(fundo) ? 'OLMOS' : 'VERFRUT';   /* _EMPRESAS_V1 */
     document.getElementById('vFundo').value = fundo;
     // Sugerir supervisor titular
     const titulares = {
@@ -7666,7 +7669,7 @@ function asignarFundoReemplazo() {
   document.getElementById('vFundo').value = fundo;
   // Empresa según fundo
   const fundosRapel = ['Planta Rapel Packing','Limones','El Papayo'];
-  document.getElementById('vEmp').value = fundosRapel.includes(fundo) ? 'RAPEL' : 'VERFRUT';
+  document.getElementById('vEmp').value = fundosRapel.includes(fundo) ? 'RAPEL' : (window.FUNDOS_OLMOS || []).includes(fundo) ? 'OLMOS' : 'VERFRUT';   /* _EMPRESAS_V1 */
   // CC según fundo
   const ccMap = {
     'Aproa':'hcisneros@verfrut.pe','El Papayo':'ygalindo@verfrut.pe',
