@@ -526,7 +526,7 @@ window.onload = function() {
   if (!USR_AZURE_PRIMERO || window._rlUsrAzOk) return;
   window._rlUsrAzOk = true;
   var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/usr/guardar/';
-  var ACCIONES = { saveUsuario: 1, updateUsuario: 1, resolverAccesoTemporal: 1, aprobarAccesoTemporal: 1 };
+  var ACCIONES = { saveUsuario: 1, updateUsuario: 1, resolverAccesoTemporal: 1, aprobarAccesoTemporal: 1, desbloquearUsuario: 1 };   /* _SEG_USUARIOS_V1 */
   function h32(s, seed) { var h = seed >>> 0; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
   function huella(b) { var s = JSON.stringify(b); return 'usr-' + h32(s, 2166136261) + h32(s, 5381) + '-' + Date.now().toString(36); }
   var previo = window.apiPost, enCurso = {}, apagadoHasta = 0;
@@ -598,5 +598,57 @@ window.onload = function() {
 <script src="../js/ui-toast.js?v=1"></script>  <!-- _UI_TOAST_V1 (15-oct): avisos unificados + esqueletos de carga -->
 <script src="../js/tema-rl.js?v=1"></script>  <!-- _TEMA_RL_V1 (16-oct): piel moderna comun (solo presentacion) -->
 <script src="../js/actualizar.js?v=1"></script>  <!-- _ACTUALIZAR_V3 (15-oct): aviso y actualizacion automatica (unico) -->
+
+<script>
+/* _SEG_USUARIOS_V1 (26-oct-2026): estado de seguridad por cuenta (desde Azure /usuarios/lista) y boton
+   "Desbloquear". Solo informa: ultimo cambio de clave, clave temporal pendiente, intentos fallidos, bloqueo.
+   Nunca muestra claves (en Azure estan con bcrypt y no se pueden leer). Si Azure no responde, la tabla queda igual. */
+(function () {
+  var SEG = {}, BASE = 'https://rl-fn-verfrut.azurewebsites.net/api';
+  function fmt(iso) { if (!iso) return ''; var d = new Date(iso); if (isNaN(d)) return ''; return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: '2-digit' }) + ' ' + d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }); }
+  function pinta() {
+    var tb = document.getElementById('tbUs'); if (!tb) return;
+    Array.prototype.forEach.call(tb.querySelectorAll('tr'), function (tr) {
+      var tds = tr.children; if (tds.length < 8) return;
+      var usr = (tds[0].textContent || '').trim(); var g = SEG[usr.toLowerCase()]; if (!g) return;
+      var viejo = tds[5].querySelector('.seg-info'); if (viejo) viejo.remove();
+      var bloq = g.bloqueado_hasta ? new Date(g.bloqueado_hasta) : null;
+      var partes = [];
+      if (bloq) partes.push('<span style="color:#b91c1c;font-weight:700">🔒 Bloqueado hasta ' + fmt(g.bloqueado_hasta) + '</span>');
+      else if (g.fallos > 0) partes.push('<span style="color:#b45309">⚠️ ' + g.fallos + ' intento' + (g.fallos > 1 ? 's' : '') + ' fallido' + (g.fallos > 1 ? 's' : '') + '</span>');
+      if (g.clave_temporal) partes.push('<span style="color:#1d4ed8">⏳ Clave temporal pendiente</span>');
+      if (g.clave_cambiada) partes.push('<span style="color:#475569">🔑 Clave cambiada ' + fmt(g.clave_cambiada) + '</span>');
+      else partes.push('<span style="color:#94a3b8">🔑 Clave sin cambios registrados</span>');
+      if (g.bloqueos > 0) partes.push('<span style="color:#64748b">· ' + g.bloqueos + ' bloqueo' + (g.bloqueos > 1 ? 's' : '') + ' en total</span>');
+      var div = document.createElement('div'); div.className = 'seg-info'; div.style.cssText = 'font-size:11px;line-height:1.5;margin-top:4px;white-space:normal;min-width:180px';
+      div.innerHTML = partes.join('<br>'); tds[5].appendChild(div);
+      var btnViejo = tds[7].querySelector('.seg-btn'); if (btnViejo) btnViejo.remove();
+      if (bloq || g.fallos > 0) {
+        var b = document.createElement('button'); b.className = 'btn-a be seg-btn'; b.textContent = '🔓 Desbloquear'; b.style.marginLeft = '4px';
+        b.onclick = function () { desbloquearUs(usr, b); }; tds[7].appendChild(b);
+      }
+    });
+  }
+  async function cargarSeg() {
+    try {
+      var r = await fetch(BASE + '/usuarios/lista', { cache: 'no-store' }); if (!r.ok) return;
+      var j = await r.json(); if (!j || !j.success) return;
+      SEG = {}; (j.data || []).forEach(function (u) { if (u.seguridad) SEG[String(u.usuario || '').trim().toLowerCase()] = u.seguridad; });
+      pinta();
+    } catch (e) { console.warn('[_SEG_USUARIOS_V1]', e.message); }
+  }
+  window.desbloquearUs = async function (usr, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+    try {
+      var d = await apiPost({ action: 'desbloquearUsuario', usuario: usr });
+      if (d && d.success) { if (typeof notify === 'function') notify('🔓 ' + usr + ': bloqueo liberado'); else alert('🔓 ' + usr + ': bloqueo liberado'); await cargarSeg(); }
+      else { alert('❌ ' + ((d && d.error) || 'No se pudo desbloquear')); if (btn) { btn.disabled = false; btn.textContent = '🔓 Desbloquear'; } }
+    } catch (e) { alert('❌ ' + e.message); if (btn) { btn.disabled = false; btn.textContent = '🔓 Desbloquear'; } }
+  };
+  var render0 = window._renderUs;
+  if (typeof render0 === 'function') window._renderUs = function () { var r = render0.apply(this, arguments); try { pinta(); } catch (e) {} return r; };
+  window.addEventListener('load', function () { setTimeout(cargarSeg, 800); setInterval(cargarSeg, 120000); });
+})();
+</script>
 </body>
 </html>

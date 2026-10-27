@@ -17,7 +17,7 @@ const TH = require('./tablas-hoja');
 const CG = require('./cv-guardar');
 const CAP = require('./cap-guardar');
 
-const ACCIONES = ['saveUsuario', 'updateUsuario', 'saveSolicitudAcceso', 'resolverAccesoTemporal', 'aprobarAccesoTemporal', 'cambiarMiClave'];   /* _CLAVE_POLITICA_V1 */
+const ACCIONES = ['saveUsuario', 'updateUsuario', 'saveSolicitudAcceso', 'resolverAccesoTemporal', 'aprobarAccesoTemporal', 'cambiarMiClave', 'desbloquearUsuario'];   /* _SEG_USUARIOS_V1 */   /* _CLAVE_POLITICA_V1 */
 const POL = require('./clave-politica');
 const DUENOS = ['jtimoteo'];
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
@@ -71,6 +71,14 @@ async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
   }
   if (accion !== 'saveSolicitudAcceso' && !propia && DUENOS.indexOf(op) < 0)
     return no(accion === 'resolverAccesoTemporal' ? 'Solo el administrador del sistema puede aprobar o rechazar accesos temporales.' : 'Solo el administrador del sistema puede crear o modificar usuarios.');
+  /* _SEG_USUARIOS_V1 (26-oct-2026): el administrador libera un bloqueo por intentos sin tocar la clave. */
+  if (accion === 'desbloquearUsuario') {
+    const uu = String(b.usuario || '').trim().toLowerCase();
+    if (!uu) return no('Falta el usuario.');
+    await pool.request().input('u', sql.NVarChar(100), uu)
+      .query("IF OBJECT_ID('dbo.Login_Intentos','U') IS NOT NULL UPDATE dbo.Login_Intentos SET fallos = 0, bloqueado_hasta = NULL WHERE usuario = @u");
+    return { status: 200, body: { success: true, usuario: uu, mensaje: 'Bloqueo liberado; el usuario ya puede intentar entrar.' } };
+  }
   const ms = prueba && ahoraMs ? +ahoraMs : Date.now(), ahora = new Date(ms);
   let hash = null, hashHoja = null;
   if (accion === 'saveUsuario' && String(b.password || '').trim()) hash = await bcrypt.hash(String(b.password).trim(), 10);
