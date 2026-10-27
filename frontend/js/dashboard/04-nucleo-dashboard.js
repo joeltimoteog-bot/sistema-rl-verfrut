@@ -7236,7 +7236,7 @@ function _irBienestar() {
     try {
       var _bsSes = JSON.parse(localStorage.getItem('bienestarSocialAuth') || 'null');
       if (_bsSes && _bsSes.token && String(_bsSes.usuario).toLowerCase() === String(USER.usuario).toLowerCase()) {
-        window.location.href = 'https://joeltimoteog-bot.github.io/bienestar-social-verfrut/portal.html';
+        window.location.href = 'https://sistemarrll.com/bienestar-social-verfrut/portal.html';
         return;
       }
     } catch(_eTok) {}
@@ -7270,7 +7270,7 @@ function _irBienestar() {
       source: 'sistema-rl-verfrut'
     };
     localStorage.setItem('bienestarSocialAuth', JSON.stringify(userBienestar));
-    window.location.href = 'https://joeltimoteog-bot.github.io/bienestar-social-verfrut/portal.html';
+    window.location.href = 'https://sistemarrll.com/bienestar-social-verfrut/portal.html';
   } catch (e) {
     console.error('[_irBienestar] error:', e);
     appAlert('Error al acceder al sistema Bienestar: ' + e.message);

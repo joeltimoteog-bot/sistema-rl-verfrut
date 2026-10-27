@@ -1780,7 +1780,7 @@ function _getLogoBase64() {
   const RUTAS = [
     '../images/logo-unifrutti.jpg',
     '/sistema-rl-verfrut/frontend/images/logo-unifrutti.jpg',
-    'https://joeltimoteog-bot.github.io/sistema-rl-verfrut/frontend/images/logo-unifrutti.jpg'
+    'https://sistemarrll.com/sistema-rl-verfrut/frontend/images/logo-unifrutti.jpg'
   ];
   return new Promise(resolve => {
     let idx = 0;
