@@ -321,7 +321,8 @@ function crear(ctx) {
         const reg = { fechaEntrada: fe, fechaSalida: fs, horaEntrada: horaTxt(f[8]), horaSalida: horaTxt(f[10]) };
         const jVieja = r2(N(f[12]) || 0);
         const jNueva = turnoUnico(reg) ? jornadaUnDia(fe) : (fs ? jornadaTotal(fe, fs) : jornadaUnDia(fe));
-        if (Math.abs(jNueva - jVieja) < 0.005) return;
+        const tope = body.topeJornada === true && !!soloIds;   /* _HORAS_PERMISO_NETO_V1: quitar el refrigerio cobrado de mas */
+        if (Math.abs(jNueva - jVieja) < 0.005 && !tope) return;
         const mot = norm(esD(f[16]) ? f[16].$s : f[16]), trab = r2(N(f[11]) || 0);
         const ant = { jornada: jVieja, acum: r2(N(f[13]) || 0), perm: r2(N(f[14]) || 0), deuda: r2(N(f[15]) || 0) };
         const nue = Object.assign({}, ant, { jornada: jNueva }); let regla = 'solo jornada';
@@ -331,6 +332,11 @@ function crear(ctx) {
           if (dif < 0) { const q = Math.min(ant.deuda, -dif); nue.deuda = r2(ant.deuda - q); nue.perm = r2(Math.max(0, ant.perm - (-dif - q))); }
           else { const disp = Number(saldo(f[3]).saldo) || 0; if (disp >= dif) nue.perm = r2(ant.perm + dif); else { nue.perm = r2(ant.perm + Math.max(0, disp)); nue.deuda = r2(ant.deuda + dif - Math.max(0, disp)); } }
         }
+        else if (tope && mot === 'permiso' && ant.perm + ant.deuda > jNueva + 0.01) {
+          const exc = r2(ant.perm + ant.deuda - jNueva), q = Math.min(ant.deuda, exc); regla = 'permiso tope jornada';
+          nue.deuda = r2(ant.deuda - q); nue.perm = r2(Math.max(0, ant.perm - (exc - q)));
+        }
+        if (nue.jornada === ant.jornada && nue.acum === ant.acum && nue.perm === ant.perm && nue.deuda === ant.deuda) return;
         const efecto = r2((nue.acum - nue.perm - nue.deuda) - (ant.acum - ant.perm - ant.deuda));
         lista.push({ id: S(f[0]), dni: normDni(f[3]), nombre: S(f[4]), fecha: fe, motivo: S(f[16]), trabajadas: trab, regla, antes: ant, despues: nue, efectoSaldo: efecto });
         if (aplicar) {
