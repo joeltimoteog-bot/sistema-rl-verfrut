@@ -55,6 +55,65 @@
     if (q) lista = lista.filter(function (u) { return k(u.usuario).indexOf(q) >= 0 || k(u.nombre).indexOf(q) >= 0; });
     return lista;
   }
+
+  /* _USR_ESTILO_V1 (27-oct-2026): tabla de Gestion de Usuarios ordenada: encabezado fijo, scroll horizontal
+     y vertical dentro de la tarjeta (las dos barras siempre a la vista), columna Usuario fija a la izquierda,
+     avatar, rol como etiqueta y acciones compactas. Solo presentacion: no cambia datos ni botones. */
+  (function () {
+    if (document.getElementById('usrEstiloV1')) return;
+    var st = document.createElement('style'); st.id = 'usrEstiloV1';
+    st.textContent = [
+      '#sec-usuarios .card .tw{max-height:calc(100vh - 250px);overflow:auto!important;border:1px solid #e2e8f0;border-radius:14px;background:#fff;scrollbar-width:thin}',
+      '#sec-usuarios .card .tw::-webkit-scrollbar{height:10px;width:10px}#sec-usuarios .card .tw::-webkit-scrollbar-thumb{background:#94a3b8;border-radius:8px}#sec-usuarios .card .tw::-webkit-scrollbar-track{background:#f1f5f9}',
+      '#sec-usuarios #tbUs{font-size:12.5px}',
+      '#sec-usuarios .card .tw>table{width:100%;min-width:1180px;border-collapse:separate;border-spacing:0}',
+      '#sec-usuarios .card .tw>table thead th{position:sticky;top:0;z-index:3;white-space:nowrap;font-size:11px;letter-spacing:.06em;padding:11px 12px}',
+      '#sec-usuarios #tbUs td{padding:10px 12px;vertical-align:middle;border-bottom:1px solid #eef2f7}',
+      '#sec-usuarios #tbUs tr:nth-child(even) td{background:#fafbfd}#sec-usuarios #tbUs tr:hover td{background:#f1f6ff}',
+      '#sec-usuarios .card .tw>table thead th:first-child,#sec-usuarios #tbUs td:first-child{position:sticky;left:0;z-index:2;background:inherit}',
+      '#sec-usuarios #tbUs td:first-child{background:#fff;min-width:150px;box-shadow:2px 0 0 #eef2f7}',
+      '#sec-usuarios .card .tw>table thead th:first-child{z-index:4}',
+      '#sec-usuarios #tbUs td:nth-child(2){min-width:210px;max-width:260px;white-space:normal;font-weight:600;color:#1e293b;line-height:1.35}',
+      '#sec-usuarios #tbUs td:nth-child(3),#sec-usuarios #tbUs td:nth-child(4){white-space:nowrap}',
+      '#sec-usuarios #tbUs td:nth-child(5){max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#475569;font-size:12px}',
+      '#sec-usuarios #tbUs td:nth-child(6){min-width:180px}',
+      '#sec-usuarios #tbUs td:nth-child(7){min-width:150px;max-width:220px;white-space:normal}',
+      '#sec-usuarios #tbUs td:nth-child(8){min-width:250px}',
+      '#sec-usuarios #tbUs td:nth-child(8) .usr-acc{display:flex;flex-wrap:wrap;gap:6px}',
+      '#sec-usuarios #tbUs td:nth-child(8) button{margin:0!important;padding:6px 10px!important;font-size:11.5px!important;font-weight:700!important;border-radius:999px!important;line-height:1.1!important;white-space:nowrap}',
+      '.usr-av::before{content:attr(data-ini)}.usr-av{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;color:#fff;font-weight:800;font-size:11.5px;margin-right:9px;flex:0 0 30px}',
+      '.usr-id{display:flex;align-items:center}.usr-id b{font-size:12.5px;color:#0f172a}',
+      '.usr-rol{display:inline-block;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800}',
+      '.usr-rol.adm{background:#ede9fe;color:#5b21b6}.usr-rol.sup{background:#e0f2fe;color:#075985}.usr-rol.otr{background:#f1f5f9;color:#334155}',
+      '#usBajaBar{position:sticky;left:0}'
+    ].join('\n');
+    document.head.appendChild(st);
+  })();
+  var COLORES = ['#2563eb', '#0891b2', '#7c3aed', '#db2777', '#ea580c', '#16a34a', '#0d9488', '#9333ea', '#dc2626', '#4f46e5'];
+  function adorna() {
+    var tb = document.getElementById('tbUs'); if (!tb) return;
+    Array.prototype.forEach.call(tb.querySelectorAll('tr'), function (tr) {
+      var tds = tr.children; if (tds.length < 8) return;
+      if (!tds[0].querySelector('.usr-id')) {
+        var usr = (tds[0].textContent || '').trim(), nom = (tds[1].textContent || '').trim(); if (!usr) return;
+        var ini = nom.split(/\s+/).filter(Boolean); ini = ((ini[0] || usr)[0] + ((ini[2] || ini[1] || '')[0] || '')).toUpperCase();
+        var h = 0; for (var i = 0; i < usr.length; i++) h = (h * 31 + usr.charCodeAt(i)) >>> 0;
+        tds[0].innerHTML = '<div class="usr-id"><span class="usr-av" data-ini="' + esc(ini) + '" style="background:' + COLORES[h % COLORES.length] + '"></span><b>' + esc(usr) + '</b></div>';
+      }
+      if (!tds[2].querySelector('.usr-rol')) {
+        var rol = (tds[2].textContent || '').trim(), rk = rol.toLowerCase();
+        var cls = rk.indexOf('admin') >= 0 || rk.indexOf('coord') >= 0 || rk.indexOf('jef') >= 0 ? 'adm' : rk.indexOf('superv') >= 0 ? 'sup' : 'otr';
+        tds[2].innerHTML = '<span class="usr-rol ' + cls + '">' + esc(rol || '—') + '</span>';
+      }
+      if (tds[4] && !tds[4].title) tds[4].title = (tds[4].textContent || '').trim();
+      var acc = tds[7];
+      if (!acc.querySelector('.usr-acc')) {
+        var w = document.createElement('div'); w.className = 'usr-acc';
+        while (acc.firstChild) w.appendChild(acc.firstChild);
+        acc.appendChild(w);
+      }
+    });
+  }
   /* botones por fila */
   function botones() {
     var tb = document.getElementById('tbUs'); if (!tb) return;
@@ -74,8 +133,9 @@
         b.textContent = '🗑️ Eliminar'; b.style.cssText += ';background:#fee2e2;color:#b91c1c';
         b.onclick = function () { eliminar(usr, (tds[1].textContent || '').trim(), b); };
       }
-      tds[7].appendChild(b);
+      (tds[7].querySelector('.usr-acc') || tds[7]).appendChild(b);
     });
+    adorna();
   }
   function redibujar(soloTabla) {
     if (!ultimoData || typeof orig !== 'function') return;

@@ -26,7 +26,7 @@
       var bv = tds[7].querySelector('.seg-btn'); if (bv) bv.remove();
       if (bloq || g.fallos > 0) {
         var b = document.createElement('button'); b.className = 'btn-a be seg-btn'; b.textContent = '🔓 Desbloquear'; b.style.marginLeft = '4px';
-        b.onclick = function () { desbloquear(usr, b); }; tds[7].appendChild(b);
+        b.onclick = function () { desbloquear(usr, b); }; (tds[7].querySelector('.usr-acc') || tds[7]).appendChild(b);
       }
     });
   }
