@@ -590,56 +590,60 @@ const SUPERVISORES_BASE = [
 ];
 
 // ── Competencias y preguntas ──
+/* _E360_PRO_V1 (27-oct-2026): preguntas reformuladas como CONDUCTAS OBSERVABLES y ancladas a los KPIs.
+   Se mantienen las 6 competencias (mismos nombres clave, asi el guardado por competencia no cambia) y 21 preguntas.
+   'kpi' = de donde sale la evidencia objetiva que se muestra al evaluar (ver js/e360-pro-v1.js). */
 const COMPETENCIAS = [
   {
     nombre: 'Cumplimiento de Metas y Reportes',
     preguntas: [
-      'Cumple las metas asignadas del mes (atenciones, casos, registros)',
-      'Realiza y registra las capacitaciones programadas',
-      'Envía sus informes de visitas de campo dentro del plazo',
-      'Registra la información en el sistema de forma completa y correcta'
-    ]
+      'Envía el informe de cada caso de conflicto dentro de los 5 días hábiles',
+      'Entrega y registra la documentación laboral a tiempo y completa',
+      'Ejecuta las capacitaciones y evaluaciones ETI programadas en su sector',
+      'Realiza sus visitas de campo y envía el informe dentro del plazo',
+      'Mantiene sus casos al día: sin casos vencidos ni sin seguimiento'
+    ],
+    kpi: ['K1', 'K2', 'K3', 'CUMPL', 'VENC']
   },
   {
     nombre: 'Comunicación y Coordinación',
     preguntas: [
-      'Comunica a los coordinadores los acuerdos tomados con jefaturas y administradores',
-      'Consulta con los coordinadores las decisiones importantes antes de ejecutarlas',
-      'Reporta incidencias y novedades a tiempo',
-      'Mantiene comunicación clara y respetuosa con la coordinación'
+      'Informa a la Coordinación, el mismo día, los acuerdos y decisiones tomadas con jefaturas',
+      'Reporta de inmediato los casos sensibles (accidentes, hostigamiento, conflictos colectivos)',
+      'Se comunica de forma clara y respetuosa con trabajadores, jefaturas y Coordinación'
     ]
   },
   {
     nombre: 'Liderazgo y Conducta',
     preguntas: [
-      'Es referente de conducta y disciplina en el sector a su cargo, liderando con el ejemplo',
-      'Demuestra buen comportamiento y respeto en el trabajo',
-      'Motiva y mantiene el compromiso del equipo',
-      'Es puntual en las reuniones y compromisos'
+      'Cumple el horario y los compromisos asumidos (reuniones, visitas, entregas)',
+      'Maneja con confidencialidad los casos y los datos personales de los trabajadores',
+      'Es referente de conducta y de trato justo en su sector',
+      'Acepta la retroalimentación y la convierte en acciones de mejora'
     ]
   },
   {
     nombre: 'Gestión de Equipo',
     preguntas: [
-      'Distribuye tareas equitativamente',
-      'Resuelve conflictos internos del equipo',
-      'Promueve un buen clima laboral'
+      'Conoce la situación laboral de su sector (dotación, ausentismo, casos abiertos)',
+      'Promueve un buen clima laboral y previene conflictos',
+      'Coordina con las jefaturas de campo el cumplimiento de las normas laborales'
     ]
   },
   {
     nombre: 'Resolución de Problemas',
     preguntas: [
-      'Identifica problemas y busca soluciones rápidas',
-      'Maneja situaciones de presión con serenidad',
-      'Toma decisiones oportunas y efectivas'
+      'Atiende los casos con criterio, conforme al Reglamento Interno y la normativa laboral',
+      'Propone soluciones concretas y hace seguimiento hasta el cierre del caso',
+      'Mantiene la calma y el buen juicio en situaciones de presión'
     ]
   },
   {
     nombre: 'Planificación e Iniciativa',
     preguntas: [
-      'Organiza su trabajo con anticipación',
-      'Muestra iniciativa y propone mejoras',
-      'Se adapta positivamente a los cambios'
+      'Planifica su semana (visitas, capacitaciones, seguimientos) y la cumple',
+      'Anticipa los vencimientos y evita que sus casos se atrasen',
+      'Propone mejoras para su sector o para el sistema'
     ]
   }
 ];
@@ -2036,6 +2040,7 @@ window.onload = function() {
 <script src="../js/ui-toast.js?v=1"></script>  <!-- _UI_TOAST_V1 (15-oct): avisos unificados + esqueletos de carga -->
 <script src="../js/tema-rl.js?v=1"></script>  <!-- _TEMA_RL_V1 (16-oct): piel moderna comun (solo presentacion) -->
 <script src="../js/actualizar.js?v=1"></script>  <!-- _ACTUALIZAR_V3 (15-oct): aviso y actualizacion automatica (unico) -->
-<script src="../js/inf-azure.js?v=1"></script>  <!-- _INF_AZURE_V1 (24-oct): informes integrales se guardan y leen primero en Azure -->
+<script src="../js/inf-azure.js?v=1"></script>
+<script src="../js/e360-pro-v1.js?v=1"></script>  <!-- _E360_PRO_V1 (27-oct): evidencia objetiva (KPIs y cumplimiento), escala con criterios y sugerencias -->  <!-- _INF_AZURE_V1 (24-oct): informes integrales se guardan y leen primero en Azure -->
 </body>
 </html>
