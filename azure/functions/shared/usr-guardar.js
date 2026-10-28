@@ -17,7 +17,7 @@ const TH = require('./tablas-hoja');
 const CG = require('./cv-guardar');
 const CAP = require('./cap-guardar');
 
-const ACCIONES = ['saveUsuario', 'updateUsuario', 'saveSolicitudAcceso', 'resolverAccesoTemporal', 'aprobarAccesoTemporal', 'cambiarMiClave', 'desbloquearUsuario'];   /* _SEG_USUARIOS_V1 */   /* _CLAVE_POLITICA_V1 */
+const ACCIONES = ['saveUsuario', 'updateUsuario', 'saveSolicitudAcceso', 'resolverAccesoTemporal', 'aprobarAccesoTemporal', 'cambiarMiClave', 'desbloquearUsuario', 'eliminarUsuario', 'restaurarUsuario'];   /* _USR_BAJA_V1 */   /* _SEG_USUARIOS_V1 */   /* _CLAVE_POLITICA_V1 */
 const POL = require('./clave-politica');
 const DUENOS = ['jtimoteo'];
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
@@ -71,6 +71,27 @@ async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
   }
   if (accion !== 'saveSolicitudAcceso' && !propia && DUENOS.indexOf(op) < 0)
     return no(accion === 'resolverAccesoTemporal' ? 'Solo el administrador del sistema puede aprobar o rechazar accesos temporales.' : 'Solo el administrador del sistema puede crear o modificar usuarios.');
+  /* _USR_BAJA_V1 (27-oct-2026): "Eliminar" = dar de baja. No se borra la fila: queda eliminado = 1 (con fecha, quien y
+     motivo) y activo = 0 (el login de los 4 sistemas solo deja entrar a activos). Sus registros historicos no se tocan.
+     La lista /usuarios/lista ya no lo muestra (salvo ?incluirEliminados=1). "Restaurar" lo devuelve activo.
+     El cambio de 'activo' sigue el camino normal de updateUsuario, asi la hoja de Google queda igual que Azure. */
+  if (accion === 'eliminarUsuario' || accion === 'restaurarUsuario') {
+    const uu = String(b.usuario || '').trim();
+    if (!uu) return no('Falta el usuario.');
+    if (accion === 'eliminarUsuario' && (DUENOS.indexOf(uu.toLowerCase()) >= 0 || uu.toLowerCase() === op)) return no('No puedes eliminar tu propia cuenta de administrador.');
+    await pool.request().query("IF COL_LENGTH('dbo.usuarios','eliminado') IS NULL ALTER TABLE dbo.usuarios ADD eliminado BIT NULL, eliminado_en DATETIME2(0) NULL, eliminado_por NVARCHAR(100) NULL, motivo_baja NVARCHAR(300) NULL");
+    const rq = pool.request().input('u', sql.NVarChar(100), uu.toLowerCase());
+    if (accion === 'eliminarUsuario') {
+      rq.input('por', sql.NVarChar(100), op).input('mot', sql.NVarChar(300), String(b.motivo || '').trim().slice(0, 300) || null);
+      const r0 = await rq.query("UPDATE dbo.usuarios SET eliminado = 1, eliminado_en = SYSUTCDATETIME(), eliminado_por = @por, motivo_baja = @mot WHERE LOWER(LTRIM(RTRIM(usuario))) = @u");
+      if (!r0.rowsAffected[0]) return no('Usuario no encontrado.');
+    } else {
+      const r0 = await rq.query("UPDATE dbo.usuarios SET eliminado = 0 WHERE LOWER(LTRIM(RTRIM(usuario))) = @u");
+      if (!r0.rowsAffected[0]) return no('Usuario no encontrado.');
+    }
+    b = { usuario: uu, activo: accion === 'eliminarUsuario' ? 'FALSE' : 'TRUE', client_id: b.client_id ? String(b.client_id) + '-act' : undefined };
+    accion = 'updateUsuario';
+  }
   /* _SEG_USUARIOS_V1 (26-oct-2026): el administrador libera un bloqueo por intentos sin tocar la clave. */
   if (accion === 'desbloquearUsuario') {
     const uu = String(b.usuario || '').trim().toLowerCase();

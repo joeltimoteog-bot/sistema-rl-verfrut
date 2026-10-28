@@ -35,9 +35,12 @@ module.exports = async function (context, req) {
          (ultimo cambio de clave, clave temporal pendiente, intentos fallidos y bloqueo). Nunca la clave.
          Si las columnas/tabla aun no existen, cae a la consulta de siempre. */
       let r;
+      /* _USR_BAJA_V1: columnas de baja (se crean una vez) */
+      try { await pool.request().query("IF COL_LENGTH('dbo.usuarios','eliminado') IS NULL ALTER TABLE dbo.usuarios ADD eliminado BIT NULL, eliminado_en DATETIME2(0) NULL, eliminado_por NVARCHAR(100) NULL, motivo_baja NVARCHAR(300) NULL"); } catch (e0) {}
+      const incluirElim = String((req.query && req.query.incluirEliminados) || '') === '1';
       try {
         r = await pool.request().query(`SELECT u.id_sistema, u.usuario, u.nombre, u.rol, u.empresa, u.activo, u.fecha_creacion, u.correo, u.cargo, u.sector,
-                                               u.clave_cambiada, u.clave_temporal, u.clave_fuerte, li.fallos, li.bloqueado_hasta, li.ultimo AS ultimo_intento, li.bloqueos
+                                               u.clave_cambiada, u.clave_temporal, u.clave_fuerte, u.eliminado, u.eliminado_en, u.eliminado_por, u.motivo_baja, li.fallos, li.bloqueado_hasta, li.ultimo AS ultimo_intento, li.bloqueos
                                         FROM dbo.usuarios u LEFT JOIN dbo.Login_Intentos li ON li.usuario = LOWER(LTRIM(RTRIM(u.usuario)))
                                         ORDER BY u.id_sistema`);
       } catch (e1) {
@@ -45,7 +48,7 @@ module.exports = async function (context, req) {
         r = await pool.request().query(`SELECT id_sistema, usuario, nombre, rol, empresa, activo, fecha_creacion, correo, cargo, sector
                                             FROM dbo.usuarios ORDER BY id_sistema`);
       }
-      const data = r.recordset.filter(u => u.id_sistema).map(u => {
+      const data = r.recordset.filter(u => u.id_sistema && (incluirElim || !(u.eliminado === true || u.eliminado === 1))).map(u => {   /* _USR_BAJA_V1 */
         const o = {};
         Object.keys(u).forEach(k => { o[k] = txt(u[k]); });
         o.activo = u.activo === true || u.activo === 1 || String(u.activo).trim().toUpperCase() === 'TRUE';
@@ -55,6 +58,8 @@ module.exports = async function (context, req) {
         o.fundos = FUNDOS_SUPERVISOR[o.usuario] || [];
         /* _SEG_USUARIOS_V1 */
         const fechaIso = v => v instanceof Date ? v.toISOString() : (v ? String(v) : '');
+        o.eliminado = u.eliminado === true || u.eliminado === 1;   /* _USR_BAJA_V1 */
+        if (o.eliminado) o.baja = { en: u.eliminado_en instanceof Date ? u.eliminado_en.toISOString() : '', por: u.eliminado_por || '', motivo: u.motivo_baja || '' };
         o.seguridad = {
           clave_cambiada: fechaIso(u.clave_cambiada), clave_temporal: u.clave_temporal === true || u.clave_temporal === 1,
           clave_fuerte: u.clave_fuerte === true || u.clave_fuerte === 1 ? true : (u.clave_fuerte === null || u.clave_fuerte === undefined ? null : false),
