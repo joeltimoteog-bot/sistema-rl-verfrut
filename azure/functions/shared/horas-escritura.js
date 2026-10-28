@@ -134,6 +134,10 @@ function crear(ctx) {
       if (!esAdmin(body.usuario)) return { success: false, error: 'Solo administradores pueden registrar' };
       if (!r.dni || !r.motivo) return { success: false, error: 'DNI y motivo son obligatorios' };
       const motivo = String(r.motivo || '').toLowerCase().trim();
+      /* _HORAS_TURNO_24H_V1 (28-oct-2026): una acumulacion es de UN turno. Si la salida es dias despues de la
+         entrada (p. ej. 01/07 a 07/07 = 155 h), es un error de fecha y se rechaza. */
+      if (norm(motivo).indexOf('acumulacion') >= 0 && r.fechaEntrada && r.fechaSalida && String(r.fechaEntrada).substring(0, 10) !== String(r.fechaSalida).substring(0, 10) && !turnoUnico(r))
+        return { success: false, error: 'Una acumulación es de un solo turno (máximo 24 horas). Revisa la fecha de salida: si salió el mismo día, debe ser la misma fecha de entrada.' };
       let horasTrabajadas = Number(r.horasTrabajadas) || 0, horasAcum = 0, horasPermiso = 0, horasDeuda = 0, alerta = '', estado = 'aprobado';
       const jornadaEsp = turnoUnico(r) ? jornadaUnDia(r.fechaEntrada)
         : ((r.fechaEntrada && r.fechaSalida) ? jornadaTotal(r.fechaEntrada, r.fechaSalida) : (r.fechaEntrada ? jornadaUnDia(r.fechaEntrada) : 0));
