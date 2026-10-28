@@ -41,7 +41,11 @@
     try {
       var f = p && p.firma; if (!f || !f.digital) return '';
       var cod = String(f.codigo || '').trim();
-      return 'FIRMADO DIGITALMENTE\n' + (cod ? 'Cód. fotocheck ' + cod : 'DNI ' + (p.dni || '') + ' (sin cód. en BD)') + '\n' + ahoraTxt(f.fecha) + ' · ' + (f.metodo || 'QR');
+      /* _CAP_FIRMA_SIN_METODO_V1 (27-oct-2026): el formato ya no imprime el metodo (QR/Excel/Lote/Manual);
+         queda guardado en Azure (Cap_Firmas) para consulta. Escaneo QR: fecha y hora real de cada firma.
+         Excel / lote / manual: solo la fecha (la firma se tomo en la hoja fisica; la hora de carga no es la de la firma). */
+      var conHora = !f.metodo || String(f.metodo).toUpperCase() === 'QR';
+      return 'FIRMADO DIGITALMENTE\n' + (cod ? 'Cód. fotocheck ' + cod : 'DNI ' + (p.dni || '') + ' (sin cód. en BD)') + '\n' + (conHora ? ahoraTxt(f.fecha) : ahoraTxt(f.fecha).slice(0, 10));
     } catch (e) { return ''; }
   };
   window._capFirmaBadge = function (a) {
