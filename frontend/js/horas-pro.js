@@ -41,15 +41,16 @@
      van en 0 (el servidor ya las guarda en 0). */
   var HORL = null;
   function refrigerioDe(fecha) {
-    if (!HORL || !fecha) return 45;
-    var p = String(fecha).split('-'); if (p.length !== 3) return 45;
+    var p = String(fecha || '').split('-'); if (p.length !== 3) return 45;
     var dow = new Date(+p[0], +p[1] - 1, +p[2]).getDay();
+    if (!HORL) return dow === 6 ? 0 : 45;
     for (var i = 0; i < HORL.length; i++) {
       var h = HORL[i]; if (fecha < h.desde || (h.hasta && fecha > h.hasta)) continue;
       return Number(dow === 6 ? h.sabRefrigMin : h.lvRefrigMin) || 0;
     }
-    return 45;
+    return dow === 6 ? 0 : 45;
   }
+  window.horasRefrigerioDia = refrigerioDe;   /* _HORAS_NETAS_V2: lo usa recalcularHoras de horas.js */
   function num(id) { return parseFloat(String((document.getElementById(id) || {}).textContent || '0').replace(',', '.')) || 0; }
   function val(id) { return ((document.getElementById(id) || {}).value || ''); }
   function txt(id, t) { var e = document.getElementById(id); if (e) e.textContent = t; }
@@ -59,6 +60,16 @@
       var r = _rec.apply(this, arguments);
       try {
         var m = String(val('regMotivo')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (m.indexOf('devolucion') >= 0) {   /* _DEVOL_SALDO_V1: no se pagan horas que no tiene */
+          var sal = null; try { sal = window.horasCache.saldoActual; } catch (e) {}
+          var ped = parseFloat(String(val('regHorasDevol')).replace(',', '.')) || 0, btn = document.getElementById('btnRegistrar');
+          var falta = sal && typeof sal.saldo === 'number' && ped > sal.saldo + 0.001;
+          if (btn) { btn.disabled = !!falta; btn.title = falta ? 'Solo tiene ' + sal.saldo.toFixed(2) + ' h acumuladas' : ''; }
+          var ay = document.getElementById('devolAyuda');
+          if (ay && falta) ay.innerHTML += ' <span style="color:#dc2626;font-weight:700">⛔ Solo tiene ' + sal.saldo.toFixed(2) + ' h acumuladas: no se puede pagar más de eso.</span>';
+          return r;
+        }
+        var btn0 = document.getElementById('btnRegistrar'); if (btn0 && btn0.title) { btn0.disabled = false; btn0.title = ''; }
         if (m.indexOf('permiso') < 0) return r;
         txt('calcTrab', '0.00');
         var pi = val('regHoraPermInicio'), pf = val('regHoraPermFin');

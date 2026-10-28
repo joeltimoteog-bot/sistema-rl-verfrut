@@ -464,7 +464,14 @@ function recalcularHoras() {
          de refrigerio; 5.75 el sabado). Al restar los 45 min aca ademas, se
          descontaban DOS VECES y a cada trabajador se le comian 45 minutos de
          cada acumulacion. Ahora se compara presencia contra presencia. */
-      horasTrab = bruto;
+      /* _HORAS_NETAS_V2 (28-oct-2026): se vuelve a descontar el refrigerio. La jornada esperada de la tabla
+         de horarios es NETA (9.60 = 06:15-16:36 menos 45 min; 8.45 = 06:15-15:27 menos 45 min), asi que las
+         horas trabajadas tambien deben ser netas. Con el cambio del 22-ago cada acumulacion sumaba 0.75 h
+         de mas (el almuerzo). El refrigerio sale del horario de ese dia (sabado = 0). */
+      let refMin = 45;
+      try { refMin = (typeof window.horasRefrigerioDia === 'function') ? window.horasRefrigerioDia(fE) : (ini.getDay() === 6 ? 0 : 45); } catch (eR) {}
+      horasTrab = bruto >= 5 ? bruto - (Number(refMin) || 0) / 60 : bruto;
+      horasTrab = Math.round(horasTrab * 100) / 100;
     }
   }
 

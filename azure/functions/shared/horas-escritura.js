@@ -220,6 +220,8 @@ function crear(ctx) {
     pedidas = r2(pedidas);
     if (pedidas <= 0) return { ok: false, error: 'Indica cuantas horas se le van a pagar como extras.' };
     if (pedidas > TOPE + 0.001) return { ok: false, error: 'Solo se pueden pagar ' + TOPE + ' horas por dia. Se intento registrar ' + pedidas.toFixed(2) + '.' };
+    try { const disp = r2(Number(saldo(r.dni).saldo) || 0);   /* _DEVOL_SALDO_V1: no se pagan horas que no tiene */
+      if (pedidas > disp + 0.001) return { ok: false, error: 'El trabajador solo tiene ' + Math.max(0, disp).toFixed(2) + ' h acumuladas. No se le pueden pagar ' + pedidas.toFixed(2) + ' h.' }; } catch (eS) {}
     const fecha = String(r.fechaEntrada || '').substring(0, 10), ya = devueltasDelDia(r.dni, fecha);
     if (ya + pedidas > TOPE + 0.001) {
       const libre = Math.max(0, r2(TOPE - ya));
@@ -321,12 +323,19 @@ function crear(ctx) {
         const reg = { fechaEntrada: fe, fechaSalida: fs, horaEntrada: horaTxt(f[8]), horaSalida: horaTxt(f[10]) };
         const jVieja = r2(N(f[12]) || 0);
         const jNueva = turnoUnico(reg) ? jornadaUnDia(fe) : (fs ? jornadaTotal(fe, fs) : jornadaUnDia(fe));
-        const tope = body.topeJornada === true && !!soloIds;   /* _HORAS_PERMISO_NETO_V1: quitar el refrigerio cobrado de mas */
+        const tope = (body.topeJornada === true || body.restarRefrigerio === true) && !!soloIds;   /* _HORAS_PERMISO_NETO_V1: quitar el refrigerio cobrado de mas */
         if (Math.abs(jNueva - jVieja) < 0.005 && !tope) return;
         const mot = norm(esD(f[16]) ? f[16].$s : f[16]), trab = r2(N(f[11]) || 0);
         const ant = { jornada: jVieja, acum: r2(N(f[13]) || 0), perm: r2(N(f[14]) || 0), deuda: r2(N(f[15]) || 0) };
         const nue = Object.assign({}, ant, { jornada: jNueva }); let regla = 'solo jornada';
-        if (mot === 'acumulacion') { nue.acum = trab > jNueva ? r2(trab - jNueva) : 0; regla = 'acumulacion'; }
+        nue.trab = trab;
+        if (mot === 'acumulacion' && body.restarRefrigerio === true && soloIds) {   /* _HORAS_NETAS_V2: trabajadas = presencia - refrigerio */
+          const v = vigente(fe), p = fe.split('-'), dw = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])).getUTCDay();
+          const ref = v ? (dw === 6 ? v.sabRef : v.lvRef) : (dw === 6 ? 0 : 45);
+          if (trab >= 5 && ref > 0) nue.trab = r2(trab - ref / 60);
+          nue.acum = nue.trab > jNueva ? r2(nue.trab - jNueva) : 0; regla = 'acumulacion neta';
+        }
+        else if (mot === 'acumulacion') { nue.acum = trab > jNueva ? r2(trab - jNueva) : 0; regla = 'acumulacion'; }
         else if ((mot === 'permiso') && Math.abs(ant.perm + ant.deuda - jVieja) < 0.011) {
           let dif = r2(jNueva - jVieja); regla = 'permiso dia completo';
           if (dif < 0) { const q = Math.min(ant.deuda, -dif); nue.deuda = r2(ant.deuda - q); nue.perm = r2(Math.max(0, ant.perm - (-dif - q))); }
@@ -336,10 +345,11 @@ function crear(ctx) {
           const exc = r2(ant.perm + ant.deuda - jNueva), q = Math.min(ant.deuda, exc); regla = 'permiso tope jornada';
           nue.deuda = r2(ant.deuda - q); nue.perm = r2(Math.max(0, ant.perm - (exc - q)));
         }
-        if (nue.jornada === ant.jornada && nue.acum === ant.acum && nue.perm === ant.perm && nue.deuda === ant.deuda) return;
+        if (nue.jornada === ant.jornada && nue.acum === ant.acum && nue.perm === ant.perm && nue.deuda === ant.deuda && nue.trab === trab) return;
         const efecto = r2((nue.acum - nue.perm - nue.deuda) - (ant.acum - ant.perm - ant.deuda));
         lista.push({ id: S(f[0]), dni: normDni(f[3]), nombre: S(f[4]), fecha: fe, motivo: S(f[16]), trabajadas: trab, regla, antes: ant, despues: nue, efectoSaldo: efecto });
         if (aplicar) {
+          if (nue.trab !== trab) cambios.push([S(f[0]), 12, nue.trab]);
           cambios.push([S(f[0]), 13, nue.jornada], [S(f[0]), 14, nue.acum], [S(f[0]), 15, nue.perm], [S(f[0]), 16, nue.deuda]);
           log(body.usuario, 'RECALC_JORNADA', S(f[0]), JSON.stringify({ antes: ant, despues: nue }));
         }

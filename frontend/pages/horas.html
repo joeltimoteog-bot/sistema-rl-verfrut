@@ -263,7 +263,7 @@ h3{font-size:16px !important}
 
     <!-- Cálculo en vivo -->
     <div class="grid4" style="margin-top:14px">
-      <div class="stat-card"><div class="stat-label" title="Tiempo entre la entrada y la salida. La jornada esperada ya incluye el refrigerio.">Horas en planta</div><div class="stat-val" id="calcTrab">0.00</div></div>
+      <div class="stat-card"><div class="stat-label" title="Tiempo entre la entrada y la salida menos el refrigerio del horario (igual que la jornada esperada).">Horas trabajadas</div><div class="stat-val" id="calcTrab">0.00</div></div>
       <div class="stat-card amber"><div class="stat-label">Jornada esperada</div><div class="stat-val" id="calcJornada">—</div></div>
       <div class="stat-card green"><div class="stat-label">Horas acumuladas</div><div class="stat-val" id="calcAcum">0.00</div></div>
       <div class="stat-card blue"><div class="stat-label">Horas permiso</div><div class="stat-val" id="calcPerm">0.00</div></div>
@@ -554,7 +554,7 @@ h3{font-size:16px !important}
 </div>
 
 <script src="../js/modal-system.js"></script>  <!-- _MODALES_FIX (23-set): horas.js usa appAlert/appConfirm -->
-<script src="../js/horas.js?v=2"></script>
+<script src="../js/horas.js?v=3"></script>
 <script src="../js/antidoble.js"></script>  <!-- _ANTIDOBLE_V1 (23-set): sin registros duplicados por doble clic -->
 <script>
 /* _MOD_AZURE_V1 (26-set-2026) — Acumulacion de Horas: las consultas salen de Azure (mismo calculo que
@@ -658,6 +658,6 @@ h3{font-size:16px !important}
 <script src="../js/tema-rl.js?v=1"></script>  <!-- _TEMA_RL_V1 (16-oct): piel moderna comun (solo presentacion) -->
 <script src="../js/actualizar.js?v=1"></script>  <!-- _ACTUALIZAR_V3 (15-oct): aviso y actualizacion automatica (unico) -->
 <script src="../js/hor-azure.js?v=1"></script>
-<script src="../js/horas-pro.js?v=2"></script>  <!-- _HORAS_PRO_V1 (28-oct): banner del horario vigente -->  <!-- _HOR_AZURE_V1 (24-oct): horarios de jornada se guardan y leen primero en Azure -->
+<script src="../js/horas-pro.js?v=3"></script>  <!-- _HORAS_PRO_V1 (28-oct): banner del horario vigente -->  <!-- _HOR_AZURE_V1 (24-oct): horarios de jornada se guardan y leen primero en Azure -->
 </body>
 </html>
