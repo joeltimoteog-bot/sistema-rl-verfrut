@@ -1952,11 +1952,18 @@ console.log('[_DEVOLUCION_V6] la devolucion pide horas a pagar, no horario');
     return String(f || '').substring(0, 10);
   }
   function norm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
-  try {
-    apiPost({ action: 'horariosListar', usuario: (typeof USER !== 'undefined' && USER && USER.usuario) || '' }).then(function (d) {
-      if (d && d.success && Array.isArray(d.horarios)) { HOR = d.horarios.slice().sort(function (a, b) { return a.desde < b.desde ? 1 : -1; }); try { window.recalcularHoras(); } catch (e) {} }
-    }).catch(function () {});
-  } catch (e) {}
+  /* _HORAS_JORNADA_PREVIA_V2 (28-oct-2026): los horarios se piden cuando la pagina termino de cargar,
+     asi pasan por hor-azure.js (tabla de Azure, la misma del calculo). Antes se pedian antes de que
+     hor-azure.js existiera, fallaban y la vista previa caia a la regla vieja (8.75 h). */
+  function cargarHOR() {
+    try {
+      apiPost({ action: 'horariosListar', usuario: (typeof USER !== 'undefined' && USER && USER.usuario) || '' }).then(function (d) {
+        if (d && d.success && Array.isArray(d.horarios)) { HOR = d.horarios.slice().sort(function (a, b) { return a.desde < b.desde ? 1 : -1; }); try { window.recalcularHoras(); } catch (e) {} }
+      }).catch(function () {});
+    } catch (e) {}
+  }
+  window.horasRecargarHorarios = cargarHOR;
+  if (document.readyState === 'complete') setTimeout(cargarHOR, 0); else window.addEventListener('load', cargarHOR);
 
   var _unDiaOrig = window.horasCalcularJornadaUnDia;
   if (typeof _unDiaOrig === 'function') {

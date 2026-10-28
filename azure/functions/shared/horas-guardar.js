@@ -18,7 +18,7 @@ const HE = require('./horas-escritura');
 /* = HORAS_ADMINS y HORAS_REG_V7 del Apps Script (si cambian alla, cambiar aqui) */
 const ADMINS = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas', 'ovilela', 'jchavez'];
 const REGISTRADORES = ['dsanchez', 'lmorales', 'jsiancas'];
-const ACCIONES = ['horasRegistrar', 'horasEditar', 'horasEliminar', 'horasAprobar', 'horasAgregarMotivo', 'horasEliminarMotivo'];
+const ACCIONES = ['horasRecalcJornada', 'horasRegistrar', 'horasEditar', 'horasEliminar', 'horasAprobar', 'horasAgregarMotivo', 'horasEliminarMotivo'];
 const CLAVES = ['horas_registros', 'horas_motivos', 'horas_horarios', 'horas_pagadas', 'horas_auditoria'];
 
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
@@ -65,6 +65,7 @@ async function ejecutar(pool, accion, b, usuario, prueba, ahoraMs) {
     const M = HE.crear({ registros: R.filas, motivos: Mo.filas, horarios: Ho.filas, ahora, admins: ADMINS, registradores: REGISTRADORES });
     const o = M.ejecutar(accion, body), resp = o.res;
     if (!resp || !resp.success) { await tx.rollback(); return { status: 200, body: resp || { success: false, error: 'Sin respuesta' } }; }
+    if (accion === 'horasRecalcJornada' && body.aplicar !== true) { await tx.rollback(); return { status: 200, body: resp }; }   /* _HORAS_RECALC_JORNADA_V1: vista previa, no guarda */
 
     const tocar = new Set(), borrarNombres = [];
     if (o.nuevas.length) { await CAP.agregarFilas(tx, 'horas_registros', o.nuevas.map(f => f.map(CAP.comoHoja))); tocar.add('horas_registros'); }

@@ -301,7 +301,48 @@ function crear(ctx) {
       return { success: false, error: 'Motivo no encontrado' };
     } catch (e) { return { success: false, error: e.message }; }
   }
-  const ACC = { horasRegistrar: registrarV3, horasEditar: editar, horasEliminar: eliminar, horasAprobar: aprobar, horasAgregarMotivo: agregarMotivo, horasEliminarMotivo: eliminarMotivo };
+  /* _HORAS_RECALC_JORNADA_V1 (28-oct-2026) — recalcula la jornada esperada de registros ya guardados
+     con la tabla de horarios vigente. Solo el dueno. Sin "aplicar": solo vista previa (no cambia nada).
+     Acumulacion: acumuladas = trabajadas - jornada nueva. Permiso de dia completo (permiso+deuda = jornada
+     vieja): la diferencia se ajusta primero en la deuda (si baja) o va al saldo/deuda (si sube).
+     Permisos con horas puestas a mano y demas motivos: solo se corrige la jornada mostrada. */
+  function horaTxt(v) { const m = hjHora(v); return m < 0 ? '' : String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+  function recalcJornada(body) {
+    try {
+      if (String(body.usuario || '').toLowerCase().trim() !== 'jtimoteo') return { success: false, error: 'Solo el dueno del sistema puede recalcular' };
+      const desde = String(body.desde || '0000-01-01'), hasta = String(body.hasta || '9999-12-31');
+      const aplicar = body.aplicar === true, lista = [];
+      const soloIds = Array.isArray(body.ids) && body.ids.length ? new Set(body.ids.map(x => String(x).trim())) : null;
+      if (!soloIds && (!body.desde || !body.hasta)) return { success: false, error: 'Indica el rango (desde y hasta) o la lista de ids' };
+      filas.forEach(f => {
+        if ((f[20] ? S(f[20]) : '').toLowerCase() === 'rechazado') return;
+        const fe = hjFecha(f[7]), fs = hjFecha(f[9]) || fe; if (!fe) return;
+        if (soloIds) { if (!soloIds.has(S(f[0]).trim())) return; } else if (fe < desde || fe > hasta) return;
+        const reg = { fechaEntrada: fe, fechaSalida: fs, horaEntrada: horaTxt(f[8]), horaSalida: horaTxt(f[10]) };
+        const jVieja = r2(N(f[12]) || 0);
+        const jNueva = turnoUnico(reg) ? jornadaUnDia(fe) : (fs ? jornadaTotal(fe, fs) : jornadaUnDia(fe));
+        if (Math.abs(jNueva - jVieja) < 0.005) return;
+        const mot = norm(esD(f[16]) ? f[16].$s : f[16]), trab = r2(N(f[11]) || 0);
+        const ant = { jornada: jVieja, acum: r2(N(f[13]) || 0), perm: r2(N(f[14]) || 0), deuda: r2(N(f[15]) || 0) };
+        const nue = Object.assign({}, ant, { jornada: jNueva }); let regla = 'solo jornada';
+        if (mot === 'acumulacion') { nue.acum = trab > jNueva ? r2(trab - jNueva) : 0; regla = 'acumulacion'; }
+        else if ((mot === 'permiso') && Math.abs(ant.perm + ant.deuda - jVieja) < 0.011) {
+          let dif = r2(jNueva - jVieja); regla = 'permiso dia completo';
+          if (dif < 0) { const q = Math.min(ant.deuda, -dif); nue.deuda = r2(ant.deuda - q); nue.perm = r2(Math.max(0, ant.perm - (-dif - q))); }
+          else { const disp = Number(saldo(f[3]).saldo) || 0; if (disp >= dif) nue.perm = r2(ant.perm + dif); else { nue.perm = r2(ant.perm + Math.max(0, disp)); nue.deuda = r2(ant.deuda + dif - Math.max(0, disp)); } }
+        }
+        const efecto = r2((nue.acum - nue.perm - nue.deuda) - (ant.acum - ant.perm - ant.deuda));
+        lista.push({ id: S(f[0]), dni: normDni(f[3]), nombre: S(f[4]), fecha: fe, motivo: S(f[16]), trabajadas: trab, regla, antes: ant, despues: nue, efectoSaldo: efecto });
+        if (aplicar) {
+          cambios.push([S(f[0]), 13, nue.jornada], [S(f[0]), 14, nue.acum], [S(f[0]), 15, nue.perm], [S(f[0]), 16, nue.deuda]);
+          log(body.usuario, 'RECALC_JORNADA', S(f[0]), JSON.stringify({ antes: ant, despues: nue }));
+        }
+      });
+      if (aplicar && !lista.length) return { success: false, error: 'No hay registros que corregir' };
+      return { success: true, aplicado: aplicar, total: lista.length, registros: lista };
+    } catch (e) { return { success: false, error: e.message }; }
+  }
+  const ACC = { horasRecalcJornada: recalcJornada, horasRegistrar: registrarV3, horasEditar: editar, horasEliminar: eliminar, horasAprobar: aprobar, horasAgregarMotivo: agregarMotivo, horasEliminarMotivo: eliminarMotivo };
   return {
     ejecutar(accion, body) {
       const fn = ACC[accion]; if (!fn) return null;
@@ -310,4 +351,4 @@ function crear(ctx) {
     }
   };
 }
-module.exports = { crear, ACCIONES: ['horasRegistrar', 'horasEditar', 'horasEliminar', 'horasAprobar', 'horasAgregarMotivo', 'horasEliminarMotivo'] };
+module.exports = { crear, ACCIONES: ['horasRecalcJornada', 'horasRegistrar', 'horasEditar', 'horasEliminar', 'horasAprobar', 'horasAgregarMotivo', 'horasEliminarMotivo'] };
