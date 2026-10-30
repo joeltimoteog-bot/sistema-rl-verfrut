@@ -235,7 +235,7 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
   }
   function filas() {
     var s = $('fSis').value, m = $('fMod').value, src = medir === 'reg' ? REG : ING;
-    return src.filter(function (r) { return (!s || r.sis === s) && (!m || r.mod === m); });
+    return src.filter(function (r) { return (!s || r.sis === s) && (!m || r.mod === m) && (!sel || r.u === sel); });   /* _ACT_SOLO_USUARIO_V1 */
   }
 
   async function cargar() {
@@ -261,38 +261,62 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
     var F = filas(), q = norm($('fBus').value);
     var usuarios = D.usuarios.filter(function (u) { return !q || norm(u.nombre + ' ' + u.usuario).indexOf(q) >= 0; });
     /* KPIs */
-    var totR = REG.reduce(function (a, r) { return a + r.n; }, 0), totI = ING.reduce(function (a, r) { return a + r.n; }, 0);
-    var activos = {}; REG.forEach(function (r) { activos[r.u] = 1; });
-    var porMod = {}; REG.forEach(function (r) { porMod[r.mod] = (porMod[r.mod] || 0) + r.n; });
+    /* _ACT_SOLO_USUARIO_V1: con un usuario elegido, todo lo de la pagina es SOLO de esa persona */
+    var RS = REG.filter(function (r) { return !sel || r.u === sel; }), IS = ING.filter(function (r) { return !sel || r.u === sel; });
+    var totR = RS.reduce(function (a, r) { return a + r.n; }, 0), totI = IS.reduce(function (a, r) { return a + r.n; }, 0);
+    var activos = {}; RS.forEach(function (r) { activos[r.u] = 1; });
+    var modsR = {}; RS.forEach(function (r) { modsR[r.sis + '|' + r.mod] = 1; });
+    var porMod = {}; RS.forEach(function (r) { porMod[r.mod] = (porMod[r.mod] || 0) + r.n; });
     var top = Object.keys(porMod).sort(function (a, b) { return porMod[b] - porMod[a]; })[0];
-    $('kpis').innerHTML = [
-      ['Registros en ' + D.anio, n(totR), 'en los módulos medidos'], ['Usuarios que registraron', n(Object.keys(activos).length), 'de ' + n(D.usuarios.filter(function (u) { return u.activo; }).length) + ' usuarios activos'],
+    var nomSel = sel ? nombreDe(sel) : '';
+    $('kpis').innerHTML = (sel ? [
+      ['Registros de ' + esc(nomSel) + ' en ' + D.anio, n(totR), 'solo lo que registró esta persona'], ['Módulos donde registró', n(Object.keys(modsR).length), Object.keys(modsR).length ? esc(Object.keys(modsR).map(function (k) { return k.split('|')[1]; }).join(', ')) : 'no registró en los módulos medidos'],
+      ['Ingresos a módulos', n(totI), 'veces que entró (desde oct-2026)'], ['Donde más registró', top ? esc(top) : '—', top && totR ? Math.round(porMod[top] * 100 / totR) + ' % de sus registros' : '']
+    ] : [
+      ['Registros en ' + D.anio, n(totR), 'de todos los usuarios'], ['Usuarios que registraron', n(Object.keys(activos).length), 'de ' + n(D.usuarios.filter(function (u) { return u.activo; }).length) + ' usuarios activos'],
       ['Ingresos a módulos', n(totI), 'desde oct-2026'], ['Módulo con más registros', top ? esc(top) : '—', top && totR ? Math.round(porMod[top] * 100 / totR) + ' % de los registros' : '']
-    ].map(function (k) { return '<div class="kpi"><div class="l">' + k[0] + '</div><div class="v">' + k[1] + '</div><div class="s">' + k[2] + '</div></div>'; }).join('');
+    ]).map(function (k) { return '<div class="kpi"><div class="l">' + k[0] + '</div><div class="v">' + k[1] + '</div><div class="s">' + k[2] + '</div></div>'; }).join('');
     /* chips de usuarios */
-    $('chips').innerHTML = usuarios.map(function (u) { return '<button type="button" data-u="' + esc(u.usuario) + '" class="' + (u.usuario === sel ? 'on ' : '') + (u.activo ? '' : 'inac') + '" title="' + esc(u.usuario) + '">' + esc(u.nombre || u.usuario) + '</button>'; }).join('') || '<span>Sin usuarios</span>';
-    $('chips').querySelectorAll('button').forEach(function (b) { b.onclick = function () { sel = b.getAttribute('data-u'); pintar(); $('ficha').scrollIntoView({ behavior: 'smooth' }); }; });
+    $('chips').innerHTML = (D.todos ? '<button type="button" data-u="" class="' + (sel ? '' : 'on') + '">👥 Todos los usuarios</button>' : '') + usuarios.map(function (u) { return '<button type="button" data-u="' + esc(u.usuario) + '" class="' + (u.usuario === sel ? 'on ' : '') + (u.activo ? '' : 'inac') + '" title="' + esc(u.usuario) + '">' + esc(u.nombre || u.usuario) + '</button>'; }).join('') || '<span>Sin usuarios</span>';
+    $('chips').querySelectorAll('button').forEach(function (b) { b.onclick = function () { elegir(b.getAttribute('data-u') || null); }; });
     pintarFicha();
     /* matriz usuario x mes */
     var m = {}; F.forEach(function (r) { var o = m[r.u] = m[r.u] || new Array(12).fill(0); o[r.mes - 1] += r.n; });
+    if (sel) {   /* _ACT_SOLO_USUARIO_V1: filas = modulos de esa persona */
+      var mm = {}; F.forEach(function (r) { var k = r.sis + '|' + r.mod, o = mm[k] = mm[k] || new Array(12).fill(0); o[r.mes - 1] += r.n; });
+      var lm = Object.keys(mm).map(function (k) { return { k: k, xs: mm[k], tot: mm[k].reduce(function (a, b) { return a + b; }, 0) }; }).sort(function (a, b) { return b.tot - a.tot; });
+      var mx1 = Math.max.apply(null, [1].concat(lm.map(function (l) { return Math.max.apply(null, l.xs); })));
+      $('matTit').textContent = (medir === 'reg' ? 'Registros' : 'Ingresos') + ' de ' + nomSel + ' por módulo y mes · ' + D.anio;
+      $('mat').innerHTML = lm.length ? '<table><thead><tr><th class="u">Módulo</th>' + MESES.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '<th>Total</th></tr></thead><tbody>' +
+        lm.map(function (l) { var p = l.k.split('|'); return '<tr><th class="u" scope="row">' + esc(p[1]) + ' <span class="nota">· ' + esc(p[0]) + '</span></th>' + l.xs.map(function (v) { var a = v ? 0.12 + 0.78 * v / mx1 : 0; return '<td style="background:' + (v ? 'rgba(10,36,99,' + a.toFixed(2) + ')' : '#f8fafc') + ';color:' + (v ? (a > .5 ? '#fff' : '#13213f') : '#94a3b8') + '">' + (v || '·') + '</td>'; }).join('') + '<td class="tot">' + n(l.tot) + '</td></tr>'; }).join('') + '</tbody></table>'
+        : '<div class="vacio">' + esc(nomSel) + ' no tiene ' + (medir === 'reg' ? 'registros' : 'ingresos') + ' con estos filtros.</div>';
+      m = {};
+    }
     var lista = usuarios.filter(function (u) { return m[u.usuario]; }).map(function (u) { return { u: u, xs: m[u.usuario], tot: m[u.usuario].reduce(function (a, b) { return a + b; }, 0) }; })
       .sort(function (a, b) { return b.tot - a.tot; });
     var max = Math.max.apply(null, [1].concat(lista.map(function (l) { return Math.max.apply(null, l.xs); })));
-    $('matTit').textContent = (medir === 'reg' ? 'Registros' : 'Ingresos') + ' por usuario y mes · ' + D.anio;
-    $('mat').innerHTML = lista.length ? '<table><thead><tr><th class="u">Usuario</th>' + MESES.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '<th>Total</th></tr></thead><tbody>' +
+    if (!sel) $('matTit').textContent = (medir === 'reg' ? 'Registros' : 'Ingresos') + ' por usuario y mes · ' + D.anio;
+    if (!sel) $('mat').innerHTML = lista.length ? '<table><thead><tr><th class="u">Usuario</th>' + MESES.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '<th>Total</th></tr></thead><tbody>' +
       lista.map(function (l) {
         return '<tr><th class="u" scope="row"><a data-u="' + esc(l.u.usuario) + '">' + esc(l.u.nombre || l.u.usuario) + '</a></th>' + l.xs.map(function (v) {
           var a = v ? 0.12 + 0.78 * v / max : 0;
           return '<td style="background:' + (v ? 'rgba(10,36,99,' + a.toFixed(2) + ')' : '#f8fafc') + ';color:' + (v ? (a > .5 ? '#fff' : '#13213f') : '#94a3b8') + '">' + (v || '·') + '</td>';
         }).join('') + '<td class="tot">' + n(l.tot) + '</td></tr>';
       }).join('') + '</tbody></table>' : '<div class="vacio">Sin ' + (medir === 'reg' ? 'registros' : 'ingresos') + ' con estos filtros.</div>';
-    $('mat').querySelectorAll('a[data-u]').forEach(function (a) { a.onclick = function () { sel = a.getAttribute('data-u'); pintar(); $('ficha').scrollIntoView({ behavior: 'smooth' }); }; });
+    $('mat').querySelectorAll('a[data-u]').forEach(function (a) { a.onclick = function () { elegir(a.getAttribute('data-u')); }; });
     $('matNota').textContent = medir === 'ing' ? 'Ingresos = veces que abrió un módulo (se cuentan desde octubre de 2026).' : 'Registros = lo que guardó en cada módulo (sin contar los anulados de Horas ni las compensaciones automáticas).';
     /* por modulo */
     var pm = {}; F.forEach(function (r) { var k = r.sis + '|' + r.mod; pm[k] = (pm[k] || 0) + r.n; });
     var ks = Object.keys(pm).sort(function (a, b) { return pm[b] - pm[a]; }), mx = ks.length ? pm[ks[0]] : 1;
-    $('modTit').textContent = (medir === 'reg' ? 'Registros' : 'Ingresos') + ' por sistema y módulo';
+    $('modTit').textContent = (medir === 'reg' ? 'Registros' : 'Ingresos') + ' por sistema y módulo' + (sel ? ' · ' + nomSel : ' · todos los usuarios');
     $('mods').innerHTML = ks.map(function (k) { var p = k.split('|'); return '<div class="barra"><span><b>' + esc(p[1]) + '</b><br><span class="nota">' + esc(p[0]) + '</span></span><span class="b"><i style="width:' + Math.max(2, Math.round(pm[k] * 100 / mx)) + '%"></i></span><b style="text-align:right">' + n(pm[k]) + '</b></div>'; }).join('') || '<div class="vacio">Sin datos con estos filtros.</div>';
+  }
+
+  /* _ACT_SOLO_USUARIO_V1: elegir un usuario filtra toda la pagina y abre su auditoria de horas */
+  function elegir(u) {
+    sel = u || null; pintar();
+    if (D && D.todos && $('audU')) { $('audU').value = sel || ''; audCargar(sel || ''); }
+    if (sel) $('ficha').scrollIntoView({ behavior: 'smooth' });
   }
 
   function pintarFicha() {
