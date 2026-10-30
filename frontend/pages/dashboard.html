@@ -248,7 +248,9 @@ h3{font-size:16px !important}
     <button class="ni" id="navEval360" style="display:none" onclick="location.href='evaluacion360.html'"><span class="ic">🔄</span>Evaluación 360°</button>
     <button class="ni" id="navSolicitudes" style="display:none" onclick="ir('solicitudes',this)"><span class="ic">🔔</span>Solicitudes <span id="badgeSol" style="background:#ef4444;color:#fff;border-radius:50%;padding:1px 6px;font-size:10px;display:none">0</span></button>
     <button class="ni" id="navFbAlertas" style="display:none" onclick="togglePanelFbAlertas()"><span class="ic">⚡</span>Alertas Sistema<span id="badgeFbAlertas" style="display:none;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;min-width:17px;height:17px;line-height:17px;text-align:center;padding:0 4px;margin-left:auto;flex-shrink:0"></span></button>
-    <button class="ni" id="navMonitor" style="display:none" onclick="location.href='monitor.html'"><span class="ic">🛰️</span>Monitor en Vivo</button>
+    <button class="ni" id="navMonitor" style="display:none" onclick="location.href='actividad.html#monitor'"><span class="ic">🛰️</span>Monitor en Vivo</button>
+    <button class="ni" id="navActividad" style="display:none" onclick="location.href='actividad.html'"><span class="ic">📊</span>Actividad de Usuarios</button>   <!-- _ACTIVIDAD_V1 (29-oct-2026): actividad por usuario, con Monitor en vivo y Cerebro como pestañas -->
+    <style>/* _ACTIVIDAD_V1: el Monitor en vivo ahora es una pestaña de Actividad de Usuarios (el permiso navMonitor se sigue usando ahi) */ #navMonitor{display:none!important}</style>
     <button class="ni" id="navKpis" style="display:none" onclick="location.href='kpis.html'"><span class="ic">🎯</span>KPIs RR.LL.</button>   <!-- _KPI_RRLL_V1 (30-set-2026) -->
     <button class="ni" id="navProgEti" style="display:none" onclick="location.href='programacion-eti.html'"><span class="ic">📅</span>Programación ETI</button>   <!-- _PROGETI_V1 (10-oct-2026) -->
     <button class="ni" id="navAppEti" style="display:none" onclick="location.href='programacion-eti.html'"><span class="ic">🎓</span>Capacitaciones ETI (programar)</button>   <!-- _ETI_PERMISO_V1 (14-oct-2026): se asigna en Acceso a Modulos; abre la tarjeta del Sistema ETI con rol de equipo -->
@@ -1839,6 +1841,7 @@ h3{font-size:16px !important}
 
 <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Dashboard"></script>
 <script>try{var _u=JSON.parse(sessionStorage.getItem("user")||"null");if(_u&&["jtimoteo"].includes(String(_u.usuario).toLowerCase())){var _b=document.getElementById("navMonitor");if(_b)_b.style.display="";}}catch(e){}</script>
+<script>/* _ACTIVIDAD_V1: el dueño del sistema siempre ve Actividad de Usuarios */try{var _u2=JSON.parse(sessionStorage.getItem("user")||"null");if(_u2&&String(_u2.usuario).toLowerCase()==="jtimoteo"){var _b2=document.getElementById("navActividad");if(_b2)_b2.style.display="";}}catch(e){}</script>
 <script>/* _KPI_RRLL_V1: KPIs oficiales del equipo de RR.LL. -> solo Joel y Eduardo Coveñas */try{var _uk=JSON.parse(sessionStorage.getItem("user")||"null");if(_uk&&["jtimoteo","lcovenas"].includes(String(_uk.usuario).toLowerCase())){var _bk=document.getElementById("navKpis");if(_bk)_bk.style.display="";}}catch(e){}</script>
 <script>/* _PROGETI_V1: Programación ETI -> Joel, o quien tenga el permiso "Capacitaciones ETI (programar)" (_ETI_PERMISO_V1) */try{var _up=JSON.parse(sessionStorage.getItem("user")||"null");var _pe=false;try{_pe=sessionStorage.getItem("rl_app_eti")==="1";}catch(e2){}if(_up&&(String(_up.usuario).toLowerCase().trim()==="jtimoteo"||_pe)){var _bp=document.getElementById("navProgEti");if(_bp)_bp.style.display="";}}catch(e){}</script>
 
@@ -1884,8 +1887,8 @@ h3{font-size:16px !important}
 
 <script src="../js/dashboard/26-cumpl-ui-v1.js?v=1"></script>
 
-<script src="../js/trafico.js?v=4"></script>  <!-- _TRAFICO_V3: cada ingreso a modulo -->
-<script src="../js/acceso-ui.js?v=2"></script>  <!-- _ACCESO_UI_V3 (15-oct): nueva pantalla Acceso a Modulos y Horarios (mismas acciones del servidor) -->
+<script src="../js/trafico.js?v=29oct"></script>  <!-- _TRAFICO_V3: cada ingreso a modulo -->
+<script src="../js/acceso-ui.js?v=3"></script>  <!-- _ACCESO_UI_V3 (15-oct): nueva pantalla Acceso a Modulos y Horarios (mismas acciones del servidor) -->
 <script src="../js/dash-ui.js?v=1"></script>  <!-- _DASH_UI_V2 (15-oct): Mi Dashboard modernizado (misma informacion y consultas; solo presentacion) -->
 <script src="../js/dashboard/27-trafico-v1.js?v=1"></script>
 

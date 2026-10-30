@@ -125,12 +125,33 @@ window.RLTrafico = window.RLTrafico || (function () {
     var pag = (location.pathname.split('/').pop() || 'index.html').replace('.html', '');
     var NOMP = { dashboard: 'Dashboard', horas: 'Horas', capacitaciones: 'Capacitaciones', mantenimiento: 'Mantenimiento', evaluacion360: 'Evaluación 360', almuerzos: 'Almuerzos',
       preaviso: 'Preavisos', inventario: 'Inventario', 'calculo-remunerativo': 'Cálculo remunerativo', 'consulta-masiva': 'Consulta masiva', estadisticas: 'Estadísticas',
-      'estadisticas-atenciones': 'Estadísticas de atenciones', resumen: 'Resumen general', usuarios: 'Gestión usuarios', 'informe-gerencial': 'Informe gerencial' };
+      'estadisticas-atenciones': 'Estadísticas de atenciones', resumen: 'Resumen general', usuarios: 'Gestión usuarios', 'informe-gerencial': 'Informe gerencial', actividad: 'Actividad de usuarios' };
     if (NOMP[pag] && pag !== 'dashboard') {
       /* _TRAFICO_V3 (15-oct-2026): antes se anotaba UNA sola vez por sesion y el Monitor no veia los
          movimientos reales. Ahora cada ingreso cuenta (con freno de 45 s por si recarga la pagina). */
       var k = '_trf_pag_' + pag, ult = Number(sessionStorage.getItem(k) || 0);
-      if (Date.now() - ult > 45000) { sessionStorage.setItem(k, String(Date.now())); setTimeout(function () { T.emit({ accion: 'Entró a ' + NOMP[pag], destino: 'Firebase', tipo: 'nav' }); }, 1200); }
+      if (Date.now() - ult > 45000) { sessionStorage.setItem(k, String(Date.now())); setTimeout(function () { T.emit({ accion: 'Entró a ' + NOMP[pag], destino: 'Firebase', tipo: 'nav' }); ingresoAz(NOMP[pag]); }, 1200); }
     }
+  } catch (e) {}
+  /* _ACTIVIDAD_V1 (29-oct-2026): cada ingreso a un modulo se suma tambien en Azure (dbo.Actividad_Ingresos), para el
+     modulo "Actividad de Usuarios" (Firebase solo guarda las ultimas 24 h). Dispara y olvida; freno de 45 s por modulo. */
+  function ingresoAz(mod) {
+    try {
+      var tk = sessionStorage.getItem('rl_token'); if (!tk || !mod) return;
+      var kk = '_act_' + mod, u0 = Number(sessionStorage.getItem(kk) || 0);
+      if (Date.now() - u0 < 45000) return; sessionStorage.setItem(kk, String(Date.now()));
+      (nativoF || window.fetch)('https://rl-fn-verfrut.azurewebsites.net/api/actividad/ingreso', { method: 'POST', keepalive: true,
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk }, body: JSON.stringify({ sistema: 'RR.LL.', modulo: mod }) }).catch(function () {});
+    } catch (e) {}
+  }
+  var nativoF = window.fetch;
+  window.RLActividadIngreso = ingresoAz;
+  /* en el Dashboard, los modulos se abren con los botones del menu */
+  try {
+    if (pag === 'dashboard') document.addEventListener('click', function (ev) {
+      var b = ev.target && ev.target.closest && ev.target.closest('button.ni[id]'); if (!b) return;
+      var txt = String(b.textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ]+/, '').replace(/\s+\d+$/, '').trim();
+      if (txt) ingresoAz(txt.slice(0, 80));
+    }, true);
   } catch (e) {}
 })();

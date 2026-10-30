@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<script src="/sistema-rl-verfrut/frontend/js/azure-token.js"></script>  <!-- _AZ_TOKEN_V1: la sesion va en toda consulta a Azure -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Actividad de Usuarios · Sistema RL</title>
+<link rel="icon" href="/sistema-rl-verfrut/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+<!-- ═══════════════════════════════════════════════════════════════════════════
+     _ACTIVIDAD_V1 (29-oct-2026) — ACTIVIDAD DE USUARIOS (RR.LL. · Bienestar · ETI · Evaluaciones)
+     · Ficha gerencial: a que sistemas y modulos tiene acceso cada usuario (Acceso a Modulos),
+       cuantas veces ingreso y cuantos registros hizo en cada modulo.
+     · Registros por usuario y mes, registros por modulo, auditoria de Acumulacion de Horas.
+     · En la misma pantalla: Monitor en vivo y Cerebro (pestañas), para no tener tantos modulos.
+     Datos: Azure (funcion /api/actividad). Dueño, administradores y quien tenga "act_todos" ven a todos;
+     los demas solo se ven a si mismos. Solo lectura.
+     ═══════════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{--az:#0a2463;--az2:#1d4ed8;--rojo:#dc2626;--fondo:#eef2f9;--panel:#fff;--linea:#dde3ef;--tx:#13213f;--mut:#475569}
+*{box-sizing:border-box}
+body{margin:0;font-family:Barlow,system-ui,sans-serif;background:var(--fondo);color:var(--tx)}
+button,select,input{font-family:inherit}
+.top{background:linear-gradient(110deg,#0a1c4d,#0a2463 45%,#1d4ed8);color:#fff;padding:14px 20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;position:sticky;top:0;z-index:50}
+.top a.vol{color:#fff;text-decoration:none;background:rgba(255,255,255,.15);border-radius:8px;padding:8px 12px;font-weight:700;font-size:13px}
+.top h1{margin:0;font:800 22px 'Barlow Condensed',sans-serif;flex:1}
+.top .yo{font-size:12px;opacity:.85}
+.tabs{display:flex;gap:6px;padding:10px 20px;background:#fff;border-bottom:1px solid var(--linea);position:sticky;top:58px;z-index:40;overflow-x:auto}
+.tabs button{border:1px solid transparent;background:none;border-radius:999px;padding:9px 16px;font-weight:700;font-size:13.5px;color:var(--mut);cursor:pointer;white-space:nowrap;min-height:40px}
+.tabs button.on{background:var(--az);color:#fff}
+main{max-width:1360px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:20px}
+.card{background:var(--panel);border:1px solid var(--linea);border-radius:14px;padding:18px}
+.card h2{margin:0 0 12px;font:800 21px 'Barlow Condensed',sans-serif;color:var(--az)}
+.fil{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.fil label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;font-weight:700;color:var(--mut);text-transform:uppercase}
+.fil select,.fil input{min-height:42px;border:1.5px solid #cbd5e1;border-radius:10px;padding:0 10px;font-size:14.5px;background:#fff;color:var(--tx)}
+.seg{display:flex;border:1.5px solid #cbd5e1;border-radius:10px;overflow:hidden;min-height:42px}
+.seg button{flex:1;border:0;background:#fff;font-weight:700;color:#334155;cursor:pointer}
+.seg button.on{background:var(--az);color:#fff}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
+.kpi{background:#fff;border:1px solid var(--linea);border-radius:14px;padding:14px 16px}
+.kpi .l{font-size:11.5px;font-weight:700;color:var(--mut);text-transform:uppercase}
+.kpi .v{font:800 32px 'Barlow Condensed',sans-serif;color:var(--az)}
+.kpi .s{font-size:12.5px;color:var(--mut)}
+.ficha{border:2px solid var(--az);border-radius:16px;overflow:hidden;background:#fff}
+.ficha .cab{background:var(--az);color:#fff;padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+.ficha .cab h2{color:#fff;margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto}
+.chips button{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid #93a3d6;background:transparent;color:#fff;font-weight:700;font-size:13px;cursor:pointer}
+.chips button.on{background:#fff;color:var(--az);border-color:#fff}
+.chips button.inac{opacity:.6;text-decoration:line-through}
+.ficha .cuerpo{padding:18px;display:flex;flex-direction:column;gap:14px}
+.who{display:flex;flex-wrap:wrap;gap:14px;align-items:center}
+.ava{width:56px;height:56px;border-radius:14px;background:var(--az);color:#fff;display:grid;place-items:center;font:800 20px 'Barlow Condensed',sans-serif}
+.mini4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;flex:2 1 520px}
+.mini4 div{background:var(--fondo);border-radius:12px;padding:10px 12px}
+.mini4 .l{font-size:11.5px;font-weight:700;color:var(--mut);text-transform:uppercase}
+.mini4 .v{font:800 22px 'Barlow Condensed',sans-serif;color:var(--az)}
+.frase{background:#f8fafc;border:1px solid var(--linea);border-radius:12px;padding:12px 14px;font-size:15px;line-height:1.5}
+.sisg{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:14px}
+.sis{border:1px solid var(--linea);border-radius:14px;overflow:hidden}
+.sis.no{background:#f8fafc}
+.sis .h{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--linea)}
+.sis .h b{font-size:15.5px;color:var(--az)}
+.bdg{font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px}
+.bdg.si{background:#dcfce7;color:#14532d}.bdg.no{background:#f1f5f9;color:#475569}.bdg.leg{background:#fef9c3;color:#713f12}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+.sis th{font-size:11px;text-transform:uppercase;color:var(--mut);padding:7px 8px;text-align:center}
+.sis th:first-child,.sis td:first-child{text-align:left;padding-left:14px}
+.sis td{padding:7px 8px;text-align:center;border-top:1px solid #eef2f9}
+.sis tr.off td{color:#94a3b8;background:#f8fafc}
+.vacio{padding:20px 14px;text-align:center;color:#64748b;font-size:14px}
+.mat{overflow-x:auto}
+.mat table{border-collapse:separate;border-spacing:3px;min-width:980px}
+.mat th{font-size:11.5px;color:var(--mut);padding:6px;text-transform:uppercase}
+.mat th.u{text-align:left}
+.mat td{text-align:center;border-radius:6px;padding:7px 4px;font-weight:600;min-width:44px}
+.mat td.tot{font-weight:800;color:var(--az)}
+.mat a{color:var(--az2);font-weight:700;text-decoration:none;cursor:pointer}
+.barra{display:grid;grid-template-columns:230px 1fr 70px;gap:10px;align-items:center;font-size:14px;margin:6px 0}
+.barra .b{background:var(--fondo);border-radius:6px;height:14px;overflow:hidden}
+.barra .b i{display:block;height:100%;background:var(--az);border-radius:6px}
+.aud{border:2px solid var(--az);border-radius:14px;overflow:hidden;background:#fff}
+.aud .cab{background:var(--az);color:#fff;padding:14px 18px;display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center}
+.aud .cab h2{color:#fff;margin:0}
+.aud .cab select{min-height:42px;border-radius:10px;border:0;padding:0 10px;font-size:14.5px}
+.aud .cuerpo{padding:18px;display:flex;flex-direction:column;gap:14px}
+.alg{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.al{border:1px solid #fed7aa;background:#fff7ed;border-radius:12px;padding:12px 14px;font-size:14px;color:#7c2d12}
+.al.ok{border-color:#bbf7d0;background:#f0fdf4;color:#14532d}
+.det{overflow-x:auto;max-height:520px;overflow-y:auto;border:1px solid var(--linea);border-radius:10px}
+.det table{min-width:1100px}
+.det th{position:sticky;top:0;background:#eef2f9;padding:9px;text-align:left;font-size:12px}
+.det td{padding:8px 9px;border-top:1px solid #eef2f9}
+.det tr.alerta td{background:#fff7ed}
+.btn{min-height:42px;padding:0 14px;border-radius:10px;border:0;background:var(--az);color:#fff;font-weight:700;cursor:pointer}
+.btn.sec{background:#fff;color:var(--az);border:1.5px solid #cbd5e1}
+.nota{font-size:12.5px;color:var(--mut)}
+.cargando{padding:40px;text-align:center;color:var(--mut)}
+iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;border-radius:12px}
+@media (max-width:720px){.mini4{grid-template-columns:repeat(2,minmax(0,1fr))}.barra{grid-template-columns:1fr 70px}.barra .b{grid-column:1/-1;order:3}}
+</style>
+</head>
+<body>
+<div class="top">
+  <a class="vol" href="dashboard.html">← Volver</a>
+  <h1>Actividad de Usuarios · 4 sistemas</h1>
+  <span class="yo" id="yo"></span>
+</div>
+<div class="tabs" id="tabs">
+  <button class="on" data-t="act">📊 Actividad de usuarios</button>
+  <button data-t="mon" id="tabMon" style="display:none">🛰️ Monitor en vivo</button>
+  <button data-t="cer" id="tabCer" style="display:none">🧠 Cerebro</button>
+</div>
+
+<main id="vAct">
+  <section class="card fil" aria-label="Filtros">
+    <label>Año<select id="fAnio"></select></label>
+    <label>Sistema<select id="fSis"><option value="">Los 4 sistemas</option><option>Sistema RR.LL.</option><option>Bienestar Social</option><option>Capacitaciones ETI</option><option>Evaluaciones ETI</option></select></label>
+    <label>Módulo<select id="fMod"><option value="">Todos los módulos</option></select></label>
+    <label>Buscar usuario<input id="fBus" type="search" placeholder="Nombre o usuario"></label>
+    <div class="fil" style="display:block"><label>Medir<div class="seg" id="fMed"><button class="on" data-m="reg">Registros</button><button data-m="ing">Ingresos</button></div></label></div>
+  </section>
+
+  <section class="kpis" id="kpis"><div class="kpi cargando">Cargando…</div></section>
+
+  <section class="ficha" id="ficha" aria-label="Ficha gerencial del usuario">
+    <div class="cab">
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:baseline">
+        <h2>Ficha gerencial del usuario</h2>
+        <span style="font-size:13px;color:#c7d2fe">Accesos, ingresos y registros en cada módulo de los 4 sistemas</span>
+      </div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="cuerpo" id="fichaCuerpo"><div class="cargando">Cargando…</div></div>
+  </section>
+
+  <section class="card" aria-label="Por usuario y mes">
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:baseline">
+      <h2 id="matTit">Registros por usuario y mes</h2>
+      <div style="display:flex;gap:8px"><button class="btn sec" id="btnCsv">⬇ Exportar Excel</button></div>
+    </div>
+    <div class="mat" id="mat"></div>
+    <p class="nota" id="matNota"></p>
+  </section>
+
+  <section class="card" aria-label="Por modulo"><h2 id="modTit">Registros por sistema y módulo</h2><div id="mods"></div></section>
+
+  <section class="aud" id="aud" aria-label="Auditoria de Acumulacion de Horas">
+    <div class="cab">
+      <div><h2>Auditoría · Acumulación de Horas</h2><span style="font-size:13px;color:#c7d2fe">Qué registró cada usuario, cuándo lo registró y para qué fecha · solo lectura</span></div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px">Registrado por <select id="audU"></select></label>
+    </div>
+    <div class="cuerpo" id="audCuerpo"><div class="cargando">Elige un usuario.</div></div>
+  </section>
+
+  <p class="nota" id="fuentes"></p>
+</main>
+<main id="vMon" style="display:none"><iframe class="vista" id="ifMon" title="Monitor en vivo"></iframe></main>
+<main id="vCer" style="display:none"><iframe class="vista" id="ifCer" title="Cerebro del sistema"></iframe></main>
+
+<script>
+(function () {
+  'use strict';
+  var AZ = 'https://rl-fn-verfrut.azurewebsites.net/api';
+  var DUENO = 'jtimoteo';
+  var USER = null; try { USER = JSON.parse(sessionStorage.getItem('user') || 'null'); } catch (e) {}
+  if (!USER || !USER.usuario) { location.href = '../../index.html'; return; }
+  var YO = String(USER.usuario).toLowerCase();
+  var MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
+  var SIS = ['Sistema RR.LL.', 'Bienestar Social', 'Capacitaciones ETI', 'Evaluaciones ETI'];
+  /* Modulos por sistema: clave de Acceso a Modulos -> nombre. 'reg' = nombre con que llegan los registros. */
+  var CAT = {
+    'Sistema RR.LL.': [
+      ['mod_dashboard','Mi Dashboard'],['navAt','Atenciones','Atenciones'],['mod_trabajadores','Trabajadores'],['mod_consulta','Consulta'],['mod_consulta-masiva','Consulta masiva'],
+      ['navMisEstadisticas','Mis estadísticas'],['navCorreo','Enviar reporte'],['navVisitas','Visitas de campo','Visitas de campo'],['navCasos','Casos','Casos'],['navFusiones','Fusiones'],
+      ['mod_capacitaciones','Capacitaciones','Capacitaciones'],['navMantenimiento','Mantenimiento'],['navSolicitudes','Solicitudes'],['navHoras','Acumulación de horas','Acumulación de horas'],
+      ['navAlmuerzos','Almuerzos'],['navInventario','Inventario'],['navPreaviso','Preavisos'],['navCalcRemu','Cálculo remunerativo'],['navRes','Resumen general'],['navEstadisticas','Estadísticas'],
+      ['navKpis','KPIs'],['navEval360','Evaluación 360'],['navProgEti','Programación ETI'],['navUsr','Gestión de usuarios'],['navPermisos','Acceso a módulos'],['navMonitor','Monitor en vivo'],['navActividad','Actividad de usuarios']],
+    'Bienestar Social': [['bs_quejas','Quejas y sugerencias'],['bs_accidentes','Accidentes'],['bs_hostigamiento','Hostigamiento'],['bs_subsidios','Subsidios'],['bs_rendiciones','Rendiciones'],['bs_panel','Panel'],['bs_estadisticas','Estadísticas'],['bs_descansos','Descansos médicos']],
+    'Capacitaciones ETI': [['eti_acceso','Ingresar como supervisor'],['navAppEti','Programar capacitaciones']],
+    'Evaluaciones ETI': [['ev_acceso','Evaluaciones de checklist']]
+  };
+  var D = null, sel = null, medir = 'reg';
+  var $ = function (id) { return document.getElementById(id); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function n(x) { return (Number(x) || 0).toLocaleString('es-PE'); }
+  function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim(); }
+  function tk() { try { return sessionStorage.getItem('rl_token') || ''; } catch (e) { return ''; } }
+  async function api(accion, body) {
+    var r = await fetch(AZ + '/actividad/' + accion, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk() }, body: JSON.stringify(body || {}) });
+    var j = await r.json().catch(function () { return null; });
+    if (!j || !j.success) throw new Error((j && j.error) || ('HTTP ' + r.status));
+    return j;
+  }
+  $('yo').textContent = (USER.nombre || YO) + ' · ' + (USER.rol || '');
+
+  /* ── pestañas: Monitor y Cerebro solo para el dueño o quien tenga navMonitor ── */
+  var permMon = YO === DUENO;
+  function tab(t) {
+    document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === t); });
+    $('vAct').style.display = t === 'act' ? '' : 'none'; $('vMon').style.display = t === 'mon' ? '' : 'none'; $('vCer').style.display = t === 'cer' ? '' : 'none';
+    if (t === 'mon' && !$('ifMon').src) $('ifMon').src = 'monitor.html';
+    if (t === 'cer' && !$('ifCer').src) $('ifCer').src = 'cerebro.html';
+  }
+  document.querySelectorAll('#tabs button').forEach(function (b) { b.onclick = function () { tab(b.getAttribute('data-t')); }; });
+  if (/monitor/.test(location.hash)) setTimeout(function () { if (permMon) tab('mon'); }, 600);
+
+  var y = new Date().getFullYear();
+  $('fAnio').innerHTML = [y, y - 1, y - 2].map(function (a) { return '<option>' + a + '</option>'; }).join('');
+  $('fAnio').onchange = cargar;
+  $('fSis').onchange = function () { llenarModulos(); pintar(); };
+  $('fMod').onchange = pintar; $('fBus').oninput = pintar;
+  document.querySelectorAll('#fMed button').forEach(function (b) { b.onclick = function () { medir = b.getAttribute('data-m'); document.querySelectorAll('#fMed button').forEach(function (x) { x.classList.toggle('on', x === b); }); pintar(); }; });
+
+  /* ── datos ── */
+  function nombreDe(u) { var x = D.usuarios.filter(function (z) { return z.usuario === u; })[0]; return x ? (x.nombre || u) : u; }
+  /* lleva el nombre de modulo de un ingreso (texto del boton) a la clave del catalogo */
+  var IDX = {}; Object.keys(CAT).forEach(function (s) { CAT[s].forEach(function (m) { IDX[s + '|' + norm(m[1])] = m[0]; if (m[2]) IDX[s + '|' + norm(m[2])] = m[0]; }); });
+  var ALIAS = { 'horas': 'navHoras', 'acumulacion de horas': 'navHoras', 'mis atenciones': 'navAt', 'atenciones': 'navAt', 'registrar caso': 'navCasos', 'casos': 'navCasos',
+    'visita de campo': 'navVisitas', 'visitas': 'navVisitas', 'visitas de campo': 'navVisitas', 'capacitaciones': 'mod_capacitaciones', 'preavisos': 'navPreaviso', 'gestion usuarios': 'navUsr',
+    'gestion de usuarios': 'navUsr', 'resumen general': 'navRes', 'evaluacion 360': 'navEval360', 'calculo remunerativo': 'navCalcRemu', 'enviar reporte': 'navCorreo', 'mi dashboard': 'mod_dashboard' };
+  function claveDe(sis, mod) { var k = norm(mod); return IDX[sis + '|' + k] || (sis === 'Sistema RR.LL.' ? ALIAS[k] : null) || ('x:' + mod); }
+  var REG = [], ING = [];   /* filas normalizadas: {u, sis, clave, mod, mes, n} */
+  function preparar() {
+    REG = D.registros.map(function (r) { return { u: r[0], sis: r[1], mod: r[2], clave: claveDe(r[1], r[2]), mes: r[3], n: r[4] }; });
+    ING = D.ingresos.map(function (r) { return { u: r[0], sis: r[1] === 'RR.LL.' ? 'Sistema RR.LL.' : r[1], mod: r[2], clave: claveDe(r[1] === 'RR.LL.' ? 'Sistema RR.LL.' : r[1], r[2]), mes: r[3], n: r[4], ult: r[5] }; });
+  }
+  function llenarModulos() {
+    var s = $('fSis').value, set = {};
+    REG.concat(ING).forEach(function (r) { if (!s || r.sis === s) set[r.mod] = 1; });
+    var v = $('fMod').value;
+    $('fMod').innerHTML = '<option value="">Todos los módulos</option>' + Object.keys(set).sort().map(function (m) { return '<option' + (m === v ? ' selected' : '') + '>' + esc(m) + '</option>'; }).join('');
+  }
+  function filas() {
+    var s = $('fSis').value, m = $('fMod').value, src = medir === 'reg' ? REG : ING;
+    return src.filter(function (r) { return (!s || r.sis === s) && (!m || r.mod === m); });
+  }
+
+  async function cargar() {
+    $('kpis').innerHTML = '<div class="kpi cargando">Cargando…</div>';
+    try {
+      D = await api('resumen', { anio: $('fAnio').value });
+      preparar(); llenarModulos();
+      if (!sel || !D.usuarios.some(function (u) { return u.usuario === sel; })) sel = D.todos ? null : YO;
+      permMon = YO === DUENO || D.todos && !!((D.accesos[YO] || {}).navMonitor);
+      $('tabMon').style.display = permMon ? '' : 'none'; $('tabCer').style.display = permMon ? '' : 'none';
+      pintar(); pintarAudSel();
+      $('fuentes').innerHTML = 'Fuentes: <b>Registros</b> de Azure (Atenciones, Casos, Visitas, Capacitaciones y Acumulación de horas del Sistema RR.LL.). <b>Ingresos</b>: se cuentan desde octubre de 2026 (antes no se guardaban). ' +
+        'Bienestar, Capacitaciones ETI y Evaluaciones ETI: se ven sus <b>accesos</b>; sus registros e ingresos se suman en la siguiente fase.' +
+        (D.errores && D.errores.length ? '<br><span style="color:#b45309">No se pudo leer: ' + esc(D.errores.join(' · ')) + '</span>' : '') +
+        (D.todos ? '' : '<br>Ves solo tu propia actividad.');
+    } catch (e) {
+      $('kpis').innerHTML = '<div class="kpi" style="color:#b91c1c">No se pudo cargar: ' + esc(e.message) + '. Si dice "Sin sesión", vuelve a iniciar sesión.</div>';
+    }
+  }
+
+  function pintar() {
+    if (!D) return;
+    var F = filas(), q = norm($('fBus').value);
+    var usuarios = D.usuarios.filter(function (u) { return !q || norm(u.nombre + ' ' + u.usuario).indexOf(q) >= 0; });
+    /* KPIs */
+    var totR = REG.reduce(function (a, r) { return a + r.n; }, 0), totI = ING.reduce(function (a, r) { return a + r.n; }, 0);
+    var activos = {}; REG.forEach(function (r) { activos[r.u] = 1; });
+    var porMod = {}; REG.forEach(function (r) { porMod[r.mod] = (porMod[r.mod] || 0) + r.n; });
+    var top = Object.keys(porMod).sort(function (a, b) { return porMod[b] - porMod[a]; })[0];
+    $('kpis').innerHTML = [
+      ['Registros en ' + D.anio, n(totR), 'en los módulos medidos'], ['Usuarios que registraron', n(Object.keys(activos).length), 'de ' + n(D.usuarios.filter(function (u) { return u.activo; }).length) + ' usuarios activos'],
+      ['Ingresos a módulos', n(totI), 'desde oct-2026'], ['Módulo con más registros', top ? esc(top) : '—', top && totR ? Math.round(porMod[top] * 100 / totR) + ' % de los registros' : '']
+    ].map(function (k) { return '<div class="kpi"><div class="l">' + k[0] + '</div><div class="v">' + k[1] + '</div><div class="s">' + k[2] + '</div></div>'; }).join('');
+    /* chips de usuarios */
+    $('chips').innerHTML = usuarios.map(function (u) { return '<button type="button" data-u="' + esc(u.usuario) + '" class="' + (u.usuario === sel ? 'on ' : '') + (u.activo ? '' : 'inac') + '" title="' + esc(u.usuario) + '">' + esc(u.nombre || u.usuario) + '</button>'; }).join('') || '<span>Sin usuarios</span>';
+    $('chips').querySelectorAll('button').forEach(function (b) { b.onclick = function () { sel = b.getAttribute('data-u'); pintar(); $('ficha').scrollIntoView({ behavior: 'smooth' }); }; });
+    pintarFicha();
+    /* matriz usuario x mes */
+    var m = {}; F.forEach(function (r) { var o = m[r.u] = m[r.u] || new Array(12).fill(0); o[r.mes - 1] += r.n; });
+    var lista = usuarios.filter(function (u) { return m[u.usuario]; }).map(function (u) { return { u: u, xs: m[u.usuario], tot: m[u.usuario].reduce(function (a, b) { return a + b; }, 0) }; })
+      .sort(function (a, b) { return b.tot - a.tot; });
+    var max = Math.max.apply(null, [1].concat(lista.map(function (l) { return Math.max.apply(null, l.xs); })));
+    $('matTit').textContent = (medir === 'reg' ? 'Registros' : 'Ingresos') + ' por usuario y mes · ' + D.anio;
+    $('mat').innerHTML = lista.length ? '<table><thead><tr><th class="u">Usuario</th>' + MESES.map(function (x) { return '<th>' + x + '</th>'; }).join('') + '<th>Total</th></tr></thead><tbody>' +
+      lista.map(function (l) {
+        return '<tr><th class="u" scope="row"><a data-u="' + esc(l.u.usuario) + '">' + esc(l.u.nombre || l.u.usuario) + '</a></th>' + l.xs.map(function (v) {
+          var a = v ? 0.12 + 0.78 * v / max : 0;
+          return '<td style="background:' + (v ? 'rgba(10,36,99,' + a.toFixed(2) + ')' : '#f8fafc') + ';color:' + (v ? (a > .5 ? '#fff' : '#13213f') : '#94a3b8') + '">' + (v || '·') + '</td>';
+        }).join('') + '<td class="tot">' + n(l.tot) + '</td></tr>';
+      }).join('') + '</tbody></table>' : '<div class="vacio">Sin ' + (medir === 'reg' ? 'registros' : 'ingresos') + ' con estos filtros.</div>';
+    $('mat').querySelectorAll('a[data-u]').forEach(function (a) { a.onclick = function () { sel = a.getAttribute('data-u'); pintar(); $('ficha').scrollIntoView({ behavior: 'smooth' }); }; });
+    $('matNota').textContent = medir === 'ing' ? 'Ingresos = veces que abrió un módulo (se cuentan desde octubre de 2026).' : 'Registros = lo que guardó en cada módulo (sin contar los anulados de Horas ni las compensaciones automáticas).';
+    /* por modulo */
+    var pm = {}; F.forEach(function (r) { var k = r.sis + '|' + r.mod; pm[k] = (pm[k] || 0) + r.n; });
+    var ks = Object.keys(pm).sort(function (a, b) { return pm[b] - pm[a]; }), mx = ks.length ? pm[ks[0]] : 1;
+    $('modTit').textContent = (medir === 'reg' ? 'Registros' : 'Ingresos') + ' por sistema y módulo';
+    $('mods').innerHTML = ks.map(function (k) { var p = k.split('|'); return '<div class="barra"><span><b>' + esc(p[1]) + '</b><br><span class="nota">' + esc(p[0]) + '</span></span><span class="b"><i style="width:' + Math.max(2, Math.round(pm[k] * 100 / mx)) + '%"></i></span><b style="text-align:right">' + n(pm[k]) + '</b></div>'; }).join('') || '<div class="vacio">Sin datos con estos filtros.</div>';
+  }
+
+  function pintarFicha() {
+    var C = $('fichaCuerpo');
+    if (!sel) { C.innerHTML = '<div class="vacio">Elige un usuario arriba para ver su ficha.</div>'; return; }
+    var u = D.usuarios.filter(function (x) { return x.usuario === sel; })[0]; if (!u) { C.innerHTML = '<div class="vacio">Usuario no encontrado.</div>'; return; }
+    var P = D.accesos[u.usuario] || null, definido = !!P;
+    var R = {}, I = {}, U = {};
+    REG.forEach(function (r) { if (r.u === u.usuario) R[r.sis + '|' + r.clave] = (R[r.sis + '|' + r.clave] || 0) + r.n; });
+    ING.forEach(function (r) { if (r.u === u.usuario) { var k = r.sis + '|' + r.clave; I[k] = (I[k] || 0) + r.n; if (!U[k] || String(r.ult) > String(U[k])) U[k] = r.ult; } });
+    var nSis = 0, nMods = 0, tI = 0, tR = 0, tiene = [], noTiene = [], ultimoG = '';
+    var cards = SIS.map(function (s) {
+      var cat = CAT[s];
+      var acceso = function (k) {
+        if (!definido) return s === 'Sistema RR.LL.' ? null : false;   /* sin permisos definidos: menu de siempre en RR.LL. */
+        if (k === 'eti_acceso') return !!(P.eti_acceso || P.navAppEti || P.navProgEti);
+        if (s === 'Bienestar Social') return !!P.bs_acceso && !!P[k];
+        return !!P[k];
+      };
+      var mods = cat.map(function (m) {
+        var k = s + '|' + m[0], a = acceso(m[0]), i = I[k] || 0, r = R[k] || 0;
+        if (a || i || r) { tI += i; tR += r; }
+        if (U[k] && String(U[k]) > ultimoG) ultimoG = String(U[k]);
+        return { nom: m[1], a: a, i: i, r: r, ult: U[k] ? new Date(U[k]).toLocaleDateString('es-PE', { timeZone: 'America/Lima' }) : '' };
+      });
+      /* modulos con ingresos que no estan en el catalogo */
+      Object.keys(I).forEach(function (k) { if (k.indexOf(s + '|x:') === 0) { var nm = k.slice((s + '|x:').length); mods.push({ nom: nm, a: null, i: I[k], r: R[k] || 0, ult: '' }); tI += I[k]; } });
+      var conAcc = mods.filter(function (m) { return m.a; });
+      var tieneSis = definido ? (s === 'Bienestar Social' ? !!P.bs_acceso : conAcc.length > 0) : (s === 'Sistema RR.LL.');
+      if (tieneSis) { nSis++; nMods += conAcc.length; tiene.push(s + (conAcc.length ? ' (' + conAcc.map(function (m) { return m.nom; }).join(', ') + ')' : '')); } else noTiene.push(s);
+      var badge = !definido && s === 'Sistema RR.LL.' ? '<span class="bdg leg">Menú de siempre</span>' : (tieneSis ? '<span class="bdg si">Con acceso</span>' : '<span class="bdg no">Sin acceso</span>');
+      var visibles = mods.filter(function (m) { return m.a !== false || m.i || m.r; });
+      var cuerpo = tieneSis || visibles.length ?
+        '<table><thead><tr><th>Módulo</th><th>Acceso</th><th>Ingresos</th><th>Registros</th><th>Último ingreso</th></tr></thead><tbody>' +
+        mods.filter(function (m) { return m.a !== false || m.i || m.r || s !== 'Sistema RR.LL.'; }).map(function (m) {
+          var off = m.a === false && !m.i && !m.r;
+          return '<tr class="' + (off ? 'off' : '') + '"><td>' + esc(m.nom) + '</td><td>' + (m.a === true ? '✓' : m.a === false ? 'Sin acceso' : '—') + '</td><td>' + (m.i ? n(m.i) : '·') + '</td><td><b>' + (m.r ? n(m.r) : '·') + '</b></td><td>' + esc(m.ult || '') + '</td></tr>';
+        }).join('') + '</tbody></table>'
+        : '<div class="vacio">No tiene acceso a este sistema.<br><span class="nota">Se asigna en Acceso a Módulos del Sistema RR.LL.</span></div>';
+      return '<div class="sis' + (tieneSis ? '' : ' no') + '"><div class="h"><b>' + esc(s) + '</b>' + badge + '</div>' + cuerpo + '</div>';
+    });
+    var ini = String(u.nombre || u.usuario).split(/\s+/).filter(Boolean).slice(0, 2).map(function (x) { return x[0]; }).join('').toUpperCase();
+    C.innerHTML =
+      '<div class="who"><span class="ava">' + esc(ini) + '</span><div style="flex:1 1 260px"><div style="font:800 24px Barlow Condensed,sans-serif;color:#0a2463">' + esc(u.nombre || u.usuario) + '</div>' +
+      '<div class="nota">' + esc([u.usuario, u.rol, u.cargo, u.empresa].filter(Boolean).join(' · ')) + (u.activo ? '' : ' · <b style="color:#b91c1c">INACTIVO</b>') + (ultimoG ? ' · último ingreso: ' + esc(new Date(ultimoG).toLocaleString('es-PE', { timeZone: 'America/Lima' })) : '') + '</div></div>' +
+      '<div class="mini4"><div><div class="l">Sistemas</div><div class="v">' + nSis + ' de 4</div></div><div><div class="l">Módulos con acceso</div><div class="v">' + (definido ? nMods : '—') + '</div></div>' +
+      '<div><div class="l">Ingresos</div><div class="v">' + n(tI) + '</div></div><div><div class="l">Registros</div><div class="v">' + n(tR) + '</div></div></div></div>' +
+      '<div class="frase">' + esc(u.nombre || u.usuario) + ' tiene acceso a ' + esc(tiene.join('; ') || 'ningún sistema') + '.' + (noTiene.length ? ' No tiene acceso a ' + esc(noTiene.join(' ni a ')) + '.' : '') +
+      (definido ? '' : ' <span class="nota">(Aún sin permisos definidos en Acceso a Módulos: en RR.LL. ve el menú de siempre.)</span>') + '</div>' +
+      '<div class="sisg">' + cards.join('') + '</div>';
+  }
+
+  /* ── auditoria de horas ── */
+  function pintarAudSel() {
+    var con = {}; REG.forEach(function (r) { if (r.clave === 'navHoras') con[r.u] = (con[r.u] || 0) + r.n; });
+    var us = D.usuarios.filter(function (u) { return D.todos || u.usuario === YO; });
+    us.sort(function (a, b) { return (con[b.usuario] || 0) - (con[a.usuario] || 0) || String(a.nombre).localeCompare(b.nombre); });
+    $('audU').innerHTML = '<option value="">— Elegir usuario —</option>' + us.map(function (u) { return '<option value="' + esc(u.usuario) + '">' + esc(u.nombre || u.usuario) + (con[u.usuario] ? ' (' + con[u.usuario] + ' en ' + D.anio + ')' : '') + '</option>'; }).join('');
+    $('audU').onchange = function () { audCargar(this.value); };
+    if (!D.todos) { $('audU').value = YO; audCargar(YO); }
+  }
+  function fLima(v, conHora) { if (!v) return ''; var d = new Date(v); if (isNaN(d)) return String(v); return conHora ? d.toLocaleString('es-PE', { timeZone: 'America/Lima', dateStyle: 'short', timeStyle: 'short' }) : d.toLocaleDateString('es-PE', { timeZone: 'America/Lima' }); }
+  function hLima(v) { if (!v) return ''; var d = new Date(v); if (isNaN(d)) return String(v); return d.toLocaleTimeString('en-GB', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit' }); }
+  var AUD = null;
+  async function audCargar(u) {
+    var C = $('audCuerpo'); if (!u) { C.innerHTML = '<div class="cargando">Elige un usuario.</div>'; return; }
+    C.innerHTML = '<div class="cargando">Cargando…</div>';
+    try {
+      var j = await api('horas', { usuario: u }); AUD = j;
+      var F = j.filas, act = F.filter(function (r) { return String(r.estado || '').toLowerCase() !== 'rechazado' && !/compensaci.*autom/i.test(String(r.motivo || '')); });
+      var sum = function (c) { return Math.round(act.reduce(function (a, r) { return a + (Number(r[c]) || 0); }, 0) * 100) / 100; };
+      F.forEach(function (r, i) {
+        var dReg = new Date(r.fecha_registro), dEnt = new Date(r.fecha_entrada);
+        r._atraso = (!isNaN(dReg) && !isNaN(dEnt)) ? Math.floor((dReg - dEnt) / 864e5) : null;
+        r._mas24 = Number(r.horas_trabajadas) > 24;
+        var vecinos = F.filter(function (x) { return Math.abs(new Date(x.fecha_registro) - dReg) <= 30 * 60000; }).length;
+        r._rafaga = vecinos >= 10;
+      });
+      var atr = act.filter(function (r) { return r._atraso != null && r._atraso > 30; }), m24 = act.filter(function (r) { return r._mas24; }),
+          raf = act.filter(function (r) { return r._rafaga; }), anu = F.filter(function (r) { return String(r.estado || '').toLowerCase() === 'rechazado'; });
+      var propio = act.filter(function (r) { return norm(r.nombre) && norm(r.nombre) === norm(nombreDe(u)); });
+      var k = [['Registros hechos', n(act.length), 'vigentes (sin anulados ni compensaciones automáticas)', '#0a2463'],
+        ['Horas acumuladas registradas', n(sum('horas_acumuladas')) + ' h', 'suma de lo que ingresó', '#0a2463'],
+        ['Permisos y deudas', n(Math.round((sum('horas_permiso') + sum('horas_deuda')) * 100) / 100) + ' h', 'horas descontadas', '#0a2463'],
+        ['Registrados con atraso', n(atr.length), 'más de 30 días después de la fecha trabajada', atr.length ? '#b45309' : '#15803d'],
+        ['Anulados', n(anu.length), 'registros rechazados', anu.length ? '#b91c1c' : '#15803d']];
+      var al = [['Registro tardío', atr.length, 'Horas ingresadas más de 30 días después de la fecha trabajada.'],
+        ['Turnos de más de 24 h', m24.length, 'Fecha de salida días después de la entrada.'],
+        ['Muchos registros en minutos', raf.length, '10 o más registros en menos de 30 minutos.'],
+        ['Para sí mismo', propio.length, 'El trabajador del registro es el mismo usuario que registra.']];
+      C.innerHTML = '<div class="kpis">' + k.map(function (x) { return '<div class="kpi" style="background:#f8fafc"><div class="l">' + x[0] + '</div><div class="v" style="color:' + x[3] + '">' + x[1] + '</div><div class="s">' + x[2] + '</div></div>'; }).join('') + '</div>' +
+        '<div class="alg">' + al.map(function (x) { return '<div class="al' + (x[1] ? '' : ' ok') + '"><b>' + x[0] + ': ' + n(x[1]) + '</b><br>' + x[2] + '</div>'; }).join('') + '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b style="color:#0a2463">Detalle de registros (' + n(F.length) + ')</b><button class="btn" id="audCsv">⬇ Exportar detalle (Excel)</button></div>' +
+        '<div class="det"><table><thead><tr><th>Registrado el</th><th>Para la fecha</th><th>Trabajador</th><th>DNI</th><th>Motivo</th><th>Entrada–salida</th><th>Trabajadas</th><th>Jornada</th><th>Acum.</th><th>Permiso</th><th>Deuda</th><th>Días de atraso</th><th>Estado</th></tr></thead><tbody>' +
+        F.map(function (r) {
+          var alerta = (r._atraso > 30) || r._mas24 || r._rafaga;
+          return '<tr class="' + (alerta ? 'alerta' : '') + '"><td>' + esc(fLima(r.fecha_registro, true)) + '</td><td>' + esc(fLima(r.fecha_entrada)) + '</td><td>' + esc(r.nombre) + '</td><td>' + esc(r.dni) + '</td><td>' + esc(r.motivo) + '</td>' +
+            '<td>' + esc(hLima(r.hora_entrada)) + (r.hora_salida ? '–' + esc(hLima(r.hora_salida)) : '') + '</td><td>' + esc(r.horas_trabajadas) + '</td><td>' + esc(r.jornada_esperada) + '</td><td><b>' + esc(r.horas_acumuladas) + '</b></td><td>' + esc(r.horas_permiso) + '</td><td>' + esc(r.horas_deuda) + '</td>' +
+            '<td style="' + (r._atraso > 30 ? 'color:#b45309;font-weight:800' : '') + '">' + (r._atraso == null ? '' : r._atraso) + '</td><td>' + esc(r.estado) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+      $('audCsv').onclick = function () {
+        var cab = ['Registrado el', 'Registrado por', 'Para la fecha', 'Trabajador', 'DNI', 'Empresa', 'Motivo', 'Entrada', 'Salida', 'Trabajadas', 'Jornada', 'Acumuladas', 'Permiso', 'Deuda', 'Dias de atraso', 'Estado', 'Aprobado por', 'ID'];
+        var filas = F.map(function (r) { return [fLima(r.fecha_registro, true), r.registrado_por, fLima(r.fecha_entrada), r.nombre, r.dni, r.empresa, r.motivo, hLima(r.hora_entrada), hLima(r.hora_salida), r.horas_trabajadas, r.jornada_esperada, r.horas_acumuladas, r.horas_permiso, r.horas_deuda, r._atraso, r.estado, r.aprobado_por, r.id]; });
+        csv('Auditoria_Horas_' + u + '_' + new Date().toISOString().slice(0, 10) + '.csv', [cab].concat(filas));
+      };
+    } catch (e) { C.innerHTML = '<div class="vacio" style="color:#b91c1c">No se pudo cargar: ' + esc(e.message) + '</div>'; }
+  }
+  function csv(nombre, filas) {
+    var t = '﻿' + filas.map(function (f) { return f.map(function (v) { v = v == null ? '' : String(v); return /[";\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(';'); }).join('\r\n');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([t], { type: 'text/csv;charset=utf-8' })); a.download = nombre; document.body.appendChild(a); a.click(); setTimeout(function () { a.remove(); }, 500);
+  }
+  $('btnCsv').onclick = function () {
+    if (!D) return;
+    var F = filas(), m = {};
+    F.forEach(function (r) { var k = r.u + '|' + r.sis + '|' + r.mod; var o = m[k] = m[k] || new Array(12).fill(0); o[r.mes - 1] += r.n; });
+    var cab = ['Usuario', 'Nombre', 'Sistema', 'Módulo'].concat(MESES).concat(['Total']);
+    csv((medir === 'reg' ? 'Registros' : 'Ingresos') + '_por_usuario_' + D.anio + '.csv', [cab].concat(Object.keys(m).map(function (k) { var p = k.split('|'), xs = m[k]; return [p[0], nombreDe(p[0]), p[1], p[2]].concat(xs).concat([xs.reduce(function (a, b) { return a + b; }, 0)]); })));
+  };
+  cargar();
+})();
+</script>
+<script src="/sistema-rl-verfrut/frontend/js/trafico.js"></script>
+</body>
+</html>
