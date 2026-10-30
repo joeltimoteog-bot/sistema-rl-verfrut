@@ -324,6 +324,21 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
     if (!sel) { C.innerHTML = '<div class="vacio">Elige un usuario arriba para ver su ficha.</div>'; return; }
     var u = D.usuarios.filter(function (x) { return x.usuario === sel; })[0]; if (!u) { C.innerHTML = '<div class="vacio">Usuario no encontrado.</div>'; return; }
     var P = D.accesos[u.usuario] || null, definido = !!P;
+    /* _ACT_ACCESO_REAL_V1 (29-oct-2026): mismas reglas con las que cada sistema deja entrar de verdad.
+       Si los interruptores bs_/eti_/ev_ no estan asignados en Acceso a Modulos, cada sistema usa sus reglas de siempre
+       (index.html aplicarVisibilidadModulos + auth-sso accesosDe). El dueño entra a todo. */
+    var ul = String(u.usuario || '').toLowerCase(), rolL = String(u.rol || '').toLowerCase().trim(), secU = String(u.sector || '').toUpperCase().trim();
+    var dueno = ul === DUENO;
+    var esAdm = dueno || ['administrador', 'administrador 01', 'administrador 02', 'admin', 'admin01', 'admin02'].indexOf(rolL) >= 0;
+    var esSupR = rolL.indexOf('supervisor') === 0, esBsSec = secU === 'BIENESTAR SOCIAL';
+    var soloRRLL = ['ovilela', 'jchavez', 'dsanchez', 'jsiancas'].indexOf(ul) >= 0;
+    var defOtros = !!P && Object.keys(P).some(function (k) { return /^(bs|eti|ev)_/.test(k); });
+    var LEG = {
+      eti: !!(P && (P.navAppEti || P.navProgEti)) || (!soloRRLL && (esAdm || esSupR) && !(esBsSec && !esAdm)),
+      ev: !(soloRRLL || (esBsSec && !esAdm)),
+      bs: esAdm || esBsSec || ['tvera', 'lmorales', 'dreyna', 'rfigueroa', 'cbecerra', 'cbeserra', 'mmechato', 'nestrada'].indexOf(ul) >= 0
+    };
+    var deSiempre = function (s) { return !dueno && s !== 'Sistema RR.LL.' && !defOtros; };
     var R = {}, I = {}, U = {};
     REG.forEach(function (r) { if (r.u === u.usuario) R[r.sis + '|' + r.clave] = (R[r.sis + '|' + r.clave] || 0) + r.n; });
     ING.forEach(function (r) { if (r.u === u.usuario) { var k = r.sis + '|' + r.clave; I[k] = (I[k] || 0) + r.n; if (!U[k] || String(r.ult) > String(U[k])) U[k] = r.ult; } });
@@ -331,10 +346,13 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
     var cards = SIS.map(function (s) {
       var cat = CAT[s];
       var acceso = function (k) {
-        if (!definido) return s === 'Sistema RR.LL.' ? null : false;   /* sin permisos definidos: menu de siempre en RR.LL. */
-        if (k === 'eti_acceso') return !!(P.eti_acceso || P.navAppEti || P.navProgEti);
-        if (s === 'Bienestar Social') return !!P.bs_acceso && !!P[k];
-        return !!P[k];
+        if (dueno) return true;
+        if (s === 'Sistema RR.LL.') return definido ? !!P[k] : null;   /* sin permisos definidos: menu de siempre en RR.LL. */
+        if (k === 'eti_acceso') return defOtros ? !!(P.eti_acceso || P.navAppEti || P.navProgEti) : LEG.eti;
+        if (k === 'navAppEti') return !!(P && P.navAppEti);
+        if (k === 'ev_acceso') return defOtros ? !!P.ev_acceso : LEG.ev;
+        if (s === 'Bienestar Social') return defOtros ? (!!P.bs_acceso && !!P[k]) : (LEG.bs ? null : false);   /* de siempre: los modulos los decide Bienestar */
+        return !!(P && P[k]);
       };
       var mods = cat.map(function (m) {
         var k = s + '|' + m[0], a = acceso(m[0]), i = I[k] || 0, r = R[k] || 0;
@@ -345,15 +363,15 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
       /* modulos con ingresos que no estan en el catalogo */
       Object.keys(I).forEach(function (k) { if (k.indexOf(s + '|x:') === 0) { var nm = k.slice((s + '|x:').length); mods.push({ nom: nm, a: null, i: I[k], r: R[k] || 0, ult: '' }); tI += I[k]; } });
       var conAcc = mods.filter(function (m) { return m.a; });
-      var tieneSis = definido ? (s === 'Bienestar Social' ? !!P.bs_acceso : conAcc.length > 0) : (s === 'Sistema RR.LL.');
+      var tieneSis = dueno ? true : s === 'Sistema RR.LL.' ? (definido ? conAcc.length > 0 : true) : s === 'Bienestar Social' ? (defOtros ? !!P.bs_acceso : LEG.bs) : conAcc.length > 0;
       if (tieneSis) { nSis++; nMods += conAcc.length; tiene.push(s + (conAcc.length ? ' (' + conAcc.map(function (m) { return m.nom; }).join(', ') + ')' : '')); } else noTiene.push(s);
-      var badge = !definido && s === 'Sistema RR.LL.' ? '<span class="bdg leg">Menú de siempre</span>' : (tieneSis ? '<span class="bdg si">Con acceso</span>' : '<span class="bdg no">Sin acceso</span>');
+      var badge = dueno ? '<span class="bdg si">Dueño · acceso total</span>' : (!definido && s === 'Sistema RR.LL.') ? '<span class="bdg leg">Menú de siempre</span>' : !tieneSis ? '<span class="bdg no">Sin acceso</span>' : deSiempre(s) ? '<span class="bdg si" title="Aún no se asignó en Acceso a Módulos: entra por las reglas de siempre de ese sistema">Con acceso · de siempre</span>' : '<span class="bdg si">Con acceso</span>';
       var visibles = mods.filter(function (m) { return m.a !== false || m.i || m.r; });
       var cuerpo = tieneSis || visibles.length ?
         '<table><thead><tr><th>Módulo</th><th>Acceso</th><th>Ingresos</th><th>Registros</th><th>Último ingreso</th></tr></thead><tbody>' +
         mods.filter(function (m) { return m.a !== false || m.i || m.r || s !== 'Sistema RR.LL.'; }).map(function (m) {
           var off = m.a === false && !m.i && !m.r;
-          return '<tr class="' + (off ? 'off' : '') + '"><td>' + esc(m.nom) + '</td><td>' + (m.a === true ? '✓' : m.a === false ? 'Sin acceso' : '—') + '</td><td>' + (m.i ? n(m.i) : '·') + '</td><td><b>' + (m.r ? n(m.r) : '·') + '</b></td><td>' + esc(m.ult || '') + '</td></tr>';
+          return '<tr class="' + (off ? 'off' : '') + '"><td>' + esc(m.nom) + '</td><td>' + (m.a === true ? '✓' : m.a === false ? 'Sin acceso' : (s === 'Bienestar Social' && tieneSis ? '<span title="Lo decide la hoja de usuarios de Bienestar">según Bienestar</span>' : '—')) + '</td><td>' + (m.i ? n(m.i) : '·') + '</td><td><b>' + (m.r ? n(m.r) : '·') + '</b></td><td>' + esc(m.ult || '') + '</td></tr>';
         }).join('') + '</tbody></table>'
         : '<div class="vacio">No tiene acceso a este sistema.<br><span class="nota">Se asigna en Acceso a Módulos del Sistema RR.LL.</span></div>';
       return '<div class="sis' + (tieneSis ? '' : ' no') + '"><div class="h"><b>' + esc(s) + '</b>' + badge + '</div>' + cuerpo + '</div>';
@@ -362,10 +380,10 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
     C.innerHTML =
       '<div class="who"><span class="ava">' + esc(ini) + '</span><div style="flex:1 1 260px"><div style="font:800 24px Barlow Condensed,sans-serif;color:#0a2463">' + esc(u.nombre || u.usuario) + '</div>' +
       '<div class="nota">' + esc([u.usuario, u.rol, u.cargo, u.empresa].filter(Boolean).join(' · ')) + (u.activo ? '' : ' · <b style="color:#b91c1c">INACTIVO</b>') + (ultimoG ? ' · último ingreso: ' + esc(new Date(ultimoG).toLocaleString('es-PE', { timeZone: 'America/Lima' })) : '') + '</div></div>' +
-      '<div class="mini4"><div><div class="l">Sistemas</div><div class="v">' + nSis + ' de 4</div></div><div><div class="l">Módulos con acceso</div><div class="v">' + (definido ? nMods : '—') + '</div></div>' +
+      '<div class="mini4"><div><div class="l">Sistemas</div><div class="v">' + nSis + ' de 4</div></div><div><div class="l">Módulos con acceso</div><div class="v">' + (definido || dueno ? nMods : '—') + '</div></div>' +
       '<div><div class="l">Ingresos</div><div class="v">' + n(tI) + '</div></div><div><div class="l">Registros</div><div class="v">' + n(tR) + '</div></div></div></div>' +
-      '<div class="frase">' + esc(u.nombre || u.usuario) + ' tiene acceso a ' + esc(tiene.join('; ') || 'ningún sistema') + '.' + (noTiene.length ? ' No tiene acceso a ' + esc(noTiene.join(' ni a ')) + '.' : '') +
-      (definido ? '' : ' <span class="nota">(Aún sin permisos definidos en Acceso a Módulos: en RR.LL. ve el menú de siempre.)</span>') + '</div>' +
+      '<div class="frase">' + esc(u.nombre || u.usuario) + (dueno ? ' es el creador y dueño del sistema: acceso total a los 4 sistemas y a todos sus módulos.' : ' tiene acceso a ' + esc(tiene.join('; ') || 'ningún sistema') + '.') + (noTiene.length ? ' No tiene acceso a ' + esc(noTiene.join(' ni a ')) + '.' : '') +
+      (dueno ? '' : (!definido ? ' <span class="nota">(Aún sin módulos asignados en Acceso a Módulos: en RR.LL. ve el menú de siempre.)</span>' : '') + (!defOtros ? ' <span class="nota">(Bienestar, Capacitaciones ETI y Evaluaciones ETI aún no se le asignaron en Acceso a Módulos: entra según las reglas de siempre de cada sistema.)</span>' : '')) + '</div>' +
       '<div class="sisg">' + cards.join('') + '</div>';
   }
 
