@@ -32,6 +32,31 @@ async function etiProg(usuario) {
   } catch (e) { return false; }
 }
 
+/* _ACCESOS_CENTRAL_V1 (29-oct-2026) — RR.LL. como panel unico de usuarios.
+   Lee de dbo.PermisosModulos las claves de los otros sistemas (las marca el administrador en
+   "Acceso a Modulos"): bs_* (Bienestar), eti_acceso + navAppEti (ETI), ev_acceso (Evaluaciones).
+   definido=false -> ese usuario aun no se configuro aqui y cada sistema usa su lista de siempre.
+   Usuario inactivo o eliminado en RR.LL. -> activo=false (sin acceso en ningun sistema).
+   Si la base no responde en 4 s devuelve null y cada sistema sigue como siempre. */
+const BS_MODS = ['quejas', 'accidentes', 'hostigamiento', 'subsidios', 'rendiciones', 'panel', 'estadisticas', 'descansos'];
+async function accesosDe(usuario) {
+  try {
+    const { getPool, sql } = require('../shared/db');
+    const lim = (pr) => Promise.race([pr, new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 4000))]);
+    const p = await lim(getPool());
+    const q = await lim(p.request().input('u', sql.NVarChar(60), usuario).query(
+      "SELECT modulo, permitido FROM dbo.PermisosModulos WHERE usuario = @u AND (modulo LIKE 'bs[_]%' OR modulo LIKE 'eti[_]%' OR modulo LIKE 'ev[_]%' OR modulo = 'navAppEti');" +
+      "SELECT TOP 1 activo, eliminado FROM dbo.usuarios WHERE LOWER(usuario) = @u"));
+    const m = {}; let definido = false;
+    (q.recordsets[0] || []).forEach(x => { m[x.modulo] = !!x.permitido; if (/^(bs|eti|ev)_/.test(x.modulo)) definido = true; });
+    const u = (q.recordsets[1] || [])[0];
+    const activo = !!u && !(u.eliminado === true || u.eliminado === 1) && (u.activo === true || u.activo === 1 || String(u.activo).trim().toUpperCase() === 'TRUE');
+    const bs = { acceso: activo && !!m.bs_acceso, admin: activo && !!m.bs_admin, permisos: {} };
+    BS_MODS.forEach(k => { bs.permisos[k] = bs.acceso && !!m['bs_' + k]; });
+    return { definido, activo, bs, eti: { acceso: activo && (!!m.eti_acceso || !!m.navAppEti), programar: activo && !!m.navAppEti }, ev: { acceso: activo && !!m.ev_acceso } };
+  } catch (e) { return null; }
+}
+
 const AUD_PASE   = 'eti-sso';
 const AUD_SESION = 'eti-sesion';
 
@@ -75,7 +100,7 @@ module.exports = async function (context, req) {
                              secret, { expiresIn: '8h', audience: AUD_SESION });
       return out(200, {
         success: true,
-        user: { usuario: d.usuario, nombre: d.nombre || '', rol: d.rol || '', empresa: d.empresa || '', etiProg: !!d.etiProg },   /* _ETI_PERMISO_V1 */
+        user: { usuario: d.usuario, nombre: d.nombre || '', rol: d.rol || '', empresa: d.empresa || '', etiProg: !!d.etiProg, accesos: await accesosDe(String(d.usuario).toLowerCase()) },   /* _ETI_PERMISO_V1 + _ACCESOS_CENTRAL_V1 */
         token
       });
     }
@@ -85,7 +110,7 @@ module.exports = async function (context, req) {
       try { d = jwt.verify(String(body.token || ''), secret); }
       catch (e) { return out(401, { success: false, error: 'Sesion invalida o vencida' }); }
       if (d.aud === AUD_PASE || !d.usuario) return out(401, { success: false, error: 'Token no valido' });
-      return out(200, { success: true, user: { usuario: String(d.usuario).toLowerCase(), rol: d.rol || '' } });
+      return out(200, { success: true, user: { usuario: String(d.usuario).toLowerCase(), rol: d.rol || '', accesos: await accesosDe(String(d.usuario).toLowerCase()) } });   /* _ACCESOS_CENTRAL_V1 */
     }
 
     return out(400, { success: false, error: 'Accion no valida' });

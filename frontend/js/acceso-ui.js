@@ -26,7 +26,9 @@
     { n: 'Principal', ic: '🏠', c: ['mod_dashboard', 'navAt', 'mod_trabajadores', 'mod_consulta', 'mod_consulta-masiva', 'navMisEstadisticas'] },
     { n: 'Operación RR.LL.', ic: '🗂️', c: ['navCorreo', 'navVisitas', 'navCasos', 'navFusiones', 'mod_capacitaciones', 'navMantenimiento', 'navSolicitudes', 'navHoras', 'navAlmuerzos', 'navInventario', 'navPreaviso', 'navCalcRemu', 'navBienestar'] },
     { n: 'Análisis y gerencia', ic: '📈', c: ['navRes', 'navEstadisticas', 'navKpis', 'navEval360'] },
-    { n: 'Sistema ETI', ic: '🎓', c: ['navProgEti', 'navAppEti'] },
+    { n: 'Sistema ETI', ic: '🎓', c: ['navProgEti', 'navAppEti', 'eti_acceso'] },
+    { n: 'Bienestar Social (otro sistema)', ic: '💚', c: ['bs_acceso', 'bs_admin', 'bs_quejas', 'bs_accidentes', 'bs_hostigamiento', 'bs_subsidios', 'bs_rendiciones', 'bs_panel', 'bs_estadisticas', 'bs_descansos'] },
+    { n: 'Evaluaciones ETI (otro sistema)', ic: '📝', c: ['ev_acceso'] },
     { n: 'Administración', ic: '🛡️', c: ['navUsr', 'navPermisos', 'navMonitor', 'navFbAlertas'] }
   ];
   var ROL_COLOR = { administrador: '#7c3aed', coordinador: '#0369a1', jefa_rl: '#0369a1', supervisor: '#15803d' };
@@ -50,6 +52,15 @@
     });
     var hay = {}; out.forEach(function (m) { hay[m.clave] = m; });
     if (!hay.navPermisos) out.push({ clave: 'navPermisos', etiqueta: 'Acceso a Módulos', ic: '🔐' });
+    /* _ACCESOS_CENTRAL_V1 (29-oct-2026): accesos a los OTROS sistemas, desde este mismo panel.
+       Se guardan con permisosGuardar igual que los modulos; cada sistema los lee al iniciar sesion. */
+    [['eti_acceso', 'ETI Capacitaciones: ingresar como supervisor', '🎓'],
+     ['bs_acceso', 'Bienestar: puede ingresar', '🔑'], ['bs_admin', 'Bienestar: administrador', '🛡️'],
+     ['bs_quejas', 'Bienestar: Quejas y reclamos', '📣'], ['bs_accidentes', 'Bienestar: Accidentes', '🚑'],
+     ['bs_hostigamiento', 'Bienestar: Hostigamiento', '🔒'], ['bs_subsidios', 'Bienestar: Subsidios', '💊'],
+     ['bs_rendiciones', 'Bienestar: Rendiciones', '🧾'], ['bs_panel', 'Bienestar: Panel', '📊'],
+     ['bs_estadisticas', 'Bienestar: Estadísticas', '📈'], ['bs_descansos', 'Bienestar: Descansos médicos', '🩺'],
+     ['ev_acceso', 'Evaluaciones ETI: puede ingresar', '📝']].forEach(function (x) { if (!hay[x[0]]) out.push({ clave: x[0], etiqueta: x[1], ic: x[2] }); });
     return out;
   }
   function grupos() {

@@ -392,11 +392,17 @@ async function _etiPermCargar(){
       { method:'POST', signal: ctl.signal, headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + tk }, body: JSON.stringify({ action:'permisosListar' }) });
     clearTimeout(t);
     const j = await r.json();
-    if (j && j.success) { if (j.permisos && (j.permisos.navAppEti === true || j.permisos.navProgEti === true)) sessionStorage.setItem('rl_app_eti', '1');   /* Programacion ETI marcado = mismo permiso */ else sessionStorage.removeItem('rl_app_eti'); }
+    if (j && j.success) { if (j.permisos && (j.permisos.navAppEti === true || j.permisos.navProgEti === true)) sessionStorage.setItem('rl_app_eti', '1');   /* Programacion ETI marcado = mismo permiso */ else sessionStorage.removeItem('rl_app_eti');
+      /* _ACCESOS_CENTRAL_V1 (29-oct-2026): si el administrador configuro los otros sistemas en Acceso a Modulos
+         (claves bs_*, eti_*, ev_*), las tarjetas ETI / Evaluaciones las deciden esos interruptores. */
+      try { const P = j.permisos || {}, def = Object.keys(P).some(k => /^(bs|eti|ev)_/.test(k));
+        if (def) sessionStorage.setItem('rl_accesos', JSON.stringify({ eti: !!(P.eti_acceso || P.navAppEti || P.navProgEti), ev: !!P.ev_acceso, bs: !!P.bs_acceso }));
+        else sessionStorage.removeItem('rl_accesos'); } catch (eA) {} }
   } catch(e) { /* sin respuesta: se queda como estaba */ }
 }
 function puedeElegirSistema(rol){
   if (_etiPermitido()) return true;   /* _ETI_PERMISO_V1 */
+  try { const A = JSON.parse(sessionStorage.getItem('rl_accesos') || 'null'); if (A && (A.eti || A.ev)) return true; } catch (eA) {}   /* _ACCESOS_CENTRAL_V1 */
   var r = String(rol || '').toLowerCase().trim();
   if (!r) return false;
   if (ROLES_SELECCION.indexOf(r) >= 0) return true;
@@ -455,6 +461,9 @@ function aplicarVisibilidadModulos(user){
   if (evalCard) evalCard.style.display = (soloRRLL || (esBienestar && !esAdmin)) ? 'none' : '';
   /* _ETI_PERMISO_V1: permiso dado en Acceso a Modulos -> ve la tarjeta de Capacitaciones ETI */
   if (eti && _etiPermitido()) eti.style.display = '';
+  /* _ACCESOS_CENTRAL_V1: configurado en Acceso a Modulos -> mandan esos interruptores (encima de las reglas de arriba) */
+  try { const A = JSON.parse(sessionStorage.getItem('rl_accesos') || 'null');
+    if (A) { if (eti) eti.style.display = A.eti ? '' : 'none'; if (evalCard) evalCard.style.display = A.ev ? '' : 'none'; } } catch (eA) {}
 }
 
 /* _AVISO_MIGRACION_V1 (15-ago-2026)
