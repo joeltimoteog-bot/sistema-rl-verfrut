@@ -414,7 +414,8 @@ const USER = JSON.parse(ud);
 const ROLES_ADMIN  = ['administrador','Administrador'];
 const ROLES_ADMIN2 = ['administrador 01','administrador 02','Administrador 01','Administrador 02'];
 const esAdmin = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
-if (!esAdmin) { location.href = 'dashboard.html'; throw 'no access'; }
+/* _PERM_PAGINA_V1 */ function _pOk(k){try{return (JSON.parse(sessionStorage.getItem('rl_perm_mios')||'{}')||{})[k]===true}catch(e){return false}}
+if (!esAdmin && !_pOk('navRes')) { location.href = 'dashboard.html'; throw 'no access'; }
 console.log('[resumen] SESSION OK — usuario:', USER.usuario, '| rol:', USER.rol, '| empresa:', USER.empresa);
 console.log('[resumen] API URL:', API);
 

@@ -353,7 +353,8 @@ document.getElementById('avR').textContent=USER.cargo||USER.rol||'';
 document.getElementById('av').textContent=(USER.nombre||USER.usuario||'U').charAt(0).toUpperCase();
 document.getElementById('empBadge').textContent=(USER.empresa||'SISTEMA RL').toUpperCase();
 document.getElementById('fecha').textContent=new Date().toLocaleDateString('es-PE',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
-if(esAdmin||esSuper){document.getElementById('mainWrap').style.display='block';if(esAdmin){document.getElementById('tabAdmin').style.display='block';document.getElementById('btnFicha').style.display='block';}}
+/* _PERM_PAGINA_V1 */ function _pOk(k){try{return (JSON.parse(sessionStorage.getItem('rl_perm_mios')||'{}')||{})[k]===true}catch(e){return false}}
+if(esAdmin||esSuper||_pOk('navMantenimiento')){document.getElementById('mainWrap').style.display='block';if(esAdmin){document.getElementById('tabAdmin').style.display='block';document.getElementById('btnFicha').style.display='block';}}
 else{document.getElementById('denyBox').style.display='block';}
 function logout(){sessionStorage.clear();location.href='/sistema-rl-verfrut/index.html';}
 

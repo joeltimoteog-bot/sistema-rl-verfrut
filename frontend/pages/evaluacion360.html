@@ -510,7 +510,8 @@ const ROLES_VER_TODO = ['coordinador','Coordinador','jefa_rl','Jefa_rl'];
 const esAdmin       = ROLES_ADMIN.includes(USER.rol) || ROLES_ADMIN2.includes(USER.rol);
 const puedeVerTodo  = esAdmin || ROLES_VER_TODO.includes(USER.rol);
 const esSupervisor  = (USER.rol || '').toLowerCase() === 'supervisor';
-if (!puedeVerTodo && !esSupervisor) { location.href = 'dashboard.html'; throw 'no access'; }
+/* _PERM_PAGINA_V1 */ function _pOk(k){try{return (JSON.parse(sessionStorage.getItem('rl_perm_mios')||'{}')||{})[k]===true}catch(e){return false}}
+if (!puedeVerTodo && !esSupervisor && !_pOk('navEval360')) { location.href = 'dashboard.html'; throw 'no access'; }
 console.log('[eval360] SESSION OK — usuario:', USER.usuario, '| rol:', USER.rol, '| empresa:', USER.empresa);
 console.log('[eval360] API URL:', API);
 

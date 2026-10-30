@@ -125,6 +125,8 @@ function permCatalogo() {
 /* ── Aplicar los permisos del usuario actual al menu ── */
 function permAplicar() {
   if (!_permMios) return;                    // sin permisos definidos -> no se toca nada
+  /* _PERM_PAGINA_V1 (29-oct-2026): se guardan en la sesion de la pestana para que cada pagina respete lo asignado */
+  try { sessionStorage.setItem('rl_perm_mios', JSON.stringify(_permMios)); } catch (e) {}
   permCatalogo().forEach(function (m) {
     if (!(m.clave in _permMios)) return;     // modulo sin definir -> se respeta lo de hoy
     var deseado = _permMios[m.clave] ? '' : 'none';

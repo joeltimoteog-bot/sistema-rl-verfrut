@@ -623,7 +623,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ─── Control de acceso: solo administradores + smiranda ───
   var _permitidos = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas', 'smiranda'];   /* _ADMINS_REMUNERACIONES_V1 */
-  if(_permitidos.indexOf((USER.usuario||'').toLowerCase().trim()) < 0){
+  /* _PERM_PAGINA_V1 */ function _pOk(k){try{return (JSON.parse(sessionStorage.getItem('rl_perm_mios')||'{}')||{})[k]===true}catch(e){return false}}
+  if(_permitidos.indexOf((USER.usuario||'').toLowerCase().trim()) < 0 && !_pOk('navAlmuerzos')){
     alert('No tienes acceso a este módulo.');
     location.href = 'dashboard.html';
     return;

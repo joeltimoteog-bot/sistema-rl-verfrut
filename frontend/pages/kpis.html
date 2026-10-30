@@ -546,7 +546,8 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
     XLSX.writeFile(wb, 'KPIs_RRLL_corte_' + D.hoy + '.xlsx');
   }
 
-  if (VISORES.indexOf(yo) < 0) {
+  /* _PERM_PAGINA_V1 */ function _pOk(k){try{return (JSON.parse(sessionStorage.getItem('rl_perm_mios')||'{}')||{})[k]===true}catch(e){return false}}
+  if (VISORES.indexOf(yo) < 0 && !_pOk('navKpis')) {
     $('cargando').style.display = 'none';
     aviso('🔒 Este módulo es solo para la Coordinación de RR.LL. y la Subgerencia de Personas.', 'av-e');
     return;

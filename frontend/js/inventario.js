@@ -42,7 +42,8 @@ document.addEventListener('DOMContentLoaded', () => {
   USER = JSON.parse(ud);
 
   const rol = (USER.rol || '').toLowerCase().trim();
-  if (!ROLES_PERMITIDOS.includes(rol)) {
+  /* _PERM_PAGINA_V1 */ function _pOk(k){try{return (JSON.parse(sessionStorage.getItem('rl_perm_mios')||'{}')||{})[k]===true}catch(e){return false}}
+  if (!ROLES_PERMITIDOS.includes(rol) && !_pOk('navInventario')) {
     document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:Barlow,sans-serif;gap:12px;color:#64748b">
       <div style="font-size:48px">🔒</div>
       <div style="font-size:18px;font-weight:700;color:#0f172a">Acceso restringido</div>
