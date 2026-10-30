@@ -101,7 +101,10 @@ function _permEsAdmin() {
 
 /* ── El catalogo sale del menu, no de una lista escrita a mano ── */
 function permCatalogo() {
-  if (_permCatalogo) return _permCatalogo;
+  /* _PERM_DINAMICOS_V1 (29-oct-2026): algunos botones se crean despues (Control de Cumplimiento, Seguridad de usuarios,
+     Cerebro). Antes el catalogo se guardaba antes de que existieran y su permiso nunca se aplicaba. Ahora se rehace si cambia el menu. */
+  var _nb = 0; try { _nb = document.querySelectorAll('nav button.ni').length; } catch (e) {}
+  if (_permCatalogo && _permCatalogo._n === _nb) return _permCatalogo;
   var out = [];
   try {
     document.querySelectorAll('nav button.ni').forEach(function (b) {
@@ -118,6 +121,7 @@ function permCatalogo() {
       out.push({ clave: clave, etiqueta: texto || clave, boton: b });
     });
   } catch (e) { console.warn('[_PERMISOS_UI_V1] catalogo:', e); }
+  out._n = _nb;
   _permCatalogo = out;
   return out;
 }
@@ -144,6 +148,8 @@ function permObservar() {
   if (!nav || typeof MutationObserver === 'undefined') return;
   _permObs = new MutationObserver(function () { permAplicar(); });
   _permObs.observe(nav, { attributes: true, subtree: true, attributeFilter: ['style'] });
+  /* _PERM_DINAMICOS_V1: si se agrega un boton al menu, se le aplica su permiso */
+  try { var _o2 = new MutationObserver(function () { permAplicar(); }); document.querySelectorAll('nav, nav .nav').forEach(function (el) { _o2.observe(el, { childList: true }); }); } catch (e) {}
 }
 
 /* ── Al iniciar sesion: preguntar por los permisos propios ── */
