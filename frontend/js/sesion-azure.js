@@ -27,6 +27,30 @@
     var base = location.pathname.indexOf('/frontend/') >= 0 ? location.pathname.split('/frontend/')[0] : '';
     location.href = base + '/index.html';
   }
+  /* _MODAL_SALIDA_V1 (29-oct-2026) — cuadro propio en lugar de la ventana gris del navegador
+     ("sistemarrll.com dice…"). Mismo texto y misma accion; Esc o clic afuera = cancelar. */
+  function confirmarSalida(siAcepta) {
+    var prev = document.getElementById('rlModalSalida'); if (prev) prev.remove();
+    var o = document.createElement('div'); o.id = 'rlModalSalida';
+    o.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.55);backdrop-filter:blur(3px);display:flex;align-items:center;justify-content:center;padding:16px;font-family:Barlow,system-ui,sans-serif';
+    o.innerHTML = '<div role="dialog" aria-modal="true" style="background:#fff;border-radius:18px;max-width:420px;width:100%;box-shadow:0 24px 60px rgba(15,23,42,.35);overflow:hidden;animation:rlMs .18s ease-out">' +
+      '<div style="background:linear-gradient(120deg,#0a1c4d,#0a2463 55%,#1d4ed8);color:#fff;padding:18px 20px;display:flex;gap:12px;align-items:center">' +
+        '<div style="width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.15);display:grid;place-items:center;font-size:22px">🔄</div>' +
+        '<div><div style="font:800 17px Barlow Condensed,system-ui,sans-serif;letter-spacing:.3px">Volver a entrar</div><div style="font-size:12px;opacity:.8">Para que el sistema vuelva a ir rápido</div></div></div>' +
+      '<div style="padding:18px 20px;color:#334155;font-size:14.5px;line-height:1.5"><b style="color:#0f172a">¿Ya guardaste lo que estabas haciendo?</b><br>Se cerrará la sesión para que vuelvas a entrar con tu usuario y contraseña.</div>' +
+      '<div style="display:flex;gap:10px;justify-content:flex-end;padding:0 20px 18px">' +
+        '<button type="button" id="rlMsNo" style="border:1.5px solid #cbd5e1;background:#fff;color:#334155;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer">Todavía no</button>' +
+        '<button type="button" id="rlMsSi" style="border:0;background:#dc2626;color:#fff;border-radius:10px;padding:10px 16px;font-weight:700;cursor:pointer;box-shadow:0 6px 16px rgba(220,38,38,.3)">Sí, volver a entrar</button></div></div>' +
+      '<style>@keyframes rlMs{from{transform:translateY(8px) scale(.98);opacity:0}to{transform:none;opacity:1}}</style>';
+    function cerrar() { o.remove(); document.removeEventListener('keydown', tecla); }
+    function tecla(e) { if (e.key === 'Escape') cerrar(); }
+    o.addEventListener('click', function (e) { if (e.target === o) cerrar(); });
+    document.addEventListener('keydown', tecla);
+    document.body.appendChild(o);
+    document.getElementById('rlMsNo').onclick = cerrar;
+    document.getElementById('rlMsSi').onclick = function () { cerrar(); siAcepta(); };
+    try { document.getElementById('rlMsSi').focus(); } catch (e) {}
+  }
   function pintar(motivo) {
     if (document.getElementById('rlAvisoLlave')) return;
     var d = document.createElement('div');
@@ -41,7 +65,7 @@
       '<button type="button" id="rlAvisoLlaveX" title="Más tarde" style="background:transparent;border:0;color:#92400e;font-size:16px;cursor:pointer">✕</button>';
     document.body.appendChild(d);
     document.getElementById('rlAvisoLlaveBtn').onclick = function () {
-      if (confirm('¿Ya guardaste lo que estabas haciendo?\n\nSe cerrará la sesión para que vuelvas a entrar.')) volverAEntrar();
+      confirmarSalida(volverAEntrar);   /* _MODAL_SALIDA_V1 (29-oct-2026): antes confirm() del navegador */
     };
     document.getElementById('rlAvisoLlaveX').onclick = function () {
       d.remove();
