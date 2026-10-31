@@ -136,11 +136,13 @@
   /* ── boton en Registro de Casos ── */
   function inyectarBoton() {
     if ($('btnPrecedentes')) return true;
-    var btns = Array.prototype.slice.call(document.querySelectorAll('button')).filter(function (b) { return /exportarCasosExcel/.test(b.getAttribute('onclick') || ''); });
-    if (!btns.length) return false;
-    var b = document.createElement('button'); b.className = 'btn-a'; b.id = 'btnPrecedentes'; b.textContent = '⚖️ Precedentes';
-    b.style.cssText = 'background:#0b1e45;color:#fff'; b.onclick = function () { PREC.abrir(); };
-    btns[0].parentNode.insertBefore(b, btns[0].nextSibling);
+    /* v1.1: va en el encabezado de Registro de Casos, junto a "+ Nuevo Caso" (la barra antigua de Exportar esta oculta por la UI moderna) */
+    var ancla = $('btnCumplimientoCasos');
+    if (!ancla) { ancla = Array.prototype.slice.call(document.querySelectorAll('button.btn-n')).filter(function (b) { return /abrirNuevoCaso/.test(b.getAttribute('onclick') || ''); })[0]; }
+    if (!ancla || !ancla.parentNode) return false;
+    var b = document.createElement('button'); b.className = 'btn-n'; b.id = 'btnPrecedentes'; b.textContent = '⚖️ Precedentes';
+    b.style.cssText = 'background:#0b1e45'; b.onclick = function () { PREC.abrir(); };
+    ancla.parentNode.insertBefore(b, ancla.nextSibling);
     return true;
   }
 
