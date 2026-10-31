@@ -640,7 +640,10 @@ window.onload = function() {
   window.desbloquearUs = async function (usr, btn) {
     if (btn) { btn.disabled = true; btn.textContent = '…'; }
     try {
-      var d = await apiPost({ action: 'desbloquearUsuario', usuario: usr });
+      /* _DESBLOQUEO_AZURE_V1 (30-oct): el bloqueo vive en Azure (dbo.Login_Intentos); antes se pedia a GAS una accion inexistente */
+      var tkD = ''; try { tkD = sessionStorage.getItem('rl_token') || ''; } catch (e0) {}
+      var rD = await fetch(BASE + '/compromiso/desbloquear', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tkD }, body: JSON.stringify({ usuario: usr }) });
+      var d = await rD.json().catch(function () { return { success: false, error: 'Respuesta no valida de Azure (' + rD.status + ')' }; });
       if (d && d.success) { if (typeof notify === 'function') notify('🔓 ' + usr + ': bloqueo liberado'); else alert('🔓 ' + usr + ': bloqueo liberado'); await cargarSeg(); }
       else { alert('❌ ' + ((d && d.error) || 'No se pudo desbloquear')); if (btn) { btn.disabled = false; btn.textContent = '🔓 Desbloquear'; } }
     } catch (e) { alert('❌ ' + e.message); if (btn) { btn.disabled = false; btn.textContent = '🔓 Desbloquear'; } }
