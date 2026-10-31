@@ -99,7 +99,7 @@ function dibujarDesdeAzure() {
   _destroyChart('tendAnual');
   var elT = document.getElementById('cTendAnual');
   if (elT && anios.length) charts.tendAnual = new Chart(elT, { type:'line', data:{ labels: anios, datasets:[{ label:'Total anual', data: anios.map(function (y) { return Number(agg.por_anio[y] || 0); }), borderColor:'#0b1e45', backgroundColor:'rgba(11,30,69,0.1)', tension:0.4, fill:true, pointRadius:5 }] },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ y:{ beginAtZero:true } } } });
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } }, scales:{ x: { ticks: { autoSkip: false, maxRotation: 0, minRotation: 0, callback: function (v) { return String(this.getLabelForValue(v)); } } }, y:{ beginAtZero:true } } } });   /* _TENDANUAL_ETIQUETAS_V1 (31-oct): años completos, sin recorte */
   var tbody = document.getElementById('tbResAnualBody');
   if (tbody) {
     var esteAnio = String(new Date().getFullYear());

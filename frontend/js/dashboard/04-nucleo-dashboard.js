@@ -7113,7 +7113,7 @@ function _fbDibujarIndicadoresPrincipales(fbData) {
         labels: anios,
         datasets: [{ label: 'Total anual', data: anios.map(y => porAnioCalc[y]), borderColor: '#0b1e45', backgroundColor: 'rgba(11,30,69,0.1)', tension: 0.4, fill: true, pointRadius: 5 }]
       },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { ticks: { autoSkip: false, maxRotation: 0, minRotation: 0, callback: function (v) { return String(this.getLabelForValue(v)); } } }, y: { beginAtZero: true } } }   /* _TENDANUAL_ETIQUETAS_V1 (31-oct): años completos, sin recorte */
     });
     console.log('[FB-indicadores] cTendAnual dibujado | años:', anios.join(', '));
   }
@@ -8778,7 +8778,7 @@ function dibujarEstadisticasDash(datos, esFiltro) {
   datos.forEach(a=>{const y=String(a.anio||a.fecha_atencion||'').substring(0,4);if(/^\d{4}$/.test(y)) porAnio[y]=(porAnio[y]||0)+1;});
   _destroyChart('tendAnual');
   const elT=document.getElementById('cTendAnual');
-  if(elT){const anios=Object.keys(porAnio).sort();charts.tendAnual=new Chart(elT,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#0b1e45',backgroundColor:'rgba(11,30,69,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});}
+  if(elT){const anios=Object.keys(porAnio).sort();charts.tendAnual=new Chart(elT,{type:'line',data:{labels:anios,datasets:[{label:'Total anual',data:anios.map(y=>porAnio[y]),borderColor:'#0b1e45',backgroundColor:'rgba(11,30,69,0.1)',tension:0.4,fill:true,pointRadius:5}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x: { ticks: { autoSkip: false, maxRotation: 0, minRotation: 0, callback: function (v) { return String(this.getLabelForValue(v)); } } }, y:{beginAtZero:true}}}});}
   const tbody=document.getElementById('tbResAnualBody');
   if(tbody){
     const resAnio={};
