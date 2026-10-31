@@ -127,7 +127,7 @@ var _cargarOrig = window.cargarStats;
 if (typeof _cargarOrig === 'function') {
   window.cargarStats = async function () {
     var ok = await refrescar('cargarStats');
-    if (ok) { try { if (typeof dibujar === 'function' && ultimo) dibujar(ultimo); } catch (e) {} return; }
+    if (ok) { try { if (typeof dibujar === 'function' && ultimo && (_hayFiltro() || !agg)) dibujar(ultimo); } catch (e) {} return; }   /* _DONA_AZURE_V1 (31-oct): sin filtro, Azure ya dibujo la dona; el dibujador antiguo la ponia en 0 con el resumen viejo de Firebase */
     return _cargarOrig.apply(this, arguments);
   };
 }
@@ -152,7 +152,7 @@ if (typeof _fbOrig === 'function') {
       window.countUp = function (id) { if (IDS.indexOf(id) >= 0) return; return cu.apply(this, arguments); };
     }
     try { return _fbOrig.apply(self, args); }
-    finally { if (typeof cu === 'function') window.countUp = cu; programar('firebase', 5000 + Math.floor(Math.random() * 55000)); }   /* _STATS_FRENO_V2: cada pestaña en un momento distinto (antes todas a los 3 s) */
+    finally { if (typeof cu === 'function') window.countUp = cu; try { if (agg && !_hayFiltro()) dibujarDesdeAzure(); } catch (e) {} programar('firebase', 5000 + Math.floor(Math.random() * 55000)); }   /* _DONA_AZURE_V1: tras Firebase, Azure vuelve a mandar en los graficos (sin red) */   /* _STATS_FRENO_V2: cada pestaña en un momento distinto (antes todas a los 3 s) */
   };
 }
 
