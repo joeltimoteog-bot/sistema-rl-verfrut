@@ -1,0 +1,271 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   PERMISOS POR USUARIO Y MODULO                        MARCA: _PERMISOS_V1
+   13-set-2026
+   ---------------------------------------------------------------------------
+   PARA QUE
+   Hoy, para dar acceso a un modulo, hay que editar listas de usuarios
+   escritas a mano dentro del codigo y publicar. Hay seis listas repartidas
+   en tres archivos. Dar de alta a una persona toma una tarde y es fragil.
+
+   Con esto, el permiso vive en una hoja y se administra con casillas. Dar de
+   alta pasa a ser marcar y guardar.
+
+   COMO NO ROMPE NADA
+   La regla es deliberada y conservadora:
+     · Si un usuario NO tiene ninguna fila en la hoja, el sistema se comporta
+       EXACTAMENTE como hoy. No se le quita ni se le agrega nada.
+     · Solo cuando ese usuario tiene filas, mandan sus filas.
+   Asi se puede migrar de a uno, empezando por los usuarios nuevos, sin tocar
+   a los doce que ya trabajan.
+
+   La hoja PERMISOS MODULOS se crea sola la primera vez.
+
+   ---------------------------------------------------------------------------
+   INSTALACION — dos pasos
+   ---------------------------------------------------------------------------
+   PASO 1 · Pegar este bloque al final de codigo.gs.
+
+   PASO 2 · En el switch, agregar estas tres lineas. ANTES de pegarlas, busca
+   con Ctrl+F si alguna ya existe: si quedara dos veces, gana la primera.
+
+       case 'permisosListar':    result = permisosListar(body);    break;
+       case 'permisosGuardar':   result = permisosGuardar(body);   break;
+       case 'permisosUsuarios':  result = permisosUsuarios(body);  break;
+
+   Despues: Implementar → Administrar implementaciones → editar → Nueva version.
+
+   Antes de publicar puedes ejecutar  permisosProbar : crea la hoja si falta y
+   muestra lo que hay. No cambia ningun permiso.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+var PERM_HOJA = 'PERMISOS MODULOS';
+var PERM_COLS = ['USUARIO', 'MODULO', 'PERMITIDO', 'ACTUALIZADO', 'POR'];
+
+/* Roles que pueden administrar permisos. Si alguien no esta aqui, el sistema
+   le responde que no puede, aunque llame directo a la API. */
+var PERM_ROLES_ADMIN = ['administrador', 'administrador 01', 'administrador 02',
+                        'admin', 'admin01', 'admin02'];
+
+function permEsAdmin_(rol) {
+  return PERM_ROLES_ADMIN.indexOf(String(rol || '').toLowerCase().trim()) >= 0;
+}
+
+function permUsr_(u) {
+  return String(u == null ? '' : u).toLowerCase().trim();
+}
+
+function permHoja_() {
+  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  var h  = ss.getSheetByName(PERM_HOJA);
+  if (!h) {
+    h = ss.insertSheet(PERM_HOJA);
+    h.appendRow(PERM_COLS);
+    h.getRange(1, 1, 1, PERM_COLS.length).setFontWeight('bold');
+    h.setFrozenRows(1);
+  } else if (h.getLastRow() < 1) {
+    h.appendRow(PERM_COLS);
+  }
+  return h;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LEER — lo llama el dashboard al iniciar sesion, y la pantalla de admin
+   ---------------------------------------------------------------------------
+   Sin parametros devuelve los permisos del usuario que pregunta.
+   Con  todos:true  y siendo administrador, devuelve los de todo el mundo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function permisosListar(body) {
+  try {
+    var b = body || {};
+    var quien = permUsr_(b.usuario);
+    var h = permHoja_();
+    var n = h.getLastRow() - 1;
+    if (n < 1) return { success: true, permisos: {}, vacio: true };
+
+    var datos = h.getRange(2, 1, n, 3).getValues();
+    var todos = !!b.todos && permEsAdmin_(b.rol);
+
+    var out = {};
+    for (var i = 0; i < datos.length; i++) {
+      var u   = permUsr_(datos[i][0]);
+      var mod = String(datos[i][1] || '').trim();
+      if (!u || !mod) continue;
+      if (!todos && u !== quien) continue;
+      var v = datos[i][2];
+      var permitido = (v === true) || (String(v).toUpperCase() === 'SI') ||
+                      (String(v).toUpperCase() === 'TRUE') || (String(v) === '1');
+      if (!out[u]) out[u] = {};
+      out[u][mod] = permitido;
+    }
+
+    /* "vacio" le dice al dashboard que a ese usuario no se le toca nada y
+       que siga con las reglas de siempre. Es el seguro de esta migracion. */
+    if (!todos) {
+      var mios = out[quien] || null;
+      return { success: true, permisos: mios || {}, vacio: !mios, usuario: quien };
+    }
+    return { success: true, permisos: out, vacio: false, esAdmin: true };
+
+  } catch (e) {
+    Logger.log('[_PERMISOS_V1] error al leer: ' + e.message);
+    /* Ante cualquier falla se responde "vacio": mejor que el menu quede como
+       hoy a que alguien se quede sin acceso por un error de lectura. */
+    return { success: true, permisos: {}, vacio: true, aviso: e.message };
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GUARDAR — reemplaza TODOS los permisos de UN usuario
+   ---------------------------------------------------------------------------
+   Recibe:  usuarioObjetivo, modulos {clave: true/false}, usuario, rol
+   Solo un administrador puede guardar.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function permisosGuardar(body) {
+  try {
+    var b = body || {};
+    if (!permEsAdmin_(b.rol)) {
+      return { success: false, error: 'Solo un administrador puede cambiar permisos.' };
+    }
+    var objetivo = permUsr_(b.usuarioObjetivo);
+    if (!objetivo) return { success: false, error: 'Falta indicar de que usuario son los permisos.' };
+
+    var mods = b.modulos || {};
+    var claves = Object.keys(mods);
+    if (!claves.length) return { success: false, error: 'No se recibio ningun modulo.' };
+
+    var h = permHoja_();
+    var n = h.getLastRow() - 1;
+
+    /* 1) borrar las filas que ese usuario tuviera, de abajo hacia arriba */
+    var borradas = 0;
+    if (n > 0) {
+      var col = h.getRange(2, 1, n, 1).getValues();
+      for (var i = col.length - 1; i >= 0; i--) {
+        if (permUsr_(col[i][0]) === objetivo) { h.deleteRow(i + 2); borradas++; }
+      }
+    }
+
+    /* 2) escribir las nuevas de una sola vez (una sola escritura, no una por fila) */
+    var ahora = new Date();
+    var por   = permUsr_(b.usuario);
+    var filas = claves.map(function (k) {
+      return [objetivo, k, mods[k] ? 'SI' : 'NO', ahora, por];
+    });
+    h.getRange(h.getLastRow() + 1, 1, filas.length, 5).setValues(filas);
+    SpreadsheetApp.flush();
+
+    var permitidos = claves.filter(function (k) { return mods[k]; }).length;
+    Logger.log('[_PERMISOS_V1] ' + por + ' guardo permisos de ' + objetivo +
+               ': ' + permitidos + ' de ' + claves.length + ' modulos');
+
+    return { success: true, usuario: objetivo, total: claves.length,
+             permitidos: permitidos, reemplazadas: borradas };
+
+  } catch (e) {
+    Logger.log('[_PERMISOS_V1] error al guardar: ' + e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LISTA DE USUARIOS — para llenar el selector de la pantalla de permisos
+   Sale de la hoja Usuarios, la misma del login. No devuelve contrasenas.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function permisosUsuarios(body) {
+  try {
+    if (!permEsAdmin_((body || {}).rol)) {
+      return { success: false, error: 'Solo un administrador puede ver la lista.' };
+    }
+    var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    /* La hoja se llama 'usuarios' en minuscula en unos sitios y 'Usuarios' en
+       otros. syncUsuariosAAzure ya contempla las dos: aqui se hace igual. */
+    var h = ss.getSheetByName('usuarios') || ss.getSheetByName('Usuarios');
+    if (!h) return { success: false, error: 'No encuentro la hoja de usuarios.' };
+
+    var datos = h.getDataRange().getValues();
+    if (datos.length < 2) return { success: true, usuarios: [] };
+
+    /* Las columnas son fijas y estan documentadas en syncUsuariosAAzure:
+         A=id · B=usuario · C=password · D=nombre · E=rol · F=empresa · G=activo
+       Se usan esas posiciones. Si ademas los encabezados traen los nombres,
+       se respeta lo que digan los encabezados. Nunca se cae a la columna A,
+       que es el id del sistema y no el usuario. */
+    var cU = 1, cN = 3, cR = 4, cA = 6;
+    try {
+      var cab = datos[0].map(function (x) { return String(x || '').toUpperCase().trim(); });
+      var iU = cab.indexOf('USUARIO'); if (iU >= 0) cU = iU;
+      var iN = cab.indexOf('NOMBRE');  if (iN >= 0) cN = iN;
+      var iR = cab.indexOf('ROL');     if (iR >= 0) cR = iR;
+      var iA = cab.indexOf('ACTIVO');  if (iA >= 0) cA = iA;
+    } catch (e) {}
+
+    var out = [], vistos = {};
+    for (var i = 1; i < datos.length; i++) {
+      var u = permUsr_(datos[i][cU]);
+      if (!u || vistos[u]) continue;          // sin usuario, o repetido
+      vistos[u] = true;
+      var act = String(datos[i][cA]).toUpperCase().trim();
+      out.push({
+        usuario: u,
+        nombre:  String(datos[i][cN] || ''),
+        rol:     String(datos[i][cR] || ''),
+        activo:  !(act === 'FALSE' || act === 'NO' || act === '0')
+      });
+    }
+    out.sort(function (a, b2) { return a.usuario < b2.usuario ? -1 : 1; });
+
+    var inactivos = out.filter(function (x) { return !x.activo; }).length;
+    Logger.log('[_PERMISOS_V1] ' + out.length + ' usuarios (' + inactivos + ' inactivos)');
+    return { success: true, usuarios: out, total: out.length, inactivos: inactivos };
+
+  } catch (e) {
+    Logger.log('[_PERMISOS_V1] error al listar usuarios: ' + e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   COMPROBACION — ejecutar  permisosProbar
+   Crea la hoja si falta y muestra lo que hay. No cambia ningun permiso.
+   ═══════════════════════════════════════════════════════════════════════════ */
+function permisosProbar() {
+  Logger.log('╔══════════════════════════════════════════════════════════════╗');
+  Logger.log('║ PERMISOS POR MODULO — COMPROBACION                           ║');
+  Logger.log('╚══════════════════════════════════════════════════════════════╝');
+
+  var h = permHoja_();
+  Logger.log('   Hoja: ' + h.getName());
+  Logger.log('   Encabezados: ' + PERM_COLS.join(' · '));
+
+  var n = h.getLastRow() - 1;
+  Logger.log('   Filas de permisos: ' + (n < 0 ? 0 : n));
+  Logger.log('');
+
+  if (n > 0) {
+    var datos = h.getRange(2, 1, n, 3).getValues();
+    var porUsuario = {};
+    datos.forEach(function (d) {
+      var u = permUsr_(d[0]); if (!u) return;
+      if (!porUsuario[u]) porUsuario[u] = { si: 0, no: 0 };
+      var v = String(d[2]).toUpperCase();
+      if (v === 'SI' || v === 'TRUE' || v === '1') porUsuario[u].si++; else porUsuario[u].no++;
+    });
+    Logger.log('   USUARIOS CON PERMISOS DEFINIDOS (a estos manda la hoja):');
+    Object.keys(porUsuario).sort().forEach(function (u) {
+      Logger.log('      ' + u + ' → ' + porUsuario[u].si + ' permitidos, ' +
+                 porUsuario[u].no + ' denegados');
+    });
+    Logger.log('');
+    Logger.log('   Cualquier usuario que NO aparezca arriba sigue con las reglas');
+    Logger.log('   de siempre: no se le quita ni se le agrega nada.');
+  } else {
+    Logger.log('   (todavia no hay permisos definidos: todo el mundo sigue como hoy)');
+  }
+
+  Logger.log('');
+  Logger.log('   Las tres lineas del switch deben decir:');
+  Logger.log("      case 'permisosListar':    result = permisosListar(body);    break;");
+  Logger.log("      case 'permisosGuardar':   result = permisosGuardar(body);   break;");
+  Logger.log("      case 'permisosUsuarios':  result = permisosUsuarios(body);  break;");
+}
