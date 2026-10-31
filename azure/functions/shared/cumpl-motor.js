@@ -587,7 +587,40 @@ function crearMotor(D) {
     return { success: true, esAdmin: false, semana: sem, rangoSemana, pendientesVisitas: misVisitas, casosPendientes: misCasos };
   }
 
-  return { cumplPendientes, cumplPanel, getCumplimiento,
+  /* _CUMPL_CASOS_AZURE_V1 (31-oct-2026): "Indicadores de Cumplimiento — Casos" (modal de Registro de Casos).
+     Copia de getCumplimientoCasos del Apps Script: por supervisor, cumplidos / fuera de plazo / pendientes y %.
+     Diferencia deliberada (regla de Joel, 24-oct): el informe cuenta como entregado tambien cuando el
+     administrador registro la fecha de envio por correo (informeEntregado), no solo con el PDF subido. */
+  function getCumplimientoCasos(p) {
+    p = p || {};
+    const hoy = hoyLima(), map = {};
+    const fEmp = String(p.empresa || '').toUpperCase(), fAnio = p.anio ? parseInt(p.anio, 10) : 0, fMes = p.mes ? parseInt(p.mes, 10) : 0;
+    casos.forEach(c => {
+      if (!c.nro && !c.dni) return;
+      const fRep = c.fecha_reporte; if (!fRep) return;
+      if (fEmp && fEmp !== 'AMBAS' && String(c.empresa || '').toUpperCase() !== fEmp) return;
+      if (fAnio && fRep.getUTCFullYear() !== fAnio) return;
+      if (fMes && (fRep.getUTCMonth() + 1) !== fMes) return;
+      const sup = String(c.supervisor || 'Sin asignar').trim() || 'Sin asignar';
+      if (!map[sup]) map[sup] = { supervisor: sup, total: 0, cumplidos: 0, fueraPlazo: 0, pendientes: 0 };
+      map[sup].total++;
+      const estado = String(c.estado || '').toUpperCase();
+      const lim = sumarHabiles(fRep, plazoEn(cfg, 'plazo_investigacion', ymd(c.fecha_registro)));
+      const vencido = lim && hoy.getTime() > lim.getTime();
+      if (estado.indexOf('RETRAS') !== -1) map[sup].fueraPlazo++;
+      else if (informeEntregado(c)) map[sup].cumplidos++;
+      else if (vencido) map[sup].fueraPlazo++;
+      else map[sup].pendientes++;
+    });
+    const supervisores = Object.keys(map).map(k => { const x = map[k]; const res = x.cumplidos + x.fueraPlazo; x.pct = res > 0 ? Math.round(x.cumplidos / res * 100) : 100; x.cumple = x.fueraPlazo === 0; return x; })
+      .sort((a, b) => b.pct - a.pct || b.cumplidos - a.cumplidos);
+    const tot = { total: 0, cumplidos: 0, fueraPlazo: 0, pendientes: 0 };
+    supervisores.forEach(x => { tot.total += x.total; tot.cumplidos += x.cumplidos; tot.fueraPlazo += x.fueraPlazo; tot.pendientes += x.pendientes; });
+    const tr = tot.cumplidos + tot.fueraPlazo; tot.pct = tr > 0 ? Math.round(tot.cumplidos / tr * 100) : 100;
+    return { success: true, data: { supervisores, cumplen: supervisores.filter(x => x.cumple), noCumplen: supervisores.filter(x => !x.cumple), totales: tot } };
+  }
+
+  return { cumplPendientes, cumplPanel, getCumplimiento, getCumplimientoCasos,
     _kpi: { esHabil, sumarHabiles, habilesEntre, AUS, esDelUsuario, concluido, casos, cfg, usuarios } };   /* _KPI_RRLL_V1 (30-set): piezas para el motor de KPIs (solo lectura) */
 }
 
