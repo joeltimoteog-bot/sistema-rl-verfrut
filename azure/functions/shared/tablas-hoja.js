@@ -112,7 +112,46 @@ const ESQ = {
     ['usuario', 't100'], ['sector', 't100'], ['supervisor', 't200'], ['tipo_item', 't20']] },
   inv_entregas:     { tabla: 'dbo.Inv_Entregas',     cols: [['id', 't40'], ['fecha_registro', 'f'], ['fecha_entrega', 'f'], ['empresa', 't60'], ['sector', 't100'], ['cantidad', 'n'], ['responsable', 't200'],
     ['documento', 't200'], ['observaciones', 't2000'], ['usuario', 't100'], ['supervisor', 't200'], ['exportadora', 't100'], ['motivo', 't200'], ['tipo_item', 't20'], ['solicitante', 't200']] },
-  inv_sectores:     { tabla: 'dbo.Inv_Sectores',     cols: [['id', 't40'], ['nombre', 't200'], ['activo', 't10'], ['creado', 'f'], ['creado_por', 't100']] }
+  inv_sectores:     { tabla: 'dbo.Inv_Sectores',     cols: [['id', 't40'], ['nombre', 't200'], ['activo', 't10'], ['creado', 'f'], ['creado_por', 't100']] },
+  /* _BS_AZURE_V1 (01-nov-2026): hojas del Sistema Bienestar Social (libro "BIENESTAR SOCIAL - RELACIONES LABORALES 2026").
+     Censo del 01-nov: encabezados exactos de cada hoja. Las sube el Apps Script de Bienestar (bs-azure-sync.js). */
+  bs_accidentes_casos: { tabla: 'dbo.BS_Accidentes_Casos', cols: [
+    ['id', 'n'], ['dni', 't15'], ['nombre', 't200'], ['edad', 'n'], ['telefono', 't40'], ['fundo', 't100'], ['sexo', 't20'], ['fecha_ingreso', 'f'],
+    ['dia_accidente', 'f'], ['dia_reportado', 'f'], ['parte_cuerpo', 't200'], ['diagnostico', 't1000'], ['tipo_accidente', 't100'], ['seguro', 't100'],
+    ['detalle', 't4000'], ['estatus_accidente', 't100'], ['centro_atencion', 't200'], ['especialidades', 't400'], ['staff_medico', 't400'], ['estado', 't60'],
+    ['situacion', 't200'], ['fecha_reincorporo', 'f'], ['fecha_fin_restriccion', 'f'], ['dias_restriccion', 'n'], ['detalle_restriccion', 't2000'], ['responsable', 't200'],
+    ['descanso_medico', 't20'], ['formulario_con_goce', 't20'], ['responsable_autorizar', 't200'], ['numero_atenciones', 'n'], ['estado_caso', 't60'], ['empresa', 't40'],
+    ['created_by', 't100'], ['created_at', 'f'], ['updated_at', 'f'], ['descanso_medico_inicio', 'f'], ['descanso_medico_fin', 'f'], ['descanso_medico_dias', 'n'],
+    ['goce_inicio', 'f'], ['goce_fin', 'f'], ['goce_dias', 'n'], ['accidente_hora_inicio', 't20'], ['accidente_hora_fin', 't20'], ['accidente_horas', 'n']] },
+  bs_accidentes_seguim: { tabla: 'dbo.BS_Accidentes_Seguimientos', cols: [
+    ['id', 'n'], ['id_caso', 'n'], ['numero_seguimiento', 'n'], ['fecha_seguimiento', 'f'], ['detalle', 't4000'], ['created_by', 't100'], ['created_at', 'f']] },
+  bs_hostigamiento: { tabla: 'dbo.BS_Hostigamiento', cols: [
+    ['id', 'n'], ['fecha_denuncia', 'f'], ['denunciante_dni', 't15'], ['denunciante_nombre', 't200'], ['denunciante_puesto', 't200'], ['medida_proteccion', 't2000'],
+    ['denunciado_dni', 't15'], ['denunciado_nombre', 't200'], ['denunciado_puesto', 't200'], ['fundo', 't100'], ['decision', 't2000'], ['status', 't60'], ['empresa', 't40'],
+    ['created_by', 't100'], ['created_at', 'f'], ['updated_at', 'f']] },
+  bs_hostigamiento_olmos: { tabla: 'dbo.BS_Hostigamiento_Olmos', cols: [
+    ['id', 'n'], ['fecha_denuncia', 'f'], ['denunciante_dni', 't15'], ['denunciante_nombre', 't200'], ['denunciante_puesto', 't200'], ['medida_proteccion', 't2000'],
+    ['denunciado_dni', 't15'], ['denunciado_nombre', 't200'], ['denunciado_puesto', 't200'], ['fundo', 't100'], ['decision', 't2000'], ['status', 't60'], ['empresa', 't40'],
+    ['created_by', 't100'], ['created_at', 'f'], ['updated_at', 'f']] },
+  bs_subsidios: { tabla: 'dbo.BS_Subsidios', cols: [
+    ['id', 'n'], ['anio', 'n'], ['mes', 't20'], ['tipo', 't100'], ['numero', 't15'], ['apellido_paterno', 't100'], ['apellido_materno', 't100'], ['nombres', 't150'],
+    ['descripcion', 't1000'], ['estado', 't100'], ['dias', 'n'], ['calculo_por_dia', 'n'], ['pago_empresa', 'n'], ['reembolso_por_mes', 'n'], ['recuperado_essalud', 'n'],
+    ['monto_total', 'n'], ['periodo', 't100'], ['expediente', 't100'], ['inicio', 'f'], ['termino', 'f'], ['observaciones', 't2000'], ['diferencias', 't1000'],
+    ['tipo_pago_planilla', 't100'], ['estado_general', 't100'], ['empresa', 't40'], ['created_by', 't100'], ['created_at', 'f'], ['updated_at', 'f']] },
+  bs_documentos: { tabla: 'dbo.BS_Documentos', cols: [
+    ['id', 'n'], ['modulo', 't40'], ['id_caso', 't40'], ['nombre_archivo', 't400'], ['url_blob', 't1000'], ['tipo_archivo', 't100'], ['tamano_kb', 'n'], ['created_by', 't100'], ['created_at', 'f']] },
+  bs_quejas: { tabla: 'dbo.BS_Quejas', cols: [
+    ['id', 'n'], ['fecha_recepcion', 'f'], ['clasificacion', 't100'], ['canal', 't100'], ['categoria', 't200'], ['sector', 't200'], ['detalle', 't4000'],
+    ['accion_correctiva', 't4000'], ['accion_mejora', 't4000'], ['coordinacion', 't2000'], ['fecha_levantamiento_ac', 'f'], ['frecuencia_seguimiento_ac', 't100'],
+    ['fecha_seguimiento_am', 'f'], ['observaciones', 't4000'], ['resultado', 't1000'], ['documentos', 't2000'], ['empresa', 't40'], ['created_by', 't100'], ['created_at', 'f'],
+    ['updated_at', 'f'], ['tipo_lugar', 't100'], ['seguimiento', 't100'], ['seguimiento_frecuencia', 't100'], ['seguimiento_inicio', 'f'], ['seguimiento_fin', 'f'],
+    ['seguimiento_dias', 'n'], ['seguimiento_alerta', 't200'], ['cantidad_buzones', 'n'], ['cantidad_quejas', 'n'], ['buzones_detalle', 't2000']] },
+  bs_quejas_seguim: { tabla: 'dbo.BS_Quejas_Seguimientos', cols: [
+    ['id', 'n'], ['id_queja', 'n'], ['numero_seguimiento', 'n'], ['fecha_seguimiento', 'f'], ['detalle', 't4000'], ['created_by', 't100'], ['created_at', 'f'], ['created_at2', 'f']] },
+  bs_descansos: { tabla: 'dbo.BS_Descansos', cols: [
+    ['id', 't40'], ['dni', 't15'], ['nombre', 't200'], ['empresa', 't40'], ['sector', 't200'], ['tipo', 't100'], ['origen', 't100'], ['citt_numero', 't100'], ['citt_estado', 't100'],
+    ['fecha_inicio', 'f'], ['fecha_fin', 'f'], ['dias', 'n'], ['diagnostico', 't1000'], ['cie10', 't40'], ['centro', 't200'], ['medico', 't200'], ['observaciones', 't2000'],
+    ['id_accidente', 't40'], ['id_subsidio', 't40'], ['estado', 't60'], ['anulado', 't10'], ['created_by', 't100'], ['created_at', 'f'], ['updated_by', 't100'], ['updated_at', 'f']] }
 };
 const tipoSql = t => t === 'f' ? 'DATETIME2(3) NULL' : t === 'n' ? 'FLOAT NULL' : 'NVARCHAR(' + t.slice(1) + ') NULL';
 const tipoMs = t => t === 'f' ? sql.DateTime2(3) : t === 'n' ? sql.Float : sql.NVarChar(parseInt(t.slice(1), 10));
