@@ -71,7 +71,17 @@ body.tc .d2-live i{background:#2E7D32}\
 body.tc .d2-feed .dot,body.tc #d2Feed .dot{background:#0F2748}\
 body.tc .d2-ok,body.tc #d2Seg .ok{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px}\
 body.tc .d2-ok .ic,body.tc #d2Seg .ok .ic{filter:grayscale(1)}\
-body.tc .d2-stat .up{color:#2E7D32}body.tc .d2-stat .dn{color:#B91C1C}';
+body.tc .d2-stat .up{color:#2E7D32}body.tc .d2-stat .dn{color:#B91C1C}\
+body.tc #d2Nom #wN,body.tc #wN{text-transform:none!important;letter-spacing:.2px;font-family:"Barlow Condensed",Barlow,sans-serif;font-size:30px}\
+body.tc #d2Hero .d2-reloj .d{font-size:12px;opacity:.85}\
+body.tc .tc-cumpl{background:#fff;border:1px solid #E2E8F0;border-left:4px solid #B45309;border-radius:8px;padding:12px 16px;margin-bottom:14px}\
+body.tc .tc-cumpl h5{margin:0 0 8px;font-size:11.5px;letter-spacing:1px;text-transform:uppercase;color:#B45309}\
+body.tc .tc-cumpl table{width:100%;border-collapse:collapse;font-size:12.5px}body.tc .tc-cumpl td{padding:6px 8px;border-bottom:1px solid #EEF2F7;vertical-align:top}\
+body.tc .tc-cumpl td.k{white-space:nowrap;font-weight:700;color:#0F2748;width:34%}body.tc .tc-cumpl .n{display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;border-radius:4px;background:#F8FAFC;border:1px solid #E2E8F0;font-weight:600;color:#1F2937}\
+body.tc .tc-cumpl .n i{font-style:normal;color:#B91C1C;font-size:10.5px;margin-left:4px}\
+body.tc .tc-foot{margin:26px 24px 18px;padding-top:12px;border-top:1px solid #E2E8F0;font-size:11px;color:#64748B;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}\
+body.tc #rlRepTab{background:#334155!important;opacity:.9!important;font-weight:700;letter-spacing:.5px}\
+body.tc .ni .badge,body.tc .ni [id^="badge"]{background:#C8102E!important;animation:none!important;border-radius:999px;font-weight:800}';
   document.head.appendChild(css);
 
   /* ── 2) Iconos de linea (por emoji del menu) ── */
@@ -137,6 +147,29 @@ body.tc .d2-stat .up{color:#2E7D32}body.tc .d2-stat .dn{color:#B91C1C}';
     /* _PIURA_OLMOS_V1: lema institucional en el banner de bienvenida del panel */
     var pills = document.getElementById('d2Pills');
     if (pills && !document.getElementById('d2Lema')) { var lm = document.createElement('div'); lm.id = 'd2Lema'; lm.className = 'd2-lema'; lm.textContent = 'Piura y Olmos, una sola Gestión Humana · mismos procesos, mismos estándares, un solo equipo'; pills.insertAdjacentElement('afterend', lm); }
+    /* _PANEL_FORMAL_V1: nombre completo con formato de titulo, saludo con fecha larga, reloj unico, alerta en tabla, pie y soporte */
+    try {
+      var U0 = (typeof USER !== 'undefined' && USER) ? USER : {};
+      var wN = document.getElementById('wN');
+      if (wN && !wN.dataset.tc2 && U0.nombre) { wN.dataset.tc2 = '1'; wN.textContent = String(U0.nombre).toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); }); }
+      var hola = document.getElementById('d2Hola'), rd = document.querySelector('#d2Hero .d2-reloj .d');
+      if (hola && rd && !hola.dataset.tc2 && rd.textContent) { hola.dataset.tc2 = '1'; var sal = (hola.textContent.split('·')[1] || '').trim(); var f = new Date(); var DIAS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'], MES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre']; var sem = (rd.textContent.match(/Semana \d+/) || [''])[0]; hola.textContent = (sal ? sal + ' · ' : '') + DIAS[f.getDay()] + ' ' + f.getDate() + ' de ' + MES[f.getMonth()] + ' de ' + f.getFullYear() + (sem ? ' · ' + sem : ''); rd.textContent = sem || rd.textContent; }
+      var rep = document.getElementById('rlRepTab'); if (rep && rep.textContent !== 'Soporte') rep.textContent = 'Soporte';
+      var adm = /^(administrador|coordinador|jefa)/i.test(String(U0.rol || '')) || String(U0.usuario || '').toLowerCase() === 'jtimoteo';
+      Array.prototype.forEach.call(document.querySelectorAll('.d2-card .t'), function (el) { var n = el.firstChild; if (n && n.nodeType === 3 && /Actividad reciente/i.test(n.nodeValue) && !adm) n.nodeValue = n.nodeValue.replace(/Actividad reciente/i, 'Mi actividad'); });
+      var main = document.querySelector('.main'); if (main && !document.getElementById('tcFoot')) { var ft = document.createElement('div'); ft.id = 'tcFoot'; ft.className = 'tc-foot'; ft.innerHTML = '<span>Sistema de Relaciones Laborales · Unifrutti Perú · Piura y Olmos</span><span>Creado por Joel A. Timoteo Gonza · Coordinación de Relaciones Laborales · v3.0</span>'; main.appendChild(ft); }
+      var ab = document.getElementById('alertCumplBanner'), at = document.getElementById('alertCumplTexto');
+      if (ab && at && ab.style.display !== 'none' && at.textContent && at.dataset.tcTxt !== at.textContent) {
+        at.dataset.tcTxt = at.textContent;
+        var filas = []; at.innerHTML.split(/<br\s*\/?>/i).forEach(function (h) { var tx = h.replace(/<[^>]+>/g, '').replace(EMOJI, '').trim(); var m = tx.match(/^(.*?)\s*(?:\((\d+)\))?\s*:\s*(.+)$/); if (m && m[3] && !/^Cumplimiento pendiente/i.test(tx)) filas.push({ k: m[1].replace(/\s+/g, ' ').trim(), n: m[2] || '', v: m[3] }); });
+        if (filas.length) {
+          var old = document.getElementById('tcCumpl'); if (old) old.remove();
+          var box = document.createElement('div'); box.id = 'tcCumpl'; box.className = 'tc-cumpl';
+          box.innerHTML = '<h5>Pendientes de cumplimiento</h5><table>' + filas.map(function (f) { return '<tr><td class="k">' + f.k + (f.n ? ' <span style="color:#64748B;font-weight:600">(' + f.n + ')</span>' : '') + '</td><td>' + f.v.split(/,\s*(?=[A-ZÁÉÍÓÚÑ])/).map(function (x) { var mm = x.match(/^(.*?)\s*\((.*?)\)\s*$/); return '<span class="n">' + (mm ? mm[1].trim() + '<i>' + mm[2] + '</i>' : x.trim()) + '</span>'; }).join('') + '</td></tr>'; }).join('') + '</table>';
+          ab.insertAdjacentElement('afterend', box); ab.style.display = 'none';
+        }
+      }
+    } catch (e) {}
     /* titulo del topbar: "MI DASHBOARD" -> "PANEL DE GESTION" */
     var t = document.querySelector('.tb-t'); if (t && /MI DASHBOARD/i.test(t.textContent)) t.textContent = 'Panel de gestión';
     /* textos formales del panel */
