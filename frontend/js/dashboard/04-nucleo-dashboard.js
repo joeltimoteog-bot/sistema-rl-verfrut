@@ -6780,7 +6780,7 @@ function _fbAplicarEstadisticasFirebase(fbData) {
           if (typeof refrescarAtencionesHoy === 'function') refrescarAtencionesHoy('firebase');
           else cargarAtenciones(true);
         } catch (e) { console.warn('[FB-refresh-at] refresco fallo:', e); }
-      }, 3000 + Math.floor(Math.random() * 27000));   /* _STATS_FRENO_V2: cada pestaña en un momento distinto (antes todas a los 1,5 s) */
+      }, 700 + Math.floor(Math.random() * 2300));   /* _AT_VIGIA_V1 (02-nov): 0,7–3 s (antes 3–30 s: los usuarios creian que no se actualizaba). refrescarAtencionesHoy solo trae lo que cambio (_AT_CAMBIOS_V1), asi que el costo es minimo */
     }
   } catch (e) { /* no romper el flujo si falla */ }
   const rg = fbData.resumen_global;
