@@ -60,3 +60,49 @@
     } catch (e) { return fOrig.apply(this, arguments); }
   };
 })();
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   _EXPORT_AUDIT_V1 (01-nov-2026) — Registro de exportaciones a Excel
+   Todas las pantallas exportan con XLSX.writeFile (SheetJS). Aqui se envuelve UNA vez y cada
+   exportacion queda anotada en Azure (POST /actividad/exportacion: pantalla, archivo, filas, hojas).
+   No cambia el archivo ni el flujo: si el registro falla, la exportacion sale igual.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  if (window._rlExportAuditOk) return;
+  window._rlExportAuditOk = true;
+  var AZ = 'https://rl-fn-verfrut.azurewebsites.net/api/actividad/exportacion';
+  function navegador() {
+    var ua = navigator.userAgent || '', b = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Navegador';
+    return b + (/Android/.test(ua) ? ' / Android' : /iPhone|iPad/.test(ua) ? ' / iOS' : /Windows/.test(ua) ? ' / Windows' : /Mac OS/.test(ua) ? ' / Mac' : '');
+  }
+  function contar(wb) {
+    var filas = 0, hojas = 0;
+    try {
+      (wb.SheetNames || []).forEach(function (n) {
+        var ws = wb.Sheets[n]; if (!ws || !ws['!ref']) return; hojas++;
+        var r = window.XLSX.utils.decode_range(ws['!ref']); filas += Math.max(0, r.e.r - r.s.r);   /* sin la cabecera */
+      });
+    } catch (e) {}
+    return { filas: filas, hojas: hojas };
+  }
+  function anotar(wb, archivo) {
+    try {
+      var tk = sessionStorage.getItem('rl_token'); if (!tk) return;
+      var c = contar(wb), pant = (document.title || '').replace(/\s*[-|·].*$/, '').trim() || location.pathname.split('/').pop();
+      var cuerpo = { sistema: 'RR.LL.', pantalla: pant.slice(0, 120), archivo: String(archivo || '').slice(0, 200), filas: c.filas, hojas: c.hojas, navegador: navegador() };
+      fetch(AZ, { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk }, body: JSON.stringify(cuerpo) }).catch(function () {});
+      try { if (window.RLTrafico) RLTrafico.emit({ accion: 'Exportó a Excel: ' + (archivo || '') + ' (' + c.filas + ' filas)', destino: 'Descarga' }); } catch (e) {}
+    } catch (e) {}
+  }
+  function envolver() {
+    var X = window.XLSX; if (!X || X._rlAudit) return !!(X && X._rlAudit);
+    ['writeFile', 'writeFileXLSX', 'writeFileAsync'].forEach(function (k) {
+      if (typeof X[k] !== 'function') return;
+      var orig = X[k];
+      X[k] = function (wb, archivo) { try { anotar(wb, archivo); } catch (e) {} return orig.apply(this, arguments); };
+    });
+    X._rlAudit = true; return true;
+  }
+  var n = 0, it = setInterval(function () { if (envolver() || ++n > 120) clearInterval(it); }, 500);   /* XLSX se carga despues de este archivo */
+})();

@@ -4,6 +4,8 @@
      ingreso  { sistema, modulo }  -> suma 1 ingreso de hoy (dbo.Actividad_Ingresos)
      resumen  { anio }             -> usuarios, accesos, registros e ingresos por usuario/modulo/mes
      horas    { usuario, anio? }   -> detalle de lo que ese usuario registro en Acumulacion de Horas
+     exportacion  { sistema, pantalla, archivo, filas, hojas, navegador } -> registra una exportacion a Excel (_EXPORT_AUDIT_V1)
+     exportaciones { usuario?, desde?, hasta?, top? }                   -> lista de exportaciones (los demas solo ven las suyas)
    Quien ve a TODOS: el dueño (jtimoteo), los administradores y quien tenga "act_todos" en Acceso a
    Modulos. Los demas solo se ven a si mismos. Solo lectura de las tablas de negocio.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -122,6 +124,38 @@ async function horas(pool, t, b) {
   return { success: true, usuario: objetivo, filas: r.recordset };
 }
 
+/* _EXPORT_AUDIT_V1 (01-nov-2026): cada exportacion a Excel queda registrada (quien, cuando, pantalla, archivo, filas). */
+let expLista = null;
+function asegurarExp(pool) {
+  if (!expLista) expLista = pool.request().query(`
+    IF OBJECT_ID('dbo.Actividad_Exportaciones', 'U') IS NULL
+      CREATE TABLE dbo.Actividad_Exportaciones (id INT IDENTITY(1,1) NOT NULL CONSTRAINT PK_Actividad_Exportaciones PRIMARY KEY,
+        fecha DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(), usuario NVARCHAR(60) NOT NULL, rol NVARCHAR(40) NULL,
+        sistema NVARCHAR(40) NOT NULL, pantalla NVARCHAR(120) NULL, archivo NVARCHAR(200) NULL, filas INT NULL, hojas INT NULL,
+        navegador NVARCHAR(80) NULL);`).catch(e => { expLista = null; throw e; });
+  return expLista;
+}
+async function exportacion(pool, t, b) {
+  await asegurarExp(pool);
+  await pool.request().input('u', sql.NVarChar(60), low(t.usuario)).input('r', sql.NVarChar(40), low(t.rol).slice(0, 40))
+    .input('s', sql.NVarChar(40), String(b.sistema || 'RR.LL.').slice(0, 40)).input('p', sql.NVarChar(120), String(b.pantalla || '').slice(0, 120))
+    .input('a', sql.NVarChar(200), String(b.archivo || '').slice(0, 200)).input('f', sql.Int, Number.isFinite(+b.filas) ? Math.max(0, Math.round(+b.filas)) : null)
+    .input('h', sql.Int, Number.isFinite(+b.hojas) ? Math.round(+b.hojas) : null).input('n', sql.NVarChar(80), String(b.navegador || '').slice(0, 80))
+    .query('INSERT INTO dbo.Actividad_Exportaciones (usuario, rol, sistema, pantalla, archivo, filas, hojas, navegador) VALUES (@u, @r, @s, @p, @a, @f, @h, @n)');
+  return { success: true };
+}
+async function exportaciones(pool, t, b) {
+  await asegurarExp(pool);
+  const todos = await veTodos(pool, t), rq = pool.request(), top = Math.min(Math.max(parseInt(b.top, 10) || 300, 1), 2000);
+  let w = '1 = 1';
+  if (!todos) { w += ' AND usuario = @u'; rq.input('u', sql.NVarChar(60), low(t.usuario)); }
+  else if (b.usuario) { w += ' AND usuario = @u'; rq.input('u', sql.NVarChar(60), low(b.usuario)); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(b.desde || ''))) { w += ' AND fecha >= @d'; rq.input('d', sql.DateTime2, new Date(b.desde + 'T05:00:00Z')); }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(b.hasta || ''))) { w += ' AND fecha < @h2'; rq.input('h2', sql.DateTime2, new Date(new Date(b.hasta + 'T05:00:00Z').getTime() + 86400e3)); }
+  const r = await rq.query(`SELECT TOP (${top}) id, fecha, usuario, rol, sistema, pantalla, archivo, filas, hojas, navegador FROM dbo.Actividad_Exportaciones WHERE ${w} ORDER BY fecha DESC, id DESC`);
+  return { success: true, data: r.recordset, total: r.recordset.length, veTodos: todos };
+}
+
 module.exports = async function (context, req) {
   const accion = context.bindingData.accion;
   const out = (status, body) => { context.res = { status, headers: { 'Content-Type': 'application/json' }, body }; };
@@ -132,6 +166,8 @@ module.exports = async function (context, req) {
     if (accion === 'ingreso') { await asegurar(pool); return out(200, await ingreso(pool, t, b)); }
     if (accion === 'resumen') return out(200, await resumen(pool, t, b));
     if (accion === 'horas') return out(200, await horas(pool, t, b));
+    if (accion === 'exportacion') return out(200, await exportacion(pool, t, b));     /* _EXPORT_AUDIT_V1 */
+    if (accion === 'exportaciones') return out(200, await exportaciones(pool, t, b));   /* _EXPORT_AUDIT_V1 */
     return out(404, { success: false, error: 'Accion desconocida' });
   } catch (e) {
     context.log.error('[actividad] ' + accion + ': ' + e.message);
