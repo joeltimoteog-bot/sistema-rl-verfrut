@@ -127,9 +127,15 @@ body.tc .d2-kpi{border-radius:8px}body.tc .d2-kpi .ic{filter:grayscale(1)}';
     /* titulo del topbar: "MI DASHBOARD" -> "PANEL DE GESTION" */
     var t = document.querySelector('.tb-t'); if (t && /MI DASHBOARD/i.test(t.textContent)) t.textContent = 'Panel de gestión';
   }
-  var pendiente = null;
-  function programar() { if (pendiente) return; pendiente = setTimeout(function () { pendiente = null; try { aplicar(); } catch (e) {} }, 120); }
+  /* v1.1: la limpieza corre en el mismo instante en que algo se pinta (antes del repintado) -> sin pestañeo */
+  var ocupado = false, obs = null;
+  function alCambiar() {
+    if (ocupado) return; ocupado = true;
+    try { aplicar(); } catch (e) {}
+    try { if (obs) obs.takeRecords(); } catch (e) {}   /* descarta las mutaciones que provoco la propia limpieza */
+    ocupado = false;
+  }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', aplicar); else aplicar();
-  try { new MutationObserver(programar).observe(document.body, { childList: true, subtree: true }); } catch (e) {}
+  try { obs = new MutationObserver(alCambiar); obs.observe(document.body, { childList: true, subtree: true }); } catch (e) {}
   console.log('[_TEMA_CORP_V1] tema corporativo activo (apagar: localStorage.rl_tema_corp = "off")');
 })();

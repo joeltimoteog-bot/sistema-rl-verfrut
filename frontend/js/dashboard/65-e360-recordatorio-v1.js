@@ -16,7 +16,8 @@
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
   async function revisar() {
-    if (yo() !== DUENO) return;
+    var LOG = function (m) { try { console.log('[_E360_RECORDATORIO_V1] ' + m); } catch (e) {} };
+    if (yo() !== DUENO) { LOG('no es el dueño: ' + yo()); return; }
     var hoy = new Date();
     /* _E360_REC_ARRASTRE_V1 (01-nov-2026): del 1 al 15 se revisa el MES ANTERIOR (lo que quedo sin evaluar sigue pendiente);
        del 16 en adelante, el mes en curso, como siempre. */
@@ -25,20 +26,21 @@
     var mes = ref.getFullYear() + '-' + ('0' + (ref.getMonth() + 1)).slice(-2);
     var MESES_ = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre'];
     var claveOcultar = 'e360_rec_oculto_' + mes + '_' + hoy.getDate();
-    try { if (localStorage.getItem(claveOcultar)) return; } catch (e) {}
+    try { if (localStorage.getItem(claveOcultar)) { LOG('oculto hoy por "Recordar mañana" (' + claveOcultar + ')'); return; } } catch (e) {}
     var kp = await fetch(AZ + '/kpi/tablero', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
-    if (!kp || !kp.personas) return;
+    if (!kp || !kp.personas) { LOG('sin personas de /kpi/tablero: ' + JSON.stringify(kp && kp.error || kp)); return; }
     var personas = kp.personas.filter(function (p) { return p.tipo === 'SUP' || p.tipo === 'ASIST'; });
     var ev = null; try { ev = typeof apiGet === 'function' ? await apiGet({ action: 'getEvaluaciones360' }) : null; } catch (e) { ev = null; }
-    if (!ev || !ev.success) return;
+    if (!ev || !ev.success) { LOG('getEvaluaciones360 fallo: ' + JSON.stringify(ev && ev.error)); return; }
     var hechas = (ev.data || []).filter(function (e) { return String(e.periodo || String(e.fecha || '').slice(0, 7)) === mes; });
     var faltan = personas.filter(function (p) { return !hechas.some(function (e) { return misma(e.supervisor, p.nombre); }); });
-    if (!faltan.length) return;
+    LOG('mes ' + mes + ' · personas ' + personas.length + ' · evaluaciones del mes ' + hechas.length + ' (total ' + (ev.data || []).length + ', fuente ' + (ev.fuente || 'google') + ') · faltan ' + faltan.length);
+    if (!faltan.length) { LOG('nadie pendiente: no se muestra'); return; }
     var ult = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate(), quedan = ult - hoy.getDate();
     pintar(faltan, personas.length, arrastre ? -1 : quedan, claveOcultar);   /* _E360_REC_ARRASTRE_V1: -1 = mes anterior */
   }
   function pintar(faltan, total, quedan, claveOcultar) {
-    var sec = document.getElementById('sec-dashboard'); if (!sec || document.getElementById('e360Rec')) return;
+    var sec = document.getElementById('sec-dashboard'); if (!sec || document.getElementById('e360Rec')) { LOG(sec ? 'ya pintado' : 'sin sec-dashboard'); return; }
     var d = document.createElement('div'); d.id = 'e360Rec';
     d.style.cssText = 'margin:0 0 16px;border-radius:18px;padding:16px 18px;background:linear-gradient(135deg,#0b1e45,#1e3a8a 60%,#2563eb);color:#fff;box-shadow:0 14px 30px -14px rgba(30,58,138,.6);display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap';
     d.innerHTML = '<div style="font-size:30px;line-height:1">🧭</div><div style="flex:1;min-width:240px">'
