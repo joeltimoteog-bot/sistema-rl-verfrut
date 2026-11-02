@@ -56,9 +56,22 @@ body.tc .alert-cumpl{background:#FFF8E6!important;border:1px solid #F5D08A!impor
 body.tc .sede-chip{border-radius:3px;text-transform:uppercase;letter-spacing:.5px}\
 body.tc .prec-head{background:#0F2748}\
 body.tc .d2-lema{margin:8px 0 0;font-size:12.5px;color:#C5D2E6;letter-spacing:.2px}\
-body.tc .d2-acc button{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#fff;border-radius:6px;font-weight:600}\
-body.tc .d2-acc button:first-child{background:#fff;color:#0F2748}\
-body.tc .d2-kpi{border-radius:8px}body.tc .d2-kpi .ic{filter:grayscale(1)}';
+body.tc .d2-acc button,body.tc .d2-acc button.ghost{background:#fff!important;border:1px solid #fff!important;color:#0F2748!important;border-radius:6px;font-weight:700;opacity:1!important;cursor:pointer;letter-spacing:.2px;box-shadow:0 2px 6px rgba(0,0,0,.18)}\
+body.tc .d2-acc button:hover{background:#EEF2F7!important}\
+body.tc .d2-hola{letter-spacing:1.5px;color:#C5D2E6;font-size:11px}\
+body.tc #d2Nom{letter-spacing:.3px}\
+body.tc .d2-pill{background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.22);border-radius:4px;text-transform:uppercase;letter-spacing:.6px;font-size:10px}\
+body.tc .d2-kpi{border-radius:8px;border:1px solid #E2E8F0;box-shadow:none;border-top:3px solid #0F2748}\
+body.tc .d2-kpi .ic{background:#F1F5F9!important;color:#0F2748!important;filter:grayscale(1);border-radius:8px}\
+body.tc .d2-kpi .v,body.tc .d2-kpi b{color:#0F2748}\
+body.tc .d2-kpi .bar,body.tc .d2-kpi .lin{background:#0F2748!important}\
+body.tc .d2-card{border:1px solid #E2E8F0;border-radius:8px;box-shadow:none}\
+body.tc .d2-card .t{font-size:11.5px;letter-spacing:1px;text-transform:uppercase;color:#0F2748}\
+body.tc .d2-live i{background:#2E7D32}\
+body.tc .d2-feed .dot,body.tc #d2Feed .dot{background:#0F2748}\
+body.tc .d2-ok,body.tc #d2Seg .ok{background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px}\
+body.tc .d2-ok .ic,body.tc #d2Seg .ok .ic{filter:grayscale(1)}\
+body.tc .d2-stat .up{color:#2E7D32}body.tc .d2-stat .dn{color:#B91C1C}';
   document.head.appendChild(css);
 
   /* ── 2) Iconos de linea (por emoji del menu) ── */
@@ -126,6 +139,9 @@ body.tc .d2-kpi{border-radius:8px}body.tc .d2-kpi .ic{filter:grayscale(1)}';
     if (pills && !document.getElementById('d2Lema')) { var lm = document.createElement('div'); lm.id = 'd2Lema'; lm.className = 'd2-lema'; lm.textContent = 'Piura y Olmos, una sola Gestión Humana · mismos procesos, mismos estándares, un solo equipo'; pills.insertAdjacentElement('afterend', lm); }
     /* titulo del topbar: "MI DASHBOARD" -> "PANEL DE GESTION" */
     var t = document.querySelector('.tb-t'); if (t && /MI DASHBOARD/i.test(t.textContent)) t.textContent = 'Panel de gestión';
+    /* textos formales del panel */
+    Array.prototype.forEach.call(document.querySelectorAll('.d2-card .t'), function (el) { var n = el.firstChild; if (n && n.nodeType === 3) { var v = n.nodeValue.replace(/Seguimiento de tu gestión/i, 'Seguimiento de gestión'); if (v !== n.nodeValue) n.nodeValue = v; } });
+    var sub = document.getElementById('wR'); if (sub && /Sistema RL v3\.0/.test(sub.textContent)) sub.textContent = sub.textContent.replace('Sistema RL v3.0', 'Sistema de Relaciones Laborales');
   }
   /* v1.1: la limpieza corre en el mismo instante en que algo se pinta (antes del repintado) -> sin pestañeo */
   var ocupado = false, obs = null;
