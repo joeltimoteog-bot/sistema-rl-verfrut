@@ -563,13 +563,13 @@ function mostrarBienvenida(user, callback) {
   const esJoel = usu === 'jtimoteo' || nom.includes('JOEL');
   let linea1, linea2;
   if (esJoel) {
-    linea1 = '¡Hola Joel! 👨‍💻';
-    linea2  = 'Creador del sistema — trabajemos en las actualizaciones 🚀';
+    linea1 = 'Bienvenido, Joel Timoteo';   /* _BIENV_V3: tono corporativo tambien en el respaldo */
+    linea2  = 'Coordinación de Relaciones Laborales · Administrador del sistema';
   } else {
     const primerNom = (user.nombre||user.usuario||'').split(' ')[0];
     const nomFmt = primerNom.charAt(0).toUpperCase() + primerNom.slice(1).toLowerCase();
-    linea1 = '¡Hola ' + nomFmt + '! 👋';
-    linea2  = 'Te damos la bienvenida al Sistema de Relaciones Laborales ✅';
+    linea1 = 'Bienvenido, ' + nomFmt;
+    linea2  = 'Sistema de Relaciones Laborales · Unifrutti Perú';
   }
   document.getElementById('pbLinea1').textContent = linea1;
   document.getElementById('pbLinea2').textContent = linea2;
@@ -1445,6 +1445,14 @@ console.log('[_HUB_UI_V2] listo');
 @keyframes bv2bar{to{width:100%}}
 #bv2 .foot{font-size:11px;color:rgba(255,255,255,.4)}#bv2 .foot b{color:rgba(255,255,255,.7)}
 @media(max-width:480px){#bv2{padding:26px 20px 20px}#bv2 h1{font-size:30px}}
+/* _BIENV_V3 (01-nov-2026): estilo corporativo */
+#bv2.bv3 .bv3-logo{width:72px;height:72px;margin:0 auto 14px;border-radius:18px;background:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+#bv2.bv3 .bv3-logo img{width:56px;height:56px;object-fit:contain}
+#bv2.bv3 .bv3-bienv{font-size:12px;letter-spacing:3px;text-transform:uppercase;color:#93a7cb;font-weight:700;margin-top:12px}
+#bv2.bv3 h1.bv3-nom{font-size:30px;letter-spacing:.6px;line-height:1.15;margin:2px 0 6px}
+#bv2.bv3 .bv3-cargo{font-size:13px;color:#dbe4f5;font-weight:600}
+#bv2.bv3 .chip{letter-spacing:.4px;text-transform:uppercase;font-size:10.5px}
+#bv2.bv3 .foot{line-height:1.6;margin-top:4px}
 </style>
 <script>
 (function(){
@@ -1454,7 +1462,7 @@ var previo=window.mostrarBienvenida;
 var MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre'],DIAS=['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function cap(s){s=String(s||'');return s.charAt(0).toUpperCase()+s.slice(1).toLowerCase();}
-function rolTxt(r){r=String(r||'').toLowerCase().replace(/_/g,' ');if(!r)return 'Usuario';if(r.indexOf('admin')===0)return '🛡️ Administrador';if(r.indexOf('coord')===0)return '🧭 Coordinación';if(r.indexOf('jefa')===0)return '🏛️ Jefatura RR.LL.';if(r.indexOf('super')===0)return '👩‍💼 Supervisión';return '👤 '+cap(r);}
+function rolTxt(r){r=String(r||'').toLowerCase().replace(/_/g,' ');if(!r)return 'Usuario';if(r.indexOf('admin')===0)return 'Administrador del sistema';if(r.indexOf('coord')===0)return 'Coordinación de Relaciones Laborales';if(r.indexOf('jefa')===0)return 'Jefatura de Relaciones Laborales';if(r.indexOf('super')===0)return 'Supervisión de Gestión Humana';if(r.indexOf('asist')===0)return 'Asistente de Relaciones Laborales';return cap(r);}   /* _BIENV_V3 (01-nov): cargos formales, sin emojis */
 function ultimo(u){try{var t=Number(localStorage.getItem('rl_bv2_ult_'+u)||0);if(!t)return 'primer ingreso en este equipo';var d=new Date(t),hoy=new Date();var hm=('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);var dias=Math.round((new Date(hoy.getFullYear(),hoy.getMonth(),hoy.getDate())-new Date(d.getFullYear(),d.getMonth(),d.getDate()))/86400000);return (dias===0?'hoy':dias===1?'ayer':d.getDate()+' de '+MESES[d.getMonth()])+' '+hm;}catch(e){return '';}}
 function pintar(user){
   var pb=document.getElementById('pantallaBienvenida');if(!pb)return false;
@@ -1466,17 +1474,23 @@ function pintar(user){
   var d=new Date(),h=d.getHours(),sal=h<12?'Buenos días':h<19?'Buenas tardes':'Buenas noches';
   var ult=ultimo(usu);
   var wrap=document.createElement('div');wrap.id='bv2Wrap';wrap.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:16px';
+  /* _BIENV_V3 (01-nov-2026): presentacion sobria y corporativa (sin emojis ni frases informales); mismo flujo y duracion */
+  var nomCompleto=nom?nom.toUpperCase():usu.toUpperCase();
+  var cargo=esJoel?'Coordinador de Relaciones Laborales · Administrador del sistema':rolTxt(user.rol);
+  var hora=('0'+h).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
   wrap.innerHTML='<div id="bv2Fondo"></div><div id="bv2Grid"></div>'+
-    '<div id="bv2"><div class="av"><svg width="104" height="104"><defs><linearGradient id="bv2g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e23c3c"/><stop offset="1" stop-color="#3b82f6"/></linearGradient></defs><circle class="b" cx="52" cy="52" r="48" fill="none" stroke-width="5"/><circle class="p" cx="52" cy="52" r="48" fill="none" stroke-width="5"/></svg><div class="in">'+esc(ini)+'</div><div class="ok">✓</div></div>'+
-    '<div class="hola">'+esc(DIAS[d.getDay()]+' '+d.getDate()+' de '+MESES[d.getMonth()]+' · '+sal)+'</div>'+
-    '<h1>'+(esJoel?'¡Hola, Joel! <span>👨‍💻</span>':'¡Hola, '+esc(primer)+'! <span>👋</span>')+'</h1>'+
-    '<div class="sub">'+(esJoel?'Creador del sistema — trabajemos en las actualizaciones 🚀':'Te damos la bienvenida al Sistema de Relaciones Laborales')+'</div>'+
-    '<div class="chips"><span class="chip">'+esc(rolTxt(user.rol))+(user.empresa?' · '+esc(user.empresa):'')+'</span>'+(user.sector?'<span class="chip">📍 '+esc(user.sector)+'</span>':'')+'<span class="chip ok">● Sistema operativo</span></div>'+
-    '<div class="steps"><div class="st done"><i>✓</i>Sesión verificada y horario de acceso en regla</div><div class="st done"><i>✓</i>Permisos y módulos cargados</div><div class="st" id="bv2S3"><i></i>Preparando tu dashboard…</div></div>'+
+    '<div id="bv2" class="bv3">'+
+    '<div class="bv3-logo"><img src="frontend/images/logo-unifrutti-hd.png" alt="Unifrutti" onerror="this.style.display=\'none\'"></div>'+
+    '<div class="hola">'+esc(sal)+' · '+esc(DIAS[d.getDay()]+' '+d.getDate()+' de '+MESES[d.getMonth()]+' de '+d.getFullYear())+' · '+hora+'</div>'+
+    '<div class="bv3-bienv">Bienvenido</div>'+
+    '<h1 class="bv3-nom">'+esc(nomCompleto)+'</h1>'+
+    '<div class="sub bv3-cargo">'+esc(cargo)+'</div>'+
+    '<div class="chips">'+(user.empresa?'<span class="chip">'+esc(String(user.empresa).toUpperCase())+'</span>':'')+(user.sector?'<span class="chip">'+esc(user.sector)+'</span>':'')+'<span class="chip ok">Sesión segura</span></div>'+
+    '<div class="steps"><div class="st done"><i>✓</i>Sesión verificada y horario de acceso en regla</div><div class="st done"><i>✓</i>Permisos y módulos cargados</div><div class="st" id="bv2S3"><i></i>Preparando su panel de trabajo</div></div>'+
     '<div class="bar"><i></i></div>'+
-    '<div class="foot">Último ingreso: <b>'+esc(ult)+'</b> · Sistema RL v3.0 · Unifrutti</div></div>';
+    '<div class="foot">Último acceso: <b>'+esc(ult)+'</b><br>Sistema de Relaciones Laborales · Unifrutti Perú · Acceso registrado</div></div>';
   pb.appendChild(wrap);
-  setTimeout(function(){var s=document.getElementById('bv2S3');if(s){s.classList.add('done');s.querySelector('i').textContent='✓';s.lastChild.textContent='Dashboard listo';}},1250);
+  setTimeout(function(){var s=document.getElementById('bv2S3');if(s){s.classList.add('done');s.querySelector('i').textContent='✓';s.lastChild.textContent='Panel de trabajo listo';}},1250);
   try{localStorage.setItem('rl_bv2_ult_'+usu,String(Date.now()));}catch(e){}
   return true;
 }
