@@ -1548,19 +1548,22 @@ body.lc .gx-slide{filter:saturate(.85) brightness(.9)}   /* _LOGIN_CORP_V2: se c
 body.lc .gx-velo{background:linear-gradient(100deg,rgba(7,20,46,.90) 0%,rgba(11,30,63,.78) 45%,rgba(11,30,63,.55) 100%)}   /* _LOGIN_CORP_V2: velo institucional sobre las frutas */
 body.lc .gx-velo::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:48px 48px;-webkit-mask-image:radial-gradient(ellipse at 30% 60%,#000 20%,transparent 75%);mask-image:radial-gradient(ellipse at 30% 60%,#000 20%,transparent 75%)}
 body.lc .gx-eyebrow{color:#9FB3D1;letter-spacing:2.5px}body.lc .gx-eyebrow::before{background:#C8102E}
-body.lc .gx-titulo .l1{color:#C5D2E6;text-transform:uppercase;letter-spacing:2px;font-size:clamp(13px,1.2vw,16px);font-weight:700}
-body.lc .gx-titulo .l2{font-size:clamp(40px,5.2vw,68px);background:none;-webkit-background-clip:unset;background-clip:unset;color:#fff;filter:none;font-weight:800;letter-spacing:.5px;line-height:.98}
-body.lc .gx-sub{background:transparent;border:0;padding:0;color:#C5D2E6;font-weight:500;font-size:14px;max-width:460px;white-space:normal;letter-spacing:0;display:block;line-height:1.5}
+body.lc .gx-titulo .l1{color:#C5D2E6;text-transform:uppercase;letter-spacing:3px;font-size:clamp(15px,1.5vw,20px);font-weight:700}
+body.lc .gx-titulo .l2{font-size:clamp(52px,7vw,96px);background:none;-webkit-background-clip:unset;background-clip:unset;color:#fff;filter:none;font-weight:800;letter-spacing:.5px;line-height:.98}
+body.lc .gx-sub{background:transparent;border:0;padding:0;color:#C5D2E6;font-weight:500;font-size:15px;max-width:560px;white-space:normal;letter-spacing:0;display:block;line-height:1.55}
+body.lc .gx-marca{max-width:720px}
+body.lc .lc-lema{font-family:'Barlow Condensed',Barlow,sans-serif;font-size:24px;letter-spacing:.3px;font-weight:800}
+body.lc .lc-autor{margin-top:16px;font-size:11.5px;color:#9FB3D1;letter-spacing:.3px}body.lc .lc-autor b{color:#fff;font-weight:700}
 body.lc .gx-sub .pt{display:none}
 body.lc .gx-indic{display:flex;opacity:.7}
 body.lc .lc-meta{display:flex;gap:22px;margin-top:26px;flex-wrap:wrap}
 body.lc .lc-meta div{font-size:11.5px;color:#9FB3D1}body.lc .lc-meta b{display:block;color:#fff;font-size:13px;margin-bottom:2px;font-weight:700}
 body.lc .gx-glow{background:none;animation:none;padding:0;border-radius:14px;box-shadow:0 30px 70px rgba(0,0,0,.45)}
 body.lc .gx-panel{background:#fff;border-radius:14px;backdrop-filter:none;-webkit-backdrop-filter:none;border:1px solid #E2E8F0;box-shadow:none}
-body.lc .gx-logo{justify-content:flex-start}body.lc .gx-logo img{height:52px;border-radius:10px;box-shadow:none;border:1px solid #E2E8F0}
+body.lc .gx-logo{justify-content:center;margin-bottom:12px}body.lc .gx-logo img{height:60px;border-radius:12px;box-shadow:none;border:1px solid #E2E8F0}   /* _LOGIN_CORP_V3: logo al centro */
 body.lc .gx-saludo{display:none}
-body.lc .gx-h1{text-align:left;color:#0F2748;font-size:26px;text-transform:none;letter-spacing:.2px;font-weight:800;margin-top:4px}
-body.lc .gx-fecha{text-align:left;color:#64748B;margin-bottom:18px;text-transform:none}
+body.lc .gx-h1{text-align:center;color:#0F2748;font-size:26px;text-transform:none;letter-spacing:.2px;font-weight:800;margin-top:4px}
+body.lc .gx-fecha{text-align:center;color:#64748B;margin-bottom:18px;text-transform:none}
 body.lc .gx-campo label{color:#64748B!important;font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:700}
 body.lc .gx-wrap input{background:#FAFBFC;border:1px solid #E2E8F0;border-radius:8px;color:#1F2937;font-size:14px}
 body.lc .gx-wrap input::placeholder{color:#94A3B8}
@@ -1605,11 +1608,12 @@ body.lc .mx-footer,body.lc .mx-pie{color:rgba(255,255,255,.5)}
       document.body.classList.add('lc');
       var eb=document.querySelector('.gx-eyebrow'); if(eb) eb.textContent='Unifrutti Perú · Piura · Olmos';
       var l1=document.querySelector('.gx-titulo .l1'); if(l1) l1.textContent='Sistema de';
-      var sub=document.querySelector('.gx-sub'); if(sub){ sub.innerHTML='<span class="pt"></span><b style="color:#fff;display:block;font-size:15px;margin-bottom:4px">Piura y Olmos, una sola Gestión Humana.</b>Mismos procesos, mismos estándares, un solo equipo: la plataforma institucional para el registro, seguimiento y cumplimiento de la gestión laboral en campo y planta.'; }
+      var sub=document.querySelector('.gx-sub'); if(sub){ sub.innerHTML='<span class="pt"></span><b class="lc-lema" style="color:#fff;display:block;margin-bottom:6px">Piura y Olmos, una sola Gestión Humana.</b>Mismos procesos, mismos estándares, un solo equipo: la plataforma institucional para el registro, seguimiento y cumplimiento de la gestión laboral en campo y planta.'; }
       var marca=document.querySelector('.gx-marca');
       if(marca && !document.getElementById('lcMeta')){ var m=document.createElement('div'); m.className='lc-meta'; m.id='lcMeta';
         m.innerHTML='<div><b>Acceso restringido</b>Solo personal autorizado</div><div><b>Información confidencial</b>Uso sujeto a las políticas de la empresa</div><div><b>Sesión registrada</b>Auditoría de accesos activa</div>';
-        var ind=document.getElementById('gxIndic'); if(ind) ind.insertAdjacentElement('afterend',m); else marca.appendChild(m); }
+        var ind=document.getElementById('gxIndic'); if(ind) ind.insertAdjacentElement('afterend',m); else marca.appendChild(m);
+        var au=document.createElement('div'); au.className='lc-autor'; au.id='lcAutor'; au.textContent='Sistema creado por '; var bb=document.createElement('b'); bb.textContent='Joel A. Timoteo Gonza'; au.appendChild(bb); au.appendChild(document.createTextNode(' · Coordinación de Relaciones Laborales · Unifrutti Perú')); m.insertAdjacentElement('afterend',au); }
       var h1=document.querySelector('.gx-h1'); if(h1) h1.textContent="Acceso al sistema"; var fe=document.getElementById("gxFecha"); if(fe && !fe.dataset.lc){ fe.dataset.lc="1"; var ob=new MutationObserver(function(){ var t=fe.textContent; var t2=t.charAt(0).toUpperCase()+t.slice(1).toLowerCase(); if(t!==t2){ fe.textContent=t2; } }); ob.observe(fe,{childList:true,characterData:true,subtree:true}); var t0=fe.textContent; fe.textContent=t0.charAt(0).toUpperCase()+t0.slice(1).toLowerCase(); }
       var u=document.getElementById('usuario'); if(u) u.placeholder='Usuario corporativo';
       var p=document.getElementById('password'); if(p) p.placeholder='Contraseña';
