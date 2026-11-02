@@ -70,19 +70,22 @@
   function huella(txt) { var h = 5381; for (var i = 0; i < txt.length; i++) h = ((h << 5) + h + txt.charCodeAt(i)) >>> 0; return h.toString(36); }
   function etag(ruta) {
     return fetch(BASE + '/' + ruta + '?h=' + Math.floor(Date.now() / 60000), { method: 'HEAD', cache: 'no-store' })
-      .then(function (r) { if (!r.ok) return ruta + ':' + r.status; return ruta + ':' + (r.headers.get('etag') || r.headers.get('last-modified') || '?'); })
+      .then(function (r) { if (!r.ok) return ruta + ':x'; var e = r.headers.get('etag'); return e ? ruta + ':' + e : ruta + ':x'; })   /* _ACTUALIZAR_V4: solo ETag; sin ETag o con error = lectura no concluyente */
       .catch(function () { return ruta + ':x'; });
   }
   function leer() {
     return Promise.all(ARCHIVOS.map(etag)).then(function (tags) {
       var falt = tags.filter(function (t) { return /:x$/.test(t); }).length;
-      if (falt > ARCHIVOS.length / 2) throw new Error('sin red');          /* sin conexion: no se decide nada */
+      /* _ACTUALIZAR_V4 (02-nov-2026): antes, con UNA sola peticion fallida (red lenta, bloqueador, CDN) la huella
+         cambiaba y salia "Nueva version disponible" sin haber version nueva; luego volvia a la normal y el aviso
+         reaparecia a cada rato. Ahora: si falta cualquier ETag, la lectura no decide nada. */
+      if (falt > 0) throw new Error('lectura incompleta');
       var v = 'v' + huella(tags.join('|'));
       return fetch(URL_VERSION + '?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
         .then(function (j) { j = j || {}; var fresco = j.version && String(j.version) !== '3.8.0'; return { version: v, fecha: fresco ? (j.fecha || '') : '', titulo: fresco ? (j.titulo || '') : '', notas: fresco ? (j.notas || '') : '' }; });
     });
   }
-  var revisando = false;
+  var revisando = false, vista = null;
   function revisar() {
     if (revisando || aplicando) return;
     revisando = true;
@@ -93,6 +96,8 @@
       if (!cargada) { ss(K_CARGADA, v); return; }          /* primera lectura en esta pestaña = la version que tengo */
       if (cargada === v) { if (nueva) { nueva = null; ocultar(); } return; }
       if (ss(K_INTENTO) === v) return;                      /* ya se aplico esta version en esta pestaña: no insistir */
+      /* _ACTUALIZAR_V4: una version nueva debe verse en DOS lecturas seguidas (6 min) antes de avisar */
+      if (vista !== v) { vista = v; return; }
       nueva = info;
       decidir();
     }).catch(function () { revisando = false; });
