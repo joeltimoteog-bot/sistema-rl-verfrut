@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   azure-token.js — _AZ_TOKEN_V1 (05-oct-2026)
+   azure-token.js — _AZ_TOKEN_V1 (05-oct-2026) · _GAS_SESION_V1 (31-oct-2026)
    Toda consulta a Azure lleva la sesion del usuario (Authorization: Bearer).
    Hasta hoy varias pantallas consultaban Azure SIN sesion (busqueda de DNI,
    capacitaciones, supervisores...) y Azure las dejaba pasar ("modo suave").
@@ -21,9 +21,30 @@
       return Object.keys(h).some(function (k) { return k.toLowerCase() === 'authorization'; });
     } catch (e) { return true; }
   }
+  /* _GAS_SESION_V1 (31-oct-2026): el backend de Google (copia de respaldo) tambien recibe la sesion firmada por Azure
+     (parametro rl_token en GET, campo rl_token en el cuerpo JSON del POST). Google verifica la firma con el mismo secreto
+     y, en modo obligatorio, rechaza lo que no venga de una sesion valida. Misma URL, mismo cuerpo, misma respuesta. */
+  var MARCA_GAS = 'script.google.com/macros/';
+  function conSesionGas(input, init, tk) {
+    var url = input;
+    if (!init || String(init.method || 'GET').toUpperCase() === 'GET') {
+      if (/[?&]rl_token=/.test(url)) return [url, init];
+      return [url + (url.indexOf('?') >= 0 ? '&' : '?') + 'rl_token=' + encodeURIComponent(tk), init];
+    }
+    if (typeof init.body === 'string' && /^\s*\{/.test(init.body)) {
+      try { var b = JSON.parse(init.body); if (b && typeof b === 'object' && !b.rl_token) { b.rl_token = tk; var i2 = Object.assign({}, init); i2.body = JSON.stringify(b); return [url, i2]; } } catch (e) {}
+    }
+    return [url, init];
+  }
   window.fetch = function (input, init) {
     try {
       var url = (typeof input === 'string') ? input : (input && input.url) || '';
+      if (typeof input === 'string' && url.indexOf(MARCA_GAS) >= 0) {
+        var tg = null; try { tg = sessionStorage.getItem('rl_token'); } catch (e) {}
+        if (!tg) return fOrig.apply(this, arguments);
+        var r = conSesionGas(input, init, tg);
+        return fOrig.call(this, r[0], r[1]);
+      }
       if (url.indexOf(MARCA) < 0 || typeof input !== 'string') return fOrig.apply(this, arguments);
       if (/\/api\/auth\//.test(url)) return fOrig.apply(this, arguments);          /* login: sin sesion todavia */
       var tk = null;
