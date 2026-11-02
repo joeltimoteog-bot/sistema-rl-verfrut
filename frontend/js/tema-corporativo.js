@@ -77,10 +77,11 @@ body.tc #d2Hero .d2-reloj .d{font-size:12px;opacity:.85}\
 body.tc .tc-cumpl{background:#fff;border:1px solid #E2E8F0;border-left:4px solid #B45309;border-radius:8px;padding:12px 16px;margin-bottom:14px}\
 body.tc .tc-cumpl h5{margin:0 0 8px;font-size:11.5px;letter-spacing:1px;text-transform:uppercase;color:#B45309}\
 body.tc .tc-cumpl table{width:100%;border-collapse:collapse;font-size:12.5px}body.tc .tc-cumpl td{padding:6px 8px;border-bottom:1px solid #EEF2F7;vertical-align:top}\
-body.tc .tc-cumpl td.k{white-space:nowrap;font-weight:700;color:#0F2748;width:34%}body.tc .tc-cumpl .n{display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;border-radius:4px;background:#F8FAFC;border:1px solid #E2E8F0;font-weight:600;color:#1F2937}\
+body.tc .tc-cumpl td.k{white-space:normal;font-weight:700;color:#0F2748;width:300px;min-width:300px}body.tc .tc-cumpl td.v{padding-left:12px}body.tc .tc-cumpl .n{display:inline-block;width:280px;box-sizing:border-box;margin:3px 8px 3px 0;padding:4px 10px;border-radius:4px;background:#F8FAFC;border:1px solid #E2E8F0;font-weight:600;color:#1F2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:top}\
 body.tc .tc-cumpl .n i{font-style:normal;color:#B91C1C;font-size:10.5px;margin-left:4px}\
 body.tc .tc-foot{margin:26px 24px 18px;padding-top:12px;border-top:1px solid #E2E8F0;font-size:11px;color:#64748B;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}\
 body.tc #rlRepTab{background:#334155!important;opacity:.9!important;font-weight:700;letter-spacing:.5px}\
+body.tc #e360Rec .chip,body.tc #e360Rec span[style*="border-radius:999px"]{display:inline-block;width:230px;box-sizing:border-box;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px!important}\
 body.tc .ni .badge,body.tc .ni [id^="badge"]{background:#C8102E!important;animation:none!important;border-radius:999px;font-weight:800}';
   document.head.appendChild(css);
 
@@ -165,7 +166,7 @@ body.tc .ni .badge,body.tc .ni [id^="badge"]{background:#C8102E!important;animat
         if (filas.length) {
           var old = document.getElementById('tcCumpl'); if (old) old.remove();
           var box = document.createElement('div'); box.id = 'tcCumpl'; box.className = 'tc-cumpl';
-          box.innerHTML = '<h5>Pendientes de cumplimiento</h5><table>' + filas.map(function (f) { return '<tr><td class="k">' + f.k + (f.n ? ' <span style="color:#64748B;font-weight:600">(' + f.n + ')</span>' : '') + '</td><td>' + f.v.split(/,\s*(?=[A-ZÁÉÍÓÚÑ])/).map(function (x) { var mm = x.match(/^(.*?)\s*\((.*?)\)\s*$/); return '<span class="n">' + (mm ? mm[1].trim() + '<i>' + mm[2] + '</i>' : x.trim()) + '</span>'; }).join('') + '</td></tr>'; }).join('') + '</table>';
+          box.innerHTML = '<h5>Pendientes de cumplimiento</h5><table>' + filas.map(function (f) { return '<tr><td class="k">' + f.k + (f.n ? ' <span style="color:#64748B;font-weight:600">(' + f.n + ')</span>' : '') + '</td><td class="v">' + f.v.split(/,\s*(?=[A-ZÁÉÍÓÚÑ])/).map(function (x) { var mm = x.match(/^(.*?)\s*\((.*?)\)\s*$/); var tt = function (q) { return String(q).toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); }); }; return '<span class="n" title="' + (mm ? mm[1].trim() : x.trim()) + '">' + (mm ? tt(mm[1].trim()) + '<i>' + mm[2] + '</i>' : tt(x.trim())) + '</span>'; }).join('') + '</td></tr>'; }).join('') + '</table>';
           ab.insertAdjacentElement('afterend', box); ab.style.display = 'none';
         }
       }

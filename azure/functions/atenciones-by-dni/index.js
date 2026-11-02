@@ -21,7 +21,13 @@ module.exports = async function (context, req) {
     }
 
     // Ventana de tiempo configurable (default 60 días)
-    const dias = Math.max(1, Math.min(365, parseInt(req.query.dias || '60', 10)));
+    /* _BYDNI_COMPLETO_V1 (01-nov-2026): Bienestar Social (Descansos Medicos) necesita el historial completo
+       de un DNI. Con completo=1 la ventana sube hasta 3 anos, se leen hasta 200 filas y las finalizadas
+       no se recortan a 5. Sin el parametro, el comportamiento anterior se mantiene identico. */
+    const completo = String(req.query.completo || '') === '1';
+    const maxDias = completo ? 1095 : 365;
+    const topN = completo ? 200 : 30;
+    const dias = Math.max(1, Math.min(maxDias, parseInt(req.query.dias || '60', 10)));
     const fechaLimite = new Date();
     fechaLimite.setDate(fechaLimite.getDate() - dias);
     fechaLimite.setHours(0, 0, 0, 0);
@@ -32,7 +38,7 @@ module.exports = async function (context, req) {
       .input('dni', sql.NVarChar(15), dni)
       .input('fechaLimite', sql.Date, fechaLimite)
       .query(`
-        SELECT TOP 30
+        SELECT TOP ${topN}
           id, nro, fecha_atencion, dni, nombre, empresa, fundo,
           detalle_documento, fecha_inicio_doc, fecha_termino_doc,
           dias_transcurridos, observaciones, supervisor,
@@ -66,7 +72,8 @@ module.exports = async function (context, req) {
         dni,
         total: atenciones.length,
         en_proceso,
-        finalizadas_recientes: finalizadas_recientes.slice(0, 5),
+        finalizadas_recientes: completo ? finalizadas_recientes : finalizadas_recientes.slice(0, 5),
+        completo,
         ventana_dias: dias,
         elapsed_ms
       }
