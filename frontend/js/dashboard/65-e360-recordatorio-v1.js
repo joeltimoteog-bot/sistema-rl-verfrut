@@ -9,6 +9,7 @@
   'use strict';
   if (window._E360_RECORDATORIO_V1) return; window._E360_RECORDATORIO_V1 = true;
   var DUENO = 'jtimoteo', DIA_INICIO = 16, AZ = 'https://rl-fn-verfrut.azurewebsites.net/api';
+  var arrastre = false, ref = null, MESES_ = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre'];   /* _E360_REC_ARRASTRE_V1: compartidas entre revisar() y pintar() */
   function yo() { try { return String((typeof USER !== 'undefined' && USER && USER.usuario) || JSON.parse(sessionStorage.getItem('user') || '{}').usuario || '').toLowerCase(); } catch (e) { return ''; } }
   function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim(); }
   function misma(a, b) { var A = norm(a).split(' ').filter(function (w) { return w.length > 2; }), B = ' ' + norm(b) + ' ', n = 0; A.forEach(function (w) { if (B.indexOf(' ' + w + ' ') >= 0) n++; }); return n >= 2; }
@@ -21,10 +22,9 @@
     var hoy = new Date();
     /* _E360_REC_ARRASTRE_V1 (01-nov-2026): del 1 al 15 se revisa el MES ANTERIOR (lo que quedo sin evaluar sigue pendiente);
        del 16 en adelante, el mes en curso, como siempre. */
-    var arrastre = hoy.getDate() < DIA_INICIO;
-    var ref = arrastre ? new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1) : hoy;
+    arrastre = hoy.getDate() < DIA_INICIO;
+    ref = arrastre ? new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1) : hoy;
     var mes = ref.getFullYear() + '-' + ('0' + (ref.getMonth() + 1)).slice(-2);
-    var MESES_ = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre'];
     var claveOcultar = 'e360_rec_oculto_' + mes + '_' + hoy.getDate();
     try { if (localStorage.getItem(claveOcultar)) { LOG('oculto hoy por "Recordar mañana" (' + claveOcultar + ')'); return; } } catch (e) {}
     var kp = await fetch(AZ + '/kpi/tablero', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
