@@ -1544,15 +1544,15 @@ console.log('[_BIENV_V2] listo');
 <style id="loginCorpCss">
 body.lc{background:#0B1E3F}
 body.lc .gx-escena{background:linear-gradient(135deg,#0B1E3F 0%,#163567 55%,#0F2748 100%)}
-body.lc .gx-slide{display:none!important}
-body.lc .gx-velo{background:radial-gradient(ellipse 80% 70% at 15% 85%,rgba(200,16,46,.10),transparent 60%),linear-gradient(180deg,rgba(255,255,255,.03),transparent)}
+body.lc .gx-slide{filter:saturate(.85) brightness(.9)}   /* _LOGIN_CORP_V2: se conservan las frutas (uva, limon, arandano, palta) */
+body.lc .gx-velo{background:linear-gradient(100deg,rgba(7,20,46,.90) 0%,rgba(11,30,63,.78) 45%,rgba(11,30,63,.55) 100%)}   /* _LOGIN_CORP_V2: velo institucional sobre las frutas */
 body.lc .gx-velo::after{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:48px 48px;-webkit-mask-image:radial-gradient(ellipse at 30% 60%,#000 20%,transparent 75%);mask-image:radial-gradient(ellipse at 30% 60%,#000 20%,transparent 75%)}
 body.lc .gx-eyebrow{color:#9FB3D1;letter-spacing:2.5px}body.lc .gx-eyebrow::before{background:#C8102E}
 body.lc .gx-titulo .l1{color:#C5D2E6;text-transform:uppercase;letter-spacing:2px;font-size:clamp(13px,1.2vw,16px);font-weight:700}
 body.lc .gx-titulo .l2{font-size:clamp(40px,5.2vw,68px);background:none;-webkit-background-clip:unset;background-clip:unset;color:#fff;filter:none;font-weight:800;letter-spacing:.5px;line-height:.98}
 body.lc .gx-sub{background:transparent;border:0;padding:0;color:#C5D2E6;font-weight:500;font-size:14px;max-width:460px;white-space:normal;letter-spacing:0;display:block;line-height:1.5}
 body.lc .gx-sub .pt{display:none}
-body.lc .gx-indic{display:none}
+body.lc .gx-indic{display:flex;opacity:.7}
 body.lc .lc-meta{display:flex;gap:22px;margin-top:26px;flex-wrap:wrap}
 body.lc .lc-meta div{font-size:11.5px;color:#9FB3D1}body.lc .lc-meta b{display:block;color:#fff;font-size:13px;margin-bottom:2px;font-weight:700}
 body.lc .gx-glow{background:none;animation:none;padding:0;border-radius:14px;box-shadow:0 30px 70px rgba(0,0,0,.45)}
@@ -1576,6 +1576,25 @@ body.lc .lc-seg svg{width:14px;height:14px;stroke:#2E7D32;fill:none;stroke-width
 body.lc .gx-pie{color:#64748B;border-top:1px solid #E2E8F0;padding-top:12px;margin-top:14px;display:flex;justify-content:space-between;font-size:11px}
 body.lc .gx-pie .esc{display:none}
 @media(max-width:900px){body.lc .gx-marca{display:none}}
+/* _HUB_CORP_V1 (01-nov-2026): tarjetas del hub con tono institucional (misma navegacion) */
+body.lc .mx-velo{background:linear-gradient(180deg,rgba(7,20,46,.80),rgba(11,30,63,.86))}
+body.lc .mx-saludo{color:#9FB3D1;letter-spacing:2.5px}body.lc .mx-saludo::before,body.lc .mx-saludo::after{background:rgba(255,255,255,.25)}
+body.lc .mx-nombre{background:none;-webkit-background-clip:unset;background-clip:unset;color:#fff;font-weight:800;letter-spacing:.3px}
+body.lc .mx-card{background:rgba(255,255,255,.10);border-radius:12px}body.lc .mx-card::before{display:none}body.lc .mx-card:hover{transform:translateY(-4px)}
+body.lc .mx-in{background:rgba(11,30,63,.72);border:1px solid rgba(255,255,255,.12);border-radius:11px;backdrop-filter:blur(14px)}
+body.lc .mx-ico{background:#fff!important;color:#0F2748;border-radius:12px;width:54px;height:54px;font-size:0;box-shadow:none;position:relative}
+body.lc .mx-ico::after{content:"";position:absolute;inset:14px;background-repeat:no-repeat;background-size:contain;background-position:center}
+body.lc #modRRLL .mx-ico::after{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F2748' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><rect x='4' y='4' width='16' height='16' rx='2'/><path d='M8 9h8M8 13h8M8 17h5'/></svg>")}
+body.lc #modETI .mx-ico::after{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F2748' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M4 19V5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z'/><path d='M8 7h7M8 11h7'/></svg>")}
+body.lc #modEval .mx-ico::after{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F2748' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'><path d='M9 11l3 3L22 4'/><path d='M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11'/></svg>")}
+body.lc .mx-t{color:#fff;font-weight:800;letter-spacing:.3px}body.lc .mx-sub{color:#9FB3D1;text-transform:uppercase;letter-spacing:1px;font-size:10px}
+body.lc .mx-list li{color:#D6E0EF}body.lc .mx-list li i{background:transparent;border:1px solid rgba(255,255,255,.18);font-size:0;position:relative}
+body.lc .mx-list li i::after{content:"";width:6px;height:6px;border-radius:50%;background:#C8102E;position:absolute;left:7px;top:7px}
+body.lc .mx-meta span{border-radius:4px;text-transform:uppercase;letter-spacing:.5px;font-size:10px}
+body.lc .mx-badge{background:#0F2748!important;box-shadow:none!important;border-radius:6px;letter-spacing:1px;font-weight:700;border:1px solid rgba(255,255,255,.18)!important}
+body.lc .mx-badge .k{background:rgba(255,255,255,.15)}
+body.lc #mxAtajos{color:rgba(255,255,255,.45)}
+body.lc .mx-footer,body.lc .mx-pie{color:rgba(255,255,255,.5)}
 </style>
 <script>
 (function(){
@@ -1584,9 +1603,9 @@ body.lc .gx-pie .esc{display:none}
   function aplicar(){
     try{
       document.body.classList.add('lc');
-      var eb=document.querySelector('.gx-eyebrow'); if(eb) eb.textContent='Unifrutti Perú · Verfrut S.A.C. · Rapel S.A.C. · Olmos';
+      var eb=document.querySelector('.gx-eyebrow'); if(eb) eb.textContent='Unifrutti Perú · Piura · Olmos';
       var l1=document.querySelector('.gx-titulo .l1'); if(l1) l1.textContent='Sistema de';
-      var sub=document.querySelector('.gx-sub'); if(sub){ sub.innerHTML='<span class="pt"></span>Plataforma institucional de Gestión Humana para el registro, seguimiento y cumplimiento de la gestión laboral en campo y planta.'; }
+      var sub=document.querySelector('.gx-sub'); if(sub){ sub.innerHTML='<span class="pt"></span><b style="color:#fff;display:block;font-size:15px;margin-bottom:4px">Piura y Olmos, una sola Gestión Humana.</b>Mismos procesos, mismos estándares, un solo equipo: la plataforma institucional para el registro, seguimiento y cumplimiento de la gestión laboral en campo y planta.'; }
       var marca=document.querySelector('.gx-marca');
       if(marca && !document.getElementById('lcMeta')){ var m=document.createElement('div'); m.className='lc-meta'; m.id='lcMeta';
         m.innerHTML='<div><b>Acceso restringido</b>Solo personal autorizado</div><div><b>Información confidencial</b>Uso sujeto a las políticas de la empresa</div><div><b>Sesión registrada</b>Auditoría de accesos activa</div>';
@@ -1599,6 +1618,7 @@ body.lc .gx-pie .esc{display:none}
       if(btn && !document.getElementById('lcSeg')){ var sg=document.createElement('div'); sg.className='lc-seg'; sg.id='lcSeg';
         sg.innerHTML='<svg viewBox="0 0 24 24"><path d="M12 2l8 4v6c0 5-3.5 9-8 10-4.5-1-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>Conexión cifrada · Sesión firmada · Máximo 5 intentos';
         btn.insertAdjacentElement('afterend',sg); }
+      var hs=document.getElementById('mxSaludo'); if(hs && !hs.dataset.lc){ hs.dataset.lc='1'; var ob2=new MutationObserver(function(){ var t=hs.textContent||''; if(t.indexOf('Piura')<0){ hs.textContent='Unifrutti Perú · Piura y Olmos · '+t.trim(); } }); ob2.observe(hs,{childList:true,characterData:true,subtree:true}); if((hs.textContent||'').indexOf('Piura')<0) hs.textContent='Unifrutti Perú · Piura y Olmos · '+(hs.textContent||'').trim(); }
       var pie=document.querySelector('.gx-pie'); if(pie && !pie.dataset.lc){ pie.dataset.lc='1'; var an=document.getElementById('lgAnio'); var y=(an&&an.textContent)||String(new Date().getFullYear()); pie.innerHTML='<span>Coordinación de Relaciones Laborales</span><span>v3.0 · '+y+'</span>'; }
     }catch(e){ console.warn('[_LOGIN_CORP_V1]',e); }
   }

@@ -17,8 +17,13 @@
 
   async function revisar() {
     if (yo() !== DUENO) return;
-    var hoy = new Date(); if (hoy.getDate() < DIA_INICIO) return;
-    var mes = hoy.getFullYear() + '-' + ('0' + (hoy.getMonth() + 1)).slice(-2);
+    var hoy = new Date();
+    /* _E360_REC_ARRASTRE_V1 (01-nov-2026): del 1 al 15 se revisa el MES ANTERIOR (lo que quedo sin evaluar sigue pendiente);
+       del 16 en adelante, el mes en curso, como siempre. */
+    var arrastre = hoy.getDate() < DIA_INICIO;
+    var ref = arrastre ? new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1) : hoy;
+    var mes = ref.getFullYear() + '-' + ('0' + (ref.getMonth() + 1)).slice(-2);
+    var MESES_ = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','setiembre','octubre','noviembre','diciembre'];
     var claveOcultar = 'e360_rec_oculto_' + mes + '_' + hoy.getDate();
     try { if (localStorage.getItem(claveOcultar)) return; } catch (e) {}
     var kp = await fetch(AZ + '/kpi/tablero', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
@@ -30,15 +35,15 @@
     var faltan = personas.filter(function (p) { return !hechas.some(function (e) { return misma(e.supervisor, p.nombre); }); });
     if (!faltan.length) return;
     var ult = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0).getDate(), quedan = ult - hoy.getDate();
-    pintar(faltan, personas.length, quedan, claveOcultar);
+    pintar(faltan, personas.length, arrastre ? -1 : quedan, claveOcultar);   /* _E360_REC_ARRASTRE_V1: -1 = mes anterior */
   }
   function pintar(faltan, total, quedan, claveOcultar) {
     var sec = document.getElementById('sec-dashboard'); if (!sec || document.getElementById('e360Rec')) return;
     var d = document.createElement('div'); d.id = 'e360Rec';
     d.style.cssText = 'margin:0 0 16px;border-radius:18px;padding:16px 18px;background:linear-gradient(135deg,#0b1e45,#1e3a8a 60%,#2563eb);color:#fff;box-shadow:0 14px 30px -14px rgba(30,58,138,.6);display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap';
     d.innerHTML = '<div style="font-size:30px;line-height:1">🧭</div><div style="flex:1;min-width:240px">'
-      + '<div style="font-weight:800;font-size:15.5px">Joel, en esta quincena te toca la Evaluación 360°</div>'
-      + '<div style="font-size:13px;opacity:.9;margin:3px 0 10px">Faltan <b>' + faltan.length + ' de ' + total + '</b> · quedan <b>' + quedan + ' día' + (quedan === 1 ? '' : 's') + '</b> para cerrar el mes. Evalúa con la evidencia de KPIs y dales su feedback.</div>'
+      + '<div style="font-weight:800;font-size:15.5px">' + (arrastre ? 'Evaluación 360° de ' + MESES_[ref.getMonth()] + ' con pendientes' : 'Evaluación 360° de la quincena') + '</div>'
+      + '<div style="font-size:13px;opacity:.9;margin:3px 0 10px">Faltan <b>' + faltan.length + ' de ' + total + '</b> ' + (quedan < 0 ? '· <b>el mes ya cerró</b>: regulariza las evaluaciones pendientes.' : '· quedan <b>' + quedan + ' día' + (quedan === 1 ? '' : 's') + '</b> para cerrar el mes.') + ' Evalúa con la evidencia de KPIs y dales su feedback.</div>'
       + '<div style="display:flex;flex-wrap:wrap;gap:6px">' + faltan.map(function (p) { return '<span style="background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:999px;font-size:12px;font-weight:700">' + esc(titulo(p.nombre)) + '</span>'; }).join('') + '</div></div>'
       + '<div style="display:flex;flex-direction:column;gap:8px"><button type="button" id="e360RecIr" style="border:0;border-radius:12px;padding:10px 16px;background:#fff;color:#0b1e45;font-weight:800;cursor:pointer">Ir a evaluar →</button>'
       + '<button type="button" id="e360RecOc" style="border:1px solid rgba(255,255,255,.35);border-radius:12px;padding:8px 14px;background:transparent;color:#fff;font-weight:700;cursor:pointer;font-size:12.5px">Recordar mañana</button></div>';
