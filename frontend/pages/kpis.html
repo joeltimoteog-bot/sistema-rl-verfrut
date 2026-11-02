@@ -250,7 +250,20 @@ tr.fila{cursor:pointer} tr.fila:hover td{background:#f8fafc}
   </div>
 </div></div>
 
-<script src="azure-blob-upload.js"></script>
+<script>
+/* _KPI_SUBIDA_SEGURA_V1 (01-nov-2026): la constancia se sube por el backend (base64 -> Apps Script -> Azure Blob casos-rl),
+   igual que los documentos de casos. Reemplaza a azure-blob-upload.js, que llevaba una firma SAS escrita en el navegador. */
+async function subirArchivoAzure(file, carpeta, msgElId, meta) {
+  if (!file) return null;
+  if (file.size > 20 * 1048576) throw new Error('El archivo supera 20 MB');
+  var b64 = await new Promise(function (ok, er) { var r = new FileReader(); r.onload = function (e) { ok(e.target.result); }; r.onerror = er; r.readAsDataURL(file); });
+  var GAS = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
+  var r = await fetch(GAS, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'subirArchivoAzure', base64: b64, nombre: file.name, mimeType: file.type || 'application/octet-stream', carpeta: 'casos-rl', modulo: 'kpis', usuario: (meta && meta.usuario) || '' }) });
+  var j = await r.json().catch(function () { return {}; });
+  if (!j.success || !j.url) throw new Error(j.error || 'No se pudo subir el archivo');
+  return { url: j.url, nombre: j.nombre || file.name, tipo: file.type, tamaño: file.size };
+}
+</script>
 <script>
 (function () {
   'use strict';
