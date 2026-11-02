@@ -114,6 +114,7 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
   <button class="on" data-t="act">📊 Actividad de usuarios</button>
   <button data-t="mon" id="tabMon" style="display:none">🛰️ Monitor en vivo</button>
   <button data-t="cer" id="tabCer" style="display:none">🧠 Cerebro</button>
+  <button data-t="ing" id="tabIng">🔐 Ingresos al sistema</button>  <!-- _LOGIN_AUDIT_V1 -->
 </div>
 
 <main id="vAct">
@@ -161,6 +162,17 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
 </main>
 <main id="vMon" style="display:none"><iframe class="vista" id="ifMon" title="Monitor en vivo"></iframe></main>
 <main id="vCer" style="display:none"><iframe class="vista" id="ifCer" title="Cerebro del sistema"></iframe></main>
+<!-- _LOGIN_AUDIT_V1 (02-nov-2026): quien entro, cuando, desde que red y equipo, con que resultado -->
+<main id="vIng" style="display:none">
+  <section class="card fil" aria-label="Filtros de ingresos">
+    <label>Días<select id="ingDias"><option value="1">Hoy</option><option value="7" selected>7 días</option><option value="30">30 días</option><option value="90">90 días</option></select></label>
+    <label>Usuario<input id="ingUsuario" placeholder="todos" style="padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit"></label>
+    <label>Resultado<select id="ingRes"><option value="">Todos</option><option value="ok">Correctos</option><option value="fallo">Fallidos / bloqueados</option></select></label>
+    <div style="display:flex;gap:8px;align-items:end"><button class="btn" id="ingBuscar">Buscar</button><button class="btn sec" id="ingCsv">⬇ Exportar Excel</button></div>
+  </section>
+  <section class="card" id="ingKpis" style="display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:#475569"></section>
+  <section class="card"><div id="ingTabla" style="overflow:auto"><div style="padding:1rem;color:#64748b">Pulsa Buscar.</div></div></section>
+</main>
 
 <script>
 (function () {
@@ -203,11 +215,44 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
   function tab(t) {
     document.querySelectorAll('#tabs button').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-t') === t); });
     $('vAct').style.display = t === 'act' ? '' : 'none'; $('vMon').style.display = t === 'mon' ? '' : 'none'; $('vCer').style.display = t === 'cer' ? '' : 'none';
+    $('vIng').style.display = t === 'ing' ? '' : 'none'; if (t === 'ing' && !window._ingCargado) { window._ingCargado = 1; ingCargar(); }   /* _LOGIN_AUDIT_V1 */
     if (t === 'mon' && !$('ifMon').src) $('ifMon').src = 'monitor.html';
     if (t === 'cer' && !$('ifCer').src) $('ifCer').src = 'cerebro.html';
   }
   document.querySelectorAll('#tabs button').forEach(function (b) { b.onclick = function () { tab(b.getAttribute('data-t')); }; });
   if (/monitor/.test(location.hash)) setTimeout(function () { if (permMon) tab('mon'); }, 600);
+
+  /* ── _LOGIN_AUDIT_V1: Ingresos al sistema ── */
+  var ING = [];
+  function ingEtiqueta(r) {
+    var m = { ok: ['Correcto', '#dcfce7', '#166534'], ok_vencido: ['Renovado (estaba vencido)', '#dbeafe', '#1e40af'], clave_incorrecta: ['Clave incorrecta', '#fee2e2', '#991b1b'], bloqueado: ['Bloqueado', '#fee2e2', '#991b1b'], inexistente: ['Usuario inexistente', '#fef3c7', '#92400e'], inactivo: ['Usuario inactivo', '#fee2e2', '#991b1b'], vencido: ['Sesión vencida', '#fef3c7', '#92400e'], invalido: ['Token inválido', '#fee2e2', '#991b1b'] };
+    var x = m[r] || [r, '#f1f5f9', '#475569'];
+    return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:' + x[1] + ';color:' + x[2] + '">' + esc(x[0]) + '</span>';
+  }
+  async function ingCargar() {
+    var cont = $('ingTabla'); cont.innerHTML = '<div style="padding:1rem;color:#64748b">Consultando Azure…</div>';
+    try {
+      var d = await api('ingresos', { dias: $('ingDias').value, usuario: $('ingUsuario').value.trim().toLowerCase(), limite: 2000 });
+      if (!d || !d.success) throw new Error((d && d.error) || 'sin respuesta');
+      ING = d.data || [];
+      var f = $('ingRes').value, L = ING.filter(function (r) { return !f || (f === 'ok' ? /^ok/.test(r.resultado) : !/^ok/.test(r.resultado)); });
+      var oks = ING.filter(function (r) { return r.resultado === 'ok' && r.sistema === 'RRLL'; }), fallos = ING.filter(function (r) { return !/^ok/.test(r.resultado); });
+      var ips = {}; oks.forEach(function (r) { ips[r.ip || '?'] = (ips[r.ip || '?'] || 0) + 1; });
+      var porUsuario = {}; oks.forEach(function (r) { porUsuario[r.usuario] = porUsuario[r.usuario] || {}; porUsuario[r.usuario][r.ip || '?'] = 1; });
+      var multiIp = Object.keys(porUsuario).filter(function (u) { return Object.keys(porUsuario[u]).length > 1; });
+      $('ingKpis').innerHTML = '<span>Ingresos correctos <b style="color:#0a2463">' + n(oks.length) + '</b></span><span>Fallidos <b style="color:#991b1b">' + n(fallos.length) + '</b></span><span>Redes (IP) distintas <b>' + n(Object.keys(ips).length) + '</b></span>' +
+        (multiIp.length ? '<span title="' + esc(multiIp.join(', ')) + '">Usuarios desde más de una red <b style="color:#b45309">' + n(multiIp.length) + '</b></span>' : '') +
+        (!d.veTodos ? '<span style="color:#b45309">Solo ves tus propios ingresos</span>' : '');
+      if (!L.length) { cont.innerHTML = '<div style="padding:1rem;color:#64748b">Sin ingresos en el periodo.</div>'; return; }
+      cont.innerHTML = '<table class="tbl" style="width:100%;font-size:12.5px"><thead><tr><th>Fecha y hora</th><th>Usuario</th><th>Rol</th><th>Empresa</th><th>Sistema</th><th>Resultado</th><th>IP (red)</th><th>Dispositivo</th><th>Sesión</th></tr></thead><tbody>' +
+        L.map(function (r) { return '<tr><td style="white-space:nowrap">' + esc(r.fecha_lima) + '</td><td><b>' + esc(r.usuario) + '</b></td><td>' + esc(r.rol || '') + '</td><td>' + esc(r.empresa || '') + '</td><td>' + esc(r.sistema) + '</td><td>' + ingEtiqueta(r.resultado) + '</td><td>' + esc(r.ip || '—') + '</td><td>' + esc(r.dispositivo || '') + '</td><td style="font-family:Consolas,monospace;font-size:11px">' + esc(r.sid || '') + '</td></tr>'; }).join('') + '</tbody></table>';
+    } catch (e) { cont.innerHTML = '<div style="padding:1rem;color:#991b1b">No se pudo consultar: ' + esc(e.message) + '</div>'; }
+  }
+  $('ingBuscar').onclick = ingCargar; $('ingRes').onchange = ingCargar;
+  $('ingCsv').onclick = function () {
+    if (!ING.length) return;
+    csv('Ingresos_al_sistema_' + new Date().toISOString().slice(0, 10) + '.csv', [['Fecha y hora (Lima)', 'Usuario', 'Rol', 'Empresa', 'Sistema', 'Resultado', 'IP', 'Dispositivo', 'Sesion']].concat(ING.map(function (r) { return [r.fecha_lima, r.usuario, r.rol || '', r.empresa || '', r.sistema, r.resultado, r.ip || '', r.dispositivo || '', r.sid || '']; })));
+  };
 
   var y = new Date().getFullYear();
   $('fAnio').innerHTML = [y, y - 1, y - 2].map(function (a) { return '<option>' + a + '</option>'; }).join('');

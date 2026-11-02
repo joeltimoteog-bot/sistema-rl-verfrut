@@ -168,6 +168,13 @@ module.exports = async function (context, req) {
     if (accion === 'horas') return out(200, await horas(pool, t, b));
     if (accion === 'exportacion') return out(200, await exportacion(pool, t, b));     /* _EXPORT_AUDIT_V1 */
     if (accion === 'exportaciones') return out(200, await exportaciones(pool, t, b));   /* _EXPORT_AUDIT_V1 */
+    if (accion === 'ingresos') {   /* _LOGIN_AUDIT_V1 (02-nov-2026): registro de ingresos (usuario, hora, sistema, resultado, IP, dispositivo, sesion) */
+      const AUD = require('../shared/login-audit');
+      const todos = await veTodos(pool, t);
+      const q = Object.assign({}, req.query || {}, b);
+      const data = await AUD.listar(pool, { dias: q.dias || 7, usuario: todos ? (q.usuario || '') : low(t.usuario), limite: q.limite || 500 });
+      return out(200, { success: true, data, total: data.length, veTodos: todos });
+    }
     return out(404, { success: false, error: 'Accion desconocida' });
   } catch (e) {
     context.log.error('[actividad] ' + accion + ': ' + e.message);

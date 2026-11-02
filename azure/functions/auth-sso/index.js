@@ -98,6 +98,8 @@ module.exports = async function (context, req) {
       catch (e) { return out(401, { success: false, error: 'Pase invalido o vencido' }); }
       const token = jwt.sign({ usuario: d.usuario, rol: d.rol || '', empresa: d.empresa || '' },
                              secret, { expiresIn: '8h', audience: AUD_SESION });
+      /* _LOGIN_AUDIT_V1 (02-nov-2026): el pase se canjeo -> el usuario entro al Sistema ETI */
+      try { const { getPool } = require('../shared/db'); const AUD = require('../shared/login-audit'); getPool().then(pool => AUD.registrar(pool, req, { usuario: d.usuario, rol: d.rol, empresa: d.empresa, sistema: 'SSO-ETI', resultado: 'ok' })).catch(() => {}); } catch (e) {}
       return out(200, {
         success: true,
         user: { usuario: d.usuario, nombre: d.nombre || '', rol: d.rol || '', empresa: d.empresa || '', etiProg: !!d.etiProg, accesos: await accesosDe(String(d.usuario).toLowerCase()) },   /* _ETI_PERMISO_V1 + _ACCESOS_CENTRAL_V1 */

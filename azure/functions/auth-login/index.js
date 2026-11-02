@@ -1,4 +1,5 @@
 ﻿const { sql, getPool } = require('../shared/db');
+const AUD = require('../shared/login-audit');   /* _LOGIN_AUDIT_V1 (02-nov-2026): registro de ingresos */
 const bcrypt = require('bcryptjs');
 const { firmarToken } = require('../shared/auth');
 const POL = require('../shared/clave-politica');
@@ -105,6 +106,7 @@ module.exports = async function (context, req) {
     // 4. Validar que existe
     if (result.recordset.length === 0) {
       context.log('Login fallido: usuario no encontrado o inactivo →', usuario);
+      AUD.registrar(pool, req, { usuario, sistema: 'RRLL', resultado: 'inexistente' });   /* _LOGIN_AUDIT_V1 */
       /* usuario inexistente: no se cuenta (evita bloquear nombres al azar) y la pantalla puede probar Google */
       context.res = {
         status: 401,
@@ -146,6 +148,7 @@ module.exports = async function (context, req) {
       if (intentosOn) { try { const f = await intentosFallo(pool, usuario.toLowerCase(), ipDe(req)); extra = f.bloqueadoMin > 0
         ? { bloqueado: true, minutos: f.bloqueadoMin, error: 'Demasiados intentos fallidos. Espera ' + f.bloqueadoMin + ' minuto(s) e intenta de nuevo, o comunícate con el administrador del sistema, Joel Timoteo, para que te desbloquee y te asigne una contraseña nueva.' }
         : { intentosRestantes: Math.max(0, INT_MAX - f.fallos) }; } catch (e) {} }
+      AUD.registrar(pool, req, { usuario, rol: u.rol, empresa: u.empresa, sistema: 'RRLL', resultado: extra.bloqueado ? 'bloqueado' : 'clave_incorrecta' });   /* _LOGIN_AUDIT_V1 */
       /* rechazado: la clave es incorrecta en Azure -> la pantalla NO debe probar por Google (evitaria el limite) */
       context.res = {
         status: extra.bloqueado ? 429 : 401,
@@ -176,7 +179,9 @@ module.exports = async function (context, req) {
     // 7. Firmar JWT de sesión (8 horas)
     let token = null;
     try {
+      var _sid = AUD.nuevoSid();   /* _LOGIN_AUDIT_V1: identificador corto de esta sesion (va dentro del token) */
       token = firmarToken({
+        sid:     _sid,
         sub:     u.id_sistema,
         usuario: u.usuario,
         rol:     (u.rol || '').trim().toLowerCase(),
@@ -189,6 +194,7 @@ module.exports = async function (context, req) {
       context.log.warn('No se pudo firmar JWT (¿falta JWT_SECRET?):', tErr.message);
     }
 
+    AUD.registrar(pool, req, { usuario: u.usuario, rol: u.rol, empresa: u.empresa, sistema: 'RRLL', resultado: 'ok', sid: (typeof _sid !== 'undefined') ? _sid : null });   /* _LOGIN_AUDIT_V1 */
     context.res = {
       status: 200,
       body: {

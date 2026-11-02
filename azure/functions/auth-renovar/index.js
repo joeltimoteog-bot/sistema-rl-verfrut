@@ -12,6 +12,7 @@
 const jwt = require('jsonwebtoken');
 const { sql, getPool } = require('../shared/db');
 const { firmarToken } = require('../shared/auth');
+const AUD = require('../shared/login-audit');   /* _LOGIN_AUDIT_V1 */
 
 const GRACIA_H = 36;
 
@@ -31,8 +32,9 @@ module.exports = async function (context, req) {
     const pool = await getPool();
     const r = await pool.request().input('u', sql.NVarChar, String(p.usuario)).query('SELECT TOP 1 id_sistema, usuario, rol, empresa FROM dbo.usuarios WHERE usuario = @u AND activo = 1');
     const u = r.recordset[0];
-    if (!u) return res(401, { success: false, error: 'Usuario inactivo', motivo: 'inactivo' });
-    const nuevo = firmarToken({ sub: u.id_sistema, usuario: u.usuario, rol: String(u.rol || '').trim().toLowerCase(), empresa: String(u.empresa || '').trim().toUpperCase(), cd: p.cd || 0, co: 0, ct: 0, rn: 1 });
+    if (!u) { AUD.registrar(pool, req, { usuario: p.usuario, sistema: 'RENOVAR', resultado: 'inactivo', sid: p.sid || null }); return res(401, { success: false, error: 'Usuario inactivo', motivo: 'inactivo' }); }
+    const nuevo = firmarToken({ sid: p.sid || AUD.nuevoSid(), sub: u.id_sistema, usuario: u.usuario, rol: String(u.rol || '').trim().toLowerCase(), empresa: String(u.empresa || '').trim().toUpperCase(), cd: p.cd || 0, co: 0, ct: 0, rn: 1 });
+    AUD.registrar(pool, req, { usuario: u.usuario, rol: u.rol, empresa: u.empresa, sistema: 'RENOVAR', resultado: exp < ahora ? 'ok_vencido' : 'ok', sid: p.sid || null });   /* _LOGIN_AUDIT_V1 */
     context.log('auth/renovar: ' + u.usuario + (exp < ahora ? ' (estaba vencido ' + Math.round((ahora - exp) / 36e5) + ' h)' : ''));
     return res(200, { success: true, token: nuevo, usuario: u.usuario, rol: String(u.rol || '').trim().toLowerCase(), renovado_en: new Date(ahora).toISOString() });
   } catch (e) {
