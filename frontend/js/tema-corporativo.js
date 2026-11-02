@@ -54,7 +54,11 @@ body.tc .ov{background:rgba(15,39,72,.55)}\
 body.tc input,body.tc select,body.tc textarea{border-radius:6px}\
 body.tc .alert-cumpl{background:#FFF8E6!important;border:1px solid #F5D08A!important;border-left:4px solid #B45309!important;border-radius:8px!important}\
 body.tc .sede-chip{border-radius:3px;text-transform:uppercase;letter-spacing:.5px}\
-body.tc .prec-head{background:#0F2748}';
+body.tc .prec-head{background:#0F2748}\
+body.tc .d2-lema{margin:8px 0 0;font-size:12.5px;color:#C5D2E6;letter-spacing:.2px}\
+body.tc .d2-acc button{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22);color:#fff;border-radius:6px;font-weight:600}\
+body.tc .d2-acc button:first-child{background:#fff;color:#0F2748}\
+body.tc .d2-kpi{border-radius:8px}body.tc .d2-kpi .ic{filter:grayscale(1)}';
   document.head.appendChild(css);
 
   /* ── 2) Iconos de linea (por emoji del menu) ── */
@@ -112,11 +116,14 @@ body.tc .prec-head{background:#0F2748}';
       });
     });
   }
-  var SEL = '.sec-hd h2, .gc-t, .card-t, .modal-t, .tb-t, .btn-n, .cards .card, .modal h2, .modal h3, .card-h h3, .alert-cumpl b, .topbar h1, #tituloPagina, .sec-hd .btn-n';
+  var SEL = '.sec-hd h2, .gc-t, .card-t, .modal-t, .tb-t, .btn-n, .cards .card, .modal h2, .modal h3, .card-h h3, .alert-cumpl b, .topbar h1, #tituloPagina, .sec-hd .btn-n, .d2-pill, .d2-card .t, .d2-acc button, .d2-kpi small';
   function aplicar() {
     document.body.classList.add('tc');
     menu();
     Array.prototype.forEach.call(document.querySelectorAll(SEL), limpiar);
+    /* _PIURA_OLMOS_V1: lema institucional en el banner de bienvenida del panel */
+    var pills = document.getElementById('d2Pills');
+    if (pills && !document.getElementById('d2Lema')) { var lm = document.createElement('div'); lm.id = 'd2Lema'; lm.className = 'd2-lema'; lm.textContent = 'Piura y Olmos, una sola Gestión Humana · mismos procesos, mismos estándares, un solo equipo'; pills.insertAdjacentElement('afterend', lm); }
     /* titulo del topbar: "MI DASHBOARD" -> "PANEL DE GESTION" */
     var t = document.querySelector('.tb-t'); if (t && /MI DASHBOARD/i.test(t.textContent)) t.textContent = 'Panel de gestión';
   }

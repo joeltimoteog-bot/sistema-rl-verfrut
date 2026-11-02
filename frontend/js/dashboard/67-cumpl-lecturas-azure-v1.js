@@ -10,8 +10,8 @@
   var CUMPL_LECTURAS_AZURE = true;
   if (!CUMPL_LECTURAS_AZURE || window._rlCumplLectOk) return;
   window._rlCumplLectOk = true;
-  var BASE = (typeof AZURE_FN_BASE !== 'undefined' ? AZURE_FN_BASE : 'https://rl-fn-verfrut.azurewebsites.net/api') + '/cumpl/';
-  var ACCIONES = { getCumplimiento: 1, getCumplimientoCasos: 1 };
+  var BASE = (typeof AZURE_FN_BASE !== 'undefined' ? AZURE_FN_BASE : 'https://rl-fn-verfrut.azurewebsites.net/api') + '/';
+  var ACCIONES = { getCumplimiento: 'cumpl/', getCumplimientoCasos: 'cumpl/', getEvaluaciones360: 'e360/guardar/' };   /* _E360_LEER_AZURE_V1: + evaluaciones 360 */
   var previo = window.apiGet;
   if (typeof previo !== 'function') return;
   window.apiGet = function (p) {
@@ -25,7 +25,7 @@
       try {
         var op = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk }, body: JSON.stringify(cuerpo) };
         if (ctrl) op.signal = ctrl.signal;
-        var r = await fetch(BASE + p.action, op);
+        var r = await fetch(BASE + ACCIONES[p.action] + p.action, op);
         var j = await r.json().catch(function () { return null; });
         clearTimeout(reloj);
         if (r.status === 200 && j && j.success) return j;
@@ -35,5 +35,5 @@
     })();
   };
   try { apiGet = window.apiGet; } catch (e) {}
-  console.log('[_CUMPL_LECTURAS_AZURE_V1] listo: banner y Indicadores de Cumplimiento desde Azure');
+  console.log('[_CUMPL_LECTURAS_AZURE_V1] listo: banner, Indicadores de Cumplimiento y Evaluaciones 360 desde Azure');
 })();

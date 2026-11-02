@@ -19,19 +19,19 @@
   if (window._SEGURIDAD_UI_V1) return;
   window._SEGURIDAD_UI_V1 = true;
 
-  var VERSION = '1.0';
-  var FECHA_TEXTO = '18-oct-2026';
+  var VERSION = '2.0';   /* _COMPROMISO_V2 (01-nov-2026): cubre los tres sistemas y Olmos; obliga a todos a aceptar de nuevo */
+  var FECHA_TEXTO = '01-nov-2026';
   var AZ = (function () { try { if (typeof AZURE_FN_BASE === 'string' && AZURE_FN_BASE) return AZURE_FN_BASE; } catch (e) {} return 'https://rl-fn-verfrut.azurewebsites.net/api'; })();
   var ROLES_ADMIN = ['administrador', 'administrador 01', 'administrador 02', 'admin', 'admin01', 'admin02', 'coordinador', 'jefa_rl'];
 
   var PUNTOS = [
-    ['1. Datos personales.', 'El Sistema RR.LL., creado y administrado por la Coordinación de Relaciones Laborales, contiene datos personales de trabajadores de RAPEL S.A.C. y VERFRUT S.A.C. (DNI, nombre, celular, cargo, fundo) y datos sensibles (salud: descansos médicos y licencias; situación familiar; procesos disciplinarios), protegidos por la Ley N.° 29733 de Protección de Datos Personales y su Reglamento.'],
-    ['2. Uso exclusivo.', 'Usaré el sistema únicamente para las funciones de mi cargo. No copiaré, fotografiaré, exportaré ni compartiré información con personas no autorizadas, ni por WhatsApp, correo personal u otros medios.'],
-    ['3. Cuenta personal.', 'Mi usuario y contraseña son personales e intransferibles. No los prestaré ni los dejaré escritos. Cerraré sesión al terminar y avisaré de inmediato a Coordinación RR.LL. si sospecho un uso indebido.'],
-    ['4. Trazabilidad.', 'Entiendo que el sistema registra quién consulta, registra y modifica cada dato, y que esa información puede ser revisada por la empresa.'],
-    ['5. Vigencia.', 'Este compromiso rige mientras tenga acceso al sistema y después de cesar en mis funciones, respecto de la información conocida.']
+    ['1. Datos personales.', 'El Sistema de Relaciones Laborales y sus sistemas integrados (ETI Capacitaciones, Evaluaciones ETI y Bienestar Social), creados y administrados por la Coordinación de Relaciones Laborales de Unifrutti Perú, contienen datos personales de trabajadores de RAPEL S.A.C., VERFRUT S.A.C. y OLMOS (sedes Piura y Olmos: DNI, nombre, celular, cargo, fundo) y datos sensibles (salud: descansos médicos y licencias; situación familiar; procesos disciplinarios), protegidos por la Ley N.° 29733 de Protección de Datos Personales y su Reglamento.'],
+    ['2. Uso exclusivo.', 'Usaré los sistemas únicamente para las funciones de mi cargo. No copiaré, fotografiaré, exportaré ni compartiré información con personas no autorizadas, ni por WhatsApp, correo personal u otros medios.'],
+    ['3. Cuenta personal.', 'Mi usuario y contraseña son personales e intransferibles y valen para los tres sistemas. No los prestaré ni los dejaré escritos. Cerraré sesión al terminar y avisaré de inmediato a Coordinación RR.LL. si sospecho un uso indebido.'],
+    ['4. Trazabilidad.', 'Entiendo que los sistemas registran quién consulta, registra, modifica y exporta cada dato, y que esa información puede ser revisada por la empresa.'],
+    ['5. Vigencia.', 'Este compromiso rige mientras tenga acceso a cualquiera de los sistemas y después de cesar en mis funciones, respecto de la información conocida.']
   ];
-  var PIE = 'Versión ' + VERSION + ' · ' + FECHA_TEXTO + ' · Sistema RL v3.0 · Elaborado por Joel Timoteo Gonza, creador y administrador del sistema · Coordinación de Relaciones Laborales.';
+  var PIE = 'Versión ' + VERSION + ' · ' + FECHA_TEXTO + ' · Sistema RR.LL. · ETI · Evaluaciones · Bienestar · Elaborado por Joel A. Timoteo Gonza, creador y administrador del sistema · Coordinación de Relaciones Laborales · Unifrutti Perú.';
 
   function $(id) { return document.getElementById(id); }
   function usuario() { try { return JSON.parse(sessionStorage.getItem('user') || 'null'); } catch (e) { return null; } }
@@ -185,7 +185,7 @@
     if ($('segOv')) return;
     var u = usuario() || {};
     var ov = document.createElement('div'); ov.id = 'segOv'; ov.className = 'ov on'; /* 'ov on': el actualizador y el aviso de novedades esperan mientras esté abierta */ ov.setAttribute('role', 'dialog'); ov.setAttribute('aria-modal', 'true');
-    ov.innerHTML = '<div class="md"><div class="h"><div class="ic">🔐</div><div><b>Compromiso de confidencialidad y uso del Sistema RR.LL.</b><small>Antes de continuar, lee y acepta. Toma 1 minuto y se registra una sola vez.</small></div></div>' +
+    ov.innerHTML = '<div class="md"><div class="h"><div class="ic">🔐</div><div><b>Compromiso de confidencialidad y uso de los sistemas de Relaciones Laborales</b><small>Antes de continuar, lee y acepta. Toma 1 minuto y se registra una sola vez.</small></div></div>' +
       '<div class="b"><div class="txt">' + textoHtml() + '</div>' +
       '<label class="chk"><input type="checkbox" id="segC1"><span>He leído y <b>acepto</b> el compromiso de confidencialidad y uso del sistema.</span></label>' +
       '<label class="chk"><input type="checkbox" id="segC2"><span>Entiendo que mis acciones en el sistema quedan registradas con mi usuario, fecha y hora.</span></label>' +
