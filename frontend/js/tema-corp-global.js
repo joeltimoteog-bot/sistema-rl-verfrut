@@ -48,6 +48,17 @@
     B + '.topbar:not(.rl-hdr-dark) .kpi.rojo,' + B + '.top:not(.rl-hdr-dark) .kpi.rojo{border-top-color:' + ROJO + '!important}' + B + '.topbar:not(.rl-hdr-dark) .kpi.rojo b,' + B + '.top:not(.rl-hdr-dark) .kpi.rojo b{color:' + ROJO + '!important}',
     B + '.topbar:not(.rl-hdr-dark) .kpi.amar,' + B + '.top:not(.rl-hdr-dark) .kpi.amar{border-top-color:#9A4A00!important}' + B + '.topbar:not(.rl-hdr-dark) .kpi.amar b,' + B + '.top:not(.rl-hdr-dark) .kpi.amar b{color:#9A4A00!important}',
     B + '.topbar:not(.rl-hdr-dark) .kpi.verde b,' + B + '.top:not(.rl-hdr-dark) .kpi.verde b,' + B + '.topbar:not(.rl-hdr-dark) .kpi.ok b{color:#0F6B3A!important}',
+    /* cabeceras clasificadas por luminosidad real (cg-light / cg-dark, ver iniciar()) */
+    B + '.cg-light a,' + B + '.cg-light .btn-back,' + B + '.cg-light .vol,' + B + '.cg-light .btn-volver,' + B + '.cg-light .bt-w,' + B + '.cg-light .btnGhost,' + B + '.cg-light button[onclick*="dashboard"]{background:#fff!important;color:' + AZ + '!important;border:1px solid #B9C4D3!important;border-radius:6px!important;padding:7px 12px!important;font-family:' + F + '!important;font-size:12.5px!important;font-weight:600!important;text-decoration:none!important;box-shadow:none!important;opacity:1!important}',
+    B + '.cg-light a:hover,' + B + '.cg-light .btn-back:hover{background:#E6EBF2!important;border-color:' + AZ + '!important}',
+    B + '.cg-dark{background:' + AZ + '!important;background-image:none!important;color:#fff}',
+    B + '.cg-dark a,' + B + '.cg-dark .btn-back,' + B + '.cg-dark .vol,' + B + '.cg-dark .btn-volver,' + B + '.cg-dark .bt-w,' + B + '.cg-dark .btnGhost,' + B + '.cg-dark button[onclick*="dashboard"]{background:rgba(255,255,255,.16)!important;color:#fff!important;border:1px solid rgba(255,255,255,.55)!important;border-radius:6px!important;padding:7px 12px!important;font-family:' + F + '!important;font-size:12.5px!important;font-weight:600!important;text-decoration:none!important;opacity:1!important}',
+    B + '.cg-dark a:hover,' + B + '.cg-dark .btn-back:hover{background:rgba(255,255,255,.28)!important}',
+    B + '.cg-dark h1,' + B + '.cg-dark .topbar-title,' + B + '.cg-dark .u,' + B + '.cg-dark .topbar-user{color:#fff!important}',
+    /* botones que dependían de un degradado (quedaban sin fondo): color plano */
+    B + '#msEnviarRep{background:' + AZ + '!important;color:#fff!important;border:1px solid ' + AZ + '!important;border-radius:6px!important;font-family:' + F + '!important;font-weight:600!important;box-shadow:none!important}',
+    B + '#msEnviarRep .ms-new{border-radius:3px!important;background:#FFF1DE!important;color:#9A4A00!important}',
+    B + '.cg-fix{background:#fff!important;color:' + AZ + '!important;border:1px solid #B9C4D3!important}',
     /* ── Encabezados de sección / tarjeta / formulario ── */
     B + '.sec-hd h2,' + B + '.card-title,' + B + '.card-t,' + B + '.gc-t,' + B + '.tb-t,' + B + '.card h2,' + B + '.card h3,' + B + '.card-h h3,' + B + '.card-h .card-t,' + B + '.fic-t,' + B + '.d2-card .t{font-family:' + F + '!important;font-weight:700!important;color:' + AZ + '!important;letter-spacing:.2px}',
     B + '.card-h,' + B + '.fic-h,' + B + '.card>.card-title:first-child,' + B + '.card>h3:first-child{background:' + BAND + '!important;border-bottom:1px solid ' + BD + '!important;border-radius:8px 8px 0 0!important}',
@@ -110,11 +121,34 @@
     B + '::-webkit-scrollbar-thumb{background:#C5CFDD;border-radius:4px}',
     '@media print{' + B + '*{box-shadow:none!important}}'
   ].join('\n');
+  /* cabecera clara u oscura según el color REAL que pinta la página (no según el nombre de la clase) */
+  function lum(c) { var m = String(c || '').match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/); if (!m) return 1; if (m[4] !== undefined && +m[4] === 0) return 1; return (0.2126 * m[1] + 0.7152 * m[2] + 0.0722 * m[3]) / 255; }
+  function clasificar() {
+    try {
+      document.querySelectorAll('.topbar, .top, header').forEach(function (h) {
+        if (h.closest('.card') || h.closest('.modal')) return;
+        var oscura = h.classList.contains('rl-hdr-dark') || lum(getComputedStyle(h).backgroundColor) < 0.5;
+        h.classList.add(oscura ? 'cg-dark' : 'cg-light');
+      });
+    } catch (e) {}
+  }
+  /* botón o enlace con texto claro sobre fondo transparente (su color venía de un degradado): se le da fondo blanco y borde */
+  function reparar() {
+    try {
+      document.querySelectorAll('button, a.btn, a[class*="btn"], .btn').forEach(function (b) {
+        if (b.classList.contains('cg-fix') || b.closest('.cg-dark') || b.closest('.sb') || b.closest('.ni')) return;
+        var cs = getComputedStyle(b); if (cs.display === 'none') return;
+        var bg = cs.backgroundColor, col = cs.color;
+        if (lum(bg) >= 0.98 && lum(col) >= 0.85 && (cs.backgroundImage === 'none' || !cs.backgroundImage)) b.classList.add('cg-fix');
+      });
+    } catch (e) {}
+  }
   function iniciar() {
     try {
       var st = document.createElement('style'); st.id = 'temaCorpGlobalCss'; st.textContent = CSS;
       (document.head || document.documentElement).appendChild(st);
       document.body.classList.add('cg1');
+      clasificar(); setTimeout(reparar, 300); setTimeout(reparar, 1500); setTimeout(reparar, 4000);
       console.log('[_TEMA_CORP_GLOBAL_V1] identidad empresarial activa en esta página (apagar: localStorage.rl_corp_global = "off")');
     } catch (e) {}
   }
