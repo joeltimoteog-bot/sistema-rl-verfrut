@@ -9,6 +9,7 @@
      el botón "Generar informe" y todas las funciones (autoFillVisita, calcularSemanaVisita,
      previewFotos, generarInformeVisita) siguen siendo las de siempre.
    Solo presentación: ningún id, flujo ni guardado cambia.
+   v1.1 (03-nov-2026): el botón "Generar informe" (guarda y abre la vista previa con "Guardar en Azure") queda siempre visible.
    INTERRUPTOR: localStorage.rl_visita_hoja = 'off' → vuelve al asistente por pasos.
    ═════════════════════════════════════════════════════════════════════════ */
 (function () {
@@ -56,7 +57,8 @@
     M + '#vHojaVal{display:flex;gap:8px;flex-wrap:wrap;font-size:12.5px;margin:0;padding:0;list-style:none;flex:1;font-family:' + F + '}',
     M + '#vHojaVal li{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:6px;font-weight:600}',
     M + '#vHojaVal li.ok{color:#0F6B3A;background:#E4F4EA}' + M + '#vHojaVal li.falta{color:#9A4A00;background:#FFF1DE}',
-    M + '#v2Foot button[onclick*="generarInformeVisita"]{height:42px!important;padding:0 22px!important;border:0!important;border-radius:6px!important;background:#0F2748!important;color:#fff!important;font-size:14px!important;font-weight:700!important;font-family:' + F + '!important;cursor:pointer}',
+    /* _VISITA_HOJA_V1.1 (03-nov): el asistente por pasos oculta este botón con estilo en línea hasta el último paso; en la hoja única debe verse siempre */
+    M + '#v2Foot button[onclick*="generarInformeVisita"]{display:inline-flex!important;align-items:center;justify-content:center;visibility:visible!important;height:42px!important;padding:0 22px!important;border:0!important;border-radius:6px!important;background:#0F2748!important;color:#fff!important;font-size:14px!important;font-weight:700!important;font-family:' + F + '!important;cursor:pointer}',
     M + '#v2Foot button[onclick*="cerrar"]{height:42px!important;padding:0 16px!important;border:1.5px solid #B8C4D6!important;border-radius:6px!important;background:#fff!important;color:#5B6B82!important;font-size:13px!important;font-weight:600!important;font-family:' + F + '!important;cursor:pointer}',
     '@media (max-width:1100px){' + M + '.v2sec .fg{grid-template-columns:repeat(3,minmax(0,1fr))}' + M + '.v2sec .fg .fc{grid-column:span 1}' + M + '.v2sec .fg .fc[style*="1/-1"],' + M + '.v2sec .fg .fc[style*="span 2"]{grid-column:span 3!important}}',
     '@media (max-width:700px){' + M + '{padding:0!important}' + M + '> .modal{border-radius:0!important;border:0!important}' + M + '.v2sec .fg{grid-template-columns:1fr}' + M + '.v2sec .fg .fc,' + M + '.v2sec .fg .fc[style*="1/-1"],' + M + '.v2sec .fg .fc[style*="span 2"]{grid-column:span 1!important}}'
