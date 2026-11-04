@@ -151,7 +151,9 @@
     if (esLogin || enCurso || avisado) return;
     var t = tk();
     var conUsuario = false; try { conUsuario = !!sessionStorage.getItem('user'); } catch (e) {}
-    if (!t) { if (conUsuario) aviso('Esta sesión entró sin credencial de Azure. Vuelve a ingresar para seguir trabajando con normalidad (toma 10 segundos).'); return; }
+    /* _SESION_SIN_BUCLE_V1 (04-nov-2026): si el login entró por Google (Azure no respondió) NO se bloquea la pantalla:
+       volver a ingresar daría otra vez una sesión sin credencial y el aviso salía en bucle. Se trabaja con el respaldo. */
+    if (!t) { if (conUsuario) console.warn('[_SESION_RENOVAR_V1] sesión sin credencial de Azure (entró por Google): se trabaja con el respaldo'); return; }
     var e = exp(t); if (!e) return;
     if (e - Date.now() > RENOVAR_ANTES_MS) return;   /* todavía le queda más de 6 h */
     enCurso = true;
