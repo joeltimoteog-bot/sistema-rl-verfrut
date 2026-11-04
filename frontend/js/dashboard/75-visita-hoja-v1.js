@@ -9,6 +9,7 @@
      el botón "Generar informe" y todas las funciones (autoFillVisita, calcularSemanaVisita,
      previewFotos, generarInformeVisita) siguen siendo las de siempre.
    Solo presentación: ningún id, flujo ni guardado cambia.
+   v1.2 (03-nov-2026): al generar, muestra que datos, PDF y fotos quedaron en Azure (el guardado ya era directo).
    v1.1 (03-nov-2026): el botón "Generar informe" (guarda y abre la vista previa con "Guardar en Azure") queda siempre visible.
    INTERRUPTOR: localStorage.rl_visita_hoja = 'off' → vuelve al asistente por pasos.
    ═════════════════════════════════════════════════════════════════════════ */
@@ -93,7 +94,41 @@
     new MutationObserver(function () { if (m.classList.contains('on')) { setTimeout(validar, 80); try { m.scrollTop = 0; } catch (e) {} } }).observe(m, { attributes: true, attributeFilter: ['class'] });
     console.log('[_VISITA_HOJA_V1] Nueva visita como hoja única activa (apagar: localStorage.rl_visita_hoja = "off")');
   }
+
+  /* ── v1.2 (03-nov-2026): "Generar informe" ya guarda TODO en Azure (fotos + PDF al Blob y datos a la tabla, _CV_AZURE_PRIMERO_V1).
+     Aquí solo se muestra ese resultado: mensaje real, botón "Guardar en Azure" marcado como hecho y "Ver en Azure" con el PDF.
+     No cambia ninguna función de guardado: solo observa lo que devuelven. ── */
+  function enlazarAzure() {
+    if (window._v75az) return true;
+    var pdf = window._generarYSubirPDFInforme, fot = window.subirFotosVisitaAzure, gen = window.generarInformeVisita;
+    if (typeof pdf !== 'function' || typeof fot !== 'function' || typeof gen !== 'function') return false;
+    window._v75az = true;
+    var wPdf = async function () { var u = await pdf.apply(this, arguments); window._v75pdf = u || ''; return u; };
+    var wFot = async function () { var r = await fot.apply(this, arguments); window._v75fotos = Array.isArray(r) ? r.length : 0; return r; };
+    window._generarYSubirPDFInforme = wPdf; window.subirFotosVisitaAzure = wFot;
+    try { _generarYSubirPDFInforme = wPdf; } catch (e) {} try { subirFotosVisitaAzure = wFot; } catch (e) {}
+    var wGen = async function () {
+      var edicion = window._editandoVisitaIdx !== undefined && window._editandoVisitaIdx !== null;
+      window._v75pdf = null; window._v75fotos = 0; window._v75gen = Date.now();
+      var r = await gen.apply(this, arguments);
+      try {
+        var msg = $('guardandoMsg'); if (!msg || edicion || !/✅/.test(msg.textContent)) return r;
+        var u = window._v75pdf || '', nf = window._v75fotos || 0;
+        msg.innerHTML = '✅ <b>Guardado en Azure</b>: datos de la visita' + (u ? ' · informe en PDF (<a href="' + u + '" target="_blank" style="color:#0F2748;text-decoration:underline">abrir</a>)' : '') + (nf ? ' · ' + nf + ' foto(s)' : '') + '.';
+        var bg = $('btnGuardarAzure'); if (bg) { bg.disabled = true; bg.textContent = '✅ Guardado en Azure'; bg.title = 'Los datos, el PDF y las fotos ya se guardaron en Azure al generar el informe'; }
+        var bv = $('btnVerAzure'); if (bv && u) { bv.href = '#'; bv.onclick = function (e) { e.preventDefault(); window.open(u, '_blank'); }; bv.style.display = 'inline-flex'; }
+      } catch (e) { console.warn('[_VISITA_HOJA_V1.2]', e.message); }
+      return r;
+    };
+    wGen._v2 = gen._v2; window.generarInformeVisita = wGen; try { generarInformeVisita = wGen; } catch (e) {}
+    /* al abrir una visita antigua desde la tabla, los botones vuelven a su estado normal */
+    var mv = $('mVerInforme');
+    if (mv) new MutationObserver(function () { if (mv.classList.contains('on') && Date.now() - (window._v75gen || 0) > 4000) {
+      var bg = $('btnGuardarAzure'); if (bg && bg.textContent.indexOf('Guardado en Azure') >= 0) { bg.disabled = false; bg.textContent = '💾 Guardar en Azure'; bg.title = ''; } } }).observe(mv, { attributes: true, attributeFilter: ['class'] });
+    console.log('[_VISITA_HOJA_V1.2] resultado del guardado en Azure visible al generar el informe');
+    return true;
+  }
   /* visitas-ui.js arma el asistente al cargar; esta hoja se monta después (reintenta hasta encontrar el pie) */
-  function iniciar() { var n = 0; var t = setInterval(function () { var m = $('mVisita'); if (m && ($('v2Foot') || n > 12)) { clearInterval(t); armar(); } else if (++n > 40) clearInterval(t); }, 150); }
+  function iniciar() { var n = 0; var t = setInterval(function () { var m = $('mVisita'); if (m && ($('v2Foot') || n > 12)) { clearInterval(t); armar(); var k = 0, t2 = setInterval(function () { if (enlazarAzure() || ++k > 40) clearInterval(t2); }, 250); } else if (++n > 40) clearInterval(t); }, 150); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
