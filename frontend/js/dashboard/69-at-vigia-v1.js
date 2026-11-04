@@ -24,8 +24,12 @@
 
   function registrar() {
     var V = window.rlVigia;
-    /* contador "Atenciones hoy" siempre exacto (las estadísticas de Azure se cachean 5 min) */
+    /* contador "Atenciones hoy" siempre exacto (las estadísticas de Azure se cachean 5 min)
+       _VIGIA_HOY_ROL_V1 (03-nov-2026): el "hoy" de vigia/marcas es el TOTAL de todos los usuarios; solo se pinta a quien ve todo
+       (ROLES_VER_TODO, mismo criterio que _STATS_AZURE_V1). El resto conserva su propio conteo (sus atenciones). */
+    var verTodo = function () { try { return typeof ROLES_VER_TODO !== 'undefined' && typeof USER !== 'undefined' && USER && ROLES_VER_TODO.includes(USER.rol); } catch (x) { return false; } };
     window.addEventListener('rl:vigia', function (e) {
+      if (!verTodo()) return;
       try { var eH = document.getElementById('sH'), h = e.detail && e.detail.hoy; if (eH && h != null && String(eH.textContent).trim() !== String(h)) eH.textContent = h; } catch (x) {}
     });
     V.en('atenciones', async function () {
