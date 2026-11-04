@@ -117,13 +117,15 @@ var N = {
   gas: { x: .72, y: .60, r: 25, ic: '📜', t: 'Apps Script', c: '#22c55e' },
   sh:  { x: .90, y: .60, r: 21, ic: '📊', t: 'Hoja (respaldo)', c: '#4ade80' },
   fb:  { x: .72, y: .87, r: 23, ic: '🔥', t: 'Firebase', c: '#f59e0b' },
-  mail:{ x: .90, y: .87, r: 17, ic: '✉️', t: 'Correo', c: '#fbbf24' }
+  mail:{ x: .90, y: .87, r: 17, ic: '✉️', t: 'Correo', c: '#fbbf24' },
+  cn:  { x: .25, y: .46, r: 24, ic: '📱', t: 'Unifrutti Conecta', c: '#14b8a6' },  /* _CONECTA_CEREBRO_V1 */
+  sb:  { x: .88, y: .46, r: 22, ic: '🛢️', t: 'Supabase', c: '#3ecf8e' }  /* _CONECTA_CEREBRO_V1 */
 };
 var MODS = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'];
 var E = [['usr', 'rl', '#ef4444'], ['usr', 'eti', '#a855f7'], ['usr', 'ev', '#06b6d4'],
   ['eti', 'az', '#3b82f6'], ['ev', 'az', '#3b82f6'], ['eti', 'fb', '#f59e0b'], ['ev', 'fb', '#f59e0b'], ['rl', 'fb', '#f59e0b'],
   ['rl', 'az', '#3b82f6'], ['rl', 'gas', '#22c55e'], ['eti', 'gas', '#22c55e'], ['ev', 'gas', '#22c55e'],
-  ['az', 'sql', '#60a5fa'], ['gas', 'sh', '#4ade80'], ['gas', 'mail', '#fbbf24'], ['gas', 'az', '#64748b']];
+  ['az', 'sql', '#60a5fa'], ['gas', 'sh', '#4ade80'], ['gas', 'mail', '#fbbf24'], ['gas', 'az', '#64748b'], ['usr', 'cn', '#14b8a6'], ['cn', 'sb', '#3ecf8e']];  /* _CONECTA_CEREBRO_V1 */
 MODS.forEach(function (m) { E.push(['rl', m, '#fca5a5']); E.push([m, 'az', '#3b82f6']); E.push([m, 'gas', '#22c55e']); });
 
 /* ── clasificación de una acción de /trafico en un camino ── */
