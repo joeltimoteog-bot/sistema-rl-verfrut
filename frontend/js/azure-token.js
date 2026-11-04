@@ -36,9 +36,17 @@
     }
     return [url, init];
   }
+  /* _MODO_GOOGLE_V1 (04-nov-2026) — EMERGENCIA: caida de Azure Storage en Brazil South (Microsoft).
+     Con MODO_GOOGLE = true NINGUNA llamada va a Azure: falla al instante y cada modulo usa su respaldo de
+     Google sin esperar los 12-14 s del reloj. Al volver Azure: MODO_GOOGLE = false (y subir ?v=).
+     Prueba en un solo navegador: localStorage.rl_modo_google = 'off' (usa Azure) / 'on' (usa Google). */
+  var MODO_GOOGLE = true;
+  try { var mg = localStorage.getItem('rl_modo_google'); if (mg === 'off') MODO_GOOGLE = false; else if (mg === 'on') MODO_GOOGLE = true; } catch (e) {}
+  if (MODO_GOOGLE) { try { console.warn('[_MODO_GOOGLE_V1] modo respaldo: Azure desactivado, todo va directo a Google'); } catch (e) {} }
   window.fetch = function (input, init) {
     try {
       var url = (typeof input === 'string') ? input : (input && input.url) || '';
+      if (MODO_GOOGLE && url.indexOf(MARCA) >= 0) return Promise.reject(new TypeError('Failed to fetch (modo respaldo Google)'));
       if (typeof input === 'string' && url.indexOf(MARCA_GAS) >= 0) {
         var tg = null; try { tg = sessionStorage.getItem('rl_token'); } catch (e) {}
         if (!tg) return fOrig.apply(this, arguments);
