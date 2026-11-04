@@ -15,7 +15,11 @@
   'use strict';
   if (window.rlVigia && window.rlVigia._v1) return;
   var SEG = 15; try { var s = parseInt(localStorage.getItem('rl_vigia_seg') || '', 10); if (s >= 10 && s <= 600) SEG = s; } catch (e) {}
-  var apagado = false; try { apagado = localStorage.getItem('rl_vigia') === 'off'; } catch (e) {}
+  /* _VIGIA_OFF_V1 (04-nov-2026): APAGADO para todos. Cada pestaña consultaba Azure cada 15 s y, sumado al resto,
+     llenó el límite de 90 consultas simultáneas de la base (S1). El tiempo real de atenciones sigue por Firebase.
+     Para volver a encenderlo: VIGIA_ACTIVO = true (o, solo en un navegador, localStorage.rl_vigia = 'on'). */
+  var VIGIA_ACTIVO = false;
+  var apagado = !VIGIA_ACTIVO; try { var lv = localStorage.getItem('rl_vigia'); if (lv === 'off') apagado = true; else if (lv === 'on') apagado = false; } catch (e) {}
   var BASE = (function () { try { if (typeof AZURE_FN_BASE === 'string' && AZURE_FN_BASE) return AZURE_FN_BASE; } catch (e) {} return 'https://rl-fn-verfrut.azurewebsites.net/api'; })();
   var marcas = null, pausaHasta = 0, enCurso = false, timer = null, fallos = 0, manejadores = [], ultimo = null;
 
