@@ -28,3 +28,6 @@ tools/__pycache__/
 *.xlsx
 data.csv
 azure-config.txt
+
+# Supabase CLI (archivos temporales, no publicar)
+supabase/.temp/

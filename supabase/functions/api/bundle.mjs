@@ -9450,6 +9450,7 @@ var require_tsql2pg = __commonJS({
     function esDDLProtegido(st) {
       const l = st.replace(/\s+/g, " ").trim().toUpperCase();
       if (/^IF\s+(NOT\s+)?(OBJECT_ID|COL_LENGTH|EXISTS\s*\(\s*SELECT\b[^)]*\bFROM\s+SYS\.|INDEXPROPERTY|TYPE_ID)/.test(l) && /\b(CREATE|ALTER|DROP)\s+(TABLE|INDEX|UNIQUE|NONCLUSTERED|CLUSTERED)/.test(l)) return true;
+      if (/^CREATE\s+(UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/.test(l)) return false;
       if (/^(CREATE|ALTER)\s+(TABLE|INDEX|UNIQUE|NONCLUSTERED)/.test(l)) return true;
       if (/^IF\s+(NOT\s+)?EXISTS\s*\(\s*SELECT\b[^)]*\bFROM\s+SYS\.TRIGGERS/.test(l) && /\bEXEC\s*\(/.test(l)) return true;
       return false;
@@ -9489,9 +9490,13 @@ var require_tsql2pg = __commonJS({
       let s = st.replace(/\b(\w+)\s*=\s*(ROW_NUMBER|RANK|DENSE_RANK)\s*\(\s*\)\s*OVER\s*\(([^)]*)\)/gi, "$2() OVER ($3) AS $1");
       if (/^\s*(BEGIN\s+TRAN(SACTION)?|COMMIT(\s+TRAN(SACTION)?)?)\s*$/i.test(s)) return { sql: null, pendiente };
       s = s.replace(/(\bLIKE\s+N?')([^']*)(')/gi, (m, a, pat, c) => a + pat.replace(/\[_\]/g, "\\_").replace(/\[%\]/g, "\\%") + c);
-      if (/^\s*(DECLARE|SET\s+NOCOUNT|SET\s+XACT_ABORT|BEGIN\s+TRAN|COMMIT|ROLLBACK)\b/i.test(s)) {
-        if (/^\s*SET\s+(NOCOUNT|XACT_ABORT)\b/i.test(s)) return { sql: null, pendiente };
+      if (/^\s*(DECLARE|SET\s+NOCOUNT|SET\s+XACT_ABORT|SET\s+DEADLOCK_PRIORITY|BEGIN\s+TRAN|COMMIT|ROLLBACK)\b/i.test(s)) {
+        if (/^\s*SET\s+(NOCOUNT|XACT_ABORT|DEADLOCK_PRIORITY)\b/i.test(s)) return { sql: null, pendiente };
         pendiente.push("sentencia T-SQL de control: " + s.slice(0, 40));
+      }
+      {
+        const dm = s.match(/^\s*DELETE\s+(\w+)\s+FROM\s+([\w.\[\]]+)\s+(?:AS\s+)?(\w+)\s+(WHERE\b[\s\S]*)$/i);
+        if (dm && dm[1].toLowerCase() === dm[3].toLowerCase() && !/^\s*(JOIN|INNER|LEFT|CROSS)\b/i.test(dm[4])) s = "DELETE FROM " + dm[2] + " AS " + dm[3] + " " + dm[4];
       }
       if (/^\s*MERGE\b/i.test(s)) {
         s = s.replace(/^\s*MERGE\s+(?!INTO\b)/i, "MERGE INTO ");
@@ -10487,6 +10492,93 @@ var require_acceso = __commonJS({
         context.res = { status: r.status, body: r.body };
       } catch (e) {
         context.log.error("[acceso] " + accion + ": " + e.message);
+        context.res = { status: 500, body: { success: false, error: [e.message, e.originalError && e.originalError.message].filter(Boolean).join(" | ") } };
+      }
+    };
+  }
+});
+
+// acceso-importar/index.js
+var require_acceso_importar = __commonJS({
+  "acceso-importar/index.js"(exports, module) {
+    var A = require_acceso_db();
+    module.exports = async function(context, req) {
+      try {
+        const p = await A.pool();
+        if (req.method === "GET") {
+          const r = await p.request().query(`SELECT (SELECT COUNT(*) FROM dbo.PermisosModulos) AS permisos,
+        (SELECT COUNT(DISTINCT usuario) FROM dbo.PermisosModulos) AS usuarios_con_permisos,
+        (SELECT COUNT(*) FROM dbo.AccesoHorarios) AS horarios`);
+          context.res = { status: 200, body: Object.assign({ success: true }, r.recordset[0]) };
+          return;
+        }
+        const b = req.body || {};
+        const solo = b.soloUsuario ? A.usr(b.soloUsuario) : null;
+        const perms = (b.permisos || []).map((f) => [
+          A.usr(f[0]),
+          String(f[1] || "").trim().slice(0, 80),
+          f[2] === true || ["SI", "TRUE", "1"].indexOf(String(f[2]).toUpperCase()) >= 0 ? 1 : 0,
+          f[3] || null,
+          A.usr(f[4])
+        ]).filter((f) => f[0] && f[1] && (!solo || f[0] === solo));
+        const hors = (b.horarios || []).map(A.filaHorario).filter((f) => f.usuario && (!solo || f.usuario === solo));
+        const tx = new A.sql.Transaction(p);
+        await tx.begin();
+        try {
+          const q = (s, ins) => {
+            const r = tx.request();
+            (ins || []).forEach((x) => r.input(x[0], x[1], x[2]));
+            return r.query(s);
+          };
+          if (solo) {
+            await q("DELETE FROM dbo.PermisosModulos WHERE usuario = @u", [["u", A.sql.NVarChar(60), solo]]);
+            await q("DELETE FROM dbo.AccesoHorarios WHERE usuario = @u", [["u", A.sql.NVarChar(60), solo]]);
+          } else {
+            await q("DELETE FROM dbo.PermisosModulos");
+            await q("DELETE FROM dbo.AccesoHorarios");
+          }
+          const vistos = {};
+          for (const f of perms) {
+            const k = f[0] + "|" + f[1];
+            if (vistos[k]) continue;
+            vistos[k] = 1;
+            const fecha = f[3] && !isNaN(new Date(f[3])) ? new Date(f[3]) : null;
+            await q(
+              "INSERT INTO dbo.PermisosModulos (usuario, modulo, permitido, actualizado, por) VALUES (@u,@m,@p,@a,@por)",
+              [["u", A.sql.NVarChar(60), f[0]], ["m", A.sql.NVarChar(80), f[1]], ["p", A.sql.Bit, f[2]], ["a", A.sql.DateTime2, fecha], ["por", A.sql.NVarChar(60), f[4]]]
+            );
+          }
+          const vh = {};
+          for (const f of hors) {
+            if (vh[f.usuario]) continue;
+            vh[f.usuario] = 1;
+            await q(
+              `INSERT INTO dbo.AccesoHorarios (usuario, hora_inicio, hora_fin, dias, desde, hasta, activo, nota, actualizado, por)
+                 VALUES (@u,@i,@f,@d,@de,@ha,@a,@n,@s,@por)`,
+              [
+                ["u", A.sql.NVarChar(60), f.usuario],
+                ["i", A.sql.NVarChar(5), A.txt(f.ini)],
+                ["f", A.sql.NVarChar(5), A.txt(f.fin)],
+                ["d", A.sql.NVarChar(20), f.dias.join(",")],
+                ["de", A.sql.NVarChar(10), f.desde || null],
+                ["ha", A.sql.NVarChar(10), f.hasta || null],
+                ["a", A.sql.Bit, f.activo ? 1 : 0],
+                ["n", A.sql.NVarChar(300), f.nota.slice(0, 300)],
+                ["s", A.sql.NVarChar(20), f.actualizado.slice(0, 20)],
+                ["por", A.sql.NVarChar(60), A.usr(f.por)]
+              ]
+            );
+          }
+          await tx.commit();
+        } catch (e) {
+          try {
+            await tx.rollback();
+          } catch (e2) {
+          }
+          throw e;
+        }
+        context.res = { status: 200, body: { success: true, permisos: perms.length, horarios: hors.length, soloUsuario: solo } };
+      } catch (e) {
         context.res = { status: 500, body: { success: false, error: [e.message, e.originalError && e.originalError.message].filter(Boolean).join(" | ") } };
       }
     };
@@ -13051,6 +13143,94 @@ var require_auth = __commonJS({
   }
 });
 
+// atenciones-batch/index.js
+var require_atenciones_batch = __commonJS({
+  "atenciones-batch/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var { exigirAuth } = require_auth();
+    module.exports = async function(context, req) {
+      const authUser = exigirAuth(context, req);
+      if (authUser === null) return;
+      context.log("atenciones-batch triggered");
+      const startTime = Date.now();
+      try {
+        const items = req.body && req.body.atenciones;
+        if (!Array.isArray(items) || items.length === 0) {
+          context.res = {
+            status: 400,
+            body: { success: false, error: 'Body debe contener un array "atenciones" no vacio' }
+          };
+          return;
+        }
+        if (items.length > 100) {
+          context.res = {
+            status: 400,
+            body: { success: false, error: "Maximo 100 atenciones por batch" }
+          };
+          return;
+        }
+        const pool = await getPool();
+        const results = {
+          total: items.length,
+          inserted: 0,
+          failed: 0,
+          errors: []
+        };
+        for (let i = 0; i < items.length; i++) {
+          const d = items[i];
+          try {
+            if (!d.dni || !d.nombre) {
+              results.failed++;
+              results.errors.push({ index: i, error: "Falta dni o nombre" });
+              continue;
+            }
+            const request = pool.request();
+            await request.input("nro", sql.Int, d.nro || null).input("fecha_atencion", sql.Date, d.fecha_atencion || null).input("hora_inicio", sql.NVarChar(10), d.hora_inicio || "").input("hora_termino", sql.NVarChar(10), d.hora_termino || "").input("nro_semana", sql.Int, d.nro_semana || null).input("mes", sql.Int, d.mes || null).input("anio", sql.Int, d.anio || null).input("dni", sql.NVarChar(15), d.dni).input("nombre", sql.NVarChar(200), d.nombre).input("sexo", sql.NVarChar(10), d.sexo || "").input("fecha_inicio_periodo", sql.Date, d.fecha_inicio_periodo || null).input("empresa", sql.NVarChar(50), d.empresa || "").input("fundo", sql.NVarChar(100), d.fundo || "").input("cargo", sql.NVarChar(150), d.cargo || "").input("ruta", sql.NVarChar(50), d.ruta || "").input("codigo", sql.NVarChar(50), d.codigo || "").input("fundo_actual", sql.NVarChar(100), d.fundo_actual || "").input("celular", sql.NVarChar(20), d.celular || "").input("supervisor", sql.NVarChar(100), d.supervisor || "").input("detalle_documento", sql.NVarChar(500), d.detalle_documento || "").input("fecha_inicio_doc", sql.Date, d.fecha_inicio_doc || null).input("fecha_termino_doc", sql.Date, d.fecha_termino_doc || null).input("dias_transcurridos", sql.Int, d.dias_transcurridos || 0).input("responsable_recepcion", sql.NVarChar(150), d.responsable_recepcion || "").input("observaciones", sql.NVarChar(sql.MAX), d.observaciones || "").input("estado", sql.NVarChar(30), d.estado || "EN PROCESO").input("usuario_sistema", sql.NVarChar(50), d.usuario_sistema || "").query(`
+            INSERT INTO Atenciones (
+              nro, fecha_atencion, hora_inicio, hora_termino, nro_semana, mes, anio,
+              dni, nombre, sexo, fecha_inicio_periodo, empresa, fundo, cargo, ruta,
+              codigo, fundo_actual, celular, supervisor, detalle_documento,
+              fecha_inicio_doc, fecha_termino_doc, dias_transcurridos,
+              responsable_recepcion, observaciones, estado, usuario_sistema
+            )
+            VALUES (
+              @nro, @fecha_atencion, @hora_inicio, @hora_termino, @nro_semana, @mes, @anio,
+              @dni, @nombre, @sexo, @fecha_inicio_periodo, @empresa, @fundo, @cargo, @ruta,
+              @codigo, @fundo_actual, @celular, @supervisor, @detalle_documento,
+              @fecha_inicio_doc, @fecha_termino_doc, @dias_transcurridos,
+              @responsable_recepcion, @observaciones, @estado, @usuario_sistema
+            )
+          `);
+            results.inserted++;
+          } catch (e) {
+            results.failed++;
+            results.errors.push({ index: i, error: e.message, dni: d.dni });
+          }
+        }
+        const elapsed = Date.now() - startTime;
+        context.log("Batch completado:", results.inserted, "/", results.total, "en", elapsed, "ms");
+        context.res = {
+          status: 200,
+          body: {
+            success: true,
+            total: results.total,
+            inserted: results.inserted,
+            failed: results.failed,
+            errors: results.errors.slice(0, 10),
+            elapsed
+          }
+        };
+      } catch (e) {
+        context.log.error("Error en batch:", e);
+        context.res = {
+          status: 500,
+          body: { success: false, error: e.message, code: e.code }
+        };
+      }
+    };
+  }
+});
+
 // atenciones-by-dni/index.js
 var require_atenciones_by_dni = __commonJS({
   "atenciones-by-dni/index.js"(exports, module) {
@@ -13256,6 +13436,327 @@ var require_at_cambios = __commonJS({
       return listo;
     }
     module.exports = { asegurar };
+  }
+});
+
+// atenciones-create/index.js
+var require_atenciones_create = __commonJS({
+  "atenciones-create/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var { exigirAuth } = require_auth();
+    var G = require_at_guardar();
+    var AC = require_at_cambios();
+    var SET_UPD = `fecha_atencion = @fecha_atencion, hora_inicio = @hora_inicio, hora_termino = @hora_termino, nro_semana = @nro_semana, mes = @mes, nombre = @nombre, sexo = @sexo, fecha_inicio_periodo = @fecha_inicio_periodo, empresa = @empresa, fundo = @fundo, cargo = @cargo, ruta = @ruta, codigo = @codigo, fundo_actual = @fundo_actual, celular = @celular, supervisor = @supervisor, detalle_documento = @detalle_documento, nro_licencia = @nro_licencia, parentesco = @parentesco, fecha_inicio_doc = @fecha_inicio_doc, fecha_termino_doc = @fecha_termino_doc, dias_transcurridos = @dias_transcurridos, responsable_recepcion = @responsable_recepcion, observaciones = @observaciones, estado = @estado, usuario_sistema = @usuario_sistema, autorizado_por = CASE WHEN @autorizado_por <> N'' THEN @autorizado_por ELSE autorizado_por END, fecha_termino_periodo = COALESCE(@fecha_termino_periodo, fecha_termino_periodo), tipo_licencia = CASE WHEN @tipo_licencia <> N'' THEN @tipo_licencia ELSE tipo_licencia END, modificado = SYSUTCDATETIME()`;
+    var COLS_INS = `nro, fecha_atencion, hora_inicio, hora_termino, nro_semana, mes, anio, dni, nombre, sexo, fecha_inicio_periodo, empresa, fundo, cargo, ruta, codigo, fundo_actual, celular, supervisor, detalle_documento, nro_licencia, parentesco, fecha_inicio_doc, fecha_termino_doc, dias_transcurridos, responsable_recepcion, observaciones, estado, usuario_sistema, autorizado_por, fecha_termino_periodo, tipo_licencia`;
+    async function upsertPg(pool, rq, d) {
+      let id = null;
+      if (d.nro) {
+        const x = await pool.request().input("nro", sql.Int, d.nro).input("anio", sql.Int, d.anio || null).input("dni", sql.NVarChar(15), d.dni).query("SELECT TOP 1 id FROM Atenciones WHERE nro = @nro AND anio = @anio AND dni = @dni ORDER BY id DESC");
+        id = x.recordset.length ? x.recordset[0].id : null;
+      }
+      if (id !== null) {
+        await rq.query("UPDATE Atenciones SET " + SET_UPD + " WHERE nro = @nro AND anio = @anio AND dni = @dni");
+        return { recordset: [{ id, accion: "actualizado" }] };
+      }
+      const ins = await rq.query("INSERT INTO Atenciones (" + COLS_INS + ") VALUES (" + COLS_INS.split(",").map((c) => "@" + c.trim()).join(", ") + ") RETURNING id");
+      return { recordset: [{ id: ins.recordset[0].id, accion: "creado" }] };
+    }
+    module.exports = async function(context, req) {
+      const authUser = exigirAuth(context, req);
+      if (authUser === null) return;
+      context.log("atenciones-create triggered");
+      try {
+        const d = req.body;
+        if (!d || !d.dni || !d.nombre) {
+          context.res = { status: 400, body: { success: false, error: "Faltan campos requeridos: dni, nombre" } };
+          return;
+        }
+        const _txt = {
+          hora_inicio: 10,
+          hora_termino: 10,
+          nombre: 200,
+          sexo: 10,
+          empresa: 50,
+          fundo: 100,
+          cargo: 150,
+          ruta: 50,
+          codigo: 50,
+          fundo_actual: 100,
+          celular: 20,
+          supervisor: 100,
+          detalle_documento: 500,
+          nro_licencia: 40,
+          parentesco: 40,
+          responsable_recepcion: 150,
+          estado: 30,
+          usuario_sistema: 50,
+          autorizado_por: 100,
+          tipo_licencia: 100
+        };
+        Object.keys(_txt).forEach((k) => {
+          if (d[k] != null && d[k] !== "") d[k] = String(d[k]).slice(0, _txt[k]);
+        });
+        const _fecha = (v) => {
+          if (!v) return null;
+          const s = String(v).slice(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
+          const y = +s.slice(0, 4);
+          if (y < 1900 || y > 2100) return null;
+          const f = /* @__PURE__ */ new Date(s + "T00:00:00Z");
+          return isNaN(f.getTime()) || f.toISOString().slice(0, 10) !== s ? null : s;
+        };
+        ["fecha_atencion", "fecha_inicio_periodo", "fecha_inicio_doc", "fecha_termino_doc", "fecha_termino_periodo"].forEach((k) => {
+          d[k] = _fecha(d[k]);
+        });
+        d.dni = String(d.dni).trim();
+        if (d.dni.length > 15) {
+          context.res = { status: 400, body: { success: false, error: "DNI invalido (mas de 15 caracteres): " + d.dni } };
+          return;
+        }
+        const pool = await getPool();
+        await Promise.all([G.asegurarTablas(pool), AC.asegurar(pool)]);
+        const rq = pool.request().input("nro", sql.Int, d.nro || null).input("fecha_atencion", sql.Date, d.fecha_atencion || null).input("hora_inicio", sql.NVarChar(10), d.hora_inicio || "").input("hora_termino", sql.NVarChar(10), d.hora_termino || "").input("nro_semana", sql.Int, d.nro_semana || null).input("mes", sql.Int, d.mes || null).input("anio", sql.Int, d.anio || null).input("dni", sql.NVarChar(15), d.dni).input("nombre", sql.NVarChar(200), d.nombre).input("sexo", sql.NVarChar(10), d.sexo || "").input("fecha_inicio_periodo", sql.Date, d.fecha_inicio_periodo || null).input("empresa", sql.NVarChar(50), d.empresa || "").input("fundo", sql.NVarChar(100), d.fundo || "").input("cargo", sql.NVarChar(150), d.cargo || "").input("ruta", sql.NVarChar(50), d.ruta || "").input("codigo", sql.NVarChar(50), d.codigo || "").input("fundo_actual", sql.NVarChar(100), d.fundo_actual || "").input("celular", sql.NVarChar(20), d.celular || "").input("supervisor", sql.NVarChar(100), d.supervisor || "").input("detalle_documento", sql.NVarChar(500), d.detalle_documento || "").input("nro_licencia", sql.NVarChar(40), d.nro_licencia || "").input("parentesco", sql.NVarChar(40), d.parentesco || "").input("fecha_inicio_doc", sql.Date, d.fecha_inicio_doc || null).input("fecha_termino_doc", sql.Date, d.fecha_termino_doc || null).input("dias_transcurridos", sql.Int, d.dias_transcurridos || 0).input("responsable_recepcion", sql.NVarChar(150), d.responsable_recepcion || "").input("observaciones", sql.NVarChar(sql.MAX), d.observaciones || "").input("estado", sql.NVarChar(30), d.estado || "EN PROCESO").input("usuario_sistema", sql.NVarChar(50), d.usuario_sistema || "").input("autorizado_por", sql.NVarChar(100), d.autorizado_por || "").input("fecha_termino_periodo", sql.Date, d.fecha_termino_periodo || null).input("tipo_licencia", sql.NVarChar(100), d.tipo_licencia || "");
+        const result = sql._pg ? await upsertPg(pool, rq, d) : await rq.query(`
+        SET NOCOUNT ON;
+        DECLARE @id INT = NULL, @accion NVARCHAR(10) = N'creado';
+        DECLARE @t TABLE (id INT);
+        IF @nro IS NOT NULL
+          SELECT TOP 1 @id = id FROM Atenciones WHERE nro = @nro AND anio = @anio AND dni = @dni ORDER BY id DESC;
+        IF @id IS NOT NULL
+        BEGIN
+          UPDATE Atenciones SET fecha_atencion = @fecha_atencion, hora_inicio = @hora_inicio, hora_termino = @hora_termino, nro_semana = @nro_semana, mes = @mes, nombre = @nombre, sexo = @sexo, fecha_inicio_periodo = @fecha_inicio_periodo, empresa = @empresa, fundo = @fundo, cargo = @cargo, ruta = @ruta, codigo = @codigo, fundo_actual = @fundo_actual, celular = @celular, supervisor = @supervisor, detalle_documento = @detalle_documento, nro_licencia = @nro_licencia, parentesco = @parentesco, fecha_inicio_doc = @fecha_inicio_doc, fecha_termino_doc = @fecha_termino_doc, dias_transcurridos = @dias_transcurridos, responsable_recepcion = @responsable_recepcion, observaciones = @observaciones, estado = @estado, usuario_sistema = @usuario_sistema, autorizado_por = CASE WHEN @autorizado_por <> N'' THEN @autorizado_por ELSE autorizado_por END, fecha_termino_periodo = COALESCE(@fecha_termino_periodo, fecha_termino_periodo), tipo_licencia = CASE WHEN @tipo_licencia <> N'' THEN @tipo_licencia ELSE tipo_licencia END, modificado = SYSUTCDATETIME()
+          WHERE nro = @nro AND anio = @anio AND dni = @dni;
+          SET @accion = N'actualizado';
+        END
+        ELSE
+        BEGIN
+          INSERT INTO Atenciones (
+          nro, fecha_atencion, hora_inicio, hora_termino, nro_semana, mes, anio,
+          dni, nombre, sexo, fecha_inicio_periodo, empresa, fundo, cargo, ruta, codigo,
+          fundo_actual, celular, supervisor, detalle_documento, nro_licencia, parentesco, fecha_inicio_doc,
+          fecha_termino_doc, dias_transcurridos, responsable_recepcion, observaciones,
+          estado, usuario_sistema, autorizado_por, fecha_termino_periodo, tipo_licencia
+          )
+          OUTPUT INSERTED.id INTO @t
+          VALUES (
+          @nro, @fecha_atencion, @hora_inicio, @hora_termino, @nro_semana, @mes, @anio, @dni, @nombre, @sexo, @fecha_inicio_periodo, @empresa, @fundo, @cargo, @ruta, @codigo, @fundo_actual, @celular, @supervisor, @detalle_documento, @nro_licencia, @parentesco, @fecha_inicio_doc, @fecha_termino_doc, @dias_transcurridos, @responsable_recepcion, @observaciones, @estado, @usuario_sistema, @autorizado_por, @fecha_termino_periodo, @tipo_licencia
+          );
+          SELECT TOP 1 @id = id FROM @t;
+        END
+        SELECT @id AS id, @accion AS accion;
+      `);
+        const fila = result.recordset[0] || {};
+        context.res = { status: 201, body: {
+          success: true,
+          id: fila.id,
+          accion: fila.accion,
+          mensaje: fila.accion === "actualizado" ? "Atencion actualizada en Azure SQL" : "Atencion creada en Azure SQL"
+        } };
+      } catch (e) {
+        context.log.error("Error en atenciones-create:", e);
+        context.res = { status: 500, body: { success: false, error: e.message } };
+      }
+    };
+  }
+});
+
+// atenciones-depurar/index.js
+var require_atenciones_depurar = __commonJS({
+  "atenciones-depurar/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var TOPE_DUPLICADOS = 1500;
+    async function asegurarRespaldo(pool) {
+      await pool.request().query(`IF OBJECT_ID('dbo.Atenciones_Respaldo', 'U') IS NULL
+    CREATE TABLE dbo.Atenciones_Respaldo (rid INT IDENTITY(1,1) PRIMARY KEY, id INT NOT NULL,
+      datos NVARCHAR(MAX) NOT NULL, motivo NVARCHAR(100) NOT NULL, fecha DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME());`);
+    }
+    var DUP_CTE = `;WITH g AS (
+    SELECT id, nro, fecha_atencion, LTRIM(RTRIM(dni)) AS dni,
+           ROW_NUMBER() OVER (PARTITION BY nro, LTRIM(RTRIM(dni)), fecha_atencion ORDER BY id) AS rn
+    FROM dbo.Atenciones WHERE fecha_atencion IS NOT NULL AND nro IS NOT NULL)`;
+    async function duplicados(pool, aplicar) {
+      const r = await pool.request().query(DUP_CTE + `
+    SELECT CONVERT(CHAR(7), fecha_atencion, 120) AS mes, COUNT(*) AS n FROM g WHERE rn > 1 GROUP BY CONVERT(CHAR(7), fecha_atencion, 120) ORDER BY mes`);
+      const porMes = {};
+      let total = 0;
+      r.recordset.forEach((x) => {
+        porMes[x.mes] = x.n;
+        total += x.n;
+      });
+      const ej = await pool.request().query(DUP_CTE + ` SELECT TOP 8 id, nro, dni, CONVERT(CHAR(10), fecha_atencion, 120) AS fecha FROM g WHERE rn > 1 ORDER BY id`);
+      if (!aplicar) return { success: true, vistaPrevia: true, aBorrar: total, porMes, ejemplos: ej.recordset };
+      if (total > TOPE_DUPLICADOS) return { success: false, error: "Freno: " + total + " repetidos (> " + TOPE_DUPLICADOS + "). No se borro nada.", porMes };
+      if (!total) return { success: true, borradas: 0 };
+      await asegurarRespaldo(pool);
+      const tx = new sql.Transaction(pool);
+      await tx.begin();
+      try {
+        const q = await tx.request().query(DUP_CTE + `
+      SELECT id INTO #del FROM g WHERE rn > 1;
+      INSERT INTO dbo.Atenciones_Respaldo (id, datos, motivo)
+        SELECT a.id, (SELECT a.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER), 'duplicado 26-set' FROM dbo.Atenciones a JOIN #del d ON d.id = a.id;
+      DECLARE @resp INT = @@ROWCOUNT;
+      DELETE a FROM dbo.Atenciones a JOIN #del d ON d.id = a.id;
+      SELECT @resp AS respaldadas, @@ROWCOUNT AS borradas;`);
+        const x = q.recordset[0];
+        if (x.respaldadas !== x.borradas) throw new Error("Respaldo (" + x.respaldadas + ") distinto de borradas (" + x.borradas + ")");
+        await tx.commit();
+        return { success: true, respaldadas: x.respaldadas, borradas: x.borradas, porMes };
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        throw e;
+      }
+    }
+    async function fechas(pool, b) {
+      const cambios = Array.isArray(b.cambios) ? b.cambios : [];
+      if (!cambios.length) throw new Error("Faltan cambios");
+      const aplicar = !!b.aplicar, out = [];
+      if (aplicar) await asegurarRespaldo(pool);
+      for (const c of cambios) {
+        const dniN = String(c.dni || "").trim().replace(/^0+/, "");
+        const f = String(c.fecha || "").slice(0, 10);
+        if (!c.nro || !dniN || !/^\d{4}-\d{2}-\d{2}$/.test(f)) {
+          out.push({ nro: c.nro, estado: "datos invalidos" });
+          continue;
+        }
+        const r = await pool.request().input("nro", sql.Int, c.nro).input("d", sql.NVarChar(20), dniN).query(`SELECT id, CONVERT(CHAR(10), fecha_atencion, 120) AS fecha FROM dbo.Atenciones
+              WHERE nro = @nro AND SUBSTRING(LTRIM(RTRIM(dni)), PATINDEX('%[^0]%', LTRIM(RTRIM(dni)) + '.'), 20) = @d`);
+        if (r.recordset.length !== 1) {
+          out.push({ nro: c.nro, estado: "no se toca: " + r.recordset.length + " registros con ese N\xB0+DNI" });
+          continue;
+        }
+        const fila = r.recordset[0];
+        if (fila.fecha === f) {
+          out.push({ nro: c.nro, estado: "ya estaba bien" });
+          continue;
+        }
+        if (!aplicar) {
+          out.push({ nro: c.nro, id: fila.id, estado: "cambiaria " + (fila.fecha || "vacia") + " -> " + f });
+          continue;
+        }
+        const tx = new sql.Transaction(pool);
+        await tx.begin();
+        try {
+          await tx.request().input("id", sql.Int, fila.id).query(`INSERT INTO dbo.Atenciones_Respaldo (id, datos, motivo)
+        SELECT a.id, (SELECT a.* FOR JSON PATH, WITHOUT_ARRAY_WRAPPER), 'cambio de fecha 26-set' FROM dbo.Atenciones a WHERE a.id = @id`);
+          await tx.request().input("id", sql.Int, fila.id).input("f", sql.Date, f).query("UPDATE dbo.Atenciones SET fecha_atencion = @f, mes = MONTH(@f), anio = YEAR(@f) WHERE id = @id");
+          await tx.commit();
+          out.push({ nro: c.nro, id: fila.id, estado: "corregida " + (fila.fecha || "vacia") + " -> " + f });
+        } catch (e) {
+          try {
+            await tx.rollback();
+          } catch (e2) {
+          }
+          out.push({ nro: c.nro, estado: "error: " + e.message });
+        }
+      }
+      return { success: true, aplicar, resultados: out };
+    }
+    var DUP_CTE_PG = `WITH g AS (
+    SELECT id, nro, fecha_atencion, TRIM(dni) AS dni,
+           ROW_NUMBER() OVER (PARTITION BY nro, TRIM(dni), fecha_atencion ORDER BY id) AS rn
+    FROM Atenciones WHERE fecha_atencion IS NOT NULL AND nro IS NOT NULL)`;
+    async function duplicadosPg(pool, aplicar) {
+      const r = await pool.request().query(DUP_CTE_PG + `
+    SELECT to_char(fecha_atencion, 'YYYY-MM') AS mes, COUNT(*)::int AS n FROM g WHERE rn > 1 GROUP BY 1 ORDER BY 1`);
+      const porMes = {};
+      let total = 0;
+      r.recordset.forEach((x) => {
+        porMes[x.mes] = x.n;
+        total += x.n;
+      });
+      const ej = await pool.request().query(DUP_CTE_PG + ` SELECT id, nro, dni, to_char(fecha_atencion, 'YYYY-MM-DD') AS fecha FROM g WHERE rn > 1 ORDER BY id LIMIT 8`);
+      if (!aplicar) return { success: true, vistaPrevia: true, aBorrar: total, porMes, ejemplos: ej.recordset };
+      if (total > TOPE_DUPLICADOS) return { success: false, error: "Freno: " + total + " repetidos (> " + TOPE_DUPLICADOS + "). No se borro nada.", porMes };
+      if (!total) return { success: true, borradas: 0 };
+      await asegurarRespaldo(pool);
+      const tx = new sql.Transaction(pool);
+      await tx.begin();
+      try {
+        const ins = await tx.request().query(DUP_CTE_PG + `
+      INSERT INTO Atenciones_Respaldo (id, datos, motivo)
+        SELECT a.id, row_to_json(a)::text, 'duplicado 26-set' FROM Atenciones a WHERE a.id IN (SELECT id FROM g WHERE rn > 1)`);
+        const del = await tx.request().query(DUP_CTE_PG + ` DELETE FROM Atenciones WHERE id IN (SELECT id FROM g WHERE rn > 1)`);
+        const x = { respaldadas: ins.rowsAffected && ins.rowsAffected[0] || 0, borradas: del.rowsAffected && del.rowsAffected[0] || 0 };
+        if (x.respaldadas !== x.borradas) throw new Error("Respaldo (" + x.respaldadas + ") distinto de borradas (" + x.borradas + ")");
+        await tx.commit();
+        return { success: true, respaldadas: x.respaldadas, borradas: x.borradas, porMes };
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        throw e;
+      }
+    }
+    async function fechasPg(pool, b) {
+      const cambios = Array.isArray(b.cambios) ? b.cambios : [];
+      if (!cambios.length) throw new Error("Faltan cambios");
+      const aplicar = !!b.aplicar, out = [];
+      if (aplicar) await asegurarRespaldo(pool);
+      for (const c of cambios) {
+        const dniN = String(c.dni || "").trim().replace(/^0+/, "");
+        const f = String(c.fecha || "").slice(0, 10);
+        if (!c.nro || !dniN || !/^\d{4}-\d{2}-\d{2}$/.test(f)) {
+          out.push({ nro: c.nro, estado: "datos invalidos" });
+          continue;
+        }
+        const r = await pool.request().input("nro", sql.Int, c.nro).input("d", sql.NVarChar(20), dniN).query(`SELECT id, to_char(fecha_atencion, 'YYYY-MM-DD') AS fecha FROM Atenciones
+              WHERE nro = @nro AND LTRIM(TRIM(dni), '0') = @d`);
+        if (r.recordset.length !== 1) {
+          out.push({ nro: c.nro, estado: "no se toca: " + r.recordset.length + " registros con ese N\xB0+DNI" });
+          continue;
+        }
+        const fila = r.recordset[0];
+        if (fila.fecha === f) {
+          out.push({ nro: c.nro, estado: "ya estaba bien" });
+          continue;
+        }
+        if (!aplicar) {
+          out.push({ nro: c.nro, id: fila.id, estado: "cambiaria " + (fila.fecha || "vacia") + " -> " + f });
+          continue;
+        }
+        const tx = new sql.Transaction(pool);
+        await tx.begin();
+        try {
+          await tx.request().input("id", sql.Int, fila.id).query(`INSERT INTO Atenciones_Respaldo (id, datos, motivo)
+        SELECT a.id, row_to_json(a)::text, 'cambio de fecha 26-set' FROM Atenciones a WHERE a.id = @id`);
+          await tx.request().input("id", sql.Int, fila.id).input("f", sql.NVarChar(10), f).query(`UPDATE Atenciones SET fecha_atencion = CAST(@f AS date), mes = EXTRACT(MONTH FROM CAST(@f AS date))::int, anio = EXTRACT(YEAR FROM CAST(@f AS date))::int WHERE id = @id`);
+          await tx.commit();
+          out.push({ nro: c.nro, id: fila.id, estado: "corregida " + (fila.fecha || "vacia") + " -> " + f });
+        } catch (e) {
+          try {
+            await tx.rollback();
+          } catch (e2) {
+          }
+          out.push({ nro: c.nro, estado: "error: " + e.message });
+        }
+      }
+      return { success: true, aplicar, resultados: out };
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData && context.bindingData.accion;
+      try {
+        const pool = await getPool();
+        let body;
+        if (accion === "duplicados") body = await (sql._pg ? duplicadosPg : duplicados)(pool, String(req.query && req.query.aplicar || "") === "1");
+        else if (accion === "fechas") body = await (sql._pg ? fechasPg : fechas)(pool, req.body || {});
+        else if (accion === "respaldo") {
+          await asegurarRespaldo(pool);
+          const r = await pool.request().query("SELECT motivo, COUNT(*) AS n FROM dbo.Atenciones_Respaldo GROUP BY motivo");
+          body = { success: true, respaldo: r.recordset };
+        } else {
+          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
+          return;
+        }
+        context.res = { status: body.success ? 200 : 409, body };
+      } catch (e) {
+        context.res = { status: 500, body: { success: false, error: [e.message, e.originalError && e.originalError.message].filter(Boolean).join(" | ") } };
+      }
+    };
   }
 });
 
@@ -13708,6 +14209,91 @@ var require_atenciones_guardar = __commonJS({
       } catch (err) {
         context.log.error("[atenciones-guardar] " + err.message);
         context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
+// atenciones-guardar-admin/index.js
+var require_atenciones_guardar_admin = __commonJS({
+  "atenciones-guardar-admin/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var G = require_at_guardar();
+    var FILA = `a.id, a.nro, CONVERT(CHAR(10), a.fecha_atencion, 120) AS fecha_atencion, a.hora_inicio, a.hora_termino, a.nro_semana, a.mes, a.anio,
+  a.dni, a.nombre, a.sexo, CONVERT(CHAR(10), a.fecha_inicio_periodo, 120) AS fecha_inicio_periodo, a.empresa, a.fundo, a.cargo, a.ruta, a.codigo,
+  a.fundo_actual, a.celular, a.supervisor, a.detalle_documento, CONVERT(CHAR(10), a.fecha_inicio_doc, 120) AS fecha_inicio_doc,
+  CONVERT(CHAR(10), a.fecha_termino_doc, 120) AS fecha_termino_doc, a.dias_transcurridos, a.responsable_recepcion, a.observaciones,
+  a.estado, a.usuario_sistema, a.nro_licencia, a.parentesco,
+  a.autorizado_por, CONVERT(CHAR(10), a.fecha_termino_periodo, 120) AS fecha_termino_periodo, a.tipo_licencia`;
+    async function subirContador(pool, anio, max) {
+      await pool.request().input("a", sql.Int, anio).input("m", sql.Int, max).query(`
+    MERGE dbo.AtNroContador WITH (HOLDLOCK) AS x USING (SELECT @a AS anio) AS s ON x.anio = s.anio
+      WHEN MATCHED AND x.ultimo < @m THEN UPDATE SET ultimo = @m, actualizado = SYSUTCDATETIME()
+      WHEN NOT MATCHED THEN INSERT (anio, ultimo) VALUES (@a, @m);`);
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData && context.bindingData.accion;
+      const b = req.body || {}, q = req.query || {};
+      try {
+        const pool = await getPool();
+        await G.asegurarTablas(pool);
+        const anio = parseInt(b.anio || q.anio, 10) || G.lima().anio;
+        let out;
+        if (accion === "estado") {
+          const r = await pool.request().input("a", sql.Int, anio).query(`
+        SELECT (SELECT valor FROM dbo.AtConfig WHERE clave = 'azure_primero') AS activo,
+               (SELECT ultimo FROM dbo.AtNroContador WHERE anio = @a) AS contador,
+               (SELECT MAX(nro) FROM dbo.Atenciones WITH (NOLOCK) WHERE anio = @a) AS maxAzure,
+               (SELECT COUNT(*) FROM dbo.AtIdem WHERE en_hoja = 0) AS pendientesHoja,
+               (SELECT COUNT(*) FROM dbo.AtIdem) AS guardadosPorAzure`);
+          out = Object.assign({ success: true, anio }, r.recordset[0]);
+        } else if (accion === "encender") {
+          if (b.max) await subirContador(pool, anio, parseInt(b.max, 10));
+          await pool.request().input("v", sql.NVarChar(200), b.activo ? "1" : "0").query(`
+        MERGE dbo.AtConfig AS x USING (SELECT 'azure_primero' AS clave) AS s ON x.clave = s.clave
+          WHEN MATCHED THEN UPDATE SET valor = @v, actualizado = SYSUTCDATETIME()
+          WHEN NOT MATCHED THEN INSERT (clave, valor) VALUES ('azure_primero', @v);`);
+          out = { success: true, activo: !!b.activo };
+        } else if (accion === "nro") {
+          const m = parseInt(b.max, 10);
+          if (!m) throw new Error("Falta max");
+          await subirContador(pool, anio, m);
+          out = { success: true };
+        } else if (accion === "idem") {
+          const k = String(q.clave || "").replace(/[^\w-]/g, "").slice(0, 80);
+          const r = await pool.request().input("k", sql.NVarChar(80), k).query(`SELECT i.clave, i.en_hoja, ${FILA} FROM dbo.AtIdem i JOIN dbo.Atenciones a ON a.id = i.atencion_id WHERE i.clave = @k`);
+          out = { success: true, encontrado: r.recordset.length > 0, fila: r.recordset[0] || null };
+        } else if (accion === "pendientes") {
+          const r = await pool.request().query(`SELECT TOP 200 i.clave, ${FILA}
+        FROM dbo.AtIdem i JOIN dbo.Atenciones a ON a.id = i.atencion_id WHERE i.en_hoja = 0 ORDER BY i.nro`);
+          await pool.request().query(sql._pg ? `UPDATE AtIdem SET en_hoja = 1 WHERE en_hoja = 0 AND NOT EXISTS (SELECT 1 FROM Atenciones a WHERE a.id = AtIdem.atencion_id)` : `UPDATE i SET en_hoja = 1 FROM dbo.AtIdem i LEFT JOIN dbo.Atenciones a ON a.id = i.atencion_id WHERE i.en_hoja = 0 AND a.id IS NULL`);
+          out = { success: true, filas: r.recordset };
+        } else if (accion === "marcar") {
+          const claves = (Array.isArray(b.claves) ? b.claves : []).map((k) => String(k).replace(/[^\w-]/g, "").slice(0, 80)).filter(Boolean).slice(0, 500);
+          let n = 0;
+          for (const k of claves) {
+            const r = await pool.request().input("k", sql.NVarChar(80), k).query("UPDATE dbo.AtIdem SET en_hoja = 1 WHERE clave = @k");
+            n += r.rowsAffected && r.rowsAffected[0] || 0;
+          }
+          out = { success: true, marcadas: n };
+        } else if (accion === "simular") {
+          const r = await pool.request().input("a", sql.Int, anio).query(`SELECT (SELECT ultimo FROM dbo.AtNroContador WHERE anio = @a) AS ultimo,
+        (SELECT MAX(nro) FROM dbo.Atenciones WITH (NOLOCK) WHERE anio = @a) AS maxAz`);
+          const x = r.recordset[0];
+          out = {
+            success: true,
+            nroSiguiente: Math.max(x.ultimo || 0, x.maxAz || 0) + 1,
+            contador: x.ultimo,
+            maxAzure: x.maxAz,
+            armado: (Array.isArray(b.atenciones) ? b.atenciones : []).map(G.armar)
+          };
+        } else {
+          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
+          return;
+        }
+        context.res = { status: 200, body: out };
+      } catch (e) {
+        context.res = { status: 500, body: { success: false, error: [e.message, e.originalError && e.originalError.message].filter(Boolean).join(" | ") } };
       }
     };
   }
@@ -67855,6 +68441,62 @@ var require_cumpl_guardar2 = __commonJS({
   }
 });
 
+// cumpl-importar/index.js
+var require_cumpl_importar = __commonJS({
+  "cumpl-importar/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var { asegurarTablas, CLAVES } = require_cumpl_db();
+    module.exports = async function(context, req) {
+      try {
+        const pool = await getPool();
+        await asegurarTablas(pool);
+        if (req.method === "GET") {
+          const r = await pool.request().query(`SELECT clave, LEN(datos) AS largo, CONVERT(VARCHAR(19), DATEADD(HOUR, -5, actualizado), 120) AS lima FROM dbo.CUMPL_Datos`);
+          const out = { success: true };
+          r.recordset.forEach((f) => {
+            out[f.clave] = { largo: f.largo, actualizado_lima: f.lima };
+          });
+          try {
+            const c = await pool.request().query("SELECT datos FROM dbo.CUMPL_Datos WHERE clave IN ('casos','usuarios')");
+            c.recordset.forEach((f) => {
+              const j = JSON.parse(f.datos);
+              if (j.length && j[0] && "estado_gestion" in j[0]) out.n_casos = j.length;
+              else out.n_usuarios = j.length;
+            });
+          } catch (e) {
+          }
+          context.res = { status: 200, body: out };
+          return;
+        }
+        const b = req.body || {};
+        const faltan = CLAVES.filter((k) => b[k] === void 0 || b[k] === null);
+        if (faltan.length) throw new Error("Faltan datos: " + faltan.join(", "));
+        if (!Array.isArray(b.casos) || !Array.isArray(b.usuarios) || !Array.isArray(b.sups) || !Array.isArray(b.restricc)) throw new Error("Formato invalido");
+        if (!b.usuarios.length) throw new Error("Lista de usuarios vacia: no se reemplaza nada");
+        const tx = new sql.Transaction(pool);
+        await tx.begin();
+        try {
+          for (const k of CLAVES) {
+            await tx.request().input("k", sql.NVarChar(40), k).input("d", sql.NVarChar(sql.MAX), JSON.stringify(b[k])).query(`MERGE dbo.CUMPL_Datos AS x USING (SELECT @k AS clave) AS s ON x.clave = s.clave
+                  WHEN MATCHED THEN UPDATE SET datos = @d, actualizado = SYSUTCDATETIME()
+                  WHEN NOT MATCHED THEN INSERT (clave, datos) VALUES (@k, @d);`);
+          }
+          await tx.commit();
+        } catch (e) {
+          try {
+            await tx.rollback();
+          } catch (e2) {
+          }
+          throw e;
+        }
+        context.res = { status: 200, body: { success: true, casos: b.casos.length, usuarios: b.usuarios.length, sups: b.sups.length, restricc: b.restricc.length } };
+      } catch (e) {
+        context.res = { status: 500, body: { success: false, error: [e.message, e.originalError && e.originalError.message].filter(Boolean).join(" | ") } };
+      }
+    };
+  }
+});
+
 // cv/index.js
 var require_cv = __commonJS({
   "cv/index.js"(exports, module) {
@@ -68068,1178 +68710,6 @@ var require_cv_guardar2 = __commonJS({
         context.res = { status: r.status, body: r.body };
       } catch (err) {
         context.log.error("[cv-guardar] " + accion + ": " + err.message);
-        context.res = { status: 500, body: { success: false, error: err.message } };
-      }
-    };
-  }
-});
-
-// shared/e360-guardar.js
-var require_e360_guardar = __commonJS({
-  "shared/e360-guardar.js"(exports, module) {
-    "use strict";
-    var { sql } = require_db();
-    var TH = require_tablas_hoja();
-    var CG = require_cv_guardar();
-    var CAP = require_cap_guardar();
-    var ACCIONES = ["saveEvaluacion360", "deleteEvaluacion360"];
-    var ADMINS_EVAL360 = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas"];
-    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
-    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
-    var p2 = (n) => (n < 10 ? "0" : "") + n;
-    function lima(d) {
-      const x = new Date(d.getTime() - 5 * 36e5);
-      return { dia: x.getUTCFullYear() + "-" + p2(x.getUTCMonth() + 1) + "-" + p2(x.getUTCDate()), hm: p2(x.getUTCHours()) + ":" + p2(x.getUTCMinutes()) };
-    }
-    var e360Fecha = (v) => !v ? "" : String(v).substring(0, 10);
-    var e360Periodo = (f) => {
-      f = e360Fecha(f);
-      return f.length >= 7 ? f.substring(0, 7) : "";
-    };
-    function promComp(comps, nombre) {
-      if (!Array.isArray(comps)) return 0;
-      for (let i = 0; i < comps.length; i++) {
-        const c = comps[i];
-        if (String(c.nombre || "").toLowerCase().indexOf(nombre) === 0) return Math.round((Number(c.promedio) || 0) * 100) / 100;
-      }
-      return 0;
-    }
-    async function encendido(pool) {
-      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'e360_azure_primero'");
-      return r.recordset.length && r.recordset[0].valor === "1";
-    }
-    function params(r, celdas) {
-      const E = TH.ESQ.e360_evaluaciones, f = TH.aFila("e360_evaluaciones", celdas);
-      const sets = E.cols.map((c, k) => {
-        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
-        return c[0] + " = @v" + k;
-      });
-      r.input("o", sql.NVarChar(sql.MAX), f.otros);
-      return sets;
-    }
-    async function ejecutar(pool, accion, b, usuario, prueba, ahoraFija) {
-      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
-      await CG.asegurarTablas(pool);
-      await TH.asegurar(pool, "e360_evaluaciones");
-      b = b || {};
-      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
-      const claveOp = (clave ? "e360:" + clave : "e360:sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8)).slice(0, 100);
-      if (clave && !prueba) {
-        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-      }
-      if (accion === "saveEvaluacion360" && !b.supervisor) return { status: 200, body: { success: false, error: "Falta supervisor" } };
-      if (accion === "deleteEvaluacion360") {
-        if (ADMINS_EVAL360.indexOf(String(usuario || "").trim().toLowerCase()) === -1) return { status: 200, body: { success: false, error: "Sin permisos: solo administradores pueden eliminar evaluaciones" } };
-        if (!b.id) return { status: 200, body: { success: false, error: "ID de evaluaci\xF3n requerido" } };
-      }
-      const tx = new sql.Transaction(pool);
-      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
-      try {
-        await tx.request().query("EXEC sp_getapplock @Resource = 'e360_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
-        const T = await TH.leer(pool, "e360_evaluaciones");
-        if (!T) {
-          await tx.rollback();
-          return { status: 503, body: { success: false, error: "Tabla de evaluaciones aun no cargada" } };
-        }
-        const E = TH.ESQ.e360_evaluaciones, ahora = ahoraFija ? new Date(ahoraFija) : /* @__PURE__ */ new Date(), L = lima(ahora);
-        let resp, cuerpo, celdas;
-        if (accion === "saveEvaluacion360") {
-          const d = b;
-          const fecha = e360Fecha(d.fecha) || L.dia;
-          const periodo = d.periodo || e360Periodo(fecha);
-          if (!periodo) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "No se pudo determinar el periodo" } };
-          }
-          const heads = (T.encabezado || []).map((h) => S(h).trim()), iP = heads.indexOf("Periodo"), iD = heads.indexOf("Detalle");
-          if (iP === -1 || iD === -1) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "Ejecutar eval360Setup() primero (faltan columnas Periodo/Detalle)" } };
-          }
-          const ancho = heads.length;
-          const comps = d.competencias || [];
-          let total = 0;
-          (Array.isArray(comps) ? comps : []).forEach((c) => {
-            (c.respuestas || []).forEach((r) => {
-              total += Number(r.valor) || 0;
-            });
-          });
-          const usuarioReg = d.evaluadorUser || d.usuario_registro || "";
-          let detalle = "";
-          try {
-            detalle = JSON.stringify(comps);
-          } catch (e) {
-            detalle = "[]";
-          }
-          const sup = String(d.supervisor).trim().toLowerCase();
-          const i = T.filas.findIndex((f) => S(f[3]).trim().toLowerCase() === sup && S(f[iP]).trim() === periodo);
-          const idExist = i >= 0 ? S(T.filas[i][0]) : "";
-          const id = i >= 0 && idExist ? idExist : d.id || "EVA-" + ahora.getTime();
-          const fila = new Array(ancho).fill("");
-          fila[0] = id;
-          fila[1] = fecha;
-          fila[2] = d.evaluador || usuarioReg;
-          fila[3] = String(d.supervisor).trim();
-          fila[4] = d.empresa || "";
-          fila[5] = d.sector || "";
-          fila[6] = promComp(comps, "liderazgo");
-          fila[7] = promComp(comps, "comunicaci");
-          fila[8] = promComp(comps, "cumplimiento");
-          fila[9] = promComp(comps, "gesti");
-          fila[10] = promComp(comps, "resoluci");
-          fila[11] = promComp(comps, "planificaci");
-          fila[12] = total;
-          fila[13] = Number(d.porcentaje) || 0;
-          fila[14] = d.clasificacion || d.nivel || "";
-          fila[15] = d.obs !== void 0 ? d.obs : d.observaciones || "";
-          fila[16] = d.recomendaciones || "";
-          fila[17] = usuarioReg;
-          fila[18] = L.dia + " " + L.hm;
-          fila[iP] = periodo;
-          fila[iD] = detalle;
-          celdas = fila.map((v, k) => k === iP ? typeof v === "string" ? v : String(v) : CAP.comoHoja(v));
-          if (i >= 0) {
-            const r = tx.request();
-            r.input("fila", sql.Int, i + 1);
-            const sets = params(r, celdas);
-            await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
-          } else await CAP.agregarFilas(tx, "e360_evaluaciones", [celdas]);
-          resp = { success: true, id, accion: i >= 0 ? "actualizada" : "creada", periodo };
-          cuerpo = { accion, id: String(id), sup: String(d.supervisor).trim(), periodo, existe: i >= 0, fila };
-        } else {
-          const i = T.filas.findIndex((f) => S(f[0]) === String(b.id));
-          if (i < 0) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "Evaluaci\xF3n " + b.id + " no encontrada" } };
-          }
-          celdas = T.filas[i];
-          await tx.request().input("fila", sql.Int, i + 1).query(`DELETE FROM ${E.tabla} WHERE fila = @fila; UPDATE ${E.tabla} SET fila = fila - 1 WHERE fila > @fila;`);
-          resp = { success: true, mensaje: "Evaluaci\xF3n archivada correctamente" };
-          cuerpo = { accion, id: String(b.id), usuario: b.usuario, motivo: b.motivo || "Sin motivo especificado", fecha: ahora.toISOString(), celdas };
-        }
-        cuerpo.clave = claveOp;
-        await CAP.tocarMarcas(tx, ["e360_evaluaciones"]);
-        resp.fuente = "azure";
-        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'e360', @a, NULL, @u, @c, @r)");
-        if (prueba) {
-          await tx.rollback();
-          resp.prueba = true;
-          resp._op = cuerpo;
-          resp._celdas = celdas;
-        } else await tx.commit();
-        return { status: 200, body: resp };
-      } catch (e) {
-        try {
-          await tx.rollback();
-        } catch (e2) {
-        }
-        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
-          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-        }
-        throw e;
-      }
-    }
-    module.exports = { ejecutar, encendido, ACCIONES, ADMINS_EVAL360 };
-  }
-});
-
-// e360-guardar/index.js
-var require_e360_guardar2 = __commonJS({
-  "e360-guardar/index.js"(exports, module) {
-    var jwt = require_jsonwebtoken();
-    var { getPool } = require_db();
-    var CG = require_cv_guardar();
-    var H = require_e360_guardar();
-    var TH = require_tablas_hoja();
-    function token(req) {
-      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
-      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
-      try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
-      } catch (e) {
-        return null;
-      }
-    }
-    var S = (v) => v && typeof v === "object" && typeof v.$d === "string" ? v.$s || v.$d : String(v == null ? "" : v);
-    function fechaYmd(v) {
-      if (v && typeof v === "object" && typeof v.$d === "string") {
-        const d2 = new Date(v.$d);
-        if (!isNaN(d2)) {
-          const x = new Date(d2.getTime() - 5 * 36e5);
-          return x.toISOString().slice(0, 10);
-        }
-      }
-      const t = String(v == null ? "" : v).trim();
-      let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (m) return m[1] + "-" + m[2] + "-" + m[3];
-      m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (m) return m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2);
-      const d = new Date(t);
-      return isNaN(d) ? "" : d.toISOString().slice(0, 10);
-    }
-    async function getEvaluaciones360(pool, p) {
-      const T = await TH.leer(pool, "e360_evaluaciones");
-      if (!T) return { success: false, error: "Tabla de evaluaciones aun no cargada" };
-      const heads = (T.encabezado || []).map((h) => S(h).trim()), iP = heads.indexOf("Periodo"), iD = heads.indexOf("Detalle");
-      let data = [];
-      (T.filas || []).forEach((r) => {
-        if (!r || !S(r[0])) return;
-        const fecha = fechaYmd(r[1]);
-        const periodo = iP >= 0 && S(r[iP]).trim() ? S(r[iP]).trim() : fecha.slice(0, 7);
-        let comps = [];
-        if (iD >= 0 && S(r[iD])) {
-          try {
-            comps = JSON.parse(S(r[iD]));
-          } catch (e) {
-            comps = [];
-          }
-        }
-        if (!comps.length) {
-          [["Liderazgo", r[6]], ["Comunicaci\xF3n", r[7]], ["Cumplimiento", r[8]], ["Gesti\xF3n de Equipo", r[9]], ["Resoluci\xF3n de Problemas", r[10]], ["Planificaci\xF3n", r[11]]].forEach((pc) => {
-            const v = Number(S(pc[1])) || 0;
-            if (v > 0) comps.push({ nombre: pc[0], promedio: v, respondidas: 0, total: 0, respuestas: [] });
-          });
-        }
-        data.push({
-          id: S(r[0]),
-          fecha,
-          periodo,
-          evaluador: S(r[2]),
-          supervisor: S(r[3]).trim(),
-          empresa: S(r[4]),
-          sector: S(r[5]),
-          competencias: comps,
-          total: Number(S(r[12])) || 0,
-          porcentaje: Number(S(r[13])) || 0,
-          clasificacion: S(r[14]),
-          obs: S(r[15]),
-          evaluadorUser: S(r[17]),
-          fechaRegistro: fechaYmd(r[18])
-        });
-      });
-      if (p && p.empresa && p.empresa !== "AMBAS") data = data.filter((e) => e.empresa === p.empresa);
-      if (p && p.supervisor) {
-        const q = String(p.supervisor).toLowerCase();
-        data = data.filter((e) => e.supervisor.toLowerCase().indexOf(q) !== -1);
-      }
-      if (p && p.periodo) data = data.filter((e) => e.periodo === String(p.periodo));
-      data.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
-      return { success: true, data, fuente: "azure" };
-    }
-    module.exports = async function(context, req) {
-      const accion = context.bindingData.accion;
-      try {
-        if (accion !== "getEvaluaciones360" && H.ACCIONES.indexOf(accion) < 0) {
-          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
-          return;
-        }
-        const t = token(req);
-        if (!t || !t.usuario) {
-          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
-          return;
-        }
-        const pool = await getPool();
-        await CG.asegurarTablas(pool);
-        if (accion === "getEvaluaciones360") {
-          context.res = { status: 200, body: await getEvaluaciones360(pool, req.body || {}) };
-          return;
-        }
-        if (!await H.encendido(pool)) {
-          context.res = { status: 503, body: { success: false, apagado: true, error: "Guardado en Azure apagado" } };
-          return;
-        }
-        const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
-        context.res = { status: r.status, body: r.body };
-      } catch (err) {
-        context.log.error("[e360-guardar] " + accion + ": " + err.message);
-        context.res = { status: 500, body: { success: false, error: err.message } };
-      }
-    };
-  }
-});
-
-// shared/eti-eval.js
-var require_eti_eval = __commonJS({
-  "shared/eti-eval.js"(exports, module) {
-    "use strict";
-    var { sql } = require_db();
-    var listo = null;
-    function asegurarTablas(pool) {
-      if (!listo) listo = pool.request().query(`
-    IF OBJECT_ID('dbo.ETI_Evaluaciones', 'U') IS NULL
-      CREATE TABLE dbo.ETI_Evaluaciones (
-        id NVARCHAR(80) NOT NULL PRIMARY KEY,
-        modalidad NVARCHAR(10) NOT NULL,            -- QR | MANUAL
-        sesion_id NVARCHAR(20) NULL,
-        fecha DATE NOT NULL,
-        empresa NVARCHAR(40) NULL,
-        supervisor NVARCHAR(150) NULL,
-        usuario NVARCHAR(60) NULL,
-        sector NVARCHAR(150) NULL,
-        tipo NVARCHAR(20) NULL,                     -- obrero | empleado
-        ruta NVARCHAR(150) NULL,
-        codigo NVARCHAR(60) NULL,
-        evaluados INT NOT NULL DEFAULT 1,
-        resultado DECIMAL(7,4) NOT NULL,            -- 0..1
-        estado NVARCHAR(12) NULL,                   -- APROBADO | REFUERZO
-        banco_version INT NULL,
-        creado DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());
-    IF OBJECT_ID('dbo.ETI_Evaluaciones_Seccion', 'U') IS NULL
-      CREATE TABLE dbo.ETI_Evaluaciones_Seccion (
-        eval_id NVARCHAR(80) NOT NULL,
-        sec_id NVARCHAR(40) NOT NULL,
-        sec_nom NVARCHAR(120) NULL,
-        peso DECIMAL(7,4) NULL,
-        pct DECIMAL(7,4) NOT NULL,
-        CONSTRAINT PK_ETI_Eval_Sec PRIMARY KEY (eval_id, sec_id));
-    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_ETI_Eval_Fecha')
-      CREATE INDEX IX_ETI_Eval_Fecha ON dbo.ETI_Evaluaciones (fecha) INCLUDE (empresa, supervisor, sector, ruta, codigo, modalidad, evaluados, resultado);`).catch((e) => {
-        listo = null;
-        throw e;
-      });
-      return listo;
-    }
-    var txt = (v, n) => {
-      const s = String(v == null ? "" : v).trim();
-      return s ? s.slice(0, n) : null;
-    };
-    var num = (v, a, b) => {
-      const x = Number(v);
-      return Number.isFinite(x) ? Math.min(b, Math.max(a, x)) : null;
-    };
-    var fechaOk = (f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f || "")) ? f : null;
-    function normalizar(r) {
-      const id = txt(r.id, 80), fecha = fechaOk(r.fecha), resultado = num(r.resultado, 0, 1);
-      if (!id || !fecha || resultado == null) return null;
-      const mod = String(r.modalidad || "").toUpperCase() === "MANUAL" ? "MANUAL" : "QR";
-      return {
-        id,
-        modalidad: mod,
-        sesion_id: txt(r.sesion_id, 20),
-        fecha,
-        empresa: txt(r.empresa, 40),
-        supervisor: txt(r.supervisor, 150),
-        usuario: txt(r.usuario, 60),
-        sector: txt(r.sector, 150),
-        tipo: txt(r.tipo, 20),
-        ruta: txt(String(r.ruta || "").toUpperCase(), 150),
-        codigo: txt(String(r.codigo || "").toUpperCase(), 60),
-        evaluados: Math.round(num(r.evaluados, 1, 5e3) || 1),
-        resultado,
-        estado: resultado >= 0.7 ? "APROBADO" : "REFUERZO",
-        banco_version: Math.round(num(r.banco_version, 0, 1e6) || 0),
-        secciones: (Array.isArray(r.secciones) ? r.secciones : []).slice(0, 20).map((s) => ({
-          sec_id: txt(s.id, 40),
-          sec_nom: txt(s.nom, 120),
-          peso: num(s.peso, 0, 1),
-          pct: num(s.pct, 0, 1)
-        })).filter((s) => s.sec_id && s.pct != null)
-      };
-    }
-    async function guardar(pool, lista) {
-      const ok = [], out = { insertados: 0, existentes: 0, invalidos: 0 };
-      lista.forEach((r) => {
-        const n = normalizar(r || {});
-        if (n) ok.push(n);
-        else out.invalidos++;
-      });
-      for (const r of ok) {
-        const q = pool.request();
-        Object.entries({
-          id: r.id,
-          modalidad: r.modalidad,
-          sesion_id: r.sesion_id,
-          fecha: r.fecha,
-          empresa: r.empresa,
-          supervisor: r.supervisor,
-          usuario: r.usuario,
-          sector: r.sector,
-          tipo: r.tipo,
-          ruta: r.ruta,
-          codigo: r.codigo,
-          estado: r.estado
-        }).forEach(([k, v]) => q.input(k, sql.NVarChar, v));
-        q.input("evaluados", sql.Int, r.evaluados);
-        q.input("resultado", sql.Decimal(7, 4), r.resultado);
-        q.input("banco_version", sql.Int, r.banco_version);
-        const vals = r.secciones.map((s, i) => {
-          q.input("s" + i, sql.NVarChar, s.sec_id);
-          q.input("n" + i, sql.NVarChar, s.sec_nom);
-          q.input("w" + i, sql.Decimal(7, 4), s.peso);
-          q.input("c" + i, sql.Decimal(7, 4), s.pct);
-          return `(@id,@s${i},@n${i},@w${i},@c${i})`;
-        });
-        if (sql._pg) {
-          const vpg = r.secciones.map((s, i) => `(CAST(@s${i} AS text),CAST(@n${i} AS text),CAST(@w${i} AS numeric),CAST(@c${i} AS numeric))`);
-          const rp = await q.query(`
-        WITH ins AS (
-          INSERT INTO ETI_Evaluaciones (id,modalidad,sesion_id,fecha,empresa,supervisor,usuario,sector,tipo,ruta,codigo,evaluados,resultado,estado,banco_version)
-          VALUES (@id,@modalidad,@sesion_id,CAST(@fecha AS date),@empresa,@supervisor,@usuario,@sector,@tipo,@ruta,@codigo,@evaluados,@resultado,@estado,@banco_version)
-          ON CONFLICT (id) DO NOTHING RETURNING id)
-        ${vpg.length ? `, sec AS (INSERT INTO ETI_Evaluaciones_Seccion (eval_id,sec_id,sec_nom,peso,pct)
-          SELECT ins.id, v.a, v.b, v.c, v.d FROM ins CROSS JOIN (VALUES ${vpg.join(",")}) AS v(a,b,c,d) RETURNING 1)` : ""}
-        SELECT COUNT(*)::int AS nuevo FROM ins`);
-          if (rp.recordset && rp.recordset[0] && rp.recordset[0].nuevo === 1) out.insertados++;
-          else out.existentes++;
-          continue;
-        }
-        const res = await q.query(`
-      SET XACT_ABORT ON;
-      IF EXISTS (SELECT 1 FROM dbo.ETI_Evaluaciones WHERE id=@id) SELECT 0 AS nuevo;
-      ELSE BEGIN
-        BEGIN TRAN;
-        INSERT INTO dbo.ETI_Evaluaciones (id,modalidad,sesion_id,fecha,empresa,supervisor,usuario,sector,tipo,ruta,codigo,evaluados,resultado,estado,banco_version)
-        VALUES (@id,@modalidad,@sesion_id,@fecha,@empresa,@supervisor,@usuario,@sector,@tipo,@ruta,@codigo,@evaluados,@resultado,@estado,@banco_version);
-        ${vals.length ? "INSERT INTO dbo.ETI_Evaluaciones_Seccion (eval_id,sec_id,sec_nom,peso,pct) VALUES " + vals.join(",") + ";" : ""}
-        COMMIT;
-        SELECT 1 AS nuevo;
-      END`);
-        const nuevo = res.recordset && res.recordset[0] && res.recordset[0].nuevo === 1;
-        if (nuevo) out.insertados++;
-        else out.existentes++;
-      }
-      return out;
-    }
-    async function stats(pool, f) {
-      const q = pool.request(), w = ["1=1"];
-      const add = (k, cond, tipo, v) => {
-        if (v) {
-          q.input(k, tipo, v);
-          w.push(cond);
-        }
-      };
-      add("desde", "e.fecha >= @desde", sql.Date, fechaOk(f.desde));
-      add("hasta", "e.fecha <= @hasta", sql.Date, fechaOk(f.hasta));
-      add("empresa", "e.empresa = @empresa", sql.NVarChar, txt(f.empresa, 40));
-      add("sector", "e.sector = @sector", sql.NVarChar, txt(f.sector, 150));
-      add("modalidad", "e.modalidad = @modalidad", sql.NVarChar, ["QR", "MANUAL"].includes(String(f.modalidad || "").toUpperCase()) ? String(f.modalidad).toUpperCase() : null);
-      const W = w.join(" AND ");
-      const keys = "CONVERT(char(10), e.fecha, 23) AS fecha, e.empresa, e.supervisor, e.sector, e.ruta, e.codigo, e.modalidad";
-      const grp = "e.fecha, e.empresa, e.supervisor, e.sector, e.ruta, e.codigo, e.modalidad";
-      const r1 = await q.query(`
-    SELECT ${keys}, SUM(e.evaluados) AS n, SUM(e.resultado * e.evaluados) AS sr,
-           SUM(CASE WHEN e.resultado >= 0.7 THEN e.evaluados ELSE 0 END) AS apr, COUNT(*) AS regs,
-           SUM(CASE WHEN e.resultado >= 0.0 AND e.resultado < 0.1 THEN e.evaluados ELSE 0 END) AS b0,
-           SUM(CASE WHEN e.resultado >= 0.1 AND e.resultado < 0.2 THEN e.evaluados ELSE 0 END) AS b1,
-           SUM(CASE WHEN e.resultado >= 0.2 AND e.resultado < 0.3 THEN e.evaluados ELSE 0 END) AS b2,
-           SUM(CASE WHEN e.resultado >= 0.3 AND e.resultado < 0.4 THEN e.evaluados ELSE 0 END) AS b3,
-           SUM(CASE WHEN e.resultado >= 0.4 AND e.resultado < 0.5 THEN e.evaluados ELSE 0 END) AS b4,
-           SUM(CASE WHEN e.resultado >= 0.5 AND e.resultado < 0.6 THEN e.evaluados ELSE 0 END) AS b5,
-           SUM(CASE WHEN e.resultado >= 0.6 AND e.resultado < 0.7 THEN e.evaluados ELSE 0 END) AS b6,
-           SUM(CASE WHEN e.resultado >= 0.7 AND e.resultado < 0.8 THEN e.evaluados ELSE 0 END) AS b7,
-           SUM(CASE WHEN e.resultado >= 0.8 AND e.resultado < 0.9 THEN e.evaluados ELSE 0 END) AS b8,
-           SUM(CASE WHEN e.resultado >= 0.9 AND e.resultado <= 1.0 THEN e.evaluados ELSE 0 END) AS b9
-      FROM dbo.ETI_Evaluaciones e WHERE ${W} GROUP BY ${grp};
-    SELECT ${keys}, s.sec_id, MAX(s.sec_nom) AS sec_nom, SUM(s.pct * e.evaluados) AS sp
-      FROM dbo.ETI_Evaluaciones e JOIN dbo.ETI_Evaluaciones_Seccion s ON s.eval_id = e.id
-     WHERE ${W} GROUP BY ${grp}, s.sec_id;`);
-      const clave = (r) => [r.fecha, r.empresa, r.supervisor, r.sector, r.ruta, r.codigo, r.modalidad].join("|");
-      const m = /* @__PURE__ */ new Map();
-      (r1.recordsets[0] || []).forEach((r) => m.set(clave(r), {
-        fecha: r.fecha,
-        empresa: r.empresa,
-        supervisor: r.supervisor,
-        sector: r.sector,
-        ruta: r.ruta,
-        codigo: r.codigo,
-        modalidad: r.modalidad,
-        n: Number(r.n) || 0,
-        sr: Number(r.sr) || 0,
-        apr: Number(r.apr) || 0,
-        regs: Number(r.regs) || 0,
-        bins: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => Number(r["b" + i]) || 0),
-        secs: {}
-      }));
-      (r1.recordsets[1] || []).forEach((r) => {
-        const g = m.get(clave(r));
-        if (g) g.secs[r.sec_id] = { nom: r.sec_nom, sp: Number(r.sp) || 0 };
-      });
-      return [...m.values()];
-    }
-    function whereFiltro(q, f) {
-      const w = [], ids = Array.isArray(f.ids) ? f.ids.map((x) => txt(x, 80)).filter(Boolean).slice(0, 2e3) : [];
-      if (ids.length) {
-        ids.forEach((v, i) => q.input("id" + i, sql.NVarChar, v));
-        w.push("id IN (" + ids.map((_, i) => "@id" + i).join(",") + ")");
-      }
-      const add = (k, cond, tipo, v) => {
-        if (v != null && v !== "") {
-          q.input(k, tipo, v);
-          w.push(cond);
-        }
-      };
-      add("f_ses", "sesion_id = @f_ses", sql.NVarChar, txt(f.sesion_id, 20));
-      add("f_sector", "sector = @f_sector", sql.NVarChar, txt(f.sector, 150));
-      add("f_ruta", "ruta = @f_ruta", sql.NVarChar, f.ruta != null ? txt(String(f.ruta).toUpperCase(), 150) : null);
-      if (f.codigo != null) {
-        q.input("f_cod", sql.NVarChar, txt(String(f.codigo).toUpperCase(), 60));
-        w.push("ISNULL(codigo,'') = ISNULL(@f_cod,'')");
-      }
-      add("f_desde", "fecha >= @f_desde", sql.Date, fechaOk(f.desde));
-      add("f_hasta", "fecha <= @f_hasta", sql.Date, fechaOk(f.hasta));
-      add("f_mod", "modalidad = @f_mod", sql.NVarChar, ["QR", "MANUAL"].includes(String(f.modalidad || "").toUpperCase()) ? String(f.modalidad).toUpperCase() : null);
-      if (!ids.length && !f.sesion_id && !f.sector && f.ruta == null) throw new Error("Filtro demasiado amplio");
-      return w.join(" AND ");
-    }
-    async function eliminar(pool, f) {
-      const q = pool.request();
-      const W = whereFiltro(q, f || {});
-      const r = await q.query(`SET XACT_ABORT ON; BEGIN TRAN;
-    DELETE FROM dbo.ETI_Evaluaciones_Seccion WHERE eval_id IN (SELECT id FROM dbo.ETI_Evaluaciones WHERE ${W});
-    DELETE FROM dbo.ETI_Evaluaciones WHERE ${W}; SELECT @@ROWCOUNT AS n; COMMIT;`);
-      return { eliminados: r.recordset && r.recordset[0] && r.recordset[0].n || 0 };
-    }
-    async function editar(pool, f, c) {
-      const q = pool.request();
-      const W = whereFiltro(q, f || {});
-      const set = [];
-      if (c && c.sector) {
-        q.input("c_sector", sql.NVarChar, txt(c.sector, 150));
-        set.push("sector = @c_sector");
-      }
-      if (c && c.ruta) {
-        q.input("c_ruta", sql.NVarChar, txt(String(c.ruta).toUpperCase(), 150));
-        set.push("ruta = @c_ruta");
-      }
-      if (c && c.codigo != null) {
-        q.input("c_cod", sql.NVarChar, txt(String(c.codigo).toUpperCase(), 60));
-        set.push("codigo = @c_cod");
-      }
-      if (!set.length) throw new Error("Sin cambios");
-      const r = await q.query(`UPDATE dbo.ETI_Evaluaciones SET ${set.join(", ")} WHERE ${W}; SELECT @@ROWCOUNT AS n;`);
-      return { editados: r.recordset && r.recordset[0] && r.recordset[0].n || 0 };
-    }
-    module.exports = { asegurarTablas, guardar, stats, normalizar, eliminar, editar };
-  }
-});
-
-// eti-eval-admin/index.js
-var require_eti_eval_admin = __commonJS({
-  "eti-eval-admin/index.js"(exports, module) {
-    var jwt = require_jsonwebtoken();
-    var { getPool } = require_db();
-    var E = require_eti_eval();
-    function admin(req) {
-      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
-      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
-      try {
-        const t = jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
-        const u = String(t.usuario || "").toLowerCase(), r = String(t.rol || "").toLowerCase();
-        return u === "jtimoteo" || r === "admin" || r === "administrador" ? t : null;
-      } catch (e) {
-        return null;
-      }
-    }
-    module.exports = async function(context, req) {
-      const accion = context.bindingData.accion;
-      try {
-        const t = admin(req);
-        if (!t) {
-          context.res = { status: 401, body: { success: false, error: "Solo el administrador" } };
-          return;
-        }
-        const b = req.body || {};
-        const pool = await getPool();
-        await E.asegurarTablas(pool);
-        let r;
-        if (accion === "eliminar") r = await E.eliminar(pool, b.filtro || {});
-        else if (accion === "editar") r = await E.editar(pool, b.filtro || {}, b.cambios || {});
-        else {
-          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
-          return;
-        }
-        context.log("[eti-eval-admin] " + accion + " por " + t.usuario + ": " + JSON.stringify(r));
-        context.res = { status: 200, body: { success: true, ...r } };
-      } catch (err) {
-        context.log.error("[eti-eval-admin] " + accion + ": " + err.message);
-        context.res = { status: err.message === "Filtro demasiado amplio" || err.message === "Sin cambios" ? 400 : 500, body: { success: false, error: err.message } };
-      }
-    };
-  }
-});
-
-// eti-eval-guardar/index.js
-var require_eti_eval_guardar = __commonJS({
-  "eti-eval-guardar/index.js"(exports, module) {
-    var { getPool } = require_db();
-    var E = require_eti_eval();
-    module.exports = async function(context, req) {
-      try {
-        const b = req.body || {};
-        const lista = Array.isArray(b.registros) ? b.registros : b.id ? [b] : [];
-        if (!lista.length) {
-          context.res = { status: 400, body: { success: false, error: "Sin registros" } };
-          return;
-        }
-        if (lista.length > 100) {
-          context.res = { status: 413, body: { success: false, error: "Maximo 100 registros por llamada" } };
-          return;
-        }
-        const pool = await getPool();
-        await E.asegurarTablas(pool);
-        const r = await E.guardar(pool, lista);
-        context.res = { status: 200, body: { success: true, ...r } };
-      } catch (err) {
-        context.log.error("[eti-eval-guardar] " + err.message);
-        context.res = { status: 500, body: { success: false, error: err.message } };
-      }
-    };
-  }
-});
-
-// eti-eval-stats/index.js
-var require_eti_eval_stats = __commonJS({
-  "eti-eval-stats/index.js"(exports, module) {
-    var { getPool } = require_db();
-    var E = require_eti_eval();
-    module.exports = async function(context, req) {
-      try {
-        const pool = await getPool();
-        await E.asegurarTablas(pool);
-        const filas = await E.stats(pool, req.query || {});
-        context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { success: true, filas, generado: (/* @__PURE__ */ new Date()).toISOString() } };
-      } catch (err) {
-        context.log.error("[eti-eval-stats] " + err.message);
-        context.res = { status: 500, body: { success: false, error: err.message } };
-      }
-    };
-  }
-});
-
-// shared/fus-guardar.js
-var require_fus_guardar = __commonJS({
-  "shared/fus-guardar.js"(exports, module) {
-    "use strict";
-    var { sql } = require_db();
-    var TH = require_tablas_hoja();
-    var CG = require_cv_guardar();
-    var CAP = require_cap_guardar();
-    var ACCIONES = ["saveFusion", "updateFusion"];
-    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
-    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
-    var pad4 = (n) => {
-      let s = String(n);
-      while (s.length < 4) s = "0" + s;
-      return s;
-    };
-    async function encendido(pool) {
-      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'fus_azure_primero'");
-      return r.recordset.length && r.recordset[0].valor === "1";
-    }
-    function filaNueva(id, d) {
-      return [
-        id,
-        d.fecha,
-        d.hora,
-        d.usuario,
-        d.sector,
-        d.supervisor,
-        d.reemplazo,
-        d.reemplazante || "",
-        d.reemplazado || "",
-        d.cantBuses,
-        d.rutaOrigen,
-        d.codOrigen,
-        d.totalTrab,
-        d.ruta1,
-        d.codigo1,
-        d.personal1,
-        d.ruta2,
-        d.codigo2,
-        d.personal2,
-        d.ruta3,
-        d.codigo3,
-        d.personal3,
-        d.motivo,
-        d.observaciones,
-        d.foto1 || "",
-        d.foto2 || "",
-        d.foto3 || "",
-        "Pendiente"
-      ].map((v) => v === void 0 || v === null ? "" : v);
-    }
-    function valoresEdicion(d) {
-      return [
-        d.sector || "",
-        d.supervisor || "",
-        d.reemplazo || "No",
-        d.reemplazante || "",
-        d.reemplazado || "",
-        d.cantBuses || "",
-        d.rutaOrigen || "",
-        d.codOrigen || "",
-        d.totalTrab || "",
-        d.ruta1 || "",
-        d.codigo1 || "",
-        d.personal1 || "",
-        d.ruta2 || "",
-        d.codigo2 || "",
-        d.personal2 || "",
-        d.ruta3 || "",
-        d.codigo3 || "",
-        d.personal3 || "",
-        d.motivo || "",
-        d.observaciones || "",
-        d.foto1 || "",
-        d.foto2 || "",
-        d.foto3 || "",
-        "Pendiente"
-      ];
-    }
-    async function ejecutar(pool, accion, b, usuario, prueba) {
-      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
-      await CG.asegurarTablas(pool);
-      await TH.asegurar(pool, "fus_buses");
-      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
-      const claveOp = clave ? accion + ":" + clave : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
-      if (clave && !prueba) {
-        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-      }
-      const tx = new sql.Transaction(pool);
-      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
-      try {
-        await tx.request().query("EXEC sp_getapplock @Resource = 'fus_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
-        const T = await TH.leer(pool, "fus_buses");
-        if (!T) {
-          await tx.rollback();
-          return { status: 503, body: { success: false, error: "Tabla de fusiones aun no cargada" } };
-        }
-        let resp, cuerpo, celdas;
-        if (accion === "saveFusion") {
-          const ids = new Set(T.filas.map((f) => S(f[0]).trim()));
-          let n = T.filas.length + 1, id = "FUS-" + pad4(n);
-          while (ids.has(id)) {
-            n++;
-            id = "FUS-" + pad4(n);
-          }
-          const fila = filaNueva(id, b);
-          celdas = fila.map(CAP.comoHoja);
-          await CAP.agregarFilas(tx, "fus_buses", [celdas]);
-          resp = { success: true, id };
-          cuerpo = { accion, id, fila };
-        } else {
-          if (!b.id) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "ID de fusi\xF3n no proporcionado" } };
-          }
-          const i = T.filas.findIndex((f2) => S(f2[0]).trim() === String(b.id).trim());
-          if (i < 0) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "Fusi\xF3n " + b.id + " no encontrada" } };
-          }
-          const valores = valoresEdicion(b);
-          celdas = T.filas[i].slice();
-          while (celdas.length < 28) celdas.push("");
-          valores.forEach((v, k) => {
-            celdas[4 + k] = CAP.comoHoja(v);
-          });
-          const E = TH.ESQ.fus_buses, f = TH.aFila("fus_buses", celdas), r = tx.request();
-          r.input("fila", sql.Int, i + 1);
-          const sets = E.cols.map((c, k) => {
-            r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
-            return c[0] + " = @v" + k;
-          });
-          r.input("o", sql.NVarChar(sql.MAX), f.otros);
-          await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
-          resp = { success: true, message: "Fusi\xF3n " + b.id + " actualizada" };
-          cuerpo = { accion, id: String(b.id).trim(), valores };
-        }
-        await CAP.tocarMarcas(tx, ["fus_buses"]);
-        resp.fuente = "azure";
-        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'fus', @a, NULL, @u, @c, @r)");
-        if (prueba) {
-          await tx.rollback();
-          resp.prueba = true;
-          resp._op = cuerpo;
-          resp._celdas = celdas;
-        } else await tx.commit();
-        return { status: 200, body: resp };
-      } catch (e) {
-        try {
-          await tx.rollback();
-        } catch (e2) {
-        }
-        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
-          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-        }
-        throw e;
-      }
-    }
-    function getFusiones(T) {
-      const J = (v) => esD(v) ? v.$d || null : v;
-      const data = T.filas.map((f) => {
-        const r = [];
-        for (let i = 0; i < 28; i++) r.push(f[i] === void 0 ? "" : J(f[i]));
-        return r;
-      }).filter((r) => r[0]).map((r) => ({
-        id: r[0],
-        fecha: r[1],
-        hora: r[2],
-        usuario: r[3],
-        sector: r[4],
-        supervisor: r[5],
-        reemplazo: r[6],
-        reemplazante: r[7],
-        reemplazado: r[8],
-        cantBuses: r[9],
-        ruta_origen: r[10],
-        codigo_origen: r[11],
-        total_trab: r[12],
-        ruta1: r[13],
-        codigo1: r[14],
-        personal1: r[15],
-        ruta2: r[16],
-        codigo2: r[17],
-        personal2: r[18],
-        ruta3: r[19],
-        codigo3: r[20],
-        personal3: r[21],
-        motivo: r[22],
-        observaciones: r[23],
-        foto1: r[24],
-        foto2: r[25],
-        foto3: r[26],
-        estado: r[27]
-      }));
-      return { success: true, data };
-    }
-    module.exports = { ejecutar, encendido, getFusiones, ACCIONES };
-  }
-});
-
-// fus-guardar/index.js
-var require_fus_guardar2 = __commonJS({
-  "fus-guardar/index.js"(exports, module) {
-    var jwt = require_jsonwebtoken();
-    var { getPool } = require_db();
-    var CG = require_cv_guardar();
-    var H = require_fus_guardar();
-    function token(req) {
-      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
-      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
-      try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
-      } catch (e) {
-        return null;
-      }
-    }
-    module.exports = async function(context, req) {
-      const accion = context.bindingData.accion;
-      try {
-        if (H.ACCIONES.indexOf(accion) < 0) {
-          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
-          return;
-        }
-        const t = token(req);
-        if (!t || !t.usuario) {
-          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
-          return;
-        }
-        const pool = await getPool();
-        await CG.asegurarTablas(pool);
-        if (!await H.encendido(pool)) {
-          context.res = { status: 503, body: { success: false, apagado: true, error: "Guardado en Azure apagado" } };
-          return;
-        }
-        const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
-        context.res = { status: r.status, body: r.body };
-      } catch (err) {
-        context.log.error("[fus-guardar] " + accion + ": " + err.message);
-        context.res = { status: 500, body: { success: false, error: err.message } };
-      }
-    };
-  }
-});
-
-// shared/hor-guardar.js
-var require_hor_guardar = __commonJS({
-  "shared/hor-guardar.js"(exports, module) {
-    "use strict";
-    var { sql } = require_db();
-    var TH = require_tablas_hoja();
-    var CG = require_cv_guardar();
-    var CAP = require_cap_guardar();
-    var CLAVE = "horas_horarios";
-    var ACCIONES = ["horariosGuardar", "horariosEliminar"];
-    var LECTURAS = ["horariosListar"];
-    var ADMINS = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas", "ovilela", "jchavez"];
-    var REGISTRADORES = ["dsanchez", "lmorales", "jsiancas"];
-    var ANCHO = 11;
-    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
-    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
-    var p2 = (n) => (n < 10 ? "0" : "") + n;
-    var lima = (ms) => new Date(ms - 5 * 36e5);
-    var ymdLima = (ms) => {
-      const x = lima(ms);
-      return x.getUTCFullYear() + "-" + p2(x.getUTCMonth() + 1) + "-" + p2(x.getUTCDate());
-    };
-    var esAdmin = (u) => {
-      u = String(u || "").toLowerCase().trim();
-      return ADMINS.indexOf(u) >= 0 || REGISTRADORES.indexOf(u) >= 0;
-    };
-    function hjFecha(v) {
-      if (esD(v)) {
-        if (!v.$d) return "";
-        return ymdLima(new Date(v.$d).getTime());
-      }
-      const s = String(v == null ? "" : v).trim();
-      return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.substring(0, 10) : "";
-    }
-    function hjHora(v) {
-      if (esD(v)) {
-        if (!v.$d) return -1;
-        const x = lima(new Date(v.$d).getTime());
-        return x.getUTCHours() * 60 + x.getUTCMinutes();
-      }
-      const s = String(v == null ? "" : v).trim(), m = s.match(/^(\d{1,2})[:.](\d{2})/);
-      if (!m) return -1;
-      const hh = parseInt(m[1], 10), mm = parseInt(m[2], 10);
-      if (isNaN(hh) || isNaN(mm) || hh > 23 || mm > 59) return -1;
-      return hh * 60 + mm;
-    }
-    var hjNetas = (e, s, ref) => {
-      if (e < 0 || s < 0 || s <= e) return 0;
-      const h = (s - e - (Number(ref) || 0)) / 60;
-      return h > 0 ? Math.round(h * 100) / 100 : 0;
-    };
-    var hjTxt = (min) => min < 0 ? "\u2014" : p2(Math.floor(min / 60)) + ":" + p2(min % 60);
-    function leer(T) {
-      const out = [];
-      T.filas.forEach((d0, i) => {
-        const d = d0.slice();
-        while (d.length < ANCHO) d.push("");
-        const desde = hjFecha(d[0]);
-        if (!desde) return;
-        out.push({
-          desde,
-          hasta: hjFecha(d[1]),
-          lvEnt: hjHora(d[2]),
-          lvSal: hjHora(d[3]),
-          lvRef: Number(S(d[4])) || 0,
-          sabEnt: hjHora(d[5]),
-          sabSal: hjHora(d[6]),
-          sabRef: Number(S(d[7])) || 0,
-          accesoActivo: S(d[8]).trim().toUpperCase() === "SI",
-          accesoMargen: d[9] === "" || d[9] == null ? 60 : Number(S(d[9])) || 0,
-          nota: S(d[10]),
-          fila: i + 2
-        });
-      });
-      out.sort((a, b) => a.desde < b.desde ? 1 : -1);
-      return out;
-    }
-    var vigente = (filas, hoy) => filas.find((f) => !(hoy < f.desde) && !(f.hasta && hoy > f.hasta)) || null;
-    function listar(T, ms) {
-      const filas = leer(T), hoy = ymdLima(ms), vig = vigente(filas, hoy);
-      const out = filas.map((f) => ({
-        fila: f.fila,
-        desde: f.desde,
-        hasta: f.hasta,
-        lvEntrada: hjTxt(f.lvEnt),
-        lvSalida: hjTxt(f.lvSal),
-        lvRefrigMin: f.lvRef,
-        sabEntrada: hjTxt(f.sabEnt),
-        sabSalida: hjTxt(f.sabSal),
-        sabRefrigMin: f.sabRef,
-        accesoActivo: f.accesoActivo,
-        accesoMargen: f.accesoMargen,
-        nota: f.nota,
-        horasLV: hjNetas(f.lvEnt, f.lvSal, f.lvRef),
-        horasSab: hjNetas(f.sabEnt, f.sabSal, f.sabRef),
-        vigente: !!(vig && vig.fila === f.fila)
-      }));
-      out.forEach((o) => {
-        o.horasSemana = Math.round((o.horasLV * 5 + o.horasSab) * 100) / 100;
-      });
-      return { success: true, horarios: out, hoy, fuente: "azure" };
-    }
-    async function encendido(pool) {
-      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'hor_azure_primero'");
-      return r.recordset.length && r.recordset[0].valor === "1";
-    }
-    async function actualizarFila(tx, i, celdas) {
-      const E = TH.ESQ[CLAVE], f = TH.aFila(CLAVE, celdas), r = tx.request();
-      r.input("fila", sql.Int, i + 1);
-      const sets = E.cols.map((c, k) => {
-        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
-        return c[0] + " = @v" + k;
-      });
-      r.input("o", sql.NVarChar(sql.MAX), f.otros);
-      await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
-    }
-    async function eliminarFila(tx, i) {
-      const E = TH.ESQ[CLAVE];
-      await tx.request().input("f", sql.Int, i + 1).query(`DELETE FROM ${E.tabla} WHERE fila = @f;
-    WITH x AS (SELECT fila, rn = ROW_NUMBER() OVER (ORDER BY fila) FROM ${E.tabla}) UPDATE x SET fila = rn;`);
-    }
-    async function ejecutar(pool, accion, b, usuario, prueba, ahoraMs) {
-      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
-      b = b || {};
-      if (!esAdmin(usuario)) return { status: 200, body: { success: false, error: accion === "horariosGuardar" ? "Solo un administrador puede cambiar los horarios." : "Solo un administrador puede borrar horarios." } };
-      await CG.asegurarTablas(pool);
-      await TH.asegurar(pool, CLAVE);
-      const huella = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
-      const claveOp = huella ? accion + ":" + huella : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
-      if (huella && !prueba) {
-        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-      }
-      const ms = prueba && ahoraMs ? +ahoraMs : Date.now();
-      const tx = new sql.Transaction(pool);
-      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
-      try {
-        await tx.request().query("EXEC sp_getapplock @Resource = 'hor_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
-        const T = await TH.leer(pool, CLAVE);
-        if (!T) {
-          await tx.rollback();
-          return { status: 503, body: { success: false, error: "Tabla de horarios aun no cargada" } };
-        }
-        const ultimaFila = T.filas.length + 1;
-        let resp, cuerpo, celdas;
-        if (accion === "horariosGuardar") {
-          const d = b.horario || {};
-          const desde = hjFecha(d.desde);
-          if (!desde) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "Falta la fecha DESDE, en formato 2026-09-01." } };
-          }
-          const hasta = hjFecha(d.hasta);
-          if (hasta && hasta < desde) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "La fecha HASTA no puede ser anterior a DESDE." } };
-          }
-          const lvE = hjHora(d.lvEntrada), lvS = hjHora(d.lvSalida);
-          if (lvE < 0 || lvS < 0) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "Faltan la entrada y la salida de lunes a viernes." } };
-          }
-          if (lvS <= lvE) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "La salida de lunes a viernes debe ser posterior a la entrada." } };
-          }
-          const sabE = hjHora(d.sabEntrada), sabS = hjHora(d.sabSalida);
-          if (sabE >= 0 !== sabS >= 0) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "Del sabado hay que poner las dos horas, o ninguna si se descansa." } };
-          }
-          if (sabE >= 0 && sabS <= sabE) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "La salida del sabado debe ser posterior a la entrada." } };
-          }
-          let lvRef = Number(d.lvRefrigMin);
-          if (isNaN(lvRef) || lvRef < 0) lvRef = 0;
-          let sabRef = Number(d.sabRefrigMin);
-          if (isNaN(sabRef) || sabRef < 0) sabRef = 0;
-          let margen = Number(d.accesoMargen);
-          if (isNaN(margen) || margen < 0) margen = 60;
-          const neto = hjNetas(lvE, lvS, lvRef);
-          if (neto <= 0) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "Con esas horas la jornada queda en cero. Revisa el refrigerio." } };
-          }
-          const valores = [desde, hasta, hjTxt(lvE), hjTxt(lvS), lvRef, sabE < 0 ? "" : hjTxt(sabE), sabS < 0 ? "" : hjTxt(sabS), sabRef, d.accesoActivo ? "SI" : "NO", margen, String(d.nota || "")];
-          celdas = valores.slice();
-          let fila = Number(d.fila) || 0;
-          if (fila >= 2 && fila <= ultimaFila) await actualizarFila(tx, fila - 2, celdas);
-          else {
-            await CAP.agregarFilas(tx, CLAVE, [celdas]);
-            fila = ultimaFila + 1;
-          }
-          resp = { success: true, fila, horasLV: neto, horasSab: hjNetas(sabE, sabS, sabRef) };
-          cuerpo = { accion, fila: Number(d.fila) || 0, valores, detalle: desde + " L-V " + hjTxt(lvE) + "-" + hjTxt(lvS) + " = " + neto + "h", usuario: String(usuario || ""), ms };
-        } else {
-          const fila = Number(b.fila) || 0;
-          if (fila < 2 || fila > ultimaFila) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "No encuentro ese horario." } };
-          }
-          if (ultimaFila <= 2) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "No se puede borrar el ultimo horario: el sistema se quedaria sin jornada." } };
-          }
-          const eraDesde = S(T.filas[fila - 2][0]);
-          await eliminarFila(tx, fila - 2);
-          resp = { success: true };
-          cuerpo = { accion, fila, eraDesde, usuario: String(usuario || ""), ms };
-        }
-        await CAP.tocarMarcas(tx, [CLAVE]);
-        resp.fuente = "azure";
-        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'hor', @a, NULL, @u, @c, @r)");
-        if (prueba) {
-          await tx.rollback();
-          resp.prueba = true;
-          resp._op = cuerpo;
-          resp._celdas = celdas;
-        } else await tx.commit();
-        return { status: 200, body: resp };
-      } catch (e) {
-        try {
-          await tx.rollback();
-        } catch (e2) {
-        }
-        if (huella && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
-          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-        }
-        throw e;
-      }
-    }
-    module.exports = { ejecutar, encendido, listar, ACCIONES, LECTURAS, CLAVE };
-  }
-});
-
-// hor-guardar/index.js
-var require_hor_guardar2 = __commonJS({
-  "hor-guardar/index.js"(exports, module) {
-    var jwt = require_jsonwebtoken();
-    var { getPool } = require_db();
-    var CG = require_cv_guardar();
-    var TH = require_tablas_hoja();
-    var H = require_hor_guardar();
-    function token(req) {
-      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
-      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
-      try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
-      } catch (e) {
-        return null;
-      }
-    }
-    module.exports = async function(context, req) {
-      const accion = context.bindingData.accion;
-      try {
-        if (H.LECTURAS.indexOf(accion) < 0 && H.ACCIONES.indexOf(accion) < 0) {
-          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
-          return;
-        }
-        const t = token(req);
-        if (!t || !t.usuario) {
-          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
-          return;
-        }
-        const pool = await getPool();
-        await CG.asegurarTablas(pool);
-        if (!await H.encendido(pool)) {
-          context.res = { status: 503, body: { success: false, apagado: true, error: "Horarios en Azure apagado" } };
-          return;
-        }
-        if (accion === "horariosListar") {
-          const T = await TH.leer(pool, H.CLAVE);
-          if (!T) {
-            context.res = { status: 503, body: { success: false, error: "Tabla de horarios aun no cargada" } };
-            return;
-          }
-          context.res = { status: 200, body: H.listar(T, Date.now()) };
-          return;
-        }
-        const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
-        context.res = { status: r.status, body: r.body };
-      } catch (err) {
-        context.log.error("[hor-guardar] " + accion + ": " + err.message);
         context.res = { status: 500, body: { success: false, error: err.message } };
       }
     };
@@ -69953,47 +69423,1315 @@ var require_horas_guardar = __commonJS({
   }
 });
 
-// horas-guardar/index.js
-var require_horas_guardar2 = __commonJS({
-  "horas-guardar/index.js"(exports, module) {
-    var jwt = require_jsonwebtoken();
-    var { getPool } = require_db();
+// shared/fus-guardar.js
+var require_fus_guardar = __commonJS({
+  "shared/fus-guardar.js"(exports, module) {
+    "use strict";
+    var { sql } = require_db();
+    var TH = require_tablas_hoja();
     var CG = require_cv_guardar();
-    var H = require_horas_guardar();
-    function token(req) {
-      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
-      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+    var CAP = require_cap_guardar();
+    var ACCIONES = ["saveFusion", "updateFusion"];
+    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
+    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
+    var pad4 = (n) => {
+      let s = String(n);
+      while (s.length < 4) s = "0" + s;
+      return s;
+    };
+    async function encendido(pool) {
+      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'fus_azure_primero'");
+      return r.recordset.length && r.recordset[0].valor === "1";
+    }
+    function filaNueva(id, d) {
+      return [
+        id,
+        d.fecha,
+        d.hora,
+        d.usuario,
+        d.sector,
+        d.supervisor,
+        d.reemplazo,
+        d.reemplazante || "",
+        d.reemplazado || "",
+        d.cantBuses,
+        d.rutaOrigen,
+        d.codOrigen,
+        d.totalTrab,
+        d.ruta1,
+        d.codigo1,
+        d.personal1,
+        d.ruta2,
+        d.codigo2,
+        d.personal2,
+        d.ruta3,
+        d.codigo3,
+        d.personal3,
+        d.motivo,
+        d.observaciones,
+        d.foto1 || "",
+        d.foto2 || "",
+        d.foto3 || "",
+        "Pendiente"
+      ].map((v) => v === void 0 || v === null ? "" : v);
+    }
+    function valoresEdicion(d) {
+      return [
+        d.sector || "",
+        d.supervisor || "",
+        d.reemplazo || "No",
+        d.reemplazante || "",
+        d.reemplazado || "",
+        d.cantBuses || "",
+        d.rutaOrigen || "",
+        d.codOrigen || "",
+        d.totalTrab || "",
+        d.ruta1 || "",
+        d.codigo1 || "",
+        d.personal1 || "",
+        d.ruta2 || "",
+        d.codigo2 || "",
+        d.personal2 || "",
+        d.ruta3 || "",
+        d.codigo3 || "",
+        d.personal3 || "",
+        d.motivo || "",
+        d.observaciones || "",
+        d.foto1 || "",
+        d.foto2 || "",
+        d.foto3 || "",
+        "Pendiente"
+      ];
+    }
+    async function ejecutar(pool, accion, b, usuario, prueba) {
+      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
+      await CG.asegurarTablas(pool);
+      await TH.asegurar(pool, "fus_buses");
+      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
+      const claveOp = clave ? accion + ":" + clave : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+      if (clave && !prueba) {
+        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+      }
+      const tx = new sql.Transaction(pool);
+      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        await tx.request().query("EXEC sp_getapplock @Resource = 'fus_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+        const T = await TH.leer(pool, "fus_buses");
+        if (!T) {
+          await tx.rollback();
+          return { status: 503, body: { success: false, error: "Tabla de fusiones aun no cargada" } };
+        }
+        let resp, cuerpo, celdas;
+        if (accion === "saveFusion") {
+          const ids = new Set(T.filas.map((f) => S(f[0]).trim()));
+          let n = T.filas.length + 1, id = "FUS-" + pad4(n);
+          while (ids.has(id)) {
+            n++;
+            id = "FUS-" + pad4(n);
+          }
+          const fila = filaNueva(id, b);
+          celdas = fila.map(CAP.comoHoja);
+          await CAP.agregarFilas(tx, "fus_buses", [celdas]);
+          resp = { success: true, id };
+          cuerpo = { accion, id, fila };
+        } else {
+          if (!b.id) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "ID de fusi\xF3n no proporcionado" } };
+          }
+          const i = T.filas.findIndex((f2) => S(f2[0]).trim() === String(b.id).trim());
+          if (i < 0) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "Fusi\xF3n " + b.id + " no encontrada" } };
+          }
+          const valores = valoresEdicion(b);
+          celdas = T.filas[i].slice();
+          while (celdas.length < 28) celdas.push("");
+          valores.forEach((v, k) => {
+            celdas[4 + k] = CAP.comoHoja(v);
+          });
+          const E = TH.ESQ.fus_buses, f = TH.aFila("fus_buses", celdas), r = tx.request();
+          r.input("fila", sql.Int, i + 1);
+          const sets = E.cols.map((c, k) => {
+            r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
+            return c[0] + " = @v" + k;
+          });
+          r.input("o", sql.NVarChar(sql.MAX), f.otros);
+          await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
+          resp = { success: true, message: "Fusi\xF3n " + b.id + " actualizada" };
+          cuerpo = { accion, id: String(b.id).trim(), valores };
+        }
+        await CAP.tocarMarcas(tx, ["fus_buses"]);
+        resp.fuente = "azure";
+        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'fus', @a, NULL, @u, @c, @r)");
+        if (prueba) {
+          await tx.rollback();
+          resp.prueba = true;
+          resp._op = cuerpo;
+          resp._celdas = celdas;
+        } else await tx.commit();
+        return { status: 200, body: resp };
       } catch (e) {
-        return null;
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
+          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+        }
+        throw e;
       }
     }
-    module.exports = async function(context, req) {
-      const accion = context.bindingData.accion;
-      try {
-        if (H.ACCIONES.indexOf(accion) < 0) {
-          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
-          return;
-        }
-        const t = token(req);
-        if (!t || !t.usuario) {
-          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
-          return;
-        }
-        const pool = await getPool();
-        await CG.asegurarTablas(pool);
-        if (!await H.encendido(pool)) {
-          context.res = { status: 503, body: { success: false, apagado: true, error: "Guardado en Azure apagado" } };
-          return;
-        }
-        const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
-        context.res = { status: r.status, body: r.body };
-      } catch (err) {
-        context.log.error("[horas-guardar] " + accion + ": " + err.message);
-        context.res = { status: 500, body: { success: false, error: err.message } };
+    function getFusiones(T) {
+      const J = (v) => esD(v) ? v.$d || null : v;
+      const data = T.filas.map((f) => {
+        const r = [];
+        for (let i = 0; i < 28; i++) r.push(f[i] === void 0 ? "" : J(f[i]));
+        return r;
+      }).filter((r) => r[0]).map((r) => ({
+        id: r[0],
+        fecha: r[1],
+        hora: r[2],
+        usuario: r[3],
+        sector: r[4],
+        supervisor: r[5],
+        reemplazo: r[6],
+        reemplazante: r[7],
+        reemplazado: r[8],
+        cantBuses: r[9],
+        ruta_origen: r[10],
+        codigo_origen: r[11],
+        total_trab: r[12],
+        ruta1: r[13],
+        codigo1: r[14],
+        personal1: r[15],
+        ruta2: r[16],
+        codigo2: r[17],
+        personal2: r[18],
+        ruta3: r[19],
+        codigo3: r[20],
+        personal3: r[21],
+        motivo: r[22],
+        observaciones: r[23],
+        foto1: r[24],
+        foto2: r[25],
+        foto3: r[26],
+        estado: r[27]
+      }));
+      return { success: true, data };
+    }
+    module.exports = { ejecutar, encendido, getFusiones, ACCIONES };
+  }
+});
+
+// shared/sol-guardar.js
+var require_sol_guardar = __commonJS({
+  "shared/sol-guardar.js"(exports, module) {
+    "use strict";
+    var { sql } = require_db();
+    var TH = require_tablas_hoja();
+    var CG = require_cv_guardar();
+    var CAP = require_cap_guardar();
+    var ACCIONES = ["resolverSolicitud"];
+    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
+    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
+    var MESES = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+    var p2 = (n) => (n < 10 ? "0" : "") + n;
+    function ymd(v) {
+      if (esD(v)) {
+        const m = String(v.$s).match(/^\w{3} (\w{3}) (\d{2}) (-?\d{4,})/);
+        return m ? m[3] + "-" + p2(MESES[m[1]]) + "-" + m[2] : "";
       }
+      return String(v || "").substring(0, 10);
+    }
+    var J = (v) => esD(v) ? v.$d || null : v;
+    async function encendido(pool) {
+      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'sol_azure_primero'");
+      return r.recordset.length && r.recordset[0].valor === "1";
+    }
+    function getSolicitudes(T, p) {
+      let data = T.filas.map((f) => {
+        const r = [];
+        for (let i = 0; i < 14; i++) r.push(f[i] === void 0 ? "" : f[i]);
+        return r;
+      }).filter((r) => J(r[0])).map((r, i) => ({
+        fila: i + 2,
+        nro: J(r[0]),
+        fecha: ymd(r[1]),
+        nro_visita: J(r[2]),
+        supervisor: S(r[3] || "").trim(),
+        empresa: S(r[4] || ""),
+        fundo: S(r[5] || ""),
+        semana: J(r[6]),
+        fecha_informe: ymd(r[7]),
+        motivo: S(r[8] || ""),
+        solicitado_por: S(r[9] || ""),
+        estado: S(r[10] || ""),
+        resuelto_por: S(r[11] || ""),
+        motivo_rechazo: S(r[13] || "")
+      }));
+      if (p && p.estado) data = data.filter((s) => s.estado === p.estado);
+      return { success: true, data };
+    }
+    async function ejecutar(pool, accion, b, usuario, prueba) {
+      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
+      await CG.asegurarTablas(pool);
+      await TH.asegurar(pool, "sol_edicion");
+      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
+      const claveOp = clave ? accion + ":" + clave : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+      if (clave && !prueba) {
+        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+      }
+      const tx = new sql.Transaction(pool);
+      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+      try {
+        await tx.request().query("EXEC sp_getapplock @Resource = 'sol_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+        const T = await TH.leer(pool, "sol_edicion");
+        if (!T) {
+          await tx.rollback();
+          return { status: 503, body: { success: false, error: "Tabla de solicitudes aun no cargada" } };
+        }
+        const fila = parseInt(b.fila, 10), i = fila - 2;
+        if (isNaN(fila) || i < 0 || i >= T.filas.length || !J(T.filas[i][0])) {
+          await tx.rollback();
+          return { status: 200, body: { success: false, error: "Solicitud no encontrada (fila " + b.fila + ")" } };
+        }
+        const ahora = /* @__PURE__ */ new Date();
+        const celdas = T.filas[i].slice();
+        while (celdas.length < 14) celdas.push("");
+        celdas[10] = CAP.comoHoja(b.estado);
+        celdas[11] = CAP.comoHoja(b.resuelto_por || "");
+        celdas[12] = CAP.comoHoja(ahora);
+        celdas[13] = CAP.comoHoja(b.motivo_rechazo || "");
+        const E = TH.ESQ.sol_edicion, f = TH.aFila("sol_edicion", celdas), r = tx.request();
+        r.input("fila", sql.Int, i + 1);
+        const sets = E.cols.map((c, k) => {
+          r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
+          return c[0] + " = @v" + k;
+        });
+        r.input("o", sql.NVarChar(sql.MAX), f.otros);
+        await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
+        await CAP.tocarMarcas(tx, ["sol_edicion"]);
+        const resp = { success: true, fuente: "azure" };
+        const cuerpo = { fila, nro: J(T.filas[i][0]), estado: b.estado === void 0 ? "" : b.estado, resuelto_por: b.resuelto_por || "", fecha: ahora.toISOString(), motivo_rechazo: b.motivo_rechazo || "" };
+        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'sol', @a, NULL, @u, @c, @r)");
+        if (prueba) {
+          await tx.rollback();
+          resp.prueba = true;
+          resp._op = cuerpo;
+          resp._celdas = celdas;
+        } else await tx.commit();
+        return { status: 200, body: resp };
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
+          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+        }
+        throw e;
+      }
+    }
+    module.exports = { ejecutar, encendido, getSolicitudes, ACCIONES };
+  }
+});
+
+// shared/usr-guardar.js
+var require_usr_guardar = __commonJS({
+  "shared/usr-guardar.js"(exports, module) {
+    "use strict";
+    var bcrypt = require_bcryptjs();
+    var { sql } = require_db();
+    var TH = require_tablas_hoja();
+    var CG = require_cv_guardar();
+    var CAP = require_cap_guardar();
+    var ACCIONES = ["saveUsuario", "updateUsuario", "saveSolicitudAcceso", "resolverAccesoTemporal", "aprobarAccesoTemporal", "cambiarMiClave", "desbloquearUsuario", "eliminarUsuario", "restaurarUsuario"];
+    var POL = require_clave_politica();
+    var DUENOS = ["jtimoteo"];
+    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
+    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
+    var p2 = (n) => (n < 10 ? "0" : "") + n;
+    function lima(ms) {
+      const x = new Date(ms - 5 * 36e5);
+      return { y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate(), h: x.getUTCHours(), mi: x.getUTCMinutes() };
+    }
+    var hhmm = (ms) => {
+      const p = lima(ms);
+      return p2(p.h) + ":" + p2(p.mi);
     };
+    var dmyhm = (ms) => {
+      const p = lima(ms);
+      return p2(p.d) + "/" + p2(p.m) + "/" + p.y + " " + p2(p.h) + ":" + p2(p.mi);
+    };
+    async function encendido(pool) {
+      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'usr_azure_primero'");
+      return r.recordset.length && r.recordset[0].valor === "1";
+    }
+    async function cambiarFila(tx, clave, fila, celdas) {
+      const E = TH.ESQ[clave], f = TH.aFila(clave, celdas), r = tx.request();
+      r.input("fila", sql.Int, fila);
+      const sets = E.cols.map((c, k) => {
+        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
+        return c[0] + " = @v" + k;
+      });
+      r.input("o", sql.NVarChar(sql.MAX), f.otros);
+      await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
+    }
+    async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
+      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
+      if (accion === "aprobarAccesoTemporal") accion = "resolverAccesoTemporal";
+      await CG.asegurarTablas(pool);
+      await TH.asegurar(pool, "acc_solicitudes");
+      const op = String(operador || "").trim().toLowerCase();
+      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
+      const claveOp = clave ? accion + ":" + clave : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+      if (clave && !prueba) {
+        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+      }
+      const no = (e) => ({ status: 200, body: { success: false, error: e } });
+      let propia = false;
+      if (accion === "cambiarMiClave") {
+        if (!op) return no("Sin sesion valida.");
+        const actual = String(b.actual || ""), nueva = String(b.nueva || "");
+        if (!actual || !nueva) return no("Escribe tu contrase\xF1a actual y la nueva.");
+        const pol = POL.evaluar(nueva, op);
+        if (!pol.ok) return no("La nueva contrase\xF1a no cumple la regla: " + pol.motivos.join("; ") + ".");
+        if (nueva === actual) return no("La nueva contrase\xF1a debe ser distinta a la actual.");
+        const ru = await pool.request().input("u", sql.NVarChar(100), op).query("SELECT password FROM dbo.usuarios WHERE LOWER(usuario) = @u AND activo = 1");
+        if (!ru.recordset.length) return no("Usuario no encontrado.");
+        const stored = String(ru.recordset[0].password || "");
+        const okActual = /^\$2[aby]\$/.test(stored) ? await bcrypt.compare(actual, stored) : stored === actual;
+        if (!okActual) return no("La contrase\xF1a actual no es correcta.");
+        b = { usuario: op, password: nueva, client_id: b.client_id };
+        accion = "updateUsuario";
+        propia = true;
+      }
+      if (accion !== "saveSolicitudAcceso" && !propia && DUENOS.indexOf(op) < 0)
+        return no(accion === "resolverAccesoTemporal" ? "Solo el administrador del sistema puede aprobar o rechazar accesos temporales." : "Solo el administrador del sistema puede crear o modificar usuarios.");
+      if (accion === "eliminarUsuario" || accion === "restaurarUsuario") {
+        const uu = String(b.usuario || "").trim();
+        if (!uu) return no("Falta el usuario.");
+        if (accion === "eliminarUsuario" && (DUENOS.indexOf(uu.toLowerCase()) >= 0 || uu.toLowerCase() === op)) return no("No puedes eliminar tu propia cuenta de administrador.");
+        await pool.request().query("IF COL_LENGTH('dbo.usuarios','eliminado') IS NULL ALTER TABLE dbo.usuarios ADD eliminado BIT NULL, eliminado_en DATETIME2(0) NULL, eliminado_por NVARCHAR(100) NULL, motivo_baja NVARCHAR(300) NULL");
+        const rq = pool.request().input("u", sql.NVarChar(100), uu.toLowerCase());
+        if (accion === "eliminarUsuario") {
+          rq.input("por", sql.NVarChar(100), op).input("mot", sql.NVarChar(300), String(b.motivo || "").trim().slice(0, 300) || null);
+          const r0 = await rq.query("UPDATE dbo.usuarios SET eliminado = 1, eliminado_en = SYSUTCDATETIME(), eliminado_por = @por, motivo_baja = @mot WHERE LOWER(LTRIM(RTRIM(usuario))) = @u");
+          if (!r0.rowsAffected[0]) return no("Usuario no encontrado.");
+        } else {
+          const r0 = await rq.query("UPDATE dbo.usuarios SET eliminado = 0 WHERE LOWER(LTRIM(RTRIM(usuario))) = @u");
+          if (!r0.rowsAffected[0]) return no("Usuario no encontrado.");
+        }
+        b = { usuario: uu, activo: accion === "eliminarUsuario" ? "FALSE" : "TRUE", client_id: b.client_id ? String(b.client_id) + "-act" : void 0 };
+        accion = "updateUsuario";
+      }
+      if (accion === "desbloquearUsuario") {
+        const uu = String(b.usuario || "").trim().toLowerCase();
+        if (!uu) return no("Falta el usuario.");
+        await pool.request().input("u", sql.NVarChar(100), uu).query("IF OBJECT_ID('dbo.Login_Intentos','U') IS NOT NULL UPDATE dbo.Login_Intentos SET fallos = 0, bloqueado_hasta = NULL WHERE usuario = @u");
+        return { status: 200, body: { success: true, usuario: uu, mensaje: "Bloqueo liberado; el usuario ya puede intentar entrar." } };
+      }
+      const ms = prueba && ahoraMs ? +ahoraMs : Date.now(), ahora = new Date(ms);
+      let hash = null, hashHoja = null;
+      if (accion === "saveUsuario" && String(b.password || "").trim()) hash = await bcrypt.hash(String(b.password).trim(), 10);
+      if (accion === "updateUsuario" && b.password) hash = await bcrypt.hash(String(b.password), 10);
+      if (hash) {
+        const crypto2 = __require("crypto");
+        const sal = crypto2.randomBytes(8).toString("hex");
+        const txt = accion === "saveUsuario" ? String(b.password).trim() : String(b.password);
+        hashHoja = "sha256$" + sal + "$" + crypto2.createHash("sha256").update(sal + txt, "utf8").digest("hex");
+      }
+      const tx = new sql.Transaction(pool);
+      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+      try {
+        await tx.request().query("EXEC sp_getapplock @Resource = 'usr_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+        let resp, cuerpo = { accion }, tocar = [], extra = {};
+        if (accion === "saveUsuario") {
+          const usuario = String(b.usuario || "").trim();
+          if (!usuario || !hash) {
+            await tx.rollback();
+            return no("Usuario y contrase\xF1a son obligatorios.");
+          }
+          const ex = await tx.request().query("SELECT id_sistema, usuario FROM dbo.usuarios WITH (UPDLOCK, HOLDLOCK)");
+          if (ex.recordset.some((x) => String(x.usuario || "").trim().toLowerCase() === usuario.toLowerCase())) {
+            await tx.rollback();
+            return no("Ese usuario ya existe.");
+          }
+          const ids = new Set(ex.recordset.map((x) => String(x.id_sistema)));
+          let id;
+          do {
+            id = "US-" + Math.floor(Math.random() * 9e4 + 1e4);
+          } while (ids.has(id));
+          const fila = [
+            id,
+            usuario,
+            hash,
+            String(b.nombre || "").trim(),
+            String(b.rol || "supervisor").trim().toLowerCase(),
+            String(b.empresa || "AMBAS").trim().toUpperCase(),
+            true,
+            ahora.toISOString(),
+            String(b.correo || "").trim()
+          ];
+          await tx.request().input("id", sql.NVarChar(50), id).input("u", sql.NVarChar(50), usuario).input("p", sql.NVarChar(255), hash).input("n", sql.NVarChar(200), fila[3]).input("r", sql.NVarChar(50), fila[4]).input("e", sql.NVarChar(50), fila[5]).input("f", sql.DateTime2, ahora).input("c", sql.NVarChar(200), fila[8] || null).query(`INSERT INTO dbo.usuarios (id_sistema, usuario, password, nombre, rol, empresa, activo, fecha_creacion, correo, fecha_sync)
+                VALUES (@id, @u, @p, @n, @r, @e, 1, @f, @c, GETDATE())`);
+          cuerpo.fila = fila.slice();
+          cuerpo.fila[2] = hashHoja || hash;
+          resp = { success: true };
+          extra._clave_ok = await bcrypt.compare(String(b.password).trim(), hash);
+        } else if (accion === "updateUsuario") {
+          const ex = await tx.request().query("SELECT id_sistema, usuario FROM dbo.usuarios WITH (UPDLOCK, HOLDLOCK)");
+          const u = ex.recordset.find((x) => String(x.usuario).trim() === String(b.usuario).trim());
+          if (!u) {
+            await tx.rollback();
+            return no("Usuario no encontrado.");
+          }
+          const r = tx.request().input("id", sql.NVarChar(50), String(u.id_sistema)), sets = [];
+          cuerpo.usuario = String(b.usuario).trim();
+          if (b.activo !== void 0) {
+            r.input("a", sql.Bit, String(b.activo).trim().toUpperCase() === "TRUE" ? 1 : 0);
+            sets.push("activo = @a");
+            cuerpo.activo = b.activo;
+          }
+          if (b.password) {
+            r.input("p", sql.NVarChar(255), hash);
+            sets.push("password = @p");
+            cuerpo.password = hashHoja || hash;
+            try {
+              await tx.request().query("IF COL_LENGTH('dbo.usuarios','clave_fuerte') IS NULL ALTER TABLE dbo.usuarios ADD clave_fuerte BIT NULL, clave_cambiada DATETIME2(0) NULL");
+            } catch (eC) {
+            }
+            try {
+              await tx.request().query("IF COL_LENGTH('dbo.usuarios','clave_temporal') IS NULL ALTER TABLE dbo.usuarios ADD clave_temporal BIT NULL");
+            } catch (eC) {
+            }
+            r.input("cf", sql.Bit, POL.evaluar(String(b.password), String(b.usuario)).ok ? 1 : 0);
+            sets.push("clave_fuerte = @cf");
+            sets.push("clave_cambiada = SYSUTCDATETIME()");
+            r.input("ct", sql.Bit, propia ? 0 : 1);
+            sets.push("clave_temporal = @ct");
+            try {
+              await tx.request().input("lu", sql.NVarChar(100), String(b.usuario).trim().toLowerCase()).query("IF OBJECT_ID('dbo.Login_Intentos','U') IS NOT NULL DELETE FROM dbo.Login_Intentos WHERE usuario = @lu");
+            } catch (eL) {
+            }
+          }
+          if (b.correo) {
+            r.input("c", sql.NVarChar(200), String(b.correo));
+            sets.push("correo = @c");
+            cuerpo.correo = b.correo;
+          }
+          if (sets.length) await r.query(`UPDATE dbo.usuarios SET ${sets.join(", ")}, fecha_sync = GETDATE() WHERE id_sistema = @id`);
+          resp = { success: true };
+        } else if (accion === "saveSolicitudAcceso") {
+          const T = await TH.leer(pool, "acc_solicitudes");
+          if (!T) {
+            await tx.rollback();
+            return { status: 503, body: { success: false, error: "Tabla de solicitudes de acceso aun no cargada" } };
+          }
+          const nro = T.filas.length + 1;
+          const horas = b.horas || b.horas_solicitadas || 1;
+          const fila = [nro, ahora, op, b.nombre || "", b.motivo || "", horas, "PENDIENTE", "", "", "", ""];
+          await CAP.agregarFilas(tx, "acc_solicitudes", [fila.map(CAP.comoHoja)]);
+          tocar.push("acc_solicitudes");
+          cuerpo.fila = fila.map((v, i) => i === 1 ? { $f: ahora.toISOString() } : v);
+          resp = { success: true, nro };
+          extra._celdas = fila.map(CAP.comoHoja);
+        } else {
+          const T = await TH.leer(pool, "acc_solicitudes");
+          if (!T) {
+            await tx.rollback();
+            return { status: 503, body: { success: false, error: "Tabla de solicitudes de acceso aun no cargada" } };
+          }
+          const filas = T.filas, pend = (r) => S(r[2] === void 0 ? "" : r[2]).trim() === String(b.usuario).trim() && S(r[6] === void 0 ? "" : r[6]).toUpperCase().trim() === "PENDIENTE";
+          let i = -1;
+          if (b.fila) {
+            const k = parseInt(b.fila, 10) - 2;
+            if (k >= 0 && k < filas.length && pend(filas[k])) i = k;
+          }
+          if (i < 0) i = filas.findIndex(pend);
+          if (i < 0) {
+            await tx.rollback();
+            return no("Solicitud pendiente no encontrada para: " + b.usuario);
+          }
+          let horas = parseInt(b.horas || b.horas_aprobadas, 10) || 0;
+          if (!horas) horas = parseInt(S(filas[i][5] === void 0 ? "" : filas[i][5]), 10) || 1;
+          const hasta = ms + horas * 36e5, decision = b.decision || "APROBADO";
+          const celdas = filas[i].slice();
+          while (celdas.length < 12) celdas.push("");
+          celdas[5] = CAP.comoHoja(horas);
+          celdas[6] = CAP.comoHoja(decision);
+          celdas[7] = CAP.comoHoja(op);
+          celdas[8] = CAP.comoHoja(hhmm(ms));
+          celdas[9] = CAP.comoHoja(hhmm(hasta));
+          celdas[10] = CAP.comoHoja(ahora);
+          celdas[11] = CAP.comoHoja(hasta);
+          await cambiarFila(tx, "acc_solicitudes", i + 1, celdas);
+          tocar.push("acc_solicitudes");
+          cuerpo.fila = i + 2;
+          cuerpo.usuario = String(b.usuario).trim();
+          cuerpo.nro = S(filas[i][0]);
+          cuerpo.valores = { horas, decision, aprobado_por: op, hora_inicio: hhmm(ms), hora_fin: hhmm(hasta), fecha: ahora.toISOString(), expira: hasta };
+          resp = { success: true, hastaHora: hhmm(hasta), hastaFecha: dmyhm(hasta), horasAprobadas: horas, expiraEn: hasta, decision };
+          extra._celdas = celdas;
+        }
+        if (tocar.length) await CAP.tocarMarcas(tx, tocar);
+        resp.fuente = "azure";
+        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), op || null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'usr', @a, NULL, @u, @c, @r)");
+        if (prueba) {
+          await tx.rollback();
+          resp.prueba = true;
+          resp._op = cuerpo;
+          Object.assign(resp, extra);
+        } else await tx.commit();
+        return { status: 200, body: resp };
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
+          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+        }
+        throw e;
+      }
+    }
+    module.exports = { ejecutar, encendido, ACCIONES };
+  }
+});
+
+// shared/mant-guardar.js
+var require_mant_guardar = __commonJS({
+  "shared/mant-guardar.js"(exports, module) {
+    "use strict";
+    var { sql } = require_db();
+    var TH = require_tablas_hoja();
+    var CG = require_cv_guardar();
+    var CAP = require_cap_guardar();
+    var ACCIONES = ["guardarSolicitudMantenimiento", "programarMantenimiento", "actualizarEstadoMantenimiento"];
+    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
+    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
+    var p2 = (n) => (n < 10 ? "0" : "") + n;
+    var pad3 = (n) => ("000" + n).slice(-3);
+    function lima(d) {
+      const x = new Date(d.getTime() - 5 * 36e5);
+      return { dia: p2(x.getUTCDate()) + "/" + p2(x.getUTCMonth() + 1) + "/" + x.getUTCFullYear(), hm: p2(x.getUTCHours()) + ":" + p2(x.getUTCMinutes()) };
+    }
+    function celda(v) {
+      const m = typeof v === "string" && v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+      if (m && +m[4] < 24 && +m[5] < 60) {
+        const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4] + 5, +m[5], +(m[6] || 0)));
+        if (new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])).getUTCDate() === +m[1] && +m[2] >= 1 && +m[2] <= 12) return CAP.comoHoja(d);
+      }
+      return CAP.comoHoja(v);
+    }
+    var norm = (s) => String(s || "").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Z0-9]/g, "");
+    function columnas(enc) {
+      const idx = {};
+      (enc || []).forEach((c, k) => {
+        idx[norm(c)] = k;
+      });
+      const b = function() {
+        for (let i = 0; i < arguments.length; i++) {
+          const k = norm(arguments[i]);
+          if (k in idx) return idx[k];
+        }
+        return -1;
+      };
+      return {
+        id: b("id", "numSolicitud", "n_solicitud", "ID_Solicitud"),
+        estado: b("estado", "Estado_Solicitud"),
+        fechaAtencion: b("fechaAtencion"),
+        atendidoPor: b("atendidoPor"),
+        fechaCierre: b("fechaCierre"),
+        cerradoPor: b("cerradoPor")
+      };
+    }
+    async function encendido(pool) {
+      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'mant_azure_primero'");
+      return r.recordset.length && r.recordset[0].valor === "1";
+    }
+    async function actualizarFila(tx, i, celdas) {
+      const E = TH.ESQ.mant_registro, f = TH.aFila("mant_registro", celdas), r = tx.request();
+      r.input("fila", sql.Int, i + 1);
+      const sets = E.cols.map((c, k) => {
+        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
+        return c[0] + " = @v" + k;
+      });
+      r.input("o", sql.NVarChar(sql.MAX), f.otros);
+      await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
+    }
+    async function ejecutar(pool, accion, b, usuario, prueba, ahoraFija) {
+      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { ok: false, msg: "Accion desconocida" } };
+      await CG.asegurarTablas(pool);
+      await TH.asegurar(pool, "mant_registro");
+      b = b || {};
+      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
+      const claveOp = (clave ? "mant:" + clave : "mant:sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8)).slice(0, 100);
+      if (clave && !prueba) {
+        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+      }
+      const tx = new sql.Transaction(pool);
+      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+      try {
+        await tx.request().query("EXEC sp_getapplock @Resource = 'mant_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+        const T = await TH.leer(pool, "mant_registro");
+        if (!T) {
+          await tx.rollback();
+          return { status: 503, body: { ok: false, msg: "Tabla de mantenimiento aun no cargada" } };
+        }
+        const ahora = ahoraFija ? new Date(ahoraFija) : /* @__PURE__ */ new Date(), L = lima(ahora);
+        const buscar = (id) => T.filas.findIndex((f) => S(f[0]).trim() === String(id).trim());
+        let resp, cuerpo, celdas;
+        if (accion === "guardarSolicitudMantenimiento") {
+          const d = b, ids = new Set(T.filas.map((f) => S(f[0]).trim()));
+          let n = T.filas.length + 1, id = "SOL-" + pad3(n);
+          while (ids.has(id)) {
+            n++;
+            id = "SOL-" + (n < 1e3 ? pad3(n) : n);
+          }
+          const fecha = L.dia + " " + L.hm;
+          const fila = [
+            id,
+            fecha,
+            d.dni || "",
+            d.nombre || "",
+            d.empresa || "",
+            d.codInterno || "",
+            ((d.modelo || "") + " " + (d.marca || "")).trim(),
+            d.numLicencia || "",
+            d.tipoLicencia || "",
+            d.fRevalidacion || "",
+            d.estadoLicencia || "",
+            d.kilometraje || "",
+            d.tipoMantenimiento || "",
+            d.observaciones || "",
+            "PENDIENTE",
+            "",
+            "",
+            "",
+            d.solicitante || ""
+          ];
+          celdas = fila.map(celda);
+          await CAP.agregarFilas(tx, "mant_registro", [celdas]);
+          resp = { ok: true, id };
+          const correo = {};
+          ["dni", "nombre", "empresa", "modelo", "marca", "codInterno", "kilometraje", "numLicencia", "tipoLicencia", "fRevalidacion", "estadoLicencia", "tipoMantenimiento", "observaciones"].forEach((k) => {
+            if (d[k] !== void 0) correo[k] = d[k];
+          });
+          cuerpo = { accion, id, ahora: fecha, fila, d: correo };
+        } else if (accion === "programarMantenimiento") {
+          const i = buscar(b.id);
+          if (i < 0) {
+            await tx.rollback();
+            return { status: 200, body: { ok: false, msg: "No se encontr\xF3 la solicitud " + b.id } };
+          }
+          const estado = String(b.estado || "PROGRAMADO").toUpperCase();
+          const valores = [estado, b.fechaProgramada || "", b.comentario || "", L.dia + " " + L.hm];
+          celdas = T.filas[i].slice();
+          while (celdas.length < 18) celdas.push("");
+          valores.forEach((v, k) => {
+            celdas[14 + k] = celda(v);
+          });
+          await actualizarFila(tx, i, celdas);
+          resp = { ok: true };
+          cuerpo = { accion, id: String(b.id), valores };
+        } else {
+          const estado = String(b.estado || "").toUpperCase().trim();
+          if (!b.id) {
+            await tx.rollback();
+            return { status: 200, body: { ok: false, msg: "Falta el id de la solicitud" } };
+          }
+          if (estado !== "ATENDIDO" && estado !== "CERRADO") {
+            await tx.rollback();
+            return { status: 200, body: { ok: false, msg: "Estado inv\xE1lido: " + estado } };
+          }
+          const col = columnas(T.encabezado);
+          const cF = estado === "ATENDIDO" ? col.fechaAtencion : col.fechaCierre, cP = estado === "ATENDIDO" ? col.atendidoPor : col.cerradoPor;
+          if (col.id < 0 || col.estado < 0 || cF < 0 || cP < 0) {
+            await tx.rollback();
+            return { status: 409, body: { ok: false, msg: "La hoja no tiene las columnas esperadas: se usa Google" } };
+          }
+          const i = T.filas.findIndex((f) => S(f[col.id]).trim() === String(b.id).trim());
+          if (i < 0) {
+            await tx.rollback();
+            return { status: 200, body: { ok: false, msg: "Solicitud no encontrada: " + b.id } };
+          }
+          const admin = b.admin || "";
+          celdas = T.filas[i].slice();
+          while (celdas.length < Math.max(cF, cP, col.estado) + 1) celdas.push("");
+          celdas[col.estado] = celda(estado);
+          celdas[cF] = celda(L.dia);
+          celdas[cP] = celda(admin);
+          await actualizarFila(tx, i, celdas);
+          resp = { ok: true, id: b.id, estado, fecha: L.dia };
+          cuerpo = { accion, id: String(b.id), estado, fecha: L.dia, admin };
+        }
+        cuerpo.clave = claveOp;
+        await CAP.tocarMarcas(tx, ["mant_registro"]);
+        resp.fuente = "azure";
+        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion.slice(0, 30)).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'mant', @a, NULL, @u, @c, @r)");
+        if (prueba) {
+          await tx.rollback();
+          resp.prueba = true;
+          resp._op = cuerpo;
+          resp._celdas = celdas;
+        } else await tx.commit();
+        return { status: 200, body: resp };
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
+          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+        }
+        throw e;
+      }
+    }
+    module.exports = { ejecutar, encendido, columnas, celda, lima, ACCIONES };
+  }
+});
+
+// shared/e360-guardar.js
+var require_e360_guardar = __commonJS({
+  "shared/e360-guardar.js"(exports, module) {
+    "use strict";
+    var { sql } = require_db();
+    var TH = require_tablas_hoja();
+    var CG = require_cv_guardar();
+    var CAP = require_cap_guardar();
+    var ACCIONES = ["saveEvaluacion360", "deleteEvaluacion360"];
+    var ADMINS_EVAL360 = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas"];
+    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
+    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
+    var p2 = (n) => (n < 10 ? "0" : "") + n;
+    function lima(d) {
+      const x = new Date(d.getTime() - 5 * 36e5);
+      return { dia: x.getUTCFullYear() + "-" + p2(x.getUTCMonth() + 1) + "-" + p2(x.getUTCDate()), hm: p2(x.getUTCHours()) + ":" + p2(x.getUTCMinutes()) };
+    }
+    var e360Fecha = (v) => !v ? "" : String(v).substring(0, 10);
+    var e360Periodo = (f) => {
+      f = e360Fecha(f);
+      return f.length >= 7 ? f.substring(0, 7) : "";
+    };
+    function promComp(comps, nombre) {
+      if (!Array.isArray(comps)) return 0;
+      for (let i = 0; i < comps.length; i++) {
+        const c = comps[i];
+        if (String(c.nombre || "").toLowerCase().indexOf(nombre) === 0) return Math.round((Number(c.promedio) || 0) * 100) / 100;
+      }
+      return 0;
+    }
+    async function encendido(pool) {
+      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'e360_azure_primero'");
+      return r.recordset.length && r.recordset[0].valor === "1";
+    }
+    function params(r, celdas) {
+      const E = TH.ESQ.e360_evaluaciones, f = TH.aFila("e360_evaluaciones", celdas);
+      const sets = E.cols.map((c, k) => {
+        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
+        return c[0] + " = @v" + k;
+      });
+      r.input("o", sql.NVarChar(sql.MAX), f.otros);
+      return sets;
+    }
+    async function ejecutar(pool, accion, b, usuario, prueba, ahoraFija) {
+      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
+      await CG.asegurarTablas(pool);
+      await TH.asegurar(pool, "e360_evaluaciones");
+      b = b || {};
+      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
+      const claveOp = (clave ? "e360:" + clave : "e360:sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8)).slice(0, 100);
+      if (clave && !prueba) {
+        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+      }
+      if (accion === "saveEvaluacion360" && !b.supervisor) return { status: 200, body: { success: false, error: "Falta supervisor" } };
+      if (accion === "deleteEvaluacion360") {
+        if (ADMINS_EVAL360.indexOf(String(usuario || "").trim().toLowerCase()) === -1) return { status: 200, body: { success: false, error: "Sin permisos: solo administradores pueden eliminar evaluaciones" } };
+        if (!b.id) return { status: 200, body: { success: false, error: "ID de evaluaci\xF3n requerido" } };
+      }
+      const tx = new sql.Transaction(pool);
+      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+      try {
+        await tx.request().query("EXEC sp_getapplock @Resource = 'e360_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+        const T = await TH.leer(pool, "e360_evaluaciones");
+        if (!T) {
+          await tx.rollback();
+          return { status: 503, body: { success: false, error: "Tabla de evaluaciones aun no cargada" } };
+        }
+        const E = TH.ESQ.e360_evaluaciones, ahora = ahoraFija ? new Date(ahoraFija) : /* @__PURE__ */ new Date(), L = lima(ahora);
+        let resp, cuerpo, celdas;
+        if (accion === "saveEvaluacion360") {
+          const d = b;
+          const fecha = e360Fecha(d.fecha) || L.dia;
+          const periodo = d.periodo || e360Periodo(fecha);
+          if (!periodo) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "No se pudo determinar el periodo" } };
+          }
+          const heads = (T.encabezado || []).map((h) => S(h).trim()), iP = heads.indexOf("Periodo"), iD = heads.indexOf("Detalle");
+          if (iP === -1 || iD === -1) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "Ejecutar eval360Setup() primero (faltan columnas Periodo/Detalle)" } };
+          }
+          const ancho = heads.length;
+          const comps = d.competencias || [];
+          let total = 0;
+          (Array.isArray(comps) ? comps : []).forEach((c) => {
+            (c.respuestas || []).forEach((r) => {
+              total += Number(r.valor) || 0;
+            });
+          });
+          const usuarioReg = d.evaluadorUser || d.usuario_registro || "";
+          let detalle = "";
+          try {
+            detalle = JSON.stringify(comps);
+          } catch (e) {
+            detalle = "[]";
+          }
+          const sup = String(d.supervisor).trim().toLowerCase();
+          const i = T.filas.findIndex((f) => S(f[3]).trim().toLowerCase() === sup && S(f[iP]).trim() === periodo);
+          const idExist = i >= 0 ? S(T.filas[i][0]) : "";
+          const id = i >= 0 && idExist ? idExist : d.id || "EVA-" + ahora.getTime();
+          const fila = new Array(ancho).fill("");
+          fila[0] = id;
+          fila[1] = fecha;
+          fila[2] = d.evaluador || usuarioReg;
+          fila[3] = String(d.supervisor).trim();
+          fila[4] = d.empresa || "";
+          fila[5] = d.sector || "";
+          fila[6] = promComp(comps, "liderazgo");
+          fila[7] = promComp(comps, "comunicaci");
+          fila[8] = promComp(comps, "cumplimiento");
+          fila[9] = promComp(comps, "gesti");
+          fila[10] = promComp(comps, "resoluci");
+          fila[11] = promComp(comps, "planificaci");
+          fila[12] = total;
+          fila[13] = Number(d.porcentaje) || 0;
+          fila[14] = d.clasificacion || d.nivel || "";
+          fila[15] = d.obs !== void 0 ? d.obs : d.observaciones || "";
+          fila[16] = d.recomendaciones || "";
+          fila[17] = usuarioReg;
+          fila[18] = L.dia + " " + L.hm;
+          fila[iP] = periodo;
+          fila[iD] = detalle;
+          celdas = fila.map((v, k) => k === iP ? typeof v === "string" ? v : String(v) : CAP.comoHoja(v));
+          if (i >= 0) {
+            const r = tx.request();
+            r.input("fila", sql.Int, i + 1);
+            const sets = params(r, celdas);
+            await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
+          } else await CAP.agregarFilas(tx, "e360_evaluaciones", [celdas]);
+          resp = { success: true, id, accion: i >= 0 ? "actualizada" : "creada", periodo };
+          cuerpo = { accion, id: String(id), sup: String(d.supervisor).trim(), periodo, existe: i >= 0, fila };
+        } else {
+          const i = T.filas.findIndex((f) => S(f[0]) === String(b.id));
+          if (i < 0) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "Evaluaci\xF3n " + b.id + " no encontrada" } };
+          }
+          celdas = T.filas[i];
+          await tx.request().input("fila", sql.Int, i + 1).query(`DELETE FROM ${E.tabla} WHERE fila = @fila; UPDATE ${E.tabla} SET fila = fila - 1 WHERE fila > @fila;`);
+          resp = { success: true, mensaje: "Evaluaci\xF3n archivada correctamente" };
+          cuerpo = { accion, id: String(b.id), usuario: b.usuario, motivo: b.motivo || "Sin motivo especificado", fecha: ahora.toISOString(), celdas };
+        }
+        cuerpo.clave = claveOp;
+        await CAP.tocarMarcas(tx, ["e360_evaluaciones"]);
+        resp.fuente = "azure";
+        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'e360', @a, NULL, @u, @c, @r)");
+        if (prueba) {
+          await tx.rollback();
+          resp.prueba = true;
+          resp._op = cuerpo;
+          resp._celdas = celdas;
+        } else await tx.commit();
+        return { status: 200, body: resp };
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
+          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+        }
+        throw e;
+      }
+    }
+    module.exports = { ejecutar, encendido, ACCIONES, ADMINS_EVAL360 };
+  }
+});
+
+// shared/preav-guardar.js
+var require_preav_guardar = __commonJS({
+  "shared/preav-guardar.js"(exports, module) {
+    "use strict";
+    var { sql } = require_db();
+    var TH = require_tablas_hoja();
+    var CG = require_cv_guardar();
+    var CAP = require_cap_guardar();
+    var CLAVE = "preav_registro";
+    var ACCIONES = ["savePreaviso", "updatePreavisoDesenlace", "registrarApelacionPreaviso"];
+    var ADMINS = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas"];
+    var ANCHO = 17;
+    var SIN_PERMISO = {
+      savePreaviso: "Sin permisos: solo administradores pueden registrar preavisos",
+      updatePreavisoDesenlace: "Sin permisos: solo administradores pueden registrar el desenlace",
+      registrarApelacionPreaviso: "Sin permisos: solo administradores pueden registrar apelaciones",
+      getPreavisos: "Sin permisos: solo administradores pueden ver preavisos"
+    };
+    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
+    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
+    var p2 = (n) => (n < 10 ? "0" : "") + n;
+    var lima = (ms) => new Date(ms - 5 * 36e5);
+    var dmyLima = (ms) => {
+      const x = lima(ms);
+      return p2(x.getUTCDate()) + "/" + p2(x.getUTCMonth() + 1) + "/" + x.getUTCFullYear();
+    };
+    var ymdLima = (ms) => {
+      const x = lima(ms);
+      return x.getUTCFullYear() + "-" + p2(x.getUTCMonth() + 1) + "-" + p2(x.getUTCDate());
+    };
+    var esAdmin = (u) => ADMINS.indexOf(String(u || "").toLowerCase().trim()) >= 0;
+    async function encendido(pool) {
+      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'preav_azure_primero'");
+      return r.recordset.length && r.recordset[0].valor === "1";
+    }
+    async function actualizarFila(tx, i, celdas) {
+      const E = TH.ESQ[CLAVE], f = TH.aFila(CLAVE, celdas), r = tx.request();
+      r.input("fila", sql.Int, i + 1);
+      const sets = E.cols.map((c, k) => {
+        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
+        return c[0] + " = @v" + k;
+      });
+      r.input("o", sql.NVarChar(sql.MAX), f.otros);
+      await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
+    }
+    async function ejecutar(pool, accion, b, usuario, prueba, ahoraMs) {
+      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
+      if (!esAdmin(usuario)) return { status: 200, body: { success: false, error: SIN_PERMISO[accion] } };
+      b = b || {};
+      await CG.asegurarTablas(pool);
+      await TH.asegurar(pool, CLAVE);
+      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
+      const claveOp = clave ? accion + ":" + clave : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+      if (clave && !prueba) {
+        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+      }
+      const ms = prueba && ahoraMs ? +ahoraMs : Date.now(), ahora = new Date(ms);
+      const tx = new sql.Transaction(pool);
+      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+      try {
+        await tx.request().query("EXEC sp_getapplock @Resource = 'preav_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+        const T = await TH.leer(pool, CLAVE);
+        if (!T) {
+          await tx.rollback();
+          return { status: 503, body: { success: false, error: "Tabla de preavisos aun no cargada" } };
+        }
+        let resp, cuerpo, celdas;
+        if (accion === "savePreaviso") {
+          const p = b.preaviso && typeof b.preaviso === "object" ? b.preaviso : b;
+          const usados = new Set(T.filas.map((f) => S(f[0]).trim()));
+          let nro = T.filas.length + 1;
+          while (usados.has(String(nro))) nro++;
+          const fila = [
+            nro,
+            null,
+            p.dni || "",
+            p.nombre || "",
+            p.empresa || "",
+            p.cargo || "",
+            p.sector || "",
+            p.tipo_falta || "",
+            p.hechos || "",
+            p.fecha_emision || "",
+            p.plazo || 6,
+            p.fecha_limite || "",
+            "",
+            "",
+            p.registrado_por || "",
+            ""
+          ];
+          celdas = fila.map((v, k) => k === 1 ? CAP.comoHoja(ahora) : CAP.comoHoja(v));
+          while (celdas.length < ANCHO) celdas.push("");
+          await CAP.agregarFilas(tx, CLAVE, [celdas]);
+          resp = { success: true, nro };
+          cuerpo = { accion, nro, fila, registroMs: ms };
+        } else {
+          const i = T.filas.findIndex((f) => S(f[0]).trim() === String(b.nro).trim());
+          if (i < 0) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "Preaviso no encontrado: " + b.nro } };
+          }
+          celdas = T.filas[i].slice();
+          while (celdas.length < ANCHO) celdas.push("");
+          if (accion === "updatePreavisoDesenlace") {
+            celdas[12] = CAP.comoHoja(b.desenlace || "");
+            celdas[13] = CAP.comoHoja(b.observacion || "");
+            celdas[15] = CAP.comoHoja(ahora);
+            resp = { success: true };
+            cuerpo = { accion, nro: S(T.filas[i][0]).trim(), desenlace: b.desenlace || "", observacion: b.observacion || "", ms };
+          } else {
+            const f = T.filas[i], nuevaMs = ms + 3 * 864e5;
+            const hoyTxt = dmyLima(ms), nuevaTxt = dmyLima(nuevaMs), obsPrevia = S(f[13]);
+            const obs = (obsPrevia ? obsPrevia + " | " : "") + "Apelaci\xF3n con descargo registrada el " + hoyTxt + ". Plazo extendido +3 d\xEDas hasta " + nuevaTxt + ".";
+            celdas[11] = CAP.comoHoja(new Date(nuevaMs));
+            celdas[13] = obs;
+            celdas[16] = CAP.comoHoja(ahora);
+            resp = { success: true, nueva_fecha_limite: nuevaTxt };
+            cuerpo = { accion, nro: S(f[0]).trim(), ms, nuevaMs, obs, hoyTxt, nuevaTxt, nombre: S(f[3]), dni: S(f[2]), empresa: S(f[4]), usuario: String(usuario || "") };
+          }
+          await actualizarFila(tx, i, celdas);
+        }
+        await CAP.tocarMarcas(tx, [CLAVE]);
+        resp.fuente = "azure";
+        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'preav', @a, NULL, @u, @c, @r)");
+        if (prueba) {
+          await tx.rollback();
+          resp.prueba = true;
+          resp._op = cuerpo;
+          resp._celdas = celdas;
+        } else await tx.commit();
+        return { status: 200, body: resp };
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
+          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+        }
+        throw e;
+      }
+    }
+    function getPreavisos(T, usuario) {
+      if (!esAdmin(usuario)) return { success: false, error: SIN_PERMISO.getPreavisos, preavisos: [] };
+      const fmt = (v) => esD(v) ? v.$d ? ymdLima(new Date(v.$d).getTime()) : "" : String(v || "");
+      const sv = (v) => esD(v) ? v.$s : String(v || "");
+      const lista = T.filas.filter((r) => r[0] !== "" && r[0] !== null && r[0] !== void 0).map((r) => ({
+        nro: r[0],
+        fecha_registro: fmt(r[1]),
+        dni: sv(r[2]),
+        nombre: sv(r[3]),
+        empresa: sv(r[4]),
+        cargo: sv(r[5]),
+        sector: sv(r[6]),
+        tipo_falta: sv(r[7]),
+        hechos: sv(r[8]),
+        fecha_emision: fmt(r[9]),
+        plazo: r[10] === "" || r[10] === null || r[10] === void 0 || r[10] === 0 ? 6 : esD(r[10]) ? r[10].$s : r[10],
+        fecha_limite: fmt(r[11]),
+        desenlace: sv(r[12]),
+        observacion: sv(r[13]),
+        registrado_por: sv(r[14]),
+        fecha_desenlace: fmt(r[15]),
+        apelado: fmt(r[16])
+      }));
+      lista.reverse();
+      return { success: true, preavisos: lista, fuente: "azure" };
+    }
+    module.exports = { ejecutar, encendido, getPreavisos, ACCIONES, CLAVE, esAdmin };
+  }
+});
+
+// shared/sup-guardar.js
+var require_sup_guardar = __commonJS({
+  "shared/sup-guardar.js"(exports, module) {
+    "use strict";
+    var { sql } = require_db();
+    var TH = require_tablas_hoja();
+    var CG = require_cv_guardar();
+    var CAP = require_cap_guardar();
+    var K_SUP = "sup_registro";
+    var K_MOT = "casos_motivos";
+    var ACCIONES = ["saveSupervisor", "addMotivoCaso"];
+    var LECTURAS = ["getSupervisores", "getMotivosCasos"];
+    var SUP_ADMIN_USUARIOS = ["jtimoteo"];
+    var ANCHO_SUP = 12;
+    var ANCHO_MOT = 3;
+    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
+    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
+    var p2 = (n) => (n < 10 ? "0" : "") + n;
+    var ymdLima = (ms) => {
+      const x = new Date(ms - 5 * 36e5);
+      return x.getUTCFullYear() + "-" + p2(x.getUTCMonth() + 1) + "-" + p2(x.getUTCDate());
+    };
+    async function encendido(pool) {
+      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'sup_azure_primero'");
+      return r.recordset.length && r.recordset[0].valor === "1";
+    }
+    async function actualizarFila(tx, clave, i, celdas) {
+      const E = TH.ESQ[clave], f = TH.aFila(clave, celdas), r = tx.request();
+      r.input("fila", sql.Int, i + 1);
+      const sets = E.cols.map((c, k) => {
+        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
+        return c[0] + " = @v" + k;
+      });
+      r.input("o", sql.NVarChar(sql.MAX), f.otros);
+      await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
+    }
+    async function ejecutar(pool, accion, b, usuario, prueba, ahoraMs, rol) {
+      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
+      b = b || {};
+      const u = String(usuario || "").trim().toLowerCase();
+      if (accion === "saveSupervisor" && (SUP_ADMIN_USUARIOS.indexOf(u) < 0 || String(rol || b.rol || "").trim().toLowerCase() !== "administrador"))
+        return { status: 200, body: { success: false, error: "Solo el administrador del sistema puede modificar la lista de supervisores." } };
+      if (accion === "addMotivoCaso") {
+        const motivo = String(b.motivo || "").trim();
+        if (!motivo) return { status: 200, body: { success: false, error: "Motivo vac\xEDo" } };
+        if (motivo.length > 80) return { status: 200, body: { success: false, error: "Motivo demasiado largo" } };
+      }
+      const clave = accion === "saveSupervisor" ? K_SUP : K_MOT, ancho = accion === "saveSupervisor" ? ANCHO_SUP : ANCHO_MOT;
+      await CG.asegurarTablas(pool);
+      await TH.asegurar(pool, clave);
+      const huella = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
+      const claveOp = huella ? accion + ":" + huella : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+      if (huella && !prueba) {
+        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+      }
+      const ms = prueba && ahoraMs ? +ahoraMs : Date.now(), ahora = new Date(ms);
+      const tx = new sql.Transaction(pool);
+      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+      try {
+        await tx.request().query("EXEC sp_getapplock @Resource = 'sup_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+        const T = await TH.leer(pool, clave);
+        if (!T) {
+          await tx.rollback();
+          return { status: 503, body: { success: false, error: "Tabla " + clave + " aun no cargada" } };
+        }
+        const filas = T.filas.map((f) => {
+          const c = f.slice();
+          while (c.length < ancho) c.push("");
+          return c;
+        });
+        let resp, cuerpo, nuevas = [], cambiadas = [];
+        if (accion === "saveSupervisor") {
+          const lista = Array.isArray(b.lista) ? b.lista : [b];
+          let creados = 0, actualizados = 0;
+          for (const x of lista) {
+            const dni = String(x.dni || "").trim(), nombre = String(x.nombre || "").trim();
+            if (!dni || !nombre) continue;
+            const k = String(x.dni_original || dni).trim();
+            const activo = x.activo === false || String(x.activo).toUpperCase() === "NO" ? "NO" : "SI";
+            const fila = [
+              dni,
+              nombre,
+              String(x.cargo || ""),
+              String(x.sector || ""),
+              String(x.empresa || ""),
+              String(x.correo || ""),
+              x.reemplazo ? "SI" : "NO",
+              activo,
+              activo === "NO" ? x.fecha_baja || ymdLima(ms) : "",
+              String(x.observacion || ""),
+              ahora,
+              String(usuario || "")
+            ];
+            const celdas = fila.map((v) => CAP.comoHoja(v));
+            const i = filas.findIndex((f) => S(f[0]).trim() === k);
+            if (i >= 0) {
+              filas[i] = celdas;
+              await actualizarFila(tx, K_SUP, i, celdas);
+              cambiadas.push({ fila: i + 2, celdas });
+              actualizados++;
+            } else {
+              filas.push(celdas);
+              nuevas.push(celdas);
+              creados++;
+            }
+          }
+          if (nuevas.length) await CAP.agregarFilas(tx, K_SUP, nuevas);
+          resp = { success: true, action: creados ? "created" : "updated", creados, actualizados };
+          cuerpo = { accion, usuario: String(usuario || ""), ms, lista: lista.map((x) => ({ dni: x.dni, dni_original: x.dni_original, nombre: x.nombre, cargo: x.cargo, sector: x.sector, empresa: x.empresa, correo: x.correo, reemplazo: !!x.reemplazo, activo: x.activo, fecha_baja: x.fecha_baja, observacion: x.observacion })) };
+        } else {
+          const motivo = String(b.motivo || "").trim();
+          const ya = filas.find((f) => S(f[0]).trim().toLowerCase() === motivo.toLowerCase());
+          if (ya) {
+            await tx.rollback();
+            return { status: 200, body: { success: true, yaExistia: true, motivo: S(ya[0]).trim(), fuente: "azure" } };
+          }
+          const celdas = [CAP.comoHoja(motivo), CAP.comoHoja(ahora), CAP.comoHoja(String(usuario || ""))];
+          nuevas.push(celdas);
+          await CAP.agregarFilas(tx, K_MOT, nuevas);
+          resp = { success: true, motivo };
+          cuerpo = { accion, motivo, usuario: String(usuario || ""), ms };
+        }
+        await CAP.tocarMarcas(tx, [clave]);
+        resp.fuente = "azure";
+        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'sup', @a, NULL, @u, @c, @r)");
+        if (prueba) {
+          await tx.rollback();
+          resp.prueba = true;
+          resp._op = cuerpo;
+          resp._nuevas = nuevas;
+          resp._cambiadas = cambiadas;
+        } else await tx.commit();
+        return { status: 200, body: resp };
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        if (huella && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
+          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+        }
+        throw e;
+      }
+    }
+    function getSupervisores(T) {
+      const fb = (v) => esD(v) ? v.$d ? ymdLima(new Date(v.$d).getTime()) : "" : String(v || "");
+      const data = T.filas.filter((r) => r[0] !== "" && r[0] !== null && r[0] !== void 0).map((r) => {
+        const c = r.slice();
+        while (c.length < ANCHO_SUP) c.push("");
+        const act = String(c[7] == null ? "" : S(c[7])).trim();
+        return {
+          dni: S(c[0]),
+          nombre: c[1],
+          cargo: c[2],
+          sector: c[3],
+          empresa: c[4],
+          correo: c[5],
+          reemplazo: c[6] === "SI" || c[6] === true,
+          activo: act.toUpperCase() !== "NO",
+          fecha_baja: fb(c[8]),
+          observacion: String(c[9] || ""),
+          gestionado: act !== ""
+        };
+      });
+      return { success: true, data, fuente: "azure" };
+    }
+    function getMotivosCasos(T) {
+      const out = [], vistos = {};
+      T.filas.forEach((r) => {
+        const m = S(r[0]).trim();
+        if (!m) return;
+        const k = m.toLowerCase();
+        if (vistos[k]) return;
+        vistos[k] = true;
+        out.push(m);
+      });
+      out.sort((a, b) => {
+        if (a.toLowerCase() === "otros") return 1;
+        if (b.toLowerCase() === "otros") return -1;
+        return a.localeCompare(b);
+      });
+      return { success: true, data: out, fuente: "azure" };
+    }
+    module.exports = { ejecutar, encendido, getSupervisores, getMotivosCasos, ACCIONES, LECTURAS, K_SUP, K_MOT };
   }
 });
 
@@ -70148,60 +70886,6 @@ var require_inf_guardar = __commonJS({
       return { success: true, data: out, fuente: "azure" };
     }
     module.exports = { ejecutar, encendido, getInformesIntegrales, ACCIONES, LECTURAS, CLAVE };
-  }
-});
-
-// inf-guardar/index.js
-var require_inf_guardar2 = __commonJS({
-  "inf-guardar/index.js"(exports, module) {
-    var jwt = require_jsonwebtoken();
-    var { getPool } = require_db();
-    var CG = require_cv_guardar();
-    var TH = require_tablas_hoja();
-    var H = require_inf_guardar();
-    function token(req) {
-      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
-      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
-      try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
-      } catch (e) {
-        return null;
-      }
-    }
-    module.exports = async function(context, req) {
-      const accion = context.bindingData.accion;
-      try {
-        if (H.LECTURAS.indexOf(accion) < 0 && H.ACCIONES.indexOf(accion) < 0) {
-          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
-          return;
-        }
-        const t = token(req);
-        if (!t || !t.usuario) {
-          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
-          return;
-        }
-        const pool = await getPool();
-        await CG.asegurarTablas(pool);
-        if (!await H.encendido(pool)) {
-          context.res = { status: 503, body: { success: false, apagado: true, error: "Informes integrales en Azure apagado" } };
-          return;
-        }
-        if (accion === "getInformesIntegrales") {
-          const T = await TH.leer(pool, H.CLAVE);
-          if (!T) {
-            context.res = { status: 503, body: { success: false, error: "Tabla de informes aun no cargada" } };
-            return;
-          }
-          context.res = { status: 200, body: H.getInformesIntegrales(T, req.body || {}) };
-          return;
-        }
-        const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
-        context.res = { status: r.status, body: r.body };
-      } catch (err) {
-        context.log.error("[inf-guardar] " + accion + ": " + err.message);
-        context.res = { status: 500, body: { success: false, error: err.message } };
-      }
-    };
   }
 });
 
@@ -70761,6 +71445,1389 @@ var require_inv_guardar = __commonJS({
   }
 });
 
+// shared/hor-guardar.js
+var require_hor_guardar = __commonJS({
+  "shared/hor-guardar.js"(exports, module) {
+    "use strict";
+    var { sql } = require_db();
+    var TH = require_tablas_hoja();
+    var CG = require_cv_guardar();
+    var CAP = require_cap_guardar();
+    var CLAVE = "horas_horarios";
+    var ACCIONES = ["horariosGuardar", "horariosEliminar"];
+    var LECTURAS = ["horariosListar"];
+    var ADMINS = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas", "ovilela", "jchavez"];
+    var REGISTRADORES = ["dsanchez", "lmorales", "jsiancas"];
+    var ANCHO = 11;
+    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
+    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
+    var p2 = (n) => (n < 10 ? "0" : "") + n;
+    var lima = (ms) => new Date(ms - 5 * 36e5);
+    var ymdLima = (ms) => {
+      const x = lima(ms);
+      return x.getUTCFullYear() + "-" + p2(x.getUTCMonth() + 1) + "-" + p2(x.getUTCDate());
+    };
+    var esAdmin = (u) => {
+      u = String(u || "").toLowerCase().trim();
+      return ADMINS.indexOf(u) >= 0 || REGISTRADORES.indexOf(u) >= 0;
+    };
+    function hjFecha(v) {
+      if (esD(v)) {
+        if (!v.$d) return "";
+        return ymdLima(new Date(v.$d).getTime());
+      }
+      const s = String(v == null ? "" : v).trim();
+      return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.substring(0, 10) : "";
+    }
+    function hjHora(v) {
+      if (esD(v)) {
+        if (!v.$d) return -1;
+        const x = lima(new Date(v.$d).getTime());
+        return x.getUTCHours() * 60 + x.getUTCMinutes();
+      }
+      const s = String(v == null ? "" : v).trim(), m = s.match(/^(\d{1,2})[:.](\d{2})/);
+      if (!m) return -1;
+      const hh = parseInt(m[1], 10), mm = parseInt(m[2], 10);
+      if (isNaN(hh) || isNaN(mm) || hh > 23 || mm > 59) return -1;
+      return hh * 60 + mm;
+    }
+    var hjNetas = (e, s, ref) => {
+      if (e < 0 || s < 0 || s <= e) return 0;
+      const h = (s - e - (Number(ref) || 0)) / 60;
+      return h > 0 ? Math.round(h * 100) / 100 : 0;
+    };
+    var hjTxt = (min) => min < 0 ? "\u2014" : p2(Math.floor(min / 60)) + ":" + p2(min % 60);
+    function leer(T) {
+      const out = [];
+      T.filas.forEach((d0, i) => {
+        const d = d0.slice();
+        while (d.length < ANCHO) d.push("");
+        const desde = hjFecha(d[0]);
+        if (!desde) return;
+        out.push({
+          desde,
+          hasta: hjFecha(d[1]),
+          lvEnt: hjHora(d[2]),
+          lvSal: hjHora(d[3]),
+          lvRef: Number(S(d[4])) || 0,
+          sabEnt: hjHora(d[5]),
+          sabSal: hjHora(d[6]),
+          sabRef: Number(S(d[7])) || 0,
+          accesoActivo: S(d[8]).trim().toUpperCase() === "SI",
+          accesoMargen: d[9] === "" || d[9] == null ? 60 : Number(S(d[9])) || 0,
+          nota: S(d[10]),
+          fila: i + 2
+        });
+      });
+      out.sort((a, b) => a.desde < b.desde ? 1 : -1);
+      return out;
+    }
+    var vigente = (filas, hoy) => filas.find((f) => !(hoy < f.desde) && !(f.hasta && hoy > f.hasta)) || null;
+    function listar(T, ms) {
+      const filas = leer(T), hoy = ymdLima(ms), vig = vigente(filas, hoy);
+      const out = filas.map((f) => ({
+        fila: f.fila,
+        desde: f.desde,
+        hasta: f.hasta,
+        lvEntrada: hjTxt(f.lvEnt),
+        lvSalida: hjTxt(f.lvSal),
+        lvRefrigMin: f.lvRef,
+        sabEntrada: hjTxt(f.sabEnt),
+        sabSalida: hjTxt(f.sabSal),
+        sabRefrigMin: f.sabRef,
+        accesoActivo: f.accesoActivo,
+        accesoMargen: f.accesoMargen,
+        nota: f.nota,
+        horasLV: hjNetas(f.lvEnt, f.lvSal, f.lvRef),
+        horasSab: hjNetas(f.sabEnt, f.sabSal, f.sabRef),
+        vigente: !!(vig && vig.fila === f.fila)
+      }));
+      out.forEach((o) => {
+        o.horasSemana = Math.round((o.horasLV * 5 + o.horasSab) * 100) / 100;
+      });
+      return { success: true, horarios: out, hoy, fuente: "azure" };
+    }
+    async function encendido(pool) {
+      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'hor_azure_primero'");
+      return r.recordset.length && r.recordset[0].valor === "1";
+    }
+    async function actualizarFila(tx, i, celdas) {
+      const E = TH.ESQ[CLAVE], f = TH.aFila(CLAVE, celdas), r = tx.request();
+      r.input("fila", sql.Int, i + 1);
+      const sets = E.cols.map((c, k) => {
+        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
+        return c[0] + " = @v" + k;
+      });
+      r.input("o", sql.NVarChar(sql.MAX), f.otros);
+      await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
+    }
+    async function eliminarFila(tx, i) {
+      const E = TH.ESQ[CLAVE];
+      await tx.request().input("f", sql.Int, i + 1).query(`DELETE FROM ${E.tabla} WHERE fila = @f;
+    WITH x AS (SELECT fila, rn = ROW_NUMBER() OVER (ORDER BY fila) FROM ${E.tabla}) UPDATE x SET fila = rn;`);
+    }
+    async function ejecutar(pool, accion, b, usuario, prueba, ahoraMs) {
+      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
+      b = b || {};
+      if (!esAdmin(usuario)) return { status: 200, body: { success: false, error: accion === "horariosGuardar" ? "Solo un administrador puede cambiar los horarios." : "Solo un administrador puede borrar horarios." } };
+      await CG.asegurarTablas(pool);
+      await TH.asegurar(pool, CLAVE);
+      const huella = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
+      const claveOp = huella ? accion + ":" + huella : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
+      if (huella && !prueba) {
+        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+      }
+      const ms = prueba && ahoraMs ? +ahoraMs : Date.now();
+      const tx = new sql.Transaction(pool);
+      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+      try {
+        await tx.request().query("EXEC sp_getapplock @Resource = 'hor_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
+        const T = await TH.leer(pool, CLAVE);
+        if (!T) {
+          await tx.rollback();
+          return { status: 503, body: { success: false, error: "Tabla de horarios aun no cargada" } };
+        }
+        const ultimaFila = T.filas.length + 1;
+        let resp, cuerpo, celdas;
+        if (accion === "horariosGuardar") {
+          const d = b.horario || {};
+          const desde = hjFecha(d.desde);
+          if (!desde) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "Falta la fecha DESDE, en formato 2026-09-01." } };
+          }
+          const hasta = hjFecha(d.hasta);
+          if (hasta && hasta < desde) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "La fecha HASTA no puede ser anterior a DESDE." } };
+          }
+          const lvE = hjHora(d.lvEntrada), lvS = hjHora(d.lvSalida);
+          if (lvE < 0 || lvS < 0) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "Faltan la entrada y la salida de lunes a viernes." } };
+          }
+          if (lvS <= lvE) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "La salida de lunes a viernes debe ser posterior a la entrada." } };
+          }
+          const sabE = hjHora(d.sabEntrada), sabS = hjHora(d.sabSalida);
+          if (sabE >= 0 !== sabS >= 0) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "Del sabado hay que poner las dos horas, o ninguna si se descansa." } };
+          }
+          if (sabE >= 0 && sabS <= sabE) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "La salida del sabado debe ser posterior a la entrada." } };
+          }
+          let lvRef = Number(d.lvRefrigMin);
+          if (isNaN(lvRef) || lvRef < 0) lvRef = 0;
+          let sabRef = Number(d.sabRefrigMin);
+          if (isNaN(sabRef) || sabRef < 0) sabRef = 0;
+          let margen = Number(d.accesoMargen);
+          if (isNaN(margen) || margen < 0) margen = 60;
+          const neto = hjNetas(lvE, lvS, lvRef);
+          if (neto <= 0) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "Con esas horas la jornada queda en cero. Revisa el refrigerio." } };
+          }
+          const valores = [desde, hasta, hjTxt(lvE), hjTxt(lvS), lvRef, sabE < 0 ? "" : hjTxt(sabE), sabS < 0 ? "" : hjTxt(sabS), sabRef, d.accesoActivo ? "SI" : "NO", margen, String(d.nota || "")];
+          celdas = valores.slice();
+          let fila = Number(d.fila) || 0;
+          if (fila >= 2 && fila <= ultimaFila) await actualizarFila(tx, fila - 2, celdas);
+          else {
+            await CAP.agregarFilas(tx, CLAVE, [celdas]);
+            fila = ultimaFila + 1;
+          }
+          resp = { success: true, fila, horasLV: neto, horasSab: hjNetas(sabE, sabS, sabRef) };
+          cuerpo = { accion, fila: Number(d.fila) || 0, valores, detalle: desde + " L-V " + hjTxt(lvE) + "-" + hjTxt(lvS) + " = " + neto + "h", usuario: String(usuario || ""), ms };
+        } else {
+          const fila = Number(b.fila) || 0;
+          if (fila < 2 || fila > ultimaFila) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "No encuentro ese horario." } };
+          }
+          if (ultimaFila <= 2) {
+            await tx.rollback();
+            return { status: 200, body: { success: false, error: "No se puede borrar el ultimo horario: el sistema se quedaria sin jornada." } };
+          }
+          const eraDesde = S(T.filas[fila - 2][0]);
+          await eliminarFila(tx, fila - 2);
+          resp = { success: true };
+          cuerpo = { accion, fila, eraDesde, usuario: String(usuario || ""), ms };
+        }
+        await CAP.tocarMarcas(tx, [CLAVE]);
+        resp.fuente = "azure";
+        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'hor', @a, NULL, @u, @c, @r)");
+        if (prueba) {
+          await tx.rollback();
+          resp.prueba = true;
+          resp._op = cuerpo;
+          resp._celdas = celdas;
+        } else await tx.commit();
+        return { status: 200, body: resp };
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        if (huella && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
+          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
+          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+        }
+        throw e;
+      }
+    }
+    module.exports = { ejecutar, encendido, listar, ACCIONES, LECTURAS, CLAVE };
+  }
+});
+
+// cv-guardar-admin/index.js
+var require_cv_guardar_admin = __commonJS({
+  "cv-guardar-admin/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var G = require_cv_guardar();
+    var CAP = require_cap_guardar();
+    var HOR = require_horas_guardar();
+    var FUS = require_fus_guardar();
+    var SOL = require_sol_guardar();
+    var CUW = require_cumpl_guardar();
+    var USR = require_usr_guardar();
+    var MANT = require_mant_guardar();
+    var E360 = require_e360_guardar();
+    var PREAV = require_preav_guardar();
+    var SUP = require_sup_guardar();
+    var ALM = require_alm_guardar();
+    var INF = require_inf_guardar();
+    var INV = require_inv_guardar();
+    var HORJ = require_hor_guardar();
+    var TH = require_tablas_hoja();
+    async function ponerEstado(pool, clave, valor) {
+      await pool.request().input("k", sql.NVarChar(40), clave).input("v", sql.NVarChar(400), valor).query(`MERGE dbo.CV_Estado AS x USING (SELECT @k AS clave) AS s ON x.clave = s.clave
+            WHEN MATCHED THEN UPDATE SET valor = @v, actualizado = SYSUTCDATETIME()
+            WHEN NOT MATCHED THEN INSERT (clave, valor) VALUES (@k, @v);`);
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData.accion, b = req.body || {};
+      const res = (status, body) => {
+        context.res = { status, body };
+      };
+      try {
+        const pool = await getPool();
+        await G.asegurarTablas(pool);
+        if (accion === "estado") {
+          const r = await pool.request().query(`SELECT
+        (SELECT valor FROM dbo.CV_Estado WHERE clave = 'azure_primero') AS azure_primero,
+        (SELECT ultimo FROM dbo.CV_Contador WHERE tipo = 'casos') AS contador_casos,
+        (SELECT ultimo FROM dbo.CV_Contador WHERE tipo = 'visitas') AS contador_visitas,
+        (SELECT COUNT(*) FROM dbo.CV_Ops WHERE en_hoja = 0) AS pendientes,
+        (SELECT COUNT(*) FROM dbo.CV_Ops WHERE en_hoja = 0 AND error IS NOT NULL) AS con_error,
+        (SELECT COUNT(*) FROM dbo.CV_Ops) AS operaciones,
+        (SELECT COUNT(*) FROM dbo.Casos) AS casos, (SELECT COUNT(*) FROM dbo.Visitas) AS visitas`);
+          return res(200, Object.assign({ success: true }, r.recordset[0]));
+        }
+        if (accion === "encender" || accion === "contadores") {
+          const mc = parseInt(b.maxCasos, 10), mv = parseInt(b.maxVisitas, 10);
+          if (isNaN(mc) || isNaN(mv)) return res(400, { success: false, error: "Faltan maxCasos / maxVisitas" });
+          for (const [t, m] of [["casos", mc], ["visitas", mv]]) {
+            await pool.request().input("t", sql.NVarChar(20), t).input("m", sql.Int, m).query(`MERGE dbo.CV_Contador AS x USING (SELECT @t AS tipo) AS s ON x.tipo = s.tipo
+                  WHEN MATCHED THEN UPDATE SET ultimo = CASE WHEN x.ultimo > @m THEN x.ultimo ELSE @m END, actualizado = SYSUTCDATETIME()
+                  WHEN NOT MATCHED THEN INSERT (tipo, ultimo) VALUES (@t, @m);`);
+          }
+          if (accion === "contadores") return res(200, { success: true, contadores: { casos: mc, visitas: mv } });
+          await ponerEstado(pool, "azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "apagar") {
+          await ponerEstado(pool, "azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "pendientes") {
+          const r = await pool.request().query("SELECT TOP 50 id, tipo, accion, nro, usuario, cuerpo, error FROM dbo.CV_Ops WHERE en_hoja = 0 ORDER BY id");
+          return res(200, { success: true, ops: r.recordset.map((o) => Object.assign(o, { cuerpo: JSON.parse(o.cuerpo) })) });
+        }
+        if (accion === "marcar") {
+          if (Array.isArray(b.ids) && b.ids.length) {
+            await pool.request().query(`UPDATE dbo.CV_Ops SET en_hoja = 1, aplicado = SYSUTCDATETIME(), error = NULL WHERE id IN (${b.ids.map((x) => parseInt(x, 10)).filter((x) => !isNaN(x)).join(",") || "0"})`);
+          }
+          if (b.id && b.error) await pool.request().input("id", sql.Int, b.id).input("e", sql.NVarChar(500), String(b.error).slice(0, 500)).query("UPDATE dbo.CV_Ops SET error = @e WHERE id = @id");
+          return res(200, { success: true });
+        }
+        if (accion === "capEncender") {
+          await ponerEstado(pool, "cap_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "capApagar") {
+          await ponerEstado(pool, "cap_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "capSimular") {
+          const r = await CAP.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", b.rol || "administrador", true);
+          return res(r.status, r.body);
+        }
+        if (accion === "e360Encender") {
+          await ponerEstado(pool, "e360_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "e360Apagar") {
+          await ponerEstado(pool, "e360_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "e360Simular") {
+          const r = await E360.ejecutar(pool, b.accion, b.datos || {}, b.operador || "jtimoteo", true, b.ahora);
+          return res(r.status, r.body);
+        }
+        if (accion === "mantEncender") {
+          await ponerEstado(pool, "mant_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "mantApagar") {
+          await ponerEstado(pool, "mant_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "mantSimular") {
+          const r = await MANT.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true, b.ahora);
+          return res(r.status, Object.assign({ success: !!r.body.ok }, r.body));
+        }
+        if (accion === "usrEncender") {
+          await ponerEstado(pool, "usr_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "usrApagar") {
+          await ponerEstado(pool, "usr_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "usrSimular") {
+          const r = await USR.ejecutar(pool, b.accion, b.datos || {}, b.operador || "jtimoteo", true, b.ahora);
+          return res(r.status, r.body);
+        }
+        if (accion === "usrUsuarios") {
+          const r = await pool.request().query("SELECT id_sistema, usuario, nombre, rol, empresa, activo, correo, CASE WHEN password LIKE '$2%' THEN 1 ELSE 0 END AS cifrada FROM dbo.usuarios ORDER BY id_sistema");
+          return res(200, { success: true, usuarios: r.recordset });
+        }
+        if (accion === "cumplEncender") {
+          await ponerEstado(pool, "cumpl_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "cumplApagar") {
+          await ponerEstado(pool, "cumpl_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "cumplSimular") {
+          const r = await CUW.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", b.rol || "administrador", true, b.ahora);
+          return res(r.status, r.body);
+        }
+        if (accion === "cumplMotor") {
+          const m = await CUW.paraMotor(pool);
+          return res(m ? 200 : 404, m ? Object.assign({ success: true }, m) : { success: false, error: "Tablas aun no cargadas" });
+        }
+        if (accion === "solEncender") {
+          await ponerEstado(pool, "sol_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "solApagar") {
+          await ponerEstado(pool, "sol_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "solSimular") {
+          const r = await SOL.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true);
+          return res(r.status, r.body);
+        }
+        if (accion === "preavEncender") {
+          await ponerEstado(pool, "preav_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "preavApagar") {
+          await ponerEstado(pool, "preav_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "preavSimular") {
+          const r = await PREAV.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true, b.ahora);
+          return res(r.status, r.body);
+        }
+        if (accion === "supEncender") {
+          await ponerEstado(pool, "sup_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "supApagar") {
+          await ponerEstado(pool, "sup_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "supSimular") {
+          const r = await SUP.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true, b.ahora, b.rol || "administrador");
+          return res(r.status, r.body);
+        }
+        if (accion === "almEncender") {
+          await ponerEstado(pool, "alm_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "almApagar") {
+          await ponerEstado(pool, "alm_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "almSimular") {
+          const r = await ALM.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true, b.ahora);
+          return res(r.status, r.body);
+        }
+        if (accion === "infEncender") {
+          await ponerEstado(pool, "inf_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "infApagar") {
+          await ponerEstado(pool, "inf_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "infSimular") {
+          const r = await INF.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true, b.ahora);
+          return res(r.status, r.body);
+        }
+        if (accion === "invEncender") {
+          await ponerEstado(pool, "inv_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "invApagar") {
+          await ponerEstado(pool, "inv_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "invSimular") {
+          const r = await INV.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true, b.ahora);
+          return res(r.status, r.body);
+        }
+        if (accion === "horEncender") {
+          await ponerEstado(pool, "hor_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "horApagar") {
+          await ponerEstado(pool, "hor_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "horSimular") {
+          const r = await HORJ.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true, b.ahora);
+          return res(r.status, r.body);
+        }
+        if (accion === "memoria") {
+          const m = process.memoryUsage(), MB = (x) => Math.round(x / 1048576);
+          return res(200, { success: true, rssMB: MB(m.rss), heapUsadoMB: MB(m.heapUsed), heapTotalMB: MB(m.heapTotal), externoMB: MB(m.external), node: process.version, vivoSeg: Math.round(process.uptime()), tablasEnMemoria: TH.enMemoria() });
+        }
+        if (accion === "invGetAllPrueba") {
+          const T = await INV.leerTodo(pool);
+          return T ? res(200, INV.getAll(T)) : res(503, { success: false, error: "Tablas de inventario aun no cargadas" });
+        }
+        if (accion === "fusEncender") {
+          await ponerEstado(pool, "fus_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "fusApagar") {
+          await ponerEstado(pool, "fus_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "fusSimular") {
+          const r = await FUS.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true);
+          return res(r.status, r.body);
+        }
+        if (accion === "horasEncender") {
+          await ponerEstado(pool, "horas_azure_primero", "1");
+          return res(200, { success: true, encendido: true });
+        }
+        if (accion === "horasApagar") {
+          await ponerEstado(pool, "horas_azure_primero", "0");
+          return res(200, { success: true, encendido: false });
+        }
+        if (accion === "horasEstado") {
+          const r = await pool.request().query(`SELECT (SELECT valor FROM dbo.CV_Estado WHERE clave = 'horas_azure_primero') AS horas_azure_primero,
+        (SELECT COUNT(*) FROM dbo.CV_Ops WHERE tipo = 'horas' AND en_hoja = 0) AS pendientes, (SELECT COUNT(*) FROM dbo.CV_Ops WHERE tipo = 'horas') AS operaciones`);
+          return res(200, Object.assign({ success: true }, r.recordset[0]));
+        }
+        if (accion === "horasSimular") {
+          const r = await HOR.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true, b.ahora);
+          return res(r.status, r.body);
+        }
+        if (accion === "simular") {
+          const r = await G.ejecutar(pool, b.accion, b.datos || {}, b.usuario || "jtimoteo", true);
+          return res(r.status, r.body);
+        }
+        return res(404, { success: false, error: "Accion desconocida" });
+      } catch (e) {
+        context.log.error("[cv-guardar-admin] " + accion + ": " + e.message);
+        return res(500, { success: false, error: [e.message, e.originalError && e.originalError.message].filter(Boolean).join(" | ") });
+      }
+    };
+  }
+});
+
+// cv-importar/index.js
+var require_cv_importar = __commonJS({
+  "cv-importar/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var { asegurarTablas } = require_cv_db();
+    module.exports = async function(context, req) {
+      try {
+        const pool = await getPool();
+        await asegurarTablas(pool);
+        if (req.method === "GET") {
+          const r = await pool.request().query(`SELECT (SELECT COUNT(*) FROM dbo.CV_Casos) AS casos,
+        (SELECT COUNT(*) FROM dbo.CV_Casos WHERE reciente = 1) AS casos_recientes,
+        (SELECT COUNT(*) FROM dbo.CV_Visitas) AS visitas,
+        (SELECT CONVERT(VARCHAR(19), DATEADD(HOUR, -5, actualizado), 120) FROM dbo.CV_Estado WHERE clave = 'ultima_carga') AS ultima_carga_lima`);
+          context.res = { status: 200, body: Object.assign({ success: true }, r.recordset[0]) };
+          return;
+        }
+        const b = req.body || {};
+        if (!Array.isArray(b.casos) || !Array.isArray(b.visitas)) throw new Error("Faltan casos o visitas");
+        const tC = new sql.Table("dbo.CV_Casos");
+        tC.create = false;
+        tC.columns.add("orden", sql.Int, { nullable: false });
+        tC.columns.add("nro", sql.NVarChar(40), { nullable: true });
+        tC.columns.add("reciente", sql.Bit, { nullable: false });
+        tC.columns.add("datos", sql.NVarChar(sql.MAX), { nullable: false });
+        b.casos.forEach((c, i) => tC.rows.add(i + 1, String((c.d && c.d.nro) == null ? "" : c.d.nro).slice(0, 40), c.r ? 1 : 0, JSON.stringify(c.d || {})));
+        const tV = new sql.Table("dbo.CV_Visitas");
+        tV.create = false;
+        tV.columns.add("orden", sql.Int, { nullable: false });
+        tV.columns.add("nro", sql.NVarChar(40), { nullable: true });
+        tV.columns.add("datos", sql.NVarChar(sql.MAX), { nullable: false });
+        b.visitas.forEach((v, i) => tV.rows.add(i + 1, String((v && v.nro) == null ? "" : v.nro).slice(0, 40), JSON.stringify(v || {})));
+        const tx = new sql.Transaction(pool);
+        await tx.begin();
+        try {
+          await tx.request().query("DELETE FROM dbo.CV_Casos; DELETE FROM dbo.CV_Visitas;");
+          if (b.casos.length) await tx.request().bulk(tC);
+          if (b.visitas.length) await tx.request().bulk(tV);
+          await tx.request().input("v", sql.NVarChar(400), "casos=" + b.casos.length + " visitas=" + b.visitas.length).query(`MERGE dbo.CV_Estado AS x USING (SELECT 'ultima_carga' AS clave) AS s ON x.clave = s.clave
+                WHEN MATCHED THEN UPDATE SET valor = @v, actualizado = SYSUTCDATETIME()
+                WHEN NOT MATCHED THEN INSERT (clave, valor) VALUES ('ultima_carga', @v);`);
+          await tx.commit();
+        } catch (e) {
+          try {
+            await tx.rollback();
+          } catch (e2) {
+          }
+          throw e;
+        }
+        context.res = { status: 200, body: { success: true, casos: b.casos.length, visitas: b.visitas.length } };
+      } catch (e) {
+        context.res = { status: 500, body: { success: false, error: [e.message, e.originalError && e.originalError.message].filter(Boolean).join(" | ") } };
+      }
+    };
+  }
+});
+
+// db-indices/index.js
+var require_db_indices = __commonJS({
+  "db-indices/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var INDICES = [
+      ["IX_At_fecha_id", "Atenciones", "fecha_atencion", "(fecha_atencion DESC, id DESC)", ""],
+      ["IX_At_dni_fecha", "Atenciones", "dni", "(dni, fecha_atencion DESC)", "INCLUDE (estado, nro)"],
+      ["IX_At_nro_anio", "Atenciones", "nro", "(nro, anio)", "INCLUDE (dni)"],
+      /* _INDICES_V2 (24-oct-2026): los 3 filtros que atenciones-list usa a cada rato y recorrian la tabla entera */
+      ["IX_At_usuario_fecha", "Atenciones", "usuario_sistema", "(usuario_sistema, fecha_atencion DESC)", "INCLUDE (id)"],
+      ["IX_At_modificado", "Atenciones", "modificado", "(modificado DESC)", "INCLUDE (id)"],
+      ["IX_At_supervisor_fecha", "Atenciones", "supervisor", "(supervisor, fecha_atencion DESC)", "INCLUDE (id)"],
+      /* primera = null -> se revisa por NOMBRE: el indice (anio, mes) que ya existe no es
+         "cubriente" y las estadisticas igual leen las filas completas */
+      ["IX_At_stats", "Atenciones", null, "(anio, mes)", "INCLUDE (fecha_atencion, estado, empresa, supervisor, detalle_documento, usuario_sistema)"],
+      ["IX_TR_dni", "Trabajadores_RAPEL", "dni", "(dni)", ""],
+      ["IX_TV_dni", "Trabajadores_VERFRUT", "dni", "(dni)", ""]
+    ];
+    async function informe(pool) {
+      const r = await pool.request().query(`
+    SELECT t.name AS tabla, SUM(p.rows) AS filas
+    FROM sys.tables t JOIN sys.partitions p ON p.object_id = t.object_id AND p.index_id IN (0,1)
+    WHERE t.name IN ('Atenciones','Trabajadores_RAPEL','Trabajadores_VERFRUT','Usuarios')
+    GROUP BY t.name;
+    SELECT t.name AS tabla, i.name AS indice, i.type_desc AS tipo,
+      STUFF((SELECT ', ' + c.name FROM sys.index_columns ic JOIN sys.columns c
+             ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+             WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0
+             ORDER BY ic.key_ordinal FOR XML PATH('')), 1, 2, '') AS columnas
+    FROM sys.indexes i JOIN sys.tables t ON t.object_id = i.object_id
+    WHERE t.name IN ('Atenciones','Trabajadores_RAPEL','Trabajadores_VERFRUT','Usuarios') AND i.type > 0
+    ORDER BY t.name, i.name;
+    SELECT t.name AS tabla, c.name AS columna, ty.name AS tipo, c.max_length
+    FROM sys.columns c JOIN sys.tables t ON t.object_id = c.object_id JOIN sys.types ty ON ty.user_type_id = c.user_type_id
+    WHERE t.name IN ('Atenciones','Trabajadores_RAPEL','Trabajadores_VERFRUT')
+      AND c.name IN ('dni','fecha_atencion','nro','anio','mes','supervisor','usuario_sistema','estado','empresa','detalle_documento','id','modificado');
+    SELECT TOP 1 service_objective = DATABASEPROPERTYEX(DB_NAME(), 'ServiceObjective');
+  `);
+      const rs = r.recordsets;
+      return { filas: rs[0], indices: rs[1], columnas: rs[2], plan: rs[3] && rs[3][0] && rs[3][0].service_objective };
+    }
+    async function yaCubierto(pool, tabla, primera) {
+      const r = await pool.request().input("t", sql.NVarChar, tabla).input("c", sql.NVarChar, primera).query(`
+    SELECT COUNT(*) AS n FROM sys.indexes i
+    JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.key_ordinal = 1
+    JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id
+    WHERE i.object_id = OBJECT_ID('dbo.' + @t) AND c.name = @c AND i.type > 0`);
+      return r.recordset[0].n > 0;
+    }
+    async function indicesPg(context, req, t0) {
+      const pool = await getPool();
+      const aplicar = req.method === "POST" && String(req.query && req.query.aplicar || "") === "1";
+      const acciones = [];
+      for (const [nombre, tabla, primera, claves, incluye] of INDICES) {
+        const t = tabla.toLowerCase(), n = nombre.toLowerCase();
+        const existe = (await pool.request().input("t", sql.NVarChar, t).query(`SELECT COUNT(*)::int AS n FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace WHERE s.nspname = current_schema() AND c.relname = @t AND c.relkind = 'r'`)).recordset[0].n > 0;
+        if (!existe) {
+          acciones.push({ indice: nombre, estado: "tabla no existe" });
+          continue;
+        }
+        if (primera === null) {
+          const ya = (await pool.request().input("n", sql.NVarChar, n).query(`SELECT COUNT(*)::int AS n FROM pg_indexes WHERE schemaname = current_schema() AND indexname = @n`)).recordset[0].n > 0;
+          if (ya) {
+            acciones.push({ indice: nombre, estado: "ya existe" });
+            continue;
+          }
+        } else {
+          const cub = (await pool.request().input("t", sql.NVarChar, t).input("c", sql.NVarChar, primera.toLowerCase()).query(`SELECT COUNT(*)::int AS n FROM pg_index ix
+          JOIN pg_class tb ON tb.oid = ix.indrelid JOIN pg_namespace s ON s.oid = tb.relnamespace
+          JOIN pg_attribute at ON at.attrelid = tb.oid AND at.attnum = split_part(ix.indkey::text, ' ', 1)::int
+          WHERE s.nspname = current_schema() AND tb.relname = @t AND at.attname = @c`)).recordset[0].n > 0;
+          if (cub) {
+            acciones.push({ indice: nombre, estado: "ya cubierto (hay indice por " + primera + ")" });
+            continue;
+          }
+        }
+        if (!aplicar) {
+          acciones.push({ indice: nombre, estado: "FALTA (se crearia)" });
+          continue;
+        }
+        const t1 = Date.now();
+        try {
+          await pool.request().query(`CREATE INDEX CONCURRENTLY IF NOT EXISTS ${n} ON ${t} ${claves.toLowerCase()} ${incluye.toLowerCase()}`);
+          acciones.push({ indice: nombre, estado: "CREADO (sin bloquear)", ms: Date.now() - t1 });
+        } catch (e) {
+          acciones.push({ indice: nombre, estado: "ERROR", error: e.message });
+        }
+      }
+      const tablas = ["atenciones", "trabajadores_rapel", "trabajadores_verfrut", "usuarios"];
+      const filas = (await pool.request().query(`SELECT c.relname AS tabla, GREATEST(c.reltuples, 0)::bigint AS filas FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace
+      WHERE s.nspname = current_schema() AND c.relkind = 'r' AND c.relname IN ('${tablas.join("','")}')`)).recordset;
+      const indices = (await pool.request().query(`SELECT tablename AS tabla, indexname AS indice, indexdef AS definicion FROM pg_indexes
+      WHERE schemaname = current_schema() AND tablename IN ('${tablas.join("','")}') ORDER BY 1, 2`)).recordset;
+      context.res = { status: 200, body: { success: true, modo: aplicar ? "aplicar" : "solo informe", acciones, filas, indices, columnas: [], plan: "Supabase (Postgres)", ms: Date.now() - t0 } };
+    }
+    module.exports = async function(context, req) {
+      const t0 = Date.now();
+      if (sql._pg) {
+        try {
+          return await indicesPg(context, req, t0);
+        } catch (e) {
+          context.res = { status: 500, body: { success: false, error: e.message } };
+          return;
+        }
+      }
+      try {
+        const pool = await getPool();
+        const aplicar = req.method === "POST" && String(req.query && req.query.aplicar || "") === "1";
+        const acciones = [];
+        for (const [nombre, tabla, primera, claves, incluye] of INDICES) {
+          const existe = (await pool.request().query(`SELECT OBJECT_ID('dbo.${tabla}') AS o`)).recordset[0].o;
+          if (!existe) {
+            acciones.push({ indice: nombre, estado: "tabla no existe" });
+            continue;
+          }
+          if (primera === null) {
+            const yaEsta = (await pool.request().input("n", sql.NVarChar, nombre).input("t", sql.NVarChar, tabla).query(`SELECT COUNT(*) AS n FROM sys.indexes WHERE name = @n AND object_id = OBJECT_ID('dbo.' + @t)`)).recordset[0].n > 0;
+            if (yaEsta) {
+              acciones.push({ indice: nombre, estado: "ya existe" });
+              continue;
+            }
+          } else if (await yaCubierto(pool, tabla, primera)) {
+            acciones.push({ indice: nombre, estado: "ya cubierto (hay indice por " + primera + ")" });
+            continue;
+          }
+          if (!aplicar) {
+            acciones.push({ indice: nombre, estado: "FALTA (se crearia)" });
+            continue;
+          }
+          const base = `CREATE NONCLUSTERED INDEX ${nombre} ON dbo.${tabla} ${claves} ${incluye}`;
+          const t1 = Date.now();
+          try {
+            await pool.request().query(base + " WITH (ONLINE = ON)");
+            acciones.push({ indice: nombre, estado: "CREADO (online)", ms: Date.now() - t1 });
+          } catch (e1) {
+            try {
+              await pool.request().query(base);
+              acciones.push({ indice: nombre, estado: "CREADO", ms: Date.now() - t1 });
+            } catch (e2) {
+              acciones.push({ indice: nombre, estado: "ERROR", error: e2.originalError && e2.originalError.message || e2.message });
+            }
+          }
+        }
+        context.res = { status: 200, body: {
+          success: true,
+          modo: aplicar ? "aplicar" : "solo informe",
+          acciones,
+          ...await informe(pool),
+          ms: Date.now() - t0
+        } };
+      } catch (e) {
+        context.res = { status: 500, body: { success: false, error: e.originalError && e.originalError.message || e.message } };
+      }
+    };
+  }
+});
+
+// e360-guardar/index.js
+var require_e360_guardar2 = __commonJS({
+  "e360-guardar/index.js"(exports, module) {
+    var jwt = require_jsonwebtoken();
+    var { getPool } = require_db();
+    var CG = require_cv_guardar();
+    var H = require_e360_guardar();
+    var TH = require_tablas_hoja();
+    function token(req) {
+      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+      } catch (e) {
+        return null;
+      }
+    }
+    var S = (v) => v && typeof v === "object" && typeof v.$d === "string" ? v.$s || v.$d : String(v == null ? "" : v);
+    function fechaYmd(v) {
+      if (v && typeof v === "object" && typeof v.$d === "string") {
+        const d2 = new Date(v.$d);
+        if (!isNaN(d2)) {
+          const x = new Date(d2.getTime() - 5 * 36e5);
+          return x.toISOString().slice(0, 10);
+        }
+      }
+      const t = String(v == null ? "" : v).trim();
+      let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return m[1] + "-" + m[2] + "-" + m[3];
+      m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (m) return m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2);
+      const d = new Date(t);
+      return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+    }
+    async function getEvaluaciones360(pool, p) {
+      const T = await TH.leer(pool, "e360_evaluaciones");
+      if (!T) return { success: false, error: "Tabla de evaluaciones aun no cargada" };
+      const heads = (T.encabezado || []).map((h) => S(h).trim()), iP = heads.indexOf("Periodo"), iD = heads.indexOf("Detalle");
+      let data = [];
+      (T.filas || []).forEach((r) => {
+        if (!r || !S(r[0])) return;
+        const fecha = fechaYmd(r[1]);
+        const periodo = iP >= 0 && S(r[iP]).trim() ? S(r[iP]).trim() : fecha.slice(0, 7);
+        let comps = [];
+        if (iD >= 0 && S(r[iD])) {
+          try {
+            comps = JSON.parse(S(r[iD]));
+          } catch (e) {
+            comps = [];
+          }
+        }
+        if (!comps.length) {
+          [["Liderazgo", r[6]], ["Comunicaci\xF3n", r[7]], ["Cumplimiento", r[8]], ["Gesti\xF3n de Equipo", r[9]], ["Resoluci\xF3n de Problemas", r[10]], ["Planificaci\xF3n", r[11]]].forEach((pc) => {
+            const v = Number(S(pc[1])) || 0;
+            if (v > 0) comps.push({ nombre: pc[0], promedio: v, respondidas: 0, total: 0, respuestas: [] });
+          });
+        }
+        data.push({
+          id: S(r[0]),
+          fecha,
+          periodo,
+          evaluador: S(r[2]),
+          supervisor: S(r[3]).trim(),
+          empresa: S(r[4]),
+          sector: S(r[5]),
+          competencias: comps,
+          total: Number(S(r[12])) || 0,
+          porcentaje: Number(S(r[13])) || 0,
+          clasificacion: S(r[14]),
+          obs: S(r[15]),
+          evaluadorUser: S(r[17]),
+          fechaRegistro: fechaYmd(r[18])
+        });
+      });
+      if (p && p.empresa && p.empresa !== "AMBAS") data = data.filter((e) => e.empresa === p.empresa);
+      if (p && p.supervisor) {
+        const q = String(p.supervisor).toLowerCase();
+        data = data.filter((e) => e.supervisor.toLowerCase().indexOf(q) !== -1);
+      }
+      if (p && p.periodo) data = data.filter((e) => e.periodo === String(p.periodo));
+      data.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
+      return { success: true, data, fuente: "azure" };
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData.accion;
+      try {
+        if (accion !== "getEvaluaciones360" && H.ACCIONES.indexOf(accion) < 0) {
+          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
+          return;
+        }
+        const t = token(req);
+        if (!t || !t.usuario) {
+          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
+          return;
+        }
+        const pool = await getPool();
+        await CG.asegurarTablas(pool);
+        if (accion === "getEvaluaciones360") {
+          context.res = { status: 200, body: await getEvaluaciones360(pool, req.body || {}) };
+          return;
+        }
+        if (!await H.encendido(pool)) {
+          context.res = { status: 503, body: { success: false, apagado: true, error: "Guardado en Azure apagado" } };
+          return;
+        }
+        const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
+        context.res = { status: r.status, body: r.body };
+      } catch (err) {
+        context.log.error("[e360-guardar] " + accion + ": " + err.message);
+        context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
+// shared/eti-eval.js
+var require_eti_eval = __commonJS({
+  "shared/eti-eval.js"(exports, module) {
+    "use strict";
+    var { sql } = require_db();
+    var listo = null;
+    function asegurarTablas(pool) {
+      if (!listo) listo = pool.request().query(`
+    IF OBJECT_ID('dbo.ETI_Evaluaciones', 'U') IS NULL
+      CREATE TABLE dbo.ETI_Evaluaciones (
+        id NVARCHAR(80) NOT NULL PRIMARY KEY,
+        modalidad NVARCHAR(10) NOT NULL,            -- QR | MANUAL
+        sesion_id NVARCHAR(20) NULL,
+        fecha DATE NOT NULL,
+        empresa NVARCHAR(40) NULL,
+        supervisor NVARCHAR(150) NULL,
+        usuario NVARCHAR(60) NULL,
+        sector NVARCHAR(150) NULL,
+        tipo NVARCHAR(20) NULL,                     -- obrero | empleado
+        ruta NVARCHAR(150) NULL,
+        codigo NVARCHAR(60) NULL,
+        evaluados INT NOT NULL DEFAULT 1,
+        resultado DECIMAL(7,4) NOT NULL,            -- 0..1
+        estado NVARCHAR(12) NULL,                   -- APROBADO | REFUERZO
+        banco_version INT NULL,
+        creado DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());
+    IF OBJECT_ID('dbo.ETI_Evaluaciones_Seccion', 'U') IS NULL
+      CREATE TABLE dbo.ETI_Evaluaciones_Seccion (
+        eval_id NVARCHAR(80) NOT NULL,
+        sec_id NVARCHAR(40) NOT NULL,
+        sec_nom NVARCHAR(120) NULL,
+        peso DECIMAL(7,4) NULL,
+        pct DECIMAL(7,4) NOT NULL,
+        CONSTRAINT PK_ETI_Eval_Sec PRIMARY KEY (eval_id, sec_id));
+    IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name='IX_ETI_Eval_Fecha')
+      CREATE INDEX IX_ETI_Eval_Fecha ON dbo.ETI_Evaluaciones (fecha) INCLUDE (empresa, supervisor, sector, ruta, codigo, modalidad, evaluados, resultado);`).catch((e) => {
+        listo = null;
+        throw e;
+      });
+      return listo;
+    }
+    var txt = (v, n) => {
+      const s = String(v == null ? "" : v).trim();
+      return s ? s.slice(0, n) : null;
+    };
+    var num = (v, a, b) => {
+      const x = Number(v);
+      return Number.isFinite(x) ? Math.min(b, Math.max(a, x)) : null;
+    };
+    var fechaOk = (f) => /^\d{4}-\d{2}-\d{2}$/.test(String(f || "")) ? f : null;
+    function normalizar(r) {
+      const id = txt(r.id, 80), fecha = fechaOk(r.fecha), resultado = num(r.resultado, 0, 1);
+      if (!id || !fecha || resultado == null) return null;
+      const mod = String(r.modalidad || "").toUpperCase() === "MANUAL" ? "MANUAL" : "QR";
+      return {
+        id,
+        modalidad: mod,
+        sesion_id: txt(r.sesion_id, 20),
+        fecha,
+        empresa: txt(r.empresa, 40),
+        supervisor: txt(r.supervisor, 150),
+        usuario: txt(r.usuario, 60),
+        sector: txt(r.sector, 150),
+        tipo: txt(r.tipo, 20),
+        ruta: txt(String(r.ruta || "").toUpperCase(), 150),
+        codigo: txt(String(r.codigo || "").toUpperCase(), 60),
+        evaluados: Math.round(num(r.evaluados, 1, 5e3) || 1),
+        resultado,
+        estado: resultado >= 0.7 ? "APROBADO" : "REFUERZO",
+        banco_version: Math.round(num(r.banco_version, 0, 1e6) || 0),
+        secciones: (Array.isArray(r.secciones) ? r.secciones : []).slice(0, 20).map((s) => ({
+          sec_id: txt(s.id, 40),
+          sec_nom: txt(s.nom, 120),
+          peso: num(s.peso, 0, 1),
+          pct: num(s.pct, 0, 1)
+        })).filter((s) => s.sec_id && s.pct != null)
+      };
+    }
+    async function guardar(pool, lista) {
+      const ok = [], out = { insertados: 0, existentes: 0, invalidos: 0 };
+      lista.forEach((r) => {
+        const n = normalizar(r || {});
+        if (n) ok.push(n);
+        else out.invalidos++;
+      });
+      for (const r of ok) {
+        const q = pool.request();
+        Object.entries({
+          id: r.id,
+          modalidad: r.modalidad,
+          sesion_id: r.sesion_id,
+          fecha: r.fecha,
+          empresa: r.empresa,
+          supervisor: r.supervisor,
+          usuario: r.usuario,
+          sector: r.sector,
+          tipo: r.tipo,
+          ruta: r.ruta,
+          codigo: r.codigo,
+          estado: r.estado
+        }).forEach(([k, v]) => q.input(k, sql.NVarChar, v));
+        q.input("evaluados", sql.Int, r.evaluados);
+        q.input("resultado", sql.Decimal(7, 4), r.resultado);
+        q.input("banco_version", sql.Int, r.banco_version);
+        const vals = r.secciones.map((s, i) => {
+          q.input("s" + i, sql.NVarChar, s.sec_id);
+          q.input("n" + i, sql.NVarChar, s.sec_nom);
+          q.input("w" + i, sql.Decimal(7, 4), s.peso);
+          q.input("c" + i, sql.Decimal(7, 4), s.pct);
+          return `(@id,@s${i},@n${i},@w${i},@c${i})`;
+        });
+        if (sql._pg) {
+          const vpg = r.secciones.map((s, i) => `(CAST(@s${i} AS text),CAST(@n${i} AS text),CAST(@w${i} AS numeric),CAST(@c${i} AS numeric))`);
+          const rp = await q.query(`
+        WITH ins AS (
+          INSERT INTO ETI_Evaluaciones (id,modalidad,sesion_id,fecha,empresa,supervisor,usuario,sector,tipo,ruta,codigo,evaluados,resultado,estado,banco_version)
+          VALUES (@id,@modalidad,@sesion_id,CAST(@fecha AS date),@empresa,@supervisor,@usuario,@sector,@tipo,@ruta,@codigo,@evaluados,@resultado,@estado,@banco_version)
+          ON CONFLICT (id) DO NOTHING RETURNING id)
+        ${vpg.length ? `, sec AS (INSERT INTO ETI_Evaluaciones_Seccion (eval_id,sec_id,sec_nom,peso,pct)
+          SELECT ins.id, v.a, v.b, v.c, v.d FROM ins CROSS JOIN (VALUES ${vpg.join(",")}) AS v(a,b,c,d) RETURNING 1)` : ""}
+        SELECT COUNT(*)::int AS nuevo FROM ins`);
+          if (rp.recordset && rp.recordset[0] && rp.recordset[0].nuevo === 1) out.insertados++;
+          else out.existentes++;
+          continue;
+        }
+        const res = await q.query(`
+      SET XACT_ABORT ON;
+      IF EXISTS (SELECT 1 FROM dbo.ETI_Evaluaciones WHERE id=@id) SELECT 0 AS nuevo;
+      ELSE BEGIN
+        BEGIN TRAN;
+        INSERT INTO dbo.ETI_Evaluaciones (id,modalidad,sesion_id,fecha,empresa,supervisor,usuario,sector,tipo,ruta,codigo,evaluados,resultado,estado,banco_version)
+        VALUES (@id,@modalidad,@sesion_id,@fecha,@empresa,@supervisor,@usuario,@sector,@tipo,@ruta,@codigo,@evaluados,@resultado,@estado,@banco_version);
+        ${vals.length ? "INSERT INTO dbo.ETI_Evaluaciones_Seccion (eval_id,sec_id,sec_nom,peso,pct) VALUES " + vals.join(",") + ";" : ""}
+        COMMIT;
+        SELECT 1 AS nuevo;
+      END`);
+        const nuevo = res.recordset && res.recordset[0] && res.recordset[0].nuevo === 1;
+        if (nuevo) out.insertados++;
+        else out.existentes++;
+      }
+      return out;
+    }
+    async function stats(pool, f) {
+      const q = pool.request(), w = ["1=1"];
+      const add = (k, cond, tipo, v) => {
+        if (v) {
+          q.input(k, tipo, v);
+          w.push(cond);
+        }
+      };
+      add("desde", "e.fecha >= @desde", sql.Date, fechaOk(f.desde));
+      add("hasta", "e.fecha <= @hasta", sql.Date, fechaOk(f.hasta));
+      add("empresa", "e.empresa = @empresa", sql.NVarChar, txt(f.empresa, 40));
+      add("sector", "e.sector = @sector", sql.NVarChar, txt(f.sector, 150));
+      add("modalidad", "e.modalidad = @modalidad", sql.NVarChar, ["QR", "MANUAL"].includes(String(f.modalidad || "").toUpperCase()) ? String(f.modalidad).toUpperCase() : null);
+      const W = w.join(" AND ");
+      const keys = "CONVERT(char(10), e.fecha, 23) AS fecha, e.empresa, e.supervisor, e.sector, e.ruta, e.codigo, e.modalidad";
+      const grp = "e.fecha, e.empresa, e.supervisor, e.sector, e.ruta, e.codigo, e.modalidad";
+      const r1 = await q.query(`
+    SELECT ${keys}, SUM(e.evaluados) AS n, SUM(e.resultado * e.evaluados) AS sr,
+           SUM(CASE WHEN e.resultado >= 0.7 THEN e.evaluados ELSE 0 END) AS apr, COUNT(*) AS regs,
+           SUM(CASE WHEN e.resultado >= 0.0 AND e.resultado < 0.1 THEN e.evaluados ELSE 0 END) AS b0,
+           SUM(CASE WHEN e.resultado >= 0.1 AND e.resultado < 0.2 THEN e.evaluados ELSE 0 END) AS b1,
+           SUM(CASE WHEN e.resultado >= 0.2 AND e.resultado < 0.3 THEN e.evaluados ELSE 0 END) AS b2,
+           SUM(CASE WHEN e.resultado >= 0.3 AND e.resultado < 0.4 THEN e.evaluados ELSE 0 END) AS b3,
+           SUM(CASE WHEN e.resultado >= 0.4 AND e.resultado < 0.5 THEN e.evaluados ELSE 0 END) AS b4,
+           SUM(CASE WHEN e.resultado >= 0.5 AND e.resultado < 0.6 THEN e.evaluados ELSE 0 END) AS b5,
+           SUM(CASE WHEN e.resultado >= 0.6 AND e.resultado < 0.7 THEN e.evaluados ELSE 0 END) AS b6,
+           SUM(CASE WHEN e.resultado >= 0.7 AND e.resultado < 0.8 THEN e.evaluados ELSE 0 END) AS b7,
+           SUM(CASE WHEN e.resultado >= 0.8 AND e.resultado < 0.9 THEN e.evaluados ELSE 0 END) AS b8,
+           SUM(CASE WHEN e.resultado >= 0.9 AND e.resultado <= 1.0 THEN e.evaluados ELSE 0 END) AS b9
+      FROM dbo.ETI_Evaluaciones e WHERE ${W} GROUP BY ${grp};
+    SELECT ${keys}, s.sec_id, MAX(s.sec_nom) AS sec_nom, SUM(s.pct * e.evaluados) AS sp
+      FROM dbo.ETI_Evaluaciones e JOIN dbo.ETI_Evaluaciones_Seccion s ON s.eval_id = e.id
+     WHERE ${W} GROUP BY ${grp}, s.sec_id;`);
+      const clave = (r) => [r.fecha, r.empresa, r.supervisor, r.sector, r.ruta, r.codigo, r.modalidad].join("|");
+      const m = /* @__PURE__ */ new Map();
+      (r1.recordsets[0] || []).forEach((r) => m.set(clave(r), {
+        fecha: r.fecha,
+        empresa: r.empresa,
+        supervisor: r.supervisor,
+        sector: r.sector,
+        ruta: r.ruta,
+        codigo: r.codigo,
+        modalidad: r.modalidad,
+        n: Number(r.n) || 0,
+        sr: Number(r.sr) || 0,
+        apr: Number(r.apr) || 0,
+        regs: Number(r.regs) || 0,
+        bins: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => Number(r["b" + i]) || 0),
+        secs: {}
+      }));
+      (r1.recordsets[1] || []).forEach((r) => {
+        const g = m.get(clave(r));
+        if (g) g.secs[r.sec_id] = { nom: r.sec_nom, sp: Number(r.sp) || 0 };
+      });
+      return [...m.values()];
+    }
+    function whereFiltro(q, f) {
+      const w = [], ids = Array.isArray(f.ids) ? f.ids.map((x) => txt(x, 80)).filter(Boolean).slice(0, 2e3) : [];
+      if (ids.length) {
+        ids.forEach((v, i) => q.input("id" + i, sql.NVarChar, v));
+        w.push("id IN (" + ids.map((_, i) => "@id" + i).join(",") + ")");
+      }
+      const add = (k, cond, tipo, v) => {
+        if (v != null && v !== "") {
+          q.input(k, tipo, v);
+          w.push(cond);
+        }
+      };
+      add("f_ses", "sesion_id = @f_ses", sql.NVarChar, txt(f.sesion_id, 20));
+      add("f_sector", "sector = @f_sector", sql.NVarChar, txt(f.sector, 150));
+      add("f_ruta", "ruta = @f_ruta", sql.NVarChar, f.ruta != null ? txt(String(f.ruta).toUpperCase(), 150) : null);
+      if (f.codigo != null) {
+        q.input("f_cod", sql.NVarChar, txt(String(f.codigo).toUpperCase(), 60));
+        w.push("ISNULL(codigo,'') = ISNULL(@f_cod,'')");
+      }
+      add("f_desde", "fecha >= @f_desde", sql.Date, fechaOk(f.desde));
+      add("f_hasta", "fecha <= @f_hasta", sql.Date, fechaOk(f.hasta));
+      add("f_mod", "modalidad = @f_mod", sql.NVarChar, ["QR", "MANUAL"].includes(String(f.modalidad || "").toUpperCase()) ? String(f.modalidad).toUpperCase() : null);
+      if (!ids.length && !f.sesion_id && !f.sector && f.ruta == null) throw new Error("Filtro demasiado amplio");
+      return w.join(" AND ");
+    }
+    async function eliminar(pool, f) {
+      const q = pool.request();
+      const W = whereFiltro(q, f || {});
+      const r = await q.query(`SET XACT_ABORT ON; BEGIN TRAN;
+    DELETE FROM dbo.ETI_Evaluaciones_Seccion WHERE eval_id IN (SELECT id FROM dbo.ETI_Evaluaciones WHERE ${W});
+    DELETE FROM dbo.ETI_Evaluaciones WHERE ${W}; SELECT @@ROWCOUNT AS n; COMMIT;`);
+      return { eliminados: r.recordset && r.recordset[0] && r.recordset[0].n || 0 };
+    }
+    async function editar(pool, f, c) {
+      const q = pool.request();
+      const W = whereFiltro(q, f || {});
+      const set = [];
+      if (c && c.sector) {
+        q.input("c_sector", sql.NVarChar, txt(c.sector, 150));
+        set.push("sector = @c_sector");
+      }
+      if (c && c.ruta) {
+        q.input("c_ruta", sql.NVarChar, txt(String(c.ruta).toUpperCase(), 150));
+        set.push("ruta = @c_ruta");
+      }
+      if (c && c.codigo != null) {
+        q.input("c_cod", sql.NVarChar, txt(String(c.codigo).toUpperCase(), 60));
+        set.push("codigo = @c_cod");
+      }
+      if (!set.length) throw new Error("Sin cambios");
+      const r = await q.query(`UPDATE dbo.ETI_Evaluaciones SET ${set.join(", ")} WHERE ${W}; SELECT @@ROWCOUNT AS n;`);
+      return { editados: r.recordset && r.recordset[0] && r.recordset[0].n || 0 };
+    }
+    module.exports = { asegurarTablas, guardar, stats, normalizar, eliminar, editar };
+  }
+});
+
+// eti-eval-admin/index.js
+var require_eti_eval_admin = __commonJS({
+  "eti-eval-admin/index.js"(exports, module) {
+    var jwt = require_jsonwebtoken();
+    var { getPool } = require_db();
+    var E = require_eti_eval();
+    function admin(req) {
+      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        const t = jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        const u = String(t.usuario || "").toLowerCase(), r = String(t.rol || "").toLowerCase();
+        return u === "jtimoteo" || r === "admin" || r === "administrador" ? t : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData.accion;
+      try {
+        const t = admin(req);
+        if (!t) {
+          context.res = { status: 401, body: { success: false, error: "Solo el administrador" } };
+          return;
+        }
+        const b = req.body || {};
+        const pool = await getPool();
+        await E.asegurarTablas(pool);
+        let r;
+        if (accion === "eliminar") r = await E.eliminar(pool, b.filtro || {});
+        else if (accion === "editar") r = await E.editar(pool, b.filtro || {}, b.cambios || {});
+        else {
+          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
+          return;
+        }
+        context.log("[eti-eval-admin] " + accion + " por " + t.usuario + ": " + JSON.stringify(r));
+        context.res = { status: 200, body: { success: true, ...r } };
+      } catch (err) {
+        context.log.error("[eti-eval-admin] " + accion + ": " + err.message);
+        context.res = { status: err.message === "Filtro demasiado amplio" || err.message === "Sin cambios" ? 400 : 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
+// eti-eval-guardar/index.js
+var require_eti_eval_guardar = __commonJS({
+  "eti-eval-guardar/index.js"(exports, module) {
+    var { getPool } = require_db();
+    var E = require_eti_eval();
+    module.exports = async function(context, req) {
+      try {
+        const b = req.body || {};
+        const lista = Array.isArray(b.registros) ? b.registros : b.id ? [b] : [];
+        if (!lista.length) {
+          context.res = { status: 400, body: { success: false, error: "Sin registros" } };
+          return;
+        }
+        if (lista.length > 100) {
+          context.res = { status: 413, body: { success: false, error: "Maximo 100 registros por llamada" } };
+          return;
+        }
+        const pool = await getPool();
+        await E.asegurarTablas(pool);
+        const r = await E.guardar(pool, lista);
+        context.res = { status: 200, body: { success: true, ...r } };
+      } catch (err) {
+        context.log.error("[eti-eval-guardar] " + err.message);
+        context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
+// eti-eval-stats/index.js
+var require_eti_eval_stats = __commonJS({
+  "eti-eval-stats/index.js"(exports, module) {
+    var { getPool } = require_db();
+    var E = require_eti_eval();
+    module.exports = async function(context, req) {
+      try {
+        const pool = await getPool();
+        await E.asegurarTablas(pool);
+        const filas = await E.stats(pool, req.query || {});
+        context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { success: true, filas, generado: (/* @__PURE__ */ new Date()).toISOString() } };
+      } catch (err) {
+        context.log.error("[eti-eval-stats] " + err.message);
+        context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
+// fus-guardar/index.js
+var require_fus_guardar2 = __commonJS({
+  "fus-guardar/index.js"(exports, module) {
+    var jwt = require_jsonwebtoken();
+    var { getPool } = require_db();
+    var CG = require_cv_guardar();
+    var H = require_fus_guardar();
+    function token(req) {
+      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+      } catch (e) {
+        return null;
+      }
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData.accion;
+      try {
+        if (H.ACCIONES.indexOf(accion) < 0) {
+          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
+          return;
+        }
+        const t = token(req);
+        if (!t || !t.usuario) {
+          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
+          return;
+        }
+        const pool = await getPool();
+        await CG.asegurarTablas(pool);
+        if (!await H.encendido(pool)) {
+          context.res = { status: 503, body: { success: false, apagado: true, error: "Guardado en Azure apagado" } };
+          return;
+        }
+        const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
+        context.res = { status: r.status, body: r.body };
+      } catch (err) {
+        context.log.error("[fus-guardar] " + accion + ": " + err.message);
+        context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
+// hor-guardar/index.js
+var require_hor_guardar2 = __commonJS({
+  "hor-guardar/index.js"(exports, module) {
+    var jwt = require_jsonwebtoken();
+    var { getPool } = require_db();
+    var CG = require_cv_guardar();
+    var TH = require_tablas_hoja();
+    var H = require_hor_guardar();
+    function token(req) {
+      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+      } catch (e) {
+        return null;
+      }
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData.accion;
+      try {
+        if (H.LECTURAS.indexOf(accion) < 0 && H.ACCIONES.indexOf(accion) < 0) {
+          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
+          return;
+        }
+        const t = token(req);
+        if (!t || !t.usuario) {
+          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
+          return;
+        }
+        const pool = await getPool();
+        await CG.asegurarTablas(pool);
+        if (!await H.encendido(pool)) {
+          context.res = { status: 503, body: { success: false, apagado: true, error: "Horarios en Azure apagado" } };
+          return;
+        }
+        if (accion === "horariosListar") {
+          const T = await TH.leer(pool, H.CLAVE);
+          if (!T) {
+            context.res = { status: 503, body: { success: false, error: "Tabla de horarios aun no cargada" } };
+            return;
+          }
+          context.res = { status: 200, body: H.listar(T, Date.now()) };
+          return;
+        }
+        const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
+        context.res = { status: r.status, body: r.body };
+      } catch (err) {
+        context.log.error("[hor-guardar] " + accion + ": " + err.message);
+        context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
+// horas-guardar/index.js
+var require_horas_guardar2 = __commonJS({
+  "horas-guardar/index.js"(exports, module) {
+    var jwt = require_jsonwebtoken();
+    var { getPool } = require_db();
+    var CG = require_cv_guardar();
+    var H = require_horas_guardar();
+    function token(req) {
+      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+      } catch (e) {
+        return null;
+      }
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData.accion;
+      try {
+        if (H.ACCIONES.indexOf(accion) < 0) {
+          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
+          return;
+        }
+        const t = token(req);
+        if (!t || !t.usuario) {
+          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
+          return;
+        }
+        const pool = await getPool();
+        await CG.asegurarTablas(pool);
+        if (!await H.encendido(pool)) {
+          context.res = { status: 503, body: { success: false, apagado: true, error: "Guardado en Azure apagado" } };
+          return;
+        }
+        const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
+        context.res = { status: r.status, body: r.body };
+      } catch (err) {
+        context.log.error("[horas-guardar] " + accion + ": " + err.message);
+        context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
+// inf-guardar/index.js
+var require_inf_guardar2 = __commonJS({
+  "inf-guardar/index.js"(exports, module) {
+    var jwt = require_jsonwebtoken();
+    var { getPool } = require_db();
+    var CG = require_cv_guardar();
+    var TH = require_tablas_hoja();
+    var H = require_inf_guardar();
+    function token(req) {
+      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+      } catch (e) {
+        return null;
+      }
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData.accion;
+      try {
+        if (H.LECTURAS.indexOf(accion) < 0 && H.ACCIONES.indexOf(accion) < 0) {
+          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
+          return;
+        }
+        const t = token(req);
+        if (!t || !t.usuario) {
+          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
+          return;
+        }
+        const pool = await getPool();
+        await CG.asegurarTablas(pool);
+        if (!await H.encendido(pool)) {
+          context.res = { status: 503, body: { success: false, apagado: true, error: "Informes integrales en Azure apagado" } };
+          return;
+        }
+        if (accion === "getInformesIntegrales") {
+          const T = await TH.leer(pool, H.CLAVE);
+          if (!T) {
+            context.res = { status: 503, body: { success: false, error: "Tabla de informes aun no cargada" } };
+            return;
+          }
+          context.res = { status: 200, body: H.getInformesIntegrales(T, req.body || {}) };
+          return;
+        }
+        const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
+        context.res = { status: r.status, body: r.body };
+      } catch (err) {
+        context.log.error("[inf-guardar] " + accion + ": " + err.message);
+        context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
 // inv-guardar/index.js
 var require_inv_guardar2 = __commonJS({
   "inv-guardar/index.js"(exports, module) {
@@ -70809,6 +72876,23 @@ var require_inv_guardar2 = __commonJS({
       } catch (err) {
         context.log.error("[inv-guardar] " + accion + ": " + err.message);
         context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
+// keepwarm/index.js
+var require_keepwarm = __commonJS({
+  "keepwarm/index.js"(exports, module) {
+    var { getPool } = require_db();
+    module.exports = async function(context, reloj) {
+      const t0 = Date.now();
+      try {
+        const pool = await getPool();
+        await pool.request().query("SELECT 1 AS ok");
+        context.log("[keepwarm] OK en " + (Date.now() - t0) + " ms");
+      } catch (e) {
+        context.log.warn("[keepwarm] SQL no respondio: " + e.message);
       }
     };
   }
@@ -70945,198 +73029,132 @@ var require_kpi = __commonJS({
   }
 });
 
-// shared/mant-guardar.js
-var require_mant_guardar = __commonJS({
-  "shared/mant-guardar.js"(exports, module) {
-    "use strict";
-    var { sql } = require_db();
-    var TH = require_tablas_hoja();
-    var CG = require_cv_guardar();
-    var CAP = require_cap_guardar();
-    var ACCIONES = ["guardarSolicitudMantenimiento", "programarMantenimiento", "actualizarEstadoMantenimiento"];
-    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
-    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
-    var p2 = (n) => (n < 10 ? "0" : "") + n;
-    var pad3 = (n) => ("000" + n).slice(-3);
-    function lima(d) {
-      const x = new Date(d.getTime() - 5 * 36e5);
-      return { dia: p2(x.getUTCDate()) + "/" + p2(x.getUTCMonth() + 1) + "/" + x.getUTCFullYear(), hm: p2(x.getUTCHours()) + ":" + p2(x.getUTCMinutes()) };
-    }
-    function celda(v) {
-      const m = typeof v === "string" && v.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{1,2}):(\d{2})(?::(\d{2}))?$/);
-      if (m && +m[4] < 24 && +m[5] < 60) {
-        const d = new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4] + 5, +m[5], +(m[6] || 0)));
-        if (new Date(Date.UTC(+m[3], +m[2] - 1, +m[1])).getUTCDate() === +m[1] && +m[2] >= 1 && +m[2] <= 12) return CAP.comoHoja(d);
-      }
-      return CAP.comoHoja(v);
-    }
-    var norm = (s) => String(s || "").toUpperCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^A-Z0-9]/g, "");
-    function columnas(enc) {
-      const idx = {};
-      (enc || []).forEach((c, k) => {
-        idx[norm(c)] = k;
-      });
-      const b = function() {
-        for (let i = 0; i < arguments.length; i++) {
-          const k = norm(arguments[i]);
-          if (k in idx) return idx[k];
-        }
-        return -1;
+// kpi-admin/index.js
+var require_kpi_admin = __commonJS({
+  "kpi-admin/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var KDB = require_kpi_db();
+    var ETI = require_kpi_eti();
+    module.exports = async function(context, req) {
+      const accion = context.bindingData.accion, b = req.body || {};
+      const res = (status, body) => {
+        context.res = { status, body };
       };
-      return {
-        id: b("id", "numSolicitud", "n_solicitud", "ID_Solicitud"),
-        estado: b("estado", "Estado_Solicitud"),
-        fechaAtencion: b("fechaAtencion"),
-        atendidoPor: b("atendidoPor"),
-        fechaCierre: b("fechaCierre"),
-        cerradoPor: b("cerradoPor")
-      };
-    }
-    async function encendido(pool) {
-      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'mant_azure_primero'");
-      return r.recordset.length && r.recordset[0].valor === "1";
-    }
-    async function actualizarFila(tx, i, celdas) {
-      const E = TH.ESQ.mant_registro, f = TH.aFila("mant_registro", celdas), r = tx.request();
-      r.input("fila", sql.Int, i + 1);
-      const sets = E.cols.map((c, k) => {
-        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
-        return c[0] + " = @v" + k;
-      });
-      r.input("o", sql.NVarChar(sql.MAX), f.otros);
-      await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
-    }
-    async function ejecutar(pool, accion, b, usuario, prueba, ahoraFija) {
-      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { ok: false, msg: "Accion desconocida" } };
-      await CG.asegurarTablas(pool);
-      await TH.asegurar(pool, "mant_registro");
-      b = b || {};
-      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
-      const claveOp = (clave ? "mant:" + clave : "mant:sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8)).slice(0, 100);
-      if (clave && !prueba) {
-        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-      }
-      const tx = new sql.Transaction(pool);
-      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
       try {
-        await tx.request().query("EXEC sp_getapplock @Resource = 'mant_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
-        const T = await TH.leer(pool, "mant_registro");
-        if (!T) {
-          await tx.rollback();
-          return { status: 503, body: { ok: false, msg: "Tabla de mantenimiento aun no cargada" } };
+        const pool = await getPool();
+        await KDB.asegurarTablas(pool);
+        if (accion === "estado") {
+          const r = await pool.request().query(`SELECT
+        (SELECT COUNT(*) FROM dbo.KPI_Personas WHERE activo = 1) AS personas,
+        (SELECT COUNT(*) FROM dbo.KPI_Alertas) AS alertas, (SELECT COUNT(*) FROM dbo.KPI_Alertas WHERE enviado IS NULL) AS pendientes,
+        (SELECT COUNT(*) FROM dbo.KPI_AtRegistro) AS at_registro,
+        (SELECT valor FROM dbo.CV_Estado WHERE clave = 'kpi_eti_sync') AS eti_sync`);
+          return res(200, Object.assign({ success: true }, r.recordset[0]));
         }
-        const ahora = ahoraFija ? new Date(ahoraFija) : /* @__PURE__ */ new Date(), L = lima(ahora);
-        const buscar = (id) => T.filas.findIndex((f) => S(f[0]).trim() === String(id).trim());
-        let resp, cuerpo, celdas;
-        if (accion === "guardarSolicitudMantenimiento") {
-          const d = b, ids = new Set(T.filas.map((f) => S(f[0]).trim()));
-          let n = T.filas.length + 1, id = "SOL-" + pad3(n);
-          while (ids.has(id)) {
-            n++;
-            id = "SOL-" + (n < 1e3 ? pad3(n) : n);
-          }
-          const fecha = L.dia + " " + L.hm;
-          const fila = [
-            id,
-            fecha,
-            d.dni || "",
-            d.nombre || "",
-            d.empresa || "",
-            d.codInterno || "",
-            ((d.modelo || "") + " " + (d.marca || "")).trim(),
-            d.numLicencia || "",
-            d.tipoLicencia || "",
-            d.fRevalidacion || "",
-            d.estadoLicencia || "",
-            d.kilometraje || "",
-            d.tipoMantenimiento || "",
-            d.observaciones || "",
-            "PENDIENTE",
-            "",
-            "",
-            "",
-            d.solicitante || ""
-          ];
-          celdas = fila.map(celda);
-          await CAP.agregarFilas(tx, "mant_registro", [celdas]);
-          resp = { ok: true, id };
-          const correo = {};
-          ["dni", "nombre", "empresa", "modelo", "marca", "codInterno", "kilometraje", "numLicencia", "tipoLicencia", "fRevalidacion", "estadoLicencia", "tipoMantenimiento", "observaciones"].forEach((k) => {
-            if (d[k] !== void 0) correo[k] = d[k];
-          });
-          cuerpo = { accion, id, ahora: fecha, fila, d: correo };
-        } else if (accion === "programarMantenimiento") {
-          const i = buscar(b.id);
-          if (i < 0) {
-            await tx.rollback();
-            return { status: 200, body: { ok: false, msg: "No se encontr\xF3 la solicitud " + b.id } };
-          }
-          const estado = String(b.estado || "PROGRAMADO").toUpperCase();
-          const valores = [estado, b.fechaProgramada || "", b.comentario || "", L.dia + " " + L.hm];
-          celdas = T.filas[i].slice();
-          while (celdas.length < 18) celdas.push("");
-          valores.forEach((v, k) => {
-            celdas[14 + k] = celda(v);
-          });
-          await actualizarFila(tx, i, celdas);
-          resp = { ok: true };
-          cuerpo = { accion, id: String(b.id), valores };
-        } else {
-          const estado = String(b.estado || "").toUpperCase().trim();
-          if (!b.id) {
-            await tx.rollback();
-            return { status: 200, body: { ok: false, msg: "Falta el id de la solicitud" } };
-          }
-          if (estado !== "ATENDIDO" && estado !== "CERRADO") {
-            await tx.rollback();
-            return { status: 200, body: { ok: false, msg: "Estado inv\xE1lido: " + estado } };
-          }
-          const col = columnas(T.encabezado);
-          const cF = estado === "ATENDIDO" ? col.fechaAtencion : col.fechaCierre, cP = estado === "ATENDIDO" ? col.atendidoPor : col.cerradoPor;
-          if (col.id < 0 || col.estado < 0 || cF < 0 || cP < 0) {
-            await tx.rollback();
-            return { status: 409, body: { ok: false, msg: "La hoja no tiene las columnas esperadas: se usa Google" } };
-          }
-          const i = T.filas.findIndex((f) => S(f[col.id]).trim() === String(b.id).trim());
-          if (i < 0) {
-            await tx.rollback();
-            return { status: 200, body: { ok: false, msg: "Solicitud no encontrada: " + b.id } };
-          }
-          const admin = b.admin || "";
-          celdas = T.filas[i].slice();
-          while (celdas.length < Math.max(cF, cP, col.estado) + 1) celdas.push("");
-          celdas[col.estado] = celda(estado);
-          celdas[cF] = celda(L.dia);
-          celdas[cP] = celda(admin);
-          await actualizarFila(tx, i, celdas);
-          resp = { ok: true, id: b.id, estado, fecha: L.dia };
-          cuerpo = { accion, id: String(b.id), estado, fecha: L.dia, admin };
+        if (accion === "alertasPendientes") {
+          const r = await pool.request().query(`SELECT TOP 100 id, CONVERT(NVARCHAR(30), creado, 126) AS creado, usuario, nombre, codigo, tipo, mensaje, detalle
+        FROM dbo.KPI_Alertas WHERE enviado IS NULL ORDER BY id`);
+          return res(200, { success: true, alertas: r.recordset });
         }
-        cuerpo.clave = claveOp;
-        await CAP.tocarMarcas(tx, ["mant_registro"]);
-        resp.fuente = "azure";
-        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion.slice(0, 30)).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'mant', @a, NULL, @u, @c, @r)");
-        if (prueba) {
-          await tx.rollback();
-          resp.prueba = true;
-          resp._op = cuerpo;
-          resp._celdas = celdas;
-        } else await tx.commit();
-        return { status: 200, body: resp };
-      } catch (e) {
-        try {
-          await tx.rollback();
-        } catch (e2) {
+        if (accion === "alertasMarcar") {
+          const ids = (Array.isArray(b.ids) ? b.ids : []).map((x) => parseInt(x, 10)).filter((x) => x > 0);
+          if (!ids.length) return res(400, { success: false, error: "Faltan ids" });
+          const r = await pool.request().input("d", sql.NVarChar(400), String(b.destinatarios || "").slice(0, 400)).query(`UPDATE dbo.KPI_Alertas SET enviado = SYSUTCDATETIME(), destinatarios = @d WHERE enviado IS NULL AND id IN (${ids.join(",")})`);
+          return res(200, { success: true, marcadas: r.rowsAffected[0] });
         }
-        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
-          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
+        if (accion === "atRegistro") {
+          const filas = (Array.isArray(b.filas) ? b.filas : []).filter((f) => Array.isArray(f) && f.length >= 3);
+          let n = 0;
+          for (let i = 0; i < filas.length; i += 300) {
+            const lote = filas.slice(i, i + 300).map((f) => [parseInt(f[0], 10), parseInt(f[1], 10), String(f[2] || "").slice(0, 16)]).filter((f) => f[0] > 2e3 && f[1] > 0 && /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?$/.test(f[2]));
+            if (!lote.length) continue;
+            const r = await pool.request().input("j", sql.NVarChar(sql.MAX), JSON.stringify(lote)).query(`
+          INSERT INTO dbo.KPI_AtRegistro (anio, nro, fecha_registro, fuente)
+          SELECT t.anio, t.nro, MIN(t.f), 'hoja'
+          FROM (SELECT CAST(JSON_VALUE(v.value, '$[0]') AS INT) AS anio, CAST(JSON_VALUE(v.value, '$[1]') AS INT) AS nro,
+                       CAST(JSON_VALUE(v.value, '$[2]') AS DATETIME2(0)) AS f FROM OPENJSON(@j) v) t
+          WHERE NOT EXISTS (SELECT 1 FROM dbo.KPI_AtRegistro x WHERE x.anio = t.anio AND x.nro = t.nro)
+          GROUP BY t.anio, t.nro`);
+            n += r.rowsAffected[0] || 0;
+          }
+          return res(200, { success: true, nuevas: n, recibidas: filas.length });
         }
-        throw e;
+        if (accion === "recalcular") {
+          let eti;
+          try {
+            eti = await ETI.sincronizar(pool);
+          } catch (e) {
+            eti = { error: e.message };
+          }
+          const d = await KDB.calcular(pool, b.hoy);
+          const r = b.soloVer ? null : await KDB.registrar(pool, d);
+          return res(200, { success: true, eti, registro: r, hoy: d.hoy });
+        }
+        if (accion === "cerrarMes") {
+          return res(200, await KDB.cerrarMes(pool, String(b.mes || ""), String(b.por || "Apps Script")));
+        }
+        if (accion === "informe") {
+          if (b.mes) {
+            const i = await KDB.informeMes(pool, String(b.mes));
+            return res(200, i ? Object.assign({ success: true }, i) : { success: false, error: "Mes no cerrado" });
+          }
+          const B = await KDB.cargar(pool), hoy = KDB.hoyLima();
+          const d = KDB.calcularCon(B, hoy, b.desde, b.hasta);
+          delete d.avisos;
+          d.serie = KDB.serie(B, hoy, d.rango.desde, d.rango.hasta > hoy ? hoy : d.rango.hasta);
+          return res(200, Object.assign({ success: true, avance: true }, d));
+        }
+        if (accion === "resumen") {
+          const d = await KDB.calcular(pool, b.hoy);
+          return res(200, { success: true, hoy: d.hoy, eti_sync: d.eti_sync, personas: d.personas.map((p) => ({
+            usuario: p.usuario,
+            nombre: p.nombre,
+            encontrado: p.usuario_encontrado,
+            enlace: p.enlace,
+            nota: p.nota,
+            kpis: p.kpis.map((k) => ({ c: k.codigo, e: k.estado, num: k.num, den: k.den, pct: k.pct == null ? null : Math.round(k.pct * 1e3) / 10, nivel: k.nivel || null }))
+          })) });
+        }
+        return res(404, { success: false, error: "Accion desconocida: " + accion });
+      } catch (err) {
+        context.log.error("[kpi-admin] " + accion + ": " + err.message);
+        return res(500, { success: false, error: err.message });
       }
-    }
-    module.exports = { ejecutar, encendido, columnas, celda, lima, ACCIONES };
+    };
+  }
+});
+
+// kpi-reloj/index.js
+var require_kpi_reloj = __commonJS({
+  "kpi-reloj/index.js"(exports, module) {
+    var { getPool } = require_db();
+    var KDB = require_kpi_db();
+    var ETI = require_kpi_eti();
+    module.exports = async function(context) {
+      const t0 = Date.now();
+      try {
+        const pool = await getPool();
+        await KDB.asegurarTablas(pool);
+        let eti;
+        try {
+          eti = await ETI.sincronizar(pool);
+        } catch (e) {
+          eti = { error: e.message };
+          context.log.warn("[kpi-reloj] ETI: " + e.message);
+        }
+        const d = await KDB.calcular(pool);
+        const r = await KDB.registrar(pool, d);
+        try {
+          const c = await KDB.cierreAutomatico(pool);
+          if (c) context.log("[kpi-reloj] cierre mensual: " + JSON.stringify(c));
+        } catch (eC) {
+          context.log.error("[kpi-reloj] cierre mensual: " + eC.message);
+        }
+        context.log("[kpi-reloj] OK en " + (Date.now() - t0) + " ms \xB7 ETI " + JSON.stringify(eti) + " \xB7 " + JSON.stringify(r));
+      } catch (e) {
+        context.log.error("[kpi-reloj] " + e.message);
+      }
+    };
   }
 });
 
@@ -71209,121 +73227,6 @@ var require_mod_db = __commonJS({
       sup: ["getSupervisores"]
     };
     module.exports = { asegurarTablas, CLAVES };
-  }
-});
-
-// shared/sol-guardar.js
-var require_sol_guardar = __commonJS({
-  "shared/sol-guardar.js"(exports, module) {
-    "use strict";
-    var { sql } = require_db();
-    var TH = require_tablas_hoja();
-    var CG = require_cv_guardar();
-    var CAP = require_cap_guardar();
-    var ACCIONES = ["resolverSolicitud"];
-    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
-    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
-    var MESES = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
-    var p2 = (n) => (n < 10 ? "0" : "") + n;
-    function ymd(v) {
-      if (esD(v)) {
-        const m = String(v.$s).match(/^\w{3} (\w{3}) (\d{2}) (-?\d{4,})/);
-        return m ? m[3] + "-" + p2(MESES[m[1]]) + "-" + m[2] : "";
-      }
-      return String(v || "").substring(0, 10);
-    }
-    var J = (v) => esD(v) ? v.$d || null : v;
-    async function encendido(pool) {
-      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'sol_azure_primero'");
-      return r.recordset.length && r.recordset[0].valor === "1";
-    }
-    function getSolicitudes(T, p) {
-      let data = T.filas.map((f) => {
-        const r = [];
-        for (let i = 0; i < 14; i++) r.push(f[i] === void 0 ? "" : f[i]);
-        return r;
-      }).filter((r) => J(r[0])).map((r, i) => ({
-        fila: i + 2,
-        nro: J(r[0]),
-        fecha: ymd(r[1]),
-        nro_visita: J(r[2]),
-        supervisor: S(r[3] || "").trim(),
-        empresa: S(r[4] || ""),
-        fundo: S(r[5] || ""),
-        semana: J(r[6]),
-        fecha_informe: ymd(r[7]),
-        motivo: S(r[8] || ""),
-        solicitado_por: S(r[9] || ""),
-        estado: S(r[10] || ""),
-        resuelto_por: S(r[11] || ""),
-        motivo_rechazo: S(r[13] || "")
-      }));
-      if (p && p.estado) data = data.filter((s) => s.estado === p.estado);
-      return { success: true, data };
-    }
-    async function ejecutar(pool, accion, b, usuario, prueba) {
-      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
-      await CG.asegurarTablas(pool);
-      await TH.asegurar(pool, "sol_edicion");
-      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
-      const claveOp = clave ? accion + ":" + clave : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
-      if (clave && !prueba) {
-        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-      }
-      const tx = new sql.Transaction(pool);
-      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
-      try {
-        await tx.request().query("EXEC sp_getapplock @Resource = 'sol_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
-        const T = await TH.leer(pool, "sol_edicion");
-        if (!T) {
-          await tx.rollback();
-          return { status: 503, body: { success: false, error: "Tabla de solicitudes aun no cargada" } };
-        }
-        const fila = parseInt(b.fila, 10), i = fila - 2;
-        if (isNaN(fila) || i < 0 || i >= T.filas.length || !J(T.filas[i][0])) {
-          await tx.rollback();
-          return { status: 200, body: { success: false, error: "Solicitud no encontrada (fila " + b.fila + ")" } };
-        }
-        const ahora = /* @__PURE__ */ new Date();
-        const celdas = T.filas[i].slice();
-        while (celdas.length < 14) celdas.push("");
-        celdas[10] = CAP.comoHoja(b.estado);
-        celdas[11] = CAP.comoHoja(b.resuelto_por || "");
-        celdas[12] = CAP.comoHoja(ahora);
-        celdas[13] = CAP.comoHoja(b.motivo_rechazo || "");
-        const E = TH.ESQ.sol_edicion, f = TH.aFila("sol_edicion", celdas), r = tx.request();
-        r.input("fila", sql.Int, i + 1);
-        const sets = E.cols.map((c, k) => {
-          r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
-          return c[0] + " = @v" + k;
-        });
-        r.input("o", sql.NVarChar(sql.MAX), f.otros);
-        await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
-        await CAP.tocarMarcas(tx, ["sol_edicion"]);
-        const resp = { success: true, fuente: "azure" };
-        const cuerpo = { fila, nro: J(T.filas[i][0]), estado: b.estado === void 0 ? "" : b.estado, resuelto_por: b.resuelto_por || "", fecha: ahora.toISOString(), motivo_rechazo: b.motivo_rechazo || "" };
-        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'sol', @a, NULL, @u, @c, @r)");
-        if (prueba) {
-          await tx.rollback();
-          resp.prueba = true;
-          resp._op = cuerpo;
-          resp._celdas = celdas;
-        } else await tx.commit();
-        return { status: 200, body: resp };
-      } catch (e) {
-        try {
-          await tx.rollback();
-        } catch (e2) {
-        }
-        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
-          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-        }
-        throw e;
-      }
-    }
-    module.exports = { ejecutar, encendido, getSolicitudes, ACCIONES };
   }
 });
 
@@ -72186,177 +74089,49 @@ var require_mod = __commonJS({
   }
 });
 
-// shared/preav-guardar.js
-var require_preav_guardar = __commonJS({
-  "shared/preav-guardar.js"(exports, module) {
-    "use strict";
-    var { sql } = require_db();
-    var TH = require_tablas_hoja();
-    var CG = require_cv_guardar();
-    var CAP = require_cap_guardar();
-    var CLAVE = "preav_registro";
-    var ACCIONES = ["savePreaviso", "updatePreavisoDesenlace", "registrarApelacionPreaviso"];
-    var ADMINS = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas"];
-    var ANCHO = 17;
-    var SIN_PERMISO = {
-      savePreaviso: "Sin permisos: solo administradores pueden registrar preavisos",
-      updatePreavisoDesenlace: "Sin permisos: solo administradores pueden registrar el desenlace",
-      registrarApelacionPreaviso: "Sin permisos: solo administradores pueden registrar apelaciones",
-      getPreavisos: "Sin permisos: solo administradores pueden ver preavisos"
-    };
-    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
-    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
-    var p2 = (n) => (n < 10 ? "0" : "") + n;
-    var lima = (ms) => new Date(ms - 5 * 36e5);
-    var dmyLima = (ms) => {
-      const x = lima(ms);
-      return p2(x.getUTCDate()) + "/" + p2(x.getUTCMonth() + 1) + "/" + x.getUTCFullYear();
-    };
-    var ymdLima = (ms) => {
-      const x = lima(ms);
-      return x.getUTCFullYear() + "-" + p2(x.getUTCMonth() + 1) + "-" + p2(x.getUTCDate());
-    };
-    var esAdmin = (u) => ADMINS.indexOf(String(u || "").toLowerCase().trim()) >= 0;
-    async function encendido(pool) {
-      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'preav_azure_primero'");
-      return r.recordset.length && r.recordset[0].valor === "1";
-    }
-    async function actualizarFila(tx, i, celdas) {
-      const E = TH.ESQ[CLAVE], f = TH.aFila(CLAVE, celdas), r = tx.request();
-      r.input("fila", sql.Int, i + 1);
-      const sets = E.cols.map((c, k) => {
-        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
-        return c[0] + " = @v" + k;
-      });
-      r.input("o", sql.NVarChar(sql.MAX), f.otros);
-      await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
-    }
-    async function ejecutar(pool, accion, b, usuario, prueba, ahoraMs) {
-      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
-      if (!esAdmin(usuario)) return { status: 200, body: { success: false, error: SIN_PERMISO[accion] } };
-      b = b || {};
-      await CG.asegurarTablas(pool);
-      await TH.asegurar(pool, CLAVE);
-      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
-      const claveOp = clave ? accion + ":" + clave : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
-      if (clave && !prueba) {
-        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-      }
-      const ms = prueba && ahoraMs ? +ahoraMs : Date.now(), ahora = new Date(ms);
-      const tx = new sql.Transaction(pool);
-      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+// mod-importar/index.js
+var require_mod_importar = __commonJS({
+  "mod-importar/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var M = require_mod_db();
+    module.exports = async function(context, req) {
       try {
-        await tx.request().query("EXEC sp_getapplock @Resource = 'preav_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
-        const T = await TH.leer(pool, CLAVE);
-        if (!T) {
-          await tx.rollback();
-          return { status: 503, body: { success: false, error: "Tabla de preavisos aun no cargada" } };
+        const pool = await getPool();
+        await M.asegurarTablas(pool);
+        if (req.method === "GET") {
+          const r = await pool.request().query("SELECT modulo, clave, LEN(datos) AS largo, CONVERT(VARCHAR(19), DATEADD(HOUR,-5,actualizado),120) AS lima FROM dbo.MOD_Datos ORDER BY modulo, clave");
+          context.res = { status: 200, body: { success: true, bloques: r.recordset } };
+          return;
         }
-        let resp, cuerpo, celdas;
-        if (accion === "savePreaviso") {
-          const p = b.preaviso && typeof b.preaviso === "object" ? b.preaviso : b;
-          const usados = new Set(T.filas.map((f) => S(f[0]).trim()));
-          let nro = T.filas.length + 1;
-          while (usados.has(String(nro))) nro++;
-          const fila = [
-            nro,
-            null,
-            p.dni || "",
-            p.nombre || "",
-            p.empresa || "",
-            p.cargo || "",
-            p.sector || "",
-            p.tipo_falta || "",
-            p.hechos || "",
-            p.fecha_emision || "",
-            p.plazo || 6,
-            p.fecha_limite || "",
-            "",
-            "",
-            p.registrado_por || "",
-            ""
-          ];
-          celdas = fila.map((v, k) => k === 1 ? CAP.comoHoja(ahora) : CAP.comoHoja(v));
-          while (celdas.length < ANCHO) celdas.push("");
-          await CAP.agregarFilas(tx, CLAVE, [celdas]);
-          resp = { success: true, nro };
-          cuerpo = { accion, nro, fila, registroMs: ms };
-        } else {
-          const i = T.filas.findIndex((f) => S(f[0]).trim() === String(b.nro).trim());
-          if (i < 0) {
-            await tx.rollback();
-            return { status: 200, body: { success: false, error: "Preaviso no encontrado: " + b.nro } };
-          }
-          celdas = T.filas[i].slice();
-          while (celdas.length < ANCHO) celdas.push("");
-          if (accion === "updatePreavisoDesenlace") {
-            celdas[12] = CAP.comoHoja(b.desenlace || "");
-            celdas[13] = CAP.comoHoja(b.observacion || "");
-            celdas[15] = CAP.comoHoja(ahora);
-            resp = { success: true };
-            cuerpo = { accion, nro: S(T.filas[i][0]).trim(), desenlace: b.desenlace || "", observacion: b.observacion || "", ms };
-          } else {
-            const f = T.filas[i], nuevaMs = ms + 3 * 864e5;
-            const hoyTxt = dmyLima(ms), nuevaTxt = dmyLima(nuevaMs), obsPrevia = S(f[13]);
-            const obs = (obsPrevia ? obsPrevia + " | " : "") + "Apelaci\xF3n con descargo registrada el " + hoyTxt + ". Plazo extendido +3 d\xEDas hasta " + nuevaTxt + ".";
-            celdas[11] = CAP.comoHoja(new Date(nuevaMs));
-            celdas[13] = obs;
-            celdas[16] = CAP.comoHoja(ahora);
-            resp = { success: true, nueva_fecha_limite: nuevaTxt };
-            cuerpo = { accion, nro: S(f[0]).trim(), ms, nuevaMs, obs, hoyTxt, nuevaTxt, nombre: S(f[3]), dni: S(f[2]), empresa: S(f[4]), usuario: String(usuario || "") };
-          }
-          await actualizarFila(tx, i, celdas);
-        }
-        await CAP.tocarMarcas(tx, [CLAVE]);
-        resp.fuente = "azure";
-        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'preav', @a, NULL, @u, @c, @r)");
-        if (prueba) {
-          await tx.rollback();
-          resp.prueba = true;
-          resp._op = cuerpo;
-          resp._celdas = celdas;
-        } else await tx.commit();
-        return { status: 200, body: resp };
-      } catch (e) {
+        const b = req.body || {}, modulo = String(b.modulo || ""), d = b.datos || {};
+        const claves = M.CLAVES[modulo];
+        if (!claves) throw new Error("Modulo desconocido: " + modulo);
+        const faltan = claves.filter((k) => d[k] === void 0);
+        if (faltan.length) throw new Error("Faltan datos: " + faltan.join(", "));
+        const tx = new sql.Transaction(pool);
+        await tx.begin();
+        const tam = {};
         try {
-          await tx.rollback();
-        } catch (e2) {
+          for (const k of Object.keys(d)) {
+            const txt = JSON.stringify(d[k]);
+            tam[k] = Array.isArray(d[k]) ? d[k].length : txt.length;
+            await tx.request().input("m", sql.NVarChar(40), modulo).input("k", sql.NVarChar(40), k).input("d", sql.NVarChar(sql.MAX), txt).query(`MERGE dbo.MOD_Datos AS x USING (SELECT @m AS modulo, @k AS clave) AS s ON x.modulo = s.modulo AND x.clave = s.clave
+                  WHEN MATCHED THEN UPDATE SET datos = @d, actualizado = SYSUTCDATETIME()
+                  WHEN NOT MATCHED THEN INSERT (modulo, clave, datos) VALUES (@m, @k, @d);`);
+          }
+          await tx.commit();
+        } catch (e) {
+          try {
+            await tx.rollback();
+          } catch (e2) {
+          }
+          throw e;
         }
-        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
-          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-        }
-        throw e;
+        context.res = { status: 200, body: { success: true, modulo, tam } };
+      } catch (e) {
+        context.res = { status: 500, body: { success: false, error: [e.message, e.originalError && e.originalError.message].filter(Boolean).join(" | ") } };
       }
-    }
-    function getPreavisos(T, usuario) {
-      if (!esAdmin(usuario)) return { success: false, error: SIN_PERMISO.getPreavisos, preavisos: [] };
-      const fmt = (v) => esD(v) ? v.$d ? ymdLima(new Date(v.$d).getTime()) : "" : String(v || "");
-      const sv = (v) => esD(v) ? v.$s : String(v || "");
-      const lista = T.filas.filter((r) => r[0] !== "" && r[0] !== null && r[0] !== void 0).map((r) => ({
-        nro: r[0],
-        fecha_registro: fmt(r[1]),
-        dni: sv(r[2]),
-        nombre: sv(r[3]),
-        empresa: sv(r[4]),
-        cargo: sv(r[5]),
-        sector: sv(r[6]),
-        tipo_falta: sv(r[7]),
-        hechos: sv(r[8]),
-        fecha_emision: fmt(r[9]),
-        plazo: r[10] === "" || r[10] === null || r[10] === void 0 || r[10] === 0 ? 6 : esD(r[10]) ? r[10].$s : r[10],
-        fecha_limite: fmt(r[11]),
-        desenlace: sv(r[12]),
-        observacion: sv(r[13]),
-        registrado_por: sv(r[14]),
-        fecha_desenlace: fmt(r[15]),
-        apelado: fmt(r[16])
-      }));
-      lista.reverse();
-      return { success: true, preavisos: lista, fuente: "azure" };
-    }
-    module.exports = { ejecutar, encendido, getPreavisos, ACCIONES, CLAVE, esAdmin };
+    };
   }
 });
 
@@ -72653,195 +74428,6 @@ var require_sol_guardar2 = __commonJS({
   }
 });
 
-// shared/sup-guardar.js
-var require_sup_guardar = __commonJS({
-  "shared/sup-guardar.js"(exports, module) {
-    "use strict";
-    var { sql } = require_db();
-    var TH = require_tablas_hoja();
-    var CG = require_cv_guardar();
-    var CAP = require_cap_guardar();
-    var K_SUP = "sup_registro";
-    var K_MOT = "casos_motivos";
-    var ACCIONES = ["saveSupervisor", "addMotivoCaso"];
-    var LECTURAS = ["getSupervisores", "getMotivosCasos"];
-    var SUP_ADMIN_USUARIOS = ["jtimoteo"];
-    var ANCHO_SUP = 12;
-    var ANCHO_MOT = 3;
-    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
-    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
-    var p2 = (n) => (n < 10 ? "0" : "") + n;
-    var ymdLima = (ms) => {
-      const x = new Date(ms - 5 * 36e5);
-      return x.getUTCFullYear() + "-" + p2(x.getUTCMonth() + 1) + "-" + p2(x.getUTCDate());
-    };
-    async function encendido(pool) {
-      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'sup_azure_primero'");
-      return r.recordset.length && r.recordset[0].valor === "1";
-    }
-    async function actualizarFila(tx, clave, i, celdas) {
-      const E = TH.ESQ[clave], f = TH.aFila(clave, celdas), r = tx.request();
-      r.input("fila", sql.Int, i + 1);
-      const sets = E.cols.map((c, k) => {
-        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
-        return c[0] + " = @v" + k;
-      });
-      r.input("o", sql.NVarChar(sql.MAX), f.otros);
-      await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
-    }
-    async function ejecutar(pool, accion, b, usuario, prueba, ahoraMs, rol) {
-      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
-      b = b || {};
-      const u = String(usuario || "").trim().toLowerCase();
-      if (accion === "saveSupervisor" && (SUP_ADMIN_USUARIOS.indexOf(u) < 0 || String(rol || b.rol || "").trim().toLowerCase() !== "administrador"))
-        return { status: 200, body: { success: false, error: "Solo el administrador del sistema puede modificar la lista de supervisores." } };
-      if (accion === "addMotivoCaso") {
-        const motivo = String(b.motivo || "").trim();
-        if (!motivo) return { status: 200, body: { success: false, error: "Motivo vac\xEDo" } };
-        if (motivo.length > 80) return { status: 200, body: { success: false, error: "Motivo demasiado largo" } };
-      }
-      const clave = accion === "saveSupervisor" ? K_SUP : K_MOT, ancho = accion === "saveSupervisor" ? ANCHO_SUP : ANCHO_MOT;
-      await CG.asegurarTablas(pool);
-      await TH.asegurar(pool, clave);
-      const huella = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
-      const claveOp = huella ? accion + ":" + huella : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
-      if (huella && !prueba) {
-        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-      }
-      const ms = prueba && ahoraMs ? +ahoraMs : Date.now(), ahora = new Date(ms);
-      const tx = new sql.Transaction(pool);
-      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
-      try {
-        await tx.request().query("EXEC sp_getapplock @Resource = 'sup_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
-        const T = await TH.leer(pool, clave);
-        if (!T) {
-          await tx.rollback();
-          return { status: 503, body: { success: false, error: "Tabla " + clave + " aun no cargada" } };
-        }
-        const filas = T.filas.map((f) => {
-          const c = f.slice();
-          while (c.length < ancho) c.push("");
-          return c;
-        });
-        let resp, cuerpo, nuevas = [], cambiadas = [];
-        if (accion === "saveSupervisor") {
-          const lista = Array.isArray(b.lista) ? b.lista : [b];
-          let creados = 0, actualizados = 0;
-          for (const x of lista) {
-            const dni = String(x.dni || "").trim(), nombre = String(x.nombre || "").trim();
-            if (!dni || !nombre) continue;
-            const k = String(x.dni_original || dni).trim();
-            const activo = x.activo === false || String(x.activo).toUpperCase() === "NO" ? "NO" : "SI";
-            const fila = [
-              dni,
-              nombre,
-              String(x.cargo || ""),
-              String(x.sector || ""),
-              String(x.empresa || ""),
-              String(x.correo || ""),
-              x.reemplazo ? "SI" : "NO",
-              activo,
-              activo === "NO" ? x.fecha_baja || ymdLima(ms) : "",
-              String(x.observacion || ""),
-              ahora,
-              String(usuario || "")
-            ];
-            const celdas = fila.map((v) => CAP.comoHoja(v));
-            const i = filas.findIndex((f) => S(f[0]).trim() === k);
-            if (i >= 0) {
-              filas[i] = celdas;
-              await actualizarFila(tx, K_SUP, i, celdas);
-              cambiadas.push({ fila: i + 2, celdas });
-              actualizados++;
-            } else {
-              filas.push(celdas);
-              nuevas.push(celdas);
-              creados++;
-            }
-          }
-          if (nuevas.length) await CAP.agregarFilas(tx, K_SUP, nuevas);
-          resp = { success: true, action: creados ? "created" : "updated", creados, actualizados };
-          cuerpo = { accion, usuario: String(usuario || ""), ms, lista: lista.map((x) => ({ dni: x.dni, dni_original: x.dni_original, nombre: x.nombre, cargo: x.cargo, sector: x.sector, empresa: x.empresa, correo: x.correo, reemplazo: !!x.reemplazo, activo: x.activo, fecha_baja: x.fecha_baja, observacion: x.observacion })) };
-        } else {
-          const motivo = String(b.motivo || "").trim();
-          const ya = filas.find((f) => S(f[0]).trim().toLowerCase() === motivo.toLowerCase());
-          if (ya) {
-            await tx.rollback();
-            return { status: 200, body: { success: true, yaExistia: true, motivo: S(ya[0]).trim(), fuente: "azure" } };
-          }
-          const celdas = [CAP.comoHoja(motivo), CAP.comoHoja(ahora), CAP.comoHoja(String(usuario || ""))];
-          nuevas.push(celdas);
-          await CAP.agregarFilas(tx, K_MOT, nuevas);
-          resp = { success: true, motivo };
-          cuerpo = { accion, motivo, usuario: String(usuario || ""), ms };
-        }
-        await CAP.tocarMarcas(tx, [clave]);
-        resp.fuente = "azure";
-        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), usuario ? String(usuario) : null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'sup', @a, NULL, @u, @c, @r)");
-        if (prueba) {
-          await tx.rollback();
-          resp.prueba = true;
-          resp._op = cuerpo;
-          resp._nuevas = nuevas;
-          resp._cambiadas = cambiadas;
-        } else await tx.commit();
-        return { status: 200, body: resp };
-      } catch (e) {
-        try {
-          await tx.rollback();
-        } catch (e2) {
-        }
-        if (huella && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
-          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-        }
-        throw e;
-      }
-    }
-    function getSupervisores(T) {
-      const fb = (v) => esD(v) ? v.$d ? ymdLima(new Date(v.$d).getTime()) : "" : String(v || "");
-      const data = T.filas.filter((r) => r[0] !== "" && r[0] !== null && r[0] !== void 0).map((r) => {
-        const c = r.slice();
-        while (c.length < ANCHO_SUP) c.push("");
-        const act = String(c[7] == null ? "" : S(c[7])).trim();
-        return {
-          dni: S(c[0]),
-          nombre: c[1],
-          cargo: c[2],
-          sector: c[3],
-          empresa: c[4],
-          correo: c[5],
-          reemplazo: c[6] === "SI" || c[6] === true,
-          activo: act.toUpperCase() !== "NO",
-          fecha_baja: fb(c[8]),
-          observacion: String(c[9] || ""),
-          gestionado: act !== ""
-        };
-      });
-      return { success: true, data, fuente: "azure" };
-    }
-    function getMotivosCasos(T) {
-      const out = [], vistos = {};
-      T.filas.forEach((r) => {
-        const m = S(r[0]).trim();
-        if (!m) return;
-        const k = m.toLowerCase();
-        if (vistos[k]) return;
-        vistos[k] = true;
-        out.push(m);
-      });
-      out.sort((a, b) => {
-        if (a.toLowerCase() === "otros") return 1;
-        if (b.toLowerCase() === "otros") return -1;
-        return a.localeCompare(b);
-      });
-      return { success: true, data: out, fuente: "azure" };
-    }
-    module.exports = { ejecutar, encendido, getSupervisores, getMotivosCasos, ACCIONES, LECTURAS, K_SUP, K_MOT };
-  }
-});
-
 // sup-guardar/index.js
 var require_sup_guardar2 = __commonJS({
   "sup-guardar/index.js"(exports, module) {
@@ -72891,6 +74477,155 @@ var require_sup_guardar2 = __commonJS({
       } catch (err) {
         context.log.error("[sup-guardar] " + accion + ": " + err.message);
         context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
+// tablas-cv/index.js
+var require_tablas_cv2 = __commonJS({
+  "tablas-cv/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var TC = require_tablas_cv();
+    var cvDb = require_cv_db();
+    module.exports = async function(context, req) {
+      const tipo = context.bindingData.tipo, accion = context.bindingData.accion;
+      const res = (status, body) => {
+        context.res = { status, body };
+      };
+      if (!TC.TABLA[tipo]) return res(404, { success: false, error: "Tipo desconocido: " + tipo });
+      try {
+        const pool = await getPool();
+        await cvDb.asegurarTablas(pool);
+        await TC.asegurarTablas(pool, tipo);
+        const T = TC.TABLA[tipo];
+        if (accion === "estado") {
+          const r = await pool.request().query(`SELECT COUNT(*) AS registros, MAX(fila) AS filas,
+        CONVERT(VARCHAR(19), DATEADD(HOUR, -5, MAX(actualizado)), 120) AS cargado_lima FROM ${T}`);
+          return res(200, Object.assign({ success: true, tabla: T }, r.recordset[0]));
+        }
+        if (accion === "leer") {
+          const r = await pool.request().query(`SELECT * FROM ${T} ORDER BY fila`);
+          const filas = r.recordset;
+          if (tipo === "casos") {
+            return res(200, {
+              success: true,
+              total: filas.length,
+              data: filas.map(TC.casoDeFila),
+              recientes: filas.filter((f) => TC.esReciente(f, filas.length)).map(TC.casoDeFila)
+            });
+          }
+          return res(200, { success: true, total: filas.length, data: filas.filter((f) => f.nro !== null).map(TC.visitaDeFila) });
+        }
+        if (accion === "cargar" && req.method === "POST") {
+          const filas = (req.body || {}).filas;
+          if (!Array.isArray(filas)) return res(400, { success: false, error: "Faltan filas" });
+          const { T: carga, problemas } = TC.armarCarga(tipo, filas);
+          if (problemas.length) return res(400, { success: false, error: problemas.length + " celda(s) no caben en su columna: no se cargo nada", problemas: problemas.slice(0, 60) });
+          const tx = new sql.Transaction(pool);
+          await tx.begin();
+          try {
+            await new sql.Request(tx).query(`DELETE FROM ${T}`);
+            if (filas.length) await new sql.Request(tx).bulk(carga);
+            await new sql.Request(tx).input("k", sql.NVarChar(40), "tablas_" + tipo).input("v", sql.NVarChar(400), String(Date.now())).query(`MERGE dbo.CV_Estado AS x USING (SELECT @k AS clave) AS s ON x.clave = s.clave
+                  WHEN MATCHED THEN UPDATE SET valor = @v, actualizado = SYSUTCDATETIME()
+                  WHEN NOT MATCHED THEN INSERT (clave, valor) VALUES (@k, @v);`);
+            await tx.commit();
+          } catch (e) {
+            try {
+              await tx.rollback();
+            } catch (e2) {
+            }
+            throw e;
+          }
+          return res(200, { success: true, tabla: T, cargados: filas.length });
+        }
+        return res(404, { success: false, error: "Accion desconocida: " + accion });
+      } catch (e) {
+        context.log.error("[tablas-cv] " + tipo + "/" + accion + ": " + e.message);
+        return res(500, { success: false, error: [e.message, e.originalError && e.originalError.message].filter(Boolean).join(" | ") });
+      }
+    };
+  }
+});
+
+// tablas-hoja/index.js
+var require_tablas_hoja2 = __commonJS({
+  "tablas-hoja/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var H = require_tablas_hoja();
+    module.exports = async function(context, req) {
+      const clave = context.bindingData.clave, accion = context.bindingData.accion, b = req.body || {}, q = req.query || {};
+      const res = (status, body) => {
+        context.res = { status, body };
+      };
+      const E = H.ESQ[clave];
+      if (!E) return res(404, { success: false, error: "Tabla desconocida: " + clave });
+      try {
+        const pool = await getPool();
+        await H.asegurar(pool, clave);
+        if (accion === "inicio") {
+          await pool.request().query(`TRUNCATE TABLE ${E.tabla}__carga`);
+          return res(200, { success: true });
+        }
+        if (accion === "lote") {
+          if (!Array.isArray(b.filas)) return res(400, { success: false, error: "Faltan filas" });
+          const { T, conOtros } = H.tablaCarga(clave, b.filas, parseInt(b.desde, 10) || 0);
+          if (b.filas.length) await pool.request().bulk(T);
+          return res(200, { success: true, recibidas: b.filas.length, conOtros });
+        }
+        if (accion === "fin") {
+          const total = parseInt(b.total, 10);
+          const n = (await pool.request().query(`SELECT COUNT(*) AS n FROM ${E.tabla}__carga`)).recordset[0].n;
+          if (n !== total) return res(409, { success: false, error: "La tabla de paso tiene " + n + " filas y se esperaban " + total + ": no se cambio nada" });
+          const cols = ["fila"].concat(E.cols.map((c) => c[0]), ["otros"]).join(", ");
+          const tx = new sql.Transaction(pool);
+          await tx.begin();
+          try {
+            const tipoOp = clave === "horas_horarios" ? "hor" : clave.indexOf("horas_") === 0 ? "horas" : clave.indexOf("cap_") === 0 ? "cap" : clave.indexOf("fus_") === 0 ? "fus" : clave.indexOf("sol_") === 0 ? "sol" : clave.indexOf("cumpl_") === 0 && clave !== "cumpl_historial" ? "cumpl" : clave.indexOf("acc_") === 0 ? "usr" : clave.indexOf("mant_") === 0 ? "mant" : clave.indexOf("e360_") === 0 ? "e360" : clave.indexOf("preav_") === 0 ? "preav" : clave.indexOf("sup_") === 0 || clave === "casos_motivos" ? "sup" : clave.indexOf("alm_") === 0 ? "alm" : clave.indexOf("inf_") === 0 ? "inf" : clave.indexOf("inv_") === 0 ? "inv" : "";
+            if (tipoOp && b.leidoMs) {
+              await new sql.Request(tx).query(`EXEC sp_getapplock @Resource = '${tipoOp}_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;`);
+              const nOps = (await new sql.Request(tx).input("t", sql.NVarChar(20), tipoOp).input("l", sql.DateTime2(0), new Date(+b.leidoMs - 2e3)).query("SELECT COUNT(*) AS n FROM dbo.CV_Ops WHERE tipo = @t AND (en_hoja = 0 OR creado >= @l)")).recordset[0].n;
+              if (nOps) {
+                await tx.rollback();
+                return res(409, { success: false, error: nOps + " guardado(s) de Azure aun no estan en la hoja leida: no se cambio nada (se reintenta luego)" });
+              }
+            }
+            await new sql.Request(tx).query(`DELETE FROM ${E.tabla}; INSERT INTO ${E.tabla} (${cols}) SELECT ${cols} FROM ${E.tabla}__carga ORDER BY fila;`);
+            await new sql.Request(tx).input("k", sql.NVarChar(40), clave).input("e", sql.NVarChar(sql.MAX), JSON.stringify(b.encabezado || [])).input("a", sql.Int, parseInt(b.ancho, 10) || E.cols.length).input("m", sql.NVarChar(40), String(Date.now())).input("n", sql.Int, total).query(`MERGE dbo.TH_Estado AS x USING (SELECT @k AS clave) AS s ON x.clave = s.clave
+                  WHEN MATCHED THEN UPDATE SET encabezado = @e, ancho = @a, marca = @m, filas = @n, actualizado = SYSUTCDATETIME()
+                  WHEN NOT MATCHED THEN INSERT (clave, encabezado, ancho, marca, filas) VALUES (@k, @e, @a, @m, @n);`);
+            await tx.commit();
+          } catch (e) {
+            try {
+              await tx.rollback();
+            } catch (e2) {
+            }
+            throw e;
+          }
+          await pool.request().query(`TRUNCATE TABLE ${E.tabla}__carga`);
+          const o = (await pool.request().query(`SELECT COUNT(*) AS n FROM ${E.tabla} WHERE otros IS NOT NULL`)).recordset[0].n;
+          return res(200, { success: true, tabla: E.tabla, filas: total, conOtros: o });
+        }
+        if (accion === "leer") {
+          const d = await H.leer(pool, clave);
+          if (!d) return res(404, { success: false, error: "Tabla aun no cargada" });
+          const desde = parseInt(q.desde, 10) || 0, cuantos = parseInt(q.cuantos, 10) || 5e3;
+          return res(200, { success: true, total: d.filas.length, encabezado: d.encabezado, filas: d.filas.slice(desde, desde + cuantos) });
+        }
+        if (accion === "estado") {
+          const r = await pool.request().input("k", sql.NVarChar(40), clave).query(`SELECT marca, filas, ancho, CONVERT(VARCHAR(19), DATEADD(HOUR,-5,actualizado),120) AS cargado_lima,
+        (SELECT COUNT(*) FROM ${E.tabla}) AS registros, (SELECT COUNT(*) FROM ${E.tabla} WHERE otros IS NOT NULL) AS con_otros FROM dbo.TH_Estado WHERE clave = @k`);
+          return res(200, Object.assign({ success: true, tabla: E.tabla }, r.recordset[0] || { marca: null }));
+        }
+        if (accion === "soltar") {
+          await pool.request().input("k", sql.NVarChar(40), clave).query("UPDATE dbo.TH_Estado SET marca = NULL WHERE clave = @k");
+          return res(200, { success: true, soltada: clave });
+        }
+        return res(404, { success: false, error: "Accion desconocida: " + accion });
+      } catch (e) {
+        context.log.error("[tablas-hoja] " + clave + "/" + accion + ": " + e.message);
+        return res(500, { success: false, error: [e.message, e.originalError && e.originalError.message].filter(Boolean).join(" | ") });
       }
     };
   }
@@ -73005,268 +74740,260 @@ var require_trabajadores_search = __commonJS({
   }
 });
 
-// shared/usr-guardar.js
-var require_usr_guardar = __commonJS({
-  "shared/usr-guardar.js"(exports, module) {
-    "use strict";
-    var bcrypt = require_bcryptjs();
-    var { sql } = require_db();
-    var TH = require_tablas_hoja();
-    var CG = require_cv_guardar();
-    var CAP = require_cap_guardar();
-    var ACCIONES = ["saveUsuario", "updateUsuario", "saveSolicitudAcceso", "resolverAccesoTemporal", "aprobarAccesoTemporal", "cambiarMiClave", "desbloquearUsuario", "eliminarUsuario", "restaurarUsuario"];
-    var POL = require_clave_politica();
-    var DUENOS = ["jtimoteo"];
-    var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
-    var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
-    var p2 = (n) => (n < 10 ? "0" : "") + n;
-    function lima(ms) {
-      const x = new Date(ms - 5 * 36e5);
-      return { y: x.getUTCFullYear(), m: x.getUTCMonth() + 1, d: x.getUTCDate(), h: x.getUTCHours(), mi: x.getUTCMinutes() };
+// trabajadores-sync/index.js
+var require_trabajadores_sync = __commonJS({
+  "trabajadores-sync/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var { exigirAuth } = require_auth();
+    function parseDate(value) {
+      if (value === null || value === void 0 || value === "") return null;
+      if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+      if (typeof value === "number") {
+        const ms = Math.round((value - 25569) * 86400 * 1e3);
+        const d2 = new Date(ms);
+        return isNaN(d2.getTime()) ? null : d2;
+      }
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? null : d;
     }
-    var hhmm = (ms) => {
-      const p = lima(ms);
-      return p2(p.h) + ":" + p2(p.mi);
-    };
-    var dmyhm = (ms) => {
-      const p = lima(ms);
-      return p2(p.d) + "/" + p2(p.m) + "/" + p.y + " " + p2(p.h) + ":" + p2(p.mi);
-    };
-    async function encendido(pool) {
-      const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'usr_azure_primero'");
-      return r.recordset.length && r.recordset[0].valor === "1";
+    function s(v, max) {
+      if (v === null || v === void 0) return null;
+      const str = String(v).trim();
+      if (str === "") return null;
+      return max && str.length > max ? str.substring(0, max) : str;
     }
-    async function cambiarFila(tx, clave, fila, celdas) {
-      const E = TH.ESQ[clave], f = TH.aFila(clave, celdas), r = tx.request();
-      r.input("fila", sql.Int, fila);
-      const sets = E.cols.map((c, k) => {
-        r.input("v" + k, c[1] === "f" ? sql.DateTime2(3) : c[1] === "n" ? sql.Float : sql.NVarChar(parseInt(c[1].slice(1), 10)), f.vals[k]);
-        return c[0] + " = @v" + k;
-      });
-      r.input("o", sql.NVarChar(sql.MAX), f.otros);
-      await r.query(`UPDATE ${E.tabla} SET ${sets.join(", ")}, otros = @o, actualizado = SYSUTCDATETIME() WHERE fila = @fila`);
+    function toInt(v) {
+      if (v === null || v === void 0 || v === "") return null;
+      const n = parseInt(v, 10);
+      return isNaN(n) ? null : n;
     }
-    async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
-      if (ACCIONES.indexOf(accion) < 0) return { status: 404, body: { success: false, error: "Accion desconocida" } };
-      if (accion === "aprobarAccesoTemporal") accion = "resolverAccesoTemporal";
-      await CG.asegurarTablas(pool);
-      await TH.asegurar(pool, "acc_solicitudes");
-      const op = String(operador || "").trim().toLowerCase();
-      const clave = String(b.client_id || "").replace(/[^\w-]/g, "").slice(0, 90);
-      const claveOp = clave ? accion + ":" + clave : accion + ":sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8);
-      if (clave && !prueba) {
-        const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-        if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-      }
-      const no = (e) => ({ status: 200, body: { success: false, error: e } });
-      let propia = false;
-      if (accion === "cambiarMiClave") {
-        if (!op) return no("Sin sesion valida.");
-        const actual = String(b.actual || ""), nueva = String(b.nueva || "");
-        if (!actual || !nueva) return no("Escribe tu contrase\xF1a actual y la nueva.");
-        const pol = POL.evaluar(nueva, op);
-        if (!pol.ok) return no("La nueva contrase\xF1a no cumple la regla: " + pol.motivos.join("; ") + ".");
-        if (nueva === actual) return no("La nueva contrase\xF1a debe ser distinta a la actual.");
-        const ru = await pool.request().input("u", sql.NVarChar(100), op).query("SELECT password FROM dbo.usuarios WHERE LOWER(usuario) = @u AND activo = 1");
-        if (!ru.recordset.length) return no("Usuario no encontrado.");
-        const stored = String(ru.recordset[0].password || "");
-        const okActual = /^\$2[aby]\$/.test(stored) ? await bcrypt.compare(actual, stored) : stored === actual;
-        if (!okActual) return no("La contrase\xF1a actual no es correcta.");
-        b = { usuario: op, password: nueva, client_id: b.client_id };
-        accion = "updateUsuario";
-        propia = true;
-      }
-      if (accion !== "saveSolicitudAcceso" && !propia && DUENOS.indexOf(op) < 0)
-        return no(accion === "resolverAccesoTemporal" ? "Solo el administrador del sistema puede aprobar o rechazar accesos temporales." : "Solo el administrador del sistema puede crear o modificar usuarios.");
-      if (accion === "eliminarUsuario" || accion === "restaurarUsuario") {
-        const uu = String(b.usuario || "").trim();
-        if (!uu) return no("Falta el usuario.");
-        if (accion === "eliminarUsuario" && (DUENOS.indexOf(uu.toLowerCase()) >= 0 || uu.toLowerCase() === op)) return no("No puedes eliminar tu propia cuenta de administrador.");
-        await pool.request().query("IF COL_LENGTH('dbo.usuarios','eliminado') IS NULL ALTER TABLE dbo.usuarios ADD eliminado BIT NULL, eliminado_en DATETIME2(0) NULL, eliminado_por NVARCHAR(100) NULL, motivo_baja NVARCHAR(300) NULL");
-        const rq = pool.request().input("u", sql.NVarChar(100), uu.toLowerCase());
-        if (accion === "eliminarUsuario") {
-          rq.input("por", sql.NVarChar(100), op).input("mot", sql.NVarChar(300), String(b.motivo || "").trim().slice(0, 300) || null);
-          const r0 = await rq.query("UPDATE dbo.usuarios SET eliminado = 1, eliminado_en = SYSUTCDATETIME(), eliminado_por = @por, motivo_baja = @mot WHERE LOWER(LTRIM(RTRIM(usuario))) = @u");
-          if (!r0.rowsAffected[0]) return no("Usuario no encontrado.");
-        } else {
-          const r0 = await rq.query("UPDATE dbo.usuarios SET eliminado = 0 WHERE LOWER(LTRIM(RTRIM(usuario))) = @u");
-          if (!r0.rowsAffected[0]) return no("Usuario no encontrado.");
-        }
-        b = { usuario: uu, activo: accion === "eliminarUsuario" ? "FALSE" : "TRUE", client_id: b.client_id ? String(b.client_id) + "-act" : void 0 };
-        accion = "updateUsuario";
-      }
-      if (accion === "desbloquearUsuario") {
-        const uu = String(b.usuario || "").trim().toLowerCase();
-        if (!uu) return no("Falta el usuario.");
-        await pool.request().input("u", sql.NVarChar(100), uu).query("IF OBJECT_ID('dbo.Login_Intentos','U') IS NOT NULL UPDATE dbo.Login_Intentos SET fallos = 0, bloqueado_hasta = NULL WHERE usuario = @u");
-        return { status: 200, body: { success: true, usuario: uu, mensaje: "Bloqueo liberado; el usuario ya puede intentar entrar." } };
-      }
-      const ms = prueba && ahoraMs ? +ahoraMs : Date.now(), ahora = new Date(ms);
-      let hash = null, hashHoja = null;
-      if (accion === "saveUsuario" && String(b.password || "").trim()) hash = await bcrypt.hash(String(b.password).trim(), 10);
-      if (accion === "updateUsuario" && b.password) hash = await bcrypt.hash(String(b.password), 10);
-      if (hash) {
-        const crypto2 = __require("crypto");
-        const sal = crypto2.randomBytes(8).toString("hex");
-        const txt = accion === "saveUsuario" ? String(b.password).trim() : String(b.password);
-        hashHoja = "sha256$" + sal + "$" + crypto2.createHash("sha256").update(sal + txt, "utf8").digest("hex");
-      }
-      const tx = new sql.Transaction(pool);
-      await tx.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+    var COLS = [
+      ["dni", "NVARCHAR(20) NOT NULL", () => sql.NVarChar(20)],
+      ["ap_paterno", "NVARCHAR(100) NULL", () => sql.NVarChar(100)],
+      ["ap_materno", "NVARCHAR(100) NULL", () => sql.NVarChar(100)],
+      ["nombres", "NVARCHAR(150) NULL", () => sql.NVarChar(150)],
+      ["codigo_trab", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
+      ["fecha_inicio", "DATE NULL", () => sql.Date],
+      ["sexo", "NCHAR(1) NULL", () => sql.NChar(1)],
+      ["oficio", "NVARCHAR(150) NULL", () => sql.NVarChar(150)],
+      ["tipo_regimen", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
+      ["id_empresa", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
+      ["zona_labor", "NVARCHAR(150) NULL", () => sql.NVarChar(150)],
+      ["direccion", "NVARCHAR(255) NULL", () => sql.NVarChar(255)],
+      ["total", "INT NULL", () => sql.Int],
+      ["empresa", "NVARCHAR(20) NULL", () => sql.NVarChar(20)],
+      ["nombre_completo", "NVARCHAR(300) NULL", () => sql.NVarChar(300)],
+      ["ruta", "NVARCHAR(100) NULL", () => sql.NVarChar(100)],
+      ["cod", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
+      ["fecha_termino", "DATE NULL", () => sql.Date],
+      ["fecha_nacimiento", "DATE NULL", () => sql.Date]
+    ];
+    var LISTA = COLS.map((c) => c[0]).join(", ");
+    var ST = COLS.map((c) => "s." + c[0]).join(", ");
+    var TT = COLS.map((c) => "t." + c[0]).join(", ");
+    function filaDe(row) {
+      const dni = s(row.dni, 20);
+      if (!dni) return null;
+      return [
+        dni,
+        s(row.ap_paterno, 100),
+        s(row.ap_materno, 100),
+        s(row.nombres, 150),
+        s(row.codigo_trab, 50),
+        parseDate(row.fecha_inicio),
+        s(row.sexo, 1),
+        s(row.oficio, 150),
+        s(row.tipo_regimen, 50),
+        s(row.id_empresa, 50),
+        s(row.zona_labor, 150),
+        s(row.direccion, 255),
+        toInt(row.total),
+        s(row.empresa, 20),
+        s(row.nombre_completo, 300),
+        s(row.ruta, 100),
+        s(row.cod, 50),
+        parseDate(row.fecha_termino),
+        parseDate(row.fecha_nacimiento)
+      ];
+    }
+    function detalleError(e) {
+      const partes = [];
+      if (e && e.message) partes.push(e.message);
+      if (e && e.originalError && e.originalError.message) partes.push(e.originalError.message);
+      if (e && e.originalError && e.originalError.info && e.originalError.info.message) partes.push(e.originalError.info.message);
+      if (e && Array.isArray(e.precedingErrors)) e.precedingErrors.forEach((x) => x && x.message && partes.push(x.message));
+      const unico = partes.filter((v, i, a) => v && a.indexOf(v) === i);
+      return unico.join(" | ") || String(e);
+    }
+    function tablaBulk(nombre, filas) {
+      const tabla = new sql.Table(nombre);
+      tabla.create = false;
+      COLS.forEach((c) => tabla.columns.add(c[0], c[2](), { nullable: c[0] !== "dni" }));
+      filas.forEach((f) => tabla.rows.add.apply(tabla.rows, f));
+      return tabla;
+    }
+    async function syncIncremental(pool, tableName, filas, rows, descartados) {
+      const STG = tableName + "_stage";
+      let paso = "crear_stage";
       try {
-        await tx.request().query("EXEC sp_getapplock @Resource = 'usr_guardar', @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 20000;");
-        let resp, cuerpo = { accion }, tocar = [], extra = {};
-        if (accion === "saveUsuario") {
-          const usuario = String(b.usuario || "").trim();
-          if (!usuario || !hash) {
-            await tx.rollback();
-            return no("Usuario y contrase\xF1a son obligatorios.");
-          }
-          const ex = await tx.request().query("SELECT id_sistema, usuario FROM dbo.usuarios WITH (UPDLOCK, HOLDLOCK)");
-          if (ex.recordset.some((x) => String(x.usuario || "").trim().toLowerCase() === usuario.toLowerCase())) {
-            await tx.rollback();
-            return no("Ese usuario ya existe.");
-          }
-          const ids = new Set(ex.recordset.map((x) => String(x.id_sistema)));
-          let id;
-          do {
-            id = "US-" + Math.floor(Math.random() * 9e4 + 1e4);
-          } while (ids.has(id));
-          const fila = [
-            id,
-            usuario,
-            hash,
-            String(b.nombre || "").trim(),
-            String(b.rol || "supervisor").trim().toLowerCase(),
-            String(b.empresa || "AMBAS").trim().toUpperCase(),
-            true,
-            ahora.toISOString(),
-            String(b.correo || "").trim()
-          ];
-          await tx.request().input("id", sql.NVarChar(50), id).input("u", sql.NVarChar(50), usuario).input("p", sql.NVarChar(255), hash).input("n", sql.NVarChar(200), fila[3]).input("r", sql.NVarChar(50), fila[4]).input("e", sql.NVarChar(50), fila[5]).input("f", sql.DateTime2, ahora).input("c", sql.NVarChar(200), fila[8] || null).query(`INSERT INTO dbo.usuarios (id_sistema, usuario, password, nombre, rol, empresa, activo, fecha_creacion, correo, fecha_sync)
-                VALUES (@id, @u, @p, @n, @r, @e, 1, @f, @c, GETDATE())`);
-          cuerpo.fila = fila.slice();
-          cuerpo.fila[2] = hashHoja || hash;
-          resp = { success: true };
-          extra._clave_ok = await bcrypt.compare(String(b.password).trim(), hash);
-        } else if (accion === "updateUsuario") {
-          const ex = await tx.request().query("SELECT id_sistema, usuario FROM dbo.usuarios WITH (UPDLOCK, HOLDLOCK)");
-          const u = ex.recordset.find((x) => String(x.usuario).trim() === String(b.usuario).trim());
-          if (!u) {
-            await tx.rollback();
-            return no("Usuario no encontrado.");
-          }
-          const r = tx.request().input("id", sql.NVarChar(50), String(u.id_sistema)), sets = [];
-          cuerpo.usuario = String(b.usuario).trim();
-          if (b.activo !== void 0) {
-            r.input("a", sql.Bit, String(b.activo).trim().toUpperCase() === "TRUE" ? 1 : 0);
-            sets.push("activo = @a");
-            cuerpo.activo = b.activo;
-          }
-          if (b.password) {
-            r.input("p", sql.NVarChar(255), hash);
-            sets.push("password = @p");
-            cuerpo.password = hashHoja || hash;
-            try {
-              await tx.request().query("IF COL_LENGTH('dbo.usuarios','clave_fuerte') IS NULL ALTER TABLE dbo.usuarios ADD clave_fuerte BIT NULL, clave_cambiada DATETIME2(0) NULL");
-            } catch (eC) {
-            }
-            try {
-              await tx.request().query("IF COL_LENGTH('dbo.usuarios','clave_temporal') IS NULL ALTER TABLE dbo.usuarios ADD clave_temporal BIT NULL");
-            } catch (eC) {
-            }
-            r.input("cf", sql.Bit, POL.evaluar(String(b.password), String(b.usuario)).ok ? 1 : 0);
-            sets.push("clave_fuerte = @cf");
-            sets.push("clave_cambiada = SYSUTCDATETIME()");
-            r.input("ct", sql.Bit, propia ? 0 : 1);
-            sets.push("clave_temporal = @ct");
-            try {
-              await tx.request().input("lu", sql.NVarChar(100), String(b.usuario).trim().toLowerCase()).query("IF OBJECT_ID('dbo.Login_Intentos','U') IS NOT NULL DELETE FROM dbo.Login_Intentos WHERE usuario = @lu");
-            } catch (eL) {
-            }
-          }
-          if (b.correo) {
-            r.input("c", sql.NVarChar(200), String(b.correo));
-            sets.push("correo = @c");
-            cuerpo.correo = b.correo;
-          }
-          if (sets.length) await r.query(`UPDATE dbo.usuarios SET ${sets.join(", ")}, fecha_sync = GETDATE() WHERE id_sistema = @id`);
-          resp = { success: true };
-        } else if (accion === "saveSolicitudAcceso") {
-          const T = await TH.leer(pool, "acc_solicitudes");
-          if (!T) {
-            await tx.rollback();
-            return { status: 503, body: { success: false, error: "Tabla de solicitudes de acceso aun no cargada" } };
-          }
-          const nro = T.filas.length + 1;
-          const horas = b.horas || b.horas_solicitadas || 1;
-          const fila = [nro, ahora, op, b.nombre || "", b.motivo || "", horas, "PENDIENTE", "", "", "", ""];
-          await CAP.agregarFilas(tx, "acc_solicitudes", [fila.map(CAP.comoHoja)]);
-          tocar.push("acc_solicitudes");
-          cuerpo.fila = fila.map((v, i) => i === 1 ? { $f: ahora.toISOString() } : v);
-          resp = { success: true, nro };
-          extra._celdas = fila.map(CAP.comoHoja);
-        } else {
-          const T = await TH.leer(pool, "acc_solicitudes");
-          if (!T) {
-            await tx.rollback();
-            return { status: 503, body: { success: false, error: "Tabla de solicitudes de acceso aun no cargada" } };
-          }
-          const filas = T.filas, pend = (r) => S(r[2] === void 0 ? "" : r[2]).trim() === String(b.usuario).trim() && S(r[6] === void 0 ? "" : r[6]).toUpperCase().trim() === "PENDIENTE";
-          let i = -1;
-          if (b.fila) {
-            const k = parseInt(b.fila, 10) - 2;
-            if (k >= 0 && k < filas.length && pend(filas[k])) i = k;
-          }
-          if (i < 0) i = filas.findIndex(pend);
-          if (i < 0) {
-            await tx.rollback();
-            return no("Solicitud pendiente no encontrada para: " + b.usuario);
-          }
-          let horas = parseInt(b.horas || b.horas_aprobadas, 10) || 0;
-          if (!horas) horas = parseInt(S(filas[i][5] === void 0 ? "" : filas[i][5]), 10) || 1;
-          const hasta = ms + horas * 36e5, decision = b.decision || "APROBADO";
-          const celdas = filas[i].slice();
-          while (celdas.length < 12) celdas.push("");
-          celdas[5] = CAP.comoHoja(horas);
-          celdas[6] = CAP.comoHoja(decision);
-          celdas[7] = CAP.comoHoja(op);
-          celdas[8] = CAP.comoHoja(hhmm(ms));
-          celdas[9] = CAP.comoHoja(hhmm(hasta));
-          celdas[10] = CAP.comoHoja(ahora);
-          celdas[11] = CAP.comoHoja(hasta);
-          await cambiarFila(tx, "acc_solicitudes", i + 1, celdas);
-          tocar.push("acc_solicitudes");
-          cuerpo.fila = i + 2;
-          cuerpo.usuario = String(b.usuario).trim();
-          cuerpo.nro = S(filas[i][0]);
-          cuerpo.valores = { horas, decision, aprobado_por: op, hora_inicio: hhmm(ms), hora_fin: hhmm(hasta), fecha: ahora.toISOString(), expira: hasta };
-          resp = { success: true, hastaHora: hhmm(hasta), hastaFecha: dmyhm(hasta), horasAprobadas: horas, expiraEn: hasta, decision };
-          extra._celdas = celdas;
-        }
-        if (tocar.length) await CAP.tocarMarcas(tx, tocar);
-        resp.fuente = "azure";
-        await tx.request().input("k", sql.NVarChar(100), claveOp).input("a", sql.NVarChar(30), accion).input("u", sql.NVarChar(100), op || null).input("c", sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input("r", sql.NVarChar(sql.MAX), JSON.stringify(resp)).query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'usr', @a, NULL, @u, @c, @r)");
-        if (prueba) {
-          await tx.rollback();
-          resp.prueba = true;
-          resp._op = cuerpo;
-          Object.assign(resp, extra);
-        } else await tx.commit();
-        return { status: 200, body: resp };
+        await pool.request().query(`IF OBJECT_ID('dbo.${STG}', 'U') IS NULL
+      CREATE TABLE dbo.${STG} (${COLS.map((c) => c[0] + " " + c[1]).join(", ")})`);
+        paso = "vaciar_stage";
+        await pool.request().query(`DELETE FROM dbo.${STG}`);
+        paso = "cargar_stage";
+        await pool.request().bulk(tablaBulk(STG, filas));
       } catch (e) {
-        try {
-          await tx.rollback();
-        } catch (e2) {
-        }
-        if (clave && /UQ_CV_Ops_clave|duplicate key/i.test(e.message || "")) {
-          const p = await pool.request().input("k", sql.NVarChar(100), claveOp).query("SELECT respuesta FROM dbo.CV_Ops WHERE clave = @k");
-          if (p.recordset.length && p.recordset[0].respuesta) return { status: 200, body: Object.assign(JSON.parse(p.recordset[0].respuesta), { duplicadoEvitado: true }) };
-        }
+        e._paso = paso;
         throw e;
       }
+      const transaction = new sql.Transaction(pool);
+      paso = "iniciar_transaccion";
+      await transaction.begin();
+      try {
+        const q = (txt) => transaction.request().query(txt);
+        paso = "config";
+        await q("SET DEADLOCK_PRIORITY LOW; SET LOCK_TIMEOUT 20000;");
+        paso = "contar";
+        const actual = (await q(`SELECT COUNT(*) AS n FROM dbo.${tableName}`)).recordset[0].n;
+        if (actual > 100 && filas.length < actual * 0.5) {
+          await transaction.rollback();
+          return {
+            total_recibidos: rows.length,
+            inserted: 0,
+            eliminados: 0,
+            sin_cambios: actual,
+            descartados_sin_dni: descartados,
+            abortado: true,
+            motivo: "Llegaron " + filas.length + " filas y la tabla tiene " + actual + ": posible lectura incompleta, no se toco nada"
+          };
+        }
+        paso = "borrar_cambiados";
+        const del = await q(`DELETE t FROM dbo.${tableName} t
+      WHERE NOT EXISTS (SELECT 1 FROM dbo.${STG} s WHERE s.dni = t.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
+        paso = "insertar_nuevos";
+        const ins = await q(`INSERT INTO dbo.${tableName} (${LISTA})
+      SELECT ${ST} FROM dbo.${STG} s
+      WHERE NOT EXISTS (SELECT 1 FROM dbo.${tableName} t WHERE t.dni = s.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
+        paso = "confirmar";
+        await transaction.commit();
+        const eliminados = del.rowsAffected && del.rowsAffected[0] || 0;
+        const insertados = ins.rowsAffected && ins.rowsAffected[0] || 0;
+        return {
+          total_recibidos: rows.length,
+          inserted: insertados,
+          eliminados,
+          sin_cambios: Math.max(0, actual - eliminados),
+          descartados_sin_dni: descartados,
+          modo: "incremental"
+        };
+      } catch (err) {
+        try {
+          await transaction.rollback();
+        } catch (e2) {
+        }
+        err._paso = paso;
+        throw err;
+      }
     }
-    module.exports = { ejecutar, encendido, ACCIONES };
+    async function syncCompleto(pool, tableName, filas, rows, descartados) {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        await transaction.request().query(`DELETE FROM dbo.${tableName}`);
+        const r = await transaction.request().bulk(tablaBulk(tableName, filas));
+        await transaction.commit();
+        return { total_recibidos: rows.length, inserted: r.rowsAffected, descartados_sin_dni: descartados, modo: "completo" };
+      } catch (err) {
+        try {
+          await transaction.rollback();
+        } catch (e2) {
+        }
+        err._paso = "completo";
+        throw err;
+      }
+    }
+    async function syncTabla(pool, tableName, rows, log) {
+      if (!rows || rows.length === 0) return { inserted: 0, total_recibidos: 0 };
+      if (!/^Trabajadores_(RAPEL|VERFRUT)$/.test(tableName)) throw new Error("Tabla no permitida: " + tableName);
+      const filas = [];
+      let descartados = 0;
+      for (const row of rows) {
+        const f = filaDe(row);
+        if (f) filas.push(f);
+        else descartados++;
+      }
+      try {
+        return await syncIncremental(pool, tableName, filas, rows, descartados);
+      } catch (e) {
+        const motivo = "paso " + (e._paso || "?") + ": " + detalleError(e);
+        if (log) log.warn("Incremental fallo en " + tableName + " (" + motivo + ") -> uso metodo completo");
+        const actual = (await pool.request().query(`SELECT COUNT(*) AS n FROM dbo.${tableName}`)).recordset[0].n;
+        if (actual > 100 && filas.length < actual * 0.5) {
+          return {
+            total_recibidos: rows.length,
+            inserted: 0,
+            abortado: true,
+            incremental_error: motivo,
+            motivo: "Llegaron " + filas.length + " filas y la tabla tiene " + actual + ": no se toco nada"
+          };
+        }
+        const r = await syncCompleto(pool, tableName, filas, rows, descartados);
+        r.incremental_error = motivo;
+        return r;
+      }
+    }
+    module.exports = async function(context, req) {
+      const authUser = exigirAuth(context, req);
+      if (authUser === null) return;
+      context.log("trabajadores-sync triggered");
+      const startTime = Date.now();
+      try {
+        const body = req.body || {};
+        const EMP = require_empresas();
+        const pendientes = EMP.EMPRESAS.filter(function(e) {
+          return Array.isArray(body[e.clave]);
+        });
+        if (!pendientes.length) {
+          context.res = {
+            status: 400,
+            body: {
+              success: false,
+              error: "Debe enviar al menos uno de los arrays: " + EMP.EMPRESAS.map(function(e) {
+                return e.clave;
+              }).join(", ")
+            }
+          };
+          return;
+        }
+        const pool = await getPool();
+        const results = {};
+        for (const e of pendientes) results[e.clave] = await syncTabla(pool, e.tabla, body[e.clave], context.log);
+        EMP.invalidarTablas();
+        const elapsed = Date.now() - startTime;
+        context.log("Sync completado en", elapsed, "ms");
+        context.res = {
+          status: 200,
+          body: {
+            success: true,
+            results,
+            elapsed_ms: elapsed,
+            fuente: "AZURE_SQL"
+          }
+        };
+      } catch (e) {
+        context.log.error("Error en trabajadores-sync:", e);
+        context.res = {
+          status: 500,
+          body: {
+            success: false,
+            error: detalleError(e),
+            paso: e._paso || null,
+            code: e.code,
+            name: e.name
+          }
+        };
+      }
+    };
   }
 });
 
@@ -73405,6 +75132,249 @@ var require_usuarios_lista = __commonJS({
   }
 });
 
+// usuarios-sync/index.js
+var require_usuarios_sync = __commonJS({
+  "usuarios-sync/index.js"(exports, module) {
+    var { exigirAuth } = require_auth();
+    var sql;
+    var getPool;
+    var dbLoadError = null;
+    try {
+      const dbModule = require_db();
+      sql = dbModule.sql;
+      getPool = dbModule.getPool;
+    } catch (e) {
+      dbLoadError = e.message + " | stack: " + e.stack;
+    }
+    module.exports = async function(context, req) {
+      const authUser = exigirAuth(context, req);
+      if (authUser === null) return;
+      const startTime = Date.now();
+      try {
+        context.log("\u2550\u2550\u2550 usuarios-sync START \u2550\u2550\u2550");
+        if (dbLoadError) {
+          context.log.error("Error cargando shared/db:", dbLoadError);
+          context.res = {
+            status: 500,
+            body: { success: false, error: "require failed", detail: dbLoadError }
+          };
+          return;
+        }
+        if (!sql || !getPool) {
+          context.res = {
+            status: 500,
+            body: { success: false, error: "sql o getPool no disponibles" }
+          };
+          return;
+        }
+        const usuarios = req.body && req.body.usuarios || [];
+        context.log("Recibidos: " + usuarios.length + " usuarios");
+        if (!Array.isArray(usuarios) || usuarios.length === 0) {
+          context.res = {
+            status: 400,
+            body: { success: false, error: "usuarios debe ser un array no vacio" }
+          };
+          return;
+        }
+        context.log("Conectando a SQL...");
+        let pool;
+        try {
+          pool = await getPool();
+          context.log("\u2713 SQL conectado");
+        } catch (e) {
+          context.log.error("Error conexi\xF3n SQL:", e.message, e.code, e.stack);
+          context.res = {
+            status: 500,
+            body: {
+              success: false,
+              error: "Error conectando a SQL: " + e.message,
+              code: e.code || null,
+              stack: e.stack || null
+            }
+          };
+          return;
+        }
+        let inserted = 0, updated = 0, failed = 0;
+        const errors = [];
+        const validos = usuarios.filter(function(u) {
+          return u && u.id_sistema && u.usuario && u.password && u.nombre;
+        });
+        usuarios.forEach(function(u) {
+          if (!(u && u.id_sistema && u.usuario && u.password && u.nombre)) {
+            failed++;
+            errors.push({ id: u && u.id_sistema || "(sin id)", error: "Faltan campos obligatorios" });
+          }
+        });
+        const fechaOk = function(f) {
+          if (!f) return null;
+          const t = Date.parse(String(f).replace(" ", "T"));
+          return isNaN(t) ? null : String(f).replace(" ", "T");
+        };
+        try {
+          const bcrypt = require_bcryptjs();
+          const act = await pool.request().query("SELECT id_sistema, password FROM dbo.usuarios");
+          const hashDe = {};
+          act.recordset.forEach(function(x) {
+            hashDe[String(x.id_sistema)] = String(x.password || "");
+          });
+          for (const u of validos) {
+            const h = hashDe[String(u.id_sistema)], p = String(u.password || "");
+            if (p.indexOf("sha256$") === 0 || p.indexOf("$2") === 0) {
+              if (h) u.password = h;
+              continue;
+            }
+            if (h && h.indexOf("$2") === 0 && p && await bcrypt.compare(p, h)) u.password = h;
+          }
+        } catch (eHash) {
+          context.log.warn("[_USR_HASH_V1] " + eHash.message);
+        }
+        let loteOk = false;
+        try {
+          const json = JSON.stringify(validos.map(function(u) {
+            return {
+              id_sistema: String(u.id_sistema),
+              usuario: String(u.usuario),
+              password: String(u.password),
+              nombre: String(u.nombre),
+              rol: u.rol || null,
+              empresa: u.empresa || null,
+              activo: u.activo ? 1 : 0,
+              fecha_creacion: fechaOk(u.fecha_creacion),
+              correo: u.correo || null,
+              cargo: u.cargo || null,
+              sector: u.sector || null
+            };
+          }));
+          if (sql._pg) {
+            const rp = await pool.request().input("j", sql.NVarChar(sql.MAX), json).query(`
+          INSERT INTO usuarios (id_sistema, usuario, password, nombre, rol, empresa, activo, fecha_creacion, correo, cargo, sector, fecha_sync)
+          SELECT s.id_sistema, s.usuario, s.password, s.nombre, s.rol, s.empresa, s.activo, s.fecha_creacion, s.correo, s.cargo, s.sector, (now() at time zone 'utc')
+            FROM jsonb_to_recordset(CAST(@j AS jsonb)) AS s(id_sistema text, usuario text, password text, nombre text, rol text, empresa text,
+                 activo smallint, fecha_creacion timestamp, correo text, cargo text, sector text)
+          ON CONFLICT (id_sistema) DO UPDATE SET
+            usuario = EXCLUDED.usuario, password = EXCLUDED.password, nombre = EXCLUDED.nombre, rol = EXCLUDED.rol,
+            empresa = EXCLUDED.empresa, activo = EXCLUDED.activo, fecha_creacion = EXCLUDED.fecha_creacion,
+            correo = EXCLUDED.correo, cargo = EXCLUDED.cargo, sector = EXCLUDED.sector, fecha_sync = (now() at time zone 'utc')
+          RETURNING (xmax = 0) AS nuevo`);
+            (rp.recordset || []).forEach(function(x) {
+              if (x.nuevo) inserted++;
+              else updated++;
+            });
+            loteOk = true;
+            context.log("\u2713 Lote OK (Supabase): i=" + inserted + " u=" + updated + " (" + (Date.now() - startTime) + "ms)");
+          } else {
+            const rl = await pool.request().input("j", sql.NVarChar(sql.MAX), json).query(`
+        SET LOCK_TIMEOUT 15000;
+        DECLARE @out TABLE (a NVARCHAR(10));
+        MERGE dbo.usuarios AS target
+        USING (SELECT * FROM OPENJSON(@j) WITH (
+                 id_sistema NVARCHAR(50), usuario NVARCHAR(50), password NVARCHAR(255), nombre NVARCHAR(200),
+                 rol NVARCHAR(50), empresa NVARCHAR(50), activo BIT, fecha_creacion DATETIME2,
+                 correo NVARCHAR(200), cargo NVARCHAR(200), sector NVARCHAR(100))) AS source
+        ON target.id_sistema = source.id_sistema
+        WHEN MATCHED THEN UPDATE SET
+          usuario = source.usuario, password = source.password, nombre = source.nombre, rol = source.rol,
+          empresa = source.empresa, activo = source.activo, fecha_creacion = source.fecha_creacion,
+          correo = source.correo, cargo = source.cargo, sector = source.sector, fecha_sync = GETDATE()
+        WHEN NOT MATCHED THEN
+          INSERT (id_sistema, usuario, password, nombre, rol, empresa, activo, fecha_creacion, correo, cargo, sector, fecha_sync)
+          VALUES (source.id_sistema, source.usuario, source.password, source.nombre, source.rol, source.empresa,
+                  source.activo, source.fecha_creacion, source.correo, source.cargo, source.sector, GETDATE())
+        OUTPUT $action INTO @out;
+        SELECT a, COUNT(*) AS n FROM @out GROUP BY a;`);
+            (rl.recordset || []).forEach(function(x) {
+              if (x.a === "INSERT") inserted += x.n;
+              else if (x.a === "UPDATE") updated += x.n;
+            });
+            loteOk = true;
+            context.log("\u2713 Lote OK: i=" + inserted + " u=" + updated + " (" + (Date.now() - startTime) + "ms)");
+          }
+        } catch (eLote) {
+          context.log.warn("Lote fallo, se pasa a fila por fila: " + eLote.message + " (" + (eLote.number || eLote.code || "") + ")");
+          inserted = 0;
+          updated = 0;
+        }
+        for (let i = 0; !loteOk && i < usuarios.length; i++) {
+          if (Date.now() - startTime > 2e5) {
+            errors.push({ id: "(corte)", error: "Se detuvo a los 200 s para no exceder el limite; quedaron " + (usuarios.length - i) + " sin procesar (probable bloqueo en la tabla usuarios)" });
+            failed += usuarios.length - i;
+            break;
+          }
+          const u = usuarios[i];
+          try {
+            if (!u.id_sistema || !u.usuario || !u.password || !u.nombre) {
+              continue;
+            }
+            context.log("Procesando: " + u.usuario + " (" + (i + 1) + "/" + usuarios.length + ")");
+            const result = await pool.request().input("id_sistema", sql.NVarChar(50), u.id_sistema).input("usuario", sql.NVarChar(50), u.usuario).input("password", sql.NVarChar(255), u.password).input("nombre", sql.NVarChar(200), u.nombre).input("rol", sql.NVarChar(50), u.rol || null).input("empresa", sql.NVarChar(50), u.empresa || null).input("activo", sql.Bit, u.activo ? 1 : 0).input("fecha_creacion", sql.DateTime2, u.fecha_creacion || null).input("correo", sql.NVarChar(200), u.correo || null).input("cargo", sql.NVarChar(200), u.cargo || null).input("sector", sql.NVarChar(100), u.sector || null).query(`
+            SET LOCK_TIMEOUT 15000;
+            MERGE dbo.usuarios AS target
+            USING (SELECT @id_sistema AS id_sistema) AS source
+            ON target.id_sistema = source.id_sistema
+            WHEN MATCHED THEN UPDATE SET
+              usuario        = @usuario,
+              password       = @password,
+              nombre         = @nombre,
+              rol            = @rol,
+              empresa        = @empresa,
+              activo         = @activo,
+              fecha_creacion = @fecha_creacion,
+              correo         = @correo,
+              cargo          = @cargo,
+              sector         = @sector,
+              fecha_sync     = GETDATE()
+            WHEN NOT MATCHED THEN
+              INSERT (id_sistema, usuario, password, nombre, rol, empresa,
+                      activo, fecha_creacion, correo, cargo, sector, fecha_sync)
+              VALUES (@id_sistema, @usuario, @password, @nombre, @rol, @empresa,
+                      @activo, @fecha_creacion, @correo, @cargo, @sector, GETDATE())
+            OUTPUT $action AS sync_action;
+          `);
+            const action = result.recordset[0] && result.recordset[0].sync_action;
+            if (action === "INSERT") inserted++;
+            else if (action === "UPDATE") updated++;
+          } catch (e) {
+            failed++;
+            errors.push({
+              id: u.id_sistema,
+              usuario: u.usuario,
+              error: e.message,
+              code: e.code || null,
+              number: e.number || null
+            });
+            context.log.error("Error sync user " + u.id_sistema + ":", e.message, e.code);
+          }
+        }
+        const elapsed = Date.now() - startTime;
+        context.log("\u2550\u2550\u2550 Sync END | i=" + inserted + " u=" + updated + " f=" + failed + " (" + elapsed + "ms) \u2550\u2550\u2550");
+        context.res = {
+          status: 200,
+          body: {
+            success: true,
+            total_recibidos: usuarios.length,
+            inserted,
+            updated,
+            failed,
+            errors: errors.slice(0, 10),
+            elapsed_ms: elapsed
+          }
+        };
+      } catch (e) {
+        context.log.error("FATAL usuarios-sync:", e.message, e.stack);
+        context.res = {
+          status: 500,
+          body: {
+            success: false,
+            error: e.message || String(e),
+            stack: e.stack || "no stack",
+            type: e.constructor && e.constructor.name
+          }
+        };
+      }
+    };
+  }
+});
+
 // vigia/index.js
 var require_vigia = __commonJS({
   "vigia/index.js"(exports, module) {
@@ -73448,48 +75418,65 @@ var require_vigia = __commonJS({
 var require_rutas_edge = __commonJS({
   "_rutas_edge.js"(exports, module) {
     module.exports = [
-      { fn: "acceso", ruta: "acceso/{accion}", metodos: ["POST"], h: require_acceso() },
-      { fn: "actividad", ruta: "actividad/{accion}", metodos: ["POST"], h: require_actividad() },
-      { fn: "alm-guardar", ruta: "alm/{accion}", metodos: ["POST"], h: require_alm_guardar2() },
-      { fn: "atenciones-by-dni", ruta: "atenciones/by-dni", metodos: ["GET", "POST"], h: require_atenciones_by_dni() },
-      { fn: "atenciones-editar", ruta: "atenciones/editar", metodos: ["POST"], h: require_atenciones_editar() },
-      { fn: "atenciones-guardar", ruta: "atenciones/guardar", metodos: ["POST"], h: require_atenciones_guardar() },
-      { fn: "atenciones-list", ruta: "atenciones", metodos: ["GET"], h: require_atenciones_list() },
-      { fn: "atenciones-marca", ruta: "atenciones/marca", metodos: ["GET"], h: require_atenciones_marca() },
-      { fn: "atenciones-stats", ruta: "atenciones/stats", metodos: ["GET"], h: require_atenciones_stats() },
-      { fn: "atenciones-update", ruta: "atenciones/update", metodos: ["POST"], h: require_atenciones_update() },
-      { fn: "auth-login", ruta: "auth/login", metodos: ["POST"], h: require_auth_login() },
-      { fn: "auth-renovar", ruta: "auth/renovar", metodos: ["POST"], h: require_auth_renovar() },
-      { fn: "auth-sso", ruta: "auth/sso", metodos: ["POST"], h: require_auth_sso() },
-      { fn: "blob-sas", ruta: "blob-sas", metodos: ["GET", "OPTIONS"], h: require_blob_sas() },
-      { fn: "bs", ruta: "bs/{accion}", metodos: ["GET"], h: require_bs() },
-      { fn: "cap-firmas", ruta: "cap-firmas/{accion}", metodos: ["POST", "OPTIONS"], h: require_cap_firmas() },
-      { fn: "cap-guardar", ruta: "cap/guardar/{accion}", metodos: ["POST"], h: require_cap_guardar2() },
-      { fn: "compromiso", ruta: "compromiso/{accion}", metodos: ["POST", "OPTIONS"], h: require_compromiso() },
-      { fn: "cumpl", ruta: "cumpl/{accion}", metodos: ["POST"], h: require_cumpl() },
-      { fn: "cumpl-guardar", ruta: "cumpl/guardar/{accion}", metodos: ["POST"], h: require_cumpl_guardar2() },
-      { fn: "cv", ruta: "cv/{accion}", metodos: ["POST"], h: require_cv() },
-      { fn: "cv-guardar", ruta: "cv/guardar/{accion}", metodos: ["POST"], h: require_cv_guardar2() },
-      { fn: "e360-guardar", ruta: "e360/guardar/{accion}", metodos: ["POST"], h: require_e360_guardar2() },
-      { fn: "eti-eval-admin", ruta: "etieval/admin/{accion}", metodos: ["POST"], h: require_eti_eval_admin() },
-      { fn: "eti-eval-guardar", ruta: "etieval/guardar", metodos: ["POST"], h: require_eti_eval_guardar() },
-      { fn: "eti-eval-stats", ruta: "etieval/stats", metodos: ["GET"], h: require_eti_eval_stats() },
-      { fn: "fus-guardar", ruta: "fus/guardar/{accion}", metodos: ["POST"], h: require_fus_guardar2() },
-      { fn: "hor-guardar", ruta: "hor/{accion}", metodos: ["POST"], h: require_hor_guardar2() },
-      { fn: "horas-guardar", ruta: "horas/guardar/{accion}", metodos: ["POST"], h: require_horas_guardar2() },
-      { fn: "inf-guardar", ruta: "inf/{accion}", metodos: ["POST"], h: require_inf_guardar2() },
-      { fn: "inv-guardar", ruta: "inv/{accion}", metodos: ["POST"], h: require_inv_guardar2() },
-      { fn: "kpi", ruta: "kpi/{accion}", metodos: ["POST"], h: require_kpi() },
-      { fn: "mant-guardar", ruta: "mant/guardar/{accion}", metodos: ["POST"], h: require_mant_guardar2() },
-      { fn: "mod", ruta: "mod/{modulo}/{accion}", metodos: ["POST"], h: require_mod() },
-      { fn: "preav-guardar", ruta: "preav/{accion}", metodos: ["POST"], h: require_preav_guardar2() },
-      { fn: "prec", ruta: "prec/{accion}", metodos: ["POST", "OPTIONS"], h: require_prec() },
-      { fn: "sol-guardar", ruta: "sol/guardar/{accion}", metodos: ["POST"], h: require_sol_guardar2() },
-      { fn: "sup-guardar", ruta: "sup/{accion}", metodos: ["POST"], h: require_sup_guardar2() },
-      { fn: "trabajadores-search", ruta: "trabajadores/buscar", metodos: ["GET"], h: require_trabajadores_search() },
-      { fn: "usr-guardar", ruta: "usr/guardar/{accion}", metodos: ["POST"], h: require_usr_guardar2() },
-      { fn: "usuarios-lista", ruta: "usuarios/lista", metodos: ["GET"], h: require_usuarios_lista() },
-      { fn: "vigia", ruta: "vigia/{accion}", metodos: ["GET"], h: require_vigia() }
+      { fn: "acceso", ruta: "acceso/{accion}", metodos: ["POST"], llave: false, h: require_acceso() },
+      { fn: "acceso-importar", ruta: "acceso-importar", metodos: ["GET", "POST"], llave: true, h: require_acceso_importar() },
+      { fn: "actividad", ruta: "actividad/{accion}", metodos: ["POST"], llave: false, h: require_actividad() },
+      { fn: "alm-guardar", ruta: "alm/{accion}", metodos: ["POST"], llave: false, h: require_alm_guardar2() },
+      { fn: "atenciones-batch", ruta: "atenciones/batch", metodos: ["POST"], llave: true, h: require_atenciones_batch() },
+      { fn: "atenciones-by-dni", ruta: "atenciones/by-dni", metodos: ["GET", "POST"], llave: false, h: require_atenciones_by_dni() },
+      { fn: "atenciones-create", ruta: "atenciones", metodos: ["POST"], llave: true, h: require_atenciones_create() },
+      { fn: "atenciones-depurar", ruta: "mantenimiento/atenciones/{accion}", metodos: ["GET", "POST"], llave: true, h: require_atenciones_depurar() },
+      { fn: "atenciones-editar", ruta: "atenciones/editar", metodos: ["POST"], llave: false, h: require_atenciones_editar() },
+      { fn: "atenciones-guardar", ruta: "atenciones/guardar", metodos: ["POST"], llave: false, h: require_atenciones_guardar() },
+      { fn: "atenciones-guardar-admin", ruta: "mantenimiento/guardar/{accion}", metodos: ["GET", "POST"], llave: true, h: require_atenciones_guardar_admin() },
+      { fn: "atenciones-list", ruta: "atenciones", metodos: ["GET"], llave: false, h: require_atenciones_list() },
+      { fn: "atenciones-marca", ruta: "atenciones/marca", metodos: ["GET"], llave: false, h: require_atenciones_marca() },
+      { fn: "atenciones-stats", ruta: "atenciones/stats", metodos: ["GET"], llave: false, h: require_atenciones_stats() },
+      { fn: "atenciones-update", ruta: "atenciones/update", metodos: ["POST"], llave: false, h: require_atenciones_update() },
+      { fn: "auth-login", ruta: "auth/login", metodos: ["POST"], llave: false, h: require_auth_login() },
+      { fn: "auth-renovar", ruta: "auth/renovar", metodos: ["POST"], llave: false, h: require_auth_renovar() },
+      { fn: "auth-sso", ruta: "auth/sso", metodos: ["POST"], llave: false, h: require_auth_sso() },
+      { fn: "blob-sas", ruta: "blob-sas", metodos: ["GET", "OPTIONS"], llave: false, h: require_blob_sas() },
+      { fn: "bs", ruta: "bs/{accion}", metodos: ["GET"], llave: false, h: require_bs() },
+      { fn: "cap-firmas", ruta: "cap-firmas/{accion}", metodos: ["POST", "OPTIONS"], llave: false, h: require_cap_firmas() },
+      { fn: "cap-guardar", ruta: "cap/guardar/{accion}", metodos: ["POST"], llave: false, h: require_cap_guardar2() },
+      { fn: "compromiso", ruta: "compromiso/{accion}", metodos: ["POST", "OPTIONS"], llave: false, h: require_compromiso() },
+      { fn: "cumpl", ruta: "cumpl/{accion}", metodos: ["POST"], llave: false, h: require_cumpl() },
+      { fn: "cumpl-guardar", ruta: "cumpl/guardar/{accion}", metodos: ["POST"], llave: false, h: require_cumpl_guardar2() },
+      { fn: "cumpl-importar", ruta: "cumpl-importar", metodos: ["GET", "POST"], llave: true, h: require_cumpl_importar() },
+      { fn: "cv", ruta: "cv/{accion}", metodos: ["POST"], llave: false, h: require_cv() },
+      { fn: "cv-guardar", ruta: "cv/guardar/{accion}", metodos: ["POST"], llave: false, h: require_cv_guardar2() },
+      { fn: "cv-guardar-admin", ruta: "mantenimiento/cv/{accion}", metodos: ["GET", "POST"], llave: true, h: require_cv_guardar_admin() },
+      { fn: "cv-importar", ruta: "cv-importar", metodos: ["GET", "POST"], llave: true, h: require_cv_importar() },
+      { fn: "db-indices", ruta: "mantenimiento/indices", metodos: ["GET", "POST"], llave: true, h: require_db_indices() },
+      { fn: "e360-guardar", ruta: "e360/guardar/{accion}", metodos: ["POST"], llave: false, h: require_e360_guardar2() },
+      { fn: "eti-eval-admin", ruta: "etieval/admin/{accion}", metodos: ["POST"], llave: false, h: require_eti_eval_admin() },
+      { fn: "eti-eval-guardar", ruta: "etieval/guardar", metodos: ["POST"], llave: false, h: require_eti_eval_guardar() },
+      { fn: "eti-eval-stats", ruta: "etieval/stats", metodos: ["GET"], llave: false, h: require_eti_eval_stats() },
+      { fn: "fus-guardar", ruta: "fus/guardar/{accion}", metodos: ["POST"], llave: false, h: require_fus_guardar2() },
+      { fn: "hor-guardar", ruta: "hor/{accion}", metodos: ["POST"], llave: false, h: require_hor_guardar2() },
+      { fn: "horas-guardar", ruta: "horas/guardar/{accion}", metodos: ["POST"], llave: false, h: require_horas_guardar2() },
+      { fn: "inf-guardar", ruta: "inf/{accion}", metodos: ["POST"], llave: false, h: require_inf_guardar2() },
+      { fn: "inv-guardar", ruta: "inv/{accion}", metodos: ["POST"], llave: false, h: require_inv_guardar2() },
+      { fn: "keepwarm", ruta: "_reloj/keepwarm", metodos: ["POST"], llave: true, reloj: true, h: require_keepwarm() },
+      { fn: "kpi", ruta: "kpi/{accion}", metodos: ["POST"], llave: false, h: require_kpi() },
+      { fn: "kpi-admin", ruta: "mantenimiento/kpi/{accion}", metodos: ["GET", "POST"], llave: true, h: require_kpi_admin() },
+      { fn: "kpi-reloj", ruta: "_reloj/kpi-reloj", metodos: ["POST"], llave: true, reloj: true, h: require_kpi_reloj() },
+      { fn: "mant-guardar", ruta: "mant/guardar/{accion}", metodos: ["POST"], llave: false, h: require_mant_guardar2() },
+      { fn: "mod", ruta: "mod/{modulo}/{accion}", metodos: ["POST"], llave: false, h: require_mod() },
+      { fn: "mod-importar", ruta: "mod-importar", metodos: ["GET", "POST"], llave: true, h: require_mod_importar() },
+      { fn: "preav-guardar", ruta: "preav/{accion}", metodos: ["POST"], llave: false, h: require_preav_guardar2() },
+      { fn: "prec", ruta: "prec/{accion}", metodos: ["POST", "OPTIONS"], llave: false, h: require_prec() },
+      { fn: "sol-guardar", ruta: "sol/guardar/{accion}", metodos: ["POST"], llave: false, h: require_sol_guardar2() },
+      { fn: "sup-guardar", ruta: "sup/{accion}", metodos: ["POST"], llave: false, h: require_sup_guardar2() },
+      { fn: "tablas-cv", ruta: "mantenimiento/tablas/{tipo}/{accion}", metodos: ["GET", "POST"], llave: true, h: require_tablas_cv2() },
+      { fn: "tablas-hoja", ruta: "mantenimiento/hoja/{clave}/{accion}", metodos: ["GET", "POST"], llave: true, h: require_tablas_hoja2() },
+      { fn: "trabajadores-search", ruta: "trabajadores/buscar", metodos: ["GET"], llave: false, h: require_trabajadores_search() },
+      { fn: "trabajadores-sync", ruta: "trabajadores/sync", metodos: ["POST"], llave: true, h: require_trabajadores_sync() },
+      { fn: "usr-guardar", ruta: "usr/guardar/{accion}", metodos: ["POST"], llave: false, h: require_usr_guardar2() },
+      { fn: "usuarios-lista", ruta: "usuarios/lista", metodos: ["GET"], llave: false, h: require_usuarios_lista() },
+      { fn: "usuarios-sync", ruta: "usuarios/sync", metodos: ["POST"], llave: true, h: require_usuarios_sync() },
+      { fn: "vigia", ruta: "vigia/{accion}", metodos: ["GET"], llave: false, h: require_vigia() }
     ];
   }
 });
@@ -73558,6 +75545,13 @@ var require_adaptador_edge = __commonJS({
         }
       }
       if (!r) return new Response(JSON.stringify({ success: false, error: "Ruta no disponible en Supabase: " + ruta }), { status: 404, headers: Object.assign({ "Content-Type": "application/json", "X-RL-Edge": "sin-ruta" }, C) });
+      if (r.llave) {
+        const dada = url.searchParams.get("code") || request.headers.get("x-functions-key") || "";
+        const validas = String(typeof process !== "undefined" && process.env.RL_FN_KEYS || "").split(",").map(function(x) {
+          return x.trim();
+        }).filter(Boolean);
+        if (!dada || validas.indexOf(dada) < 0) return new Response(JSON.stringify({ success: false, error: "Llave de funcion invalida o ausente" }), { status: 401, headers: Object.assign({ "Content-Type": "application/json" }, C) });
+      }
       const params = {};
       r.nombres.forEach(function(n, i) {
         params[n] = m[i + 1] !== void 0 ? decodeURIComponent(m[i + 1]) : void 0;
@@ -73584,6 +75578,11 @@ var require_adaptador_edge = __commonJS({
       const req = { method: request.method, url: request.url, originalUrl: request.url, headers, query, params, body, rawBody };
       const context = { log: registro("[" + r.fn + "]"), bindingData: Object.assign({}, query, params), res: null, invocationId: crypto.randomUUID(), executionContext: { functionName: r.fn } };
       try {
+        if (r.reloj) {
+          const t0 = Date.now();
+          await r.h(context, { isPastDue: false, schedule: {} });
+          return new Response(JSON.stringify({ success: true, reloj: r.fn, ms: Date.now() - t0 }), { status: 200, headers: Object.assign({ "Content-Type": "application/json" }, C) });
+        }
         const ret = await r.h(context, req);
         const res = context.res || ret || { status: 204 };
         const h = Object.assign({}, res.headers || {}, C);

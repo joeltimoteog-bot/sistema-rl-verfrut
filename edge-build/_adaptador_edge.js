@@ -54,6 +54,13 @@ async function manejar(request) {
   for (const t of TABLA) { m = ruta.match(t.re); if (m && t.metodos.indexOf(request.method) >= 0) { r = t; break; } }
   if (!r) return new Response(JSON.stringify({ success: false, error: 'Ruta no disponible en Supabase: ' + ruta }), { status: 404, headers: Object.assign({ 'Content-Type': 'application/json', 'X-RL-Edge': 'sin-ruta' }, C) });
 
+  /* _FASE3_V1: rutas con llave (authLevel "function" en Azure): la misma llave de Azure en ?code= o x-functions-key.
+     Las llaves validas vienen del secreto RL_FN_KEYS (separadas por coma). Sin llave valida → 401, igual que Azure. */
+  if (r.llave) {
+    const dada = url.searchParams.get('code') || request.headers.get('x-functions-key') || '';
+    const validas = String((typeof process !== 'undefined' && process.env.RL_FN_KEYS) || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean);
+    if (!dada || validas.indexOf(dada) < 0) return new Response(JSON.stringify({ success: false, error: 'Llave de funcion invalida o ausente' }), { status: 401, headers: Object.assign({ 'Content-Type': 'application/json' }, C) });
+  }
   const params = {}; r.nombres.forEach(function (n, i) { params[n] = m[i + 1] !== undefined ? decodeURIComponent(m[i + 1]) : undefined; });
   const query = {}; url.searchParams.forEach(function (v, k) { query[k] = v; });
   const headers = {}; request.headers.forEach(function (v, k) { headers[k.toLowerCase()] = v; });
@@ -67,6 +74,10 @@ async function manejar(request) {
   const context = { log: registro('[' + r.fn + ']'), bindingData: Object.assign({}, query, params), res: null, invocationId: crypto.randomUUID(), executionContext: { functionName: r.fn } };
 
   try {
+    if (r.reloj) {   /* funcion de reloj: se ejecuta como en Azure (context, timer) y se responde con su resultado */
+      const t0 = Date.now(); await r.h(context, { isPastDue: false, schedule: {} });
+      return new Response(JSON.stringify({ success: true, reloj: r.fn, ms: Date.now() - t0 }), { status: 200, headers: Object.assign({ 'Content-Type': 'application/json' }, C) });
+    }
     const ret = await r.h(context, req);
     const res = context.res || ret || { status: 204 };
     const h = Object.assign({}, res.headers || {}, C);

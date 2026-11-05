@@ -50,7 +50,7 @@
   var EDGE_ACTIVO = true;
   var EDGE = 'https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/';
   /* _EDGE_V2 (05-nov): fase 2 — TODO pasa a Supabase salvo las rutas con llave de funcion (mantenimiento, importaciones, sync, lote) */
-  var SOLO_AZURE = /^(mantenimiento\/|[\w-]+-importar|trabajadores\/sync|usuarios\/sync|atenciones\/batch)/;
+  var SOLO_AZURE = /^(?!)/;   /* _EDGE_V3 (05-nov): fase 3 — Supabase ya atiende tambien mantenimiento, importaciones y sync (con la misma llave) */
   try { var me = localStorage.getItem('rl_edge'); if (me === 'off') EDGE_ACTIVO = false; else if (me === 'on') EDGE_ACTIVO = true; } catch (e) {}
   var edgeFallas = 0;
   function edgePausado() { try { return Date.now() < +(sessionStorage.getItem('rl_edge_pausa') || 0); } catch (e) { return false; } }
@@ -63,7 +63,7 @@
     var metodo = String((init && init.method) || 'GET').toUpperCase();
     var ruta = url.split(MARCA)[1] || '';
     if (!EDGE_ACTIVO || edgePausado() || SOLO_AZURE.test(ruta) || (init && init.body && typeof init.body !== 'string')) return fOrig.call(window, url, init);
-    if (ruta === 'atenciones' || /^atenciones[?]/.test(ruta)) { if (metodo !== 'GET') return fOrig.call(window, url, init); }   /* POST /atenciones (crear con llave) sigue en Azure */
+    /* _EDGE_V3: POST /atenciones (crear, con llave) tambien va a Supabase */
     return fOrig.call(window, EDGE + ruta, init).then(function (r) {
       if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { edgeFalla('HTTP ' + r.status); return fOrig.call(window, url, init); }
       edgeFallas = 0; return r;

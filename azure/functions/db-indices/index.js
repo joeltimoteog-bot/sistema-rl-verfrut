@@ -61,8 +61,44 @@ async function yaCubierto(pool, tabla, primera) {
   return r.recordset[0].n > 0;
 }
 
+/* _FASE3_V1 (05-nov-2026): en Supabase (Postgres) mismo informe y mismos indices, con el catalogo de Postgres.
+   CREATE INDEX CONCURRENTLY no bloquea a los usuarios (equivale a ONLINE = ON). Nunca borra nada. */
+async function indicesPg(context, req, t0) {
+  const pool = await getPool();
+  const aplicar = req.method === 'POST' && String((req.query && req.query.aplicar) || '') === '1';
+  const acciones = [];
+  for (const [nombre, tabla, primera, claves, incluye] of INDICES) {
+    const t = tabla.toLowerCase(), n = nombre.toLowerCase();
+    const existe = (await pool.request().input('t', sql.NVarChar, t).query(`SELECT COUNT(*)::int AS n FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace WHERE s.nspname = current_schema() AND c.relname = @t AND c.relkind = 'r'`)).recordset[0].n > 0;
+    if (!existe) { acciones.push({ indice: nombre, estado: 'tabla no existe' }); continue; }
+    if (primera === null) {
+      const ya = (await pool.request().input('n', sql.NVarChar, n).query(`SELECT COUNT(*)::int AS n FROM pg_indexes WHERE schemaname = current_schema() AND indexname = @n`)).recordset[0].n > 0;
+      if (ya) { acciones.push({ indice: nombre, estado: 'ya existe' }); continue; }
+    } else {
+      const cub = (await pool.request().input('t', sql.NVarChar, t).input('c', sql.NVarChar, primera.toLowerCase()).query(`SELECT COUNT(*)::int AS n FROM pg_index ix
+          JOIN pg_class tb ON tb.oid = ix.indrelid JOIN pg_namespace s ON s.oid = tb.relnamespace
+          JOIN pg_attribute at ON at.attrelid = tb.oid AND at.attnum = split_part(ix.indkey::text, ' ', 1)::int
+          WHERE s.nspname = current_schema() AND tb.relname = @t AND at.attname = @c`)).recordset[0].n > 0;
+      if (cub) { acciones.push({ indice: nombre, estado: 'ya cubierto (hay indice por ' + primera + ')' }); continue; }
+    }
+    if (!aplicar) { acciones.push({ indice: nombre, estado: 'FALTA (se crearia)' }); continue; }
+    const t1 = Date.now();
+    try {
+      await pool.request().query(`CREATE INDEX CONCURRENTLY IF NOT EXISTS ${n} ON ${t} ${claves.toLowerCase()} ${incluye.toLowerCase()}`);
+      acciones.push({ indice: nombre, estado: 'CREADO (sin bloquear)', ms: Date.now() - t1 });
+    } catch (e) { acciones.push({ indice: nombre, estado: 'ERROR', error: e.message }); }
+  }
+  const tablas = ['atenciones', 'trabajadores_rapel', 'trabajadores_verfrut', 'usuarios'];
+  const filas = (await pool.request().query(`SELECT c.relname AS tabla, GREATEST(c.reltuples, 0)::bigint AS filas FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace
+      WHERE s.nspname = current_schema() AND c.relkind = 'r' AND c.relname IN ('${tablas.join("','")}')`)).recordset;
+  const indices = (await pool.request().query(`SELECT tablename AS tabla, indexname AS indice, indexdef AS definicion FROM pg_indexes
+      WHERE schemaname = current_schema() AND tablename IN ('${tablas.join("','")}') ORDER BY 1, 2`)).recordset;
+  context.res = { status: 200, body: { success: true, modo: aplicar ? 'aplicar' : 'solo informe', acciones, filas, indices, columnas: [], plan: 'Supabase (Postgres)', ms: Date.now() - t0 } };
+}
+
 module.exports = async function (context, req) {
   const t0 = Date.now();
+  if (sql._pg) { try { return await indicesPg(context, req, t0); } catch (e) { context.res = { status: 500, body: { success: false, error: e.message } }; return; } }
   try {
     const pool = await getPool();
     const aplicar = req.method === 'POST' && String((req.query && req.query.aplicar) || '') === '1';

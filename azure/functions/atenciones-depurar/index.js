@@ -83,13 +83,72 @@ async function fechas(pool, b) {
   return { success: true, aplicar, resultados: out };
 }
 
+/* _FASE3_V1 (05-nov-2026): versiones para Supabase (Postgres) de duplicados y fechas.
+   Mismo resultado y mismas respuestas; el respaldo guarda la fila completa como JSON (row_to_json). */
+const DUP_CTE_PG = `WITH g AS (
+    SELECT id, nro, fecha_atencion, TRIM(dni) AS dni,
+           ROW_NUMBER() OVER (PARTITION BY nro, TRIM(dni), fecha_atencion ORDER BY id) AS rn
+    FROM Atenciones WHERE fecha_atencion IS NOT NULL AND nro IS NOT NULL)`;
+async function duplicadosPg(pool, aplicar) {
+  const r = await pool.request().query(DUP_CTE_PG + `
+    SELECT to_char(fecha_atencion, 'YYYY-MM') AS mes, COUNT(*)::int AS n FROM g WHERE rn > 1 GROUP BY 1 ORDER BY 1`);
+  const porMes = {}; let total = 0;
+  r.recordset.forEach(x => { porMes[x.mes] = x.n; total += x.n; });
+  const ej = await pool.request().query(DUP_CTE_PG + ` SELECT id, nro, dni, to_char(fecha_atencion, 'YYYY-MM-DD') AS fecha FROM g WHERE rn > 1 ORDER BY id LIMIT 8`);
+  if (!aplicar) return { success: true, vistaPrevia: true, aBorrar: total, porMes, ejemplos: ej.recordset };
+  if (total > TOPE_DUPLICADOS) return { success: false, error: 'Freno: ' + total + ' repetidos (> ' + TOPE_DUPLICADOS + '). No se borro nada.', porMes };
+  if (!total) return { success: true, borradas: 0 };
+  await asegurarRespaldo(pool);
+  const tx = new sql.Transaction(pool);
+  await tx.begin();
+  try {
+    const ins = await tx.request().query(DUP_CTE_PG + `
+      INSERT INTO Atenciones_Respaldo (id, datos, motivo)
+        SELECT a.id, row_to_json(a)::text, 'duplicado 26-set' FROM Atenciones a WHERE a.id IN (SELECT id FROM g WHERE rn > 1)`);
+    const del = await tx.request().query(DUP_CTE_PG + ` DELETE FROM Atenciones WHERE id IN (SELECT id FROM g WHERE rn > 1)`);
+    const x = { respaldadas: (ins.rowsAffected && ins.rowsAffected[0]) || 0, borradas: (del.rowsAffected && del.rowsAffected[0]) || 0 };
+    if (x.respaldadas !== x.borradas) throw new Error('Respaldo (' + x.respaldadas + ') distinto de borradas (' + x.borradas + ')');
+    await tx.commit();
+    return { success: true, respaldadas: x.respaldadas, borradas: x.borradas, porMes };
+  } catch (e) { try { await tx.rollback(); } catch (e2) {} throw e; }
+}
+async function fechasPg(pool, b) {
+  const cambios = Array.isArray(b.cambios) ? b.cambios : [];
+  if (!cambios.length) throw new Error('Faltan cambios');
+  const aplicar = !!b.aplicar, out = [];
+  if (aplicar) await asegurarRespaldo(pool);
+  for (const c of cambios) {
+    const dniN = String(c.dni || '').trim().replace(/^0+/, '');
+    const f = String(c.fecha || '').slice(0, 10);
+    if (!c.nro || !dniN || !/^\d{4}-\d{2}-\d{2}$/.test(f)) { out.push({ nro: c.nro, estado: 'datos invalidos' }); continue; }
+    const r = await pool.request().input('nro', sql.Int, c.nro).input('d', sql.NVarChar(20), dniN)
+      .query(`SELECT id, to_char(fecha_atencion, 'YYYY-MM-DD') AS fecha FROM Atenciones
+              WHERE nro = @nro AND LTRIM(TRIM(dni), '0') = @d`);
+    if (r.recordset.length !== 1) { out.push({ nro: c.nro, estado: 'no se toca: ' + r.recordset.length + ' registros con ese N°+DNI' }); continue; }
+    const fila = r.recordset[0];
+    if (fila.fecha === f) { out.push({ nro: c.nro, estado: 'ya estaba bien' }); continue; }
+    if (!aplicar) { out.push({ nro: c.nro, id: fila.id, estado: 'cambiaria ' + (fila.fecha || 'vacia') + ' -> ' + f }); continue; }
+    const tx = new sql.Transaction(pool);
+    await tx.begin();
+    try {
+      await tx.request().input('id', sql.Int, fila.id).query(`INSERT INTO Atenciones_Respaldo (id, datos, motivo)
+        SELECT a.id, row_to_json(a)::text, 'cambio de fecha 26-set' FROM Atenciones a WHERE a.id = @id`);
+      await tx.request().input('id', sql.Int, fila.id).input('f', sql.NVarChar(10), f)
+        .query(`UPDATE Atenciones SET fecha_atencion = CAST(@f AS date), mes = EXTRACT(MONTH FROM CAST(@f AS date))::int, anio = EXTRACT(YEAR FROM CAST(@f AS date))::int WHERE id = @id`);
+      await tx.commit();
+      out.push({ nro: c.nro, id: fila.id, estado: 'corregida ' + (fila.fecha || 'vacia') + ' -> ' + f });
+    } catch (e) { try { await tx.rollback(); } catch (e2) {} out.push({ nro: c.nro, estado: 'error: ' + e.message }); }
+  }
+  return { success: true, aplicar, resultados: out };
+}
+
 module.exports = async function (context, req) {
   const accion = context.bindingData && context.bindingData.accion;
   try {
     const pool = await getPool();
     let body;
-    if (accion === 'duplicados') body = await duplicados(pool, String((req.query && req.query.aplicar) || '') === '1');
-    else if (accion === 'fechas') body = await fechas(pool, req.body || {});
+    if (accion === 'duplicados') body = await (sql._pg ? duplicadosPg : duplicados)(pool, String((req.query && req.query.aplicar) || '') === '1');
+    else if (accion === 'fechas') body = await (sql._pg ? fechasPg : fechas)(pool, req.body || {});
     else if (accion === 'respaldo') { await asegurarRespaldo(pool); const r = await pool.request().query('SELECT motivo, COUNT(*) AS n FROM dbo.Atenciones_Respaldo GROUP BY motivo'); body = { success: true, respaldo: r.recordset }; }
     else { context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
     context.res = { status: body.success ? 200 : 409, body };

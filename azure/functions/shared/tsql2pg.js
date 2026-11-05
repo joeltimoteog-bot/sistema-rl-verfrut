@@ -179,6 +179,7 @@ const UTC = "(now() at time zone 'utc')";
 function esDDLProtegido(st) {
   const l = st.replace(/\s+/g, ' ').trim().toUpperCase();
   if (/^IF\s+(NOT\s+)?(OBJECT_ID|COL_LENGTH|EXISTS\s*\(\s*SELECT\b[^)]*\bFROM\s+SYS\.|INDEXPROPERTY|TYPE_ID)/.test(l) && /\b(CREATE|ALTER|DROP)\s+(TABLE|INDEX|UNIQUE|NONCLUSTERED|CLUSTERED)/.test(l)) return true;
+  if (/^CREATE\s+(UNIQUE\s+)?INDEX\s+CONCURRENTLY\b/.test(l)) return false;   /* _FASE3_V1: indice escrito para Postgres (db-indices) */
   if (/^(CREATE|ALTER)\s+(TABLE|INDEX|UNIQUE|NONCLUSTERED)/.test(l)) return true;
   /* triggers creados con EXEC('CREATE TRIGGER ...'): en Supabase ya existen (migracion/complementos.sql) */
   if (/^IF\s+(NOT\s+)?EXISTS\s*\(\s*SELECT\b[^)]*\bFROM\s+SYS\.TRIGGERS/.test(l) && /\bEXEC\s*\(/.test(l)) return true;
@@ -217,10 +218,13 @@ function traducirSentencia(st, nombres) {
   if (/^\s*(BEGIN\s+TRAN(SACTION)?|COMMIT(\s+TRAN(SACTION)?)?)\s*$/i.test(s)) return { sql: null, pendiente };
   /* LIKE 'bs[_]%' de SQL Server (corchete = literal) → 'bs\_%' en Postgres */
   s = s.replace(/(\bLIKE\s+N?')([^']*)(')/gi, (m, a, pat, c) => a + pat.replace(/\[_\]/g, '\\_').replace(/\[%\]/g, '\\%') + c);
-  if (/^\s*(DECLARE|SET\s+NOCOUNT|SET\s+XACT_ABORT|BEGIN\s+TRAN|COMMIT|ROLLBACK)\b/i.test(s)) {
-    if (/^\s*SET\s+(NOCOUNT|XACT_ABORT)\b/i.test(s)) return { sql: null, pendiente };
+  if (/^\s*(DECLARE|SET\s+NOCOUNT|SET\s+XACT_ABORT|SET\s+DEADLOCK_PRIORITY|BEGIN\s+TRAN|COMMIT|ROLLBACK)\b/i.test(s)) {
+    if (/^\s*SET\s+(NOCOUNT|XACT_ABORT|DEADLOCK_PRIORITY)\b/i.test(s)) return { sql: null, pendiente };   /* _FASE3_V1: DEADLOCK_PRIORITY no existe en Postgres */
     pendiente.push('sentencia T-SQL de control: ' + s.slice(0, 40));
   }
+  /* _FASE3_V1: DELETE t FROM dbo.Tabla t WHERE ... (sin JOIN) → DELETE FROM Tabla AS t WHERE ... */
+  { const dm = s.match(/^\s*DELETE\s+(\w+)\s+FROM\s+([\w.\[\]]+)\s+(?:AS\s+)?(\w+)\s+(WHERE\b[\s\S]*)$/i);
+    if (dm && dm[1].toLowerCase() === dm[3].toLowerCase() && !/^\s*(JOIN|INNER|LEFT|CROSS)\b/i.test(dm[4])) s = 'DELETE FROM ' + dm[2] + ' AS ' + dm[3] + ' ' + dm[4]; }
   if (/^\s*MERGE\b/i.test(s)) {
     /* MERGE dbo.T AS x ... → MERGE INTO T AS x ... ; SET x.col = → SET col = */
     s = s.replace(/^\s*MERGE\s+(?!INTO\b)/i, 'MERGE INTO ');

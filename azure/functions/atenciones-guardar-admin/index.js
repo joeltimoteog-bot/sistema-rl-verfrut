@@ -63,7 +63,9 @@ module.exports = async function (context, req) {
       const r = await pool.request().query(`SELECT TOP 200 i.clave, ${FILA}
         FROM dbo.AtIdem i JOIN dbo.Atenciones a ON a.id = i.atencion_id WHERE i.en_hoja = 0 ORDER BY i.nro`);
       /* si la atencion fue borrada de Azure, su huella ya no tiene fila: se da por resuelta */
-      await pool.request().query(`UPDATE i SET en_hoja = 1 FROM dbo.AtIdem i LEFT JOIN dbo.Atenciones a ON a.id = i.atencion_id WHERE i.en_hoja = 0 AND a.id IS NULL`);
+      await pool.request().query(sql._pg   /* _FASE3_V1 (05-nov): Postgres no actualiza por alias del FROM */
+        ? `UPDATE AtIdem SET en_hoja = 1 WHERE en_hoja = 0 AND NOT EXISTS (SELECT 1 FROM Atenciones a WHERE a.id = AtIdem.atencion_id)`
+        : `UPDATE i SET en_hoja = 1 FROM dbo.AtIdem i LEFT JOIN dbo.Atenciones a ON a.id = i.atencion_id WHERE i.en_hoja = 0 AND a.id IS NULL`);
       out = { success: true, filas: r.recordset };
     } else if (accion === 'marcar') {
       const claves = (Array.isArray(b.claves) ? b.claves : []).map(k => String(k).replace(/[^\w-]/g, '').slice(0, 80)).filter(Boolean).slice(0, 500);
