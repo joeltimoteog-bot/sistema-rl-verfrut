@@ -77,6 +77,19 @@
     try {
       var url = (typeof input === 'string') ? input : (input && input.url) || '';
       if (MODO_GOOGLE && url.indexOf(MARCA) >= 0) return Promise.reject(new TypeError('Failed to fetch (modo respaldo Google)'));
+      /* _FASE4_DIRECTO_V1 (05-nov): las fotos y PDF (action subirArchivoAzure) se suben DIRECTO a Supabase Storage
+         con la sesion del usuario, sin pasar por Apps Script. Misma respuesta { success, enlace, url }.
+         Si Supabase falla, la MISMA llamada sigue a Apps Script como siempre. */
+      if (typeof input === 'string' && url.indexOf(MARCA_GAS) >= 0 && EDGE_ACTIVO && !edgePausado() && init && !init._rlSinEdge && typeof init.body === 'string' && init.body.indexOf('subirArchivoAzure') >= 0) {
+        var tkS = null; try { tkS = sessionStorage.getItem('rl_token'); } catch (e) {}
+        var cuerpoS = null; try { cuerpoS = JSON.parse(init.body); } catch (e) {}
+        if (tkS && cuerpoS && cuerpoS.action === 'subirArchivoAzure') {
+          var self = this, initGas = Object.assign({}, init, { _rlSinEdge: true });   /* el respaldo no vuelve a intentar Supabase */
+          return fOrig.call(window, EDGE + 'archivos/subir', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tkS }, body: init.body, signal: init.signal })
+            .then(function (r) { return r.ok ? r.clone().json().then(function (j) { if (j && j.success && j.url) return r; throw new Error('respuesta sin url'); }) : Promise.reject(new Error('HTTP ' + r.status)); })
+            .catch(function (e) { if (init.signal && init.signal.aborted) throw e; try { console.warn('[_FASE4_DIRECTO_V1] subida directa fallo (' + (e && e.message) + '): va por Apps Script'); } catch (x) {} return window.fetch.call(self, input, initGas); });
+        }
+      }
       if (typeof input === 'string' && url.indexOf(MARCA_GAS) >= 0) {
         var tg = null; try { tg = sessionStorage.getItem('rl_token'); } catch (e) {}
         if (!tg) return fOrig.apply(this, arguments);

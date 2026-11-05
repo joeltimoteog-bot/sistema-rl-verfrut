@@ -10,6 +10,8 @@ const ETI = require('../shared/kpi-eti');
 
 module.exports = async function (context) {
   const t0 = Date.now();
+  /* _RELOJ_SUPABASE_V1 (05-nov-2026): el reloj corre en Supabase (pg_cron). En Azure se pone RELOJ_EN_SUPABASE=1 y aqui no hace nada. */
+  if (process.env.RELOJ_EN_SUPABASE === '1') { context.log('[kpi-reloj] omitido: corre en Supabase'); return; }
   try {
     const pool = await getPool();
     await KDB.asegurarTablas(pool);
