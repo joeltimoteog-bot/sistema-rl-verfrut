@@ -34,7 +34,7 @@ function aviso(mostrar) {
   if (!ref || !ref.parentElement) return;
   el = document.createElement('div'); el.id = id;
   el.style.cssText = 'background:#fffbeb;border:1px solid #fcd34d;color:#92400e;border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:600;margin:0 0 10px';
-  el.innerHTML = '🔒 Tu sesión de Azure venció (dura 8 horas): "Atenciones hoy" se está calculando con la lista del día. ' +
+  el.innerHTML = '🔒 Tu sesión venció (dura 8 horas): "Atenciones hoy" se está calculando con la lista del día. ' +
     'Para ver todas las cifras exactas, <a href="#" style="color:#b45309;text-decoration:underline">vuelve a entrar</a>.';
   el.querySelector('a').onclick = function (e) { e.preventDefault(); try { logout(); } catch (x) { location.reload(); } };
   ref.parentElement.insertBefore(el, ref);
@@ -74,7 +74,7 @@ async function revisar(motivo) {
       if (!vencida && typeof window._refrescarStatsAzure === 'function') {
         try { ok = await window._refrescarStatsAzure(cambioDia ? 'guardia cambio de día' : 'volvió a la pestaña'); } catch (e) { ok = false; }
       }
-      if (!ok && cambioDia) ponerHoy(contarHoyLocal(), vencida ? 'sesión vencida: lista local' : 'Azure no respondió: lista local');
+      if (!ok && cambioDia) ponerHoy(contarHoyLocal(), vencida ? 'sesión vencida: lista local' : 'Supabase no respondió: lista local');
     }
   } finally { ocupado = false; }
 }

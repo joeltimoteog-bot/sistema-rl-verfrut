@@ -70,7 +70,7 @@ function _filtrar(lista) {
   });
   if (out.length !== antes) {
     console.log('[_ELIMINADAS_V1] se ocultaron ' + (antes - out.length) +
-                ' registro(s) ya eliminados que Azure sigue devolviendo');
+                ' registro(s) ya eliminados que Supabase sigue devolviendo');
   }
   return out;
 }

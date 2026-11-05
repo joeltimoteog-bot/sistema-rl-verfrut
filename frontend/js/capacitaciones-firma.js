@@ -142,7 +142,7 @@
       var j = await post('guardar', { idCapacitacion: id, firmas: firmas, usuario: (usr() || {}).usuario });
       if (j && j.success) { toast('✍️ ' + j.guardadas + ' firma(s) digital(es) guardada(s)'); try { localStorage.removeItem('rl_cap_firmas_' + id); } catch (e) {} }
       else toast('⚠️ Las firmas quedaron guardadas en este equipo; se reintentará al regenerar', 'warn');
-    } catch (e) { toast('⚠️ Azure no respondió: las firmas quedaron guardadas en este equipo', 'warn'); }
+    } catch (e) { toast('⚠️ Supabase no respondió: las firmas quedaron guardadas en este equipo', 'warn'); }
   }
   function envolverGuardar() {
     var prev = window.guardarCapacitacion; if (typeof prev !== 'function' || prev._firma) return;

@@ -1446,7 +1446,7 @@ async function verInformeGuardado(idx) {
   const msgAzure = document.getElementById('azureInformeMsg');
   if (msgAzure) { msgAzure.textContent = ''; msgAzure.style.display = 'none'; }
   const btnGuardar = document.getElementById('btnGuardarAzure');
-  if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '💾 Guardar en Azure'; }
+  if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '💾 Guardar en Supabase'; }
 
   // Si ya existe enlace (Azure o Drive), mostrar botón directamente
   const enlaceExistente = v.enlace_azure || v.enlace_informe || '';
@@ -1517,7 +1517,7 @@ async function guardarInformeEnAzure() {
     console.log('[Azure] HTML length:', htmlDoc.length);
     console.log('[Azure] File creado:', file.name, file.size, file.type);
 
-    setMsg('⏳ Subiendo informe a Azure...', '#f59e0b');
+    setMsg('⏳ Subiendo informe...', '#f59e0b');
 
     const resultado = await _subirViaBackend(file, 'visitas-campo', {
       modulo:   'visitas',
@@ -1535,7 +1535,7 @@ async function guardarInformeEnAzure() {
     if (v) v.enlace_azure = resultado.url;
 
     // Mostrar éxito con enlace
-    setMsg('✅ Guardado en Azure: <a href="' + resultado.url + '" target="_blank" ' +
+    setMsg('✅ Guardado en Supabase: <a href="' + resultado.url + '" target="_blank" ' +
       'style="color:#0b1e45;text-decoration:underline;font-weight:700">📎 Abrir informe</a>', '#16a34a');
 
     // Mostrar botón "Ver en Azure"
@@ -1550,7 +1550,7 @@ async function guardarInformeEnAzure() {
     setMsg('❌ Error inesperado: ' + err.message, '#dc2626');
     console.error('[guardarInformeEnAzure]', err);
   } finally {
-    if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '💾 Guardar en Azure'; }
+    if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '💾 Guardar en Supabase'; }
   }
 }
 
@@ -4671,7 +4671,7 @@ async function _marcarFinalizado(id, nro, doc, dni, supervisorOriginal) {
   const msg = `¿Confirmar que el siguiente documento fue regularizado?\n\n` +
               `📄 ${doc}\n` +
               `👤 Atendido originalmente por: ${supervisorOriginal}\n\n` +
-              `Se marcará como FINALIZADO en Google Sheets y Azure SQL.`;
+              `Se marcará como FINALIZADO en Google Sheets y Supabase.`;
   if (!(await appConfirm(msg))) return;
 
   console.log('[marcarFinalizado] id=' + id + ' nro=' + nro + ' dni=' + dni);
@@ -4709,11 +4709,11 @@ async function _marcarFinalizado(id, nro, doc, dni, supervisorOriginal) {
     const azureResult = results.find(r => r.source === 'Azure');
 
     if (gasResult?.ok && azureResult?.ok) {
-      mostrarToast('✅ Documento marcado como FINALIZADO (Sheets + Azure)');
+      mostrarToast('✅ Documento marcado como FINALIZADO (Sheets + Supabase)');
     } else if (gasResult?.ok) {
-      mostrarToast('✅ FINALIZADO en Sheets (Azure: ' + (azureResult?.error || 'falló') + ')');
+      mostrarToast('✅ FINALIZADO en Sheets (Supabase: ' + (azureResult?.error || 'falló') + ')');
     } else if (azureResult?.ok) {
-      mostrarToast('⚠️ FINALIZADO en Azure pero Sheets falló: ' + (gasResult?.error || ''), 'error');
+      mostrarToast('⚠️ FINALIZADO en Supabase pero Sheets falló: ' + (gasResult?.error || ''), 'error');
     } else {
       mostrarToast('❌ Error: ' + (gasResult?.error || azureResult?.error || 'No se pudo actualizar'), 'error');
       return;
@@ -5390,7 +5390,7 @@ async function consultarDNI() {
         '<div class="empty" style="text-align:left">' +
         '<div style="font-size:15px;margin-bottom:6px">No se encontraron atenciones con esos filtros.</div>' +
         '<div style="font-size:12.5px;color:#475569;margin-bottom:12px">' +
-        'La busqueda se hizo en Azure y respondio al instante. Los registros mas antiguos ' +
+        'La busqueda se hizo en Supabase y respondio al instante. Los registros mas antiguos ' +
         'podrian estar solo en la hoja de calculo.</div>' +
         '<button class="btn" onclick="window._forzarHoja=true;consultarDNI();">' +
         'Buscar tambien en la hoja de calculo</button>' +

@@ -855,7 +855,7 @@ if(typeof _adminPrev==='function'){
     var az=await azure({});
     if(az){
       _solicitudes=az.data; _estadosExtra=az.estadosExtra||{}; renderAdmin();
-      nota('adminNota','⚡ Datos al instante desde Azure · confirmando con Google…','#64748b');
+      nota('adminNota','⚡ Datos al instante desde Supabase · confirmando con Google…','#64748b');
     }else{
       /* Azure no respondio: camino de siempre (Google) con el mensaje de siempre */
       try{
@@ -872,8 +872,8 @@ if(typeof _adminPrev==='function'){
         _solicitudes=g.data;
         try{var g2=await google({action:'getEstadosMantenimiento'});if(g2&&g2.ok&&g2.data)_estadosExtra=g2.data;}catch(e){}
         renderAdmin(); nota('adminNota','');
-      }else nota('adminNota','ℹ️ Mostrando la copia de Azure (Google no confirmó). Los botones de correo aparecerán al actualizar.','#b45309');
-    }catch(e){nota('adminNota','ℹ️ Mostrando la copia de Azure (Google tardó demasiado). Pulsa Actualizar para reintentar.','#b45309');}
+      }else nota('adminNota','ℹ️ Mostrando la copia de Supabase (Google no confirmó). Los botones de correo aparecerán al actualizar.','#b45309');
+    }catch(e){nota('adminNota','ℹ️ Mostrando la copia de Supabase (Google tardó demasiado). Pulsa Actualizar para reintentar.','#b45309');}
   };
 }
 /* ── Mis Solicitudes ── */
@@ -890,7 +890,7 @@ if(typeof _misPrev==='function'){
         '<td class="muted">'+(s.comentarioAdmin||'—')+'</td></tr>';}).join('');
     }
     var az=await azure({solicitante:USER.usuario});
-    if(az){pintar(az.data);nota('misNota','⚡ Al instante desde Azure · confirmando…');}
+    if(az){pintar(az.data);nota('misNota','⚡ Al instante desde Supabase · confirmando…');}
     else{ return _misPrev.apply(this,arguments); }
     try{var g=await google({action:'listarSolicitudesMantenimiento',solicitante:USER.usuario});if(g&&g.ok&&Array.isArray(g.data)){pintar(g.data);}nota('misNota','');}
     catch(e){nota('misNota','');}

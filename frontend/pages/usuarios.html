@@ -537,10 +537,10 @@ window.onload = function() {
      se muestra el motivo real (sesion vencida, sin sesion, Azure sin respuesta...) en vez del mensaje generico. */
   function tkVencido(tk) { try { var p = JSON.parse(atob(tk.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return !!(p.exp && p.exp * 1000 < Date.now()); } catch (e) { return false; } }
   function motivo(tk, r) {
-    if (!tk) return '🔒 Esta pestaña no tiene sesión de Azure. Cierra sesión, vuelve a entrar y repite la acción.';
+    if (!tk) return '🔒 Esta pestaña no tiene sesión activa. Cierra sesión, vuelve a entrar y repite la acción.';
     if ((r && r.status === 401) || tkVencido(tk)) return '🔒 Tu sesión venció (dura 8 horas). Cierra sesión, vuelve a entrar y repite la acción.';
-    if (!r) return '📡 Azure no respondió (internet lento o sin conexión). Espera unos segundos y repite la acción.';
-    return '⚠️ Azure respondió ' + r.status + ((r.j && r.j.error) ? ': ' + r.j.error : '') + '. Repite en unos segundos; si sigue, avisa al administrador.';
+    if (!r) return '📡 Supabase no respondió (internet lento o sin conexión). Espera unos segundos y repite la acción.';
+    return '⚠️ Supabase respondió ' + r.status + ((r.j && r.j.error) ? ': ' + r.j.error : '') + '. Repite en unos segundos; si sigue, avisa al administrador.';
   }
   function respaldo(self, args, tk, r) {
     return Promise.resolve(previo.apply(self, args)).then(function (g) {
@@ -555,7 +555,7 @@ window.onload = function() {
     try { tk = sessionStorage.getItem('rl_token'); } catch (e) {}
     if (!b || !ACCIONES[b.action]) return previo.apply(this, arguments);
     if (!tk || tkVencido(tk)) return respaldo(this, arguments, tk, tk ? { status: 401, j: null } : null);
-    if (Date.now() < apagadoHasta) return respaldo(this, arguments, tk, { status: 503, j: { error: 'Azure en pausa unos minutos' } });
+    if (Date.now() < apagadoHasta) return respaldo(this, arguments, tk, { status: 503, j: { error: 'Supabase en pausa unos minutos' } });
     var self = this, args = arguments, igual, clave;
     try { igual = JSON.stringify(b); clave = huella(b); } catch (e) { return respaldo(self, args, tk, null); }
     if (enCurso[igual]) return enCurso[igual];
@@ -645,7 +645,7 @@ window.onload = function() {
       /* _DESBLOQUEO_AZURE_V1 (30-oct): el bloqueo vive en Azure (dbo.Login_Intentos); antes se pedia a GAS una accion inexistente */
       var tkD = ''; try { tkD = sessionStorage.getItem('rl_token') || ''; } catch (e0) {}
       var rD = await fetch(BASE + '/compromiso/desbloquear', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tkD }, body: JSON.stringify({ usuario: usr }) });
-      var d = await rD.json().catch(function () { return { success: false, error: 'Respuesta no valida de Azure (' + rD.status + ')' }; });
+      var d = await rD.json().catch(function () { return { success: false, error: 'Respuesta no valida de Supabase (' + rD.status + ')' }; });
       if (d && d.success) { if (typeof notify === 'function') notify('🔓 ' + usr + ': bloqueo liberado'); else alert('🔓 ' + usr + ': bloqueo liberado'); await cargarSeg(); }
       else { alert('❌ ' + ((d && d.error) || 'No se pudo desbloquear')); if (btn) { btn.disabled = false; btn.textContent = '🔓 Desbloquear'; } }
     } catch (e) { alert('❌ ' + e.message); if (btn) { btn.disabled = false; btn.textContent = '🔓 Desbloquear'; } }

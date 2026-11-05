@@ -230,7 +230,7 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
     return '<span style="display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;background:' + x[1] + ';color:' + x[2] + '">' + esc(x[0]) + '</span>';
   }
   async function ingCargar() {
-    var cont = $('ingTabla'); cont.innerHTML = '<div style="padding:1rem;color:#64748b">Consultando Azure…</div>';
+    var cont = $('ingTabla'); cont.innerHTML = '<div style="padding:1rem;color:#64748b">Consultando Supabase…</div>';
     try {
       var d = await api('ingresos', { dias: $('ingDias').value, usuario: $('ingUsuario').value.trim().toLowerCase(), limite: 2000 });
       if (!d || !d.success) throw new Error((d && d.error) || 'sin respuesta');
@@ -294,7 +294,7 @@ iframe.vista{width:100%;height:calc(100vh - 130px);border:0;background:#fff;bord
       permMon = YO === DUENO || D.todos && !!((D.accesos[YO] || {}).navMonitor);
       $('tabMon').style.display = permMon ? '' : 'none'; $('tabCer').style.display = permMon ? '' : 'none';
       pintar(); pintarAudSel();
-      $('fuentes').innerHTML = 'Fuentes: <b>Registros</b> de Azure (Atenciones, Casos, Visitas, Capacitaciones y Acumulación de horas del Sistema RR.LL.). <b>Ingresos</b>: se cuentan desde octubre de 2026 (antes no se guardaban). ' +
+      $('fuentes').innerHTML = 'Fuentes: <b>Registros</b> de Supabase (Atenciones, Casos, Visitas, Capacitaciones y Acumulación de horas del Sistema RR.LL.). <b>Ingresos</b>: se cuentan desde octubre de 2026 (antes no se guardaban). ' +
         'Bienestar, Capacitaciones ETI y Evaluaciones ETI: se ven sus <b>accesos</b>; sus registros e ingresos se suman en la siguiente fase.' +
         (D.errores && D.errores.length ? '<br><span style="color:#b45309">No se pudo leer: ' + esc(D.errores.join(' · ')) + '</span>' : '') +
         (D.todos ? '' : '<br>Ves solo tu propia actividad.');

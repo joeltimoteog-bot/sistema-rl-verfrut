@@ -209,7 +209,7 @@
       post('aceptar', { version: VERSION, nombre: u.nombre || '', navegador: navegador() }, 15000).then(function (j) {
         if (j && j.success) { aceptado(j.fecha || new Date().toISOString()); return; }
         if (j && j._status === 401) { $('segErr').textContent = 'Tu sesión no es válida. Cierra sesión y vuelve a entrar.'; si.textContent = '✓ Acepto y continuar'; si.disabled = false; return; }
-        throw new Error((j && j.error) || 'Azure no respondió');
+        throw new Error((j && j.error) || 'Supabase no respondió');
       }).catch(function (e) {
         /* sin servidor: queda pendiente y se reenvía sola en el siguiente ingreso; no se bloquea al usuario */
         try { localStorage.setItem(clavePend(), JSON.stringify({ version: VERSION, nombre: u.nombre || '', navegador: navegador(), ts: Date.now() })); } catch (e2) {}
@@ -359,7 +359,7 @@
           if (alTerminar) alTerminar();
           return;
         }
-        $('ncErr').textContent = (j && j.error) || (j && j._status === 503 ? 'Azure en mantenimiento; intenta en unos minutos.' : 'No se pudo guardar.'); b.disabled = false; b.textContent = '💾 Asignar y desbloquear';
+        $('ncErr').textContent = (j && j.error) || (j && j._status === 503 ? 'Supabase en mantenimiento; intenta en unos minutos.' : 'No se pudo guardar.'); b.disabled = false; b.textContent = '💾 Asignar y desbloquear';
       }).catch(function () { clearTimeout(reloj); $('ncErr').textContent = 'Sin conexión con el servidor.'; b.disabled = false; b.textContent = '💾 Asignar y desbloquear'; });
     };
   }
@@ -387,7 +387,7 @@
           var acc = ((x.bloqueadoHasta || x.fallos) ? '<button type="button" class="btn s mc-desb" data-u="' + esc(x.usuario) + '" style="padding:5px 9px;font-size:11px">🔓 Desbloquear</button> ' : '') +
                     (yo === 'jtimoteo' ? '<button type="button" class="btn mc-nueva" data-u="' + esc(x.usuario) + '" data-n="' + esc(x.nombre || '') + '" style="padding:5px 9px;font-size:11px;white-space:nowrap">🔑 Nueva clave</button>' : '');
           return '<tr data-q="' + esc((x.usuario + ' ' + (x.nombre || '')).toLowerCase()) + '"><td><b>' + esc(x.usuario) + '</b><div style="font-size:11px;color:#64748b;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(x.nombre) + '">' + esc(x.nombre) + '</div></td><td>' + comp + '</td><td>' + cl + '</td><td>' + it + '</td><td style="text-align:right;white-space:nowrap">' + acc + '</td></tr>'; }).join('') + '</tbody></table>' +
-        '<div style="font-size:11.5px;color:#64748b;margin-top:8px">🔑 Nueva clave: asigna una contraseña temporal (y levanta el bloqueo); el usuario deberá crear la suya al entrar. Queda cifrada en Azure y en la hoja; nadie la ve después.</div>';
+        '<div style="font-size:11.5px;color:#64748b;margin-top:8px">🔑 Nueva clave: asigna una contraseña temporal (y levanta el bloqueo); el usuario deberá crear la suya al entrar. Queda cifrada en Supabase y en la hoja; nadie la ve después.</div>';
       var bq = $('mcBuscar'); if (bq) bq.oninput = function () { var q = bq.value.trim().toLowerCase(); t.querySelectorAll('tbody tr').forEach(function (tr) { tr.style.display = (!q || (tr.getAttribute('data-q') || '').indexOf(q) >= 0) ? '' : 'none'; }); };
       t.querySelectorAll('.mc-nueva').forEach(function (b) { b.onclick = function () { nuevaClave(b.getAttribute('data-u'), b.getAttribute('data-n'), listaAdmin); }; });
       t.querySelectorAll('.mc-desb').forEach(function (b) { b.onclick = function () {

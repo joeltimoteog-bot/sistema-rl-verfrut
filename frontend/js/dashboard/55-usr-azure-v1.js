@@ -22,10 +22,10 @@
      se muestra el motivo real (sesion vencida, sin sesion, Azure sin respuesta...) en vez del mensaje generico. */
   function tkVencido(tk) { try { var p = JSON.parse(atob(tk.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return !!(p.exp && p.exp * 1000 < Date.now()); } catch (e) { return false; } }
   function motivo(tk, r) {
-    if (!tk) return '🔒 Esta pestaña no tiene sesión de Azure. Cierra sesión, vuelve a entrar y repite la acción.';
+    if (!tk) return '🔒 Esta pestaña no tiene sesión activa. Cierra sesión, vuelve a entrar y repite la acción.';
     if ((r && r.status === 401) || tkVencido(tk)) return '🔒 Tu sesión venció (dura 8 horas). Cierra sesión, vuelve a entrar y repite la acción.';
-    if (!r) return '📡 Azure no respondió (internet lento o sin conexión). Espera unos segundos y repite la acción.';
-    return '⚠️ Azure respondió ' + r.status + ((r.j && r.j.error) ? ': ' + r.j.error : '') + '. Repite en unos segundos; si sigue, avisa al administrador.';
+    if (!r) return '📡 Supabase no respondió (internet lento o sin conexión). Espera unos segundos y repite la acción.';
+    return '⚠️ Supabase respondió ' + r.status + ((r.j && r.j.error) ? ': ' + r.j.error : '') + '. Repite en unos segundos; si sigue, avisa al administrador.';
   }
   function respaldo(self, args, tk, r) {
     return Promise.resolve(previo.apply(self, args)).then(function (g) {
@@ -40,7 +40,7 @@
     try { tk = sessionStorage.getItem('rl_token'); } catch (e) {}
     if (!b || !ACCIONES[b.action]) return previo.apply(this, arguments);
     if (!tk || tkVencido(tk)) return respaldo(this, arguments, tk, tk ? { status: 401, j: null } : null);
-    if (Date.now() < apagadoHasta) return respaldo(this, arguments, tk, { status: 503, j: { error: 'Azure en pausa unos minutos' } });
+    if (Date.now() < apagadoHasta) return respaldo(this, arguments, tk, { status: 503, j: { error: 'Supabase en pausa unos minutos' } });
     var self = this, args = arguments, igual, clave;
     try { igual = JSON.stringify(b); clave = huella(b); } catch (e) { return respaldo(self, args, tk, null); }
     if (enCurso[igual]) return enCurso[igual];

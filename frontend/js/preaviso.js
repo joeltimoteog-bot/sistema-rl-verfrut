@@ -50,7 +50,7 @@ async function buscarDni(){
   const hint = document.getElementById('dniHint');
   const box = document.getElementById('workerBox');
   if(dni.length !== 8){ hint.textContent='Ingresa un DNI de 8 dígitos.'; hint.style.color='#dc2626'; box.classList.remove('on'); return; }
-  hint.textContent='Buscando en Azure…'; hint.style.color='#64748b';
+  hint.textContent='Buscando en Supabase…'; hint.style.color='#64748b';
   _trabajadorActual = null;
   try{
     const r = await fetch(AZURE_DNI + encodeURIComponent(dni));
@@ -75,7 +75,7 @@ async function buscarDni(){
     }
   }catch(e){
     box.classList.remove('on');
-    hint.textContent='Error de conexión con Azure.'; hint.style.color='#dc2626';
+    hint.textContent='Error de conexión con Supabase.'; hint.style.color='#dc2626';
   }
 }
 

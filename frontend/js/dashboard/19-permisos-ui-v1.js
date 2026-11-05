@@ -352,7 +352,7 @@ async function permGuardar() {
                     d.total + ' módulos permitidos para ' + u +
                     '. Lo verá al volver a iniciar sesión.</span>' +
       '<br><span style="color:#64748b;font-size:11.5px">Los permisos son inmediatos. Si ' +
-      'acabas de crear a esta persona, además tiene que llegar a Azure para poder entrar: ' +
+      'acabas de crear a esta persona, además tiene que llegar a Supabase para poder entrar: ' +
       'la sincronización corre sola cada hora, o se adelanta ejecutando ' +
       'syncUsuariosAAzure desde Apps Script.</span>';
     if (String(u).toLowerCase() === String(USER.usuario).toLowerCase()) {

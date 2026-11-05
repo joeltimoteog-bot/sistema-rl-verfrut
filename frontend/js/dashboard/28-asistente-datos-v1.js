@@ -92,7 +92,7 @@ var MODS=[
   ['No puedo entrar a Mantenimiento','Se restringe en el nivel más alto de incumplimiento. Regulariza tus pendientes (campana 🔔) o coordina con Joel por 💬.']]},
  {k:'usuarios',t:'👥 Gestión Usuarios',nav:'navUsr',kw:'usuario usuarios clave contraseña rol permisos modulos',q:[
   ['¿Cómo asigno módulos a un usuario?','En Gestión Usuarios → Permisos por módulo, elige al usuario y marca los módulos que debe ver. Se guarda en la hoja PERMISOS MODULOS y aplica en su siguiente ingreso.'],
-  ['¿Cómo restablezco una contraseña?','En Gestión Usuarios edita al usuario y define la nueva clave; recuerda sincronizar con Azure si el ingreso sigue fallando.']]},
+  ['¿Cómo restablezco una contraseña?','En Gestión Usuarios edita al usuario y define la nueva clave; recuerda sincronizar con Supabase si el ingreso sigue fallando.']]},
  {k:'monitor',t:'🛰️ Monitor en Vivo',nav:'navMonitor',kw:'monitor vivo presencia trafico conectados',q:[
   ['¿Qué muestra el Monitor?','Quién está conectado, en qué módulo, mensajes con los usuarios y, en la pestaña 🛰️ Tráfico, el flujo de acciones entre usuarios, RR.LL., los módulos ETI y los servidores.']]},
  {k:'cumplimiento',t:'✅ Control de Cumplimiento',nav:'navCumpl',always:true,kw:'cumplimiento semaforo restriccion restringido justificacion plazo plazos vencido escalar',q:[

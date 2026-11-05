@@ -10,7 +10,7 @@
      previewFotos, generarInformeVisita) siguen siendo las de siempre.
    Solo presentación: ningún id, flujo ni guardado cambia.
    v1.2 (03-nov-2026): al generar, muestra que datos, PDF y fotos quedaron en Azure (el guardado ya era directo).
-   v1.1 (03-nov-2026): el botón "Generar informe" (guarda y abre la vista previa con "Guardar en Azure") queda siempre visible.
+   v1.1 (03-nov-2026): el botón "Generar informe" (guarda y abre la vista previa con "Guardar en Supabase") queda siempre visible.
    INTERRUPTOR: localStorage.rl_visita_hoja = 'off' → vuelve al asistente por pasos.
    ═════════════════════════════════════════════════════════════════════════ */
 (function () {
@@ -96,7 +96,7 @@
   }
 
   /* ── v1.2 (03-nov-2026): "Generar informe" ya guarda TODO en Azure (fotos + PDF al Blob y datos a la tabla, _CV_AZURE_PRIMERO_V1).
-     Aquí solo se muestra ese resultado: mensaje real, botón "Guardar en Azure" marcado como hecho y "Ver en Azure" con el PDF.
+     Aquí solo se muestra ese resultado: mensaje real, botón "Guardar en Supabase" marcado como hecho y "Ver en Supabase" con el PDF.
      No cambia ninguna función de guardado: solo observa lo que devuelven. ── */
   function enlazarAzure() {
     if (window._v75az) return true;
@@ -114,8 +114,8 @@
       try {
         var msg = $('guardandoMsg'); if (!msg || edicion || !/✅/.test(msg.textContent)) return r;
         var u = window._v75pdf || '', nf = window._v75fotos || 0;
-        msg.innerHTML = '✅ <b>Guardado en Azure</b>: datos de la visita' + (u ? ' · informe en PDF (<a href="' + u + '" target="_blank" style="color:#0F2748;text-decoration:underline">abrir</a>)' : '') + (nf ? ' · ' + nf + ' foto(s)' : '') + '.';
-        var bg = $('btnGuardarAzure'); if (bg) { bg.disabled = true; bg.textContent = '✅ Guardado en Azure'; bg.title = 'Los datos, el PDF y las fotos ya se guardaron en Azure al generar el informe'; }
+        msg.innerHTML = '✅ <b>Guardado en Supabase</b>: datos de la visita' + (u ? ' · informe en PDF (<a href="' + u + '" target="_blank" style="color:#0F2748;text-decoration:underline">abrir</a>)' : '') + (nf ? ' · ' + nf + ' foto(s)' : '') + '.';
+        var bg = $('btnGuardarAzure'); if (bg) { bg.disabled = true; bg.textContent = '✅ Guardado en Supabase'; bg.title = 'Los datos, el PDF y las fotos ya se guardaron en Supabase al generar el informe'; }
         var bv = $('btnVerAzure'); if (bv && u) { bv.href = '#'; bv.onclick = function (e) { e.preventDefault(); window.open(u, '_blank'); }; bv.style.display = 'inline-flex'; }
       } catch (e) { console.warn('[_VISITA_HOJA_V1.2]', e.message); }
       return r;
@@ -124,7 +124,7 @@
     /* al abrir una visita antigua desde la tabla, los botones vuelven a su estado normal */
     var mv = $('mVerInforme');
     if (mv) new MutationObserver(function () { if (mv.classList.contains('on') && Date.now() - (window._v75gen || 0) > 4000) {
-      var bg = $('btnGuardarAzure'); if (bg && bg.textContent.indexOf('Guardado en Azure') >= 0) { bg.disabled = false; bg.textContent = '💾 Guardar en Azure'; bg.title = ''; } } }).observe(mv, { attributes: true, attributeFilter: ['class'] });
+      var bg = $('btnGuardarAzure'); if (bg && bg.textContent.indexOf('Guardado en Supabase') >= 0) { bg.disabled = false; bg.textContent = '💾 Guardar en Supabase'; bg.title = ''; } } }).observe(mv, { attributes: true, attributeFilter: ['class'] });
     console.log('[_VISITA_HOJA_V1.2] resultado del guardado en Azure visible al generar el informe');
     return true;
   }

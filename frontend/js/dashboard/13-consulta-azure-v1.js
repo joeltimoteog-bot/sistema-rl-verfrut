@@ -61,7 +61,7 @@ function _azFetch(url) {
   return fetch(url, ctrl ? { signal: ctrl.signal } : undefined)
     .then(function (r) {
       clearTimeout(to);
-      if (r.status === 401) throw new Error('HTTP 401 - Azure rechazo la llave de acceso');
+      if (r.status === 401) throw new Error('HTTP 401 - Supabase rechazo la llave de acceso');
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     })
@@ -225,7 +225,7 @@ function _azSello(mostrados, total, ms, truncado) {
       s.id = '_azSello';
       s.style.cssText = 'margin-top:10px;font-size:11.5px;color:#475569;background:#f8fafc;' +
         'border:1px solid #e2e8f0;border-radius:7px;padding:6px 10px;display:inline-block';
-      s.innerHTML = '⚡ Consultado en Azure · <b>' + mostrados + '</b> de ' + total +
+      s.innerHTML = '⚡ Consultado en Supabase · <b>' + mostrados + '</b> de ' + total +
                     ' registros · ' + (ms < 1000 ? ms + ' ms' : (Math.round(ms / 100) / 10) + ' s') +
                     (truncado ? ' · <b style="color:#b45309">hay más: acorta el rango</b>' : '');
       cont.appendChild(s);
@@ -261,7 +261,7 @@ window.compararFuentes = async function (desde, hasta, dni) {
   if (!errA && !errG) {
     if (nA === nG) console.log('%c   ✔ COINCIDEN: Azure tiene todo lo de este filtro.', 'color:#166534;font-weight:bold');
     else console.log('%c   ✘ NO COINCIDEN: diferencia de ' + Math.abs(nA - nG) +
-                     ' registros. Avisale a Claude antes de confiar en Azure.', 'color:#b91c1c;font-weight:bold');
+                     ' registros. Avisale a Claude antes de confiar en Supabase.', 'color:#b91c1c;font-weight:bold');
     if (msG > 0) console.log('   Azure es ~' + Math.max(1, Math.round(msG / Math.max(msA, 1))) + ' veces mas rapido');
   }
   return { azure: nA, hoja: nG, msAzure: msA, msHoja: msG };

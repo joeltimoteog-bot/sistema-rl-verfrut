@@ -35,7 +35,7 @@
     var j = await r.json().catch(function () { return {}; });
     if (r.status === 401) throw new Error('Tu sesión venció: vuelve a iniciar sesión');
     if (r.status === 403) throw new Error(j.error || 'Sin permiso');
-    if (!r.ok) throw new Error(j.error || ('Azure ' + r.status));
+    if (!r.ok) throw new Error(j.error || ('Supabase ' + r.status));
     return j;
   }
 
@@ -216,7 +216,7 @@
       } catch (e) { toast('❌ ' + e.message, 'error'); }
     },
     eliminar: function (id, codigo) {
-      confirmar('¿Eliminar el precedente ' + codigo + '?', 'Deja de mostrarse en el banco (queda guardado como inactivo en Azure).', async function () {
+      confirmar('¿Eliminar el precedente ' + codigo + '?', 'Deja de mostrarse en el banco (queda guardado como inactivo en Supabase).', async function () {
         try { var j = await api('eliminar', { id: id }); if (!j.success) throw new Error(j.error); toast('🗑 ' + codigo + ' eliminado'); PREC.listar(); } catch (e) { toast('❌ ' + e.message, 'error'); }
       });
     },
@@ -228,7 +228,7 @@
     },
     buscarDni: async function () {
       var dni = $('precDni').value.replace(/\D/g, ''); if (dni.length < 7) return;
-      $('precDniMsg').textContent = 'Buscando en Azure…';
+      $('precDniMsg').textContent = 'Buscando en Supabase…';
       try {
         var r = (typeof _buscarTrabApi === 'function') ? await _buscarTrabApi(dni, 'AMBAS') : null;
         var t = r && r.success && r.data && r.data[0];
@@ -266,7 +266,7 @@
         b.adjuntos = adjActuales.concat(subidos);
         btn.textContent = '⏳ Guardando…';
         var j = await api(editandoId ? 'editar' : 'guardar', b); if (!j.success) throw new Error(j.error || 'No se pudo guardar');
-        toast('✅ Precedente ' + (j.codigo || 'actualizado') + ' guardado en Azure');
+        toast('✅ Precedente ' + (j.codigo || 'actualizado') + ' guardado en Supabase');
         try { if (window.RLTrafico) RLTrafico.emit({ accion: (editandoId ? 'Editó' : 'Registró') + ' precedente ' + (j.codigo || ''), destino: 'Azure SQL' }); } catch (e) {}
         adjPend = []; $('precFiles').value = ''; PREC.tab('l'); PREC.listar();
         api('materias').then(function (r) { if (r && r.success) { materiasAz = r.materias || []; pintarMaterias(); } }).catch(function () {});

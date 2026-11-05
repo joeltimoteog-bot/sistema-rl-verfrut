@@ -30,7 +30,7 @@ function pedir(u) {
 }
 async function todo(extra, desde) {
   var j = await pedir(url(extra, desde, 1));
-  if (!j || !j.success) throw new Error('Azure sin respuesta valida');
+  if (!j || !j.success) throw new Error('Supabase sin respuesta valida');
   var lista = (j.data || []).slice(), pags = Math.min(12, Math.ceil(Number(j.total || lista.length) / 1000));
   if (pags > 1) {
     var mas = [];
