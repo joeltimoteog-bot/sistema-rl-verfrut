@@ -76,7 +76,9 @@
   window.fetch = function (input, init) {
     try {
       var url = (typeof input === 'string') ? input : (input && input.url) || '';
-      if (MODO_GOOGLE && url.indexOf(MARCA) >= 0) return Promise.reject(new TypeError('Failed to fetch (modo respaldo Google)'));
+      /* _EDGE_MODOGOOGLE_V1 (05-nov): con Supabase activo el modo Google de emergencia (de la caida de Azure del 04-nov) ya no bloquea:
+         las llamadas van a Supabase y, si fallan, el enrutador usa Azure. Solo bloquea si Supabase esta apagado (rl_edge=off). */
+      if (MODO_GOOGLE && !(EDGE_ACTIVO && !edgePausado()) && url.indexOf(MARCA) >= 0) return Promise.reject(new TypeError('Failed to fetch (modo respaldo Google)'));
       /* _FASE4_DIRECTO_V1 (05-nov): las fotos y PDF (action subirArchivoAzure) se suben DIRECTO a Supabase Storage
          con la sesion del usuario, sin pasar por Apps Script. Misma respuesta { success, enlace, url }.
          Si Supabase falla, la MISMA llamada sigue a Apps Script como siempre. */
