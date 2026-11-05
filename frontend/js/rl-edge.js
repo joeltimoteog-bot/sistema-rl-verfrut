@@ -1,0 +1,47 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   rl-edge.js — _EDGE_V1 (05-nov-2026) — Enrutador para los sistemas que llaman
+   al servidor del Sistema RR.LL. (Capacitaciones ETI, Evaluacion ETI...).
+   Toda llamada a https://rl-fn-verfrut.azurewebsites.net/api/... se atiende en
+   Supabase (Edge Function "api", el MISMO codigo). Si Supabase no responde
+   (red, 502/503/504/546 o ruta no disponible) se repite la MISMA llamada en Azure.
+   Tras 3 fallas seguidas usa solo Azure por 5 minutos.
+   Apagar: localStorage.rl_edge = 'off'. Cargar ANTES que los demas scripts.
+   (El Sistema RR.LL. tiene la misma logica dentro de azure-token.js.)
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+  if (window._rlEdgeOk || window._rlAzTokenOk || typeof window.fetch !== 'function') return;   /* azure-token.js ya lo hace */
+  window._rlEdgeOk = true;
+  var fOrig = window.fetch;
+  var MARCA = 'azurewebsites.net/api/';
+  var EDGE = 'https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/';
+  /* lo que NO pasa a Supabase: rutas con llave de funcion (mantenimiento, importaciones, sync, lote) */
+  var SOLO_AZURE = /^(mantenimiento\/|[\w-]+-importar|trabajadores\/sync|usuarios\/sync|atenciones\/batch)/;
+  var activo = true;
+  try { var me = localStorage.getItem('rl_edge'); if (me === 'off') activo = false; } catch (e) {}
+  var fallas = 0;
+  function pausado() { try { return Date.now() < +(sessionStorage.getItem('rl_edge_pausa') || 0); } catch (e) { return false; } }
+  function falla(m) {
+    fallas++;
+    try { console.warn('[_EDGE_V1] Supabase no respondio (' + m + '): se usa Azure'); } catch (e) {}
+    if (fallas >= 3) { fallas = 0; try { sessionStorage.setItem('rl_edge_pausa', String(Date.now() + 5 * 60000)); } catch (e) {} }
+  }
+  window.fetch = function (input, init) {
+    try {
+      if (typeof input !== 'string' || input.indexOf(MARCA) < 0 || !activo || pausado()) return fOrig.apply(this, arguments);
+      if (init && init.body && typeof init.body !== 'string') return fOrig.apply(this, arguments);
+      var ruta = input.split(MARCA)[1] || '';
+      var metodo = String((init && init.method) || 'GET').toUpperCase();
+      if (SOLO_AZURE.test(ruta) || (/^atenciones([?#]|$)/.test(ruta) && metodo !== 'GET')) return fOrig.apply(this, arguments);
+      var url = input;
+      return fOrig.call(window, EDGE + ruta, init).then(function (r) {
+        if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { falla('HTTP ' + r.status); return fOrig.call(window, url, init); }
+        fallas = 0; return r;
+      }, function (e) {
+        if (init && init.signal && init.signal.aborted) throw e;
+        falla(e && e.message); return fOrig.call(window, url, init);
+      });
+    } catch (e) { return fOrig.apply(this, arguments); }
+  };
+  window.rlEdge = { activo: function () { return activo && !pausado(); }, base: EDGE };
+})();
