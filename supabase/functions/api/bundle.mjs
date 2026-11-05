@@ -74530,6 +74530,48 @@ var require_prec = __commonJS({
   }
 });
 
+// respaldo/index.js
+var require_respaldo = __commonJS({
+  "respaldo/index.js"(exports, module) {
+    "use strict";
+    var { getPool, sql } = require_db();
+    async function tablas(pool) {
+      const r = await pool.request().query(`SELECT c.relname AS tabla, GREATEST(c.reltuples, 0)::bigint AS filas
+     FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = current_schema() AND c.relkind = 'r' AND c.relname NOT LIKE '\\_resp\\_%' AND c.relname NOT LIKE '%\\_stage'
+     ORDER BY c.relname`);
+      return r.recordset;
+    }
+    async function leer(pool, b) {
+      const t = String(b.tabla || "");
+      if (!/^[a-z0-9_]+$/.test(t)) throw new Error("Tabla invalida");
+      const lista = (await tablas(pool)).map((x) => x.tabla);
+      if (lista.indexOf(t) < 0) throw new Error("Tabla desconocida: " + t);
+      const desde = Math.max(0, parseInt(b.desde, 10) || 0), cant = Math.max(1, Math.min(5e3, parseInt(b.cantidad, 10) || 2e3));
+      const r = await pool.request().input("d", sql.Int, desde).input("c", sql.Int, cant + 1).query(`SELECT * FROM "${t}" ORDER BY ctid OFFSET @d LIMIT @c`);
+      const filas = r.recordset.slice(0, cant);
+      return { success: true, tabla: t, desde, filas, siguiente: desde + filas.length, fin: r.recordset.length <= cant };
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData && context.bindingData.accion;
+      try {
+        const pool = await getPool(), b = req.body && typeof req.body === "object" ? req.body : {};
+        let r;
+        if (accion === "tablas") r = { success: true, tablas: await tablas(pool) };
+        else if (accion === "leer") r = await leer(pool, b);
+        else {
+          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
+          return;
+        }
+        context.res = { status: 200, body: r };
+      } catch (e) {
+        context.log.error("[respaldo] " + accion + ": " + e.message);
+        context.res = { status: 500, body: { success: false, error: e.message } };
+      }
+    };
+  }
+});
+
 // sol-guardar/index.js
 var require_sol_guardar2 = __commonJS({
   "sol-guardar/index.js"(exports, module) {
@@ -75614,6 +75656,7 @@ var require_rutas_edge = __commonJS({
       { fn: "mod-importar", ruta: "mod-importar", metodos: ["GET", "POST"], llave: true, h: require_mod_importar() },
       { fn: "preav-guardar", ruta: "preav/{accion}", metodos: ["POST"], llave: false, h: require_preav_guardar2() },
       { fn: "prec", ruta: "prec/{accion}", metodos: ["POST", "OPTIONS"], llave: false, h: require_prec() },
+      { fn: "respaldo", ruta: "respaldo/{accion}", metodos: ["POST"], llave: true, h: require_respaldo() },
       { fn: "sol-guardar", ruta: "sol/guardar/{accion}", metodos: ["POST"], llave: false, h: require_sol_guardar2() },
       { fn: "sup-guardar", ruta: "sup/{accion}", metodos: ["POST"], llave: false, h: require_sup_guardar2() },
       { fn: "tablas-cv", ruta: "mantenimiento/tablas/{tipo}/{accion}", metodos: ["GET", "POST"], llave: true, h: require_tablas_cv2() },
