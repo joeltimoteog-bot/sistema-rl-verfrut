@@ -67,12 +67,12 @@
       var d = document.createElement('div'); d.className = 'hoja-dcha';
       d.innerHTML = '<span class="hoja-nro" id="atHojaNro">N° se asigna al guardar</span><span class="hoja-est" id="atHojaEstado">Borrador · sin guardar</span>';
       t.appendChild(d);
-      var sub = document.createElement('div'); sub.className = 'hoja-sub'; sub.textContent = 'Una sola hoja: trabajador, atención y cierre. Se guarda en Azure al instante; la copia en Google se genera sola.';
+      var sub = document.createElement('div'); sub.className = 'hoja-sub'; sub.textContent = 'Una sola hoja: trabajador, atención y cierre. Se guarda en Supabase al instante; la copia en Google se genera sola.';
       t.appendChild(sub);
     }
     /* secciones */
     var seps = m.querySelectorAll('.sep');
-    if (seps[0]) { seps[0].textContent = 'A · Trabajador'; var tag = document.createElement('span'); tag.className = 'hoja-tag'; tag.textContent = 'Datos del padrón · Azure'; seps[0].appendChild(tag); }
+    if (seps[0]) { seps[0].textContent = 'A · Trabajador'; var tag = document.createElement('span'); tag.className = 'hoja-tag'; tag.textContent = 'Datos del padrón · Supabase'; seps[0].appendChild(tag); }
     if (seps[1]) seps[1].textContent = 'B · Datos de la atención';
     /* distribución en 6 columnas */
     span('at_dni', 2); span('at_nom', 2); span('at_emp', 1); span('at_sex', 1);
