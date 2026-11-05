@@ -76,7 +76,7 @@ function conTipos(sqlTxt, params, vals, tipos) {
 let pgPool = null;
 function pg() {
   if (pgPool) return pgPool;
-  const cs = process.env.SUPABASE_DB_URL;
+  const cs = process.env.RL_DB_URL || process.env.SUPABASE_DB_URL;   /* _EDGE_V1: en Supabase Edge, SUPABASE_DB_URL es reservada; se usa RL_DB_URL (pooler) */
   if (!cs) throw new Error('Falta SUPABASE_DB_URL en la configuración de la Function App');
   /* _CONEXIONES_V1 (05-nov): max 5 por servidor (DBPG_MAX), se sueltan a los 10 s: 6 servidores x 5 = 30 < Pool Size 40 de Supabase */
   pgPool = new Pool({ connectionString: cs, ssl: /sslmode=disable|@(127\.0\.0\.1|localhost)[:/]/.test(cs) ? false : { rejectUnauthorized: false }, max: +(process.env.DBPG_MAX || 5), idleTimeoutMillis: 10000, connectionTimeoutMillis: 15000, statement_timeout: 60000 });

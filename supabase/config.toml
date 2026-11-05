@@ -1,0 +1,5 @@
+# _EDGE_V1 (05-nov-2026): Supabase del Sistema RR.LL.
+project_id = "sistema-rl-verfrut"
+
+[functions.api]
+verify_jwt = false

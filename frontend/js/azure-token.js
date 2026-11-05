@@ -43,6 +43,35 @@
   var MODO_GOOGLE = false;
   try { var mg = localStorage.getItem('rl_modo_google'); if (mg === 'off') MODO_GOOGLE = false; else if (mg === 'on') MODO_GOOGLE = true; } catch (e) {}
   if (MODO_GOOGLE) { try { console.warn('[_MODO_GOOGLE_V1] modo respaldo: Azure desactivado, todo va directo a Google'); } catch (e) {} }
+  /* _EDGE_V1 (05-nov-2026) — Fase 1 de "todo en Supabase": las rutas de abajo se atienden en Supabase
+     (Edge Function "api", el MISMO codigo que Azure). Si Supabase no responde (red, 502/503/504/546 o ruta
+     no disponible) la MISMA llamada se repite en Azure: el usuario no nota nada. Tras 3 fallas seguidas
+     se usa solo Azure por 5 minutos. Apagar: localStorage.rl_edge = 'off' (o EDGE_ACTIVO = false + subir ?v=). */
+  var EDGE_ACTIVO = true;
+  var EDGE = 'https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/';
+  var RUTAS_EDGE = /^(auth\/(login|renovar|sso)|trabajadores\/buscar|atenciones\/(by-dni|guardar|update|editar|stats|marca)|atenciones(?=[?]|$)|usuarios\/lista|etieval\/(guardar|stats|admin\/\w+)|prec\/\w+|compromiso\/\w+)([?#]|$)/;
+  try { var me = localStorage.getItem('rl_edge'); if (me === 'off') EDGE_ACTIVO = false; else if (me === 'on') EDGE_ACTIVO = true; } catch (e) {}
+  var edgeFallas = 0;
+  function edgePausado() { try { return Date.now() < +(sessionStorage.getItem('rl_edge_pausa') || 0); } catch (e) { return false; } }
+  function edgeFalla(motivo) {
+    edgeFallas++;
+    try { console.warn('[_EDGE_V1] Supabase no respondio (' + motivo + '): se usa Azure'); } catch (e) {}
+    if (edgeFallas >= 3) { edgeFallas = 0; try { sessionStorage.setItem('rl_edge_pausa', String(Date.now() + 5 * 60000)); } catch (e) {} }
+  }
+  function enviar(url, init) {
+    var metodo = String((init && init.method) || 'GET').toUpperCase();
+    var ruta = url.split(MARCA)[1] || '';
+    if (!EDGE_ACTIVO || edgePausado() || !RUTAS_EDGE.test(ruta) || (init && init.body && typeof init.body !== 'string')) return fOrig.call(window, url, init);
+    if (ruta === 'atenciones' || /^atenciones[?]/.test(ruta)) { if (metodo !== 'GET') return fOrig.call(window, url, init); }   /* POST /atenciones (crear con llave) sigue en Azure */
+    return fOrig.call(window, EDGE + ruta, init).then(function (r) {
+      if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { edgeFalla('HTTP ' + r.status); return fOrig.call(window, url, init); }
+      edgeFallas = 0; return r;
+    }, function (e) {
+      if (init && init.signal && init.signal.aborted) throw e;   /* la pantalla cancelo: no reintentar */
+      edgeFalla(e && e.message); return fOrig.call(window, url, init);
+    });
+  }
+  window.rlEdge = { activo: function () { return EDGE_ACTIVO && !edgePausado(); }, base: EDGE };
   window.fetch = function (input, init) {
     try {
       var url = (typeof input === 'string') ? input : (input && input.url) || '';
@@ -54,17 +83,17 @@
         return fOrig.call(this, r[0], r[1]);
       }
       if (url.indexOf(MARCA) < 0 || typeof input !== 'string') return fOrig.apply(this, arguments);
-      if (/\/api\/auth\//.test(url)) return fOrig.apply(this, arguments);          /* login: sin sesion todavia */
+      if (/\/api\/auth\//.test(url)) return (typeof input === 'string') ? enviar(url, init) : fOrig.apply(this, arguments);          /* login: sin sesion todavia */
       var tk = null;
       try { tk = sessionStorage.getItem('rl_token'); } catch (e) {}
-      if (!tk || (init && tieneAuth(init.headers))) return fOrig.apply(this, arguments);
+      if (!tk || (init && tieneAuth(init.headers))) return enviar(url, init);
       var i2 = Object.assign({}, init || {});
       var h = i2.headers;
       if (typeof Headers !== 'undefined' && h instanceof Headers) { h = new Headers(h); h.set('Authorization', 'Bearer ' + tk); }
       else if (Array.isArray(h)) { h = h.concat([['Authorization', 'Bearer ' + tk]]); }
       else { h = Object.assign({}, h || {}, { Authorization: 'Bearer ' + tk }); }
       i2.headers = h;
-      return fOrig.call(this, input, i2);
+      return enviar(url, i2);
     } catch (e) { return fOrig.apply(this, arguments); }
   };
 })();

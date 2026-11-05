@@ -6,7 +6,7 @@
    · Eliminar es logico (activo = 0): nada se pierde.
    ═══════════════════════════════════════════════════════════════════ */
 const jwt = require('jsonwebtoken');
-const sql = require('mssql');
+const { sql } = require('../shared/db');   /* _PREC_PG_V1 (05-nov): mismo sql que la base activa (Azure o Supabase) */
 const { getPool } = require('../shared/db');
 
 const ROLES_ADMIN = ['administrador', 'administrador 01', 'administrador 02', 'admin', 'admin01', 'admin02', 'coordinador', 'jefa_rl'];
