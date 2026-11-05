@@ -78,7 +78,8 @@ function pg() {
   if (pgPool) return pgPool;
   const cs = process.env.SUPABASE_DB_URL;
   if (!cs) throw new Error('Falta SUPABASE_DB_URL en la configuración de la Function App');
-  pgPool = new Pool({ connectionString: cs, ssl: /sslmode=disable|@(127\.0\.0\.1|localhost)[:/]/.test(cs) ? false : { rejectUnauthorized: false }, max: 10, idleTimeoutMillis: 30000, connectionTimeoutMillis: 15000, statement_timeout: 60000 });
+  /* _CONEXIONES_V1 (05-nov): max 5 por servidor (DBPG_MAX), se sueltan a los 10 s: 6 servidores x 5 = 30 < Pool Size 40 de Supabase */
+  pgPool = new Pool({ connectionString: cs, ssl: /sslmode=disable|@(127\.0\.0\.1|localhost)[:/]/.test(cs) ? false : { rejectUnauthorized: false }, max: +(process.env.DBPG_MAX || 5), idleTimeoutMillis: 10000, connectionTimeoutMillis: 15000, statement_timeout: 60000 });
   pgPool.on('error', (e) => console.error('[db-pg] error del pool:', e && e.message));
   /* las tablas del sistema viven en el esquema "rl" (migracion/migrar.js); public queda para lo antiguo */
   pgPool.on('connect', (c) => { c.query('SET search_path TO ' + (process.env.SUPABASE_SCHEMA || 'rl') + ', public, extensions').catch(() => {}); });
