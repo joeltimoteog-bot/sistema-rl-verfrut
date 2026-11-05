@@ -102,6 +102,22 @@ module.exports = async function (context, req) {
         id_sistema: String(u.id_sistema), usuario: String(u.usuario), password: String(u.password), nombre: String(u.nombre),
         rol: u.rol || null, empresa: u.empresa || null, activo: u.activo ? 1 : 0, fecha_creacion: fechaOk(u.fecha_creacion),
         correo: u.correo || null, cargo: u.cargo || null, sector: u.sector || null }; }));
+      /* _USYNC_PG_V1 (05-nov): en Supabase el mismo lote con INSERT ... ON CONFLICT (sin OPENJSON/MERGE OUTPUT) */
+      if (sql._pg) {
+        const rp = await pool.request().input('j', sql.NVarChar(sql.MAX), json).query(`
+          INSERT INTO usuarios (id_sistema, usuario, password, nombre, rol, empresa, activo, fecha_creacion, correo, cargo, sector, fecha_sync)
+          SELECT s.id_sistema, s.usuario, s.password, s.nombre, s.rol, s.empresa, s.activo, s.fecha_creacion, s.correo, s.cargo, s.sector, (now() at time zone 'utc')
+            FROM jsonb_to_recordset(CAST(@j AS jsonb)) AS s(id_sistema text, usuario text, password text, nombre text, rol text, empresa text,
+                 activo smallint, fecha_creacion timestamp, correo text, cargo text, sector text)
+          ON CONFLICT (id_sistema) DO UPDATE SET
+            usuario = EXCLUDED.usuario, password = EXCLUDED.password, nombre = EXCLUDED.nombre, rol = EXCLUDED.rol,
+            empresa = EXCLUDED.empresa, activo = EXCLUDED.activo, fecha_creacion = EXCLUDED.fecha_creacion,
+            correo = EXCLUDED.correo, cargo = EXCLUDED.cargo, sector = EXCLUDED.sector, fecha_sync = (now() at time zone 'utc')
+          RETURNING (xmax = 0) AS nuevo`);
+        (rp.recordset || []).forEach(function (x) { if (x.nuevo) inserted++; else updated++; });
+        loteOk = true;
+        context.log('✓ Lote OK (Supabase): i=' + inserted + ' u=' + updated + ' (' + (Date.now() - startTime) + 'ms)');
+      } else {
       const rl = await pool.request().input('j', sql.NVarChar(sql.MAX), json).query(`
         SET LOCK_TIMEOUT 15000;
         DECLARE @out TABLE (a NVARCHAR(10));
@@ -124,6 +140,7 @@ module.exports = async function (context, req) {
       (rl.recordset || []).forEach(function (x) { if (x.a === 'INSERT') inserted += x.n; else if (x.a === 'UPDATE') updated += x.n; });
       loteOk = true;
       context.log('✓ Lote OK: i=' + inserted + ' u=' + updated + ' (' + (Date.now() - startTime) + 'ms)');
+      }
     } catch (eLote) {
       context.log.warn('Lote fallo, se pasa a fila por fila: ' + eLote.message + ' (' + (eLote.number || eLote.code || '') + ')');
       inserted = 0; updated = 0;

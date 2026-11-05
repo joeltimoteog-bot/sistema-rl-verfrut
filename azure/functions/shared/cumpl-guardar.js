@@ -150,7 +150,10 @@ async function ejecutar(pool, accion, b, usuario, rol, prueba, ahoraMs) {
       /* dias / motivo de retraso del caso (solo si no es una visita) — igual que alla: el motivo solo si estaba vacio */
       if (b.nro && String(b.actividad || '').indexOf('visita') === -1) {
         const c = await tx.request().input('n', sql.NVarChar(50), String(b.nro)).input('d', sql.Float, dias).input('m', sql.NVarChar(2000), just)
-          .query(`UPDATE x SET dias_retraso = @d, motivo_retraso = CASE WHEN LTRIM(RTRIM(ISNULL(x.motivo_retraso, ''))) = '' THEN @m ELSE x.motivo_retraso END
+          .query(sql._pg   /* _CUMPL_PG_V1 (05-nov): Postgres no actualiza a traves de una subconsulta */
+            ? `UPDATE Casos SET dias_retraso = @d, motivo_retraso = CASE WHEN TRIM(COALESCE(motivo_retraso, '')) = '' THEN @m ELSE motivo_retraso END
+                  WHERE ctid = (SELECT ctid FROM Casos WHERE CAST(nro AS text) = @n ORDER BY fila LIMIT 1)`
+            : `UPDATE x SET dias_retraso = @d, motivo_retraso = CASE WHEN LTRIM(RTRIM(ISNULL(x.motivo_retraso, ''))) = '' THEN @m ELSE x.motivo_retraso END
                   FROM (SELECT TOP 1 * FROM dbo.Casos WHERE CAST(nro AS NVARCHAR(50)) = @n ORDER BY fila) x`);
         if (c.rowsAffected[0]) {
           cuerpo.caso = { nro: String(b.nro), dias, motivo: just };
