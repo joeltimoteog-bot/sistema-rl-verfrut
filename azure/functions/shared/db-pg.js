@@ -178,4 +178,6 @@ const sql = new Proxy({ _pg: true, Request, Transaction, Table, ISOLATION_LEVEL,
 
 async function getPool() { pg(); return POOL; }
 
-module.exports = { sql, getPool };
+/* _ETI_V1 (05-nov): acceso directo para modulos nuevos escritos en Postgres nativo (parametros $1..$n, sin traductor T-SQL) */
+function pgDirecto() { return pg(); }
+module.exports = { sql, getPool, pgDirecto };

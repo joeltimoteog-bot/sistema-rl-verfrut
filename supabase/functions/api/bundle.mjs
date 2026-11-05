@@ -10093,7 +10093,10 @@ var require_db_pg = __commonJS({
       pg();
       return POOL;
     }
-    module.exports = { sql, getPool };
+    function pgDirecto() {
+      return pg();
+    }
+    module.exports = { sql, getPool, pgDirecto };
   }
 });
 
@@ -72426,6 +72429,184 @@ var require_e360_guardar2 = __commonJS({
   }
 });
 
+// eti/index.js
+var require_eti = __commonJS({
+  "eti/index.js"(exports, module) {
+    "use strict";
+    var COLS = [
+      "respuestas_qr",
+      "evaluaciones_conocimiento",
+      "config_eti",
+      "sesiones_qr",
+      "programaciones_eti",
+      "programaciones_eval",
+      "informes_enviados",
+      "evaluaciones_depuradas",
+      "banco_historial",
+      "capacitaciones",
+      "supervisores_eti",
+      "usuarios_eti"
+    ];
+    var LECTURA_ANONIMA = ["sesiones_qr", "config_eti", "programaciones_eval"];
+    var OPS = { "==": "=", ">=": ">=", "<=": "<=", "<": "<", ">": ">" };
+    var env = (k) => typeof process !== "undefined" && process.env && process.env[k] || "";
+    function pool() {
+      const db = require_db();
+      if (typeof db.pgDirecto !== "function") throw new Error("Este modulo solo funciona con Supabase");
+      return db.pgDirecto();
+    }
+    function sesion(req) {
+      try {
+        const a = String(req.headers && (req.headers.authorization || req.headers.Authorization) || "");
+        if (!a.startsWith("Bearer ") || !env("JWT_SECRET")) return null;
+        return require_jsonwebtoken().verify(a.slice(7).trim(), env("JWT_SECRET"));
+      } catch (e) {
+        return null;
+      }
+    }
+    var esAdmin = (u) => !!u && /^admin/i.test(String(u.rol || ""));
+    function col(c) {
+      if (COLS.indexOf(c) < 0) throw Object.assign(new Error("Coleccion no permitida: " + c), { status: 400 });
+      return c;
+    }
+    var campoOk = (f) => /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$/.test(String(f));
+    function ruta(f) {
+      return "{" + String(f).split(".").join(",") + "}";
+    }
+    async function consultar(b, u) {
+      const c = col(b.col);
+      if (!u && LECTURA_ANONIMA.indexOf(c) < 0) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
+      const w = [], v = [];
+      for (const f of Array.isArray(b.filtros) ? b.filtros : []) {
+        const [campo, op, valor] = f;
+        if (!campoOk(campo)) throw Object.assign(new Error("Campo invalido"), { status: 400 });
+        v.push(ruta(campo));
+        const pc = "$" + v.length;
+        if (OPS[op]) {
+          v.push(JSON.stringify(valor));
+          w.push(`(datos #> ${pc}::text[]) ${OPS[op]} $${v.length}::jsonb`);
+        } else if (op === "in") {
+          v.push(JSON.stringify(Array.isArray(valor) ? valor : []));
+          w.push(`(datos #> ${pc}::text[]) IN (SELECT jsonb_array_elements($${v.length}::jsonb))`);
+        } else if (op === "array-contains") {
+          v.push(JSON.stringify([valor]));
+          w.push(`jsonb_typeof(datos #> ${pc}::text[]) = 'array' AND (datos #> ${pc}::text[]) @> $${v.length}::jsonb`);
+        } else throw Object.assign(new Error("Operador no soportado: " + op), { status: 400 });
+        if (OPS[op] && op !== "==") {
+          v.push(valor === null ? "null" : Array.isArray(valor) ? "array" : typeof valor === "object" ? "object" : typeof valor === "boolean" ? "boolean" : typeof valor === "number" ? "number" : "string");
+          w.push(`jsonb_typeof(datos #> ${pc}::text[]) = $${v.length}`);
+        }
+      }
+      let orden = "id";
+      if (Array.isArray(b.orden) && b.orden[0]) {
+        if (!campoOk(b.orden[0])) throw Object.assign(new Error("Campo invalido"), { status: 400 });
+        v.push(ruta(b.orden[0]));
+        orden = `(datos #> $${v.length}::text[]) ${String(b.orden[1]).toLowerCase() === "desc" ? "DESC" : "ASC"}, id`;
+        w.push(`(datos #> $${v.length}::text[]) IS NOT NULL`);
+      }
+      const lim = Math.max(1, Math.min(2e4, parseInt(b.limite, 10) || 2e4));
+      const r = await pool().query(`SELECT id, datos FROM eti.${c}${w.length ? " WHERE " + w.join(" AND ") : ""} ORDER BY ${orden} LIMIT ${lim}`, v);
+      return { success: true, docs: r.rows };
+    }
+    async function leerDoc(b, u) {
+      const c = col(b.col);
+      if (!u && LECTURA_ANONIMA.indexOf(c) < 0) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
+      const r = await pool().query(`SELECT id, datos FROM eti.${c} WHERE id = $1`, [String(b.id)]);
+      return { success: true, existe: r.rows.length > 0, id: String(b.id), datos: r.rows.length ? r.rows[0].datos : null };
+    }
+    async function escribir(b, u) {
+      const ops = Array.isArray(b.ops) ? b.ops.slice(0, 500) : [];
+      if (!ops.length) return { success: true, aplicadas: 0 };
+      for (const o of ops) {
+        col(o.col);
+        if (!o.id || String(o.id).length > 200) throw Object.assign(new Error("id invalido"), { status: 400 });
+        if (!u && !(o.col === "respuestas_qr" && (o.op === "set" || o.op === "update"))) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
+      }
+      const cli = await pool().connect();
+      try {
+        await cli.query("BEGIN");
+        for (const o of ops) {
+          const id = String(o.id), d = JSON.stringify(o.datos || {});
+          if (o.op === "delete") await cli.query(`DELETE FROM eti.${o.col} WHERE id = $1`, [id]);
+          else if (o.op === "set" && !o.merge) await cli.query(`INSERT INTO eti.${o.col} (id, datos, origen) VALUES ($1, $2::jsonb, $3)
+          ON CONFLICT (id) DO UPDATE SET datos = EXCLUDED.datos, actualizado = now(), origen = EXCLUDED.origen`, [id, d, o.origen || "espejo"]);
+          else if (o.op === "set" || o.op === "update") {
+            const plano = {}, rutas = [];
+            for (const [k, val] of Object.entries(o.datos || {})) {
+              if (o.op === "update" && k.indexOf(".") > 0) rutas.push([k.split("."), val]);
+              else plano[k] = val;
+            }
+            await cli.query(
+              `INSERT INTO eti.${o.col} (id, datos, origen) VALUES ($1, $2::jsonb, $3)
+            ON CONFLICT (id) DO UPDATE SET datos = ${o.op === "update" ? `eti.${o.col}.datos || EXCLUDED.datos` : `eti.mezclar(eti.${o.col}.datos, EXCLUDED.datos)`}, actualizado = now()`,
+              [id, JSON.stringify(plano), o.origen || "espejo"]
+            );
+            for (const [p, val] of rutas) {
+              const n = {};
+              let x = n;
+              p.forEach((k, i) => {
+                if (i === p.length - 1) x[k] = val;
+                else x = x[k] = {};
+              });
+              await cli.query(`UPDATE eti.${o.col} SET datos = eti.mezclar(datos, $2::jsonb), actualizado = now() WHERE id = $1`, [id, JSON.stringify(n)]);
+            }
+          } else throw Object.assign(new Error("op invalida: " + o.op), { status: 400 });
+          await cli.query(`INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`, [o.col, id, o.op, u && u.usuario || "anonimo", o.origen || "espejo"]);
+        }
+        await cli.query("COMMIT");
+        return { success: true, aplicadas: ops.length };
+      } catch (e) {
+        try {
+          await cli.query("ROLLBACK");
+        } catch (x) {
+        }
+        throw e;
+      } finally {
+        cli.release();
+      }
+    }
+    async function importar(b, u) {
+      if (!esAdmin(u)) throw Object.assign(new Error("Solo el administrador"), { status: 403 });
+      const c = col(b.col), docs = Array.isArray(b.docs) ? b.docs.slice(0, 1e3) : [];
+      if (!docs.length) return { success: true, importados: 0 };
+      const r = await pool().query(`INSERT INTO eti.${c} (id, datos, origen)
+      SELECT x->>'id', COALESCE(x->'datos', '{}'::jsonb), 'importacion' FROM jsonb_array_elements($1::jsonb) x
+      ON CONFLICT (id) DO UPDATE SET datos = EXCLUDED.datos, actualizado = now(), origen = 'importacion'`, [JSON.stringify(docs)]);
+      return { success: true, importados: r.rowCount };
+    }
+    async function contar(b, u) {
+      if (!esAdmin(u)) throw Object.assign(new Error("Solo el administrador"), { status: 403 });
+      const out = {};
+      for (const c of Array.isArray(b.cols) && b.cols.length ? b.cols : COLS) {
+        col(c);
+        const r = await pool().query(`SELECT COUNT(*)::int AS n, COALESCE(md5(string_agg(id || ':' || md5(datos::text), ',' ORDER BY id)), '') AS huella FROM eti.${c}`);
+        out[c] = r.rows[0];
+      }
+      return { success: true, colecciones: out };
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData && context.bindingData.accion;
+      const u = sesion(req), b = req.body && typeof req.body === "object" ? req.body : {};
+      try {
+        let r;
+        if (accion === "consultar") r = await consultar(b, u);
+        else if (accion === "doc") r = await leerDoc(b, u);
+        else if (accion === "escribir") r = await escribir(b, u);
+        else if (accion === "importar") r = await importar(b, u);
+        else if (accion === "contar") r = await contar(b, u);
+        else {
+          context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
+          return;
+        }
+        context.res = { status: 200, body: r };
+      } catch (e) {
+        if (!e.status) context.log.error("[eti] " + accion + ": " + e.message);
+        context.res = { status: e.status || 500, body: { success: false, error: e.message } };
+      }
+    };
+  }
+});
+
 // shared/eti-eval.js
 var require_eti_eval = __commonJS({
   "shared/eti-eval.js"(exports, module) {
@@ -75639,6 +75820,7 @@ var require_rutas_edge = __commonJS({
       { fn: "cv-importar", ruta: "cv-importar", metodos: ["GET", "POST"], llave: true, h: require_cv_importar() },
       { fn: "db-indices", ruta: "mantenimiento/indices", metodos: ["GET", "POST"], llave: true, h: require_db_indices() },
       { fn: "e360-guardar", ruta: "e360/guardar/{accion}", metodos: ["POST"], llave: false, h: require_e360_guardar2() },
+      { fn: "eti", ruta: "eti/{accion}", metodos: ["POST"], llave: false, h: require_eti() },
       { fn: "eti-eval-admin", ruta: "etieval/admin/{accion}", metodos: ["POST"], llave: false, h: require_eti_eval_admin() },
       { fn: "eti-eval-guardar", ruta: "etieval/guardar", metodos: ["POST"], llave: false, h: require_eti_eval_guardar() },
       { fn: "eti-eval-stats", ruta: "etieval/stats", metodos: ["GET"], llave: false, h: require_eti_eval_stats() },
