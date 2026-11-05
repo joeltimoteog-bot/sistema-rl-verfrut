@@ -3,6 +3,25 @@ const { exigirAuth } = require('../shared/auth');
 const G = require('../shared/at-guardar');   /* _AT_COLS_V1: asegura las columnas nuevas */
 const AC = require('../shared/at-cambios');   /* _AT_CAMBIOS_V1 */
  
+/* _AT_CREATE_PG_V1 (05-nov-2026): Supabase. Mismo upsert que el bloque T-SQL (DECLARE/IF/OUTPUT INTO),
+   en pasos: buscar por N°+año+DNI → actualizar, o insertar y devolver el id. */
+const SET_UPD = `fecha_atencion = @fecha_atencion, hora_inicio = @hora_inicio, hora_termino = @hora_termino, nro_semana = @nro_semana, mes = @mes, nombre = @nombre, sexo = @sexo, fecha_inicio_periodo = @fecha_inicio_periodo, empresa = @empresa, fundo = @fundo, cargo = @cargo, ruta = @ruta, codigo = @codigo, fundo_actual = @fundo_actual, celular = @celular, supervisor = @supervisor, detalle_documento = @detalle_documento, nro_licencia = @nro_licencia, parentesco = @parentesco, fecha_inicio_doc = @fecha_inicio_doc, fecha_termino_doc = @fecha_termino_doc, dias_transcurridos = @dias_transcurridos, responsable_recepcion = @responsable_recepcion, observaciones = @observaciones, estado = @estado, usuario_sistema = @usuario_sistema, autorizado_por = CASE WHEN @autorizado_por <> N'' THEN @autorizado_por ELSE autorizado_por END, fecha_termino_periodo = COALESCE(@fecha_termino_periodo, fecha_termino_periodo), tipo_licencia = CASE WHEN @tipo_licencia <> N'' THEN @tipo_licencia ELSE tipo_licencia END, modificado = SYSUTCDATETIME()`;
+const COLS_INS = `nro, fecha_atencion, hora_inicio, hora_termino, nro_semana, mes, anio, dni, nombre, sexo, fecha_inicio_periodo, empresa, fundo, cargo, ruta, codigo, fundo_actual, celular, supervisor, detalle_documento, nro_licencia, parentesco, fecha_inicio_doc, fecha_termino_doc, dias_transcurridos, responsable_recepcion, observaciones, estado, usuario_sistema, autorizado_por, fecha_termino_periodo, tipo_licencia`;
+async function upsertPg(pool, rq, d) {
+  let id = null;
+  if (d.nro) {
+    const x = await pool.request().input('nro', sql.Int, d.nro).input('anio', sql.Int, d.anio || null).input('dni', sql.NVarChar(15), d.dni)
+      .query('SELECT TOP 1 id FROM Atenciones WHERE nro = @nro AND anio = @anio AND dni = @dni ORDER BY id DESC');
+    id = x.recordset.length ? x.recordset[0].id : null;
+  }
+  if (id !== null) {
+    await rq.query('UPDATE Atenciones SET ' + SET_UPD + ' WHERE nro = @nro AND anio = @anio AND dni = @dni');
+    return { recordset: [{ id, accion: 'actualizado' }] };
+  }
+  const ins = await rq.query('INSERT INTO Atenciones (' + COLS_INS + ') VALUES (' + COLS_INS.split(',').map(c => '@' + c.trim()).join(', ') + ') RETURNING id');
+  return { recordset: [{ id: ins.recordset[0].id, accion: 'creado' }] };
+}
+
 module.exports = async function (context, req) {
   // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
   const authUser = exigirAuth(context, req);
@@ -46,7 +65,7 @@ module.exports = async function (context, req) {
     const pool = await getPool();
     await Promise.all([G.asegurarTablas(pool), AC.asegurar(pool)]);   /* _AT_CAMBIOS_V1 */
  
-    const result = await pool.request()
+    const rq = pool.request()
       .input('nro', sql.Int, d.nro || null)
       .input('fecha_atencion', sql.Date, d.fecha_atencion || null)
       .input('hora_inicio', sql.NVarChar(10), d.hora_inicio || '')
@@ -79,10 +98,11 @@ module.exports = async function (context, req) {
       .input('autorizado_por', sql.NVarChar(100), d.autorizado_por || '')   /* _AT_COLS_V1 */
       .input('fecha_termino_periodo', sql.Date, d.fecha_termino_periodo || null)
       .input('tipo_licencia', sql.NVarChar(100), d.tipo_licencia || '')   /* _AT_TIPO_LIC_V1 */
-      /* _UPSERT_V1 (25-set-2026): si ya existe la atencion (mismo N°, año y DNI) se
-         ACTUALIZA en vez de crear otra. Asi las ediciones hechas en la hoja llegan a
-         Azure y un envio repetido ya no duplica el registro. Sin N° -> se crea como antes. */
-      .query(`
+      ;
+    /* _UPSERT_V1 (25-set-2026): si ya existe la atencion (mismo N°, año y DNI) se
+       ACTUALIZA en vez de crear otra. Asi las ediciones hechas en la hoja llegan a
+       Azure y un envio repetido ya no duplica el registro. Sin N° -> se crea como antes. */
+    const result = sql._pg ? await upsertPg(pool, rq, d) : await rq.query(`
         SET NOCOUNT ON;
         DECLARE @id INT = NULL, @accion NVARCHAR(10) = N'creado';
         DECLARE @t TABLE (id INT);

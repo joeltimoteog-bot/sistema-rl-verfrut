@@ -80,6 +80,20 @@ async function guardar(pool, lista) {
       q.input('w' + i, sql.Decimal(7, 4), s.peso); q.input('c' + i, sql.Decimal(7, 4), s.pct);
       return `(@id,@s${i},@n${i},@w${i},@c${i})`;
     });
+    /* _ETI_EVAL_PG_V1 (05-nov): en Supabase, una sola sentencia atomica e idempotente */
+    if (sql._pg) {
+      const vpg = r.secciones.map((s, i) => `(CAST(@s${i} AS text),CAST(@n${i} AS text),CAST(@w${i} AS numeric),CAST(@c${i} AS numeric))`);
+      const rp = await q.query(`
+        WITH ins AS (
+          INSERT INTO ETI_Evaluaciones (id,modalidad,sesion_id,fecha,empresa,supervisor,usuario,sector,tipo,ruta,codigo,evaluados,resultado,estado,banco_version)
+          VALUES (@id,@modalidad,@sesion_id,CAST(@fecha AS date),@empresa,@supervisor,@usuario,@sector,@tipo,@ruta,@codigo,@evaluados,@resultado,@estado,@banco_version)
+          ON CONFLICT (id) DO NOTHING RETURNING id)
+        ${vpg.length ? `, sec AS (INSERT INTO ETI_Evaluaciones_Seccion (eval_id,sec_id,sec_nom,peso,pct)
+          SELECT ins.id, v.a, v.b, v.c, v.d FROM ins CROSS JOIN (VALUES ${vpg.join(',')}) AS v(a,b,c,d) RETURNING 1)` : ''}
+        SELECT COUNT(*)::int AS nuevo FROM ins`);
+      if (rp.recordset && rp.recordset[0] && rp.recordset[0].nuevo === 1) out.insertados++; else out.existentes++;
+      continue;
+    }
     const res = await q.query(`
       SET XACT_ABORT ON;
       IF EXISTS (SELECT 1 FROM dbo.ETI_Evaluaciones WHERE id=@id) SELECT 0 AS nuevo;

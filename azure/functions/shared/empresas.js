@@ -19,6 +19,12 @@ function esTodas(c) { return TODAS.indexOf(String(c || '').trim().toUpperCase())
 let _ex = { t: 0, set: null };
 async function tablasExistentes(pool, sql) {
   if (_ex.set && Date.now() - _ex.t < 300000) return _ex.set;
+  if (sql && sql._pg) {   /* _EMPRESAS_PG_V1 (05-nov-2026): Supabase guarda los nombres de tabla en minusculas */
+    const r = await pool.request().query("SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema() AND table_name LIKE 'trabajadores\\_%'");
+    const hay = new Set(r.recordset.map(x => String(x.name).toLowerCase()));
+    _ex = { t: Date.now(), set: new Set(EMPRESAS.filter(e => hay.has(e.tabla.toLowerCase())).map(e => e.tabla)) };
+    return _ex.set;
+  }
   const r = await pool.request().query("SELECT name FROM sys.tables WHERE name LIKE 'Trabajadores[_]%'");
   _ex = { t: Date.now(), set: new Set(r.recordset.map(x => x.name)) };
   return _ex.set;

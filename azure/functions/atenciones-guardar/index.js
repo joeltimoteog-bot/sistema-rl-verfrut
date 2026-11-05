@@ -72,6 +72,8 @@ module.exports = async function (context, req) {
       /* el candado va SOLO sobre la fila del contador: todos los guardados por Azure
          pasan por ella en fila india (milisegundos). El MAX de la tabla es solo para
          respetar los N° que haya puesto Google (respaldo) y no bloquea a nadie. */
+      /* _AT_GUARDAR_PG_V1: en Supabase el candado del contador es explicito (equivale a UPDLOCK, HOLDLOCK) */
+      if (sql._pg) await tx.request().query("SELECT pg_advisory_xact_lock(hashtext('at_nro_contador'))");
       const c = await tx.request().input('a', sql.Int, anioHoja).query(`
         SELECT (SELECT ultimo FROM dbo.AtNroContador WITH (UPDLOCK, HOLDLOCK) WHERE anio = @a) AS ultimo,
                (SELECT MAX(nro) FROM dbo.Atenciones WITH (NOLOCK) WHERE anio = @a) AS maxAz`);
@@ -94,7 +96,21 @@ module.exports = async function (context, req) {
        .input('autorizado_por', sql.NVarChar(100), d.autorizado_por).input('fecha_termino_periodo', sql.Date, d.fecha_termino_periodo)
        .input('tipo_licencia', sql.NVarChar(100), d.tipo_licencia || '')   /* _AT_TIPO_LIC_V1 */   /* _AT_COLS_V1 */
        .input('a', sql.Int, anioHoja).input('k', sql.NVarChar(80), clave || ('sin-huella-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)));
-      const ins = await r.query(`SET NOCOUNT ON; DECLARE @t TABLE (id INT); ${INSERT}
+      let ins;
+      if (sql._pg) {
+        /* _AT_GUARDAR_PG_V1 (05-nov-2026): Supabase. Mismo resultado que el bloque T-SQL de abajo, en 3 pasos
+           dentro de la misma transaccion (Postgres no tiene DECLARE @t TABLE / OUTPUT INTO). */
+        ins = await r.query(INSERT.replace(/\s*OUTPUT\s+INSERTED\.id\s+INTO\s+@t/i, '').replace(/;\s*$/, '') + ' RETURNING id');
+        const idPg = ins.recordset[0].id;
+        await tx.request().input('a', sql.Int, anioHoja).input('nro', sql.Int, nro).query(`
+          MERGE dbo.AtNroContador AS x USING (SELECT @a AS anio) AS s ON x.anio = s.anio
+            WHEN MATCHED THEN UPDATE SET ultimo = @nro, actualizado = SYSUTCDATETIME()
+            WHEN NOT MATCHED THEN INSERT (anio, ultimo) VALUES (@a, @nro);`);
+        await tx.request().input('k', sql.NVarChar(80), r._p.k).input('nro', sql.Int, nro).input('id', sql.Int, idPg).input('a', sql.Int, anioHoja)
+          .query('INSERT INTO dbo.AtIdem (clave, nro, atencion_id, anio) VALUES (@k, @nro, @id, @a)');
+        ins = { recordset: [{ id: idPg }] };
+      } else
+      ins = await r.query(`SET NOCOUNT ON; DECLARE @t TABLE (id INT); ${INSERT}
         DECLARE @id INT = (SELECT TOP 1 id FROM @t);
         MERGE dbo.AtNroContador AS x USING (SELECT @a AS anio) AS s ON x.anio = s.anio
           WHEN MATCHED THEN UPDATE SET ultimo = @nro, actualizado = SYSUTCDATETIME()

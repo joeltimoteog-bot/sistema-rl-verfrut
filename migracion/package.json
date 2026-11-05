@@ -1,0 +1,6 @@
+{
+  "name": "migracion-supabase",
+  "private": true,
+  "description": "Copia sistema-rl-db (Azure SQL) a Supabase PostgreSQL. Ver migrar.js",
+  "dependencies": { "mssql": "^11.0.1", "pg": "^8.13.0", "jsonwebtoken": "^9.0.2", "bcryptjs": "^2.4.3", "@azure/storage-blob": "^12.25.0" }
+}
