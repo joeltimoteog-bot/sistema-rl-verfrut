@@ -43,9 +43,9 @@
   var css = document.createElement('style'); css.id = 'precCss';
   css.textContent = '\
   #mPrec .modal{max-width:1040px;width:97vw;padding:0}\
-  .prec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 22px;background:linear-gradient(135deg,#0b1e45,#1e3a8a);color:#fff;border-radius:14px 14px 0 0}\
-  .prec-head h3{margin:0;font-size:17px;font-weight:800}\
-  .prec-head small{display:block;font-size:11px;opacity:.85;font-weight:400;margin-top:2px}\
+  .prec-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 22px;background:#EDF1F6!important;background-image:none!important;color:#0F2748;border-bottom:1px solid #D6DEE9;border-radius:8px 8px 0 0}\
+  .prec-head h3{margin:0;font-size:16px;font-weight:700;color:#0F2748!important;background:transparent!important;border:0!important;padding:0!important;border-radius:0!important}\
+  .prec-head small{display:block;font-size:11.5px;color:#5B6B82;font-weight:400;margin-top:2px}\
   .prec-tabs{display:flex;gap:6px;padding:12px 22px 0}\
   .prec-tab{padding:8px 16px;border:none;border-radius:8px 8px 0 0;background:#e2e8f0;color:#334155;font-weight:700;font-size:12.5px;cursor:pointer}\
   .prec-tab.on{background:#fff;color:#0b1e45;box-shadow:0 -2px 0 #0b1e45 inset}\
@@ -82,7 +82,7 @@
     if ($('mPrec')) return;
     var d = document.createElement('div'); d.className = 'ov'; d.id = 'mPrec';
     d.innerHTML = '<div class="modal">\
-      <div class="prec-head"><div><h3>⚖️ Casos Precedentes</h3><small>Banco de referencia: cómo se resolvieron casos anteriores y por qué sirven de guía</small></div>\
+      <div class="prec-head"><div><h3>Casos Precedentes</h3><small>Banco de referencia: cómo se resolvieron casos anteriores y por qué sirven de guía</small></div>\
         <button class="prec-btn n" onclick="cerrar(\'mPrec\')">✕ Cerrar</button></div>\
       <div class="prec-tabs"><button class="prec-tab on" id="precTabL" onclick="PREC.tab(\'l\')">🔎 Buscar precedentes</button>\
         <button class="prec-tab" id="precTabN" onclick="PREC.nuevo()" style="display:none">➕ Nuevo precedente</button></div>\
