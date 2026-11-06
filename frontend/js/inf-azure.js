@@ -53,11 +53,11 @@
       }
       if (valida(r)) {
         if (r.j.success) { try { Promise.resolve(postPrevio.call(self, { action: 'cvAplicarDesdeAzure' })).catch(function () {}); } catch (e) {} }   /* la hoja y la copia JSON, en 2do plano */
-        console.log('[_INF_AZURE_V1] ' + b.action + ' en Azure' + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : '') + (r.j.success ? '' : ': ' + r.j.error));
+        console.log('[_INF_AZURE_V1] ' + b.action + ' en Supabase' + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : '') + (r.j.success ? '' : ': ' + r.j.error));
         return r.j;
       }
       if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-      console.warn('[_INF_AZURE_V1] ' + b.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
+      console.warn('[_INF_AZURE_V1] ' + b.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
       return postPrevio.apply(self, args);
     })();
     enCurso[clave] = p;
@@ -73,10 +73,10 @@
       try { r = await llamar(p.action, cuerpo, 10000); } catch (e) { r = null; }
       if (valida(r)) return r.j;
       if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-      console.warn('[_INF_AZURE_V1] ' + p.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> camino de siempre');
+      console.warn('[_INF_AZURE_V1] ' + p.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> camino de siempre');
       return getPrevio.apply(self, args);
     })();
   };
   try { apiPost = window.apiPost; apiGet = window.apiGet; } catch (e) {}
-  console.log('[_INF_AZURE_V1] listo: informes integrales, Azure primero');
+  console.log('[_INF_AZURE_V1] listo: informes integrales, Supabase primero');
 })();

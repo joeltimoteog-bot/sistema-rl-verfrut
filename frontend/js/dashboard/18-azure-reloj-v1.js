@@ -61,7 +61,7 @@ window.fetch = function (recurso, opciones) {
   var t0   = (window.performance && performance.now()) || Date.now();
   var reloj = setTimeout(function () {
     try { ctrl.abort(); } catch (e) {}
-    console.warn('[_AZURE_RELOJ_V1] Azure no contesto en ' + AZ_RELOJ_MS +
+    console.warn('[_AZURE_RELOJ_V1] Supabase no contesto en ' + AZ_RELOJ_MS +
                  ' ms, se pasa al respaldo ->', u.split('?')[0]);
   }, AZ_RELOJ_MS);
 
@@ -70,7 +70,7 @@ window.fetch = function (recurso, opciones) {
     clearTimeout(reloj);
     try {
       var ms = Math.round((((window.performance && performance.now()) || Date.now())) - t0);
-      if (ms > 2000) console.warn('[_AZURE_RELOJ_V1] Azure tardo ' + ms + ' ms ->', u.split('?')[0]);
+      if (ms > 2000) console.warn('[_AZURE_RELOJ_V1] Supabase tardo ' + ms + ' ms ->', u.split('?')[0]);
     } catch (e) {}
     return r;
   }, function (err) {
@@ -90,7 +90,7 @@ function _despertarAzure() {
     _fetchPrevio(AZURE_FN_BASE + '/mod/sup/getSupervisores', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })
       .then(function () {
         var ms = Math.round((((window.performance && performance.now()) || Date.now())) - t0);
-        console.log('[_AZURE_RELOJ_V1] Azure despierto en ' + ms + ' ms');
+        console.log('[_AZURE_RELOJ_V1] Supabase despierto en ' + ms + ' ms');
       })
       .catch(function () { /* da igual el resultado: solo queriamos despertarlo */ });
   } catch (e) {}
@@ -102,5 +102,5 @@ if (document.readyState === 'loading') {
   _despertarAzure();
 }
 
-console.log('[_AZURE_RELOJ_V1] reloj de ' + AZ_RELOJ_MS + ' ms activo sobre las llamadas a Azure');
+console.log('[_AZURE_RELOJ_V1] reloj de ' + AZ_RELOJ_MS + ' ms activo sobre las llamadas a Supabase');
 })();

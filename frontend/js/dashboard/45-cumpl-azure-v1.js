@@ -41,7 +41,7 @@ function envolver(nombre, acciones) {
       var r = null;
       try { r = await azure(accion, cuerpo); } catch (e) { r = null; }
       if (r && r.status === 200 && r.j && r.j.success) return r.j;
-      console.warn('[_CUMPL_AZURE_V1] ' + accion + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se usa Google (respaldo)');
+      console.warn('[_CUMPL_AZURE_V1] ' + accion + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se usa Google (respaldo)');
       return previo.apply(self, args);
     })();
   };
@@ -50,5 +50,5 @@ function envolver(nombre, acciones) {
 }
 envolver('apiPost', POST);
 envolver('apiGet', GET);
-console.log('[_CUMPL_AZURE_V1] listo: Control de Cumplimiento desde Azure');
+console.log('[_CUMPL_AZURE_V1] listo: Control de Cumplimiento desde Supabase');
 })();

@@ -39,7 +39,7 @@ window.apiGet = function (p) {
     var r = null;
     try { r = await azure(p); } catch (e) { r = null; }
     if (r && r.status === 200 && r.j && r.j.success && Array.isArray(r.j.data)) return r.j;
-    console.warn('[_CV_AZURE_V1] ' + p.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se usa la hoja (respaldo)');
+    console.warn('[_CV_AZURE_V1] ' + p.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se usa la hoja (respaldo)');
     return previo.apply(self, args);
   })();
 };
@@ -56,5 +56,5 @@ window._cvCompletar = async function (data, p) {
     data.visitas = (r[1] && r[1].success && Array.isArray(r[1].data)) ? r[1].data : (data.visitas || []);
   } catch (e) { console.warn('[_CV_AZURE_V1] no se pudieron completar casos/visitas:', e && e.message); }
 };
-console.log('[_CV_AZURE_V1] listo: Casos y Visitas desde Azure');
+console.log('[_CV_AZURE_V1] listo: Casos y Visitas desde Supabase');
 })();

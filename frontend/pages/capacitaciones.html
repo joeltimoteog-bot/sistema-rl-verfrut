@@ -667,13 +667,13 @@ h3{font-size:16px !important}
         var j = await r.json();
         clearTimeout(reloj);
         if (r.status === 200 && j && j.success) return j;
-        console.warn('[_MOD_AZURE_V1] ' + b.action + ': Azure HTTP ' + r.status + ' -> Google (respaldo)');
-      } catch (e) { clearTimeout(reloj); console.warn('[_MOD_AZURE_V1] ' + b.action + ': Azure sin respuesta -> Google (respaldo)'); }
+        console.warn('[_MOD_AZURE_V1] ' + b.action + ': Supabase HTTP ' + r.status + ' -> Google (respaldo)');
+      } catch (e) { clearTimeout(reloj); console.warn('[_MOD_AZURE_V1] ' + b.action + ': Supabase sin respuesta -> Google (respaldo)'); }
       return previo.apply(self, args);
     })();
   };
   try { apiPost = window.apiPost; } catch (e) {}
-  console.log('[_MOD_AZURE_V1] listo: Capacitaciones desde Azure');
+  console.log('[_MOD_AZURE_V1] listo: Capacitaciones desde Supabase');
 })();
 </script>
 <script>
@@ -719,11 +719,11 @@ h3{font-size:16px !important}
       }
       if (r && r.status === 200 && r.j && r.j.success) {
         try { Promise.resolve(previo.call(self, { action: 'cvAplicarDesdeAzure' })).catch(function () {}); } catch (e) {}
-        console.log('[_CAP_AZURE_PRIMERO_V1] ' + b.action + ' guardado en Azure: ' + r.j.idCapacitacion + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : ''));
+        console.log('[_CAP_AZURE_PRIMERO_V1] ' + b.action + ' guardado en Supabase: ' + r.j.idCapacitacion + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : ''));
         return r.j;
       }
       if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-      console.warn('[_CAP_AZURE_PRIMERO_V1] ' + b.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
+      console.warn('[_CAP_AZURE_PRIMERO_V1] ' + b.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
       return previo.apply(self, args);
     })();
     enCurso[clave] = p;
@@ -731,7 +731,7 @@ h3{font-size:16px !important}
     return p;
   };
   try { apiPost = window.apiPost; } catch (e) {}
-  console.log('[_CAP_AZURE_PRIMERO_V1] listo: Capacitaciones se guardan primero en Azure');
+  console.log('[_CAP_AZURE_PRIMERO_V1] listo: Capacitaciones se guardan primero en Supabase');
 })();
 </script>
 <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Capacitaciones"></script>

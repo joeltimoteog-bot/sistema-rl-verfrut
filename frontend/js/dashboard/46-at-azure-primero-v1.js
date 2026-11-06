@@ -66,13 +66,13 @@ window.apiPost = function (b) {
         delete fila.client_id;
         Promise.resolve(previo.call(self, fila)).catch(function () {});   // la hoja, en 2do plano (la red de seguridad cubre si falla)
       } catch (e) {}
-      console.log('[_AT_AZURE_PRIMERO_V1] guardada en Azure N° ' + j.nro + (j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : '') + ' en ' + (Date.now() - _t0) + ' ms');
+      console.log('[_AT_AZURE_PRIMERO_V1] guardada en Supabase N° ' + j.nro + (j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : '') + ' en ' + (Date.now() - _t0) + ' ms');
       /* _GUARDAR_RAPIDO_V1: los guardados de mas de 2,5 s quedan en LOG_ERRORES (saludHoy muestra cuanto tarda guardar) */
       try { var _ms = Date.now() - _t0; if (_ms > 2500 && window.rlSalud && window.rlSalud.registrar) window.rlSalud.registrar('guardado_lento', 'azure:atenciones/guardar', _ms, 'intentos ' + intento); } catch (e) {}
       return j;
     }
     if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-    console.warn('[_AT_AZURE_PRIMERO_V1] Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
+    console.warn('[_AT_AZURE_PRIMERO_V1] Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
     b.client_id = clave;
     return previo.apply(self, args);
   })();
@@ -80,5 +80,5 @@ window.apiPost = function (b) {
   p.then(function () { setTimeout(function () { delete enCurso[clave]; }, 3000); }, function () { delete enCurso[clave]; });
   return p;
 };
-console.log('[_AT_AZURE_PRIMERO_V1] listo: Nueva Atencion se guarda primero en Azure');
+console.log('[_AT_AZURE_PRIMERO_V1] listo: Nueva Atencion se guarda primero en Supabase');
 })();

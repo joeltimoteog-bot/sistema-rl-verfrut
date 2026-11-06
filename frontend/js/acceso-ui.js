@@ -89,7 +89,7 @@
           return j.data.map(function (u) { return { usuario: String(u.usuario || '').toLowerCase(), nombre: u.nombre || '', rol: u.rol || '', empresa: u.empresa || '', activo: u.activo !== false }; });
         }
       }
-    } catch (e) { console.warn('[_ACCESO_UI_V3] usuarios Azure: ' + (e && e.message) + ' -> Google'); }
+    } catch (e) { console.warn('[_ACCESO_UI_V3] usuarios Supabase: ' + (e && e.message) + ' -> Google'); }
     var d = await apiPost({ action: 'permisosUsuarios', usuario: yo.usuario, rol: yo.rol });
     if (!d || !d.success) { await new Promise(function (r) { setTimeout(r, 1500); }); d = await apiPost({ action: 'permisosUsuarios', usuario: yo.usuario, rol: yo.rol }); }
     if (!d || !d.success) throw new Error((d && d.error) || 'No se pudo leer la lista de usuarios');

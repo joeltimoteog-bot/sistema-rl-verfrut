@@ -42,11 +42,11 @@
         }
         if (valida(r)) {
           if (!lee && r.j.success) { try { Promise.resolve(previo.call(self, { action: 'cvAplicarDesdeAzure' })).catch(function () {}); } catch (e) {} }
-          if (!lee) console.log('[_HOR_AZURE_V1] ' + b.action + ' en Azure' + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : '') + (r.j.success ? '' : ': ' + r.j.error));
+          if (!lee) console.log('[_HOR_AZURE_V1] ' + b.action + ' en Supabase' + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : '') + (r.j.success ? '' : ': ' + r.j.error));
           return r.j;
         }
         if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-        console.warn('[_HOR_AZURE_V1] ' + b.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> Google (respaldo)');
+        console.warn('[_HOR_AZURE_V1] ' + b.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> Google (respaldo)');
         return previo.apply(self, args);
       })();
       if (!lee) { enCurso[clave] = p; p.then(function () { setTimeout(function () { delete enCurso[clave]; }, 3000); }, function () { delete enCurso[clave]; }); }
@@ -58,5 +58,5 @@
   if (typeof window.post === 'function') { window.post = envolver(window.post); try { post = window.post; } catch (e) {} n++; }
   if (!n) return;
   window._rlHorAzOk = true;
-  console.log('[_HOR_AZURE_V1] listo: horarios de jornada, Azure primero');
+  console.log('[_HOR_AZURE_V1] listo: horarios de jornada, Supabase primero');
 })();

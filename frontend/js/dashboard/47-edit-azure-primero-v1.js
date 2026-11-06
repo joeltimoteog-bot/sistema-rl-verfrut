@@ -70,18 +70,18 @@ window.apiPost = function (b) {
     var ms = Date.now() - _t0;
     if (r && r.status === 200 && r.j && r.j.success) {
       hoja(b, 1);
-      console.log('[_EDIT_AZURE_PRIMERO_V1] N° ' + b.nro + ' editada en Azure en ' + ms + ' ms');
+      console.log('[_EDIT_AZURE_PRIMERO_V1] N° ' + b.nro + ' editada en Supabase en ' + ms + ' ms');
       try { if (ms > 2500 && window.rlSalud && window.rlSalud.registrar) window.rlSalud.registrar('guardado_lento', 'azure:atenciones/editar', ms, 'intentos ' + intento); } catch (e) {}
       return { success: true, nro: b.nro, fuente: 'azure', ms: ms };
     }
     if (r && r.status === 403 && r.j && /permiso/i.test(String(r.j.error || ''))) return { success: false, error: r.j.error };
     if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-    console.warn('[_EDIT_AZURE_PRIMERO_V1] Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se edita por Google (respaldo)');
+    console.warn('[_EDIT_AZURE_PRIMERO_V1] Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se edita por Google (respaldo)');
     return previo.apply(self, args);
   })();
   enCurso[clave] = p;
   p.then(function () { setTimeout(function () { delete enCurso[clave]; }, 3000); }, function () { delete enCurso[clave]; });
   return p;
 };
-console.log('[_EDIT_AZURE_PRIMERO_V1] listo: Editar atencion va primero a Azure');
+console.log('[_EDIT_AZURE_PRIMERO_V1] listo: Editar atencion va primero a Supabase');
 })();

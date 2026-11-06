@@ -32,7 +32,7 @@
     try {
       var r = await conReloj(AZ, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usuario: u, password: p }) }, 12000);
       st = r.status; d = await jsonSeguro(r);
-    } catch (eAz) { try { console.warn('[_LOGIN_COMUN_V1] Azure no respondió:', eAz && (eAz.name || eAz.message)); } catch (e) {} }
+    } catch (eAz) { try { console.warn('[_LOGIN_COMUN_V1] Supabase no respondió:', eAz && (eAz.name || eAz.message)); } catch (e) {} }
     if (d && d.success && d.user) return { ok: true, user: d.user, token: d.token || null, via: 'azure', claveTemporal: !!d.claveTemporal, cambioObligatorio: !!d.cambioObligatorio };
     if (d && (d.rechazado || d.bloqueado || st === 429)) {
       return { ok: false, rechazado: true, bloqueado: !!(d.bloqueado || st === 429), minutos: d.minutos || 0,

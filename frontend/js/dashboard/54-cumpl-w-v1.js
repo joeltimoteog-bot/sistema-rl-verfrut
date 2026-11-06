@@ -46,11 +46,11 @@
       }
       if (r && r.status === 200 && r.j) {
         if (r.j.success) { try { Promise.resolve(previo.call(self, { action: 'cvAplicarDesdeAzure' })).catch(function () {}); } catch (e) {} }
-        console.log('[_CUMPL_W_V1] ' + b.action + ' en Azure: ' + (r.j.success ? 'guardado' : 'rechazado (' + r.j.error + ')') + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : ''));
+        console.log('[_CUMPL_W_V1] ' + b.action + ' en Supabase: ' + (r.j.success ? 'guardado' : 'rechazado (' + r.j.error + ')') + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : ''));
         return r.j;
       }
       if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-      console.warn('[_CUMPL_W_V1] ' + b.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
+      console.warn('[_CUMPL_W_V1] ' + b.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
       return previo.apply(self, args);
     })();
     enCurso[clave] = p;
@@ -58,5 +58,5 @@
     return p;
   };
   try { apiPost = window.apiPost; } catch (e) {}
-  console.log('[_CUMPL_W_V1] listo: escrituras de Cumplimiento primero en Azure');
+  console.log('[_CUMPL_W_V1] listo: escrituras de Cumplimiento primero en Supabase');
 })();

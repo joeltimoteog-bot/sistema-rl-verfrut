@@ -378,7 +378,7 @@ async function cargarDatos(){
                    _qUser +
                    '&code=' + encodeURIComponent(AZURE_FN_KEY_ATLIST);
       const resp = await fetch(_url);
-      if(!resp.ok){ if(pagina===1){ console.warn('[estadisticas] Azure status', resp.status, '- fallback a GAS'); } break; }
+      if(!resp.ok){ if(pagina===1){ console.warn('[estadisticas] Supabase status', resp.status, '- fallback a GAS'); } break; }
       const json = await resp.json();
       if(!(json && json.success && Array.isArray(json.data))){ break; }
       json.data.forEach(a=>_fld.forEach(c=>{ if(a[c]) a[c]=String(a[c]).slice(0,10); }));
@@ -397,9 +397,9 @@ async function cargarDatos(){
 
     if(acumulado.length){
       data = acumulado; fuente = 'Azure';
-      console.log('[estadisticas] Azure:', data.length, 'de', totalServidor, 'totales | '+(pagina-1)+' pag |', (Date.now()-_t0)+'ms');
+      console.log('[estadisticas] Supabase:', data.length, 'de', totalServidor, 'totales | '+(pagina-1)+' pag |', (Date.now()-_t0)+'ms');
     }
-  }catch(e){ console.warn('[estadisticas] Azure error:', e.message, '- fallback a GAS'); }
+  }catch(e){ console.warn('[estadisticas] Supabase error:', e.message, '- fallback a GAS'); }
 
   // 2) Fallback: GAS (puede traer menos histórico, pero asegura datos)
   if(!data){

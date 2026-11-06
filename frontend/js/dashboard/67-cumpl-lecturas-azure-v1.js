@@ -29,11 +29,11 @@
         var j = await r.json().catch(function () { return null; });
         clearTimeout(reloj);
         if (r.status === 200 && j && j.success) return j;
-        console.warn('[_CUMPL_LECTURAS_AZURE_V1] ' + p.action + ': Azure HTTP ' + r.status + ((j && j.error) ? ' (' + j.error + ')' : '') + ' -> Google (respaldo)');
-      } catch (e) { clearTimeout(reloj); console.warn('[_CUMPL_LECTURAS_AZURE_V1] ' + p.action + ': Azure sin respuesta -> Google (respaldo)'); }
+        console.warn('[_CUMPL_LECTURAS_AZURE_V1] ' + p.action + ': Supabase HTTP ' + r.status + ((j && j.error) ? ' (' + j.error + ')' : '') + ' -> Google (respaldo)');
+      } catch (e) { clearTimeout(reloj); console.warn('[_CUMPL_LECTURAS_AZURE_V1] ' + p.action + ': Supabase sin respuesta -> Google (respaldo)'); }
       return previo.apply(self, args);
     })();
   };
   try { apiGet = window.apiGet; } catch (e) {}
-  console.log('[_CUMPL_LECTURAS_AZURE_V1] listo: banner, Indicadores de Cumplimiento y Evaluaciones 360 desde Azure');
+  console.log('[_CUMPL_LECTURAS_AZURE_V1] listo: banner, Indicadores de Cumplimiento y Evaluaciones 360 desde Supabase');
 })();

@@ -66,11 +66,11 @@
         if (r.j.success) {   /* esperar la copia a la hoja (max 15 s): la lista se recarga de Google */
           try { await Promise.race([Promise.resolve(previo.call(self, { action: 'cvAplicarDesdeAzure' })).catch(function () {}), new Promise(function (z) { setTimeout(z, 15000); })]); } catch (e) {}
         }
-        console.log('[_USR_AZURE_V1] ' + b.action + ' en Azure: ' + (r.j.success ? 'guardado' : 'rechazado (' + r.j.error + ')'));
+        console.log('[_USR_AZURE_V1] ' + b.action + ' en Supabase: ' + (r.j.success ? 'guardado' : 'rechazado (' + r.j.error + ')'));
         return r.j;
       }
       if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-      console.warn('[_USR_AZURE_V1] ' + b.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> Google (respaldo)');
+      console.warn('[_USR_AZURE_V1] ' + b.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> Google (respaldo)');
       return respaldo(self, args, tk, r);
     })();
     enCurso[igual] = p;
@@ -78,5 +78,5 @@
     return p;
   };
   try { apiPost = window.apiPost; } catch (e) {}
-  console.log('[_USR_AZURE_V1] listo: usuarios y accesos temporales primero en Azure');
+  console.log('[_USR_AZURE_V1] listo: usuarios y accesos temporales primero en Supabase');
 })();

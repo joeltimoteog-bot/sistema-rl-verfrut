@@ -125,7 +125,7 @@
     var mv = $('mVerInforme');
     if (mv) new MutationObserver(function () { if (mv.classList.contains('on') && Date.now() - (window._v75gen || 0) > 4000) {
       var bg = $('btnGuardarAzure'); if (bg && bg.textContent.indexOf('Guardado en Supabase') >= 0) { bg.disabled = false; bg.textContent = '💾 Guardar en Supabase'; bg.title = ''; } } }).observe(mv, { attributes: true, attributeFilter: ['class'] });
-    console.log('[_VISITA_HOJA_V1.2] resultado del guardado en Azure visible al generar el informe');
+    console.log('[_VISITA_HOJA_V1.2] resultado del guardado en Supabase visible al generar el informe');
     return true;
   }
   /* visitas-ui.js arma el asistente al cargar; esta hoja se monta después (reintenta hasta encontrar el pie) */

@@ -2057,6 +2057,6 @@ async function _horasBuscarAzure(dni) {
         dni: d, nombre: String(nombre || '').trim(), cargo: a.oficio || '', regimen: a.tipo_regimen || '',
         fechaInicio: a.fecha_inicio ? String(a.fecha_inicio).slice(0, 10) : '', empresa: a.empresa || a.empresa_origen || '' } };
     }
-  } catch (e) { console.warn('[_BUSCAR_AZURE_V1] Azure no respondio, se usa Google:', e && e.message); }
+  } catch (e) { console.warn('[_BUSCAR_AZURE_V1] Supabase no respondio, se usa Google:', e && e.message); }
   return apiPost({ action: 'horasBuscarTrabajador', dni: dni });
 }

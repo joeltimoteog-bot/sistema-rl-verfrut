@@ -38,7 +38,7 @@
       var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, reloj = setTimeout(function () { try { ctl && ctl.abort(); } catch (e) {} }, 8000);
       var r = await fetch(BASE + '/vigia/marcas', { headers: { Authorization: 'Bearer ' + tk }, signal: ctl ? ctl.signal : undefined });
       clearTimeout(reloj);
-      if (r.status === 401 || r.status === 503) { pausaHasta = Date.now() + 5 * 60 * 1000; console.warn('[_VIGIA_V1] Azure ' + r.status + ' → pausa 5 min'); return false; }
+      if (r.status === 401 || r.status === 503) { pausaHasta = Date.now() + 5 * 60 * 1000; console.warn('[_VIGIA_V1] Supabase ' + r.status + ' → pausa 5 min'); return false; }
       if (!r.ok) throw new Error('HTTP ' + r.status);
       var j = await r.json(); if (!j || !j.success || !j.marcas) throw new Error('respuesta inválida');
       fallos = 0; ultimo = { ts: Date.now(), hoy: j.hoy };
@@ -68,5 +68,5 @@
   };
   if (apagado) { console.log('[_VIGIA_V1] apagado por localStorage.rl_vigia'); return; }
   setTimeout(function () { revisar('inicio'); programar(); }, 5000);
-  console.log('[_VIGIA_V1] activo: comprueba cambios en Azure cada ' + SEG + ' s (pestaña visible)');
+  console.log('[_VIGIA_V1] activo: comprueba cambios en Supabase cada ' + SEG + ' s (pestaña visible)');
 })();

@@ -64,7 +64,7 @@ async function refrescar(motivo) {
       if (s) { ultimo = s; pintar(s); try { if (!_hayFiltro()) dibujarDesdeAzure(); } catch (e) { console.warn('[_STATS_AZURE_V1] graficos:', e.message); }
         console.log('[_STATS_AZURE_V1] ' + (motivo || '') + ' → hoy ' + s.hoy + ' | mes ' + s.mes + ' | año ' + s.anio + ' | en proceso ' + s.enProceso + (esAdmin() ? ' (global)' : ' (solo ' + (USER.nombre || USER.usuario) + ')'));
         return true; }
-    } catch (e) { _pausaHasta = Date.now() + 180000; console.warn('[_STATS_AZURE_V1] Azure no respondió (' + (motivo || '') + '): ' + e.message + ' — se mantiene el cálculo anterior (pausa 3 min)'); }
+    } catch (e) { _pausaHasta = Date.now() + 180000; console.warn('[_STATS_AZURE_V1] Supabase no respondió (' + (motivo || '') + '): ' + e.message + ' — se mantiene el cálculo anterior (pausa 3 min)'); }
     return false;
   })().finally(function () { enCurso = null; });
   return enCurso;

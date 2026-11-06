@@ -57,11 +57,11 @@ window.apiPost = function (b) {
     }
     if (r && r.status === 200 && r.j && r.j.success) {
       try { Promise.resolve(previo.call(self, { action: 'cvAplicarDesdeAzure' })).catch(function () {}); } catch (e) {}   // la hoja, en 2do plano
-      console.log('[_CV_AZURE_PRIMERO_V1] ' + b.action + ' guardado en Azure' + (r.j.nro ? ' N° ' + r.j.nro : '') + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : ''));
+      console.log('[_CV_AZURE_PRIMERO_V1] ' + b.action + ' guardado en Supabase' + (r.j.nro ? ' N° ' + r.j.nro : '') + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : ''));
       return r.j;
     }
     if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-    console.warn('[_CV_AZURE_PRIMERO_V1] ' + b.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
+    console.warn('[_CV_AZURE_PRIMERO_V1] ' + b.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
     return previo.apply(self, args);
   })();
   enCurso[clave] = p;
@@ -69,5 +69,5 @@ window.apiPost = function (b) {
   return p;
 };
 try { apiPost = window.apiPost; } catch (e) {}
-console.log('[_CV_AZURE_PRIMERO_V1] listo: Casos y Visitas se guardan primero en Azure');
+console.log('[_CV_AZURE_PRIMERO_V1] listo: Casos y Visitas se guardan primero en Supabase');
 })();

@@ -48,11 +48,11 @@
       }
       if (r && r.status === 200 && r.j && (r.j.success || r.j.error)) {
         if (r.j.success) { try { Promise.resolve(google({ action: 'cvAplicarDesdeAzure' })).catch(function () {}); } catch (e) {} }   /* la hoja y el correo, en 2do plano */
-        console.log('[_ALM_AZURE_V1] ' + b.action + ' en Azure' + (r.j.guardados ? ' guardados ' + r.j.guardados : '') + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : '') + (r.j.success ? '' : ': ' + r.j.error));
+        console.log('[_ALM_AZURE_V1] ' + b.action + ' en Supabase' + (r.j.guardados ? ' guardados ' + r.j.guardados : '') + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : '') + (r.j.success ? '' : ': ' + r.j.error));
         return r.j;
       }
       if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-      console.warn('[_ALM_AZURE_V1] ' + b.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
+      console.warn('[_ALM_AZURE_V1] ' + b.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
       return google(b);
     })();
     enCurso[clave] = p;
@@ -66,7 +66,7 @@
     try { r = await llamar('getAlmuerzos', {}, 10000); } catch (e) { r = null; }
     if (r && r.status === 200 && r.j && (r.j.success || r.j.error)) return r.j;
     if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-    console.warn('[_ALM_AZURE_V1] lista: Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se lee de Google');
+    console.warn('[_ALM_AZURE_V1] lista: Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se lee de Google');
     return google(p);
   }
   window.rlAlmAzure = { post: post, get: get };

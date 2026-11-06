@@ -42,7 +42,7 @@
      Prueba en un solo navegador: localStorage.rl_modo_google = 'off' (usa Azure) / 'on' (usa Google). */
   var MODO_GOOGLE = false;
   try { var mg = localStorage.getItem('rl_modo_google'); if (mg === 'off') MODO_GOOGLE = false; else if (mg === 'on') MODO_GOOGLE = true; } catch (e) {}
-  if (MODO_GOOGLE) { try { console.warn('[_MODO_GOOGLE_V1] modo respaldo: Azure desactivado, todo va directo a Google'); } catch (e) {} }
+  if (MODO_GOOGLE) { try { console.warn('[_MODO_GOOGLE_V1] modo respaldo: Supabase desactivado, todo va directo a Google'); } catch (e) {} }
   /* _EDGE_V1 (05-nov-2026) — Fase 1 de "todo en Supabase": las rutas de abajo se atienden en Supabase
      (Edge Function "api", el MISMO codigo que Azure). Si Supabase no responde (red, 502/503/504/546 o ruta
      no disponible) la MISMA llamada se repite en Azure: el usuario no nota nada. Tras 3 fallas seguidas
@@ -209,7 +209,7 @@
     var conUsuario = false; try { conUsuario = !!sessionStorage.getItem('user'); } catch (e) {}
     /* _SESION_SIN_BUCLE_V1 (04-nov-2026): si el login entró por Google (Azure no respondió) NO se bloquea la pantalla:
        volver a ingresar daría otra vez una sesión sin credencial y el aviso salía en bucle. Se trabaja con el respaldo. */
-    if (!t) { if (conUsuario) console.warn('[_SESION_RENOVAR_V1] sesión sin credencial de Azure (entró por Google): se trabaja con el respaldo'); return; }
+    if (!t) { if (conUsuario) console.warn('[_SESION_RENOVAR_V1] sesión sin credencial de Supabase (entró por Google): se trabaja con el respaldo'); return; }
     var e = exp(t); if (!e) return;
     if (e - Date.now() > RENOVAR_ANTES_MS) return;   /* todavía le queda más de 6 h */
     enCurso = true;

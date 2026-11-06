@@ -72,7 +72,7 @@ window.apiGet = function (p) {
       var data = { atenciones: [], stats: r[3], visitas: [], casos: [], fusiones: r[0], solicitudes: r[2], estadisticasAdmin: null,
                    supervisores: r[1], timestamp: Date.now(), _ts: Date.now(), fuente_atenciones: 'AZURE', fuente: 'azure', tiempo_total_ms: ms };
       if (r[4]) data.usuarios = r[4];   /* sin lista -> no se manda 'usuarios' (Gestion de usuarios la pide al abrirse) */
-      console.log('[_PRELOAD_AZURE_V1] carga al entrar desde Azure en ' + ms + ' ms');
+      console.log('[_PRELOAD_AZURE_V1] carga al entrar desde Supabase en ' + ms + ' ms');
       try { if (ms > 4000 && window.rlSalud && window.rlSalud.registrar) window.rlSalud.registrar('carga_lenta', 'azure:preload', ms, rol); } catch (e) {}
       return { success: true, data: data, fuente: 'azure' };
     } catch (e) {
@@ -82,5 +82,5 @@ window.apiGet = function (p) {
   })();
 };
 try { apiGet = window.apiGet; } catch (e) {}
-console.log('[_PRELOAD_AZURE_V1] listo: la carga al entrar sale de Azure');
+console.log('[_PRELOAD_AZURE_V1] listo: la carga al entrar sale de Supabase');
 })();

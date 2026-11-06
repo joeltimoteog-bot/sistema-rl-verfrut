@@ -1828,8 +1828,8 @@ async function _capSupervisoresAzure() {
     const j = await r.json();
     clearTimeout(reloj);
     if (r.status === 200 && j && j.success && Array.isArray(j.data)) { _capSupAzureCache = j; return j; }
-    console.warn('[_CAP_RESP_AZURE_V1] Azure HTTP ' + r.status + ' -> Google (respaldo)');
-  } catch (e) { clearTimeout(reloj); console.warn('[_CAP_RESP_AZURE_V1] Azure sin respuesta -> Google (respaldo)'); }
+    console.warn('[_CAP_RESP_AZURE_V1] Supabase HTTP ' + r.status + ' -> Google (respaldo)');
+  } catch (e) { clearTimeout(reloj); console.warn('[_CAP_RESP_AZURE_V1] Supabase sin respuesta -> Google (respaldo)'); }
   return null;
 }
 

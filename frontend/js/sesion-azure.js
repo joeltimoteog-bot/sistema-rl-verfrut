@@ -72,7 +72,7 @@
       window._rlAvisoLlaveHasta = Date.now() + 15 * 60 * 1000;   // se vuelve a avisar en 15 min
     };
     try { if (window.rlSalud && rlSalud.registrar) rlSalud.registrar('sesion_sin_llave', motivo, null, 'modo lento (Google)'); } catch (e) {}
-    console.warn('[_SESION_SIN_LLAVE_V1] sesion sin llave de Azure (' + motivo + '): todo va por Google');
+    console.warn('[_SESION_SIN_LLAVE_V1] sesion sin llave de Supabase (' + motivo + '): todo va por Google');
   }
   function revisar() {
     if (!hayUsuario()) return;

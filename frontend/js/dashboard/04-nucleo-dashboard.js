@@ -1480,9 +1480,9 @@ async function guardarInformeEnAzure() {
 
   if (btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = '⏳ Subiendo...'; }
 
-  console.log('[Azure] Iniciando subida de informe...');
-  console.log('[Azure] Elemento informe:', document.getElementById('informeVistaPrevia'));
-  console.log('[Azure] currentVisita:', typeof v !== 'undefined' ? v : 'NO DEFINIDA');
+  console.log('[Supabase] Iniciando subida de informe...');
+  console.log('[Supabase] Elemento informe:', document.getElementById('informeVistaPrevia'));
+  console.log('[Supabase] currentVisita:', typeof v !== 'undefined' ? v : 'NO DEFINIDA');
 
   try {
     const contenido = document.getElementById('informeVistaPrevia').innerHTML;
@@ -1514,8 +1514,8 @@ async function guardarInformeEnAzure() {
       empresa: v ? (v.empresa || USER.empresa || '') : (USER.empresa || '')
     };
 
-    console.log('[Azure] HTML length:', htmlDoc.length);
-    console.log('[Azure] File creado:', file.name, file.size, file.type);
+    console.log('[Supabase] HTML length:', htmlDoc.length);
+    console.log('[Supabase] File creado:', file.name, file.size, file.type);
 
     setMsg('⏳ Subiendo informe...', '#f59e0b');
 
@@ -1548,7 +1548,7 @@ async function guardarInformeEnAzure() {
 
   } catch(err) {
     setMsg('❌ Error inesperado: ' + err.message, '#dc2626');
-    console.error('[guardarInformeEnAzure]', err);
+    console.error('[guardarInformeEnSupabase]', err);
   } finally {
     if (btnGuardar) { btnGuardar.disabled = false; btnGuardar.textContent = '💾 Guardar en Supabase'; }
   }
@@ -1602,7 +1602,7 @@ async function buscarTrabajadorPorDniAzure(dni, empresa = '') {
       /* _DNI404_V2 (25-oct-2026): Azure es la base oficial y la hoja de trabajadores se sincroniza al momento
          (_SYNC_AL_CAMBIAR_V1). "No existe" en Azure es definitivo: ya no se vuelve a preguntar a Google (eso
          era lo que demoraba). Solo si Azure FALLA (no responde / error) se usa Google de respaldo. */
-      console.log('[Trabajador] DNI ' + dni + ' no encontrado en Azure (' + Math.round(t1-t0) + 'ms)');
+      console.log('[Trabajador] DNI ' + dni + ' no encontrado en Supabase (' + Math.round(t1-t0) + 'ms)');
       return null;
     }
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -1685,7 +1685,7 @@ async function _consultaDNIAzure(dni, anio) {
   if (!trabajador) {
     trabajador = { dni: String(dni), nombre: lista[0].nombre || '', empresa: lista[0].empresa || '', cargo: '', fundo: lista[0].fundo || '' };
   }
-  console.log('[consultarDNI] Azure by-dni:', lista.length, 'atenciones (' + Math.round(performance.now() - t0) + 'ms)');
+  console.log('[consultarDNI] Supabase by-dni:', lista.length, 'atenciones (' + Math.round(performance.now() - t0) + 'ms)');
   return { success: true, data: lista, trabajador: trabajador };
 }
 // Precargar logo como base64 para usar en documentos generados
@@ -2687,7 +2687,7 @@ async function buscarTrabajadorCaso() {
     window._casoTrabajador = tc;
     return;
   }
-  console.log('[buscarTrabajadorCaso] DNI enviado:', dni, '| empresa: AMBAS (Azure)');
+  console.log('[buscarTrabajadorCaso] DNI enviado:', dni, '| empresa: AMBAS (Supabase)');
   msg.textContent='🔍 Buscando...';
   msg.style.color='#64748b';
   try {
@@ -4208,12 +4208,12 @@ async function cargarAtenciones(historial=false) {
         CACHE.atenciones = _datos;
         atTodas = _datos.filter(a => a.fecha_atencion === hoy());
         renderAt(atTodas);
-        console.log('[cargarAtenciones] Azure (admin):', _datos.length, '| hoy:', atTodas.length, '|', (Date.now() - _t0) + 'ms');
+        console.log('[cargarAtenciones] Supabase (admin):', _datos.length, '| hoy:', atTodas.length, '|', (Date.now() - _t0) + 'ms');
         return;
       }
-      console.warn('[cargarAtenciones] Azure sin datos - fallback a GAS');
+      console.warn('[cargarAtenciones] Supabase sin datos - fallback a GAS');
     } catch (e) {
-      console.warn('[cargarAtenciones] Azure error:', e.message, '- fallback a GAS');
+      console.warn('[cargarAtenciones] Supabase error:', e.message, '- fallback a GAS');
     }
   }
 
@@ -4226,10 +4226,10 @@ async function cargarAtenciones(historial=false) {
         CACHE.atenciones = _datosS;
         atTodas = _datosS.filter(a => a.fecha_atencion === hoy());
         renderAt(atTodas);
-        console.log('[cargarAtenciones] Azure (supervisor):', _datosS.length, '| hoy:', atTodas.length, '|', (Date.now() - _t0s) + 'ms');
+        console.log('[cargarAtenciones] Supabase (supervisor):', _datosS.length, '| hoy:', atTodas.length, '|', (Date.now() - _t0s) + 'ms');
         return;
       }
-    } catch (e) { console.warn('[cargarAtenciones] Azure supervisor error:', e.message, '- fallback a la hoja'); }
+    } catch (e) { console.warn('[cargarAtenciones] Supabase supervisor error:', e.message, '- fallback a la hoja'); }
   }
 
   // 2) GAS (fallback de admin o de supervisor)
@@ -4522,7 +4522,7 @@ async function _chequearHistorialDNI(dni) {
       if (!d.success) return null;
       return { enProc: d.en_proceso || [], finRec: d.finalizadas_recientes || [] };
     } catch (e) {
-      console.warn('[historialDNI] Azure error:', e);
+      console.warn('[historialDNI] Supabase error:', e);
       return null;
     }
   })();
@@ -4613,7 +4613,7 @@ async function _chequearHistorialDNI(dni) {
 
   // 1. Esperar Azure (rápido) y mostrar lo que tenga
   const azureData = await promAzure;
-  console.log('[historialDNI] Azure:', azureData ? azureData.enProc.length + ' en_proceso' : 'falló', '(' + Math.round(performance.now() - t0) + 'ms)');
+  console.log('[historialDNI] Supabase:', azureData ? azureData.enProc.length + ' en_proceso' : 'falló', '(' + Math.round(performance.now() - t0) + 'ms)');
   _renderConDatos(azureData, null);
 
   // 2. Esperar GAS (más lento) y completar si agrega cosas
@@ -5125,7 +5125,7 @@ async function _buscarTrabApi(q, emp) {
       try { const resp = await fetch(url.toString(), c ? { signal: c.signal } : {}); if (resp.ok) j = await resp.json(); } finally { clearTimeout(t0); }
       if (j && j.success && Array.isArray(j.trabajadores)) return { success: true, data: j.trabajadores.map(_mapTrabajadorAzureALegado), fuente: 'AZURE' };
     }
-  } catch (e) { console.warn('[_BUSCAR_AZURE_V1] Azure no respondio, se usa Google:', e && e.message); }
+  } catch (e) { console.warn('[_BUSCAR_AZURE_V1] Supabase no respondio, se usa Google:', e && e.message); }
   return apiGet({ action: 'buscarTrabajador', q: q, empresa: emp });
 }
 
@@ -5268,7 +5268,7 @@ async function buscarDniBtn() {
   inp.style.boxShadow='0 0 0 2px #bfdbfe';
   r.style.display='none';
   const _tApi0=performance.now();
-  console.log('[buscarDniBtn] DNI enviado:', dni, '| empresa: AMBAS (Azure) | cache size:', Object.keys(window._trabajadoresCache||{}).length);
+  console.log('[buscarDniBtn] DNI enviado:', dni, '| empresa: AMBAS (Supabase) | cache size:', Object.keys(window._trabajadoresCache||{}).length);
   console.time('[buscarDniBtn] API');
   try{
     const _azRec=await buscarTrabajadorPorDniAzure(dni, '');
@@ -5384,7 +5384,7 @@ async function consultarDNI() {
        minutos. Se le muestra el resultado al usuario y el decide. */
     window._azVacio = false;
     try { d = window._forzarHoja ? null : await _consultaAzureFull(params); }
-    catch (eAz) { console.warn('[consultarDNI] Azure fallo -> hoja de calculo:', eAz.message); d = null; }
+    catch (eAz) { console.warn('[consultarDNI] Supabase fallo -> hoja de calculo:', eAz.message); d = null; }
 
     if (!d && window._azVacio && !window._forzarHoja) {
       document.getElementById('consultaResult').innerHTML =
@@ -5627,9 +5627,9 @@ async function generarCorreo() {
         ['fecha_atencion', 'fecha_inicio_doc', 'fecha_termino_doc', 'fecha_inicio_periodo', 'fecha_termino_periodo', 'fecha_registro', 'fecha_creacion']
           .forEach(c => _lista.forEach(a => { if (a && a[c]) a[c] = String(a[c]).substring(0, 10); }));
         historial = _lista; _rangoAzOk = true;
-        console.log('[_REPORTE_RANGO_V1] ' + _lista.length + ' atenciones del ' + fi + ' al ' + ff + ' desde Azure');
+        console.log('[_REPORTE_RANGO_V1] ' + _lista.length + ' atenciones del ' + fi + ' al ' + ff + ' desde Supabase');
       }
-    } catch (eRango) { console.warn('[_REPORTE_RANGO_V1] Azure no respondio, se usa el camino de siempre:', eRango && eRango.message); }
+    } catch (eRango) { console.warn('[_REPORTE_RANGO_V1] Supabase no respondio, se usa el camino de siempre:', eRango && eRango.message); }
     console.log('[reporte] Caché disponible:', historial.length, 'registros');
 
     if (historial.length > 0 || _rangoAzOk) {   /* _REPORTE_RANGO_V1 */

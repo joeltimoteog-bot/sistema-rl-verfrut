@@ -24,11 +24,11 @@
         var j = await r.json();
         clearTimeout(reloj);
         if (r.status === 200 && j && j.success && j.data) return j;
-        console.warn('[_ESTADM_AZURE_V1] Azure HTTP ' + r.status + ' -> Google (respaldo)');
-      } catch (e) { clearTimeout(reloj); console.warn('[_ESTADM_AZURE_V1] Azure sin respuesta -> Google (respaldo)'); }
+        console.warn('[_ESTADM_AZURE_V1] Supabase HTTP ' + r.status + ' -> Google (respaldo)');
+      } catch (e) { clearTimeout(reloj); console.warn('[_ESTADM_AZURE_V1] Supabase sin respuesta -> Google (respaldo)'); }
       return previo.apply(self, args);
     })();
   };
   try { apiGet = window.apiGet; } catch (e) {}
-  console.log('[_ESTADM_AZURE_V1] listo: Estadisticas Admin desde Azure');
+  console.log('[_ESTADM_AZURE_V1] listo: Estadisticas Admin desde Supabase');
 })();

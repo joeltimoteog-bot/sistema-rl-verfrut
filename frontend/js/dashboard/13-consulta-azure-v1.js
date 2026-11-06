@@ -93,7 +93,7 @@ window._azLimpiarCache = function () { _azRangoCache = {}; _azRangoCurso = {}; }
 async function _azAtencionesRango(desde) {
   var c = _azRangoCache[desde];
   if (c && (Date.now() - c.t) < AZ_CACHE_MS) {
-    console.log('[_azAtencionesRango] ' + c.datos.length + ' registros desde memoria (sin pedir nada a Azure)');
+    console.log('[_azAtencionesRango] ' + c.datos.length + ' registros desde memoria (sin pedir nada a Supabase)');
     return c.datos;
   }
   if (_azRangoCurso[desde]) {
@@ -180,7 +180,7 @@ async function _consultaAzureFull(params) {
        para que la pantalla NO se vaya sola a la hoja de calculo, que demora
        varios minutos. Que lo decida el usuario. */
     window._azVacio = true;
-    console.log('[consultarDNI] Azure respondio en ' +
+    console.log('[consultarDNI] Supabase respondio en ' +
                 Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0) +
                 ' ms sin resultados para ese filtro.');
     return null;
@@ -206,7 +206,7 @@ async function _consultaAzureFull(params) {
   }
 
   var ms = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0);
-  console.log('[consultarDNI] Azure:', lista.length, 'de', total, 'registros (' + ms + ' ms)');
+  console.log('[consultarDNI] Supabase:', lista.length, 'de', total, 'registros (' + ms + ' ms)');
   _azSello(lista.length, total, ms, truncado);
 
   return { success: true, data: lista, trabajador: trabajador, total: total, _fuente: 'azure' };
@@ -259,10 +259,10 @@ window.compararFuentes = async function (desde, hasta, dni) {
   console.log('   AZURE           :', errA ? ('ERROR ' + errA) : (nA + ' registros en ' + msA + ' ms'));
   console.log('   HOJA DE CALCULO :', errG ? ('ERROR ' + errG) : (nG + ' registros en ' + msG + ' ms'));
   if (!errA && !errG) {
-    if (nA === nG) console.log('%c   ✔ COINCIDEN: Azure tiene todo lo de este filtro.', 'color:#166534;font-weight:bold');
+    if (nA === nG) console.log('%c   ✔ COINCIDEN: Supabase tiene todo lo de este filtro.', 'color:#166534;font-weight:bold');
     else console.log('%c   ✘ NO COINCIDEN: diferencia de ' + Math.abs(nA - nG) +
                      ' registros. Avisale a Claude antes de confiar en Supabase.', 'color:#b91c1c;font-weight:bold');
-    if (msG > 0) console.log('   Azure es ~' + Math.max(1, Math.round(msG / Math.max(msA, 1))) + ' veces mas rapido');
+    if (msG > 0) console.log('   Supabase es ~' + Math.max(1, Math.round(msG / Math.max(msA, 1))) + ' veces mas rapido');
   }
   return { azure: nA, hoja: nG, msAzure: msA, msHoja: msG };
 };

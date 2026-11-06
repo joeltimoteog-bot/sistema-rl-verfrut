@@ -46,9 +46,9 @@ window.apiPost = function (b) {
       }
       return r.j;
     }
-    console.warn('[_ACCESO_AZURE_V1] ' + accion + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se usa la hoja (respaldo)');
+    console.warn('[_ACCESO_AZURE_V1] ' + accion + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se usa la hoja (respaldo)');
     return previo.apply(self, args);
   })();
 };
-console.log('[_ACCESO_AZURE_V1] listo: Acceso a Modulos desde Azure');
+console.log('[_ACCESO_AZURE_V1] listo: Acceso a Modulos desde Supabase');
 })();

@@ -65,7 +65,7 @@ window._azAtencionesSup = async function (dias, sinCache) {
       cache[k] = { t: Date.now(), d: out };
       return out;
     } catch (e) {
-      console.warn('[_AT_SUP_AZURE_V1] Azure no respondio (' + e.message + ') -> se usa la hoja');
+      console.warn('[_AT_SUP_AZURE_V1] Supabase no respondio (' + e.message + ') -> se usa la hoja');
       return null;
     } finally { delete enCurso[k]; }
   })();

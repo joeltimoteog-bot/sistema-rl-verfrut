@@ -166,18 +166,18 @@ tr:hover td{background:#fafbfc}
         if (r.j.ok) {   /* esperar la copia a la hoja (y los correos), max 15 s: la lista se recarga de Google */
           try { await Promise.race([previo.call(window, url, { method: 'POST', body: JSON.stringify({ action: 'cvAplicarDesdeAzure' }), headers: { 'Content-Type': 'text/plain' } }).catch(function () {}), new Promise(function (z) { setTimeout(z, 15000); })]); } catch (e) {}
         }
-        console.log('[_MANT_AZURE_V1] ' + b.action + ' en Azure: ' + (r.j.ok ? 'guardado ' + (r.j.id || b.id || '') : 'rechazado (' + r.j.msg + ')') + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : ''));
+        console.log('[_MANT_AZURE_V1] ' + b.action + ' en Supabase: ' + (r.j.ok ? 'guardado ' + (r.j.id || b.id || '') : 'rechazado (' + r.j.msg + ')') + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : ''));
         return r.j;
       }
       if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
-      console.warn('[_MANT_AZURE_V1] ' + b.action + ': Azure ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
+      console.warn('[_MANT_AZURE_V1] ' + b.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> se guarda por Google (respaldo)');
       return null;
     })();
     enCurso[igual] = p;
     p.then(function () { setTimeout(function () { delete enCurso[igual]; }, 3000); }, function () { delete enCurso[igual]; });
     return p.then(function (j) { return j ? respuesta(j) : previo.apply(self, args); });
   };
-  console.log('[_MANT_AZURE_V1] listo: Mantenimiento se guarda primero en Azure');
+  console.log('[_MANT_AZURE_V1] listo: Mantenimiento se guarda primero en Supabase');
 })();
 </script>
 </head>
@@ -834,7 +834,7 @@ async function azure(params){
     var r=await conTiempo(AZ,{method:'POST',headers:h,body:JSON.stringify(params||{})},9000);
     if(!r.ok)return null; var j=await r.json();
     return (j&&j.ok&&Array.isArray(j.data))?j:null;
-  }catch(e){console.warn('[_MANT_RAPIDO_V1] Azure no respondio:',e&&e.message);return null;}
+  }catch(e){console.warn('[_MANT_RAPIDO_V1] Supabase no respondio:',e&&e.message);return null;}
 }
 async function google(params){
   var r=await conTiempo(API+'?'+new URLSearchParams(params),{},90000); return r.json();

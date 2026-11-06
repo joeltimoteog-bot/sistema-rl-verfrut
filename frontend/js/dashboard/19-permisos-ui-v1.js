@@ -256,7 +256,7 @@ async function _permListaUsuarios() {
           .sort(function (a, b) { return String(a.usuario).localeCompare(String(b.usuario)); }) };
       }
     }
-  } catch (e) { console.warn('[_PERM_USUARIOS_AZURE_V1] Azure: ' + (e && e.message) + ' -> Google'); }
+  } catch (e) { console.warn('[_PERM_USUARIOS_AZURE_V1] Supabase: ' + (e && e.message) + ' -> Google'); }
   var d = await apiPost({ action: 'permisosUsuarios', usuario: USER.usuario, rol: USER.rol });
   if ((!d || !d.success) ) {   /* Google respondio mal: un reintento */
     await new Promise(function (r) { setTimeout(r, 1500); });
