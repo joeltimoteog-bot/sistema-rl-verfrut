@@ -19,7 +19,7 @@
      cada consulta tardaba 230-1200 ms en el servidor; en Sao Paulo 6-60 ms) */
   function rg(u) { var i = u.indexOf('#'), h = i >= 0 ? u.slice(i) : ''; if (i >= 0) u = u.slice(0, i); return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'forceFunctionRegion=sa-east-1' + h; }
   /* lo que NO pasa a Supabase: rutas con llave de funcion (mantenimiento, importaciones, sync, lote) */
-  var SOLO_AZURE = /^(mantenimiento\/|[\w-]+-importar|trabajadores\/sync|usuarios\/sync|atenciones\/batch)/;
+  var SOLO_AZURE = /^(?!)/;   /* _EDGE_TODO_SUPABASE_V1 (06-nov): como azure-token.js (fase 3), Supabase atiende TODAS las rutas, tambien mantenimiento, importaciones y sync (con la misma llave). Antes: /^(mantenimiento\/|[\w-]+-importar|trabajadores\/sync|usuarios\/sync|atenciones\/batch)/ */
   var activo = true;
   try { var me = localStorage.getItem('rl_edge'); if (me === 'off') activo = false; } catch (e) {}
   var fallas = 0;
@@ -35,7 +35,7 @@
       if (init && init.body && typeof init.body !== 'string') return fOrig.apply(this, arguments);
       var ruta = input.split(MARCA)[1] || '';
       var metodo = String((init && init.method) || 'GET').toUpperCase();
-      if (SOLO_AZURE.test(ruta) || (/^atenciones([?#]|$)/.test(ruta) && metodo !== 'GET')) return fOrig.apply(this, arguments);
+      if (SOLO_AZURE.test(ruta)) return fOrig.apply(this, arguments);   /* _EDGE_TODO_SUPABASE_V1: POST /atenciones tambien va a Supabase */
       var url = input;
       return fOrig.call(window, rg(EDGE + ruta), init).then(function (r) {
         if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { falla('HTTP ' + r.status); return fOrig.call(window, url, init); }
