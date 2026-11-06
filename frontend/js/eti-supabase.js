@@ -99,7 +99,7 @@
      Protecciones para no mostrar datos incompletos:
        1) solo colecciones que escribe Evaluacion ETI (las de Capacitaciones siguen en Firestore);
        2) si hay escrituras del espejo en camino o en cola para esa coleccion -> Firestore;
-       3) si Supabase tarda mas de 1.5 s tambien se consulta Firestore y gana el primero;
+       3) Supabase y Firestore se consultan a la vez y gana el primero (V3);
        4) si Supabase falla -> Firestore, como antes;
        5) verificacion en sombra: cada respuesta se compara despues con Firestore; si difiere,
           Supabase se repara con el dato de Firestore y esa coleccion vuelve a leerse de Firestore
@@ -142,27 +142,27 @@
       forEach: function (cb, t) { docs.forEach(cb, t); },
       docChanges: function () { return docs.map(function (d, i) { return { type: 'added', doc: d, oldIndex: -1, newIndex: i }; }); } };
   }
-  /* Supabase primero; a los 1.5 s, o si falla, tambien Firestore; gana la primera respuesta valida */
+  /* _ETI_SUPABASE_V3 (05-nov): Supabase y Firestore se consultan A LA VEZ y se muestra la primera respuesta valida
+     (nunca mas lento que antes). Cuando llegan las dos, se comparan (verificacion en sombra) sin lecturas extra. */
   function carrera(promSb, fsFn, armar, sombra) {
     var t0 = Date.now();
     return new Promise(function (ok, mal) {
-      var listo = false, fsP = null, sbFallo = false, fsError = null;
-      function usarFs() {
-        if (fsP) return; fsP = fsFn();
-        fsP.then(function (s) { if (!listo) { listo = true; est.firestore++; ok(s); } },
-          function (e) { fsError = e; if (!listo && sbFallo) { listo = true; mal(e); } });
-      }
-      var tm = setTimeout(usarFs, 1500);
+      var listo = false, rSb = null, sFs = null, sbMal = false, fsMal = null, comparado = false;
+      function comparar() { if (comparado || !rSb || !sFs) return; comparado = true; try { sombra(rSb, sFs); } catch (e) {} }
+      var fsP = fsFn();
+      fsP.then(function (s) {
+        sFs = s;
+        if (!listo) { listo = true; est.firestore++; ok(s); }
+        comparar();
+      }, function (e) { fsMal = e; if (!listo && sbMal) { listo = true; mal(e); } });
       promSb.then(function (r) {
-        clearTimeout(tm); if (listo) return;
-        var snap; try { snap = armar(r); } catch (e) { sbFallo = true; ultimoError = 'lectura: ' + e.message; if (fsError) { listo = true; mal(fsError); } else usarFs(); return; }
-        listo = true; est.supabase++; est.ms.push(Date.now() - t0); if (est.ms.length > 50) est.ms.shift();
-        ok(snap);
-        setTimeout(function () { (fsP || fsFn()).then(function (s) { try { sombra(r, s); } catch (e) {} }, function () {}); }, fsP ? 0 : 2000);
+        var snap; try { snap = armar(r); } catch (e) { sbMal = true; ultimoError = 'lectura: ' + e.message; if (!listo && fsMal) { listo = true; mal(fsMal); } return; }
+        rSb = r; est.ms.push(Date.now() - t0); if (est.ms.length > 50) est.ms.shift();
+        if (!listo) { listo = true; est.supabase++; ok(snap); }
+        comparar();
       }, function (e) {
-        clearTimeout(tm); sbFallo = true; ultimoError = 'lectura: ' + e.message;
-        if (fsError && !listo) { listo = true; mal(fsError); return; }
-        usarFs();
+        sbMal = true; ultimoError = 'lectura: ' + e.message;
+        if (!listo && fsMal) { listo = true; mal(fsMal); }
       });
     });
   }
