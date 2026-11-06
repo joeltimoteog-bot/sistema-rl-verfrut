@@ -49,6 +49,9 @@
      se usa solo Azure por 5 minutos. Apagar: localStorage.rl_edge = 'off' (o EDGE_ACTIVO = false + subir ?v=). */
   var EDGE_ACTIVO = true;
   var EDGE = 'https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/';
+  /* _EDGE_REGION_V1 (05-nov): el servidor de Supabase se ejecuta en Sao Paulo, junto a la base (antes corria en otra region:
+     cada consulta tardaba 230-1200 ms en el servidor; en Sao Paulo 6-60 ms) */
+  function rg(u) { var i = u.indexOf('#'), h = i >= 0 ? u.slice(i) : ''; if (i >= 0) u = u.slice(0, i); return u + (u.indexOf('?') >= 0 ? '&' : '?') + 'forceFunctionRegion=sa-east-1' + h; }
   /* _EDGE_V2 (05-nov): fase 2 — TODO pasa a Supabase salvo las rutas con llave de funcion (mantenimiento, importaciones, sync, lote) */
   var SOLO_AZURE = /^(?!)/;   /* _EDGE_V3 (05-nov): fase 3 — Supabase ya atiende tambien mantenimiento, importaciones y sync (con la misma llave) */
   try { var me = localStorage.getItem('rl_edge'); if (me === 'off') EDGE_ACTIVO = false; else if (me === 'on') EDGE_ACTIVO = true; } catch (e) {}
@@ -64,7 +67,7 @@
     var ruta = url.split(MARCA)[1] || '';
     if (!EDGE_ACTIVO || edgePausado() || SOLO_AZURE.test(ruta) || (init && init.body && typeof init.body !== 'string')) return fOrig.call(window, url, init);
     /* _EDGE_V3: POST /atenciones (crear, con llave) tambien va a Supabase */
-    return fOrig.call(window, EDGE + ruta, init).then(function (r) {
+    return fOrig.call(window, rg(EDGE + ruta), init).then(function (r) {
       if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { edgeFalla('HTTP ' + r.status); return fOrig.call(window, url, init); }
       edgeFallas = 0; return r;
     }, function (e) {
@@ -87,7 +90,7 @@
         var cuerpoS = null; try { cuerpoS = JSON.parse(init.body); } catch (e) {}
         if (tkS && cuerpoS && cuerpoS.action === 'subirArchivoAzure') {
           var self = this, initGas = Object.assign({}, init, { _rlSinEdge: true });   /* el respaldo no vuelve a intentar Supabase */
-          return fOrig.call(window, EDGE + 'archivos/subir', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tkS }, body: init.body, signal: init.signal })
+          return fOrig.call(window, rg(EDGE + 'archivos/subir'), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tkS }, body: init.body, signal: init.signal })
             .then(function (r) { return r.ok ? r.clone().json().then(function (j) { if (j && j.success && j.url) return r; throw new Error('respuesta sin url'); }) : Promise.reject(new Error('HTTP ' + r.status)); })
             .catch(function (e) { if (init.signal && init.signal.aborted) throw e; try { console.warn('[_FASE4_DIRECTO_V1] subida directa fallo (' + (e && e.message) + '): va por Apps Script'); } catch (x) {} return window.fetch.call(self, input, initGas); });
         }

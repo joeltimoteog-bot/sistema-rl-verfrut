@@ -25,7 +25,8 @@
   function token() { try { return sessionStorage.getItem('eti_token') || ''; } catch (e) { return ''; } }
   function post(accion, cuerpo) {
     var h = { 'Content-Type': 'application/json' }, t = token(); if (t) h.Authorization = 'Bearer ' + t;
-    return fetch(API + accion, { method: 'POST', headers: h, body: JSON.stringify(cuerpo) }).then(function (r) {
+    return fetch(API + accion + '?forceFunctionRegion=sa-east-1', {   /* _EDGE_REGION_V1: servidor en Sao Paulo, junto a la base */
+       method: 'POST', headers: h, body: JSON.stringify(cuerpo) }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + r.status)); return j; });
     });
   }
