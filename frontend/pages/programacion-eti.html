@@ -348,7 +348,7 @@
 <script type="module">
 if(!window.__PROGETI_BLOQ){
 const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js");
-const { getFirestore, collection, addDoc, deleteDoc, doc, setDoc, onSnapshot } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+const { getFirestore, collection, addDoc, deleteDoc, doc, setDoc, onSnapshot, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
 
 /* Mismo proyecto que Capacitaciones ETI. Nombre de app propio para no chocar con otra instancia. */
 const app = initializeApp({
@@ -713,17 +713,63 @@ function verDetalle(id){
    ${(p.reprogramaciones||[]).length?`<div class="kv"><b>Reprogramaciones:</b> ${p.reprogramaciones.map(r=>esc(r.motivo||'')).join('; ')}</div>`:''}
    <div class="kv"><b>Creado por:</b> ${esc(p.creadoPor||'—')} · ${p.origen==='SISTEMA_RRLL'?'Sistema RR.LL.':'Capacitaciones ETI'}</div>
    ${htmlEnlace(p.supervisor,p.tema)}
-   <div class="hint" style="margin-top:8px">Para reprogramar con motivo e historial usa <b>Capacitaciones ETI → Programación</b>.</div>
+   ${p.estado!=='ejecutada'?`<div class="hint" style="margin-top:8px">🔄 <b>Reprogramar</b> cambia las fechas con motivo e historial (igual que en Capacitaciones ETI) y al supervisor le aparece el aviso <b>"Fechas cambiadas"</b>.</div>`:''}
    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">
+     ${p.estado!=='ejecutada'?`<button class="btn bp" id="btnReprog">🔄 Reprogramar</button>`:''}
      ${puedeAnular?`<button class="btn bd" id="btnAnular">🗑️ Anular</button>`:''}
      <button class="btn bs" id="btnCerrar">Cerrar</button></div>`;
   $('modal').style.display='flex';
   $('btnCerrar').onclick=()=>$('modal').style.display='none';
+  if($('btnReprog'))$('btnReprog').onclick=()=>reprogramar(p);
   if(puedeAnular)$('btnAnular').onclick=async()=>{
     if(!confirm('¿Anular esta programación? Desaparecerá también para el supervisor.'))return;
     try{await deleteDoc(doc(db,COL_PROG,p.id));$('modal').style.display='none';toast('🗑️ Programación anulada');}
     catch(err){console.error(err);toast('❌ No se pudo anular');}
   };
+}
+/* _PROGETI_REPROG_V1 (06-nov-2026): reprogramar desde el Sistema RR.LL. con el MISMO formato que Capacitaciones ETI
+   (fechas, fechaProgramada, fechaFin, diasDesignados, reprogramaciones[], vecesReprogramada). Las fechas ya
+   registradas (fechasEjecutadas) no se pueden mover. El supervisor ve el aviso "Fechas cambiadas". */
+const MOTIVOS_REPROG=['LLUVIA / CLIMA','PARO / BLOQUEO','LABORES ATRASADAS','FALTA DE PERSONAL','DECISION DE ADMINISTRACION','CRUCE CON OTRA ACTIVIDAD','OTRO'];
+function reprogramar(p){
+  const orig=fechasDe(p).slice().sort(), hechas=(p.fechasEjecutadas||[]).filter(f=>orig.includes(f));
+  let F=orig.slice();
+  const pintar=()=>{
+    $('mBox').innerHTML=`<h3>🔄 Reprogramar · ${esc(tipoDe(p.tema).t)}</h3>
+     <div class="kv"><b>${esc(p.sector)}</b> · ${esc(p.supervisor)}</div>
+     <div class="kv" style="margin-top:8px"><b>Fechas</b> (cambia, quita o agrega):</div>
+     <div id="rpF">${F.map((f,i)=>hechas.includes(f)
+        ?`<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><input type="date" value="${f}" disabled style="padding:6px;border:1px solid var(--bd);border-radius:8px"><span class="bdg" style="background:#dcfce7;color:#166534">✅ ya registrada</span></div>`
+        :`<div style="display:flex;gap:6px;align-items:center;margin:4px 0"><input type="date" data-i="${i}" value="${f}" style="padding:6px;border:1px solid var(--bd);border-radius:8px"><button class="btn bs" data-q="${i}" title="Quitar" style="padding:4px 10px">✕</button></div>`).join('')}</div>
+     <button class="btn bs" id="rpAdd" style="margin:4px 0 10px">＋ Agregar fecha</button>
+     <div class="kv"><b>Motivo *</b></div><select id="rpMot" style="width:100%;padding:8px;border:1px solid var(--bd);border-radius:8px"><option value="">— Selecciona —</option>${MOTIVOS_REPROG.map(m=>`<option>${m}</option>`).join('')}</select>
+     <div class="kv" style="margin-top:8px"><b>Detalle</b></div><textarea id="rpDet" rows="2" style="width:100%;padding:8px;border:1px solid var(--bd);border-radius:8px" placeholder="Opcional"></textarea>
+     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn bs" id="rpVol">← Volver</button><button class="btn bp" id="rpOk">💾 Guardar reprogramación</button></div>`;
+    $('mBox').querySelectorAll('input[data-i]').forEach(el=>el.onchange=()=>{F[+el.dataset.i]=el.value;});
+    $('mBox').querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{F.splice(+b.dataset.q,1);pintar();});
+    $('rpAdd').onclick=()=>{F.push(F[F.length-1]||new Date().toISOString().slice(0,10));pintar();};
+    $('rpVol').onclick=()=>verDetalle(p.id);
+    $('rpOk').onclick=guardar;
+  };
+  const guardar=async()=>{
+    const nuevas=[...new Set(F.filter(Boolean))].sort(), mot=$('rpMot').value, det=$('rpDet').value.trim();
+    if(!nuevas.length)return toast('⚠️ Debe quedar al menos una fecha');
+    if(JSON.stringify(nuevas)===JSON.stringify(orig))return toast('⚠️ Las fechas son iguales a las actuales');
+    if(!mot){$('rpMot').focus();return toast('⚠️ El motivo es obligatorio');}
+    if(hechas.some(f=>!nuevas.includes(f)))return toast('⚠️ No se puede quitar una fecha ya registrada');
+    const quit=orig.filter(f=>!nuevas.includes(f)), agr=nuevas.filter(f=>!orig.includes(f)), cambios=[];
+    quit.forEach((f,i)=>{ if(agr[i])cambios.push(dmy(f)+' → '+dmy(agr[i])); else cambios.push(dmy(f)+' eliminada'); });
+    agr.slice(quit.length).forEach(f=>cambios.push(dmy(f)+' agregada'));
+    const entrada={fechaAnteriorIni:orig[0],fechaAnteriorFin:orig[orig.length-1],fechasAnterior:orig,fechasNueva:nuevas,nuevaIni:nuevas[0],nuevaFin:nuevas[nuevas.length-1],
+      cambios:cambios.join(' · '),motivo:mot,detalle:det,registradoPor:USER.nombre||USER.usuario||'',fecha:new Date().toISOString(),origen:'SISTEMA_RRLL'};
+    $('rpOk').disabled=true;
+    try{
+      await updateDoc(doc(db,COL_PROG,p.id),{fechaProgramada:nuevas[0],fechaFin:nuevas[nuevas.length-1],fechas:nuevas,diasDesignados:nuevas.length,
+        semanas:[...new Set(nuevas.map(f=>semanaETI(f).w))],reprogramaciones:[...(p.reprogramaciones||[]),entrada],vecesReprogramada:(p.vecesReprogramada||0)+1});
+      $('modal').style.display='none'; toast('🔄 Reprogramada: '+entrada.cambios+' · el supervisor verá el aviso',6000);
+    }catch(err){console.error('[progeti] reprog',err);toast('❌ No se pudo reprogramar');$('rpOk').disabled=false;}
+  };
+  pintar();
 }
 $('modal').addEventListener('click',e=>{if(e.target.id==='modal')$('modal').style.display='none';});
 document.addEventListener('click',e=>{const el=e.target.closest('[data-id]');if(el&&(el.classList.contains('ev')||el.tagName==='BUTTON'))verDetalle(el.dataset.id);});
