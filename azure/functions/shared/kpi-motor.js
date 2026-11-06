@@ -322,7 +322,17 @@ function calcular(E) {
       const opcional = tema === TEMA_OPCIONAL;
       if (!opcional && TEMAS_ETI.indexOf(tema) < 0) return;
       const fechas = (g.fechas || []).slice().sort();
-      const ejec = new Set(g.fechas_ejecutadas || []);
+      const ejec = new Set((g.fechas_ejecutadas || []).filter(f => fechas.indexOf(f) >= 0));
+      /* _KPI_FIX_V2 (06-nov): ejecucion REAL de cada fecha programada.
+         · Capacitaciones ETI anota { prog, real } por registro (real = dia del registro).
+         · Evaluacion ETI, cuando se evalua a destiempo, anota la fecha REAL (no programada) en fechasEjecutadas:
+           esa fecha cubre la primera fecha programada pendiente, como TARDE. Antes: la programada salia no hecha y
+           la evaluacion contaba aparte como "sin programacion" (1/2 en vez de 0/1). */
+      const realDe = {};
+      (g.ejecuciones || []).forEach(x => { if (x && x.prog && fechas.indexOf(x.prog) >= 0 && x.real) { ejec.add(x.prog); if (!realDe[x.prog] || x.real < realDe[x.prog]) realDe[x.prog] = x.real; } });
+      (g.fechas_ejecutadas || []).filter(f => fechas.indexOf(f) < 0).sort().forEach(extra => {
+        const f0 = fechas.find(f => !ejec.has(f)); if (!f0) return; ejec.add(f0); realDe[f0] = extra;
+      });
       /* _KPI_AJUSTES_V2 (09-oct): si ETI anoto fecha por fecha lo ejecutado, SOLO esas fechas cuentan.
          El estado global 'ejecutada' da por hechas las fechas pasadas solo si no hay detalle por fecha
          (programaciones antiguas). Antes: 'ejecutada' con 1 de 2 fechas hechas salia 2/2. */
@@ -350,9 +360,10 @@ function calcular(E) {
         const realEseDia = !!hechasReal[tema + '|' + f];   /* _K3_REALIZADAS_V1: registro real en la fecha programada = ejecutada ese dia */
         const hecha = ejec.has(f) || realEseDia || (globalEjec && f <= hoyS);   /* _IND_FIX_V1: el estado global no da por hechas fechas futuras */
         if (hecha) {
-          const tarde = !ejec.has(f) && !realEseDia && fReg && fReg > fin;
+          if (realDe[f]) { e.real = realDe[f]; }   /* _KPI_FIX_V2 */
+          const tarde = realDe[f] ? (realDe[f] > fin && !realEseDia) : (!ejec.has(f) && !realEseDia && fReg && fReg > fin);
           e.ok = !tarde;
-          e.detalle = tarde ? 'Programada el ' + dm(f) + ', ejecutada recién el ' + dm(fReg) + ' (fuera de la fecha programada)' : 'Programada el ' + dm(f) + ' · ejecutada' + (fReg ? ' (registro del ' + dm(fReg) + ')' : '');
+          e.detalle = tarde ? 'Programada el ' + dm(f) + ', ejecutada recién el ' + dm(realDe[f] || fReg) + ' (fuera de la fecha programada)' : 'Programada el ' + dm(f) + ' · ejecutada' + ((realDe[f] || fReg) ? ' (registro del ' + dm(realDe[f] || fReg) + ')' : '');
           if (opcional) e.detalle += ' · reforzamiento (opcional)';
           den++; if (e.ok) num++;
         } else if (f < hoyS) {
@@ -381,14 +392,15 @@ function calcular(E) {
          · evaluacion de checklist registrada en Evaluaciones ETI (evaluaciones_conocimiento) en el periodo, en una fecha que
            no este ya cubierta por una programacion de checklist contada arriba.
        Lo programado y no hecho sigue restando. */
-    const fechasProg = {}; ev.forEach(e => { if (e.prog) fechasProg[String(e.ref).split(' ·')[0] + '|' + e.fecha] = 1; });
-    const ligados = {}; progs.forEach(g => { if (g.registro_id) ligados[g.registro_id] = 1; });
+    const fechasProg = {}; ev.forEach(e => { if (e.prog) { const t0 = String(e.ref).split(' ·')[0]; fechasProg[t0 + '|' + e.fecha] = 1; if (e.real) fechasProg[t0 + '|' + e.real] = 1; } });   /* _KPI_FIX_V2: la fecha real tambien queda cubierta */
+    const ligados = {}; progs.forEach(g => { if (g.registro_id) ligados[g.registro_id] = 1; (g.registro_ids || []).forEach(id => { ligados[id] = 1; }); });   /* _KPI_FIX_V2: todos los registros de la programacion */
     ((E.eti && E.eti.actas) || []).forEach(a => {
       if (!a.ejecucion || !enR(a.ejecucion) || a.ejecucion < desde || ligados[a.id]) return;
       if (!esPersonaEti(a.supervisor, p, u.nombre, etiNombre)) return;
       const tema = String(a.tema || 'CAPACITACIONES ETI').toUpperCase().trim();
       if (tema === TEMA_OPCIONAL) { ev.push({ ref: tema + ' · ' + (a.sector || ''), fecha: a.ejecucion, ok: null, detalle: 'Reforzamiento realizado el ' + dm(a.ejecucion) + ' (opcional: se muestra, no cambia la nota)' }); return; }
       if (fechasProg[tema + '|' + a.ejecucion]) return;
+      if (TEMAS_ETI.indexOf(tema) < 0) return;   /* _KPI_FIX_V2: solo temas ETI (antes una "CHARLA SST" contaba como capacitacion ETI cumplida) */
       den++; num++;
       ev.push({ ref: tema + ' · ' + (a.sector || ''), fecha: a.ejecucion, ok: true, realizada: true, detalle: 'Realizada y registrada en ETI el ' + dm(a.ejecucion) + ' (sin programación previa: cuenta como cumplida)' });
     });

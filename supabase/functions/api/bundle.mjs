@@ -65831,14 +65831,15 @@ var require_cumpl_motor = __commonJS({
             obj[a.id] = a;
           }
         }
-        let best = null, n = 0;
+        let best = null, n = 0, tot = 0;
         Object.keys(cnt).forEach((k) => {
+          tot += cnt[k];
           if (cnt[k] > n) {
             n = cnt[k];
             best = obj[k];
           }
         });
-        return best && n * 2 > hab ? best : null;
+        return best && tot * 2 > hab ? best : null;
       }
       function etiqueta(o, a) {
         o.cubre_a = String(titular(a).nombre || a.nombre || "");
@@ -66076,7 +66077,8 @@ var require_cumpl_motor = __commonJS({
           trabajador: c.nombre,
           empresa: c.empresa,
           sector: c.sector,
-          motivo: c.motivo.toLowerCase() === "otros" && c.motivo_extra ? c.motivo_extra : c.motivo,
+          motivo: String(c.motivo || "").toLowerCase() === "otros" && c.motivo_extra ? c.motivo_extra : c.motivo || "",
+          /* _CUMPL_FIX_V2: caso sin motivo ya no tumba el panel */
           gravedad: c.gravedad,
           responsable: c.supervisor || c.registrado_por,
           fecha_registro: ymd(base),
@@ -66233,23 +66235,50 @@ var require_cumpl_motor = __commonJS({
             const dom = sumar(d, 6);
             const limV = limiteVisita(sumar(d, 7), cfg.plazo_visita_dias || 1);
             if (dom >= hoy || limV >= hoy) break;
-            let obl = propio && !AUS.semana(u, d, ymd, sumar) ? 1 : 0;
+            const propia = propio && !AUS.semana(u, d, ymd, sumar) ? 1 : 0;
+            const titulares = [];
             cobV.forEach((a) => {
-              if (AUS.semana(AUS.titular(a), d, ymd, sumar) === a) obl++;
+              if (AUS.semana(AUS.titular(a), d, ymd, sumar) === a) titulares.push(AUS.titular(a));
             });
+            const obl = propia + titulares.length;
             if (!obl) continue;
             semanas += obl;
             const lunes = d;
-            const cubren = lv.filter((v) => {
-              if (!esDelUsuario({ supervisor: v.supervisor, registrado_por: "" }, u)) return false;
+            const enSemana = (v) => {
               const fi = fechaV(v.fecha_inicio), ff = fechaV(v.fecha_fin) || fi, finf = fechaV(v.fecha_informe);
               return fi && ff && fi <= dom && ff >= lunes || finf && finf >= lunes && finf <= dom;
-            });
-            if (cubren.length) realizadas += obl;
-            if (cubren.some((v) => {
+            };
+            const de = (v, w) => esDelUsuario({ supervisor: v.supervisor, registrado_por: "" }, w);
+            const enPlazoV = (v) => {
               const fr = v.fecha_reg ? fechaV(String(v.fecha_reg).slice(0, 10)) : null;
               return !fr || fr <= limV;
-            })) visEnPlazo += obl;
+            };
+            const cand = lv.filter((v) => enSemana(v) && (de(v, u) || titulares.some((t) => de(v, t))));
+            const usadas = /* @__PURE__ */ new Set(), tomar = (f) => {
+              const ok = cand.filter((v2) => !usadas.has(v2) && f(v2));
+              const v = ok.find(enPlazoV) || ok[0];
+              if (v) usadas.add(v);
+              return v;
+            };
+            const hechas = [];
+            const pendT = titulares.filter((t) => {
+              const v = tomar((v2) => de(v2, t));
+              if (v) {
+                hechas.push(v);
+                return false;
+              }
+              return true;
+            });
+            if (propia) {
+              const v = tomar((v2) => de(v2, u));
+              if (v) hechas.push(v);
+            }
+            pendT.forEach(() => {
+              const v = tomar((v2) => de(v2, u));
+              if (v) hechas.push(v);
+            });
+            realizadas += hechas.length;
+            visEnPlazo += hechas.filter(enPlazoV).length;
           }
         }
         const denom = cerrados + vencidos + semanas;
@@ -66936,6 +66965,8 @@ var require_kpi_eti = __commonJS({
         fecha DATE NULL, tipo NVARCHAR(60) NULL, sector NVARCHAR(150) NULL, empresa NVARCHAR(30) NULL, creado_en NVARCHAR(40) NULL,
         sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());   /* _K3_REALIZADAS_V1 (25-oct-2026): evaluaciones de checklist del Sistema Evaluaciones ETI */
     IF COL_LENGTH('dbo.KPI_EtiEvaluaciones', 'creado_en') IS NULL ALTER TABLE dbo.KPI_EtiEvaluaciones ADD creado_en NVARCHAR(40) NULL;
+    IF COL_LENGTH('dbo.ETI_Programaciones', 'registro_ids') IS NULL ALTER TABLE dbo.ETI_Programaciones ADD registro_ids NVARCHAR(MAX) NULL;
+    IF COL_LENGTH('dbo.ETI_Programaciones', 'ejecuciones') IS NULL ALTER TABLE dbo.ETI_Programaciones ADD ejecuciones NVARCHAR(MAX) NULL;
     IF COL_LENGTH('dbo.KPI_EtiEvaluaciones', 'empresa') IS NULL ALTER TABLE dbo.KPI_EtiEvaluaciones ADD empresa NVARCHAR(30) NULL;
     IF OBJECT_ID('dbo.ETI_Supervisores', 'U') IS NULL
       CREATE TABLE dbo.ETI_Supervisores (nombre NVARCHAR(150) NOT NULL, sector NVARCHAR(150) NULL, sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());`).catch((e) => {
@@ -67007,6 +67038,11 @@ var require_kpi_eti = __commonJS({
         await r.query(`INSERT INTO ${tabla} (${cols.map((c) => c[0]).join(", ")}) VALUES ${vals.join(", ")}`);
       }
     }
+    function evalUsuario(d) {
+      const n = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(Boolean).sort().join(" ");
+      const u = String(d.usuario || "").trim().toLowerCase();
+      return d.sup && d.nomUsuario && n(d.sup) !== n(d.nomUsuario) ? "" : u;
+    }
     async function sincronizar(pool, fetchFn) {
       await asegurarTablas(pool);
       const evals = await coleccion("evaluaciones_conocimiento", fetchFn).catch(() => null);
@@ -67056,7 +67092,10 @@ var require_kpi_eti = __commonJS({
           fecha: x.fecha || "",
           atendidaEn: x.atendidaEn || "",
           atendidaPor: x.atendidaPor || ""
-        }))).slice(0, 6e4)
+        }))).slice(0, 6e4),
+        /* _KPI_FIX_V2 (06-nov): todos los registros ligados y, por fecha, cuando se ejecuto realmente (Capacitaciones ETI) */
+        JSON.stringify((Array.isArray(d.registroIds) ? d.registroIds : []).map(String)).slice(0, 8e3),
+        JSON.stringify((Array.isArray(d.ejecuciones) ? d.ejecuciones : []).map((x) => ({ prog: String(x.prog || "").slice(0, 10), real: String(x.real || "").slice(0, 10), reg: String(x.reg || "") }))).slice(0, 2e4)
       ]);
       const colsP = [
         ["id", sql.NVarChar(60)],
@@ -67075,7 +67114,9 @@ var require_kpi_eti = __commonJS({
         ["creado_por", sql.NVarChar(150)],
         ["creado_en", sql.NVarChar(40)],
         ["fs_actualizado", sql.NVarChar(40)],
-        ["solicitudes", sql.NVarChar(sql.MAX)]
+        ["solicitudes", sql.NVarChar(sql.MAX)],
+        ["registro_ids", sql.NVarChar(sql.MAX)],
+        ["ejecuciones", sql.NVarChar(sql.MAX)]
       ];
       const filasR = regs.map((d) => [
         txt(d._id, 60),
@@ -67130,7 +67171,7 @@ var require_kpi_eti = __commonJS({
             tx,
             "dbo.KPI_EtiEvaluaciones",
             [["id", sql.NVarChar(60)], ["usuario", sql.NVarChar(60)], ["nombre", sql.NVarChar(150)], ["fecha", sql.Date], ["tipo", sql.NVarChar(60)], ["sector", sql.NVarChar(150)], ["empresa", sql.NVarChar(30)], ["creado_en", sql.NVarChar(40)]],
-            evals.map((d) => [txt(d._id, 60), txt(String(d.usuario || "").trim().toLowerCase(), 60), txt(d.nomUsuario || d.nombre, 150), dia(d.fecha || d.creadoEn), txt(d.tipo, 60), txt(d.sector, 150), txt(d.emp || d.empresa, 30), txt(d.creadoEn, 40)])
+            evals.map((d) => [txt(d._id, 60), txt(evalUsuario(d), 60), txt(d.sup || d.nomUsuario || d.nombre, 150), dia(d.fecha || d.creadoEn), txt(d.tipo, 60), txt(d.sector, 150), txt(d.emp || d.empresa, 30), txt(d.creadoEn, 40)])
           );
         }
         await tx.request().query(`MERGE dbo.CV_Estado AS x USING (SELECT 'kpi_eti_sync' AS clave) AS s ON x.clave = s.clave
@@ -67185,8 +67226,11 @@ var require_kpi_eti = __commonJS({
           ejecutada_en: x.ejecutada_en,
           veces_reprog: x.veces_reprog,
           reprogramaciones: J(x.reprogramaciones, []),
-          solicitudes: J(x.solicitudes, [])
+          solicitudes: J(x.solicitudes, []),
+          registro_ids: J(x.registro_ids, []),
+          ejecuciones: J(x.ejecuciones, [])
         })),
+        /* _KPI_FIX_V2 */
         registros,
         usuarios,
         supervisores,
@@ -67634,7 +67678,20 @@ var require_kpi_motor = __commonJS({
           const opcional = tema === TEMA_OPCIONAL;
           if (!opcional && TEMAS_ETI.indexOf(tema) < 0) return;
           const fechas = (g.fechas || []).slice().sort();
-          const ejec = new Set(g.fechas_ejecutadas || []);
+          const ejec = new Set((g.fechas_ejecutadas || []).filter((f) => fechas.indexOf(f) >= 0));
+          const realDe = {};
+          (g.ejecuciones || []).forEach((x) => {
+            if (x && x.prog && fechas.indexOf(x.prog) >= 0 && x.real) {
+              ejec.add(x.prog);
+              if (!realDe[x.prog] || x.real < realDe[x.prog]) realDe[x.prog] = x.real;
+            }
+          });
+          (g.fechas_ejecutadas || []).filter((f) => fechas.indexOf(f) < 0).sort().forEach((extra) => {
+            const f0 = fechas.find((f) => !ejec.has(f));
+            if (!f0) return;
+            ejec.add(f0);
+            realDe[f0] = extra;
+          });
           const globalEjec = g.estado === "ejecutada" && ejec.size === 0;
           const reg = g.registro_id && E.eti.registros ? E.eti.registros[g.registro_id] : null;
           const fReg = reg && reg.fecha_ejecucion ? String(reg.fecha_ejecucion).slice(0, 10) : g.ejecutada_en ? String(g.ejecutada_en).slice(0, 10) : "";
@@ -67670,9 +67727,12 @@ var require_kpi_motor = __commonJS({
             const realEseDia = !!hechasReal[tema + "|" + f];
             const hecha = ejec.has(f) || realEseDia || globalEjec && f <= hoyS;
             if (hecha) {
-              const tarde = !ejec.has(f) && !realEseDia && fReg && fReg > fin;
+              if (realDe[f]) {
+                e.real = realDe[f];
+              }
+              const tarde = realDe[f] ? realDe[f] > fin && !realEseDia : !ejec.has(f) && !realEseDia && fReg && fReg > fin;
               e.ok = !tarde;
-              e.detalle = tarde ? "Programada el " + dm(f) + ", ejecutada reci\xE9n el " + dm(fReg) + " (fuera de la fecha programada)" : "Programada el " + dm(f) + " \xB7 ejecutada" + (fReg ? " (registro del " + dm(fReg) + ")" : "");
+              e.detalle = tarde ? "Programada el " + dm(f) + ", ejecutada reci\xE9n el " + dm(realDe[f] || fReg) + " (fuera de la fecha programada)" : "Programada el " + dm(f) + " \xB7 ejecutada" + (realDe[f] || fReg ? " (registro del " + dm(realDe[f] || fReg) + ")" : "");
               if (opcional) e.detalle += " \xB7 reforzamiento (opcional)";
               den++;
               if (e.ok) num++;
@@ -67709,11 +67769,18 @@ var require_kpi_motor = __commonJS({
         });
         const fechasProg = {};
         ev.forEach((e) => {
-          if (e.prog) fechasProg[String(e.ref).split(" \xB7")[0] + "|" + e.fecha] = 1;
+          if (e.prog) {
+            const t0 = String(e.ref).split(" \xB7")[0];
+            fechasProg[t0 + "|" + e.fecha] = 1;
+            if (e.real) fechasProg[t0 + "|" + e.real] = 1;
+          }
         });
         const ligados = {};
         progs.forEach((g) => {
           if (g.registro_id) ligados[g.registro_id] = 1;
+          (g.registro_ids || []).forEach((id) => {
+            ligados[id] = 1;
+          });
         });
         (E.eti && E.eti.actas || []).forEach((a) => {
           if (!a.ejecucion || !enR(a.ejecucion) || a.ejecucion < desde || ligados[a.id]) return;
@@ -67724,6 +67791,7 @@ var require_kpi_motor = __commonJS({
             return;
           }
           if (fechasProg[tema + "|" + a.ejecucion]) return;
+          if (TEMAS_ETI.indexOf(tema) < 0) return;
           den++;
           num++;
           ev.push({ ref: tema + " \xB7 " + (a.sector || ""), fecha: a.ejecucion, ok: true, realizada: true, detalle: "Realizada y registrada en ETI el " + dm(a.ejecucion) + " (sin programaci\xF3n previa: cuenta como cumplida)" });
@@ -73464,7 +73532,9 @@ var require_kpi = __commonJS({
         if (accion === "serie") {
           const c = await datosBase(pool, context);
           const hoy = KDB.hoyLima();
-          const desde = fechaOk(b.desde) || K.PERIODO.ini, hasta = fechaOk(b.hasta) || hoy;
+          const desde = fechaOk(b.desde) || K.PERIODO.ini;
+          let hasta = fechaOk(b.hasta) || hoy;
+          if (K.PERIODO.fin && hasta > K.PERIODO.fin) hasta = K.PERIODO.fin;
           return res(200, { success: true, desde, hasta, serie: KDB.serie(c.B, hoy, desde < K.PERIODO.ini ? K.PERIODO.ini : desde, hasta) });
         }
         if (accion === "informe") {

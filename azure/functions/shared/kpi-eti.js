@@ -37,6 +37,8 @@ function asegurarTablas(pool) {
         fecha DATE NULL, tipo NVARCHAR(60) NULL, sector NVARCHAR(150) NULL, empresa NVARCHAR(30) NULL, creado_en NVARCHAR(40) NULL,
         sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());   /* _K3_REALIZADAS_V1 (25-oct-2026): evaluaciones de checklist del Sistema Evaluaciones ETI */
     IF COL_LENGTH('dbo.KPI_EtiEvaluaciones', 'creado_en') IS NULL ALTER TABLE dbo.KPI_EtiEvaluaciones ADD creado_en NVARCHAR(40) NULL;
+    IF COL_LENGTH('dbo.ETI_Programaciones', 'registro_ids') IS NULL ALTER TABLE dbo.ETI_Programaciones ADD registro_ids NVARCHAR(MAX) NULL;
+    IF COL_LENGTH('dbo.ETI_Programaciones', 'ejecuciones') IS NULL ALTER TABLE dbo.ETI_Programaciones ADD ejecuciones NVARCHAR(MAX) NULL;
     IF COL_LENGTH('dbo.KPI_EtiEvaluaciones', 'empresa') IS NULL ALTER TABLE dbo.KPI_EtiEvaluaciones ADD empresa NVARCHAR(30) NULL;
     IF OBJECT_ID('dbo.ETI_Supervisores', 'U') IS NULL
       CREATE TABLE dbo.ETI_Supervisores (nombre NVARCHAR(150) NOT NULL, sector NVARCHAR(150) NULL, sync DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME());`)
@@ -92,6 +94,13 @@ async function insertarLotes(tx, tabla, cols, filas) {
   }
 }
 
+/* _KPI_FIX_V2 (06-nov): la evaluacion es del supervisor EVALUADO (d.sup). Si la registro otra persona (admin o reemplazo),
+   no se le acredita a quien la registro: se usa solo el nombre del evaluado. */
+function evalUsuario(d) {
+  const n = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(Boolean).sort().join(' ');
+  const u = String(d.usuario || '').trim().toLowerCase();
+  return d.sup && d.nomUsuario && n(d.sup) !== n(d.nomUsuario) ? '' : u;
+}
 /* Lee Firestore y reemplaza las tablas. Devuelve { programaciones, registros } */
 async function sincronizar(pool, fetchFn) {
   await asegurarTablas(pool);
@@ -110,11 +119,15 @@ async function sincronizar(pool, fetchFn) {
     txt(d.observaciones || d.obs, 1000), txt(d.creadoPor, 150), txt(d.creadoEn, 40), txt(d._upd, 40),
     JSON.stringify((Array.isArray(d.solicitudesReprog) ? d.solicitudesReprog : []).map(x => ({
       id: x.id || '', estado: x.estado || '', motivo: x.motivo || '', detalle: String(x.detalle || '').slice(0, 1000), fechas: Array.isArray(x.fechas) ? x.fechas : [],
-      usuario: x.usuario || '', nombre: x.nombre || '', fecha: x.fecha || '', atendidaEn: x.atendidaEn || '', atendidaPor: x.atendidaPor || '' }))).slice(0, 60000)]);
+      usuario: x.usuario || '', nombre: x.nombre || '', fecha: x.fecha || '', atendidaEn: x.atendidaEn || '', atendidaPor: x.atendidaPor || '' }))).slice(0, 60000),
+    /* _KPI_FIX_V2 (06-nov): todos los registros ligados y, por fecha, cuando se ejecuto realmente (Capacitaciones ETI) */
+    JSON.stringify((Array.isArray(d.registroIds) ? d.registroIds : []).map(String)).slice(0, 8000),
+    JSON.stringify((Array.isArray(d.ejecuciones) ? d.ejecuciones : []).map(x => ({ prog: String(x.prog || '').slice(0, 10), real: String(x.real || '').slice(0, 10), reg: String(x.reg || '') }))).slice(0, 20000)]);
   const colsP = [['id', sql.NVarChar(60)], ['origen', sql.NVarChar(10)], ['supervisor', sql.NVarChar(150)], ['sector', sql.NVarChar(150)], ['tema', sql.NVarChar(80)],
     ['fechas', sql.NVarChar(2000)], ['fechas_ejecutadas', sql.NVarChar(2000)], ['estado', sql.NVarChar(30)], ['registro_id', sql.NVarChar(60)], ['ejecutada_en', sql.NVarChar(40)],
     ['veces_reprog', sql.Int], ['reprogramaciones', sql.NVarChar(sql.MAX)], ['observaciones', sql.NVarChar(1000)], ['creado_por', sql.NVarChar(150)],
-    ['creado_en', sql.NVarChar(40)], ['fs_actualizado', sql.NVarChar(40)], ['solicitudes', sql.NVarChar(sql.MAX)]];
+    ['creado_en', sql.NVarChar(40)], ['fs_actualizado', sql.NVarChar(40)], ['solicitudes', sql.NVarChar(sql.MAX)],
+    ['registro_ids', sql.NVarChar(sql.MAX)], ['ejecuciones', sql.NVarChar(sql.MAX)]];   /* _KPI_FIX_V2 */
   const filasR = regs.map(d => [txt(d._id, 60), txt(d.supervisor, 150), txt(d.sector, 150), txt(d.tema, 80), dia(d.fechaEjecucion), dia(d.fechaEnvio),
     dia(d.fechaLimite), parseInt(d.total, 10) || null, txt(d.registradoPor, 150), txt(d.creadoEn, 40)]);
   const colsR = [['id', sql.NVarChar(60)], ['supervisor', sql.NVarChar(150)], ['sector', sql.NVarChar(150)], ['tema', sql.NVarChar(80)], ['fecha_ejecucion', sql.Date],
@@ -135,7 +148,7 @@ async function sincronizar(pool, fetchFn) {
     if (evals) {   /* _K3_REALIZADAS_V1 */
       await tx.request().query('DELETE FROM dbo.KPI_EtiEvaluaciones;');
       await insertarLotes(tx, 'dbo.KPI_EtiEvaluaciones', [['id', sql.NVarChar(60)], ['usuario', sql.NVarChar(60)], ['nombre', sql.NVarChar(150)], ['fecha', sql.Date], ['tipo', sql.NVarChar(60)], ['sector', sql.NVarChar(150)], ['empresa', sql.NVarChar(30)], ['creado_en', sql.NVarChar(40)]],
-        evals.map(d => [txt(d._id, 60), txt(String(d.usuario || '').trim().toLowerCase(), 60), txt(d.nomUsuario || d.nombre, 150), dia(d.fecha || d.creadoEn), txt(d.tipo, 60), txt(d.sector, 150), txt(d.emp || d.empresa, 30), txt(d.creadoEn, 40)]));
+        evals.map(d => [txt(d._id, 60), txt(evalUsuario(d), 60), txt(d.sup || d.nomUsuario || d.nombre, 150), dia(d.fecha || d.creadoEn), txt(d.tipo, 60), txt(d.sector, 150), txt(d.emp || d.empresa, 30), txt(d.creadoEn, 40)]));
     }
     await tx.request().query(`MERGE dbo.CV_Estado AS x USING (SELECT 'kpi_eti_sync' AS clave) AS s ON x.clave = s.clave
       WHEN MATCHED THEN UPDATE SET valor = CONVERT(NVARCHAR(19), SYSUTCDATETIME(), 126), actualizado = SYSUTCDATETIME()
@@ -159,7 +172,8 @@ async function leer(pool) {
   try { evaluaciones = (await pool.request().query('SELECT id, usuario, nombre, CONVERT(CHAR(10), fecha, 120) AS fecha, tipo, sector, empresa FROM dbo.KPI_EtiEvaluaciones')).recordset; } catch (e) {}
   return { programaciones: p.map(x => ({ id: x.id, origen: x.origen, supervisor: x.supervisor, sector: x.sector, tema: x.tema,
     fechas: J(x.fechas, []), fechas_ejecutadas: J(x.fechas_ejecutadas, []), estado: x.estado, registro_id: x.registro_id,
-    ejecutada_en: x.ejecutada_en, veces_reprog: x.veces_reprog, reprogramaciones: J(x.reprogramaciones, []), solicitudes: J(x.solicitudes, []) })),
+    ejecutada_en: x.ejecutada_en, veces_reprog: x.veces_reprog, reprogramaciones: J(x.reprogramaciones, []), solicitudes: J(x.solicitudes, []),
+    registro_ids: J(x.registro_ids, []), ejecuciones: J(x.ejecuciones, []) })),   /* _KPI_FIX_V2 */
     registros, usuarios, supervisores, evaluaciones,
     actas: r.map(x => ({ id: x.id, supervisor: x.supervisor, sector: x.sector, tema: x.tema, ejecucion: x.fecha_ejecucion, envio: x.fecha_envio, limite: x.fecha_limite })) };   /* _IND_COMPL_V1 */
 }

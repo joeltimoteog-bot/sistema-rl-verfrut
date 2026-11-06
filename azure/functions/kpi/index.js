@@ -57,7 +57,7 @@ module.exports = async function (context, req) {
     if (accion === 'serie') {   /* { desde, hasta }: por dia, lo que vencia ese dia */
       const c = await datosBase(pool, context);
       const hoy = KDB.hoyLima();
-      const desde = fechaOk(b.desde) || K.PERIODO.ini, hasta = fechaOk(b.hasta) || hoy;
+      const desde = fechaOk(b.desde) || K.PERIODO.ini; let hasta = fechaOk(b.hasta) || hoy; if (K.PERIODO.fin && hasta > K.PERIODO.fin) hasta = K.PERIODO.fin;   /* _KPI_FIX_V2: desde 2027 no pasar del fin del periodo (rango max. de la serie) */
       return res(200, { success: true, desde, hasta, serie: KDB.serie(c.B, hoy, desde < K.PERIODO.ini ? K.PERIODO.ini : desde, hasta) });
     }
     if (accion === 'informe') {   /* informe de un mes CERRADO (foto inmutable) */

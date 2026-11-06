@@ -136,9 +136,9 @@ function crearAus(raw, usuarios, esDel, esHabil) {
       const d = sumarF(lunes, i); if (!esHabil(d)) continue; hab++;
       const a = ausencia(u, ymdF(d)); if (a) { cnt[a.id] = (cnt[a.id] || 0) + 1; obj[a.id] = a; }
     }
-    let best = null, n = 0;
-    Object.keys(cnt).forEach(k => { if (cnt[k] > n) { n = cnt[k]; best = obj[k]; } });
-    return best && n * 2 > hab ? best : null;
+    let best = null, n = 0, tot = 0;
+    Object.keys(cnt).forEach(k => { tot += cnt[k]; if (cnt[k] > n) { n = cnt[k]; best = obj[k]; } });
+    return best && tot * 2 > hab ? best : null;   /* _CUMPL_FIX_V2: se SUMAN todas las ausencias de la semana (vacaciones lun-mar + descanso medico mie-jue = 4 de 5); devuelve la mas larga */
   }
   function etiqueta(o, a) { o.cubre_a = String(titular(a).nombre || a.nombre || ''); o.ausencia_tipo = String(a.tipo || ''); o.ausencia_hasta = String(a.hasta || ''); return o; }
   return { todas, lista, vig, ausencia, reemp, titular, coberturas, duenoEn, cobCaso, semana, etiqueta };
@@ -316,7 +316,7 @@ function crearMotor(D) {
     const avance = informeEntregado(c) && c.enlace_reporte ? 80 : informeEntregado(c) ? 50 : 20;   /* _ENVIO_INFORME_CUMPL_V1 */
     const o = {
       tipo: 'CASO', clave: 'caso_' + c.nro, caso: c.nro, actividad: etapa, trabajador: c.nombre, empresa: c.empresa, sector: c.sector,
-      motivo: c.motivo.toLowerCase() === 'otros' && c.motivo_extra ? c.motivo_extra : c.motivo, gravedad: c.gravedad,
+      motivo: String(c.motivo || '').toLowerCase() === 'otros' && c.motivo_extra ? c.motivo_extra : (c.motivo || ''),   /* _CUMPL_FIX_V2: caso sin motivo ya no tumba el panel */ gravedad: c.gravedad,
       responsable: c.supervisor || c.registrado_por, fecha_registro: ymd(base), plazo_dias: plazo, fecha_limite: ymd(limite),
       dias_transcurridos: dias(base, hoy), dias_restantes: s.dias_restantes, dias_retraso: s.dias_retraso, estado: s.estado,
       porcentaje: avance, documentos_pendientes: docs, estado_gestion: c.estado_gestion || 'EN PROCESO',
@@ -423,18 +423,27 @@ function crearMotor(D) {
         const dom = sumar(d, 6);
         const limV = limiteVisita(sumar(d, 7), cfg.plazo_visita_dias || 1);   /* _CALENDARIO_V1 */
         if (dom >= hoy || limV >= hoy) break;
-        let obl = (propio && !AUS.semana(u, d, ymd, sumar)) ? 1 : 0;
-        cobV.forEach(a => { if (AUS.semana(AUS.titular(a), d, ymd, sumar) === a) obl++; });
+        const propia = (propio && !AUS.semana(u, d, ymd, sumar)) ? 1 : 0;
+        const titulares = []; cobV.forEach(a => { if (AUS.semana(AUS.titular(a), d, ymd, sumar) === a) titulares.push(AUS.titular(a)); });
+        const obl = propia + titulares.length;
         if (!obl) continue;
         semanas += obl;
         const lunes = d;
-        const cubren = lv.filter(v => {
-          if (!esDelUsuario({ supervisor: v.supervisor, registrado_por: '' }, u)) return false;
-          const fi = fechaV(v.fecha_inicio), ff = fechaV(v.fecha_fin) || fi, finf = fechaV(v.fecha_informe);
-          return (fi && ff && fi <= dom && ff >= lunes) || (finf && finf >= lunes && finf <= dom);
-        });
-        if (cubren.length) realizadas += obl;
-        if (cubren.some(v => { const fr = v.fecha_reg ? fechaV(String(v.fecha_reg).slice(0, 10)) : null; return !fr || fr <= limV; })) visEnPlazo += obl;   /* _VISITA_PLAZO_V1 */
+        /* _CUMPL_FIX_V2 (06-nov): cada obligacion de la semana necesita SU visita. Antes 1 visita del reemplazo valia por
+           su semana propia + la que cubre (2 de 2), y la visita hecha por el titular del sector cubierto no le contaba (0 de 2).
+           Ahora: semana cubierta = visita del titular o del reemplazo; semana propia = visita del reemplazo; cada visita, una vez. */
+        const enSemana = v => { const fi = fechaV(v.fecha_inicio), ff = fechaV(v.fecha_fin) || fi, finf = fechaV(v.fecha_informe);
+          return (fi && ff && fi <= dom && ff >= lunes) || (finf && finf >= lunes && finf <= dom); };
+        const de = (v, w) => esDelUsuario({ supervisor: v.supervisor, registrado_por: '' }, w);
+        const enPlazoV = v => { const fr = v.fecha_reg ? fechaV(String(v.fecha_reg).slice(0, 10)) : null; return !fr || fr <= limV; };
+        const cand = lv.filter(v => enSemana(v) && (de(v, u) || titulares.some(t => de(v, t))));
+        const usadas = new Set(), tomar = (f) => { const ok = cand.filter(v => !usadas.has(v) && f(v)); const v = ok.find(enPlazoV) || ok[0]; if (v) usadas.add(v); return v; };
+        const hechas = [];
+        const pendT = titulares.filter(t => { const v = tomar(v2 => de(v2, t)); if (v) { hechas.push(v); return false; } return true; });
+        if (propia) { const v = tomar(v2 => de(v2, u)); if (v) hechas.push(v); }
+        pendT.forEach(() => { const v = tomar(v2 => de(v2, u)); if (v) hechas.push(v); });
+        realizadas += hechas.length;
+        visEnPlazo += hechas.filter(enPlazoV).length;   /* _VISITA_PLAZO_V1 */
       }
     }
     const denom = cerrados + vencidos + semanas;
