@@ -60,20 +60,20 @@ canvas{position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
  <div class="kpi"><b id="kAct">–</b><span>Usuarios conectados</span></div>
  <div class="kpi"><b id="kMin">0</b><span>Impulsos / minuto</span></div>
  <div class="kpi"><b id="kHoy">–</b><span>Acciones hoy</span></div>
- <div class="kpi"><b id="kAz" style="color:#93c5fd">Azure</b><span id="kAzS">midiendo…</span></div>
+ <div class="kpi"><b id="kAz" style="color:#6ee7b7">Supabase</b><span id="kAzS">midiendo…</span></div>
  <div class="kpi"><b id="kGo" style="color:#86efac">Google</b><span id="kGoS">midiendo…</span></div>
  <div class="kpi"><b id="kFb" style="color:#fcd34d">Firebase</b><span id="kFbS">midiendo…</span></div>
 </div>
 <div class="wrap">
  <div class="mapa" id="mapa"><canvas id="c"></canvas>
   <div class="replay" id="replayInfo">⏪ Reproduciendo el día · <b id="replayHora">--:--</b></div>
-  <div class="leyenda"><span><i style="background:#3b82f6"></i>Azure SQL (principal)</span><span><i style="background:#22c55e"></i>Google Sheets (respaldo)</span><span><i style="background:#f59e0b"></i>Firebase (vivo)</span><span><i style="background:#ef4444"></i>Error</span><span>● clic en una neurona = detalle</span></div>
+  <div class="leyenda"><span><i style="background:#10b981"></i>Supabase (principal)</span><span><i style="background:#22c55e"></i>Google Sheets (respaldo)</span><span><i style="background:#f59e0b"></i>Firebase (vivo)</span><span><i style="background:#ef4444"></i>Error</span><span>● clic en una neurona = detalle</span></div>
  </div>
  <div class="side">
   <div class="card" id="det"><h3><span id="detT">Neurona</span><span class="x" id="detX">✕</span></h3><div id="detB"></div></div>
   <div class="card"><h3>⚡ Impulsos en vivo</h3><div class="feed" id="feed"><div class="vacio">Esperando actividad…</div></div></div>
   <div class="card salud"><h3>🩺 Salud (se mide cada minuto)</h3>
-   <div><span>Azure Functions</span><span id="sAz">…</span></div>
+   <div><span>Supabase (servidor + base)</span><span id="sAz">…</span></div>
    <div><span>Google Apps Script</span><span id="sGo">…</span></div>
    <div><span>Firebase (presencia/tráfico)</span><span id="sFb">…</span></div>
    <div><span>Errores de usuarios (1 h)</span><span id="sErr">…</span></div>
@@ -112,8 +112,8 @@ var N = {
   m6:  { x: .47, y: .64, r: 13, ic: '🔧', t: 'Mantenimiento', c: '#fca5a5' },
   m7:  { x: .47, y: .75, r: 13, ic: '✅', t: 'Cumplimiento', c: '#fca5a5' },
   m8:  { x: .47, y: .86, r: 13, ic: '🧩', t: 'Otros módulos', c: '#fca5a5' },
-  az:  { x: .72, y: .28, r: 32, ic: '☁️', t: 'Azure Functions', c: '#3b82f6' },
-  sql: { x: .90, y: .28, r: 25, ic: '🗄️', t: 'Azure SQL', c: '#60a5fa' },
+  az:  { x: .72, y: .28, r: 32, ic: '⚡', t: 'Servidor Supabase', c: '#10b981' },   /* _CEREBRO_SUPABASE_V1 (05-nov): antes Azure Functions */
+  sql: { x: .90, y: .28, r: 25, ic: '🗄️', t: 'Base Supabase', c: '#34d399' },   /* antes Azure SQL */
   gas: { x: .72, y: .60, r: 25, ic: '📜', t: 'Apps Script', c: '#22c55e' },
   sh:  { x: .90, y: .60, r: 21, ic: '📊', t: 'Hoja (respaldo)', c: '#4ade80' },
   fb:  { x: .72, y: .87, r: 23, ic: '🔥', t: 'Firebase', c: '#f59e0b' },
@@ -123,10 +123,10 @@ var N = {
 };
 var MODS = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8'];
 var E = [['usr', 'rl', '#ef4444'], ['usr', 'eti', '#a855f7'], ['usr', 'ev', '#06b6d4'],
-  ['eti', 'az', '#3b82f6'], ['ev', 'az', '#3b82f6'], ['eti', 'fb', '#f59e0b'], ['ev', 'fb', '#f59e0b'], ['rl', 'fb', '#f59e0b'],
-  ['rl', 'az', '#3b82f6'], ['rl', 'gas', '#22c55e'], ['eti', 'gas', '#22c55e'], ['ev', 'gas', '#22c55e'],
-  ['az', 'sql', '#60a5fa'], ['gas', 'sh', '#4ade80'], ['gas', 'mail', '#fbbf24'], ['gas', 'az', '#64748b'], ['usr', 'cn', '#14b8a6'], ['cn', 'sb', '#3ecf8e']];  /* _CONECTA_CEREBRO_V1 */
-MODS.forEach(function (m) { E.push(['rl', m, '#fca5a5']); E.push([m, 'az', '#3b82f6']); E.push([m, 'gas', '#22c55e']); });
+  ['eti', 'az', '#10b981'], ['ev', 'az', '#10b981'], ['eti', 'fb', '#f59e0b'], ['ev', 'fb', '#f59e0b'], ['rl', 'fb', '#f59e0b'],
+  ['rl', 'az', '#10b981'], ['rl', 'gas', '#22c55e'], ['eti', 'gas', '#22c55e'], ['ev', 'gas', '#22c55e'],
+  ['az', 'sql', '#34d399'], ['gas', 'sh', '#4ade80'], ['gas', 'mail', '#fbbf24'], ['gas', 'az', '#64748b'], ['usr', 'cn', '#14b8a6'], ['cn', 'sb', '#3ecf8e']];  /* _CONECTA_CEREBRO_V1 */
+MODS.forEach(function (m) { E.push(['rl', m, '#fca5a5']); E.push([m, 'az', '#10b981']); E.push([m, 'gas', '#22c55e']); });
 
 /* ── clasificación de una acción de /trafico en un camino ── */
 function modulo(a) {
@@ -147,7 +147,7 @@ function camino(e) {
   p.push(origen);
   var m = origen === 'rl' ? modulo(e.accion) : null;
   if (m) p.push(m);
-  if (/azure/i.test(dest)) { p.push('az'); p.push('sql'); }
+  if (/azure|supabase/i.test(dest)) { p.push('az'); p.push('sql'); }
   else if (/google|sheet/i.test(dest)) { p.push('gas'); p.push('sh'); }
   else if (/correo/i.test(dest)) { p.push('gas'); p.push('mail'); }
   else if (/firebase|firestore/i.test(dest)) { if (p[p.length - 1] !== origen) { p = ['usr', origen]; if (m) p.push(m); } p.push('fb'); }
@@ -155,7 +155,7 @@ function camino(e) {
   if (p[p.length - 1] === 'fb' && p.length > 3) { p = ['usr', origen, 'fb']; }
   return p;
 }
-function colorDe(e) { if (e.tipo === 'error') return '#ef4444'; var d = String(e.destino || ''); return /azure/i.test(d) ? '#3b82f6' : /google|sheet/i.test(d) ? '#22c55e' : /correo/i.test(d) ? '#fbbf24' : '#f59e0b'; }
+function colorDe(e) { if (e.tipo === 'error') return '#ef4444'; var d = String(e.destino || ''); return /azure|supabase/i.test(d) ? '#10b981' : /google|sheet/i.test(d) ? '#22c55e' : /correo/i.test(d) ? '#fbbf24' : '#f59e0b'; }
 
 /* ── lienzo ── */
 var cv = $('c'), cx = cv.getContext('2d'), W = 0, H = 0, dpr = window.devicePixelRatio || 1;
@@ -258,7 +258,7 @@ function pintarSalud(id, kId, r, nodos) {
 }
 function salud() {
   if (document.hidden) return;
-  medir(AZ + '/trabajadores/buscar?dni=00000000').then(function (r) { pintarSalud('sAz', 'kAzS', r, ['az', 'sql']); });
+  medir('https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/trabajadores/buscar?dni=00000000&forceFunctionRegion=sa-east-1').then(function (r) { pintarSalud('sAz', 'kAzS', r, ['az', 'sql']); });
   medir(GAS, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'ping' }) }).then(function (r) { pintarSalud('sGo', 'kGoS', r, ['gas', 'sh']); });
   var t0 = performance.now(); setTimeout(function () { var r = { ok: fbOk !== false, ms: Math.round(performance.now() - t0) }; pintarSalud('sFb', 'kFbS', { ok: fbOk !== false, ms: 300 }, ['fb']); }, 50);
 }

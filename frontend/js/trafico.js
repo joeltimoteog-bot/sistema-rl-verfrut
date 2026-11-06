@@ -81,13 +81,15 @@ window.RLTrafico = window.RLTrafico || (function () {
     if (url.indexOf('.blob.core.windows.net') >= 0 && met === 'PUT') return { accion: 'Subió documento', destino: 'Azure Blob', sinJson: true };
     if (url.indexOf('azurewebsites.net/api/') >= 0) {
       var ruta = url.split('/api/')[1].split('?')[0];
-      if ((m = ruta.match(/^[\w-]+\/guardar\/(\w+)/))) return { accion: humano(m[1]), destino: 'Azure SQL' };
-      if (ruta === 'atenciones/guardar') return { accion: 'Guardó atención', destino: 'Azure SQL' };
-      if (ruta === 'atenciones/update') return { accion: 'Actualizó atención', destino: 'Azure SQL' };
-      if (ruta === 'atenciones/editar') return { accion: 'Actualizó atención', destino: 'Azure SQL' };   /* _EDIT_AZURE_PRIMERO_V1 */
-      if (ruta === 'atenciones' && met === 'POST') return { accion: 'Sincronizó atención', destino: 'Azure SQL' };
-      if (ruta.indexOf('trabajadores/buscar') === 0) return { accion: 'Buscó trabajador', destino: 'Azure SQL', tipo: 'consulta', sinJson: true };
-      if (ruta.indexOf('atenciones/by-dni') === 0) return { accion: 'Consultó historial por DNI', destino: 'Azure SQL', tipo: 'consulta', sinJson: true };
+      /* _CEREBRO_SUPABASE_V1 (05-nov): la llamada a Azure la desvia azure-token.js a Supabase; se anota el destino real */
+      var BASE = (window.rlEdge && typeof window.rlEdge.activo === 'function' && window.rlEdge.activo()) ? 'Supabase' : 'Azure SQL';
+      if ((m = ruta.match(/^[\w-]+\/guardar\/(\w+)/))) return { accion: humano(m[1]), destino: BASE };
+      if (ruta === 'atenciones/guardar') return { accion: 'Guardó atención', destino: BASE };
+      if (ruta === 'atenciones/update') return { accion: 'Actualizó atención', destino: BASE };
+      if (ruta === 'atenciones/editar') return { accion: 'Actualizó atención', destino: BASE };   /* _EDIT_AZURE_PRIMERO_V1 */
+      if (ruta === 'atenciones' && met === 'POST') return { accion: 'Sincronizó atención', destino: BASE };
+      if (ruta.indexOf('trabajadores/buscar') === 0) return { accion: 'Buscó trabajador', destino: BASE, tipo: 'consulta', sinJson: true };
+      if (ruta.indexOf('atenciones/by-dni') === 0) return { accion: 'Consultó historial por DNI', destino: BASE, tipo: 'consulta', sinJson: true };
       return null;
     }
     if (url.indexOf('script.google.com/macros/') >= 0) {
