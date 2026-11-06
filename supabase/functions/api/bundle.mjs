@@ -72449,7 +72449,8 @@ var require_eti = __commonJS({
       "informes_eti",
       "informes_cap",
       "encuestas_qr",
-      "encuestas_sat"
+      "encuestas_sat",
+      "alertas_ref"
     ];
     var EDITORES_INFORME = ["jtimoteo", "lcastillo"];
     var editorInforme = (u) => !!u && (esAdminU(u) || EDITORES_INFORME.indexOf(String(u.usuario || "").toLowerCase()) >= 0);
@@ -72541,6 +72542,7 @@ var require_eti = __commonJS({
             const ya = await cli.query(`SELECT 1 FROM eti.${o.col} WHERE id = $1`, [id]);
             if (o.op === "delete" || ya.rows.length) throw Object.assign(new Error("Solo los administradores de informes pueden corregir un informe emitido"), { status: 403 });
           }
+          if (o.col === "alertas_ref" && o.op === "delete" && !editorInforme(u)) throw Object.assign(new Error("Solo los administradores pueden borrar un seguimiento"), { status: 403 });
           if (o.col === "encuestas_sat" && !editorInforme(u)) throw Object.assign(new Error("Las respuestas de la encuesta no se pueden modificar"), { status: 403 });
           if (o.op === "delete") await cli.query(`DELETE FROM eti.${o.col} WHERE id = $1`, [id]);
           else if (o.op === "set" && !o.merge) await cli.query(`INSERT INTO eti.${o.col} (id, datos, origen) VALUES ($1, $2::jsonb, $3)

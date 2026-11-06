@@ -16,7 +16,8 @@ const COLS = ['respuestas_qr', 'evaluaciones_conocimiento', 'config_eti', 'sesio
   'programaciones_eval', 'informes_enviados', 'evaluaciones_depuradas', 'banco_historial',
   'capacitaciones', 'supervisores_eti', 'usuarios_eti',
   'informes_eti', 'informes_cap',
-  'encuestas_qr', 'encuestas_sat'];   /* _ENCUESTA_SAT_V1 (05-nov): QR de encuesta de satisfaccion y sus respuestas */   /* _CAP_INFORME_V1: informes de capacitacion del Sistema RR.LL. */   /* _INFORME_ETI_V1 (05-nov): informes INF-SC-GH-03 emitidos (solo Supabase) */
+  'encuestas_qr', 'encuestas_sat',
+  'alertas_ref'];   /* _ALERTAS_REF_V1 (06-nov): seguimiento del reforzamiento por ruta y tema */   /* _ENCUESTA_SAT_V1 (05-nov): QR de encuesta de satisfaccion y sus respuestas */   /* _CAP_INFORME_V1: informes de capacitacion del Sistema RR.LL. */   /* _INFORME_ETI_V1 (05-nov): informes INF-SC-GH-03 emitidos (solo Supabase) */
 /* informes ya emitidos: solo estos usuarios (o un administrador) pueden corregirlos o borrarlos */
 const EDITORES_INFORME = ['jtimoteo', 'lcastillo'];
 const editorInforme = (u) => !!u && (esAdminU(u) || EDITORES_INFORME.indexOf(String(u.usuario || '').toLowerCase()) >= 0);
@@ -95,6 +96,7 @@ async function escribir(b, u) {
         const ya = await cli.query(`SELECT 1 FROM eti.${o.col} WHERE id = $1`, [id]);
         if (o.op === 'delete' || ya.rows.length) throw Object.assign(new Error('Solo los administradores de informes pueden corregir un informe emitido'), { status: 403 });
       }
+      if (o.col === 'alertas_ref' && o.op === 'delete' && !editorInforme(u)) throw Object.assign(new Error('Solo los administradores pueden borrar un seguimiento'), { status: 403 });   /* _ALERTAS_REF_V1 */
       if (o.col === 'encuestas_sat' && !editorInforme(u)) throw Object.assign(new Error('Las respuestas de la encuesta no se pueden modificar'), { status: 403 });   /* _ENCUESTA_SAT_V1: el supervisor no puede tocar su propia evaluacion */
       if (o.op === 'delete') await cli.query(`DELETE FROM eti.${o.col} WHERE id = $1`, [id]);
       else if (o.op === 'set' && !o.merge) await cli.query(`INSERT INTO eti.${o.col} (id, datos, origen) VALUES ($1, $2::jsonb, $3)

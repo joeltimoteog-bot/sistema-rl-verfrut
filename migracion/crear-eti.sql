@@ -30,7 +30,9 @@ BEGIN
     -- _CAP_INFORME_V1 (05-nov): informes de capacitacion del Sistema RR.LL.
     'informes_cap',
     -- _ENCUESTA_SAT_V1 (05-nov): QR de la encuesta de satisfaccion y respuestas del personal capacitado
-    'encuestas_qr', 'encuestas_sat'
+    'encuestas_qr', 'encuestas_sat',
+    -- _ALERTAS_REF_V1 (06-nov): seguimiento del reforzamiento por ruta y tema (pendiente / reforzado)
+    'alertas_ref'
   ] LOOP
     EXECUTE format('CREATE TABLE IF NOT EXISTS eti.%I (
         id          text PRIMARY KEY,
