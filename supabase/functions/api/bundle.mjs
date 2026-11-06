@@ -66067,7 +66067,6 @@ var require_cumpl_motor = __commonJS({
           limite = sumarHabiles(base, plazo);
         }
         let s = semaforo(limite, hoy);
-        if (informeEnPlazo(c)) s = { dias_restantes: s.dias_restantes, dias_retraso: 0, estado: "EN_PLAZO" };
         const avance = informeEntregado(c) && c.enlace_reporte ? 80 : informeEntregado(c) ? 50 : 20;
         const o = {
           tipo: "CASO",
@@ -66208,7 +66207,7 @@ var require_cumpl_motor = __commonJS({
           cerrados++;
           sumaDias += dias(base, fin);
           const lim = sumarHabiles(base, plazoEn(cfg, "plazo_cierre", ymd(c.fecha_registro)));
-          if (fin <= lim || informeEnPlazo(c)) enPlazo++;
+          if (fin <= lim) enPlazo++;
           else fuera++;
         });
         let vencidos = 0, enInvest = 0, docsPend = 0;
@@ -66218,7 +66217,7 @@ var require_cumpl_motor = __commonJS({
           if (!a) return;
           if (!informeEntregado(c)) enInvest++;
           docsPend += a.documentos_pendientes.length;
-          if (a.dias_retraso > 0 && !informeEnPlazo(c)) {
+          if (a.dias_retraso > 0) {
             vencidos++;
             detalleVencidos.push({ caso: c.nro, trabajador: c.nombre, actividad: a.actividad, dias_retraso: a.dias_retraso, fecha_limite: a.fecha_limite });
           }
@@ -66521,29 +66520,33 @@ var require_cumpl_motor = __commonJS({
         const fEmp = String(p.empresa || "").toUpperCase(), fAnio = p.anio ? parseInt(p.anio, 10) : 0, fMes = p.mes ? parseInt(p.mes, 10) : 0;
         casos.forEach((c) => {
           if (!c.nro && !c.dni) return;
-          const fRep = c.fecha_reporte;
+          const fRep = c.fecha_reporte || c.fecha_registro;
           if (!fRep) return;
           if (fEmp && fEmp !== "AMBAS" && String(c.empresa || "").toUpperCase() !== fEmp) return;
           if (fAnio && fRep.getUTCFullYear() !== fAnio) return;
           if (fMes && fRep.getUTCMonth() + 1 !== fMes) return;
-          const sup = String(c.supervisor || "Sin asignar").trim() || "Sin asignar";
-          if (!map[sup]) map[sup] = { supervisor: sup, total: 0, cumplidos: 0, fueraPlazo: 0, pendientes: 0 };
+          const supTxt = String(c.supervisor || "Sin asignar").replace(/\s+/g, " ").trim() || "Sin asignar";
+          const sup = supTxt.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          if (!map[sup]) map[sup] = { supervisor: supTxt, total: 0, cumplidos: 0, fueraPlazo: 0, pendientes: 0 };
           map[sup].total++;
           const estado = String(c.estado || "").toUpperCase();
           const lim = sumarHabiles(fRep, plazoEn(cfg, "plazo_investigacion", ymd(c.fecha_registro)));
           const vencido = lim && hoy.getTime() > lim.getTime();
           if (estado.indexOf("RETRAS") !== -1) map[sup].fueraPlazo++;
-          else if (informeEntregado(c)) map[sup].cumplidos++;
+          else if (c.fecha_envio_informe) {
+            if (informeEnPlazo(c)) map[sup].cumplidos++;
+            else map[sup].fueraPlazo++;
+          } else if (informeEntregado(c)) map[sup].cumplidos++;
           else if (vencido) map[sup].fueraPlazo++;
           else map[sup].pendientes++;
         });
         const supervisores = Object.keys(map).map((k) => {
           const x = map[k];
           const res = x.cumplidos + x.fueraPlazo;
-          x.pct = res > 0 ? Math.round(x.cumplidos / res * 100) : 100;
+          x.pct = res > 0 ? Math.round(x.cumplidos / res * 100) : null;
           x.cumple = x.fueraPlazo === 0;
           return x;
-        }).sort((a, b) => b.pct - a.pct || b.cumplidos - a.cumplidos);
+        }).sort((a, b) => (b.pct == null ? -1 : b.pct) - (a.pct == null ? -1 : a.pct) || b.cumplidos - a.cumplidos);
         const tot = { total: 0, cumplidos: 0, fueraPlazo: 0, pendientes: 0 };
         supervisores.forEach((x) => {
           tot.total += x.total;
@@ -66552,7 +66555,7 @@ var require_cumpl_motor = __commonJS({
           tot.pendientes += x.pendientes;
         });
         const tr = tot.cumplidos + tot.fueraPlazo;
-        tot.pct = tr > 0 ? Math.round(tot.cumplidos / tr * 100) : 100;
+        tot.pct = tr > 0 ? Math.round(tot.cumplidos / tr * 100) : null;
         return { success: true, data: { supervisores, cumplen: supervisores.filter((x) => x.cumple), noCumplen: supervisores.filter((x) => !x.cumple), totales: tot } };
       }
       return {
@@ -67499,6 +67502,9 @@ var require_kpi_motor = __commonJS({
           } else if (c.enlace_informe && inf && inf.fecha) {
             fi = aFecha(inf.fecha);
             fuente = inf.fuente || "";
+          } else if (!c.enlace_informe && c.fecha_envio_informe && aFecha(c.fecha_envio_informe) && (!base || aFecha(c.fecha_envio_informe) >= aFecha(ymd(base)))) {
+            fi = aFecha(c.fecha_envio_informe);
+            fuente = "env\xEDo por correo";
           } else if (!c.enlace_informe && M.concluido(c) && c.fecha_cierre) {
             fi = c.fecha_cierre;
             fuente = "cierre sin informe";
@@ -67532,6 +67538,13 @@ var require_kpi_motor = __commonJS({
           if (x.sinFecha) {
             e.ok = null;
             e.detalle = "Tiene informe, pero se subi\xF3 antes del registro autom\xE1tico de fechas: no se puede verificar el d\xEDa. No suma ni resta.";
+            ev.push(e);
+            return;
+          }
+          if (x.fi && x.fuente === "cierre sin informe") {
+            e.ok = false;
+            den++;
+            e.detalle = "Cerrado el " + dm(ymd(x.fi)) + " sin informe: no cumple (el informe debe subirse dentro de los 5 d\xEDas h\xE1biles)";
             ev.push(e);
             return;
           }

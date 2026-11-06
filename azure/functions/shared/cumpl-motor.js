@@ -312,7 +312,8 @@ function crearMotor(D) {
     else if (!c.enlace_reporte) { etapa = 'Carga de reporte/descargo'; plazo = plazoEn(cfg, 'plazo_documentos', fReg); limite = sumarHabiles(base, plazo); }
     else { etapa = 'Cierre del caso'; plazo = plazoEn(cfg, 'plazo_cierre', fReg); limite = sumarHabiles(base, plazo); }
     let s = semaforo(limite, hoy);
-    if (informeEnPlazo(c)) s = { dias_restantes: s.dias_restantes, dias_retraso: 0, estado: 'EN_PLAZO' };   /* _INFORME_PLAZO_V1 */
+    /* _CUMPL_REGLAS_V3 (B, 06-nov, decision de Joel): el informe enviado a tiempo por correo cumple la etapa de INFORME;
+       la carga del reporte/descargo y el cierre se miden con su propio plazo (antes quedaban 'en plazo' para siempre). */
     const avance = informeEntregado(c) && c.enlace_reporte ? 80 : informeEntregado(c) ? 50 : 20;   /* _ENVIO_INFORME_CUMPL_V1 */
     const o = {
       tipo: 'CASO', clave: 'caso_' + c.nro, caso: c.nro, actividad: etapa, trabajador: c.nombre, empresa: c.empresa, sector: c.sector,
@@ -402,7 +403,7 @@ function crearMotor(D) {
       if (!AUS.duenoEn(c, u, ymd(fin))) return;   /* _AUSENCIAS_V1: de quien era el caso el dia del cierre */
       cerrados++; sumaDias += dias(base, fin);
       const lim = sumarHabiles(base, plazoEn(cfg, 'plazo_cierre', ymd(c.fecha_registro)));   /* _PLAZO_VIGENTE_V1 */
-      if (fin <= lim || informeEnPlazo(c)) enPlazo++; else fuera++;   /* _INFORME_PLAZO_V1 */
+      if (fin <= lim) enPlazo++; else fuera++;   /* _CUMPL_REGLAS_V3 (B): el cierre se mide con su plazo */
     });
     let vencidos = 0, enInvest = 0, docsPend = 0;
     const detalleVencidos = [];
@@ -410,7 +411,7 @@ function crearMotor(D) {
       const a = actividadCaso(c, hoy); if (!a) return;
       if (!informeEntregado(c)) enInvest++;   /* _ENVIO_INFORME_CUMPL_V1 */
       docsPend += a.documentos_pendientes.length;
-      if (a.dias_retraso > 0 && !informeEnPlazo(c)) { vencidos++; detalleVencidos.push({ caso: c.nro, trabajador: c.nombre, actividad: a.actividad, dias_retraso: a.dias_retraso, fecha_limite: a.fecha_limite }); }
+      if (a.dias_retraso > 0) { vencidos++; detalleVencidos.push({ caso: c.nro, trabajador: c.nombre, actividad: a.actividad, dias_retraso: a.dias_retraso, fecha_limite: a.fecha_limite }); }
     });
     let semanas = 0, realizadas = 0, visEnPlazo = 0, primerLunesV = null;   /* _VISITA_PLAZO_V1 */
     const propio = esSupCampo(u);   /* _AUSENCIAS_V1: + semanas que cubre como reemplazo; - semanas en que estuvo ausente */
@@ -606,26 +607,28 @@ function crearMotor(D) {
     const fEmp = String(p.empresa || '').toUpperCase(), fAnio = p.anio ? parseInt(p.anio, 10) : 0, fMes = p.mes ? parseInt(p.mes, 10) : 0;
     casos.forEach(c => {
       if (!c.nro && !c.dni) return;
-      const fRep = c.fecha_reporte; if (!fRep) return;
+      const fRep = c.fecha_reporte || c.fecha_registro; if (!fRep) return;   /* _CUMPL_REGLAS_V3 (D): como el resto del motor */
       if (fEmp && fEmp !== 'AMBAS' && String(c.empresa || '').toUpperCase() !== fEmp) return;
       if (fAnio && fRep.getUTCFullYear() !== fAnio) return;
       if (fMes && (fRep.getUTCMonth() + 1) !== fMes) return;
-      const sup = String(c.supervisor || 'Sin asignar').trim() || 'Sin asignar';
-      if (!map[sup]) map[sup] = { supervisor: sup, total: 0, cumplidos: 0, fueraPlazo: 0, pendientes: 0 };
+      const supTxt = String(c.supervisor || 'Sin asignar').replace(/\s+/g, ' ').trim() || 'Sin asignar';
+      const sup = supTxt.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');   /* _CUMPL_REGLAS_V3 (D): "JUAN PEREZ" = "Juan Pérez" */
+      if (!map[sup]) map[sup] = { supervisor: supTxt, total: 0, cumplidos: 0, fueraPlazo: 0, pendientes: 0 };
       map[sup].total++;
       const estado = String(c.estado || '').toUpperCase();
       const lim = sumarHabiles(fRep, plazoEn(cfg, 'plazo_investigacion', ymd(c.fecha_registro)));
       const vencido = lim && hoy.getTime() > lim.getTime();
       if (estado.indexOf('RETRAS') !== -1) map[sup].fueraPlazo++;
+      else if (c.fecha_envio_informe) { if (informeEnPlazo(c)) map[sup].cumplidos++; else map[sup].fueraPlazo++; }   /* _CUMPL_REGLAS_V3 (D): enviado TARDE no cumple */
       else if (informeEntregado(c)) map[sup].cumplidos++;
       else if (vencido) map[sup].fueraPlazo++;
       else map[sup].pendientes++;
     });
-    const supervisores = Object.keys(map).map(k => { const x = map[k]; const res = x.cumplidos + x.fueraPlazo; x.pct = res > 0 ? Math.round(x.cumplidos / res * 100) : 100; x.cumple = x.fueraPlazo === 0; return x; })
-      .sort((a, b) => b.pct - a.pct || b.cumplidos - a.cumplidos);
+    const supervisores = Object.keys(map).map(k => { const x = map[k]; const res = x.cumplidos + x.fueraPlazo; x.pct = res > 0 ? Math.round(x.cumplidos / res * 100) : null; x.cumple = x.fueraPlazo === 0; return x; })   /* _CUMPL_REGLAS_V3 (D): sin casos resueltos = SIN DATOS (antes 100%) */
+      .sort((a, b) => (b.pct == null ? -1 : b.pct) - (a.pct == null ? -1 : a.pct) || b.cumplidos - a.cumplidos);
     const tot = { total: 0, cumplidos: 0, fueraPlazo: 0, pendientes: 0 };
     supervisores.forEach(x => { tot.total += x.total; tot.cumplidos += x.cumplidos; tot.fueraPlazo += x.fueraPlazo; tot.pendientes += x.pendientes; });
-    const tr = tot.cumplidos + tot.fueraPlazo; tot.pct = tr > 0 ? Math.round(tot.cumplidos / tr * 100) : 100;
+    const tr = tot.cumplidos + tot.fueraPlazo; tot.pct = tr > 0 ? Math.round(tot.cumplidos / tr * 100) : null;
     return { success: true, data: { supervisores, cumplen: supervisores.filter(x => x.cumple), noCumplen: supervisores.filter(x => !x.cumple), totales: tot } };
   }
 

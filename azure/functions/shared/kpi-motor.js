@@ -194,6 +194,7 @@ function calcular(E) {
         if (inf && inf.fecha) { const f2 = aFecha(inf.fecha); if (f2 && fi && f2 < fi) { fi = f2; fuente = inf.fuente || 'primer registro del informe'; } }
       }
       else if (c.enlace_informe && inf && inf.fecha) { fi = aFecha(inf.fecha); fuente = inf.fuente || ''; }
+      else if (!c.enlace_informe && c.fecha_envio_informe && aFecha(c.fecha_envio_informe) && (!base || aFecha(c.fecha_envio_informe) >= aFecha(ymd(base)))) { fi = aFecha(c.fecha_envio_informe); fuente = 'envío por correo'; }   /* _KPI_REGLAS_V3 (A): enviado por correo sin PDF = entregado (igual que Cumplimiento) */
       else if (!c.enlace_informe && M.concluido(c) && c.fecha_cierre) { fi = c.fecha_cierre; fuente = 'cierre sin informe'; }
       /* _ENVIO_INFORME_V1 (09-oct-2026): si el supervisor registro la FECHA EN QUE ENVIO EL INFORME POR CORREO,
          el plazo se cuenta hasta esa fecha (aunque lo haya subido al sistema despues). Nunca puede ser
@@ -216,6 +217,11 @@ function calcular(E) {
       if (x.excluido) { e.ok = null; e.detalle = x.excluido; ev.push(e); return; }
       if (x.cubre) e.cubre = true;
       if (x.sinFecha) { e.ok = null; e.detalle = 'Tiene informe, pero se subió antes del registro automático de fechas: no se puede verificar el día. No suma ni resta.'; ev.push(e); return; }
+      if (x.fi && x.fuente === 'cierre sin informe') {   /* _KPI_REGLAS_V3 (C): cerrar sin informe NO cumple (el informe se sube en 5 dias) */
+        e.ok = false; den++;
+        e.detalle = 'Cerrado el ' + dm(ymd(x.fi)) + ' sin informe: no cumple (el informe debe subirse dentro de los 5 días hábiles)';
+        ev.push(e); return;
+      }
       if (x.fi) {
         const d = M.habilesEntre(x.base, x.fi);
         e.ok = x.fi <= x.lim5; e.estrella = x.fi <= x.lim3; e.dias = d;

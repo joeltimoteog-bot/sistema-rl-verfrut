@@ -2188,8 +2188,9 @@ async function mostrarCumplimientoCasos(){
   const d = res.data, t = d.totales||{};
   const card=(lbl,val,col)=>'<div style="flex:1;min-width:120px;background:#f4f6f9;border-radius:10px;padding:12px;text-align:center"><div style="font-size:26px;font-weight:800;color:'+col+'">'+val+'</div><div style="font-size:11px;color:#55626c;text-transform:uppercase;letter-spacing:.4px">'+lbl+'</div></div>';
   const fila=(s)=>{
-    const pct=s.pct||0;
-    const col = pct>=90?'#16a34a':pct>=70?'#d97706':'#dc2626';
+    const sd = s.pct==null;   /* _CUMPL_REGLAS_V3 (D): sin casos resueltos = SIN DATOS */
+    const pct=sd?0:s.pct;
+    const col = sd?'#94a3b8':pct>=90?'#16a34a':pct>=70?'#d97706':'#dc2626';
     return '<tr>'
       +'<td style="padding:8px 10px;border-bottom:1px solid #eef2f6">'+s.supervisor+'</td>'
       +'<td style="padding:8px 10px;border-bottom:1px solid #eef2f6;text-align:center;color:#16a34a;font-weight:700">'+s.cumplidos+'</td>'
@@ -2197,7 +2198,7 @@ async function mostrarCumplimientoCasos(){
       +'<td style="padding:8px 10px;border-bottom:1px solid #eef2f6;text-align:center;color:#64748b">'+s.pendientes+'</td>'
       +'<td style="padding:8px 10px;border-bottom:1px solid #eef2f6;min-width:120px">'
         +'<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:#eef2f6;border-radius:5px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+col+'"></div></div>'
-        +'<span style="font-weight:700;color:'+col+';font-size:12px">'+pct+'%</span></div>'
+        +'<span style="font-weight:700;color:'+col+';font-size:12px">'+(sd?'SIN DATOS':pct+'%')+'</span></div>'
       +'</td></tr>';
   };
   const tabla=(arr,titulo,bg)=> !arr.length ? '' :
@@ -2208,7 +2209,7 @@ async function mostrarCumplimientoCasos(){
 
   body.innerHTML =
     '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">'
-    + card('Cumplimiento global', (t.pct||0)+'%', '#0a4a8f')
+    + card('Cumplimiento global', t.pct==null?'SIN DATOS':t.pct+'%', '#0a4a8f')
     + card('A tiempo', t.cumplidos||0, '#16a34a')
     + card('Fuera de plazo', t.fueraPlazo||0, '#dc2626')
     + card('Pendientes', t.pendientes||0, '#64748b')
