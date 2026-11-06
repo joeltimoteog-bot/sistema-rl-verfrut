@@ -69185,6 +69185,10 @@ var require_horas_escritura = __commonJS({
           } else if (motivo === "permiso" || motivo === "devoluci\xF3n" || motivo === "devolucion") {
             let pedidas = Number(r.horasPermiso) || 0;
             if (pedidas === 0 && r.fechaEntrada && r.fechaSalida) pedidas = jornadaTotal(r.fechaEntrada, r.fechaSalida);
+            if (motivo === "permiso" && r.fechaEntrada) {
+              if (!(jornadaEsp > 0)) return { success: false, error: "El " + String(r.fechaEntrada).substring(0, 10).split("-").reverse().join("/") + " no tiene jornada (domingo o d\xEDa de descanso): un permiso ese d\xEDa no descuenta horas. Revisa la fecha." };
+              if (pedidas > jornadaEsp) pedidas = r2(jornadaEsp);
+            }
             const dias = r.fechaEntrada && r.fechaSalida ? Math.floor((new Date(r.fechaSalida) - new Date(r.fechaEntrada)) / (24 * 60 * 60 * 1e3)) + 1 : 1;
             if (dias >= 2) {
               alerta = "OBSERVADO: Permiso por " + dias + " d\xEDa(s). Requiere validaci\xF3n.";

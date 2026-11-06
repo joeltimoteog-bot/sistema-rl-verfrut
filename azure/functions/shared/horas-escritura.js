@@ -162,6 +162,13 @@ function crear(ctx) {
       } else if (motivo === 'permiso' || motivo === 'devolución' || motivo === 'devolucion') {
         let pedidas = Number(r.horasPermiso) || 0;
         if (pedidas === 0 && r.fechaEntrada && r.fechaSalida) pedidas = jornadaTotal(r.fechaEntrada, r.fechaSalida);
+        /* _HORAS_PERMISO_DESCANSO_V1 (06-nov-2026): un PERMISO solo descuenta horas de jornada. En un dia sin jornada
+           (domingo o dia de descanso del horario) no hay nada que descontar: se rechaza en vez de crear deuda
+           (paso el 27-set: permiso un domingo -> 10.35 h de deuda). Y nunca descuenta mas que la jornada del periodo. */
+        if (motivo === 'permiso' && r.fechaEntrada) {
+          if (!(jornadaEsp > 0)) return { success: false, error: 'El ' + String(r.fechaEntrada).substring(0, 10).split('-').reverse().join('/') + ' no tiene jornada (domingo o día de descanso): un permiso ese día no descuenta horas. Revisa la fecha.' };
+          if (pedidas > jornadaEsp) pedidas = r2(jornadaEsp);
+        }
         const dias = (r.fechaEntrada && r.fechaSalida) ? Math.floor((new Date(r.fechaSalida) - new Date(r.fechaEntrada)) / (24 * 60 * 60 * 1000)) + 1 : 1;
         if (dias >= 2) { alerta = 'OBSERVADO: Permiso por ' + dias + ' día(s). Requiere validación.'; estado = 'pendiente'; }
         else if (pedidas > 12) { alerta = 'OBSERVADO: Permiso excede 12 horas. Revisar autorización.'; estado = 'pendiente'; }
