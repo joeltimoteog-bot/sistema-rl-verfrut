@@ -24,7 +24,9 @@ BEGIN
     'respuestas_qr', 'evaluaciones_conocimiento', 'config_eti', 'sesiones_qr', 'programaciones_eti',
     'programaciones_eval', 'informes_enviados', 'evaluaciones_depuradas', 'banco_historial',
     -- Capacitaciones ETI
-    'capacitaciones', 'supervisores_eti', 'usuarios_eti'
+    'capacitaciones', 'supervisores_eti', 'usuarios_eti',
+    -- _INFORME_ETI_V1 (05-nov): informes INF-SC-GH-03 emitidos (Word + fotos en Storage)
+    'informes_eti'
   ] LOOP
     EXECUTE format('CREATE TABLE IF NOT EXISTS eti.%I (
         id          text PRIMARY KEY,

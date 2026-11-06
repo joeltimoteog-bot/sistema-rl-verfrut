@@ -13,8 +13,13 @@
 'use strict';
 const COLS = ['respuestas_qr', 'evaluaciones_conocimiento', 'config_eti', 'sesiones_qr', 'programaciones_eti',
   'programaciones_eval', 'informes_enviados', 'evaluaciones_depuradas', 'banco_historial',
-  'capacitaciones', 'supervisores_eti', 'usuarios_eti'];
+  'capacitaciones', 'supervisores_eti', 'usuarios_eti',
+  'informes_eti'];   /* _INFORME_ETI_V1 (05-nov): informes INF-SC-GH-03 emitidos (solo Supabase) */
+/* informes ya emitidos: solo estos usuarios (o un administrador) pueden corregirlos o borrarlos */
+const EDITORES_INFORME = ['jtimoteo', 'lcastillo'];
+const editorInforme = (u) => !!u && (esAdminU(u) || EDITORES_INFORME.indexOf(String(u.usuario || '').toLowerCase()) >= 0);
 const LECTURA_ANONIMA = ['sesiones_qr', 'config_eti', 'programaciones_eval'];
+function esAdminU(u) { return !!u && /^admin/i.test(String(u.rol || '')); }
 const OPS = { '==': '=', '>=': '>=', '<=': '<=', '<': '<', '>': '>' };
 const env = (k) => (typeof process !== 'undefined' && process.env && process.env[k]) || '';
 
@@ -83,6 +88,10 @@ async function escribir(b, u) {
     await cli.query('BEGIN');
     for (const o of ops) {
       const id = String(o.id), d = JSON.stringify(o.datos || {});
+      if (o.col === 'informes_eti' && !editorInforme(u)) {   /* _INFORME_ETI_V1: el supervisor solo crea su informe; corregir o borrar = editores */
+        const ya = await cli.query('SELECT 1 FROM eti.informes_eti WHERE id = $1', [id]);
+        if (o.op === 'delete' || ya.rows.length) throw Object.assign(new Error('Solo los administradores de informes pueden corregir un informe emitido'), { status: 403 });
+      }
       if (o.op === 'delete') await cli.query(`DELETE FROM eti.${o.col} WHERE id = $1`, [id]);
       else if (o.op === 'set' && !o.merge) await cli.query(`INSERT INTO eti.${o.col} (id, datos, origen) VALUES ($1, $2::jsonb, $3)
           ON CONFLICT (id) DO UPDATE SET datos = EXCLUDED.datos, actualizado = now(), origen = EXCLUDED.origen`, [id, d, o.origen || 'espejo']);

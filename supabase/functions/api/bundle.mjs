@@ -72445,9 +72445,15 @@ var require_eti = __commonJS({
       "banco_historial",
       "capacitaciones",
       "supervisores_eti",
-      "usuarios_eti"
+      "usuarios_eti",
+      "informes_eti"
     ];
+    var EDITORES_INFORME = ["jtimoteo", "lcastillo"];
+    var editorInforme = (u) => !!u && (esAdminU(u) || EDITORES_INFORME.indexOf(String(u.usuario || "").toLowerCase()) >= 0);
     var LECTURA_ANONIMA = ["sesiones_qr", "config_eti", "programaciones_eval"];
+    function esAdminU(u) {
+      return !!u && /^admin/i.test(String(u.rol || ""));
+    }
     var OPS = { "==": "=", ">=": ">=", "<=": "<=", "<": "<", ">": ">" };
     var env = (k) => typeof process !== "undefined" && process.env && process.env[k] || "";
     function pool() {
@@ -72527,6 +72533,10 @@ var require_eti = __commonJS({
         await cli.query("BEGIN");
         for (const o of ops) {
           const id = String(o.id), d = JSON.stringify(o.datos || {});
+          if (o.col === "informes_eti" && !editorInforme(u)) {
+            const ya = await cli.query("SELECT 1 FROM eti.informes_eti WHERE id = $1", [id]);
+            if (o.op === "delete" || ya.rows.length) throw Object.assign(new Error("Solo los administradores de informes pueden corregir un informe emitido"), { status: 403 });
+          }
           if (o.op === "delete") await cli.query(`DELETE FROM eti.${o.col} WHERE id = $1`, [id]);
           else if (o.op === "set" && !o.merge) await cli.query(`INSERT INTO eti.${o.col} (id, datos, origen) VALUES ($1, $2::jsonb, $3)
           ON CONFLICT (id) DO UPDATE SET datos = EXCLUDED.datos, actualizado = now(), origen = EXCLUDED.origen`, [id, d, o.origen || "espejo"]);
@@ -76047,7 +76057,7 @@ var require_adaptador_edge = __commonJS({
       });
       const query = {};
       url.searchParams.forEach(function(v, k) {
-        query[k] = v;
+        if (k !== "forceFunctionRegion") query[k] = v;
       });
       const headers = {};
       request.headers.forEach(function(v, k) {
