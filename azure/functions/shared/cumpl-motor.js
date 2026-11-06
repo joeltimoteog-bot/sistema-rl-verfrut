@@ -63,6 +63,14 @@ function semanaNum(d) {
   const ini = fecha(d.getUTCFullYear(), 0, 1);
   return Math.ceil(((d - ini) / DIA + ini.getUTCDay() + 1) / 7);
 }
+/* _SEMANA_ISO_V1 (06-nov): numero de semana ESTANDAR (ISO 8601, semana de lunes a domingo; la 1 es la del primer jueves).
+   Solo para MOSTRAR ("Sem. 45"). Las claves internas (visita_<sem>_...) siguen con semanaNum para no romper lo ya guardado. */
+function semanaISO(d) {
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const dow = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - dow);
+  const ini = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  return Math.ceil(((t - ini) / 86400000 + 1) / 7);
+}
 /* _casoNombreMatch */
 function nombreMatch(a, b) {
   const norm = (s) => ' ' + String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim() + ' ';
@@ -276,11 +284,16 @@ function crearMotor(D) {
     for (let i = 0; i < sups.length; i++) { const k = usr(sups[i]); if (k === nom) return true; if (nombreMatch(k, nom) || nombreMatch(nom, k)) return true; }
     return false;
   }
+  /* _CUMPL_NOMBRES_V2 (06-nov): primero coincidencia EXACTA (usuario o nombre); si no, el nombre MAS parecido y solo si es
+     unico. Antes bastaban 2 palabras: "Luis Garcia Ramos" y "Luis Garcia Torres" se tomaban como la misma persona. */
+  const toksN = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(t => t.length >= 3);
+  function parecido(a, b) { const A = toksN(a), B = toksN(b); if (!A.length || !B.length) return 0; let n = 0; B.forEach(t => { if (A.indexOf(t) >= 0) n++; }); return n >= Math.min(2, A.length, B.length) ? n : 0; }
   function usuarioPor(lista, clave) {
-    const k = usr(clave);
+    const k = usr(clave); if (!k) return null;
     for (let i = 0; i < lista.length; i++) if (lista[i].usuario === k || usr(lista[i].nombre) === k) return lista[i];
-    for (let j = 0; j < lista.length; j++) if (nombreMatch(usr(lista[j].nombre), k) || nombreMatch(k, usr(lista[j].nombre))) return lista[j];
-    return null;
+    let mejor = null, max = 0, empate = false;
+    lista.forEach(x => { const n = parecido(x.nombre, k); if (n > max) { max = n; mejor = x; empate = false; } else if (n && n === max) empate = true; });
+    return max && !empate ? mejor : null;
   }
   /* _IND_FIX_V1 (08-oct-2026): el caso es del SUPERVISOR responsable. Quien lo registro cuenta SOLO si
      el caso no tiene supervisor (o el supervisor escrito no corresponde a ningun usuario). Antes contaba
@@ -290,8 +303,12 @@ function crearMotor(D) {
     const sup = usr(caso.supervisor), reg = usr(caso.registrado_por);
     if (sup) {
       if (sup === u.usuario || sup === usr(u.nombre)) return true;
-      if (nombreMatch(sup, usr(u.nombre)) || nombreMatch(usr(u.nombre), sup)) return true;
-      if (usuarioPor(usuarios || [], sup)) return false;   /* es de otra persona conocida */
+      const quien = usuarioPor(usuarios || [], sup);   /* _CUMPL_NOMBRES_V2: el MAS parecido decide (antes: el primero que se pareciera) */
+      if (quien) return quien.usuario === u.usuario;
+      if (nombreMatch(sup, usr(u.nombre)) || nombreMatch(usr(u.nombre), sup)) {   /* no esta en la lista de usuarios: como antes, salvo empate */
+        const otros = (usuarios || []).filter(x => x.usuario !== u.usuario && parecido(x.nombre, sup));
+        if (!otros.length) return true;
+      }
     }
     return !!reg && reg === u.usuario;
   }
@@ -363,7 +380,7 @@ function crearMotor(D) {
         if (okR) return;
       }
       res[key] = {
-        tipo: 'VISITA', clave: 'visita_' + semana + '_' + key, caso: 'Sem. ' + semana, actividad: 'Informe de visitas de campo',
+        tipo: 'VISITA', clave: 'visita_' + semana + '_' + key, caso: 'Sem. ' + semanaISO(domPasadoDia), actividad: 'Informe de visitas de campo',
         trabajador: '', responsable: rp ? rp.nombre : nombreSup, fecha_registro: ymd(lunesEsta), plazo_dias: cfg.plazo_visita_dias,
         fecha_limite: ymd(limite), dias_transcurridos: dias(lunesEsta, hoy), dias_restantes: s.dias_restantes,
         dias_retraso: s.dias_retraso, estado: s.estado, porcentaje: 0, documentos_pendientes: ['Informe de visitas (' + rango + ')' + (rp ? ' — sector de ' + nombreSup : '')],
@@ -550,7 +567,7 @@ function crearMotor(D) {
     const domDia = sumar(lunesEsta, -1);
     const domingoPasado = new Date(domDia.getTime() + DIA - 1);
     const esLunesHoy = hoy <= limiteVisita(lunesEsta, cfg.plazo_visita_dias);   /* _CALENDARIO_V1: el lunes o el siguiente dia laborable */
-    const sem = semanaNum(domDia);
+    const sem = semanaISO(domDia);   /* _SEMANA_ISO_V1: solo se muestra */
     const rangoSemana = ddmm(lunesPasado) + ' al ' + ddmm(domDia);
     const reportaron = {};
     visitas.forEach(v => {
@@ -636,4 +653,4 @@ function crearMotor(D) {
     _kpi: { esHabil, sumarHabiles, habilesEntre, AUS, esDelUsuario, concluido, casos, cfg, usuarios } };   /* _KPI_RRLL_V1 (30-set): piezas para el motor de KPIs (solo lectura) */
 }
 
-module.exports = { crearMotor, plazosHist, plazoEn, crearAus, ausParse, ausAplicar, AUS_TIPOS, nombreMatch, calParseDias, calParseFeriados, _t: { parse, fechaV, semanaNum, hoyLima, ymd } };
+module.exports = { crearMotor, plazosHist, plazoEn, crearAus, ausParse, ausAplicar, AUS_TIPOS, nombreMatch, calParseDias, calParseFeriados, _t: { parse, fechaV, semanaNum, semanaISO, hoyLima, ymd } };

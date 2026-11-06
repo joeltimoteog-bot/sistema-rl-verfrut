@@ -65735,6 +65735,13 @@ var require_cumpl_motor = __commonJS({
       const ini = fecha(d.getUTCFullYear(), 0, 1);
       return Math.ceil(((d - ini) / DIA + ini.getUTCDay() + 1) / 7);
     }
+    function semanaISO(d) {
+      const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+      const dow = t.getUTCDay() || 7;
+      t.setUTCDate(t.getUTCDate() + 4 - dow);
+      const ini = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+      return Math.ceil(((t - ini) / 864e5 + 1) / 7);
+    }
     function nombreMatch(a, b) {
       const norm = (s) => " " + String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim() + " ";
       const A = norm(a), B = norm(b);
@@ -66024,19 +66031,42 @@ var require_cumpl_motor = __commonJS({
         }
         return false;
       }
+      const toksN = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter((t) => t.length >= 3);
+      function parecido(a, b) {
+        const A = toksN(a), B = toksN(b);
+        if (!A.length || !B.length) return 0;
+        let n = 0;
+        B.forEach((t) => {
+          if (A.indexOf(t) >= 0) n++;
+        });
+        return n >= Math.min(2, A.length, B.length) ? n : 0;
+      }
       function usuarioPor(lista, clave) {
         const k = usr(clave);
+        if (!k) return null;
         for (let i = 0; i < lista.length; i++) if (lista[i].usuario === k || usr(lista[i].nombre) === k) return lista[i];
-        for (let j = 0; j < lista.length; j++) if (nombreMatch(usr(lista[j].nombre), k) || nombreMatch(k, usr(lista[j].nombre))) return lista[j];
-        return null;
+        let mejor = null, max = 0, empate = false;
+        lista.forEach((x) => {
+          const n = parecido(x.nombre, k);
+          if (n > max) {
+            max = n;
+            mejor = x;
+            empate = false;
+          } else if (n && n === max) empate = true;
+        });
+        return max && !empate ? mejor : null;
       }
       function esDelUsuario(caso, u) {
         if (!u) return false;
         const sup = usr(caso.supervisor), reg = usr(caso.registrado_por);
         if (sup) {
           if (sup === u.usuario || sup === usr(u.nombre)) return true;
-          if (nombreMatch(sup, usr(u.nombre)) || nombreMatch(usr(u.nombre), sup)) return true;
-          if (usuarioPor(usuarios || [], sup)) return false;
+          const quien = usuarioPor(usuarios || [], sup);
+          if (quien) return quien.usuario === u.usuario;
+          if (nombreMatch(sup, usr(u.nombre)) || nombreMatch(usr(u.nombre), sup)) {
+            const otros = (usuarios || []).filter((x) => x.usuario !== u.usuario && parecido(x.nombre, sup));
+            if (!otros.length) return true;
+          }
         }
         return !!reg && reg === u.usuario;
       }
@@ -66147,7 +66177,7 @@ var require_cumpl_motor = __commonJS({
           res[key] = {
             tipo: "VISITA",
             clave: "visita_" + semana + "_" + key,
-            caso: "Sem. " + semana,
+            caso: "Sem. " + semanaISO(domPasadoDia),
             actividad: "Informe de visitas de campo",
             trabajador: "",
             responsable: rp ? rp.nombre : nombreSup,
@@ -66455,7 +66485,7 @@ var require_cumpl_motor = __commonJS({
         const domDia = sumar(lunesEsta, -1);
         const domingoPasado = new Date(domDia.getTime() + DIA - 1);
         const esLunesHoy = hoy <= limiteVisita(lunesEsta, cfg.plazo_visita_dias);
-        const sem = semanaNum(domDia);
+        const sem = semanaISO(domDia);
         const rangoSemana = ddmm(lunesPasado) + " al " + ddmm(domDia);
         const reportaron = {};
         visitas.forEach((v) => {
@@ -66566,7 +66596,7 @@ var require_cumpl_motor = __commonJS({
         _kpi: { esHabil, sumarHabiles, habilesEntre, AUS, esDelUsuario, concluido, casos, cfg, usuarios }
       };
     }
-    module.exports = { crearMotor, plazosHist, plazoEn, crearAus, ausParse, ausAplicar, AUS_TIPOS, nombreMatch, calParseDias, calParseFeriados, _t: { parse, fechaV, semanaNum, hoyLima, ymd } };
+    module.exports = { crearMotor, plazosHist, plazoEn, crearAus, ausParse, ausAplicar, AUS_TIPOS, nombreMatch, calParseDias, calParseFeriados, _t: { parse, fechaV, semanaNum, semanaISO, hoyLima, ymd } };
   }
 });
 
