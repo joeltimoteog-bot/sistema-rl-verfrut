@@ -61,10 +61,16 @@ async function padron(pool, dni) {
   const ex = await EMP.tablasExistentes(pool, sql);
   const tablas = EMP.EMPRESAS.filter(e => ex.has(e.tabla));
   if (!tablas.length) return null;
-  const rq = pool.request();
-  const sin0 = dni.replace(/^0+/, ''); rq.input('dni', sql.NVarChar(20), dni); rq.input('dni2', sql.NVarChar(20), sin0 || dni);
-  const q = tablas.map(e => `SELECT TOP 1 *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE dni IN (@dni, @dni2)`).join(' UNION ALL ');
-  const r = await rq.query(q); const t = (r.recordset || [])[0]; if (!t) return null;
+  const sin0 = dni.replace(/^0+/, '');
+  /* _BS_FICHA_SUPA_V1 (06-nov): antes era un solo "TOP 1 … UNION ALL …" que Supabase rechazaba (error 500 -> la ficha caia a Google, lenta).
+     Ahora una consulta por empresa, en el mismo orden, y se queda con la primera que encuentra: mismo resultado. */
+  let t = null;
+  for (const e of tablas) {
+    const rq = pool.request(); rq.input('dni', sql.NVarChar(20), dni); rq.input('dni2', sql.NVarChar(20), sin0 || dni);
+    const r = await rq.query(`SELECT TOP 1 *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE dni IN (@dni, @dni2)`);
+    t = (r.recordset || [])[0]; if (t) break;
+  }
+  if (!t) return null;
   const nombre = String(t.nombre_completo || [t.ap_paterno, t.ap_materno, t.nombres].filter(Boolean).join(' ') || '').trim().toUpperCase();
   return { dni, nombre, empresa: String(t.empresa_origen || t.empresa || '').toUpperCase().replace(/\s*S\.?A\.?C\.?\s*$/, '').trim(), sexo: String(t.sexo || ''), cargo: String(t.oficio || t.cargo || ''),
     regimen: String(t.tipo_regimen || ''), zona: String(t.zona_labor || ''), fecha_inicio: ymd(t.fecha_inicio), fecha_termino: ymd(t.fecha_termino), ruta: String(t.ruta || ''), codigo: String(t.codigo_trab || t.cod || ''), fuente: 'azure' };

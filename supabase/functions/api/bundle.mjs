@@ -65197,13 +65197,16 @@ var require_bs = __commonJS({
       const ex = await EMP.tablasExistentes(pool, sql);
       const tablas = EMP.EMPRESAS.filter((e) => ex.has(e.tabla));
       if (!tablas.length) return null;
-      const rq = pool.request();
       const sin0 = dni.replace(/^0+/, "");
-      rq.input("dni", sql.NVarChar(20), dni);
-      rq.input("dni2", sql.NVarChar(20), sin0 || dni);
-      const q = tablas.map((e) => `SELECT TOP 1 *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE dni IN (@dni, @dni2)`).join(" UNION ALL ");
-      const r = await rq.query(q);
-      const t = (r.recordset || [])[0];
+      let t = null;
+      for (const e of tablas) {
+        const rq = pool.request();
+        rq.input("dni", sql.NVarChar(20), dni);
+        rq.input("dni2", sql.NVarChar(20), sin0 || dni);
+        const r = await rq.query(`SELECT TOP 1 *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE dni IN (@dni, @dni2)`);
+        t = (r.recordset || [])[0];
+        if (t) break;
+      }
       if (!t) return null;
       const nombre = String(t.nombre_completo || [t.ap_paterno, t.ap_materno, t.nombres].filter(Boolean).join(" ") || "").trim().toUpperCase();
       return {
