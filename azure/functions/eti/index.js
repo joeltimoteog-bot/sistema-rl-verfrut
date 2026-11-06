@@ -126,6 +126,7 @@ async function contar(b, u) {
 }
 
 module.exports = async function (context, req) {
+  const t0 = Date.now();
   const accion = context.bindingData && context.bindingData.accion;
   const u = sesion(req), b = (req.body && typeof req.body === 'object') ? req.body : {};
   try {
@@ -136,6 +137,7 @@ module.exports = async function (context, req) {
     else if (accion === 'importar') r = await importar(b, u);
     else if (accion === 'contar') r = await contar(b, u);
     else { context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
+    if (r && typeof r === 'object') r.ms = Date.now() - t0;   /* _ETI_MS_V1: tiempo del servidor (diagnostico de velocidad) */
     context.res = { status: 200, body: r };
   } catch (e) {
     if (!e.status) context.log.error('[eti] ' + accion + ': ' + e.message);
