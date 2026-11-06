@@ -74220,77 +74220,109 @@ var require_mod_estadm = __commonJS({
     "use strict";
     var { getPool } = require_db();
     var LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    var limaHoy = () => new Date(Date.now() - 5 * 36e5);
     var atCache = null;
     async function atencionesAgrupadas() {
-      if (atCache && Date.now() - atCache.t < 6e4) return atCache.filas;
+      const dia = limaHoy().getUTCDate();
+      if (atCache && atCache.d === dia && Date.now() - atCache.t < 6e4) return atCache;
       const pool = await getPool();
       const r = await pool.request().query(`
-    SELECT supervisor COLLATE Latin1_General_BIN2 AS s, UPPER(ISNULL(empresa, '')) AS e, UPPER(ISNULL(estado, '')) AS st,
-           ISNULL(YEAR(fecha_atencion), 0) AS a, ISNULL(MONTH(fecha_atencion), 0) AS m, COUNT(*) AS n
-    FROM dbo.Atenciones WITH (NOLOCK)
-    GROUP BY supervisor COLLATE Latin1_General_BIN2, UPPER(ISNULL(empresa, '')), UPPER(ISNULL(estado, '')),
-             ISNULL(YEAR(fecha_atencion), 0), ISNULL(MONTH(fecha_atencion), 0)`);
-      const filas = r.recordset.map((x) => ({ supervisor: String(x.s || "").trim(), empresa: x.e, estado: x.st, mes: x.m, anio: x.a, n: x.n }));
-      atCache = { t: Date.now(), filas };
-      return filas;
+    SELECT supervisor AS s, UPPER(ISNULL(empresa, '')) AS e, UPPER(ISNULL(estado, '')) AS st,
+           ISNULL(YEAR(fecha_atencion), 0) AS a, ISNULL(MONTH(fecha_atencion), 0) AS m, COUNT(*) AS n,
+           SUM(CASE WHEN DAY(fecha_atencion) <= ${dia} THEN 1 ELSE 0 END) AS nd
+    FROM dbo.Atenciones
+    GROUP BY supervisor, UPPER(ISNULL(empresa, '')), UPPER(ISNULL(estado, '')), ISNULL(YEAR(fecha_atencion), 0), ISNULL(MONTH(fecha_atencion), 0);
+    SELECT CONVERT(VARCHAR(19), MAX(fecha_registro), 126) AS u FROM dbo.Atenciones;`);
+      const filas = r.recordsets[0].map((x) => ({ supervisor: String(x.s || "").trim(), empresa: x.e, estado: x.st, mes: x.m, anio: x.a, n: x.n, nd: x.nd || 0 }));
+      atCache = { t: Date.now(), d: dia, filas, ultimo: (r.recordsets[1][0] || {}).u || null };
+      return atCache;
+    }
+    var tbCache = null;
+    async function tablasVisCas() {
+      const dia = limaHoy().getUTCDate();
+      if (tbCache && tbCache.d === dia && Date.now() - tbCache.t < 6e4) return tbCache;
+      const pool = await getPool();
+      const q = (t) => `SELECT supervisor AS s, UPPER(ISNULL(empresa, '')) AS e, UPPER(ISNULL(estado, '')) AS st,
+      ISNULL(YEAR(fecha_reg), 0) AS a, ISNULL(MONTH(fecha_reg), 0) AS m, COUNT(*) AS n, SUM(CASE WHEN DAY(fecha_reg) <= ${dia} THEN 1 ELSE 0 END) AS nd
+    FROM dbo.${t} GROUP BY supervisor, UPPER(ISNULL(empresa, '')), UPPER(ISNULL(estado, '')), ISNULL(YEAR(fecha_reg), 0), ISNULL(MONTH(fecha_reg), 0)`;
+      const r = await pool.request().query(q("Visitas") + ";" + q("Casos") + ";");
+      const map = (rs) => rs.map((x) => ({ supervisor: String(x.s || "").trim(), empresa: x.e, estado: x.st, mes: x.m, anio: x.a, n: x.n, nd: x.nd || 0 }));
+      tbCache = { t: Date.now(), d: dia, vis: map(r.recordsets[0]), cas: map(r.recordsets[1]) };
+      return tbCache;
     }
     function crear(D) {
       const F = D.filas || {};
-      const vis = (F.vis || []).map((x) => ({ supervisor: x[0], empresa: x[1], estado: x[2], mes: x[3], anio: x[4], n: 1 }));
-      const cas = (F.cas || []).map((x) => ({ supervisor: x[0], empresa: x[1], estado: x[2], mes: x[3], anio: x[4], n: 1 }));
-      const fus = (F.fus || []).map((x) => ({ supervisor: x[0], empresa: "", estado: x[1], totalTrab: x[2] === null ? NaN : x[2], mes: x[3], anio: x[4], n: 1 }));
+      const visG = (F.vis || []).map((x) => ({ supervisor: x[0], empresa: x[1], estado: x[2], mes: x[3], anio: x[4], n: 1, nd: null }));
+      const casG = (F.cas || []).map((x) => ({ supervisor: x[0], empresa: x[1], estado: x[2], mes: x[3], anio: x[4], n: 1, nd: null }));
+      const fus = (F.fus || []).map((x) => ({ supervisor: x[0], empresa: "", estado: x[1], totalTrab: x[2] === null ? NaN : x[2], mes: x[3], anio: x[4], n: 1, nd: null }));
       async function getEstadisticasAdmin(p) {
         p = p || {};
-        const lima = new Date(Date.now() - 5 * 36e5);
-        const mesActual = lima.getUTCMonth() + 1, anioActual = lima.getUTCFullYear();
+        const lima = limaHoy();
+        const mesActual = lima.getUTCMonth() + 1, anioActual = lima.getUTCFullYear(), diaHoy = lima.getUTCDate();
         const filtroEmp = String(p.empresa || "").toUpperCase();
         const filtroSup = String(p.supervisor || "").toLowerCase();
         const filtroMes = p.mes ? parseInt(p.mes) : 0;
         const filtroAnio = p.anio ? parseInt(p.anio) : 0;
-        function applyFilters(arr) {
-          let out = arr;
-          if (filtroEmp && filtroEmp !== "AMBAS") out = out.filter((x) => x.empresa === filtroEmp || x.empresa === "");
-          if (filtroSup) out = out.filter((x) => x.supervisor.toLowerCase().indexOf(filtroSup) !== -1);
-          if (filtroAnio) out = out.filter((x) => x.anio === filtroAnio);
-          if (filtroMes) out = out.filter((x) => x.mes === filtroMes);
-          return out;
-        }
+        const conEmp = !!filtroEmp && filtroEmp !== "AMBAS";
+        const filtrarBase = (arr, sinEmpOk) => arr.filter((x) => (!conEmp || x.empresa === filtroEmp || sinEmpOk && x.empresa === "") && (!filtroSup || x.supervisor.toLowerCase().indexOf(filtroSup) !== -1));
+        const filtrarFecha = (arr) => arr.filter((x) => (!filtroAnio || x.anio === filtroAnio) && (!filtroMes || x.mes === filtroMes));
         const cuenta = (arr, f) => arr.reduce((s, x) => s + (f(x) ? x.n : 0), 0);
-        const at = applyFilters(await atencionesAgrupadas()), vi = applyFilters(vis), ca = applyFilters(cas), fu = applyFilters(fus);
+        const AT = await atencionesAgrupadas();
+        let TB = null, fuenteVC = "tablas";
+        try {
+          TB = await tablasVisCas();
+        } catch (e) {
+          fuenteVC = "copia de Google";
+        }
+        const baseAt = filtrarBase(AT.filas, false), baseVi = filtrarBase(TB ? TB.vis : visG, false), baseCa = filtrarBase(TB ? TB.cas : casG, false), baseFu = filtrarBase(fus, true);
+        const at = filtrarFecha(baseAt), vi = filtrarFecha(baseVi), ca = filtrarFecha(baseCa), fu = filtrarFecha(baseFu);
         const refAnio = filtroAnio || anioActual;
         const esteMes = (x) => x.mes === mesActual && x.anio === refAnio;
         const fin = (x) => x.estado === "FINALIZADO" || x.estado === "RESUELTO" || x.estado === "ENVIADO";
         const ret = (x) => x.estado.indexOf("RETRAS") !== -1;
+        const sinFecha = (x) => !x.anio || x.anio < 2015 || x.anio > anioActual + 1;
         const stats = {
-          atenciones: { total: cuenta(at, () => true), enProceso: cuenta(at, (x) => x.estado === "EN PROCESO"), finalizados: cuenta(at, fin), esteMes: cuenta(at, esteMes) },
-          visitas: { total: vi.length, enPlazo: cuenta(vi, (x) => !ret(x)), retrasadas: cuenta(vi, ret), esteMes: cuenta(vi, esteMes) },
-          casos: { total: ca.length, enPlazo: cuenta(ca, (x) => !ret(x)), retrasados: cuenta(ca, ret), esteMes: cuenta(ca, esteMes) },
+          atenciones: {
+            total: cuenta(at, () => true),
+            enProceso: cuenta(at, (x) => x.estado === "EN PROCESO"),
+            finalizados: cuenta(at, fin),
+            esteMes: cuenta(at, esteMes),
+            sinFecha: cuenta(at, sinFecha),
+            sinEmpresa: conEmp ? 0 : cuenta(at, (x) => x.empresa === "")
+          },
+          visitas: { total: cuenta(vi, () => true), enPlazo: cuenta(vi, (x) => !ret(x)), retrasadas: cuenta(vi, ret), esteMes: cuenta(vi, esteMes) },
+          casos: { total: cuenta(ca, () => true), enPlazo: cuenta(ca, (x) => !ret(x)), retrasados: cuenta(ca, ret), esteMes: cuenta(ca, esteMes) },
           fusiones: {
             total: fu.length,
             pendientes: cuenta(fu, (x) => x.estado === "PENDIENTE"),
             validados: cuenta(fu, (x) => x.estado === "VALIDADO"),
-            trabajadores: fu.reduce((s, x) => s + x.totalTrab, 0),
+            trabajadores: fu.reduce((s, x) => s + (isFinite(x.totalTrab) ? x.totalTrab : 0), 0),
             esteMes: cuenta(fu, esteMes)
           }
         };
-        const porSupervisor = {};
+        const porSupervisor = {}, clave = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+        const mejorNombre = (a, b) => {
+          const mix = (s) => s !== s.toUpperCase();
+          return !a ? b : !mix(a) && mix(b) ? b : a;
+        };
         function acumSup(arr, modulo) {
           arr.forEach((x) => {
-            const s = x.supervisor || "Sin asignar";
-            if (!porSupervisor[s]) porSupervisor[s] = { nombre: s, atenciones: 0, atEnProceso: 0, atFinalizados: 0, visitas: 0, viRetrasadas: 0, casos: 0, caRetrasados: 0, fusiones: 0 };
-            const o = porSupervisor[s];
+            const k = clave(x.supervisor) || "sin asignar", s = x.supervisor || "Sin asignar";
+            if (!porSupervisor[k]) porSupervisor[k] = { nombre: s, atenciones: 0, atEnProceso: 0, atFinalizados: 0, visitas: 0, viRetrasadas: 0, casos: 0, caRetrasados: 0, fusiones: 0 };
+            const o = porSupervisor[k];
+            o.nombre = mejorNombre(o.nombre, s);
             if (modulo === "at") {
               o.atenciones += x.n;
               if (x.estado === "EN PROCESO") o.atEnProceso += x.n;
               if (fin(x)) o.atFinalizados += x.n;
             }
             if (modulo === "vis") {
-              o.visitas++;
-              if (ret(x)) o.viRetrasadas++;
+              o.visitas += x.n;
+              if (ret(x)) o.viRetrasadas += x.n;
             }
             if (modulo === "cas") {
-              o.casos++;
-              if (ret(x)) o.caRetrasados++;
+              o.casos += x.n;
+              if (ret(x)) o.caRetrasados += x.n;
             }
             if (modulo === "fus") o.fusiones++;
           });
@@ -74299,15 +74331,30 @@ var require_mod_estadm = __commonJS({
         acumSup(vi, "vis");
         acumSup(ca, "cas");
         acumSup(fu, "fus");
+        const porSup = {};
+        Object.keys(porSupervisor).forEach((k) => {
+          porSup[porSupervisor[k].nombre] = porSupervisor[k];
+        });
         const tendencia = [];
         for (let t = 5; t >= 0; t--) {
           const td = new Date(Date.UTC(anioActual, lima.getUTCMonth() - t, 1));
           const tMes = td.getUTCMonth() + 1;
           const tAnio = filtroAnio ? filtroAnio + (td.getUTCFullYear() - anioActual) : td.getUTCFullYear();
           const del = (x) => x.mes === tMes && x.anio === tAnio;
-          tendencia.push({ label: LABELS[tMes - 1], atenciones: cuenta(at, del), visitas: cuenta(vi, del), casos: cuenta(ca, del), fusiones: cuenta(fu, del) });
+          tendencia.push({ label: LABELS[tMes - 1], atenciones: cuenta(baseAt, del), visitas: cuenta(baseVi, del), casos: cuenta(baseCa, del), fusiones: cuenta(baseFu, del) });
         }
-        return { success: true, data: { stats, porSupervisor, tendencia, filtros: { anio: filtroAnio || "", mes: filtroMes || "" } } };
+        const ant = new Date(Date.UTC(anioActual, lima.getUTCMonth() - 1, 1)), mA = ant.getUTCMonth() + 1, aA = ant.getUTCFullYear();
+        const tramo = (arr, mm, aa) => arr.reduce((s, x) => s + (x.mes === mm && x.anio === aa ? x.nd == null ? x.n : x.nd : 0), 0);
+        const comparativa = {
+          dia: diaHoy,
+          actual: { label: LABELS[mesActual - 1], anio: anioActual },
+          anterior: { label: LABELS[mA - 1], anio: aA },
+          atenciones: [tramo(baseAt, mesActual, anioActual), tramo(baseAt, mA, aA)],
+          visitas: TB ? [tramo(baseVi, mesActual, anioActual), tramo(baseVi, mA, aA)] : null,
+          casos: TB ? [tramo(baseCa, mesActual, anioActual), tramo(baseCa, mA, aA)] : null
+        };
+        const fuente = { origen: "Supabase", atencionesHasta: AT.ultimo, visitasCasos: fuenteVC, fusiones: "copia de Google", calculado: (/* @__PURE__ */ new Date()).toISOString() };
+        return { success: true, data: { stats, porSupervisor: porSup, tendencia, comparativa, fuente, filtros: { anio: filtroAnio || "", mes: filtroMes || "" } } };
       }
       return { getEstadisticasAdmin };
     }

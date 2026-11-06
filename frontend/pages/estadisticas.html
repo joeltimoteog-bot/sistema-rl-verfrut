@@ -255,6 +255,7 @@ table tbody tr{transition:background .15s}
         <div style="margin-top:10px;font-size:11px;color:#64748b">
           Este mes: <strong id="eAtMes">—</strong>
         </div>
+        <div id="eAtNota" style="margin-top:4px;font-size:10.5px;color:#b45309;display:none"></div>
       </div>
       <!-- Visitas -->
       <div style="background:#fff;border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-left:5px solid #7c3aed">
@@ -318,6 +319,8 @@ table tbody tr{transition:background .15s}
       </div>
     </div>
 
+    <!-- _ESTADM_V2 (06-nov): de donde salen los datos -->
+    <div id="estFuente" style="display:none;font-size:12px;border-radius:10px;padding:8px 12px;margin:-6px 0 14px"></div>
     <!-- COMPARATIVA MES ACTUAL VS ANTERIOR -->
     <div id="estComparativa" style="display:none;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px">
       <div id="ecAt"  style="background:#fff;border-radius:14px;padding:16px 18px;box-shadow:0 2px 8px rgba(0,0,0,.07);border-top:3px solid #0b1e45"></div>
@@ -650,8 +653,24 @@ function renderEstadisticasAdmin(data) {
     });
   }
 
+  /* _ESTADM_V2 (06-nov): atenciones sin fecha / sin empresa y fuente de los datos */
+  try {
+    const nota = document.getElementById('eAtNota'), a = stats.atenciones, ps = [];
+    if (a.sinFecha) ps.push(a.sinFecha.toLocaleString('es-PE') + ' sin fecha de atención (no aparecen en ningún mes)');
+    if (a.sinEmpresa) ps.push(a.sinEmpresa.toLocaleString('es-PE') + ' sin empresa');
+    if (nota) { nota.textContent = ps.length ? '⚠️ Incluye ' + ps.join(' · ') : ''; nota.style.display = ps.length ? '' : 'none'; }
+    const fb = document.getElementById('estFuente');
+    if (fb) {
+      const f = data.fuente, hh = iso => { try { return new Date(iso + (/Z$|[+-]\d\d:\d\d$/.test(iso) ? '' : '-05:00')).toLocaleString('es-PE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return iso; } };
+      if (f) { fb.style.cssText += ';display:block;background:#ecfdf5;color:#065f46;border:1px solid #a7f3d0';
+        fb.innerHTML = '📡 <b>Datos: ' + f.origen + '</b> · atenciones al ' + (f.atencionesHasta ? hh(f.atencionesHasta) : '—') + ' · visitas y casos: ' + (f.visitasCasos === 'tablas' ? 'en tiempo real' : f.visitasCasos) + ' · fusiones: ' + f.fusiones; }
+      else { fb.style.cssText += ';display:block;background:#fff7ed;color:#9a3412;border:1px solid #fdba74';
+        fb.innerHTML = '⚠️ <b>Datos de Google (respaldo):</b> el servidor principal no respondió. Las atenciones pueden salir contadas dos veces; vuelve a cargar en unos minutos.'; }
+    }
+  } catch (e) {}
+
   // ── Secciones que no dependen de la tabla ──
-  _actualizarComparativaEst(tendencia);
+  _actualizarComparativaEst(tendencia, data.comparativa);
   _renderVistaGerencial(data);
   _cargarTendenciaAnioAnterior(tendencia);
 
@@ -711,11 +730,17 @@ function renderEstadisticasAdmin(data) {
   _cargarChartEmpresa();
 }
 
-function _actualizarComparativaEst(tendencia) {
+function _actualizarComparativaEst(tendencia, comp) {
   const wrap = document.getElementById('estComparativa');
   if (!wrap || !tendencia || tendencia.length < 2) return;
-  const act = tendencia[tendencia.length - 1];
-  const ant = tendencia[tendencia.length - 2];
+  const act = Object.assign({}, tendencia[tendencia.length - 1]);
+  const ant = Object.assign({}, tendencia[tendencia.length - 2]);
+  /* _ESTADM_V2 (06-nov): comparativa justa = del dia 1 al de hoy en los dos meses (antes: mes en curso vs mes completo -> caida falsa) */
+  let tramo = '';
+  if (comp && comp.dia) {
+    ['atenciones', 'visitas', 'casos'].forEach(k => { if (comp[k]) { act[k] = comp[k][0]; ant[k] = comp[k][1]; } });
+    tramo = '1–' + comp.dia + ' ' + comp.actual.label + ' vs 1–' + comp.dia + ' ' + comp.anterior.label;
+  }
   const _pct = (a, b) => b === 0 ? (a > 0 ? 100 : 0) : Math.round(((a - b) / b) * 100);
   const _html = (label, color, act, ant) => {
     const pct = _pct(act, ant);
@@ -725,10 +750,10 @@ function _actualizarComparativaEst(tendencia) {
     return `<div style="font-size:11px;font-weight:700;color:${color};margin-bottom:4px">${label}</div>
       <div style="display:flex;align-items:baseline;gap:6px">
         <span style="font-size:26px;font-weight:900;color:${color}">${act}</span>
-        <span style="font-size:11px;color:#64748b">este mes</span>
+        <span style="font-size:11px;color:#64748b">${tramo && label.indexOf('Fusiones') < 0 ? 'del 1 al ' + comp.dia : 'este mes'}</span>
       </div>
-      <div style="font-size:12px;font-weight:700;color:${clr};margin-top:4px">${arrow} ${Math.abs(pct)}% vs ${ant ? ant.label || 'mes ant.' : 'mes ant.'}</div>
-      <div style="font-size:10px;color:#94a3b8">Mes anterior: ${ant}</div>`;
+      <div style="font-size:12px;font-weight:700;color:${clr};margin-top:4px">${arrow} ${Math.abs(pct)}% vs ${tramo && label.indexOf('Fusiones') < 0 ? 'mismo tramo de ' + comp.anterior.label : 'mes anterior'}</div>
+      <div style="font-size:10px;color:#94a3b8">${tramo && label.indexOf('Fusiones') < 0 ? '1–' + comp.dia + ' ' + comp.anterior.label + ': ' + ant : 'Mes anterior completo: ' + ant}</div>`;
   };
   document.getElementById('ecAt').innerHTML  = _html('🩺 Atenciones', '#0b1e45', act.atenciones, ant.atenciones);
   document.getElementById('ecVis').innerHTML = _html('🏕️ Visitas',    '#7c3aed', act.visitas,    ant.visitas);
