@@ -72446,7 +72446,8 @@ var require_eti = __commonJS({
       "capacitaciones",
       "supervisores_eti",
       "usuarios_eti",
-      "informes_eti"
+      "informes_eti",
+      "informes_cap"
     ];
     var EDITORES_INFORME = ["jtimoteo", "lcastillo"];
     var editorInforme = (u) => !!u && (esAdminU(u) || EDITORES_INFORME.indexOf(String(u.usuario || "").toLowerCase()) >= 0);
@@ -72533,8 +72534,8 @@ var require_eti = __commonJS({
         await cli.query("BEGIN");
         for (const o of ops) {
           const id = String(o.id), d = JSON.stringify(o.datos || {});
-          if (o.col === "informes_eti" && !editorInforme(u)) {
-            const ya = await cli.query("SELECT 1 FROM eti.informes_eti WHERE id = $1", [id]);
+          if ((o.col === "informes_eti" || o.col === "informes_cap") && !editorInforme(u)) {
+            const ya = await cli.query(`SELECT 1 FROM eti.${o.col} WHERE id = $1`, [id]);
             if (o.op === "delete" || ya.rows.length) throw Object.assign(new Error("Solo los administradores de informes pueden corregir un informe emitido"), { status: 403 });
           }
           if (o.op === "delete") await cli.query(`DELETE FROM eti.${o.col} WHERE id = $1`, [id]);

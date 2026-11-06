@@ -1314,6 +1314,7 @@ async function _buildBody() {
 async function generarPDFsFormatos() {
   const empresa = v('capEmpresa');
   if (!empresa) { mostrarFeedback('err', 'Selecciona la empresa antes de generar el PDF'); return; }
+  try { if (typeof window._capAjustarResponsable === 'function') window._capAjustarResponsable(); } catch (e) {}   /* _CAP_FIRMA_ROLES_V1 (05-nov): ETI -> Lucia Castillo · otros temas -> el supervisor */
   const respDni = v('capRespDni').trim(), respNombre = v('capRespNombre').trim(), respCargo = v('capRespCargo').trim();
   if (!respDni || !respNombre || !respCargo) {
     await appAlert('⚠️ Debes ingresar el DNI del responsable del registro.\n\nEl DNI debe existir en BD_Supervisores para auto-completar el nombre y cargo.');
@@ -1635,12 +1636,13 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '', docExist
     doc.autoTable({
       startY: y, margin: { left: MGS, right: MGS, bottom: 5 },
       head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO/INSTITUCIÓN', 'FIRMA']],   /* _RSC01_IDENTICO_V1 */
-      body: [['1', v('capCapDni').trim(), v('capCapNombre').trim(), v('capCapCargo').trim(), '']],
+      body: [['1', v('capCapDni').trim(), v('capCapNombre').trim(), v('capCapCargo').trim(), (typeof window._capFirmaRol === 'function' ? window._capFirmaRol('capacitador', { dni: v('capCapDni').trim(), nombre: v('capCapNombre').trim() }) : '')]],   /* _CAP_FIRMA_ROLES_V1 */
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
       bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 8 },   /* _RSC01_IDENTICO_V1: el cargo entra en una linea */
-      columnStyles: { 0:{cellWidth:9.6}, 1:{cellWidth:20.9}, 2:{cellWidth:71.5}, 3:{cellWidth:59.2}, 4:{cellWidth:28.8} }   /* _RSC01_IDENTICO_V1: anchos del oficial (suma 190) */
+      columnStyles: { 0:{cellWidth:9.6}, 1:{cellWidth:20.9}, 2:{cellWidth:71.5}, 3:{cellWidth:59.2}, 4:{cellWidth:28.8} }   /* _RSC01_IDENTICO_V1: anchos del oficial (suma 190) */,
+      didParseCell: d => { if (d.section === 'body' && d.column.index === 4 && /FIRMADO DIGITALMENTE/.test(String(d.cell.raw || ''))) { d.cell.styles.fontSize = 5.6; d.cell.styles.fontStyle = 'bold'; d.cell.styles.textColor = [10, 36, 99]; d.cell.styles.cellPadding = 0.4; } }   /* _CAP_FIRMA_ROLES_V1 */
     });
     y = doc.lastAutoTable.finalY;
 
@@ -1701,12 +1703,13 @@ async function generarPDF(asistentesOverride = null, formatoLabel = '', docExist
     doc.autoTable({
       startY: y, margin: { left: MGS, right: MGS, bottom: 5 },
       head: [['N°', 'DNI', 'APELLIDOS Y NOMBRES', 'CARGO / ÁREA', 'FIRMA']],
-      body: [['1', respDni, respNombre, respCargo, '']],
+      body: [['1', respDni, respNombre, respCargo, (typeof window._capFirmaRol === 'function' ? window._capFirmaRol('responsable', { dni: respDni, nombre: respNombre }) : '')]],   /* _CAP_FIRMA_ROLES_V1 */
       theme: 'grid',
       headStyles: { ...sCabHead },
       styles: { ...sBorder, cellPadding: 1, textColor: C.negro },
       bodyStyles: { fontSize: 8, halign: 'center', valign: 'middle', minCellHeight: 8 },   /* _RSC01_IDENTICO_V1: el cargo entra en una linea */
-      columnStyles: { 0:{cellWidth:9.6}, 1:{cellWidth:20.9}, 2:{cellWidth:71.5}, 3:{cellWidth:59.2}, 4:{cellWidth:28.8} }   /* _RSC01_IDENTICO_V1: anchos del oficial (suma 190) */
+      columnStyles: { 0:{cellWidth:9.6}, 1:{cellWidth:20.9}, 2:{cellWidth:71.5}, 3:{cellWidth:59.2}, 4:{cellWidth:28.8} }   /* _RSC01_IDENTICO_V1: anchos del oficial (suma 190) */,
+      didParseCell: d => { if (d.section === 'body' && d.column.index === 4 && /FIRMADO DIGITALMENTE/.test(String(d.cell.raw || ''))) { d.cell.styles.fontSize = 5.6; d.cell.styles.fontStyle = 'bold'; d.cell.styles.textColor = [10, 36, 99]; d.cell.styles.cellPadding = 0.4; } }   /* _CAP_FIRMA_ROLES_V1 */
     });
 
     // ── _FIX_RESPONSABLE_PAG1_V1: NO borrar páginas extra ──

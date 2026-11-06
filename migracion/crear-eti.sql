@@ -26,7 +26,9 @@ BEGIN
     -- Capacitaciones ETI
     'capacitaciones', 'supervisores_eti', 'usuarios_eti',
     -- _INFORME_ETI_V1 (05-nov): informes INF-SC-GH-03 emitidos (Word + fotos en Storage)
-    'informes_eti'
+    'informes_eti',
+    -- _CAP_INFORME_V1 (05-nov): informes de capacitacion del Sistema RR.LL.
+    'informes_cap'
   ] LOOP
     EXECUTE format('CREATE TABLE IF NOT EXISTS eti.%I (
         id          text PRIMARY KEY,

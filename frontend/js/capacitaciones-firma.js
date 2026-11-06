@@ -48,6 +48,29 @@
       return 'FIRMADO DIGITALMENTE\n' + (cod ? 'Cód. fotocheck ' + cod : 'DNI ' + (p.dni || '') + ' (sin cód. en BD)') + '\n' + (conHora ? ahoraTxt(f.fecha) : ahoraTxt(f.fecha).slice(0, 10));
     } catch (e) { return ''; }
   };
+  /* _CAP_FIRMA_ROLES_V1 (05-nov-2026): firma digital del CAPACITADOR y del RESPONSABLE DEL REGISTRO en el R-SC-01.
+     Temas de ética (ETI / ética / buenas prácticas): responsable = Lucía Castillo (Analista de Gestión Humana).
+     Otros temas (cambio de horario, comunicados, etc.): responsable = el mismo supervisor que capacita.
+     La firma lleva DNI, fecha de la capacitación y un código de verificación (mismo código si se regenera el formato). */
+  function verif(t) { var h = 2166136261 >>> 0; for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } var x = ('00000000' + h.toString(16).toUpperCase()).slice(-8); return x.slice(0, 4) + '-' + x.slice(4); }
+  function valor(id) { var e = $(id); return e ? String(e.value || '').trim() : ''; }
+  window._capEsTemaEti = function (tema, tipo) { return /\beti\b|[ée]tica|buenas pr[aá]cticas/i.test(String(tema || '') + ' ' + String(tipo || '')); };
+  window._capAjustarResponsable = function () {
+    var tipos = ''; try { tipos = (typeof getTipos === 'function' ? getTipos() : []).join(' '); } catch (e) {}
+    var LU = (typeof _RESP_REGISTRO !== 'undefined' && _RESP_REGISTRO) ? _RESP_REGISTRO : { dni: '71732176', nombre: 'CASTILLO CELI LUCIA GABRIELA', cargo: 'ANALISTA DE GESTION HUMANA' };
+    var cap = { dni: valor('capCapDni'), nombre: valor('capCapNombre'), cargo: valor('capCapCargo') }, resp = valor('capRespDni');
+    var pon = function (o) { if (typeof sv === 'function') { sv('capRespDni', o.dni); sv('capRespNombre', o.nombre); sv('capRespCargo', o.cargo); } };
+    if (window._capEsTemaEti(valor('capTema'), tipos)) { if (!resp || resp === cap.dni) pon(LU); }
+    else if ((!resp || resp === LU.dni) && cap.dni && cap.nombre) pon({ dni: cap.dni, nombre: cap.nombre, cargo: cap.cargo || 'SUPERVISOR DE GESTION HUMANA' });
+  };
+  window._capFirmaRol = function (rol, p) {
+    try {
+      var dni = String((p && p.dni) || '').trim(); if (!/^\d{8}$/.test(dni)) return '';
+      var f = valor('capFecha'), fd = /^\d{4}-\d{2}-\d{2}$/.test(f) ? f.split('-').reverse().join('/') : f;
+      return 'FIRMADO DIGITALMENTE\nDNI ' + dni + ' · ' + fd + '\nVerif. ' + verif(rol + '|' + dni + '|' + f + '|' + valor('capTema'));
+    } catch (e) { return ''; }
+  };
+  window._capFirmaVerif = verif;
   window._capFirmaBadge = function (a) {
     try {
       var f = a && a.firma;
