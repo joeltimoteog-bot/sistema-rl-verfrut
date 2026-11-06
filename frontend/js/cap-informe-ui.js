@@ -305,7 +305,7 @@
     var L;
     try { var c = { col: 'informes_cap', limite: 3000 }; if (!esEditor()) c.filtros = [['usuario', '==', u.usuario]]; L = ((await post('eti/consultar', c)).docs || []).map(function (d) { return d.datos; }).sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); }); }
     catch (e) { $('ci-lista').innerHTML = '<div class="ci-err">No se pudo cargar: ' + esc(e.message) + '</div>'; return; }
-    if (!L.length) { $('ci-lista').innerHTML = '<p>Aún no hay informes. Se emiten con el botón <b>📝</b> de cada capacitación en Registros.</p>'; return; }
+    if (!L.length) { $('ci-lista').innerHTML = '<p>Aún no hay informes. Se emiten desde la pestaña <b>📝 Informes</b> (arriba) o con el botón <b>📝</b> de cada capacitación en Registros.</p>'; return; }
     $('ci-lista').innerHTML = '<div style="overflow-x:auto"><table class="ci-tab"><thead><tr><th>Emitido</th><th>Fecha(s)</th><th>Empresa</th><th>Tema</th><th>Sector</th><th>Total (H/M)</th><th>Fotos</th><th>Versión</th><th>Emitido por</th><th></th></tr></thead><tbody>' +
       L.map(function (r, i) {
         return '<tr><td>' + esc(fF(String(r.creado || '').slice(0, 10))) + '</td><td>' + esc((r.fechas || [r.fecha]).map(fF).join(', ')) + '</td><td>' + esc(r.emp) + '</td><td>' + esc(String(r.tema || '').slice(0, 60)) + '</td><td>' + esc(r.sector) + '</td>' +
@@ -345,6 +345,44 @@
       }
     }
   }
+  /* _CAP_INFORME_CENTRO_V1 (05-nov): pestaña propia "📝 Informes" en la barra del módulo.
+     Arriba: los temas registrados para emitir su informe. Abajo: los informes ya emitidos. */
+  function pestana() {
+    if ($('tabBtnInformes')) return;
+    var ref = $('tabBtnRegistros'); if (!ref || !ref.parentNode) return;
+    var t = document.createElement('button'); t.type = 'button'; t.className = 'tab-btn'; t.id = 'tabBtnInformes'; t.textContent = '📝 Informes';
+    t.style.cssText = 'color:#0a2463;font-weight:800';
+    t.onclick = centro;
+    ref.parentNode.insertBefore(t, ref.nextSibling);
+  }
+  async function centro() {
+    var u = usuario(); if (!u) return;
+    var m = modal('<div class="ci-hd"><div><b>📝 Informes de capacitación (INF-SC-GH-03)</b><small>Elige el tema que terminaste de registrar y emite su informe: del día, por fechas programadas, por rango o general.</small></div><button class="ci-b" id="ci-x" aria-label="Cerrar">✕</button></div>' +
+      '<div class="ci-bd"><div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin-bottom:.7rem"><input id="ci-bus" placeholder="🔍 Buscar tema…" style="flex:1;min-width:200px;min-height:38px;padding:0 10px;border:1.5px solid #c7d2e6;border-radius:9px;font:inherit"><button class="ci-b" id="ci-emit">📚 Informes ya emitidos</button></div><div id="ci-temas"><p>⏳ Cargando tus capacitaciones…</p></div></div>', true);
+    m.querySelector('#ci-x').onclick = function () { m.remove(); };
+    m.querySelector('#ci-emit').onclick = function () { m.remove(); panel(); };
+    var L;
+    try { L = await todasLasCapacitaciones(); }
+    catch (e) { $('ci-temas').innerHTML = '<div class="ci-err">No se pudo cargar: ' + esc(e.message) + '</div>'; return; }
+    var g = {};
+    L.forEach(function (r) {
+      var d0 = desdeRegistro(r), k = normTema(r.tema) + '|' + (esRapel(r.empresa) ? 'R' : 'V'); var f = String(d0.fecha || '').slice(0, 10);
+      var x = g[k] || (g[k] = { r: r, f: f, fechas: {}, n: 0 });
+      x.fechas[f] = 1; x.n += d0.n || 0;
+      if (f > x.f) { x.f = f; x.r = r; }
+    });
+    var G = Object.keys(g).map(function (k) { return g[k]; }).sort(function (a, b) { return a.f < b.f ? 1 : -1; });
+    function pinta(q) {
+      var nq = normTema(q), V = G.filter(function (x) { return !nq || normTema(x.r.tema).indexOf(nq) >= 0; }).slice(0, 150);
+      $('ci-temas').innerHTML = !V.length ? '<p>No hay capacitaciones registradas' + (nq ? ' con ese tema' : '') + '.</p>' :
+        '<div style="overflow-x:auto"><table class="ci-tab"><thead><tr><th>Última fecha</th><th>Tema</th><th>Empresa</th><th>Fechas</th><th>Asistentes</th><th></th></tr></thead><tbody>' +
+        V.map(function (x, i) { return '<tr><td>' + esc(fF(x.f)) + '</td><td>' + esc(String(x.r.tema || '').slice(0, 80)) + '</td><td>' + (esRapel(x.r.empresa) ? 'RAPEL' : 'VERFRUT') + '</td><td>' + Object.keys(x.fechas).length + '</td><td>' + (x.n || '—') + '</td>' +
+          '<td><button class="ci-b p" style="min-height:34px;padding:0 10px;white-space:nowrap" data-k="' + i + '">📝 Emitir informe</button></td></tr>'; }).join('') + '</tbody></table></div>';
+      Array.prototype.forEach.call($('ci-temas').querySelectorAll('button[data-k]'), function (b) { b.onclick = function () { m.remove(); emitir(desdeRegistro(V[+b.getAttribute('data-k')].r)); }; });
+    }
+    pinta('');
+    m.querySelector('#ci-bus').oninput = function () { pinta(this.value); };
+  }
   /* aviso al terminar de guardar una capacitación nueva */
   function engancharGuardado() {
     if (typeof window.guardarYGenerar !== 'function' || window.guardarYGenerar._ci) return;
@@ -371,8 +409,8 @@
     window.guardarYGenerar._ci = true;
   }
 
-  window.capInformeUI = { emitir: emitir, panel: panel, corregir: corregir, desdeRegistro: desdeRegistro, version: 2 };
-  function iniciar() { try { botonesFilas(); engancharGuardado(); } catch (e) {} }
+  window.capInformeUI = { emitir: emitir, panel: panel, centro: centro, corregir: corregir, desdeRegistro: desdeRegistro, version: 3 };
+  function iniciar() { try { pestana(); } catch (e) {} try { botonesFilas(); engancharGuardado(); } catch (e) {} }
   setInterval(iniciar, 1200); setTimeout(iniciar, 300);
   try { console.log('[_CAP_INFORME_V1] listo'); } catch (e) {}
 })();

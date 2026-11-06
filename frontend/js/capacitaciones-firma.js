@@ -71,7 +71,21 @@
     } catch (e) { return ''; }
   };
   window._capFirmaVerif = verif;
+  /* _CAP_FIRMA_TOGGLE_V1 (05-nov): tocar la etiqueta de un asistente cambia Papel <-> Firma digital
+     (por si entro sin firma aunque firmo con su fotocheck). Si el registro ya se guardo, se actualiza en Supabase. */
+  window._capFirmaToggle = async function (dni) {
+    var a = lista().find(function (x) { return String(x.dni) === String(dni); }); if (!a) return;
+    if (a.firma && a.firma.digital) { if (!await pregunta('¿Quitar la firma digital de ' + (a.nombre || a.dni) + '?\n\nFirmará a mano en el formato impreso.')) return; a.firma = null; }
+    else a.firma = { digital: true, codigo: String(a.codigo || '').trim(), fecha: new Date().toISOString(), metodo: 'Manual' };
+    try { if (typeof renderLista === 'function') renderLista(); } catch (e) {}
+    try { if (a.firma && !a.firma.codigo) completarCodigo(a.dni); } catch (e) {}
+    try { var g = false; try { g = _capGuardada === true; } catch (e) {} if (g && _ultimoId && a.firma) await guardarFirmas(_ultimoId, [a]); } catch (e) {}
+  };
   window._capFirmaBadge = function (a) {
+    var h = window._capFirmaBadge0(a); if (!h || !a || !a.dni) return h;
+    return '<span role="button" tabindex="0" style="cursor:pointer" title="Tocar para cambiar Papel / Firma digital" onclick="window._capFirmaToggle(\'' + esc(String(a.dni)).replace(/'/g, '') + '\')">' + h + '</span>';
+  };
+  window._capFirmaBadge0 = function (a) {
     try {
       var f = a && a.firma;
       if (!f || !f.digital) return '<span style="font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:999px;background:#f1f5f9;color:#475569" title="Firmará en el formato impreso">Papel</span>';
@@ -82,7 +96,13 @@
   };
 
   /* ── etiquetar cada asistente nuevo segun su origen ── */
+  /* _CAP_FIRMA_QR_DNI_V1 (05-nov): el QR deja marcado SU DNI por 3 min. Antes la marca duraba 4 s y,
+     si la busqueda del trabajador tardaba (senal debil en campo) o salia el aviso de tope, el asistente
+     entraba SIN firma digital aunque se hubiera escaneado su fotocheck. */
+  var qrDni = {};
   function marcaFirma(t) {
+    var dq = String((t && t.dni) || '').trim(), q = qrDni[dq];
+    if (q && Date.now() < q.hasta) { delete qrDni[dq]; if (!q.firma) return null; return { digital: true, codigo: String(t.codigo || '').trim(), fecha: new Date().toISOString(), metodo: 'QR' }; }
     var tipo = (origen && Date.now() < origen.hasta) ? origen.tipo : 'manual';
     var conFirma = origen && Date.now() < origen.hasta ? !!origen.firma : (firmaOn && manualPreguntado === true);
     if (!conFirma) return null;
@@ -105,6 +125,7 @@
     var w = function (texto) {
       try { sessionStorage.setItem('rl_cap_ultimo_qr', String(texto || '').slice(0, 200)); } catch (e) {}
       origen = { tipo: 'qr', firma: firmaOn, hasta: Date.now() + 4000 };
+      try { var mq = String(texto || '').match(/\b(\d{8})\b/); if (mq) qrDni[mq[1]] = { firma: firmaOn, hasta: Date.now() + 180000 }; } catch (e) {}
       return prev.apply(this, arguments);
     };
     w._firma = true; window.procesarQR = w; try { procesarQR = w; } catch (e) {}
@@ -190,6 +211,47 @@
     } catch (e) {}
     return local || [];
   }
+  /* _CAP_FIRMA_VALIDAR_V1 (05-nov): al emitir el R-SC-01 desde Registros, si hay asistentes SIN firma digital
+     guardada, quien registro (o Joel / Lucia / administrador) marca los que firmaron con su fotocheck.
+     Queda guardado en Supabase con metodo "Validado" y el usuario que lo valido. */
+  function puedeValidar(cap) {
+    var u = usr() || {}, us = String(u.usuario || '').toLowerCase();
+    return /^admin/i.test(String(u.rol || '')) || us === 'jtimoteo' || us === 'lcastillo' || (us && us === String(cap.creadaPor || '').toLowerCase());
+  }
+  function validarFirmas(cap) {
+    return new Promise(function (fin) {
+      var L = cap.asistentes, ya = L.filter(function (a) { return a.firma && a.firma.digital; }).length;
+      var ov = document.createElement('div');
+      ov.style.cssText = 'position:fixed;inset:0;background:rgba(10,20,40,.55);z-index:2147483000;display:flex;align-items:center;justify-content:center;padding:1rem;font-family:Inter,"Segoe UI",sans-serif';
+      ov.innerHTML = '<div style="background:#fff;border-radius:16px;max-width:720px;width:100%;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)">' +
+        '<div style="padding:1rem 1.2rem;border-bottom:1px solid #E2E8F0"><b style="font-size:1.05rem;color:#0E2A5C">✍️ Firma digital de los participantes</b>' +
+        '<small style="display:block;color:#5B6B82;font-size:.8rem;margin-top:.2rem">' + esc(cap.tema || '') + ' · ' + L.length + ' asistentes · ' + ya + ' con firma digital guardada</small></div>' +
+        '<div style="padding:.8rem 1.2rem;overflow:auto"><div style="background:#eef4ff;border:1px solid #c7d7fe;border-radius:10px;padding:.6rem .8rem;font-size:.82rem;margin-bottom:.6rem">Marca a quienes <b>firmaron con su fotocheck</b>. En el formato R-SC-01 saldrán como <b>FIRMADO DIGITALMENTE</b>; los no marcados quedan en blanco para firmar a mano.</div>' +
+        '<label style="display:flex;gap:.5rem;align-items:center;font-weight:800;font-size:.85rem;margin:.2rem 0 .5rem;cursor:pointer"><input type="checkbox" id="cfvTodos"> Marcar todos</label>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:.82rem"><tbody>' + L.map(function (a, i) {
+          var on = a.firma && a.firma.digital;
+          return '<tr style="border-top:1px solid #eef2f7"><td style="padding:5px 4px;width:28px"><input type="checkbox" class="cfv" data-i="' + i + '"' + (on ? ' checked disabled' : '') + '></td><td style="padding:5px 4px;width:30px;color:#64748b">' + (i + 1) + '</td><td style="padding:5px 4px">' + esc(a.dni) + '</td><td style="padding:5px 4px">' + esc(a.nombre || '') + '</td><td style="padding:5px 4px;color:' + (on ? '#166534' : '#64748b') + ';font-weight:700">' + (on ? '✍️ ' + esc(a.firma.metodo || 'QR') : 'Papel') + '</td></tr>';
+        }).join('') + '</tbody></table></div>' +
+        '<div style="padding:.8rem 1.2rem;border-top:1px solid #E2E8F0;display:flex;justify-content:flex-end;gap:.5rem;flex-wrap:wrap">' +
+        '<button type="button" id="cfvNo" style="min-height:40px;padding:0 14px;border-radius:10px;border:1.5px solid #c7d2e6;background:#fff;font-weight:800;cursor:pointer">Cancelar</button>' +
+        '<button type="button" id="cfvAsi" style="min-height:40px;padding:0 14px;border-radius:10px;border:1.5px solid #c7d2e6;background:#fff;font-weight:800;cursor:pointer">Generar sin cambios</button>' +
+        '<button type="button" id="cfvOk" style="min-height:40px;padding:0 14px;border-radius:10px;border:0;background:#0a2463;color:#fff;font-weight:800;cursor:pointer">✍️ Guardar firmas y generar</button></div></div>';
+      document.body.appendChild(ov);
+      var cajas = function () { return Array.prototype.slice.call(ov.querySelectorAll('input.cfv:not([disabled])')); };
+      ov.querySelector('#cfvTodos').onchange = function () { var on = this.checked; cajas().forEach(function (c) { c.checked = on; }); };
+      ov.querySelector('#cfvNo').onclick = function () { ov.remove(); fin('cancel'); };
+      ov.querySelector('#cfvAsi').onclick = function () { ov.remove(); fin('asi'); };
+      ov.querySelector('#cfvOk').onclick = async function () {
+        var nuevos = cajas().filter(function (c) { return c.checked; }).map(function (c) { return L[+c.getAttribute('data-i')]; });
+        var hoyIso = new Date().toISOString();
+        nuevos.forEach(function (a) { a.firma = { digital: true, codigo: String(a.codigo || '').trim(), fecha: (cap.fecha ? String(cap.fecha).slice(0, 10) + 'T12:00:00' : hoyIso), metodo: 'Validado' }; });
+        this.disabled = true; this.textContent = '⏳ Guardando…';
+        var id = String(cap.id || cap.idCapacitacion || cap.id_capacitacion || '');
+        if (nuevos.length && id) { try { await guardarFirmas(id, nuevos); } catch (e) {} }
+        ov.remove(); fin('ok');
+      };
+    });
+  }
   function envolverRegenerar() {
     var prev = window.regenerarFormatoCapacitacion; if (typeof prev !== 'function' || prev._firma) return;
     var w = async function (cap) {
@@ -200,6 +262,10 @@
           if (firmas.length) {
             var m = {}; firmas.forEach(function (f) { m[String(f.dni)] = f; });
             cap.asistentes.forEach(function (a) { var f = m[String(a.dni)]; if (f) a.firma = { digital: true, codigo: f.codigo || '', fecha: f.fecha || '', metodo: f.metodo || 'QR' }; });
+          }
+          if (cap.asistentes.some(function (a) { return !(a.firma && a.firma.digital); }) && puedeValidar(cap)) {
+            var r = await validarFirmas(cap);
+            if (r === 'cancel') return false;
           }
         }
       } catch (e) {}
