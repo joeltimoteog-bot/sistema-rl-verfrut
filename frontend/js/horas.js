@@ -392,8 +392,8 @@ function renderSaldoCard(data) {
   const t = data.totales || {};
   const acum = Number(t.acum || 0);
   const perm = Number(t.perm || 0);
-  const deuda = Number(t.deuda || 0);
-  const saldo = (t.saldo !== undefined) ? Number(t.saldo) : (acum - perm - deuda);
+  const saldo = (t.saldo !== undefined) ? Number(t.saldo) : (acum - perm - Number(t.deuda || 0));
+  /* _HORAS_DEUDA_REAL_V1 (06-nov): la deuda que se muestra es la que el trabajador DEBE HOY (saldo negativo). Antes se sumaba la columna deuda: si un permiso se cubrio con un saldo que luego se anulo/corrigio, esa deuda no aparecia (ADANAQUE: mostraba 23.98 h y debe 95.54 h). */ const deuda = Math.max(0, Math.round(-saldo * 100) / 100);
   document.getElementById('saldoWrap').innerHTML = `
     <div class="saldo-card">
       <div class="lbl-w">📊 Saldo actual</div>
@@ -609,8 +609,8 @@ function renderResumenIndividual(d) {
   const t = d.totales || {};
   const acum = Number(t.acum || 0);
   const perm = Number(t.perm || 0);
-  const deuda = Number(t.deuda || 0);
-  const saldo = (t.saldo !== undefined) ? Number(t.saldo) : (acum - perm - deuda);
+  const saldo = (t.saldo !== undefined) ? Number(t.saldo) : (acum - perm - Number(t.deuda || 0));
+  /* _HORAS_DEUDA_REAL_V1 (06-nov): la deuda que se muestra es la que el trabajador DEBE HOY (saldo negativo). Antes se sumaba la columna deuda: si un permiso se cubrio con un saldo que luego se anulo/corrigio, esa deuda no aparecia (ADANAQUE: mostraba 23.98 h y debe 95.54 h). */ const deuda = Math.max(0, Math.round(-saldo * 100) / 100);
 
   // Header con datos del trabajador (tomados del primer registro si vienen)
   const primer = registros[0] || {};
@@ -754,8 +754,8 @@ function renderResumenGeneral(rows) {
   const html = rows.map(r => {
     const acum = Number(r.acum || 0);
     const perm = Number(r.perm || 0);
-    const deuda = Number(r.deuda || 0);
-    const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm - deuda);
+    const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm - Number(r.deuda || 0));
+    const deuda = Math.max(0, Math.round(-saldo * 100) / 100);   /* _HORAS_DEUDA_REAL_V1 */
     totAcum += acum; totPerm += perm; totDeuda += deuda; totSaldo += saldo;
     let cls = '';
     if (saldo > 0) cls = 'row-green';
@@ -871,7 +871,7 @@ async function exportarIndividualPDF() {
   y += 22;
   const t = d.totales || {};
   doc.setTextColor(15, 23, 42); doc.setFontSize(10);
-  doc.text(`Acumuladas: ${num(t.acum)}   Permiso: ${num(t.perm)}   Deuda: ${num(t.deuda)}   Saldo: ${num(t.saldo)}`, mg, y);
+  doc.text(`Acumuladas: ${num(t.acum)}   Permiso: ${num(t.perm)}   Deuda: ${num(Math.max(0, -(Number(t.saldo) || 0)))}   Saldo: ${num(t.saldo)}`, mg, y);
   y += 6;
   doc.autoTable({
     startY: y, margin: { left: mg, right: mg },
@@ -921,8 +921,8 @@ async function exportarGeneralPDF() {
     startY: y, margin: { left: mg, right: mg },
     head: [['DNI','Nombre','Empresa','Cargo','Acum','Permiso','Deuda','Saldo']],
     body: rows.map(r => {
-      const acum = Number(r.acum || 0), perm = Number(r.perm || 0), deuda = Number(r.deuda || 0);
-      const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm - deuda);
+      const acum = Number(r.acum || 0), perm = Number(r.perm || 0);
+      const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm - Number(r.deuda || 0)), deuda = Math.max(0, Math.round(-saldo * 100) / 100);   /* _HORAS_DEUDA_REAL_V1 */
       return [r.dni || '', r.nombre || '', r.empresa || '', r.cargo || '',
               acum.toFixed(2), perm.toFixed(2), deuda.toFixed(2), saldo.toFixed(2)];
     }),
@@ -936,8 +936,8 @@ async function exportarGeneralExcel() {
   const rows = window.horasCache.resumenGeneral;
   if (!rows || !rows.length) { await appAlert('No hay datos para exportar'); return; }
   const data = rows.map(r => {
-    const acum = Number(r.acum || 0), perm = Number(r.perm || 0), deuda = Number(r.deuda || 0);
-    const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm - deuda);
+    const acum = Number(r.acum || 0), perm = Number(r.perm || 0);
+    const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm - Number(r.deuda || 0)), deuda = Math.max(0, Math.round(-saldo * 100) / 100);   /* _HORAS_DEUDA_REAL_V1 */
     return {
       DNI: r.dni || '', Nombre: r.nombre || '', Empresa: r.empresa || '', Cargo: r.cargo || '',
       Acumuladas: acum, Permiso: perm, Deuda: deuda, Saldo: saldo

@@ -69162,6 +69162,14 @@ var require_horas_escritura = __commonJS({
           const motivo = String(r.motivo || "").toLowerCase().trim();
           if (norm(motivo).indexOf("acumulacion") >= 0 && r.fechaEntrada && r.fechaSalida && String(r.fechaEntrada).substring(0, 10) !== String(r.fechaSalida).substring(0, 10) && !turnoUnico(r))
             return { success: false, error: "Una acumulaci\xF3n es de un solo turno (m\xE1ximo 24 horas). Revisa la fecha de salida: si sali\xF3 el mismo d\xEDa, debe ser la misma fecha de entrada." };
+          {
+            const nm = norm(motivo), tipo = nm.indexOf("dia libre") >= 0 ? "dia libre" : nm.indexOf("acumulacion") >= 0 ? "acumulacion" : "";
+            if (tipo && r.fechaEntrada) {
+              const fe = String(r.fechaEntrada).substring(0, 10), he = hjHora(r.horaEntrada), hs = hjHora(r.horaSalida);
+              const dup = todas().find((x) => normDni(x[3]) === normDni(r.dni) && (x[20] ? S(x[20]) : "").toLowerCase() !== "rechazado" && norm(esD(x[16]) ? x[16].$s : x[16]).indexOf(tipo) >= 0 && hjFecha(x[7]) === fe && hjHora(x[8]) === he && hjHora(x[10]) === hs);
+              if (dup) return { success: false, error: "Ya est\xE1 registrada esta " + (tipo === "dia libre" ? "jornada en d\xEDa libre" : "acumulaci\xF3n") + " del " + fe.split("-").reverse().join("/") + " (" + (r.horaEntrada || "") + " a " + (r.horaSalida || "") + ") para este trabajador (registro " + S(dup[0]) + "). No se registr\xF3 de nuevo." };
+            }
+          }
           let horasTrabajadas = Number(r.horasTrabajadas) || 0, horasAcum = 0, horasPermiso = 0, horasDeuda = 0, alerta = "", estado = "aprobado";
           const jornadaEsp = turnoUnico(r) ? jornadaUnDia(r.fechaEntrada) : r.fechaEntrada && r.fechaSalida ? jornadaTotal(r.fechaEntrada, r.fechaSalida) : r.fechaEntrada ? jornadaUnDia(r.fechaEntrada) : 0;
           if (horasTrabajadas === 0 && r.fechaEntrada && r.horaEntrada && r.fechaSalida && r.horaSalida) {

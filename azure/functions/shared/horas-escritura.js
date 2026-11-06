@@ -138,6 +138,15 @@ function crear(ctx) {
          entrada (p. ej. 01/07 a 07/07 = 155 h), es un error de fecha y se rechaza. */
       if (norm(motivo).indexOf('acumulacion') >= 0 && r.fechaEntrada && r.fechaSalida && String(r.fechaEntrada).substring(0, 10) !== String(r.fechaSalida).substring(0, 10) && !turnoUnico(r))
         return { success: false, error: 'Una acumulación es de un solo turno (máximo 24 horas). Revisa la fecha de salida: si salió el mismo día, debe ser la misma fecha de entrada.' };
+      /* _HORAS_SIN_DUPLICADO_V1 (06-nov-2026): la misma acumulacion (mismo DNI, dia, hora de entrada y de salida) no se registra
+         dos veces. Paso con TAMAYO: la del 15-may se registro el 19-may y otra vez el 06-jun, y sumo 1.02 h de mas. */
+      { const nm = norm(motivo), tipo = nm.indexOf('dia libre') >= 0 ? 'dia libre' : (nm.indexOf('acumulacion') >= 0 ? 'acumulacion' : '');
+        if (tipo && r.fechaEntrada) {
+          const fe = String(r.fechaEntrada).substring(0, 10), he = hjHora(r.horaEntrada), hs = hjHora(r.horaSalida);
+          const dup = todas().find(x => normDni(x[3]) === normDni(r.dni) && (x[20] ? S(x[20]) : '').toLowerCase() !== 'rechazado' &&
+            norm(esD(x[16]) ? x[16].$s : x[16]).indexOf(tipo) >= 0 && hjFecha(x[7]) === fe && hjHora(x[8]) === he && hjHora(x[10]) === hs);
+          if (dup) return { success: false, error: 'Ya está registrada esta ' + (tipo === 'dia libre' ? 'jornada en día libre' : 'acumulación') + ' del ' + fe.split('-').reverse().join('/') + ' (' + (r.horaEntrada || '') + ' a ' + (r.horaSalida || '') + ') para este trabajador (registro ' + S(dup[0]) + '). No se registró de nuevo.' };
+        } }
       let horasTrabajadas = Number(r.horasTrabajadas) || 0, horasAcum = 0, horasPermiso = 0, horasDeuda = 0, alerta = '', estado = 'aprobado';
       const jornadaEsp = turnoUnico(r) ? jornadaUnDia(r.fechaEntrada)
         : ((r.fechaEntrada && r.fechaSalida) ? jornadaTotal(r.fechaEntrada, r.fechaSalida) : (r.fechaEntrada ? jornadaUnDia(r.fechaEntrada) : 0));
