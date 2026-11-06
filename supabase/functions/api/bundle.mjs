@@ -72447,11 +72447,14 @@ var require_eti = __commonJS({
       "supervisores_eti",
       "usuarios_eti",
       "informes_eti",
-      "informes_cap"
+      "informes_cap",
+      "encuestas_qr",
+      "encuestas_sat"
     ];
     var EDITORES_INFORME = ["jtimoteo", "lcastillo"];
     var editorInforme = (u) => !!u && (esAdminU(u) || EDITORES_INFORME.indexOf(String(u.usuario || "").toLowerCase()) >= 0);
     var LECTURA_ANONIMA = ["sesiones_qr", "config_eti", "programaciones_eval"];
+    var DOC_ANONIMO = ["encuestas_qr"];
     function esAdminU(u) {
       return !!u && /^admin/i.test(String(u.rol || ""));
     }
@@ -72517,7 +72520,7 @@ var require_eti = __commonJS({
     }
     async function leerDoc(b, u) {
       const c = col(b.col);
-      if (!u && LECTURA_ANONIMA.indexOf(c) < 0) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
+      if (!u && LECTURA_ANONIMA.indexOf(c) < 0 && DOC_ANONIMO.indexOf(c) < 0) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
       const r = await pool().query(`SELECT id, datos FROM eti.${c} WHERE id = $1`, [String(b.id)]);
       return { success: true, existe: r.rows.length > 0, id: String(b.id), datos: r.rows.length ? r.rows[0].datos : null };
     }
@@ -72538,6 +72541,7 @@ var require_eti = __commonJS({
             const ya = await cli.query(`SELECT 1 FROM eti.${o.col} WHERE id = $1`, [id]);
             if (o.op === "delete" || ya.rows.length) throw Object.assign(new Error("Solo los administradores de informes pueden corregir un informe emitido"), { status: 403 });
           }
+          if (o.col === "encuestas_sat" && !editorInforme(u)) throw Object.assign(new Error("Las respuestas de la encuesta no se pueden modificar"), { status: 403 });
           if (o.op === "delete") await cli.query(`DELETE FROM eti.${o.col} WHERE id = $1`, [id]);
           else if (o.op === "set" && !o.merge) await cli.query(`INSERT INTO eti.${o.col} (id, datos, origen) VALUES ($1, $2::jsonb, $3)
           ON CONFLICT (id) DO UPDATE SET datos = EXCLUDED.datos, actualizado = now(), origen = EXCLUDED.origen`, [id, d, o.origen || "espejo"]);
@@ -72576,6 +72580,51 @@ var require_eti = __commonJS({
         cli.release();
       }
     }
+    var ESC5 = ["p1", "p2", "p3", "p4b", "p5", "p8", "p9"];
+    function hoyLima() {
+      return new Date(Date.now() - 5 * 36e5).toISOString().slice(0, 10);
+    }
+    async function encuesta(b) {
+      const sid = String(b.ses || "").toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20);
+      if (!sid) throw Object.assign(new Error("Codigo QR no valido"), { status: 400 });
+      const q = await pool().query("SELECT datos FROM eti.encuestas_qr WHERE id = $1", [sid]);
+      if (!q.rows.length) throw Object.assign(new Error("Encuesta no encontrada"), { status: 404 });
+      const S = q.rows[0].datos || {};
+      if (S.estado !== "abierta" || S.expira && Date.now() > S.expira) throw Object.assign(new Error("Esta encuesta ya fue cerrada"), { status: 409 });
+      const r = b.resp && typeof b.resp === "object" ? b.resp : {}, d = {};
+      ESC5.forEach(function(k) {
+        const n = parseInt(r[k], 10);
+        if (n >= 1 && n <= 5) d[k] = n;
+      });
+      if (r.p4 === "si" || r.p4 === "no") d.p4 = r.p4;
+      if (d.p4 !== "si") delete d.p4b;
+      if (["si", "no", "nose"].indexOf(r.p6) >= 0) d.p6 = r.p6;
+      if (["corto", "adecuado", "largo"].indexOf(r.p7) >= 0) d.p7 = r.p7;
+      if (["obrero", "empleado"].indexOf(r.tipo) >= 0) d.tipo = r.tipo;
+      if (r.sexo === "H" || r.sexo === "M") d.sexo = r.sexo;
+      d.sector = String(r.sector || S.sector || "").trim().slice(0, 80);
+      d.ruta = String(r.ruta || "").trim().slice(0, 60);
+      d.coment = String(r.coment || "").trim().slice(0, 600);
+      if (["p1", "p2", "p3", "p5", "p9"].some(function(k) {
+        return !d[k];
+      })) throw Object.assign(new Error("Faltan respuestas"), { status: 400 });
+      Object.assign(d, {
+        ses: sid,
+        sup: S.sup || "",
+        usuario: S.usuario || "",
+        emp: S.emp || "",
+        tema: S.tema || "",
+        ciclo: S.ciclo || "",
+        capId: S.capId || "",
+        fecha: S.fecha || hoyLima(),
+        ts: Date.now(),
+        en: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      const id = sid + "-" + Date.now().toString(36).toUpperCase() + Math.random().toString(36).slice(2, 6).toUpperCase();
+      await pool().query(`INSERT INTO eti.encuestas_sat (id, datos, origen) VALUES ($1, $2::jsonb, 'qr')`, [id, JSON.stringify(d)]);
+      await pool().query(`INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ('encuestas_sat', $1, 'set', 'anonimo', 'qr')`, [id]);
+      return { success: true, id };
+    }
     async function importar(b, u) {
       if (!esAdmin(u)) throw Object.assign(new Error("Solo el administrador"), { status: 403 });
       const c = col(b.col), docs = Array.isArray(b.docs) ? b.docs.slice(0, 1e3) : [];
@@ -72606,6 +72655,7 @@ var require_eti = __commonJS({
         else if (accion === "escribir") r = await escribir(b, u);
         else if (accion === "importar") r = await importar(b, u);
         else if (accion === "contar") r = await contar(b, u);
+        else if (accion === "encuesta") r = await encuesta(b);
         else {
           context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
           return;

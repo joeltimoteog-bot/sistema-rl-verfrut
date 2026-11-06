@@ -28,7 +28,9 @@ BEGIN
     -- _INFORME_ETI_V1 (05-nov): informes INF-SC-GH-03 emitidos (Word + fotos en Storage)
     'informes_eti',
     -- _CAP_INFORME_V1 (05-nov): informes de capacitacion del Sistema RR.LL.
-    'informes_cap'
+    'informes_cap',
+    -- _ENCUESTA_SAT_V1 (05-nov): QR de la encuesta de satisfaccion y respuestas del personal capacitado
+    'encuestas_qr', 'encuestas_sat'
   ] LOOP
     EXECUTE format('CREATE TABLE IF NOT EXISTS eti.%I (
         id          text PRIMARY KEY,
@@ -60,3 +62,8 @@ CREATE TABLE IF NOT EXISTS eti._bitacora (
   usuario text, origen text, en timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS _bitacora_en ON eti._bitacora (en);
+
+-- _ENCUESTA_SAT_V1: busquedas de resultados por QR, supervisor y fecha
+CREATE INDEX IF NOT EXISTS encuestas_sat_ses     ON eti.encuestas_sat ((datos->>'ses'));
+CREATE INDEX IF NOT EXISTS encuestas_sat_usuario ON eti.encuestas_sat ((datos->>'usuario'));
+CREATE INDEX IF NOT EXISTS encuestas_qr_usuario  ON eti.encuestas_qr  ((datos->>'usuario'));
