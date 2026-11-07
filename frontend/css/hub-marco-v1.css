@@ -45,3 +45,8 @@ body .mx-top{min-height:84px;box-sizing:border-box}
 body .mx-card .mx-t{font-size:23px!important;white-space:nowrap}
 body .mx-top::after{font-size:9.5px;padding:3px 6px;letter-spacing:1px;margin-left:4px}
 body .mx-top{gap:8px}
+/* _HUB_MARCO_V1b: las tres en una sola fila (el contenedor mide 980px) */
+body .mx-mod{width:1060px!important;max-width:96vw!important}
+body #pmGrid{flex-wrap:nowrap!important;gap:20px!important}
+body .mx-card{flex:1 1 0!important;width:auto!important;min-width:0}
+@media(max-width:1000px){body #pmGrid{flex-wrap:wrap!important}body .mx-card{flex:0 1 330px!important;width:330px!important}}
