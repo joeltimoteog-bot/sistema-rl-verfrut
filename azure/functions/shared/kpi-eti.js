@@ -124,6 +124,7 @@ async function sincronizar(pool, fetchFn) {
   const vistosS = {};
   sups = sups.filter(x => {
     const nm = x.nombre || x.supervisor; if (!nm) return false;
+    if (String(x.estado || 'activo') === 'inactivo') return false;   /* desactivado en el panel de Capacitaciones ETI */
     if (inactivos[nomN(nm)]) return false;
     const k = nomN(nm) + '|' + String(x.sector || '').trim().toUpperCase(); if (vistosS[k]) return false; vistosS[k] = 1; return true;
   });

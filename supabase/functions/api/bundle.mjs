@@ -67122,6 +67122,7 @@ var require_kpi_eti = __commonJS({
       sups = sups.filter((x) => {
         const nm = x.nombre || x.supervisor;
         if (!nm) return false;
+        if (String(x.estado || "activo") === "inactivo") return false;
         if (inactivos[nomN(nm)]) return false;
         const k = nomN(nm) + "|" + String(x.sector || "").trim().toUpperCase();
         if (vistosS[k]) return false;
