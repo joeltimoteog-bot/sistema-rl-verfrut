@@ -19,7 +19,17 @@ const PESO = { EN_PLAZO: 0, PROXIMO: 1, VENCE_HOY: 2, VENCIDO: 3, CRITICO: 4 };
 const ROLES_ADMIN = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'];
 /* _CUMPL_EXCLUIDOS_V1 (25-oct-2026, decision de Joel): usuarios que registran en el sistema pero NO pertenecen al equipo
    de Gestion Humana / RR.LL. y por eso no se evaluan en el panel de Control de Cumplimiento (si pueden usar el sistema). */
-const CUMPL_EXCLUIDOS = ['jsiancas', 'mmechato'];
+const CUMPL_EXCLUIDOS = ['jsiancas', 'mmechato', 'jchavez', 'dsanchez', 'jcarranza', 'jfernandez'];   /* _EQUIPO_RRLL_V1 (06-nov-2026, decision de Joel) */
+/* _EQUIPO_RRLL_V1 (06-nov-2026, decision de Joel): la hoja Usuarios ya trae el sector; quien pertenece a Bienestar Social o
+   Reclutamiento usa el sistema pero NO se evalua (ni panel, ni aviso del dashboard, ni casos pendientes). Una sola regla
+   para los tres lugares; antes CUMPL_EXCLUIDOS solo se aplicaba en cumplPanel y el aviso seguia mostrando a los excluidos. */
+const CUMPL_SECTORES_FUERA = ['BIENESTAR SOCIAL', 'RECLUTAMIENTO'];
+const secN = (s) => String(s || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+function fueraEquipo(u) {
+  if (!u) return false;
+  if (CUMPL_EXCLUIDOS.indexOf(usr(u.usuario)) >= 0) return true;
+  return CUMPL_SECTORES_FUERA.indexOf(secN(u.sector)) >= 0;
+}
 /* _CUMPL_SIN_VISITAS_V1 (25-oct-2026, decision de Joel): la asistente de RR.LL. no hace visitas de campo ni ETI;
    se evalua solo por atenciones y casos. No se le exige el informe semanal de visitas. */
 const CUMPL_SIN_VISITAS = ['smiranda'];
@@ -224,7 +234,7 @@ function crearMotor(D) {
   const cfg = D.config;
   const usuarios = D.usuarios || [];
   const sups = (D.sups || []).filter(n => {   /* _CUMPL_SIN_VISITAS_V1: fuera de la lista de supervisores de campo */
-    const u = usuarioPor(D.usuarios || [], n); return !(u && CUMPL_SIN_VISITAS.indexOf(usr(u.usuario)) >= 0);
+    const u = usuarioPor(D.usuarios || [], n); return !(u && (CUMPL_SIN_VISITAS.indexOf(usr(u.usuario)) >= 0 || fueraEquipo(u)));   /* _EQUIPO_RRLL_V1 */
   });
   const visitas = D.visitas || [];
   const restricc = D.restricc || [];
@@ -374,6 +384,7 @@ function crearMotor(D) {
       let rp = null;
       if (aS) {
         rp = AUS.reemp(aS); if (!rp) return;
+        if (CUMPL_SIN_VISITAS.indexOf(usr(rp.usuario)) >= 0) return;   /* _EQUIPO_RRLL_V1: la asistente cubre casos, no la visita semanal */
         const kr = usr(rp.nombre);
         let okR = !!reportaron[kr];
         if (!okR) for (const k in reportaron) { if (nombreMatch(k, kr) || nombreMatch(kr, k)) { okR = true; break; } }
@@ -432,7 +443,7 @@ function crearMotor(D) {
     });
     let semanas = 0, realizadas = 0, visEnPlazo = 0, primerLunesV = null;   /* _VISITA_PLAZO_V1 */
     const propio = esSupCampo(u);   /* _AUSENCIAS_V1: + semanas que cubre como reemplazo; - semanas en que estuvo ausente */
-    const cobV = AUS.lista.filter(a => usr(a.reemplazo) === u.usuario && AUS.reemp(a) && esSupCampo(AUS.titular(a)));
+    const cobV = CUMPL_SIN_VISITAS.indexOf(u.usuario) >= 0 ? [] : AUS.lista.filter(a => usr(a.reemplazo) === u.usuario && AUS.reemp(a) && esSupCampo(AUS.titular(a)));   /* _EQUIPO_RRLL_V1 */
     const lv = (propio || cobV.length) ? visitas : null;
     let d = copia(ini); while (d.getUTCDay() !== 1) d = sumar(d, -1);   /* _IND_FIX_V1: semana del dia 1 (su domingo cae en este mes); antes se saltaba la semana que cruza dos meses */
     primerLunesV = copia(d);
@@ -521,7 +532,7 @@ function crearMotor(D) {
     const hoy = hoyLima();
     const vis = visitasPendientes(hoy);
     const lista = usuarios.filter(x => {
-      if (CUMPL_EXCLUIDOS.indexOf(usr(x.usuario)) >= 0) return false;   /* _CUMPL_EXCLUIDOS_V1 */
+      if (fueraEquipo(x)) return false;   /* _CUMPL_EXCLUIDOS_V1 · _EQUIPO_RRLL_V1 */
       if (x.activo && AUS.coberturas(x, ymd(hoy)).length) return true;   /* _AUSENCIAS_V1: el reemplazo entra al panel aunque no sea supervisor */
       if (!x.activo || x.rol !== 'supervisor') return false;
       if (esSupCampo(x)) return true;
@@ -584,6 +595,7 @@ function crearMotor(D) {
       const tU = usuarioPor(usuarios, nombreSup), aS = tU ? AUS.semana(tU, lunesPasado, ymd, sumar) : null;   /* _AUSENCIAS_V1 */
       if (aS) {
         const rp = AUS.reemp(aS); if (!rp) return;
+        if (CUMPL_SIN_VISITAS.indexOf(usr(rp.usuario)) >= 0) return;   /* _EQUIPO_RRLL_V1: la asistente cubre casos, no la visita semanal */
         const kr = rp.nombre.toLowerCase();
         let okR = !!reportaron[kr];
         if (!okR) for (const k in reportaron) { if (nombreMatch(k, kr) || nombreMatch(kr, k)) { okR = true; break; } }
@@ -596,6 +608,10 @@ function crearMotor(D) {
     (casosRecientes || []).forEach(c => {
       const sinInforme = !String(c.enlace_informe || '').trim() && !String(c.fecha_envio_informe || '').trim();   /* _ENVIO_INFORME_CUMPL_V1 */
       const sinReporte = !String(c.enlace_reporte || '').trim();
+      if (sinInforme && sinReporte) {   /* _EQUIPO_RRLL_V1: si el supervisor del caso es un usuario inactivo o de otro equipo, no se le exige */
+        const uc = usuarioPor(usuarios, c.supervisor || c.registrado_por);
+        if (uc && (!uc.activo || fueraEquipo(uc))) return;
+      }
       if (sinInforme && sinReporte) casosPendientes.push({ nombre_mostrar: c.supervisor || c.registrado_por || '(sin asignar)', supervisor: c.supervisor || '', registrado_por: c.registrado_por || '', motivo: c.motivo || '', nro: c.nro });
     });
     if (esAdminGeneral) return { success: true, esAdmin: true, semana: sem, rangoSemana, pendientesVisitas, casosPendientes };

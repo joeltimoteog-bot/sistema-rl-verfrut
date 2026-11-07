@@ -65694,7 +65694,14 @@ var require_cumpl_motor = __commonJS({
     var MESES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     var PESO = { EN_PLAZO: 0, PROXIMO: 1, VENCE_HOY: 2, VENCIDO: 3, CRITICO: 4 };
     var ROLES_ADMIN = ["administrador", "administrador 01", "administrador 02", "coordinador", "jefa_rl"];
-    var CUMPL_EXCLUIDOS = ["jsiancas", "mmechato"];
+    var CUMPL_EXCLUIDOS = ["jsiancas", "mmechato", "jchavez", "dsanchez", "jcarranza", "jfernandez"];
+    var CUMPL_SECTORES_FUERA = ["BIENESTAR SOCIAL", "RECLUTAMIENTO"];
+    var secN = (s) => String(s || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    function fueraEquipo(u) {
+      if (!u) return false;
+      if (CUMPL_EXCLUIDOS.indexOf(usr(u.usuario)) >= 0) return true;
+      return CUMPL_SECTORES_FUERA.indexOf(secN(u.sector)) >= 0;
+    }
     var CUMPL_SIN_VISITAS = ["smiranda"];
     var fecha = (y, m, d) => new Date(Date.UTC(y, m, d));
     var copia = (d) => new Date(d.getTime());
@@ -65965,7 +65972,7 @@ var require_cumpl_motor = __commonJS({
       const usuarios = D.usuarios || [];
       const sups = (D.sups || []).filter((n) => {
         const u = usuarioPor(D.usuarios || [], n);
-        return !(u && CUMPL_SIN_VISITAS.indexOf(usr(u.usuario)) >= 0);
+        return !(u && (CUMPL_SIN_VISITAS.indexOf(usr(u.usuario)) >= 0 || fueraEquipo(u)));
       });
       const visitas = D.visitas || [];
       const restricc = D.restricc || [];
@@ -66167,6 +66174,7 @@ var require_cumpl_motor = __commonJS({
           if (aS) {
             rp = AUS.reemp(aS);
             if (!rp) return;
+            if (CUMPL_SIN_VISITAS.indexOf(usr(rp.usuario)) >= 0) return;
             const kr = usr(rp.nombre);
             let okR = !!reportaron[kr];
             if (!okR) for (const k in reportaron) {
@@ -66257,7 +66265,7 @@ var require_cumpl_motor = __commonJS({
         });
         let semanas = 0, realizadas = 0, visEnPlazo = 0, primerLunesV = null;
         const propio = esSupCampo(u);
-        const cobV = AUS.lista.filter((a) => usr(a.reemplazo) === u.usuario && AUS.reemp(a) && esSupCampo(AUS.titular(a)));
+        const cobV = CUMPL_SIN_VISITAS.indexOf(u.usuario) >= 0 ? [] : AUS.lista.filter((a) => usr(a.reemplazo) === u.usuario && AUS.reemp(a) && esSupCampo(AUS.titular(a)));
         const lv = propio || cobV.length ? visitas : null;
         let d = copia(ini);
         while (d.getUTCDay() !== 1) d = sumar(d, -1);
@@ -66408,7 +66416,7 @@ var require_cumpl_motor = __commonJS({
         const hoy = hoyLima();
         const vis = visitasPendientes(hoy);
         const lista = usuarios.filter((x) => {
-          if (CUMPL_EXCLUIDOS.indexOf(usr(x.usuario)) >= 0) return false;
+          if (fueraEquipo(x)) return false;
           if (x.activo && AUS.coberturas(x, ymd(hoy)).length) return true;
           if (!x.activo || x.rol !== "supervisor") return false;
           if (esSupCampo(x)) return true;
@@ -66511,6 +66519,7 @@ var require_cumpl_motor = __commonJS({
           if (aS) {
             const rp = AUS.reemp(aS);
             if (!rp) return;
+            if (CUMPL_SIN_VISITAS.indexOf(usr(rp.usuario)) >= 0) return;
             const kr = rp.nombre.toLowerCase();
             let okR = !!reportaron[kr];
             if (!okR) for (const k in reportaron) {
@@ -66528,6 +66537,10 @@ var require_cumpl_motor = __commonJS({
         (casosRecientes || []).forEach((c) => {
           const sinInforme = !String(c.enlace_informe || "").trim() && !String(c.fecha_envio_informe || "").trim();
           const sinReporte = !String(c.enlace_reporte || "").trim();
+          if (sinInforme && sinReporte) {
+            const uc = usuarioPor(usuarios, c.supervisor || c.registrado_por);
+            if (uc && (!uc.activo || fueraEquipo(uc))) return;
+          }
           if (sinInforme && sinReporte) casosPendientes.push({ nombre_mostrar: c.supervisor || c.registrado_por || "(sin asignar)", supervisor: c.supervisor || "", registrado_por: c.registrado_por || "", motivo: c.motivo || "", nro: c.nro });
         });
         if (esAdminGeneral) return { success: true, esAdmin: true, semana: sem, rangoSemana, pendientesVisitas, casosPendientes };
@@ -67082,13 +67095,39 @@ var require_kpi_eti = __commonJS({
     async function sincronizar(pool, fetchFn) {
       await asegurarTablas(pool);
       const evals = await coleccion("evaluaciones_conocimiento", fetchFn).catch(() => null);
-      const [pEti, pEval, regs, usus, sups] = await Promise.all([
+      let [pEti, pEval, regs, usus, sups] = await Promise.all([
         coleccion("programaciones_eti", fetchFn),
         coleccion("programaciones_eval", fetchFn),
         coleccion("capacitaciones", fetchFn),
         coleccion("usuarios_eti", fetchFn),
         coleccion("supervisores_eti", fetchFn)
       ]);
+      const rlUsu = {};
+      try {
+        const r = await pool.request().query("SELECT datos FROM dbo.CUMPL_Datos WHERE clave = 'usuarios'");
+        JSON.parse(r.recordset[0].datos).forEach((u) => {
+          if (u && u.usuario) rlUsu[String(u.usuario).trim().toLowerCase()] = u;
+        });
+      } catch (e) {
+      }
+      const nomN = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/\s+/).filter(Boolean).sort().join(" ");
+      const inactivos = {};
+      usus.forEach((u) => {
+        if (!u.usuario) return;
+        const k = String(u.usuario).trim().toLowerCase();
+        if (rlUsu[k] && rlUsu[k].activo === false) u.estado = "inactivo";
+        if (String(u.estado || "activo") === "inactivo") inactivos[nomN(u.supervisorNombre || u.nombre)] = 1;
+      });
+      const vistosS = {};
+      sups = sups.filter((x) => {
+        const nm = x.nombre || x.supervisor;
+        if (!nm) return false;
+        if (inactivos[nomN(nm)]) return false;
+        const k = nomN(nm) + "|" + String(x.sector || "").trim().toUpperCase();
+        if (vistosS[k]) return false;
+        vistosS[k] = 1;
+        return true;
+      });
       const P = [];
       pEti.forEach((d) => P.push(["eti", d]));
       pEval.forEach((d) => P.push(["eval", d]));

@@ -105,9 +105,28 @@ function evalUsuario(d) {
 async function sincronizar(pool, fetchFn) {
   await asegurarTablas(pool);
   const evals = await coleccion('evaluaciones_conocimiento', fetchFn).catch(() => null);   /* _K3_REALIZADAS_V1: si falla, se conserva lo anterior */
-  const [pEti, pEval, regs, usus, sups] = await Promise.all([
+  let [pEti, pEval, regs, usus, sups] = await Promise.all([
     coleccion('programaciones_eti', fetchFn), coleccion('programaciones_eval', fetchFn)   /* _IND_FIX_V1 (08-oct-2026): antes .catch(() => []): si fallaba la lectura se BORRABAN las programaciones de checklist y el K3 subia; ahora se aborta y queda lo de la vuelta anterior */, coleccion('capacitaciones', fetchFn),
     coleccion('usuarios_eti', fetchFn), coleccion('supervisores_eti', fetchFn)]);
+  /* _EQUIPO_RRLL_V1 (06-nov-2026): la copia de ETI se alinea al padron de Usuarios del sistema RL (dbo.CUMPL_Datos).
+     Un usuario dado de baja en RL queda 'inactivo' aqui, sus filas de supervisor se omiten y no se repiten nombres. */
+  const rlUsu = {};
+  try { const r = await pool.request().query("SELECT datos FROM dbo.CUMPL_Datos WHERE clave = 'usuarios'");
+        JSON.parse(r.recordset[0].datos).forEach(u => { if (u && u.usuario) rlUsu[String(u.usuario).trim().toLowerCase()] = u; }); } catch (e) {}
+  const nomN = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/\s+/).filter(Boolean).sort().join(' ');
+  const inactivos = {};
+  usus.forEach(u => {
+    if (!u.usuario) return;
+    const k = String(u.usuario).trim().toLowerCase();
+    if (rlUsu[k] && rlUsu[k].activo === false) u.estado = 'inactivo';
+    if (String(u.estado || 'activo') === 'inactivo') inactivos[nomN(u.supervisorNombre || u.nombre)] = 1;
+  });
+  const vistosS = {};
+  sups = sups.filter(x => {
+    const nm = x.nombre || x.supervisor; if (!nm) return false;
+    if (inactivos[nomN(nm)]) return false;
+    const k = nomN(nm) + '|' + String(x.sector || '').trim().toUpperCase(); if (vistosS[k]) return false; vistosS[k] = 1; return true;
+  });
   const P = [];
   pEti.forEach(d => P.push(['eti', d])); pEval.forEach(d => P.push(['eval', d]));
   const filasP = P.map(([o, d]) => [
