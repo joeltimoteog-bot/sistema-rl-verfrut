@@ -1,0 +1,47 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   _HUB_MARCO_V1 (06-nov-2026) — Portal de sistemas · tarjetas "Marco institucional" (opción D aprobada por Joel)
+   · Solo piel: cabecera de color vivo con código del sistema, cuerpo blanco con módulos numerados,
+     franja de estado y botón de contorno. No cambia la estructura que arma _HUB_UI_V2 ni el SSO.
+   · Reversible: quitar el <link> de este archivo y vuelve la piel anterior.
+   ═══════════════════════════════════════════════════════════════════════════ */
+body .mx-card{--hm1:#e11d48;--hm2:#9f1239;background:transparent!important;padding:0!important;border-radius:12px!important;flex:0 1 330px!important;width:330px!important;box-shadow:0 22px 48px rgba(0,0,0,.38);transition:transform .25s ease,box-shadow .25s ease}
+body #modRRLL{--hm1:#f43f5e;--hm2:#be123c}
+body #modETI{--hm1:#38bdf8;--hm2:#0369a1}
+body #modEval{--hm1:#60a5fa;--hm2:#1e40af}
+body .mx-card::before{display:none!important}
+body .mx-card:hover{transform:translateY(-5px)!important;box-shadow:0 28px 56px rgba(0,0,0,.45)}
+body .mx-in{padding:0!important;background:#fff!important;border:0!important;border-radius:12px!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;overflow:hidden;align-items:stretch;text-align:left}
+body .mx-in::after{display:none!important}
+/* cabecera viva */
+body .mx-top{margin:0!important;padding:20px 22px 18px;background:linear-gradient(135deg,var(--hm1),var(--hm2));color:#fff;display:flex;align-items:flex-start;gap:12px;position:relative}
+body .mx-top::before{content:"";position:absolute;inset:0;background:radial-gradient(120px 80px at 100% 0%,rgba(255,255,255,.28),transparent 70%);pointer-events:none}
+body .mx-top > div{flex:1;position:relative}
+body .mx-card .mx-ico{display:none!important}
+body .mx-card .mx-t{font-family:'Barlow Condensed','Barlow',sans-serif!important;font-size:25px!important;font-weight:800!important;color:#fff!important;letter-spacing:.4px!important;line-height:1.05!important;margin:0 0 5px!important}
+body .mx-card .mx-sub{font-size:10.5px!important;letter-spacing:1.4px!important;text-transform:uppercase;color:rgba(255,255,255,.88)!important;font-weight:700}
+body .mx-top::after{content:"SIS · 00";position:relative;font-size:10.5px;font-weight:800;letter-spacing:1.2px;border:1.5px solid rgba(255,255,255,.7);border-radius:6px;padding:4px 8px;color:#fff;align-self:flex-start;white-space:nowrap}
+body #modRRLL .mx-top::after{content:"SIS · 01"}body #modETI .mx-top::after{content:"SIS · 02"}body #modEval .mx-top::after{content:"SIS · 03"}
+/* módulos numerados */
+body .mx-card .mx-list{counter-reset:hm;margin:0!important;padding:14px 22px 6px!important;gap:0!important}
+body .mx-card .mx-list li{counter-increment:hm;color:#334155!important;font-family:'Barlow',sans-serif;font-size:13.5px!important;font-weight:500;padding:9px 0;border-bottom:1px solid #f1f5f9;gap:12px!important}
+body .mx-card .mx-list li:last-child{border-bottom:0}
+body .mx-card .mx-list li i{width:28px!important;height:26px!important;border-radius:6px!important;background:#f1f5f9!important;border:0!important;font-size:0!important;position:relative;display:inline-flex!important}
+body.lc .mx-card .mx-list li i::after,body .mx-card .mx-list li i::after{content:counter(hm,decimal-leading-zero);position:static;width:auto;height:auto;border-radius:0;background:transparent;font-size:11.5px;font-weight:800;color:var(--hm2);font-family:'Barlow',sans-serif;letter-spacing:0}
+/* franja de estado */
+body .mx-card .mx-meta{margin:10px 0 0!important;padding:11px 22px;background:#f8fafc;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb;justify-content:space-between;gap:8px!important;flex-wrap:nowrap!important}
+body .mx-card .mx-meta span{background:transparent!important;border:0!important;padding:0!important;font-size:11px!important;color:#64748b!important;letter-spacing:.3px!important;text-transform:none!important;font-weight:600!important;border-radius:0!important}
+body .mx-card .mx-meta .on{color:#15803d!important}
+/* botón de contorno */
+body .mx-card .mx-badge{margin:14px 22px 20px!important;padding:11px 16px!important;width:auto!important;background:#fff!important;color:#0F2748!important;border:2px solid #0F2748!important;border-radius:8px!important;font-size:12.5px!important;letter-spacing:1.4px!important;font-weight:800!important;box-shadow:none!important;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s,color .2s}
+body .mx-card:hover .mx-badge{background:#0F2748!important;color:#fff!important;filter:none!important}
+body .mx-card .mx-badge .k{background:rgba(15,39,72,.1)!important;color:inherit!important;border-radius:4px;padding:1px 7px;font-size:10.5px;opacity:1!important}
+body .mx-card:hover .mx-badge .k{background:rgba(255,255,255,.2)!important}
+@media(max-width:600px){body .mx-card{width:100%!important;max-width:340px!important}}
+/* todas a la misma altura, botón al pie */
+body #pmGrid{align-items:stretch}
+body .mx-card .mx-in{height:100%;display:flex;flex-direction:column}
+body .mx-card .mx-list{flex:1}
+body .mx-top{min-height:84px;box-sizing:border-box}
+body .mx-card .mx-t{font-size:23px!important;white-space:nowrap}
+body .mx-top::after{font-size:9.5px;padding:3px 6px;letter-spacing:1px;margin-left:4px}
+body .mx-top{gap:8px}
