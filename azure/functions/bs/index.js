@@ -177,6 +177,27 @@ async function ficha(pool, dni, perm, esAdmin) {
   return out;
 }
 
+/* _BS_PERMISOS_SERVIDOR_V1 (08-nov-2026) — permisos de Bienestar decididos en el servidor.
+   · esAdmin: rol del token (admin/coordinador/jefa) o bs_admin en "Acceso a Modulos".
+   · Si el usuario esta configurado en "Acceso a Modulos" (definido=true): mandan esos permisos; lo que mande el navegador se ignora.
+   · Si NO esta configurado (o la consulta no responde): se conserva el comportamiento anterior (permisos que envia Bienestar
+     desde su hoja Usuarios), salvo HOSTIGAMIENTO, que queda cerrado hasta que el administrador lo configure en RR.LL. */
+const MODULO_DE_CLAVE = { bs_accidentes_casos: 'accidentes', bs_accidentes_seguim: 'accidentes', bs_hostigamiento: 'hostigamiento', bs_hostigamiento_olmos: 'hostigamiento',
+  bs_subsidios: 'subsidios', bs_documentos: '', bs_quejas: 'quejas', bs_quejas_seguim: 'quejas', bs_descansos: 'descansos', bs_auditoria: '' };
+async function permisosBS(u, q) {
+  const rol = String((u && (u.rol || u.role)) || '').toLowerCase(), usuario = String((u && u.usuario) || '').toLowerCase();
+  let esAdmin = rol.indexOf('admin') >= 0 || /coordinador|jefa/.test(rol);
+  let acc = null; try { acc = usuario ? await require('../auth-sso/index.js').accesosDe(usuario) : null; } catch (e) { acc = null; }
+  if (acc && acc.definido) {
+    if (!acc.activo || !acc.bs || !acc.bs.acceso) return { esAdmin: false, permisos: {}, fuente: 'rrll:sin-acceso' };
+    if (acc.bs.admin) esAdmin = true;
+    return { esAdmin, permisos: Object.assign({}, acc.bs.permisos || {}), fuente: 'rrll' };
+  }
+  let perm = {}; try { perm = JSON.parse((q && q.permisos) || '{}') || {}; } catch (e) { perm = {}; }
+  if (!esAdmin) perm.hostigamiento = false;
+  return { esAdmin, permisos: perm, fuente: acc === null ? 'bienestar:sin-respuesta-rrll' : 'bienestar:no-configurado' };
+}
+
 module.exports = async function (context, req) {
   const u = exigirAuth(context, req); if (u === null) return;
   const accion = String(context.bindingData.accion || '').toLowerCase(), q = req.query || {};
@@ -185,15 +206,18 @@ module.exports = async function (context, req) {
     const pool = await getPool();
     if (accion === 'ficha') {
       const dni = String(q.dni || '').trim(); if (!/^\d{8}$/.test(dni)) return res(400, { ok: false, success: false, message: 'DNI inválido (8 dígitos).' });
-      let perm = {}; try { perm = JSON.parse(q.permisos || '{}'); } catch (e) {}
-      const rol = String((u && (u.rol || u.role)) || q.rol || '').toLowerCase();
-      const esAdmin = rol.indexOf('admin') >= 0 || /coordinador|jefa/.test(rol);   /* rol del token de RR.LL.; los permisos por módulo los manda Bienestar */
-      const out = await ficha(pool, dni, perm, esAdmin); out.success = true; return res(200, out);
+      /* _BS_PERMISOS_SERVIDOR_V1 (08-nov-2026): antes el rol podia venir en ?rol= y los permisos en ?permisos= (el navegador
+         decidia). Ahora el rol sale SOLO del token y los permisos de "Acceso a Modulos" del RR.LL. (dbo.PermisosModulos). */
+      const P = await permisosBS(u, q);
+      const out = await ficha(pool, dni, P.permisos, P.esAdmin); out.success = true; out.permisos_fuente = P.fuente; return res(200, out);
     }
     if (accion === 'tabla') {
       const clave = String(q.clave || ''); if (CLAVES.indexOf(clave) < 0) return res(400, { success: false, error: 'clave desconocida' });
       if (clave === 'bs_auditoria') { const rolA = String((u && (u.rol || u.role)) || '').toLowerCase(), usA = String((u && u.usuario) || '').toLowerCase();
         if (rolA.indexOf('admin') < 0 && !/coordinador|jefa/.test(rolA) && ['jtimoteo', 'ovilela'].indexOf(usA) < 0) return res(403, { success: false, error: 'Solo administradores pueden ver la auditoría.' }); }
+      /* _BS_PERMISOS_SERVIDOR_V1: cada tabla exige el permiso de su modulo (calculado en el servidor) */
+      const modT = MODULO_DE_CLAVE[clave] || '';
+      if (modT && clave !== 'bs_auditoria') { const PT = await permisosBS(u, q); if (!PT.esAdmin && !PT.permisos[modT]) return res(403, { success: false, error: 'Sin permiso para el módulo ' + modT + '.' }); }
       let filas = await objetos(pool, clave, String(q.hora || '') === '1'); if (filas === null) return res(200, { success: true, cargada: false, items: [] });
       filas = filas.filter(o => !anulado(o));
       const dni = String(q.dni || '').trim(); if (dni) filas = filas.filter(o => [o.dni, o.numero, o.denunciante_dni, o.denunciado_dni].some(v => String(v || '').trim() === dni));

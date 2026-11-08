@@ -121,3 +121,5 @@ module.exports = async function (context, req) {
     return out(500, { success: false, error: 'Error interno' });
   }
 };
+/* _BS_PERMISOS_SERVIDOR_V1 (08-nov-2026): Bienestar (bs/ficha, bs/tabla) calcula los permisos en el servidor con esta misma funcion */
+module.exports.accesosDe = accesosDe;

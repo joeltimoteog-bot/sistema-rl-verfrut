@@ -65026,6 +65026,7 @@ var require_auth_sso = __commonJS({
         return out(500, { success: false, error: "Error interno" });
       }
     };
+    module.exports.accesosDe = accesosDe;
   }
 });
 
@@ -65380,6 +65381,41 @@ var require_bs = __commonJS({
       out.cargadas = { accidentes: acc !== null, subsidios: sub !== null, hostigamiento: hosP !== null, descansos: dms !== null, documentos: docs !== null };
       return out;
     }
+    var MODULO_DE_CLAVE = {
+      bs_accidentes_casos: "accidentes",
+      bs_accidentes_seguim: "accidentes",
+      bs_hostigamiento: "hostigamiento",
+      bs_hostigamiento_olmos: "hostigamiento",
+      bs_subsidios: "subsidios",
+      bs_documentos: "",
+      bs_quejas: "quejas",
+      bs_quejas_seguim: "quejas",
+      bs_descansos: "descansos",
+      bs_auditoria: ""
+    };
+    async function permisosBS(u, q) {
+      const rol = String(u && (u.rol || u.role) || "").toLowerCase(), usuario = String(u && u.usuario || "").toLowerCase();
+      let esAdmin = rol.indexOf("admin") >= 0 || /coordinador|jefa/.test(rol);
+      let acc = null;
+      try {
+        acc = usuario ? await require_auth_sso().accesosDe(usuario) : null;
+      } catch (e) {
+        acc = null;
+      }
+      if (acc && acc.definido) {
+        if (!acc.activo || !acc.bs || !acc.bs.acceso) return { esAdmin: false, permisos: {}, fuente: "rrll:sin-acceso" };
+        if (acc.bs.admin) esAdmin = true;
+        return { esAdmin, permisos: Object.assign({}, acc.bs.permisos || {}), fuente: "rrll" };
+      }
+      let perm = {};
+      try {
+        perm = JSON.parse(q && q.permisos || "{}") || {};
+      } catch (e) {
+        perm = {};
+      }
+      if (!esAdmin) perm.hostigamiento = false;
+      return { esAdmin, permisos: perm, fuente: acc === null ? "bienestar:sin-respuesta-rrll" : "bienestar:no-configurado" };
+    }
     module.exports = async function(context, req) {
       const u = exigirAuth(context, req);
       if (u === null) return;
@@ -65392,15 +65428,10 @@ var require_bs = __commonJS({
         if (accion === "ficha") {
           const dni = String(q.dni || "").trim();
           if (!/^\d{8}$/.test(dni)) return res(400, { ok: false, success: false, message: "DNI inv\xE1lido (8 d\xEDgitos)." });
-          let perm = {};
-          try {
-            perm = JSON.parse(q.permisos || "{}");
-          } catch (e) {
-          }
-          const rol = String(u && (u.rol || u.role) || q.rol || "").toLowerCase();
-          const esAdmin = rol.indexOf("admin") >= 0 || /coordinador|jefa/.test(rol);
-          const out = await ficha(pool, dni, perm, esAdmin);
+          const P = await permisosBS(u, q);
+          const out = await ficha(pool, dni, P.permisos, P.esAdmin);
           out.success = true;
+          out.permisos_fuente = P.fuente;
           return res(200, out);
         }
         if (accion === "tabla") {
@@ -65409,6 +65440,11 @@ var require_bs = __commonJS({
           if (clave === "bs_auditoria") {
             const rolA = String(u && (u.rol || u.role) || "").toLowerCase(), usA = String(u && u.usuario || "").toLowerCase();
             if (rolA.indexOf("admin") < 0 && !/coordinador|jefa/.test(rolA) && ["jtimoteo", "ovilela"].indexOf(usA) < 0) return res(403, { success: false, error: "Solo administradores pueden ver la auditor\xEDa." });
+          }
+          const modT = MODULO_DE_CLAVE[clave] || "";
+          if (modT && clave !== "bs_auditoria") {
+            const PT = await permisosBS(u, q);
+            if (!PT.esAdmin && !PT.permisos[modT]) return res(403, { success: false, error: "Sin permiso para el m\xF3dulo " + modT + "." });
           }
           let filas = await objetos(pool, clave, String(q.hora || "") === "1");
           if (filas === null) return res(200, { success: true, cargada: false, items: [] });
