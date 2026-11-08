@@ -67,8 +67,13 @@ jobs:
           EOF
       - name: Armar el sitio (mismos archivos que publicaba GitHub Pages)
         run: |
+          # _SEG_PUBLICAR_V1 (08-nov-2026): antes se copiaba TODO el repo (backend/, docs/, migracion/, azure/, supabase/...)
+          # y quedaba servido en el sitio publico. Ahora solo se publica el frontend (lista blanca).
           mkdir _site
-          rsync -a --exclude='.*' --exclude='_*' --exclude='node_modules' ./ _site/
+          rsync -a --exclude='.*' --exclude='_*' --exclude='*.bak*' --exclude='node_modules' --exclude='/database.rules.json' \
+            --include='/*.html' --include='/*.json' --include='/sw.js' --include='/favicon.ico' --include='/favicon.png' \
+            --include='/frontend/***' --exclude='*' ./ _site/
+          echo "Publicado:"; find _site -maxdepth 1 | sort; du -sh _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

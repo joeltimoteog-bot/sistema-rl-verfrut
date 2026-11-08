@@ -56,7 +56,8 @@
   var SOLO_AZURE = /^(?!)/;   /* _EDGE_V3 (05-nov): fase 3 — Supabase ya atiende tambien mantenimiento, importaciones y sync (con la misma llave) */
   try { var me = localStorage.getItem('rl_edge'); if (me === 'off') EDGE_ACTIVO = false; else if (me === 'on') EDGE_ACTIVO = true; } catch (e) {}
   var edgeFallas = 0;
-  function edgePausado() { try { return Date.now() < +(sessionStorage.getItem('rl_edge_pausa') || 0); } catch (e) { return false; } }
+  function edgePausado() { return false; /* _SIN_AZURE_V1: ya no hay respaldo al que ir */ }
+  function edgePausadoViejo_() { try { return Date.now() < +(sessionStorage.getItem('rl_edge_pausa') || 0); } catch (e) { return false; } }
   function edgeFalla(motivo) {
     edgeFallas++;
     try { console.warn('[_EDGE_V1] Supabase no respondio (' + motivo + '): se usa Azure'); } catch (e) {}
@@ -68,11 +69,16 @@
     if (!EDGE_ACTIVO || edgePausado() || SOLO_AZURE.test(ruta) || (init && init.body && typeof init.body !== 'string')) return fOrig.call(window, url, init);
     /* _EDGE_V3: POST /atenciones (crear, con llave) tambien va a Supabase */
     return fOrig.call(window, rg(EDGE + ruta), init).then(function (r) {
-      if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { edgeFalla('HTTP ' + r.status); return fOrig.call(window, url, init); }
+      /* _SIN_AZURE_V1 (08-nov-2026): Azure se apaga el 12-nov. Si Supabase responde 5xx ya NO se reintenta contra Azure:
+         se anota la falla y se devuelve la respuesta tal cual (la pantalla muestra su propio aviso de error). */
+      if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { edgeFalla('HTTP ' + r.status); return r; }
+      /* _SEG_401_V1 (08-nov-2026): con el servidor en modo estricto, un 401 en una ruta de datos significa sesion vencida o
+         sin credencial: se avisa de inmediato y se vuelve a ingresar (antes la pantalla quedaba vacia hasta el siguiente reloj). */
+      if (r.status === 401 && !/\/api\/auth\//.test(url) && window.rlSesion && typeof window.rlSesion.vencida === 'function') { try { window.rlSesion.vencida('Por seguridad, las sesiones se renuevan cada día. Vuelve a ingresar y regresarás a esta misma página.'); } catch (e) {} }
       edgeFallas = 0; return r;
     }, function (e) {
       if (init && init.signal && init.signal.aborted) throw e;   /* la pantalla cancelo: no reintentar */
-      edgeFalla(e && e.message); return fOrig.call(window, url, init);
+      edgeFalla(e && e.message); throw e;   /* _SIN_AZURE_V1: sin respaldo a Azure */
     });
   }
   window.rlEdge = { activo: function () { return EDGE_ACTIVO && !edgePausado(); }, base: EDGE };
@@ -179,7 +185,7 @@
   'use strict';
   if (window._SESION_RENOVAR_V1) return; window._SESION_RENOVAR_V1 = true;
   try { if (localStorage.getItem('rl_renovar') === 'off') return; } catch (e) {}
-  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api';
+  var BASE = 'https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api';   /* _SIN_AZURE_V1: antes azurewebsites (lo reescribia el enrutador) */
   var esLogin = /\/index\.html$|\/sistema-rl-verfrut\/?$/.test(location.pathname) || location.pathname === '/';
   var RENOVAR_ANTES_MS = 6 * 3600e3, CADA_MS = 5 * 60000, enCurso = false, avisado = false;
 
@@ -230,5 +236,5 @@
   setTimeout(function () { revisar('inicio'); }, 4000);
   setInterval(function () { if (document.visibilityState === 'visible') revisar('reloj'); }, CADA_MS);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(function () { revisar('al volver'); }, 500); });
-  window.rlSesion = { renovar: function () { return revisar('manual'); }, vence: function () { var e = exp(tk()); return e ? new Date(e) : null; } };
+  window.rlSesion = { renovar: function () { return revisar('manual'); }, vence: function () { var e = exp(tk()); return e ? new Date(e) : null; }, vencida: function (msg) { if (!esLogin) aviso(msg || 'Vuelve a ingresar para continuar.'); } };   /* _SEG_401_V1: aviso disponible para el enrutador */
 })();

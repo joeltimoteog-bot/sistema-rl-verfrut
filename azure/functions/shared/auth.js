@@ -25,7 +25,9 @@ function firmarToken(payload) {
  * - ok=false → responder 401 (solo ocurre con JWT_REQUIRED=1)
  */
 function verificarRequest(context, req) {
-  const requerido = process.env.JWT_REQUIRED === '1';
+  /* _SEG_AUTH_ESTRICTO_V1 (08-nov-2026): antes, sin la variable JWT_REQUIRED el servidor dejaba pasar SIN token
+     ("modo suave"). Ahora se exige token salvo que JWT_REQUIRED sea exactamente '0'. */
+  const requerido = process.env.JWT_REQUIRED !== '0';
   const secret = process.env.JWT_SECRET;
 
   const auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
@@ -130,7 +132,7 @@ function esLlamadaInterna(req) {
    Con LECTURAS_CON_SESION=1 responde 401 si no hay token valido ni clave interna; sin la variable
    (o "0") deja pasar como siempre y solo anota en Auth_SinToken. Devuelve el usuario (o {}) o null si corto. */
 function exigirSesionLectura(context, req) {
-  const activo = process.env.LECTURAS_CON_SESION === '1';
+  const activo = process.env.LECTURAS_CON_SESION !== '0';   /* _SEG_AUTH_ESTRICTO_V1: exige sesion salvo '0' explicito */
   const auth = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : null;
   const interna = token ? null : esLlamadaInterna(req);

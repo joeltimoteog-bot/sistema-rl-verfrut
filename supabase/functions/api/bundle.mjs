@@ -61059,7 +61059,7 @@ var require_auth = __commonJS({
       return jwt.sign(payload, secret, { expiresIn: JWT_EXP_HORAS + "h" });
     }
     function verificarRequest(context, req) {
-      const requerido = process.env.JWT_REQUIRED === "1";
+      const requerido = process.env.JWT_REQUIRED !== "0";
       const secret = process.env.JWT_SECRET;
       const auth = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
@@ -61148,7 +61148,7 @@ var require_auth = __commonJS({
       }
     }
     function exigirSesionLectura(context, req) {
-      const activo = process.env.LECTURAS_CON_SESION === "1";
+      const activo = process.env.LECTURAS_CON_SESION !== "0";
       const auth = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
       const interna = token ? null : esLlamadaInterna(req);

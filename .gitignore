@@ -31,3 +31,10 @@ azure-config.txt
 
 # Supabase CLI (archivos temporales, no publicar)
 supabase/.temp/
+
+# _SEG_V1 (08-nov-2026): secretos y claves NUNCA en el repo
+backend/env
+backend/.env
+backend/scripts/generar-passwords.js
+*.env
+!*.env.example
