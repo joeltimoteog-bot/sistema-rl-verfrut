@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v3.9.8-cola';   /* _SW_RED_LENTA_V1 (05-oct-2026) */
+const CACHE_VERSION = 'v3.9.9-doc12s';   /* _SW_RED_LENTA_V1 (05-oct-2026) + _SW_DOC_12S_V1 (08-nov-2026) */
 const CACHE_NAME    = 'sistema-rl-' + CACHE_VERSION;
 const BASE          = '/sistema-rl-verfrut';
 // Solo lo mínimo para soporte offline básico — el resto se pide por red
@@ -83,7 +83,10 @@ self.addEventListener('fetch', (event) => {
       new Promise((resolver) => {
         let listo = false;
         const dar = (r) => { if (!listo && r) { listo = true; resolver(r); } };
-        const reloj = setTimeout(() => { copiaGuardada.then((c) => { if (c) dar(c); }); }, 4000);
+        /* _SW_DOC_12S_V1 (08-nov-2026): para la PAGINA (index.html de 400 KB) 4 s era poco en GitHub Pages: se mostraba la copia
+           vieja y luego la nueva (doble carga). Ahora la pagina espera hasta 12 s a la red; scripts y estilos siguen en 4 s. */
+        const esDocumento = event.request.destination === 'document' || url.pathname.endsWith('.html') || url.pathname.endsWith('/');
+        const reloj = setTimeout(() => { copiaGuardada.then((c) => { if (c) dar(c); }); }, esDocumento ? 12000 : 4000);
         red.then((r) => { clearTimeout(reloj); dar(r); })
            .catch(() => {
              clearTimeout(reloj);
