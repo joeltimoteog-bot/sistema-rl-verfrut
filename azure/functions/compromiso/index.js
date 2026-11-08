@@ -16,7 +16,7 @@ function version() { return String(process.env.COMPROMISO_VERSION || '1.0').trim
 function token(req) {
   const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
   if (!h.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
-  try { return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET); } catch (e) { return null; }
+  try { return require('../shared/auth.js').verificarSoloRL(h.slice(7).trim()); } catch (e) { return null; }
 }
 async function asegurar(pool) {
   await pool.request().query(`IF OBJECT_ID('dbo.Usuarios_Aceptaciones', 'U') IS NULL CREATE TABLE dbo.Usuarios_Aceptaciones (

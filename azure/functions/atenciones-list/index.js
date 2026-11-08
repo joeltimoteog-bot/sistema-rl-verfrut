@@ -51,6 +51,16 @@ module.exports = async function (context, req) {
     if (dni)        { where.push('dni = @dni');                  request.input('dni', sql.NVarChar, dni); }
     if (estado)     { where.push('estado = @estado');            request.input('estado', sql.NVarChar, estado); }
     if (usuario)    { where.push('usuario_sistema = @usuario'); request.input('usuario', sql.NVarChar, usuario); }
+    /* _AT_SOLO_PROPIAS_V1 (08-nov-2026): con AT_SOLO_PROPIAS=1 (secreto de Supabase), un usuario sin rol de direccion
+       (admin/coordinador/jefa/gerencia) solo recibe SUS atenciones (usuario_sistema = su usuario), aunque pida otra cosa.
+       Apagado por defecto hasta que el administrador confirme que roles ven todo. */
+    if (String(process.env.AT_SOLO_PROPIAS || '') === '1' && authUser && authUser.usuario) {
+      const rolA = String(authUser.rol || authUser.role || '').toLowerCase();
+      if (!/admin|coordinador|jefa|gerenc/.test(rolA)) {
+        where.push('usuario_sistema = @usuarioSesion'); request.input('usuarioSesion', sql.NVarChar, String(authUser.usuario));
+        context.log('[_AT_SOLO_PROPIAS_V1] ' + authUser.usuario + ' (' + rolA + ') solo ve sus atenciones');
+      }
+    }
     /* _AT_CAMBIOS_V1 (01-oct-2026): ?cambiosDesde=<ISO UTC> -> solo lo que cambio desde esa hora (+ 'ahora' de Azure) */
     let ahora = null;
     if (q.cambiosDesde !== undefined) {

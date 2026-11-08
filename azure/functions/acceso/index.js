@@ -20,7 +20,7 @@ const AH_ROLES_ADMIN = ['administrador', 'administrador 01', 'administrador 02',
 function token(req) {
   const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
   if (!h.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
-  try { return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET); } catch (e) { return null; }
+  try { return require('../shared/auth.js').verificarSoloRL(h.slice(7).trim()); } catch (e) { return null; }
 }
 const esAdminPerm = (t) => !!t && PERM_ROLES_ADMIN.indexOf(A.usr(t.rol)) >= 0;
 const esAdminHor = (t) => !!t && (A.usr(t.usuario) === 'jtimoteo' || AH_ROLES_ADMIN.indexOf(A.usr(t.rol)) >= 0);

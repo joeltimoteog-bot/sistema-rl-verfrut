@@ -29,11 +29,28 @@ const limpiarNombre = (n) => String(n || ('archivo_' + Date.now() + '.pdf')).rep
 const rutaUrl = (n) => String(n).split('/').map(encodeURIComponent).join('/');
 const publica = (s, bucket, nombre) => s.url + '/storage/v1/object/public/' + bucket + '/' + rutaUrl(nombre);
 
-async function subirBytes(s, bucket, nombre, bytes, tipo) {
-  const r = await fetch(s.url + '/storage/v1/object/' + bucket + '/' + rutaUrl(nombre), {
-    method: 'POST', headers: Object.assign({ 'Content-Type': tipo || 'application/octet-stream', 'x-upsert': 'true', 'cache-control': '3600' }, s.h), body: bytes
+/* _STORAGE_SIN_SOBRESCRIBIR_V1 (08-nov-2026): antes toda subida iba con x-upsert=true, asi que cualquier sesion podia
+   REEMPLAZAR un archivo existente sabiendo su nombre (evidencias de casos). Ahora nunca se sobrescribe: si el nombre ya
+   existe, se guarda con sufijo de fecha-hora y se devuelve ese nombre. La migracion desde Azure (misma copia) si puede
+   sobrescribir (upsert=true explicito). Devuelve el nombre final. */
+async function subirBytes(s, bucket, nombre, bytes, tipo, upsert) {
+  const intento = async (n, up) => fetch(s.url + '/storage/v1/object/' + bucket + '/' + rutaUrl(n), {
+    method: 'POST', headers: Object.assign({ 'Content-Type': tipo || 'application/octet-stream', 'x-upsert': up ? 'true' : 'false', 'cache-control': '3600' }, s.h), body: bytes
   });
+  let r = await intento(nombre, !!upsert);
+  if (!upsert && (r.status === 409 || r.status === 400)) {
+    const txt = await r.text().catch(() => '');
+    if (r.status === 409 || /exists|duplicate/i.test(txt)) {
+      const m = String(nombre).match(/^(.*?)(\.[A-Za-z0-9]{1,6})?$/), st = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+      const nuevo = (m && m[1] ? m[1] : String(nombre)) + '-' + st + (m && m[2] ? m[2] : '');
+      r = await intento(nuevo, false);
+      if (!r.ok) throw new Error('Storage HTTP ' + r.status + ': ' + (await r.text()).slice(0, 200));
+      return nuevo;
+    }
+    throw new Error('Storage HTTP ' + r.status + ': ' + txt.slice(0, 200));
+  }
   if (!r.ok) throw new Error('Storage HTTP ' + r.status + ': ' + (await r.text()).slice(0, 200));
+  return nombre;
 }
 
 async function preparar() {
@@ -54,9 +71,9 @@ async function subir(b) {
   b64 = b64.replace(/\s/g, '');
   const bytes = Buffer.from(b64, 'base64');
   const bucket = contenedorDe(b.contenedor || b.carpeta), nombre = limpiarNombre(b.nombre);
-  await subirBytes(s, bucket, nombre, bytes, b.mimeType || b.tipo || 'application/pdf');
-  const u = publica(s, bucket, nombre);
-  return { success: true, enlace: u, url: u, bytes: bytes.length, contenedor: bucket };
+  const nombreFinal = await subirBytes(s, bucket, nombre, bytes, b.mimeType || b.tipo || 'application/pdf', false);
+  const u = publica(s, bucket, nombreFinal);
+  return { success: true, enlace: u, url: u, bytes: bytes.length, contenedor: bucket, nombre: nombreFinal };
 }
 
 async function migrar(b) {
@@ -76,7 +93,7 @@ async function migrar(b) {
       const r = await fetch(base + '/' + bucket + '/' + rutaUrl(it.name) + '?' + sas);
       if (!r.ok) throw new Error('Azure HTTP ' + r.status);
       const bytes = new Uint8Array(await r.arrayBuffer());
-      await subirBytes(s, bucket, it.name, bytes, (it.properties && it.properties.contentType) || r.headers.get('content-type') || 'application/octet-stream');
+      await subirBytes(s, bucket, it.name, bytes, (it.properties && it.properties.contentType) || r.headers.get('content-type') || 'application/octet-stream', true);   /* migracion: misma copia */
       copiados++;
     } catch (e) { errores.push({ nombre: it.name, error: String(e.message || e).slice(0, 160) }); }
   }
@@ -110,7 +127,7 @@ function sesionValida(req) {
   try {
     const a = String((req.headers && (req.headers.authorization || req.headers.Authorization)) || '');
     if (!a.startsWith('Bearer ') || !env('JWT_SECRET')) return null;
-    return require('jsonwebtoken').verify(a.slice(7).trim(), env('JWT_SECRET'));
+    return require('../shared/auth.js').verificarSoloRL(a.slice(7).trim(), env('JWT_SECRET'));   /* _AUD_RL_V1 */
   } catch (e) { return null; }
 }
 

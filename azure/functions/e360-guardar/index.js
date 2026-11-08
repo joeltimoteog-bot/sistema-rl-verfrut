@@ -13,7 +13,7 @@ const TH = require('../shared/tablas-hoja');   /* _E360_LEER_AZURE_V1 */
 function token(req) {
   const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
   if (!h.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
-  try { return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET); } catch (e) { return null; }
+  try { return require('../shared/auth.js').verificarSoloRL(h.slice(7).trim()); } catch (e) { return null; }
 }
 /* _E360_LEER_AZURE_V1 (01-nov-2026): lectura getEvaluaciones360 desde Azure (misma forma que el Apps Script).
    Columnas de la hoja/tabla: 0 id · 1 fecha · 2 evaluador · 3 supervisor · 4 empresa · 5 sector · 6-11 competencias planas

@@ -10273,6 +10273,145 @@ var require_acceso_db = __commonJS({
   }
 });
 
+// shared/auth.js
+var require_auth = __commonJS({
+  "shared/auth.js"(exports, module) {
+    var jwt = require_jsonwebtoken();
+    var JWT_EXP_HORAS = 14;
+    function firmarToken(payload) {
+      const secret = process.env.JWT_SECRET;
+      if (!secret) throw new Error("JWT_SECRET no configurado");
+      return jwt.sign(payload, secret, { expiresIn: JWT_EXP_HORAS + "h" });
+    }
+    function verificarRequest(context, req) {
+      const requerido = process.env.JWT_REQUIRED !== "0";
+      const secret = process.env.JWT_SECRET;
+      const auth = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
+      if (!token) {
+        const interna = esLlamadaInterna(req);
+        if (interna) return { ok: true, user: interna, error: null };
+      }
+      if (!token) {
+        anotarSinToken(req, "sin-token");
+        if (requerido) return { ok: false, user: null, error: "Token requerido" };
+        context.log.warn("[auth] Request sin token (modo suave, permitido)");
+        return { ok: true, user: null, error: null };
+      }
+      if (!secret) {
+        context.log.warn("[auth] JWT_SECRET no configurado; no se puede validar token");
+        return { ok: !requerido, user: null, error: requerido ? "Servidor sin JWT_SECRET" : null };
+      }
+      try {
+        const user = verificarSoloRL(token, secret);
+        return { ok: true, user, error: null };
+      } catch (e) {
+        anotarSinToken(req, "token-invalido");
+        if (requerido) return { ok: false, user: null, error: "Token inv\xE1lido o expirado" };
+        context.log.warn("[auth] Token inv\xE1lido (modo suave, permitido):", e.message);
+        return { ok: true, user: null, error: null };
+      }
+    }
+    function exigirAuth(context, req) {
+      const r = verificarRequest(context, req);
+      if (!r.ok) {
+        context.res = { status: 401, body: { success: false, error: r.error } };
+        return null;
+      }
+      return r.user || {};
+    }
+    var _sinTok = {};
+    var _sinTokReloj = null;
+    function anotarSinToken(req, motivo) {
+      try {
+        const url = String(req && (req.originalUrl || req.url) || "");
+        const ruta = (url.split("?")[0].match(/\/api\/(.*)$/) || [, url])[1].slice(0, 120);
+        const h = req && req.headers || {};
+        const origen = String(h.referer || h.origin || h["user-agent"] || "").replace(/\?.*$/, "").slice(0, 200);
+        const dia = new Date(Date.now() - 5 * 36e5).toISOString().slice(0, 10);
+        const k = dia + "|" + ruta + "|" + origen + "|" + motivo;
+        _sinTok[k] = (_sinTok[k] || 0) + 1;
+        if (!_sinTokReloj) _sinTokReloj = setTimeout(guardarSinToken, 6e4);
+      } catch (e) {
+      }
+    }
+    async function guardarSinToken() {
+      _sinTokReloj = null;
+      const lote = Object.assign({}, _sinTok);
+      Object.keys(_sinTok).forEach((k) => delete _sinTok[k]);
+      const claves = Object.keys(lote);
+      if (!claves.length) return;
+      try {
+        const { sql, getPool } = require_db();
+        const pool = await getPool();
+        await pool.request().query("IF OBJECT_ID('dbo.Auth_SinToken','U') IS NULL CREATE TABLE dbo.Auth_SinToken (dia DATE NOT NULL, ruta NVARCHAR(120) NOT NULL, origen NVARCHAR(200) NOT NULL, motivo NVARCHAR(20) NOT NULL, n INT NOT NULL, ultimo DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT PK_Auth_SinToken PRIMARY KEY (dia, ruta, origen, motivo))");
+        for (const k of claves) {
+          const [dia, ruta, origen, motivo] = k.split("|");
+          await pool.request().input("d", sql.Date, dia).input("r", sql.NVarChar(120), ruta).input("o", sql.NVarChar(200), origen).input("m", sql.NVarChar(20), motivo).input("n", sql.Int, lote[k]).query("MERGE dbo.Auth_SinToken AS t USING (SELECT @d d, @r r, @o o, @m m) s ON t.dia = s.d AND t.ruta = s.r AND t.origen = s.o AND t.motivo = s.m WHEN MATCHED THEN UPDATE SET n = t.n + @n, ultimo = SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT (dia, ruta, origen, motivo, n) VALUES (@d, @r, @o, @m, @n);");
+        }
+      } catch (e) {
+      }
+    }
+    function esLlamadaInterna(req) {
+      try {
+        const lista = String(process.env.INTERNAL_API_KEY || "").split(",").map(function(x) {
+          return x.trim();
+        }).filter(Boolean);
+        if (!lista.length) return null;
+        const h = req && req.headers || {};
+        const k = String(h["x-functions-key"] || h["X-Functions-Key"] || "").trim();
+        if (!k) return null;
+        for (const esperada of lista) {
+          if (k.length !== esperada.length) continue;
+          let d = 0;
+          for (let i = 0; i < k.length; i++) d |= k.charCodeAt(i) ^ esperada.charCodeAt(i);
+          if (d === 0) return { usuario: "servidor-google", rol: "sistema", interno: true };
+        }
+        return null;
+      } catch (e) {
+        return null;
+      }
+    }
+    function exigirSesionLectura(context, req) {
+      const activo = process.env.LECTURAS_CON_SESION !== "0";
+      const auth = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
+      const interna = token ? null : esLlamadaInterna(req);
+      if (interna) return interna;
+      if (!token) {
+        anotarSinToken(req, "sin-token");
+        if (activo) {
+          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
+          return null;
+        }
+        return {};
+      }
+      const secret = process.env.JWT_SECRET;
+      if (!secret) return activo ? (context.res = { status: 401, body: { success: false, error: "Servidor sin JWT_SECRET" } }, null) : {};
+      try {
+        return verificarSoloRL(token, secret) || {};
+      } catch (e) {
+        anotarSinToken(req, "token-invalido");
+        if (activo) {
+          context.res = { status: 401, body: { success: false, error: "Token inv\xE1lido o expirado" } };
+          return null;
+        }
+        return {};
+      }
+    }
+    function verificarSoloRL(token, secret) {
+      const p = jwt.verify(token, secret || process.env.JWT_SECRET);
+      if (p && p.aud) {
+        const e = new Error("Token de otro sistema (aud=" + p.aud + ")");
+        e.name = "AudienceError";
+        throw e;
+      }
+      return p;
+    }
+    module.exports = { firmarToken, verificarRequest, exigirAuth, anotarSinToken, esLlamadaInterna, exigirSesionLectura, verificarSoloRL };
+  }
+});
+
 // acceso/index.js
 var require_acceso = __commonJS({
   "acceso/index.js"(exports, module) {
@@ -10318,7 +10457,7 @@ var require_acceso = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -10688,7 +10827,7 @@ var require_actividad = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        const t = jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        const t = require_auth().verificarSoloRL(h.slice(7).trim());
         return t && t.usuario ? t : null;
       } catch (e) {
         return null;
@@ -12983,7 +13122,7 @@ var require_alm_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -60927,13 +61066,26 @@ var require_archivos = __commonJS({
     var limpiarNombre = (n) => String(n || "archivo_" + Date.now() + ".pdf").replace(/[^a-zA-Z0-9._-]/g, "_");
     var rutaUrl = (n) => String(n).split("/").map(encodeURIComponent).join("/");
     var publica = (s, bucket, nombre) => s.url + "/storage/v1/object/public/" + bucket + "/" + rutaUrl(nombre);
-    async function subirBytes(s, bucket, nombre, bytes, tipo) {
-      const r = await fetch(s.url + "/storage/v1/object/" + bucket + "/" + rutaUrl(nombre), {
+    async function subirBytes(s, bucket, nombre, bytes, tipo, upsert) {
+      const intento = async (n, up) => fetch(s.url + "/storage/v1/object/" + bucket + "/" + rutaUrl(n), {
         method: "POST",
-        headers: Object.assign({ "Content-Type": tipo || "application/octet-stream", "x-upsert": "true", "cache-control": "3600" }, s.h),
+        headers: Object.assign({ "Content-Type": tipo || "application/octet-stream", "x-upsert": up ? "true" : "false", "cache-control": "3600" }, s.h),
         body: bytes
       });
+      let r = await intento(nombre, !!upsert);
+      if (!upsert && (r.status === 409 || r.status === 400)) {
+        const txt = await r.text().catch(() => "");
+        if (r.status === 409 || /exists|duplicate/i.test(txt)) {
+          const m = String(nombre).match(/^(.*?)(\.[A-Za-z0-9]{1,6})?$/), st = (/* @__PURE__ */ new Date()).toISOString().replace(/[-:T]/g, "").slice(0, 14);
+          const nuevo = (m && m[1] ? m[1] : String(nombre)) + "-" + st + (m && m[2] ? m[2] : "");
+          r = await intento(nuevo, false);
+          if (!r.ok) throw new Error("Storage HTTP " + r.status + ": " + (await r.text()).slice(0, 200));
+          return nuevo;
+        }
+        throw new Error("Storage HTTP " + r.status + ": " + txt.slice(0, 200));
+      }
       if (!r.ok) throw new Error("Storage HTTP " + r.status + ": " + (await r.text()).slice(0, 200));
+      return nombre;
     }
     async function preparar() {
       const s = supa(), out = {};
@@ -60952,9 +61104,9 @@ var require_archivos = __commonJS({
       b64 = b64.replace(/\s/g, "");
       const bytes = Buffer.from(b64, "base64");
       const bucket = contenedorDe(b.contenedor || b.carpeta), nombre = limpiarNombre(b.nombre);
-      await subirBytes(s, bucket, nombre, bytes, b.mimeType || b.tipo || "application/pdf");
-      const u = publica(s, bucket, nombre);
-      return { success: true, enlace: u, url: u, bytes: bytes.length, contenedor: bucket };
+      const nombreFinal = await subirBytes(s, bucket, nombre, bytes, b.mimeType || b.tipo || "application/pdf", false);
+      const u = publica(s, bucket, nombreFinal);
+      return { success: true, enlace: u, url: u, bytes: bytes.length, contenedor: bucket, nombre: nombreFinal };
     }
     async function migrar(b) {
       const s = supa();
@@ -60974,7 +61126,7 @@ var require_archivos = __commonJS({
           const r = await fetch(base + "/" + bucket + "/" + rutaUrl(it.name) + "?" + sas);
           if (!r.ok) throw new Error("Azure HTTP " + r.status);
           const bytes = new Uint8Array(await r.arrayBuffer());
-          await subirBytes(s, bucket, it.name, bytes, it.properties && it.properties.contentType || r.headers.get("content-type") || "application/octet-stream");
+          await subirBytes(s, bucket, it.name, bytes, it.properties && it.properties.contentType || r.headers.get("content-type") || "application/octet-stream", true);
           copiados++;
         } catch (e) {
           errores.push({ nombre: it.name, error: String(e.message || e).slice(0, 160) });
@@ -61014,7 +61166,7 @@ var require_archivos = __commonJS({
       try {
         const a = String(req.headers && (req.headers.authorization || req.headers.Authorization) || "");
         if (!a.startsWith("Bearer ") || !env("JWT_SECRET")) return null;
-        return require_jsonwebtoken().verify(a.slice(7).trim(), env("JWT_SECRET"));
+        return require_auth().verificarSoloRL(a.slice(7).trim(), env("JWT_SECRET"));
       } catch (e) {
         return null;
       }
@@ -61045,136 +61197,6 @@ var require_archivos = __commonJS({
         context.res = { status: 500, body: { success: false, error: e.message } };
       }
     };
-  }
-});
-
-// shared/auth.js
-var require_auth = __commonJS({
-  "shared/auth.js"(exports, module) {
-    var jwt = require_jsonwebtoken();
-    var JWT_EXP_HORAS = 14;
-    function firmarToken(payload) {
-      const secret = process.env.JWT_SECRET;
-      if (!secret) throw new Error("JWT_SECRET no configurado");
-      return jwt.sign(payload, secret, { expiresIn: JWT_EXP_HORAS + "h" });
-    }
-    function verificarRequest(context, req) {
-      const requerido = process.env.JWT_REQUIRED !== "0";
-      const secret = process.env.JWT_SECRET;
-      const auth = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
-      const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
-      if (!token) {
-        const interna = esLlamadaInterna(req);
-        if (interna) return { ok: true, user: interna, error: null };
-      }
-      if (!token) {
-        anotarSinToken(req, "sin-token");
-        if (requerido) return { ok: false, user: null, error: "Token requerido" };
-        context.log.warn("[auth] Request sin token (modo suave, permitido)");
-        return { ok: true, user: null, error: null };
-      }
-      if (!secret) {
-        context.log.warn("[auth] JWT_SECRET no configurado; no se puede validar token");
-        return { ok: !requerido, user: null, error: requerido ? "Servidor sin JWT_SECRET" : null };
-      }
-      try {
-        const user = jwt.verify(token, secret);
-        return { ok: true, user, error: null };
-      } catch (e) {
-        anotarSinToken(req, "token-invalido");
-        if (requerido) return { ok: false, user: null, error: "Token inv\xE1lido o expirado" };
-        context.log.warn("[auth] Token inv\xE1lido (modo suave, permitido):", e.message);
-        return { ok: true, user: null, error: null };
-      }
-    }
-    function exigirAuth(context, req) {
-      const r = verificarRequest(context, req);
-      if (!r.ok) {
-        context.res = { status: 401, body: { success: false, error: r.error } };
-        return null;
-      }
-      return r.user || {};
-    }
-    var _sinTok = {};
-    var _sinTokReloj = null;
-    function anotarSinToken(req, motivo) {
-      try {
-        const url = String(req && (req.originalUrl || req.url) || "");
-        const ruta = (url.split("?")[0].match(/\/api\/(.*)$/) || [, url])[1].slice(0, 120);
-        const h = req && req.headers || {};
-        const origen = String(h.referer || h.origin || h["user-agent"] || "").replace(/\?.*$/, "").slice(0, 200);
-        const dia = new Date(Date.now() - 5 * 36e5).toISOString().slice(0, 10);
-        const k = dia + "|" + ruta + "|" + origen + "|" + motivo;
-        _sinTok[k] = (_sinTok[k] || 0) + 1;
-        if (!_sinTokReloj) _sinTokReloj = setTimeout(guardarSinToken, 6e4);
-      } catch (e) {
-      }
-    }
-    async function guardarSinToken() {
-      _sinTokReloj = null;
-      const lote = Object.assign({}, _sinTok);
-      Object.keys(_sinTok).forEach((k) => delete _sinTok[k]);
-      const claves = Object.keys(lote);
-      if (!claves.length) return;
-      try {
-        const { sql, getPool } = require_db();
-        const pool = await getPool();
-        await pool.request().query("IF OBJECT_ID('dbo.Auth_SinToken','U') IS NULL CREATE TABLE dbo.Auth_SinToken (dia DATE NOT NULL, ruta NVARCHAR(120) NOT NULL, origen NVARCHAR(200) NOT NULL, motivo NVARCHAR(20) NOT NULL, n INT NOT NULL, ultimo DATETIME2(0) NOT NULL DEFAULT SYSUTCDATETIME(), CONSTRAINT PK_Auth_SinToken PRIMARY KEY (dia, ruta, origen, motivo))");
-        for (const k of claves) {
-          const [dia, ruta, origen, motivo] = k.split("|");
-          await pool.request().input("d", sql.Date, dia).input("r", sql.NVarChar(120), ruta).input("o", sql.NVarChar(200), origen).input("m", sql.NVarChar(20), motivo).input("n", sql.Int, lote[k]).query("MERGE dbo.Auth_SinToken AS t USING (SELECT @d d, @r r, @o o, @m m) s ON t.dia = s.d AND t.ruta = s.r AND t.origen = s.o AND t.motivo = s.m WHEN MATCHED THEN UPDATE SET n = t.n + @n, ultimo = SYSUTCDATETIME() WHEN NOT MATCHED THEN INSERT (dia, ruta, origen, motivo, n) VALUES (@d, @r, @o, @m, @n);");
-        }
-      } catch (e) {
-      }
-    }
-    function esLlamadaInterna(req) {
-      try {
-        const lista = String(process.env.INTERNAL_API_KEY || "").split(",").map(function(x) {
-          return x.trim();
-        }).filter(Boolean);
-        if (!lista.length) return null;
-        const h = req && req.headers || {};
-        const k = String(h["x-functions-key"] || h["X-Functions-Key"] || "").trim();
-        if (!k) return null;
-        for (const esperada of lista) {
-          if (k.length !== esperada.length) continue;
-          let d = 0;
-          for (let i = 0; i < k.length; i++) d |= k.charCodeAt(i) ^ esperada.charCodeAt(i);
-          if (d === 0) return { usuario: "servidor-google", rol: "sistema", interno: true };
-        }
-        return null;
-      } catch (e) {
-        return null;
-      }
-    }
-    function exigirSesionLectura(context, req) {
-      const activo = process.env.LECTURAS_CON_SESION !== "0";
-      const auth = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
-      const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
-      const interna = token ? null : esLlamadaInterna(req);
-      if (interna) return interna;
-      if (!token) {
-        anotarSinToken(req, "sin-token");
-        if (activo) {
-          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
-          return null;
-        }
-        return {};
-      }
-      const secret = process.env.JWT_SECRET;
-      if (!secret) return activo ? (context.res = { status: 401, body: { success: false, error: "Servidor sin JWT_SECRET" } }, null) : {};
-      try {
-        return jwt.verify(token, secret) || {};
-      } catch (e) {
-        anotarSinToken(req, "token-invalido");
-        if (activo) {
-          context.res = { status: 401, body: { success: false, error: "Token inv\xE1lido o expirado" } };
-          return null;
-        }
-        return {};
-      }
-    }
-    module.exports = { firmarToken, verificarRequest, exigirAuth, anotarSinToken, esLlamadaInterna, exigirSesionLectura };
   }
 });
 
@@ -61940,7 +61962,7 @@ var require_atenciones_editar = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -62104,7 +62126,7 @@ var require_atenciones_guardar = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -62398,6 +62420,14 @@ var require_atenciones_list = __commonJS({
         if (usuario) {
           where.push("usuario_sistema = @usuario");
           request.input("usuario", sql.NVarChar, usuario);
+        }
+        if (String(process.env.AT_SOLO_PROPIAS || "") === "1" && authUser && authUser.usuario) {
+          const rolA = String(authUser.rol || authUser.role || "").toLowerCase();
+          if (!/admin|coordinador|jefa|gerenc/.test(rolA)) {
+            where.push("usuario_sistema = @usuarioSesion");
+            request.input("usuarioSesion", sql.NVarChar, String(authUser.usuario));
+            context.log("[_AT_SOLO_PROPIAS_V1] " + authUser.usuario + " (" + rolA + ") solo ve sus atenciones");
+          }
         }
         let ahora = null;
         if (q.cambiosDesde !== void 0) {
@@ -64883,6 +64913,7 @@ var require_auth_renovar = __commonJS({
       let p;
       try {
         p = jwt.verify(token, secret, { ignoreExpiration: true });
+        if (p && p.aud) throw new Error("Token de otro sistema");
       } catch (e) {
         return res(401, { success: false, error: "Token inv\xE1lido", motivo: "invalido" });
       }
@@ -64897,7 +64928,7 @@ var require_auth_renovar = __commonJS({
           AUD.registrar(pool, req, { usuario: p.usuario, sistema: "RENOVAR", resultado: "inactivo", sid: p.sid || null });
           return res(401, { success: false, error: "Usuario inactivo", motivo: "inactivo" });
         }
-        const nuevo = firmarToken({ sid: p.sid || AUD.nuevoSid(), sub: u.id_sistema, usuario: u.usuario, rol: String(u.rol || "").trim().toLowerCase(), empresa: String(u.empresa || "").trim().toUpperCase(), cd: p.cd || 0, co: 0, ct: 0, rn: 1 });
+        const nuevo = firmarToken({ sid: p.sid || AUD.nuevoSid(), sub: u.id_sistema, usuario: u.usuario, rol: String(u.rol || "").trim().toLowerCase(), empresa: String(u.empresa || "").trim().toUpperCase(), cd: p.cd || 0, co: p.co || 0, ct: p.ct || 0, rn: 1 });
         AUD.registrar(pool, req, { usuario: u.usuario, rol: u.rol, empresa: u.empresa, sistema: "RENOVAR", resultado: exp < ahora ? "ok_vencido" : "ok", sid: p.sid || null });
         context.log("auth/renovar: " + u.usuario + (exp < ahora ? " (estaba vencido " + Math.round((ahora - exp) / 36e5) + " h)" : ""));
         return res(200, { success: true, token: nuevo, usuario: u.usuario, rol: String(u.rol || "").trim().toLowerCase(), renovado_en: new Date(ahora).toISOString() });
@@ -65564,7 +65595,7 @@ var require_cap_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -65610,7 +65641,7 @@ var require_compromiso = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -68665,7 +68696,7 @@ var require_cumpl = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -68779,7 +68810,7 @@ var require_cumpl_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -68967,7 +68998,7 @@ var require_cv = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -69054,7 +69085,7 @@ var require_cv_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -72564,7 +72595,7 @@ var require_e360_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -73383,7 +73414,7 @@ var require_fus_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -73428,7 +73459,7 @@ var require_hor_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -73481,7 +73512,7 @@ var require_horas_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -73526,7 +73557,7 @@ var require_inf_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -73579,7 +73610,7 @@ var require_inv_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -73650,7 +73681,7 @@ var require_kpi = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -73915,7 +73946,7 @@ var require_mant_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -74940,7 +74971,7 @@ var require_preav_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -74996,7 +75027,7 @@ var require_prec = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -75230,7 +75261,7 @@ var require_sol_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -75275,7 +75306,7 @@ var require_sup_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -75843,7 +75874,7 @@ var require_usr_guardar2 = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }
@@ -75898,7 +75929,7 @@ var require_usuarios_lista = __commonJS({
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
-        return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        return require_auth().verificarSoloRL(h.slice(7).trim());
       } catch (e) {
         return null;
       }

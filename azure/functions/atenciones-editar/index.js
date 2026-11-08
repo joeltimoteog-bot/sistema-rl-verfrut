@@ -22,7 +22,7 @@ const AC = require('../shared/at-cambios');   /* _AT_CAMBIOS_V1 */
 function token(req) {
   const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
   if (!h.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
-  try { return jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET); } catch (e) { return null; }
+  try { return require('../shared/auth.js').verificarSoloRL(h.slice(7).trim()); } catch (e) { return null; }
 }
 
 /* campo del formulario -> [tipo, largo] (mismos campos que escribe updateAtencion en la hoja) */

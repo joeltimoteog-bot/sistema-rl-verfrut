@@ -24,7 +24,7 @@ module.exports = async function (context, req) {
   const secret = process.env.JWT_SECRET;
   if (!secret) return res(500, { success: false, error: 'Servidor sin JWT_SECRET' });
   let p;
-  try { p = jwt.verify(token, secret, { ignoreExpiration: true }); } catch (e) { return res(401, { success: false, error: 'Token inválido', motivo: 'invalido' }); }
+  try { p = jwt.verify(token, secret, { ignoreExpiration: true }); if (p && p.aud) throw new Error('Token de otro sistema'); }   /* _AUD_RL_V1 */ catch (e) { return res(401, { success: false, error: 'Token inválido', motivo: 'invalido' }); }
   const exp = (p.exp || 0) * 1000, ahora = Date.now();
   if (exp && ahora - exp > GRACIA_H * 3600e3) return res(401, { success: false, error: 'Sesión vencida: vuelve a ingresar', motivo: 'vencido' });
   if (!p.usuario) return res(401, { success: false, error: 'Token sin usuario', motivo: 'invalido' });
@@ -33,7 +33,7 @@ module.exports = async function (context, req) {
     const r = await pool.request().input('u', sql.NVarChar, String(p.usuario)).query('SELECT TOP 1 id_sistema, usuario, rol, empresa FROM dbo.usuarios WHERE usuario = @u AND activo = 1');
     const u = r.recordset[0];
     if (!u) { AUD.registrar(pool, req, { usuario: p.usuario, sistema: 'RENOVAR', resultado: 'inactivo', sid: p.sid || null }); return res(401, { success: false, error: 'Usuario inactivo', motivo: 'inactivo' }); }
-    const nuevo = firmarToken({ sid: p.sid || AUD.nuevoSid(), sub: u.id_sistema, usuario: u.usuario, rol: String(u.rol || '').trim().toLowerCase(), empresa: String(u.empresa || '').trim().toUpperCase(), cd: p.cd || 0, co: 0, ct: 0, rn: 1 });
+    const nuevo = firmarToken({ sid: p.sid || AUD.nuevoSid(), sub: u.id_sistema, usuario: u.usuario, rol: String(u.rol || '').trim().toLowerCase(), empresa: String(u.empresa || '').trim().toUpperCase(), cd: p.cd || 0, co: p.co || 0, ct: p.ct || 0, rn: 1 });   /* _RENOVAR_CLAVE_TEMP_V1 (08-nov): se conserva la marca de cambio de clave obligatorio */
     AUD.registrar(pool, req, { usuario: u.usuario, rol: u.rol, empresa: u.empresa, sistema: 'RENOVAR', resultado: exp < ahora ? 'ok_vencido' : 'ok', sid: p.sid || null });   /* _LOGIN_AUDIT_V1 */
     context.log('auth/renovar: ' + u.usuario + (exp < ahora ? ' (estaba vencido ' + Math.round((ahora - exp) / 36e5) + ' h)' : ''));
     return res(200, { success: true, token: nuevo, usuario: u.usuario, rol: String(u.rol || '').trim().toLowerCase(), renovado_en: new Date(ahora).toISOString() });

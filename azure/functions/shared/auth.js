@@ -54,7 +54,7 @@ function verificarRequest(context, req) {
   }
 
   try {
-    const user = jwt.verify(token, secret);
+    const user = verificarSoloRL(token, secret);   /* _AUD_RL_V1 */
     return { ok: true, user, error: null };
   } catch (e) {
     anotarSinToken(req, 'token-invalido');
@@ -144,7 +144,7 @@ function exigirSesionLectura(context, req) {
   }
   const secret = process.env.JWT_SECRET;
   if (!secret) return activo ? (context.res = { status: 401, body: { success: false, error: 'Servidor sin JWT_SECRET' } }, null) : {};
-  try { return jwt.verify(token, secret) || {}; }
+  try { return verificarSoloRL(token, secret) || {}; }   /* _AUD_RL_V1 */
   catch (e) {
     anotarSinToken(req, 'token-invalido');
     if (activo) { context.res = { status: 401, body: { success: false, error: 'Token inválido o expirado' } }; return null; }
@@ -152,4 +152,12 @@ function exigirSesionLectura(context, req) {
   }
 }
 
-module.exports = { firmarToken, verificarRequest, exigirAuth, anotarSinToken, esLlamadaInterna, exigirSesionLectura };
+/* _AUD_RL_V1 (08-nov-2026): un token de sesion del RR.LL. NO lleva "aud". Los pases SSO (aud=eti-sso) y las sesiones
+   de los ETI (aud=eti-sesion) se firman con el mismo secreto pero NO valen como sesion del RR.LL. (antes si valian:
+   "confusion de audiencia"). Esta funcion es la unica forma de validar un token de RR.LL. */
+function verificarSoloRL(token, secret) {
+  const p = jwt.verify(token, secret || process.env.JWT_SECRET);
+  if (p && p.aud) { const e = new Error('Token de otro sistema (aud=' + p.aud + ')'); e.name = 'AudienceError'; throw e; }
+  return p;
+}
+module.exports = { firmarToken, verificarRequest, exigirAuth, anotarSinToken, esLlamadaInterna, exigirSesionLectura, verificarSoloRL };

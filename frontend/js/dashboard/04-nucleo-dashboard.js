@@ -1,3 +1,5 @@
+/* _SEG_XSS_V1 (08-nov-2026): escape HTML para texto libre (observaciones, motivos, nombres) en las tablas del panel. */
+function escH(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 /* _EMPRESAS_V1 (26-oct-2026): catalogo de empresas del grupo (espejo de azure/functions/shared/empresas.js) */
 window.EMPRESAS_RL = ['RAPEL', 'VERFRUT', 'OLMOS'];
 window.FUNDOS_OLMOS = ['BOMAREA', 'PIRONA', 'MOSQUETA', 'HEFEI', 'LEFKADA'];
@@ -1064,7 +1066,7 @@ function renderFusiones(data) {
       <td style="font-size:11px">${r.supervisor||''}</td>
       <td style="font-size:11px">${rutasHtml}</td>
       <td style="text-align:center;font-weight:700">${r.total_trab||''}</td>
-      <td style="font-size:11px">${r.motivo||''}</td>
+      <td style="font-size:11px">${escH(r.motivo)}</td>
       <td><span style="background:${estColor}20;color:${estColor};padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700">${r.estado||'Pendiente'}</span></td>
       <td style="display:flex;gap:4px;flex-wrap:wrap">
         <button onclick="verFusion(${i})" style="background:#0a2463;color:#fff;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer">👁️ Ver${fotos.length?' 📷'+fotos.length:''}</button>
@@ -3383,8 +3385,8 @@ function renderTablaCasos(data) {
         <td>${i+1}</td>
         <td>${fmtF(c.fecha_reporte)}</td>
         <td><span class="tag tag-${c.empresa==='RAPEL'?'az':'ro'}">${c.empresa}</span></td>
-        <td style="font-size:11px">${c.nombre}</td>
-        <td style="font-size:11px">${c.motivo}</td>
+        <td style="font-size:11px">${escH(c.nombre)}</td>
+        <td style="font-size:11px">${escH(c.motivo)}</td>
         <td style="font-size:11px">${c.supervisor}</td>
         <td><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:${estBg};color:${estColor};white-space:nowrap">${estadoLabel}</span></td>
         <td style="font-weight:700;color:${estColor}">${porcentaje}%</td>
@@ -4429,7 +4431,7 @@ function renderAt(lista) {
         <td>${a.hora_inicio||''}</td>
         <td>${a.hora_termino||''}</td>
         <td><strong>${a.dni||''}</strong></td>
-        <td>${a.nombre||''}</td>
+        <td>${escH(a.nombre)}</td>
         <td>${a.celular||''}</td>
         <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
         <td>${a.fundo||''}</td><td>${a.ruta||''}</td><td>${a.codigo||''}</td>
@@ -4441,7 +4443,7 @@ function renderAt(lista) {
         <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>
         <td>${a.nro_licencia||''}</td>
         <td>${a.parentesco||''}</td>
-        <td style="max-width:200px;font-size:11px;white-space:normal">${a.observaciones||''}</td>
+        <td style="max-width:200px;font-size:11px;white-space:normal">${escH(a.observaciones)}</td>
         <td>
           <button class="btn-a bv" onclick="verDet('${a.nro}','at')">Ver</button>
           ${puedeMod?`<button class="btn-a be" onclick="editarAt('${a.nro}')">✏️</button>`:''}
@@ -5079,7 +5081,7 @@ function _renderTrabRows(lista) {
     const ftP = t.fecha_termino_periodo ? fmtF(String(t.fecha_termino_periodo).split('T')[0]) : '';
     const cump = _formatCumpleanos(t.cumpleanos);
     return `<tr>
-      <td><strong>${t.dni||''}</strong></td><td>${t.nombre||''}</td><td>${t.sexo||''}</td>
+      <td><strong>${escH(t.dni)}</strong></td><td>${escH(t.nombre)}</td><td>${escH(t.sexo)}</td>
       <td><span class="bg ${empC(t.empresa)}">${t.empresa||''}</span></td>
       <td>${t.cargo||''}</td><td>${t.fundo||''}</td><td>${t.fundo_actual||''}</td>
       <td>${t.ruta||''}</td><td>${t.codigo||''}</td>
@@ -5548,7 +5550,7 @@ function filtrarRes() {
   document.getElementById('tbRes').innerHTML=lista.length?
     lista.map(a=>`<tr>
       <td>${a.nro||''}</td><td>${fmtF(a.fecha_atencion)}</td>
-      <td><strong>${a.dni||''}</strong></td><td>${a.nombre||''}</td>
+      <td><strong>${escH(a.dni)}</strong></td><td>${escH(a.nombre)}</td>
       <td><span class="bg ${empC(a.empresa)}">${a.empresa||''}</span></td>
       <td>${a.detalle_documento||''}</td><td>${a.supervisor||''}</td>
       <td><span class="bg ${estC(a.estado)}">${a.estado||''}</span></td>

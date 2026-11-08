@@ -20,7 +20,7 @@ const norm = (v) => low(v).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+
 function token(req) {
   const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
   if (!h.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
-  try { const t = jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET); return t && t.usuario ? t : null; } catch (e) { return null; }
+  try { const t = require('../shared/auth.js').verificarSoloRL(h.slice(7).trim()); return t && t.usuario ? t : null; } catch (e) { return null; }
 }
 let tablaLista = null;
 function asegurar(pool) {
