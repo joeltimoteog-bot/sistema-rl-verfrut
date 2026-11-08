@@ -74,7 +74,13 @@
       if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { edgeFalla('HTTP ' + r.status); return r; }
       /* _SEG_401_V1 (08-nov-2026): con el servidor en modo estricto, un 401 en una ruta de datos significa sesion vencida o
          sin credencial: se avisa de inmediato y se vuelve a ingresar (antes la pantalla quedaba vacia hasta el siguiente reloj). */
-      if (r.status === 401 && !/\/api\/auth\//.test(url) && window.rlSesion && typeof window.rlSesion.vencida === 'function') { try { window.rlSesion.vencida('Por seguridad, las sesiones se renuevan cada día. Vuelve a ingresar y regresarás a esta misma página.'); } catch (e) {} }
+      if (r.status === 401 && !/\/api\/auth\//.test(url)) {
+        /* _SEG_401_V2: el token rechazado se descarta en todas sus copias, para que el siguiente ingreso sea limpio */
+        try { sessionStorage.removeItem('rl_token'); } catch (e) {}
+        try { localStorage.removeItem('rl_session'); } catch (e) {}
+        try { var bA = JSON.parse(localStorage.getItem('bienestarSocialAuth') || 'null'); if (bA && bA.rl_token) { delete bA.rl_token; localStorage.setItem('bienestarSocialAuth', JSON.stringify(bA)); } } catch (e) {}
+        if (window.rlSesion && typeof window.rlSesion.vencida === 'function') { try { window.rlSesion.vencida('Por seguridad, las sesiones se renuevan cada día. Vuelve a ingresar y regresarás a esta misma página.'); } catch (e) {} }
+      }
       edgeFallas = 0; return r;
     }, function (e) {
       if (init && init.signal && init.signal.aborted) throw e;   /* la pantalla cancelo: no reintentar */
@@ -207,7 +213,7 @@
       '<div style="font-size:14px;color:#475569;line-height:1.5;margin-bottom:18px">' + msg + '</div>' +
       '<button id="rlSesionIr" style="background:#0F2748;color:#fff;border:0;border-radius:8px;padding:10px 22px;font-size:14px;font-weight:600;cursor:pointer">Volver a ingresar</button></div>';
     (document.body || document.documentElement).appendChild(d);
-    document.getElementById('rlSesionIr').onclick = function () { location.href = '/sistema-rl-verfrut/index.html'; };
+    document.getElementById('rlSesionIr').onclick = function () { try { sessionStorage.clear(); } catch (e) {} try { localStorage.removeItem('rl_session'); } catch (e) {} location.href = '/sistema-rl-verfrut/index.html'; };   /* _SEG_401_V2: ingreso limpio */
   }
   async function revisar(motivo) {
     if (esLogin || enCurso || avisado) return;
@@ -224,6 +230,7 @@
       var r = await fetch(BASE + '/auth/renovar', { method: 'POST', headers: { Authorization: 'Bearer ' + t }, signal: ctl ? ctl.signal : undefined });
       clearTimeout(reloj);
       if (r.status === 401) {
+        try { sessionStorage.removeItem('rl_token'); localStorage.removeItem('rl_session'); } catch (x) {}   /* _SEG_401_V2 */
         var j = null; try { j = await r.json(); } catch (x) {}
         aviso(j && j.motivo === 'inactivo' ? 'Tu usuario fue desactivado. Comunícate con Relaciones Laborales.' : 'Por seguridad, las sesiones se renuevan cada día. Vuelve a ingresar y regresarás a esta misma pantalla.');
         return;
