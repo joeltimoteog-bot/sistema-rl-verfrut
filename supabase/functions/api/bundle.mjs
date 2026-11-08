@@ -65232,8 +65232,28 @@ var require_bs_guardar = __commonJS({
       bs_buzones: "quejas"
     };
     var SEGUIMIENTO = {
-      bs_accidentes_seguim: { padre: "bs_accidentes_casos", fk: "id_caso", contador: "numero_atenciones" },
-      bs_quejas_seguim: { padre: "bs_quejas", fk: "id_queja", contador: null }
+      bs_accidentes_seguim: { padre: "bs_accidentes_casos", fk: "id_caso", contador: "numero_atenciones", exige: ["detalle"] },
+      bs_quejas_seguim: { padre: "bs_quejas", fk: "id_queja", contador: null, exige: ["fecha_seguimiento", "detalle"], mensaje: "Completa fecha y detalle" }
+    };
+    var ENTERO = (v) => {
+      const n = parseInt(String(v == null ? "" : v).replace(/[^\d-]/g, ""), 10);
+      return isNaN(n) ? 0 : n;
+    };
+    var NORMALIZAR = {
+      bs_quejas: (v, nuevo) => {
+        if (nuevo) {
+          if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(/* @__PURE__ */ new Date());
+          if (!v.resultado) v.resultado = "En proceso";
+          if (!v.seguimiento) v.seguimiento = "No";
+          ["cantidad_buzones", "cantidad_quejas", "seguimiento_dias", "seguimiento_alerta"].forEach((k) => {
+            v[k] = ENTERO(v[k]);
+          });
+        } else {
+          ["cantidad_buzones", "cantidad_quejas", "seguimiento_dias", "seguimiento_alerta"].forEach((k) => {
+            if (v[k] !== void 0) v[k] = ENTERO(v[k]);
+          });
+        }
+      }
     };
     var ENCABEZADO_INICIAL = {
       bs_rendiciones: ["id", "fecha", "semana", "anio", "rendicion", "empresa", "monto_reclutamiento", "monto_relaciones_laborales", "monto_capacitaciones", "monto_bienestar", "monto_total", "responsable", "estado", "fecha_deposito", "observaciones", "created_by", "created_at", "updated_at"],
@@ -65428,6 +65448,7 @@ var require_bs_guardar = __commonJS({
         const cab = await cabecera(tx, clave), ahora = /* @__PURE__ */ new Date(), enc = cab.enc;
         const id = await siguienteId(tx, clave, enc), v = valoresDesde(datos, enc, usuario, ahora, true);
         v.id = id;
+        if (NORMALIZAR[clave]) NORMALIZAR[clave](v, true);
         if (o.completar) o.completar(v, enc);
         const celdas = enc.map((h) => v[h] !== void 0 ? v[h] : "");
         await insertarCeldas(tx, clave, await siguienteFila(tx, clave), celdas);
@@ -65444,6 +65465,7 @@ var require_bs_guardar = __commonJS({
         if (!reg) return { ok: false, success: false, status: 404, message: "Registro #" + id + " no encontrado." };
         if (marcaAnulado(enc, reg.celdas) && !o.permitirAnulado) return { ok: false, success: false, status: 409, message: "El registro #" + id + " est\xE1 anulado; rest\xE1uralo antes de editarlo." };
         const v = valoresDesde(datos, enc, usuario, ahora, false), celdas = reg.celdas.slice();
+        if (NORMALIZAR[clave]) NORMALIZAR[clave](v, false);
         while (celdas.length < enc.length) celdas.push("");
         let cambios = 0;
         enc.forEach((h, i) => {
@@ -65461,6 +65483,7 @@ var require_bs_guardar = __commonJS({
     async function seguimiento(pool, claveHija, idPadre, datos, usuario) {
       const S = SEGUIMIENTO[claveHija];
       if (!S) throw new Error(claveHija + " no es una tabla de seguimientos");
+      if ((S.exige || []).some((k) => !String((datos || {})[k] || "").trim())) return { ok: false, success: false, status: 400, message: S.mensaje || "Completa " + S.exige.join(" y ") };
       return enTransaccion(pool, [claveHija, S.padre, "bs_auditoria"], async (tx) => {
         const cabP = await cabecera(tx, S.padre), padre = await buscarPorId(tx, S.padre, idPadre, cabP.ancho);
         if (!padre) return { ok: false, success: false, status: 404, message: "Caso #" + idPadre + " no encontrado." };
@@ -65537,6 +65560,66 @@ var require_bs_guardar = __commonJS({
         return { ok: true, success: true, id, message: "Registro #" + id + " restaurado.", fuente: "supabase" };
       });
     }
+    async function cerrarMasivo(pool, clave, p, usuario) {
+      if (clave !== "bs_quejas") return { ok: false, success: false, status: 400, message: "El cierre masivo solo aplica a hallazgos." };
+      const mC = String(p.fecha_corte || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!mC) return { ok: false, success: false, status: 400, message: "Indica una fecha de corte v\xE1lida." };
+      const corte = mC[1] + "-" + mC[2] + "-" + mC[3], motivo = String(p.motivo || "").trim(), simular = !!p.simular;
+      if (!simular && motivo.length < 5) return { ok: false, success: false, status: 400, message: "Escribe un motivo (m\xEDnimo 5 caracteres); queda en el historial." };
+      const ymdCelda = (c) => {
+        if (esD(c)) {
+          const d = new Date(new Date(c.$d).getTime() - 5 * 36e5);
+          return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+        }
+        const s = String(c == null ? "" : c).trim();
+        const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (m) return m[1] + "-" + p2(+m[2]) + "-" + p2(+m[3]);
+        const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        return m2 ? m2[3] + "-" + p2(+m2[2]) + "-" + p2(+m2[1]) : "";
+      };
+      return enTransaccion(pool, simular ? [] : [clave, "bs_auditoria"], async (tx) => {
+        const cab = await cabecera(tx, clave), enc = cab.enc, E = TH.ESQ[clave];
+        const iFec = enc.indexOf("fecha_recepcion"), iRes = enc.indexOf("resultado"), iObs = enc.indexOf("observaciones"), iUpd = enc.indexOf("updated_at"), iEmp = enc.indexOf("empresa");
+        if (iFec < 0 || iRes < 0) return { ok: false, success: false, status: 400, message: "Faltan columnas fecha_recepcion / resultado." };
+        const todo = await tx.request().query(`SELECT * FROM ${E.tabla} ORDER BY fila`);
+        const hoy = new Date(Date.now() - 5 * 36e5).toISOString().slice(0, 10), sello = "Cierre masivo " + hoy + " por " + usuario + (motivo ? ": " + motivo : "");
+        const porEmp = {};
+        let n = 0;
+        for (const x of todo.recordset) {
+          const c = TH.aCeldas(clave, x, cab.ancho);
+          while (c.length < enc.length) c.push("");
+          if (marcaAnulado(enc, c)) continue;
+          if (/cerrad|resuelt/i.test(texto(c[iRes]))) continue;
+          const f = ymdCelda(c[iFec]);
+          if (!f || f >= corte) continue;
+          n++;
+          const e = texto(c[iEmp]) || "\u2014";
+          porEmp[e] = (porEmp[e] || 0) + 1;
+          if (simular) continue;
+          c[iRes] = "Cerrado";
+          if (iObs >= 0) {
+            const o = texto(c[iObs]).trim();
+            c[iObs] = o ? o + " | " + sello : sello;
+          }
+          if (iUpd >= 0) c[iUpd] = celdaFecha(/* @__PURE__ */ new Date());
+          await reemplazarCeldas(tx, clave, x.id_fila, c);
+        }
+        if (!simular && n) {
+          await tocarMarca(tx, clave);
+          await auditar(tx, usuario, "ACTUALIZAR", "quejas", "masivo", "Cierre masivo de " + n + " hallazgos anteriores a " + corte + " \xB7 " + motivo);
+        }
+        return {
+          ok: true,
+          success: true,
+          simulado: simular,
+          total: n,
+          porEmpresa: porEmp,
+          fecha_corte: corte,
+          fuente: "supabase",
+          message: (simular ? "Se cerrar\xEDan " : "Se cerraron ") + n + " hallazgo(s) anteriores a " + corte + "."
+        };
+      });
+    }
     async function registrarEvento(pool, ev) {
       return enTransaccion(pool, ["bs_auditoria"], async (tx) => {
         await auditar(tx, ev.usuario, ev.accion, ev.modulo, ev.registro_id, ev.detalle);
@@ -65584,7 +65667,7 @@ var require_bs_guardar = __commonJS({
       }
       return out;
     }
-    module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
+    module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, cerrarMasivo, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
   }
 });
 
@@ -65910,7 +65993,7 @@ var require_bs = __commonJS({
           }
           let filas = await objetos(pool, clave, String(q.hora || "") === "1");
           if (filas === null) return res(200, { success: true, cargada: false, items: [] });
-          filas = filas.filter((o) => !anulado(o));
+          if (String(q.anulados || "") !== "1") filas = filas.filter((o) => !anulado(o));
           const dni = String(q.dni || "").trim();
           if (dni) filas = filas.filter((o) => [o.dni, o.numero, o.denunciante_dni, o.denunciado_dni].some((v) => String(v || "").trim() === dni));
           return res(200, { success: true, cargada: true, total: filas.length, items: filas });
@@ -65940,7 +66023,6 @@ var require_bs = __commonJS({
           const modG = MODULO_DE_CLAVE[clave] || "";
           const PG = await permisosBS(u, q);
           if (!PG.esAdmin && modG && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: "Sin permiso para el m\xF3dulo " + modG + "." });
-          if ((op === "anular" || op === "restaurar") && !PG.esAdmin) return res(403, { ok: false, success: false, message: "Solo administradores pueden " + op + " registros." });
           let out;
           if (op === "crear") out = await BG.crear(pool, clave, b.datos || {}, usuario);
           else if (op === "actualizar") {
@@ -65951,7 +66033,10 @@ var require_bs = __commonJS({
             out = await BG.seguimiento(pool, clave, b.id, b.datos || {}, usuario);
           } else if (op === "anular") out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
           else if (op === "restaurar") out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
-          else return res(400, { ok: false, success: false, message: "Operaci\xF3n desconocida: " + op });
+          else if (op === "cierre_masivo") {
+            if (!PG.esAdmin) return res(403, { ok: false, success: false, message: "Solo administradores pueden hacer cierres masivos." });
+            out = await BG.cerrarMasivo(pool, clave, b, usuario);
+          } else return res(400, { ok: false, success: false, message: "Operaci\xF3n desconocida: " + op });
           const st = out.status || 200;
           delete out.status;
           return res(st, out);

@@ -224,7 +224,7 @@ module.exports = async function (context, req) {
       const modT = MODULO_DE_CLAVE[clave] || '';
       if (modT && clave !== 'bs_auditoria') { const PT = await permisosBS(u, q); if (!PT.esAdmin && !PT.permisos[modT]) return res(403, { success: false, error: 'Sin permiso para el módulo ' + modT + '.' }); }
       let filas = await objetos(pool, clave, String(q.hora || '') === '1'); if (filas === null) return res(200, { success: true, cargada: false, items: [] });
-      filas = filas.filter(o => !anulado(o));
+      if (String(q.anulados || '') !== '1') filas = filas.filter(o => !anulado(o));   /* _BS_GUARDA_SUPABASE_V1: las páginas de módulo piden anulados=1 y los ocultan ellas (casilla "Ver anulados") */
       const dni = String(q.dni || '').trim(); if (dni) filas = filas.filter(o => [o.dni, o.numero, o.denunciante_dni, o.denunciado_dni].some(v => String(v || '').trim() === dni));
       return res(200, { success: true, cargada: true, total: filas.length, items: filas });
     }
@@ -240,7 +240,7 @@ module.exports = async function (context, req) {
       return res(200, out);
     }
     /* ═══ _BS_GUARDA_SUPABASE_V1 (08-nov-2026): ESCRITURAS directas en Supabase ═══
-       POST bs/guardar { clave, op: crear|actualizar|seguimiento|anular|restaurar, id, datos, motivo }
+       POST bs/guardar { clave, op: crear|actualizar|seguimiento|anular|restaurar|cierre_masivo, id, datos, motivo }
        Solo si BS_Fuente dice que esa tabla ya manda desde Supabase (si no: 409 fuente:'hoja' y el navegador sigue con Google).
        El rol sale del token y los permisos de "Acceso a Módulos" del RR.LL. (permisosBS). Todo queda en BS_Auditoria. */
     if (accion === 'guardar') {
@@ -255,13 +255,14 @@ module.exports = async function (context, req) {
       const modG = MODULO_DE_CLAVE[clave] || '';
       const PG = await permisosBS(u, q);
       if (!PG.esAdmin && modG && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: 'Sin permiso para el módulo ' + modG + '.' });
-      if ((op === 'anular' || op === 'restaurar') && !PG.esAdmin) return res(403, { ok: false, success: false, message: 'Solo administradores pueden ' + op + ' registros.' });
+      /* anular/restaurar: igual que hoy en Google, basta el permiso del módulo (queda en auditoría con usuario y motivo) */
       let out;
       if (op === 'crear') out = await BG.crear(pool, clave, b.datos || {}, usuario);
       else if (op === 'actualizar') { if (b.id === undefined || b.id === null || b.id === '') return res(400, { ok: false, success: false, message: 'Falta el id.' }); out = await BG.actualizar(pool, clave, b.id, b.datos || {}, usuario); }
       else if (op === 'seguimiento') { if (!BG.SEGUIMIENTO[clave]) return res(400, { ok: false, success: false, message: clave + ' no lleva seguimientos.' }); out = await BG.seguimiento(pool, clave, b.id, b.datos || {}, usuario); }
       else if (op === 'anular') out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
       else if (op === 'restaurar') out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
+      else if (op === 'cierre_masivo') { if (!PG.esAdmin) return res(403, { ok: false, success: false, message: 'Solo administradores pueden hacer cierres masivos.' }); out = await BG.cerrarMasivo(pool, clave, b, usuario); }
       else return res(400, { ok: false, success: false, message: 'Operación desconocida: ' + op });
       const st = out.status || 200; delete out.status;
       return res(st, out);

@@ -29,8 +29,22 @@ const MODULO_DE_CLAVE = { bs_accidentes_casos: 'accidentes', bs_accidentes_segui
   bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas' };
 /* seguimientos: tabla hija → padre, llave y contador que se actualiza en el padre (accidentes: numero_atenciones; hallazgos: solo updated_at) */
 const SEGUIMIENTO = {
-  bs_accidentes_seguim: { padre: 'bs_accidentes_casos', fk: 'id_caso', contador: 'numero_atenciones' },
-  bs_quejas_seguim: { padre: 'bs_quejas', fk: 'id_queja', contador: null }
+  bs_accidentes_seguim: { padre: 'bs_accidentes_casos', fk: 'id_caso', contador: 'numero_atenciones', exige: ['detalle'] },
+  bs_quejas_seguim: { padre: 'bs_quejas', fk: 'id_queja', contador: null, exige: ['fecha_seguimiento', 'detalle'], mensaje: 'Completa fecha y detalle' }
+};
+/* valores por defecto y tipos al CREAR, iguales a los que ponía el Apps Script (bs_crearQueja, etc.) */
+const ENTERO = v => { const n = parseInt(String(v == null ? '' : v).replace(/[^\d-]/g, ''), 10); return isNaN(n) ? 0 : n; };
+const NORMALIZAR = {
+  bs_quejas: (v, nuevo) => {
+    if (nuevo) {
+      if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(new Date());
+      if (!v.resultado) v.resultado = 'En proceso';
+      if (!v.seguimiento) v.seguimiento = 'No';
+      ['cantidad_buzones', 'cantidad_quejas', 'seguimiento_dias', 'seguimiento_alerta'].forEach(k => { v[k] = ENTERO(v[k]); });
+    } else {
+      ['cantidad_buzones', 'cantidad_quejas', 'seguimiento_dias', 'seguimiento_alerta'].forEach(k => { if (v[k] !== undefined) v[k] = ENTERO(v[k]); });
+    }
+  }
 };
 /* encabezado inicial de las hojas que aún no tienen tabla (mismo orden que las hojas de Google) */
 const ENCABEZADO_INICIAL = {
@@ -180,6 +194,7 @@ async function crear(pool, clave, datos, usuario, opciones) {
   return enTransaccion(pool, [clave, 'bs_auditoria'], async tx => {
     const cab = await cabecera(tx, clave), ahora = new Date(), enc = cab.enc;
     const id = await siguienteId(tx, clave, enc), v = valoresDesde(datos, enc, usuario, ahora, true); v.id = id;
+    if (NORMALIZAR[clave]) NORMALIZAR[clave](v, true);
     if (o.completar) o.completar(v, enc);
     const celdas = enc.map(h => (v[h] !== undefined ? v[h] : ''));
     await insertarCeldas(tx, clave, await siguienteFila(tx, clave), celdas);
@@ -196,6 +211,7 @@ async function actualizar(pool, clave, id, datos, usuario, opciones) {
     if (!reg) return { ok: false, success: false, status: 404, message: 'Registro #' + id + ' no encontrado.' };
     if (marcaAnulado(enc, reg.celdas) && !o.permitirAnulado) return { ok: false, success: false, status: 409, message: 'El registro #' + id + ' está anulado; restáuralo antes de editarlo.' };
     const v = valoresDesde(datos, enc, usuario, ahora, false), celdas = reg.celdas.slice();
+    if (NORMALIZAR[clave]) NORMALIZAR[clave](v, false);
     while (celdas.length < enc.length) celdas.push('');
     let cambios = 0; enc.forEach((h, i) => { if (v[h] !== undefined) { if (h !== 'updated_at' && h !== 'updated_by' && texto(celdas[i]) !== texto(v[h])) cambios++; celdas[i] = v[h]; } });
     await reemplazarCeldas(tx, clave, reg.id_fila, celdas);
@@ -207,6 +223,7 @@ async function actualizar(pool, clave, id, datos, usuario, opciones) {
 /* seguimiento = fila nueva en la tabla hija (numero_seguimiento consecutivo dentro del caso) + updated_at/contador en el padre */
 async function seguimiento(pool, claveHija, idPadre, datos, usuario) {
   const S = SEGUIMIENTO[claveHija]; if (!S) throw new Error(claveHija + ' no es una tabla de seguimientos');
+  if ((S.exige || []).some(k => !String((datos || {})[k] || '').trim())) return { ok: false, success: false, status: 400, message: S.mensaje || ('Completa ' + S.exige.join(' y ')) };
   return enTransaccion(pool, [claveHija, S.padre, 'bs_auditoria'], async tx => {
     const cabP = await cabecera(tx, S.padre), padre = await buscarPorId(tx, S.padre, idPadre, cabP.ancho);
     if (!padre) return { ok: false, success: false, status: 404, message: 'Caso #' + idPadre + ' no encontrado.' };
@@ -264,6 +281,39 @@ async function restaurar(pool, clave, id, usuario, motivo) {
     return { ok: true, success: true, id, message: 'Registro #' + id + ' restaurado.', fuente: 'supabase' };
   });
 }
+/* cierre masivo de hallazgos (bs_cierreMasivoQuejas del Apps Script): los no cerrados con fecha_recepcion anterior al corte pasan a 'Cerrado',
+   con sello en observaciones. simular=true solo cuenta. */
+async function cerrarMasivo(pool, clave, p, usuario) {
+  if (clave !== 'bs_quejas') return { ok: false, success: false, status: 400, message: 'El cierre masivo solo aplica a hallazgos.' };
+  const mC = String(p.fecha_corte || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!mC) return { ok: false, success: false, status: 400, message: 'Indica una fecha de corte válida.' };
+  const corte = mC[1] + '-' + mC[2] + '-' + mC[3], motivo = String(p.motivo || '').trim(), simular = !!p.simular;
+  if (!simular && motivo.length < 5) return { ok: false, success: false, status: 400, message: 'Escribe un motivo (mínimo 5 caracteres); queda en el historial.' };
+  const ymdCelda = c => { if (esD(c)) { const d = new Date(new Date(c.$d).getTime() - 5 * 3600e3); return isNaN(d) ? '' : d.toISOString().slice(0, 10); } const s = String(c == null ? '' : c).trim(); const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return m[1] + '-' + p2(+m[2]) + '-' + p2(+m[3]); const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m2 ? m2[3] + '-' + p2(+m2[2]) + '-' + p2(+m2[1]) : ''; };
+  return enTransaccion(pool, simular ? [] : [clave, 'bs_auditoria'], async tx => {
+    const cab = await cabecera(tx, clave), enc = cab.enc, E = TH.ESQ[clave];
+    const iFec = enc.indexOf('fecha_recepcion'), iRes = enc.indexOf('resultado'), iObs = enc.indexOf('observaciones'), iUpd = enc.indexOf('updated_at'), iEmp = enc.indexOf('empresa');
+    if (iFec < 0 || iRes < 0) return { ok: false, success: false, status: 400, message: 'Faltan columnas fecha_recepcion / resultado.' };
+    const todo = await tx.request().query(`SELECT * FROM ${E.tabla} ORDER BY fila`);
+    const hoy = new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, 10), sello = 'Cierre masivo ' + hoy + ' por ' + usuario + (motivo ? ': ' + motivo : '');
+    const porEmp = {}; let n = 0;
+    for (const x of todo.recordset) {
+      const c = TH.aCeldas(clave, x, cab.ancho); while (c.length < enc.length) c.push('');
+      if (marcaAnulado(enc, c)) continue;
+      if (/cerrad|resuelt/i.test(texto(c[iRes]))) continue;
+      const f = ymdCelda(c[iFec]); if (!f || f >= corte) continue;
+      n++; const e = texto(c[iEmp]) || '—'; porEmp[e] = (porEmp[e] || 0) + 1;
+      if (simular) continue;
+      c[iRes] = 'Cerrado';
+      if (iObs >= 0) { const o = texto(c[iObs]).trim(); c[iObs] = o ? o + ' | ' + sello : sello; }
+      if (iUpd >= 0) c[iUpd] = celdaFecha(new Date());
+      await reemplazarCeldas(tx, clave, x.id_fila, c);
+    }
+    if (!simular && n) { await tocarMarca(tx, clave); await auditar(tx, usuario, 'ACTUALIZAR', 'quejas', 'masivo', 'Cierre masivo de ' + n + ' hallazgos anteriores a ' + corte + ' · ' + motivo); }
+    return { ok: true, success: true, simulado: simular, total: n, porEmpresa: porEmp, fecha_corte: corte, fuente: 'supabase',
+      message: (simular ? 'Se cerrarían ' : 'Se cerraron ') + n + ' hallazgo(s) anteriores a ' + corte + '.' };
+  });
+}
 /* evento de auditoría suelto (lo manda el Apps Script por cada escritura que aún hace en Google, y el frontend ACCESO/EXPORTAR) */
 async function registrarEvento(pool, ev) {
   return enTransaccion(pool, ['bs_auditoria'], async tx => {
@@ -313,4 +363,4 @@ async function respaldar(pool, dias) {
   return out;
 }
 
-module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
+module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, cerrarMasivo, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
