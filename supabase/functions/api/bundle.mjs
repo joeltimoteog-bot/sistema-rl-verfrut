@@ -65240,7 +65240,14 @@ var require_bs_guardar = __commonJS({
       return isNaN(n) ? 0 : n;
     };
     var DECIMAL = (v) => {
-      const n = parseFloat(String(v == null ? "" : v).replace(",", "."));
+      if (typeof v === "number") return isNaN(v) ? 0 : v;
+      let t = String(v == null ? "" : v).replace(/[^\d,.-]/g, "");
+      if (t.indexOf(",") >= 0 && t.indexOf(".") >= 0) t = t.replace(/,/g, "");
+      else if (t.indexOf(",") >= 0) {
+        const d = t.split(",").pop();
+        t = d.length === 3 ? t.replace(/,/g, "") : t.replace(",", ".");
+      }
+      const n = parseFloat(t);
       return isNaN(n) ? 0 : n;
     };
     var NORMALIZAR = {
@@ -65259,6 +65266,21 @@ var require_bs_guardar = __commonJS({
           });
           if (v.edad !== void 0) v.edad = isNaN(parseInt(v.edad, 10)) ? 0 : parseInt(v.edad, 10);
           if (v.accidente_horas !== void 0) v.accidente_horas = DECIMAL(v.accidente_horas);
+        }
+      },
+      bs_subsidios: (v, nuevo) => {
+        const DEC = ["dias", "calculo_por_dia", "pago_empresa", "reembolso_por_mes", "recuperado_essalud", "monto_total", "diferencias"];
+        if (nuevo) {
+          v.anio = ENTERO(v.anio) || new Date(Date.now() - 5 * 36e5).getUTCFullYear();
+          if (!v.estado_general) v.estado_general = "En proceso";
+          DEC.forEach((k) => {
+            v[k] = DECIMAL(v[k]);
+          });
+        } else {
+          if (v.anio !== void 0) v.anio = ENTERO(v.anio);
+          DEC.forEach((k) => {
+            if (v[k] !== void 0) v[k] = DECIMAL(v[k]);
+          });
         }
       },
       bs_quejas: (v, nuevo) => {
@@ -65588,12 +65610,25 @@ var require_bs_guardar = __commonJS({
         return { ok: true, success: true, id, message: "Registro #" + id + " restaurado.", fuente: "supabase" };
       });
     }
-    var LLAVE_IMPORTAR = { bs_accidentes_casos: ["dni", "dia_accidente"], bs_subsidios: ["numero", "fecha_inicio"] };
-    async function importar(pool, clave, filas, usuario) {
-      const llave = LLAVE_IMPORTAR[clave];
-      if (!llave) return { ok: false, success: false, status: 400, message: "La tabla " + clave + " no admite importaci\xF3n." };
-      if (!Array.isArray(filas) || !filas.length) return { ok: false, success: false, status: 400, message: "No llegaron filas." };
+    var LLAVE_IMPORTAR = {
+      bs_accidentes_casos: { campos: ["dni", "dia_accidente"], firma: (g) => {
+        const d = texto(g("dni")).trim(), f = g("dia_accidente");
+        return d && f ? "K:" + d + "|" + f : null;
+      } },
+      /* igual que bs_importarSubsidios del Apps Script: expediente manda; si no, numero|anio|tipo|periodo */
+      bs_subsidios: { campos: [], firma: (g) => {
+        const e = texto(g("expediente")).trim().toUpperCase();
+        if (e) return "EXP:" + e;
+        const k = [texto(g("numero")).trim(), texto(g("anio")).trim(), texto(g("tipo")).trim().toUpperCase(), texto(g("periodo")).trim().toUpperCase()].join("|");
+        return k === "|||" ? null : "K:" + k;
+      } }
+    };
+    async function importar(pool, clave, filas, usuario, modo) {
+      const L = LLAVE_IMPORTAR[clave];
+      if (!L) return { ok: false, success: false, status: 400, message: "La tabla " + clave + " no admite importaci\xF3n." };
+      if (!Array.isArray(filas) || !filas.length) return { ok: false, success: false, status: 400, message: "No llegaron filas para importar." };
       if (filas.length > 500) return { ok: false, success: false, status: 400, message: "M\xE1ximo 500 filas por lote." };
+      const soloAgregar = String(modo || "") === "solo_agregar";
       const ymdCelda = (c) => {
         if (esD(c)) {
           const d = new Date(new Date(c.$d).getTime() - 5 * 36e5);
@@ -65605,33 +65640,42 @@ var require_bs_guardar = __commonJS({
         const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
         return m2 ? m2[3] + "-" + p2(+m2[2]) + "-" + p2(+m2[1]) : s;
       };
-      const firma = (c, enc) => llave.map((k) => {
+      const firmaDe = (c, enc) => L.firma((k) => {
         const i = enc.indexOf(k);
-        const x = i < 0 ? "" : c[i];
-        return /fecha|dia_/.test(k) ? ymdCelda(x) : texto(x).trim().toLowerCase();
-      }).join("|");
+        if (i < 0) return "";
+        const x = c[i];
+        return /fecha|dia_|inicio|termino/.test(k) && (esD(x) || /^\d{4}-\d{2}-\d{2}/.test(texto(x))) ? ymdCelda(x) : esD(x) ? ymdCelda(x) : x;
+      });
+      const vacio = (x) => x === "" || x === null || x === void 0;
       return enTransaccion(pool, [clave, "bs_auditoria"], async (tx) => {
         const cab = await cabecera(tx, clave), enc = cab.enc, E = TH.ESQ[clave];
         const todo = await tx.request().query(`SELECT * FROM ${E.tabla} ORDER BY fila`);
         const existentes = {};
         todo.recordset.forEach((x) => {
           const c = TH.aCeldas(clave, x, cab.ancho);
-          if (!marcaAnulado(enc, c)) existentes[firma(c, enc)] = { id_fila: x.id_fila, celdas: c };
+          if (marcaAnulado(enc, c)) return;
+          const f = firmaDe(c, enc);
+          if (f && existentes[f] === void 0) existentes[f] = { id_fila: x.id_fila, celdas: c };
         });
         let siguiente = await siguienteId(tx, clave, enc), fila = await siguienteFila(tx, clave);
         const out = { ok: true, success: true, creados: 0, actualizados: 0, errores: [], fuente: "supabase" }, ahora = /* @__PURE__ */ new Date();
         for (let n = 0; n < filas.length; n++) {
           try {
             const d = filas[n] || {};
-            if (llave.some((k) => !String(d[k] == null ? "" : d[k]).trim())) {
-              out.errores.push({ fila: n + 1, error: "falta " + llave.filter((k) => !String(d[k] == null ? "" : d[k]).trim()).join(", ") });
+            const faltan = L.campos.filter((k) => vacio(d[k]) || !String(d[k]).trim());
+            if (faltan.length) {
+              out.errores.push({ fila: n + 1, error: "falta " + faltan.join(", ") });
               continue;
             }
             const vN = valoresDesde(d, enc, usuario, ahora, true, clave);
             if (NORMALIZAR[clave]) NORMALIZAR[clave](vN, true);
-            const f = firma(enc.map((h) => vN[h] !== void 0 ? vN[h] : ""), enc), ex = existentes[f];
-            if (ex) {
-              const vU = valoresDesde(d, enc, usuario, ahora, false, clave);
+            const f = firmaDe(enc.map((h) => vN[h] !== void 0 ? vN[h] : ""), enc), ex = f && !soloAgregar ? existentes[f] : null;
+            if (ex && ex.id_fila > 0) {
+              const dLleno = {};
+              Object.keys(d).forEach((k) => {
+                if (!vacio(d[k])) dLleno[k] = d[k];
+              });
+              const vU = valoresDesde(dLleno, enc, usuario, ahora, false, clave);
               if (NORMALIZAR[clave]) NORMALIZAR[clave](vU, false);
               const c = ex.celdas.slice();
               while (c.length < enc.length) c.push("");
@@ -65641,11 +65685,13 @@ var require_bs_guardar = __commonJS({
               await reemplazarCeldas(tx, clave, ex.id_fila, c);
               ex.celdas = c;
               out.actualizados++;
+            } else if (ex) {
+              out.errores.push({ fila: n + 1, error: "repetida dentro del mismo lote" });
             } else {
               vN.id = siguiente++;
               const c = enc.map((h) => vN[h] !== void 0 ? vN[h] : "");
               await insertarCeldas(tx, clave, fila++, c);
-              existentes[f] = { id_fila: -1, celdas: c };
+              if (f) existentes[f] = { id_fila: -1, celdas: c };
               out.creados++;
             }
           } catch (e) {
@@ -66114,13 +66160,12 @@ var require_bs = __commonJS({
           if (String(req.method || "POST").toUpperCase() !== "POST") return res(405, { success: false, error: "Usa POST" });
           const b = req.body || {}, clave = String(b.clave || ""), op = String(b.op || "").toLowerCase();
           if (CLAVES.indexOf(clave) < 0 || clave === "bs_auditoria") return res(400, { ok: false, success: false, message: "Tabla desconocida: " + clave });
-          if (u && u.interno) return res(403, { ok: false, success: false, message: "bs/guardar exige la sesi\xF3n de un usuario." });
-          const usuario = String(u && u.usuario || "").toLowerCase();
+          const usuario = String((u && u.interno ? (req.body || {}).usuario : u && u.usuario) || "").toLowerCase();
           if (!usuario) return res(401, { ok: false, success: false, message: "Sesi\xF3n sin usuario." });
           const fuente = await BG.fuenteDe(pool, clave);
           if (fuente !== "supabase") return res(409, { ok: false, success: false, fuente, message: "La tabla " + clave + " todav\xEDa se guarda en Google." });
           const modG = MODULO_DE_CLAVE[clave] || "";
-          const PG = await permisosBS(u, q);
+          const PG = u && u.interno ? { esAdmin: true, permisos: {} } : await permisosBS(u, q);
           if (!PG.esAdmin && modG && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: "Sin permiso para el m\xF3dulo " + modG + "." });
           let out;
           if (op === "crear") out = await BG.crear(pool, clave, b.datos || {}, usuario);
@@ -66132,7 +66177,7 @@ var require_bs = __commonJS({
             out = await BG.seguimiento(pool, clave, b.id, b.datos || {}, usuario);
           } else if (op === "anular") out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
           else if (op === "restaurar") out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
-          else if (op === "importar") out = await BG.importar(pool, clave, b.filas, usuario);
+          else if (op === "importar") out = await BG.importar(pool, clave, b.filas, usuario, b.modo);
           else if (op === "cierre_masivo") {
             if (!PG.esAdmin) return res(403, { ok: false, success: false, message: "Solo administradores pueden hacer cierres masivos." });
             out = await BG.cerrarMasivo(pool, clave, b, usuario);

@@ -247,13 +247,13 @@ module.exports = async function (context, req) {
       if (String(req.method || 'POST').toUpperCase() !== 'POST') return res(405, { success: false, error: 'Usa POST' });
       const b = req.body || {}, clave = String(b.clave || ''), op = String(b.op || '').toLowerCase();
       if (CLAVES.indexOf(clave) < 0 || clave === 'bs_auditoria') return res(400, { ok: false, success: false, message: 'Tabla desconocida: ' + clave });
-      if (u && u.interno) return res(403, { ok: false, success: false, message: 'bs/guardar exige la sesión de un usuario.' });
-      const usuario = String((u && u.usuario) || '').toLowerCase();
+      /* clave interna (Apps Script, p. ej. generar subsidio desde un descanso médico): el usuario viene en el cuerpo y no se filtran permisos */
+      const usuario = String((u && u.interno ? (req.body || {}).usuario : (u && u.usuario)) || '').toLowerCase();
       if (!usuario) return res(401, { ok: false, success: false, message: 'Sesión sin usuario.' });
       const fuente = await BG.fuenteDe(pool, clave);
       if (fuente !== 'supabase') return res(409, { ok: false, success: false, fuente, message: 'La tabla ' + clave + ' todavía se guarda en Google.' });
       const modG = MODULO_DE_CLAVE[clave] || '';
-      const PG = await permisosBS(u, q);
+      const PG = u && u.interno ? { esAdmin: true, permisos: {} } : await permisosBS(u, q);
       if (!PG.esAdmin && modG && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: 'Sin permiso para el módulo ' + modG + '.' });
       /* anular/restaurar: igual que hoy en Google, basta el permiso del módulo (queda en auditoría con usuario y motivo) */
       let out;
@@ -262,7 +262,7 @@ module.exports = async function (context, req) {
       else if (op === 'seguimiento') { if (!BG.SEGUIMIENTO[clave]) return res(400, { ok: false, success: false, message: clave + ' no lleva seguimientos.' }); out = await BG.seguimiento(pool, clave, b.id, b.datos || {}, usuario); }
       else if (op === 'anular') out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
       else if (op === 'restaurar') out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
-      else if (op === 'importar') out = await BG.importar(pool, clave, b.filas, usuario);
+      else if (op === 'importar') out = await BG.importar(pool, clave, b.filas, usuario, b.modo);
       else if (op === 'cierre_masivo') { if (!PG.esAdmin) return res(403, { ok: false, success: false, message: 'Solo administradores pueden hacer cierres masivos.' }); out = await BG.cerrarMasivo(pool, clave, b, usuario); }
       else return res(400, { ok: false, success: false, message: 'Operación desconocida: ' + op });
       const st = out.status || 200; delete out.status;

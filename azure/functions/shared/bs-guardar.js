@@ -34,7 +34,14 @@ const SEGUIMIENTO = {
 };
 /* valores por defecto y tipos al CREAR, iguales a los que ponía el Apps Script (bs_crearQueja, etc.) */
 const ENTERO = v => { const n = parseInt(String(v == null ? '' : v).replace(/[^\d-]/g, ''), 10); return isNaN(n) ? 0 : n; };
-const DECIMAL = v => { const n = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isNaN(n) ? 0 : n; };
+/* '1,250.50' → 1250.5 · '12,5' → 12.5 · '1,250' → 1250 (formato peruano: punto decimal, coma de miles; una coma con 1-2 decimales se toma como decimal) */
+const DECIMAL = v => {
+  if (typeof v === 'number') return isNaN(v) ? 0 : v;
+  let t = String(v == null ? '' : v).replace(/[^\d,.-]/g, '');
+  if (t.indexOf(',') >= 0 && t.indexOf('.') >= 0) t = t.replace(/,/g, '');
+  else if (t.indexOf(',') >= 0) { const d = t.split(',').pop(); t = d.length === 3 ? t.replace(/,/g, '') : t.replace(',', '.'); }
+  const n = parseFloat(t); return isNaN(n) ? 0 : n;
+};
 const NORMALIZAR = {
   bs_accidentes_casos: (v, nuevo) => {
     const INT = ['dias_restriccion', 'numero_atenciones', 'descanso_medico_dias', 'goce_dias'];
@@ -47,6 +54,17 @@ const NORMALIZAR = {
       INT.forEach(k => { if (v[k] !== undefined) v[k] = ENTERO(v[k]); });
       if (v.edad !== undefined) v.edad = isNaN(parseInt(v.edad, 10)) ? 0 : parseInt(v.edad, 10);
       if (v.accidente_horas !== undefined) v.accidente_horas = DECIMAL(v.accidente_horas);
+    }
+  },
+  bs_subsidios: (v, nuevo) => {
+    const DEC = ['dias', 'calculo_por_dia', 'pago_empresa', 'reembolso_por_mes', 'recuperado_essalud', 'monto_total', 'diferencias'];
+    if (nuevo) {
+      v.anio = ENTERO(v.anio) || new Date(Date.now() - 5 * 3600e3).getUTCFullYear();
+      if (!v.estado_general) v.estado_general = 'En proceso';
+      DEC.forEach(k => { v[k] = DECIMAL(v[k]); });
+    } else {
+      if (v.anio !== undefined) v.anio = ENTERO(v.anio);
+      DEC.forEach(k => { if (v[k] !== undefined) v[k] = DECIMAL(v[k]); });
     }
   },
   bs_quejas: (v, nuevo) => {
@@ -303,34 +321,44 @@ async function restaurar(pool, clave, id, usuario, motivo) {
 }
 /* importación por lotes (bs_importarAccidentes del navegador: modo upsert). Llave de coincidencia por tabla; si ya existe → actualiza, si no → crea.
    Devuelve { creados, actualizados, errores:[{fila, error}] } como espera la página. */
-const LLAVE_IMPORTAR = { bs_accidentes_casos: ['dni', 'dia_accidente'], bs_subsidios: ['numero', 'fecha_inicio'] };
-async function importar(pool, clave, filas, usuario) {
-  const llave = LLAVE_IMPORTAR[clave]; if (!llave) return { ok: false, success: false, status: 400, message: 'La tabla ' + clave + ' no admite importación.' };
-  if (!Array.isArray(filas) || !filas.length) return { ok: false, success: false, status: 400, message: 'No llegaron filas.' };
+const LLAVE_IMPORTAR = {
+  bs_accidentes_casos: { campos: ['dni', 'dia_accidente'], firma: g => { const d = texto(g('dni')).trim(), f = g('dia_accidente'); return d && f ? 'K:' + d + '|' + f : null; } },
+  /* igual que bs_importarSubsidios del Apps Script: expediente manda; si no, numero|anio|tipo|periodo */
+  bs_subsidios: { campos: [], firma: g => { const e = texto(g('expediente')).trim().toUpperCase(); if (e) return 'EXP:' + e; const k = [texto(g('numero')).trim(), texto(g('anio')).trim(), texto(g('tipo')).trim().toUpperCase(), texto(g('periodo')).trim().toUpperCase()].join('|'); return k === '|||' ? null : 'K:' + k; } }
+};
+async function importar(pool, clave, filas, usuario, modo) {
+  const L = LLAVE_IMPORTAR[clave]; if (!L) return { ok: false, success: false, status: 400, message: 'La tabla ' + clave + ' no admite importación.' };
+  if (!Array.isArray(filas) || !filas.length) return { ok: false, success: false, status: 400, message: 'No llegaron filas para importar.' };
   if (filas.length > 500) return { ok: false, success: false, status: 400, message: 'Máximo 500 filas por lote.' };
+  const soloAgregar = String(modo || '') === 'solo_agregar';
   const ymdCelda = c => { if (esD(c)) { const d = new Date(new Date(c.$d).getTime() - 5 * 3600e3); return isNaN(d) ? '' : d.toISOString().slice(0, 10); } const s = String(c == null ? '' : c).trim(); const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); if (m) return m[1] + '-' + p2(+m[2]) + '-' + p2(+m[3]); const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m2 ? m2[3] + '-' + p2(+m2[2]) + '-' + p2(+m2[1]) : s; };
-  const firma = (c, enc) => llave.map(k => { const i = enc.indexOf(k); const x = i < 0 ? '' : c[i]; return /fecha|dia_/.test(k) ? ymdCelda(x) : texto(x).trim().toLowerCase(); }).join('|');
+  const firmaDe = (c, enc) => L.firma(k => { const i = enc.indexOf(k); if (i < 0) return ''; const x = c[i]; return /fecha|dia_|inicio|termino/.test(k) && (esD(x) || /^\d{4}-\d{2}-\d{2}/.test(texto(x))) ? ymdCelda(x) : (esD(x) ? ymdCelda(x) : x); });
+  const vacio = x => x === '' || x === null || x === undefined;
   return enTransaccion(pool, [clave, 'bs_auditoria'], async tx => {
     const cab = await cabecera(tx, clave), enc = cab.enc, E = TH.ESQ[clave];
     const todo = await tx.request().query(`SELECT * FROM ${E.tabla} ORDER BY fila`);
-    const existentes = {}; todo.recordset.forEach(x => { const c = TH.aCeldas(clave, x, cab.ancho); if (!marcaAnulado(enc, c)) existentes[firma(c, enc)] = { id_fila: x.id_fila, celdas: c }; });
+    const existentes = {}; todo.recordset.forEach(x => { const c = TH.aCeldas(clave, x, cab.ancho); if (marcaAnulado(enc, c)) return; const f = firmaDe(c, enc); if (f && existentes[f] === undefined) existentes[f] = { id_fila: x.id_fila, celdas: c }; });
     let siguiente = await siguienteId(tx, clave, enc), fila = await siguienteFila(tx, clave);
     const out = { ok: true, success: true, creados: 0, actualizados: 0, errores: [], fuente: 'supabase' }, ahora = new Date();
     for (let n = 0; n < filas.length; n++) {
       try {
         const d = filas[n] || {};
-        if (llave.some(k => !String(d[k] == null ? '' : d[k]).trim())) { out.errores.push({ fila: n + 1, error: 'falta ' + llave.filter(k => !String(d[k] == null ? '' : d[k]).trim()).join(', ') }); continue; }
+        const faltan = L.campos.filter(k => vacio(d[k]) || !String(d[k]).trim());
+        if (faltan.length) { out.errores.push({ fila: n + 1, error: 'falta ' + faltan.join(', ') }); continue; }
         const vN = valoresDesde(d, enc, usuario, ahora, true, clave); if (NORMALIZAR[clave]) NORMALIZAR[clave](vN, true);
-        const f = firma(enc.map(h => (vN[h] !== undefined ? vN[h] : '')), enc), ex = existentes[f];
-        if (ex) {
-          const vU = valoresDesde(d, enc, usuario, ahora, false, clave); if (NORMALIZAR[clave]) NORMALIZAR[clave](vU, false);
+        const f = firmaDe(enc.map(h => (vN[h] !== undefined ? vN[h] : '')), enc), ex = f && !soloAgregar ? existentes[f] : null;
+        if (ex && ex.id_fila > 0) {
+          /* actualizar: solo los campos que traen valor (como el Apps Script) */
+          const dLleno = {}; Object.keys(d).forEach(k => { if (!vacio(d[k])) dLleno[k] = d[k]; });
+          const vU = valoresDesde(dLleno, enc, usuario, ahora, false, clave); if (NORMALIZAR[clave]) NORMALIZAR[clave](vU, false);
           const c = ex.celdas.slice(); while (c.length < enc.length) c.push('');
           enc.forEach((h, i) => { if (vU[h] !== undefined) c[i] = vU[h]; });
           await reemplazarCeldas(tx, clave, ex.id_fila, c); ex.celdas = c; out.actualizados++;
-        } else {
+        } else if (ex) { out.errores.push({ fila: n + 1, error: 'repetida dentro del mismo lote' }); }
+        else {
           vN.id = siguiente++;
           const c = enc.map(h => (vN[h] !== undefined ? vN[h] : ''));
-          await insertarCeldas(tx, clave, fila++, c); existentes[f] = { id_fila: -1, celdas: c }; out.creados++;
+          await insertarCeldas(tx, clave, fila++, c); if (f) existentes[f] = { id_fila: -1, celdas: c }; out.creados++;
         }
       } catch (e) { out.errores.push({ fila: n + 1, error: String(e.message || e).slice(0, 200) }); }
     }
