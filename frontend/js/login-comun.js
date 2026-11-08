@@ -14,7 +14,7 @@
 (function () {
   'use strict';
   if (window.rlLoginComun) return;
-  var AZ = 'https://rl-fn-verfrut.azurewebsites.net/api/auth/login';
+  var AZ = 'https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/auth/login';   /* _SIN_AZURE_V1 (08-nov-2026): antes Azure; Bienestar y los ETI no cargan el enrutador, asi que aqui va la URL real de Supabase */
   var GAS = 'https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec';
 
   function conReloj(url, op, ms) {
