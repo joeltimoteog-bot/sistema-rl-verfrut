@@ -7,6 +7,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Sistema RL | Relaciones Laborales</title>
+<!-- _LOGIN_SIN_PARPADEO_V1 (08-nov-2026): el tema corporativo del login se aplica por JS al terminar de cargar la pagina;
+     mientras tanto se veia el diseno anterior y luego "saltaba" al nuevo. Se oculta la tarjeta (no el fondo) hasta que
+     el tema esta aplicado; por seguridad se muestra sola a los 4 s pase lo que pase. -->
+<style id="lcPre">html.lc-pre .gx-wrap{visibility:hidden}</style>
+<script>document.documentElement.classList.add('lc-pre');setTimeout(function(){document.documentElement.classList.remove('lc-pre');},4000);</script>
 <link rel="manifest" href="/sistema-rl-verfrut/manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="/sistema-rl-verfrut/frontend/images/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/sistema-rl-verfrut/frontend/images/favicon-16.png">
@@ -191,7 +196,7 @@ body::after{content:'';position:fixed;bottom:-200px;left:-200px;width:600px;heig
 </style>
 <script src="frontend/js/salud.js"></script>  <!-- _SALUD_V1 (23-set): registro de errores, mensajes en espanol, aviso de version nueva -->
 </head>
-<body>
+<body class="lc">   <!-- _LOGIN_SIN_PARPADEO_V1: clase del tema corporativo desde el primer pintado -->
 
 <div class="card lgreset">
 <div class="gx-escena">
@@ -1628,6 +1633,7 @@ body.lc .mx-footer,body.lc .mx-pie{color:rgba(255,255,255,.5)}
       var hs=document.getElementById('mxSaludo'); if(hs && !hs.dataset.lc){ hs.dataset.lc='1'; var ob2=new MutationObserver(function(){ var t=hs.textContent||''; if(t.indexOf('Piura')<0){ hs.textContent='Unifrutti Perú · Piura y Olmos · '+t.trim(); } }); ob2.observe(hs,{childList:true,characterData:true,subtree:true}); if((hs.textContent||'').indexOf('Piura')<0) hs.textContent='Unifrutti Perú · Piura y Olmos · '+(hs.textContent||'').trim(); }
       var pie=document.querySelector('.gx-pie'); if(pie && !pie.dataset.lc){ pie.dataset.lc='1'; var an=document.getElementById('lgAnio'); var y=(an&&an.textContent)||String(new Date().getFullYear()); pie.innerHTML='<span>Coordinación de Relaciones Laborales</span><span>v3.0 · '+y+'</span>'; }
     }catch(e){ console.warn('[_LOGIN_CORP_V1]',e); }
+    try{ document.documentElement.classList.remove('lc-pre'); }catch(e){}   /* _LOGIN_SIN_PARPADEO_V1: ya se puede mostrar */
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',aplicar); else aplicar();
   console.log('[_LOGIN_CORP_V1] listo');
