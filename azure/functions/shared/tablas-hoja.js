@@ -148,6 +148,8 @@ const ESQ = {
     ['seguimiento_dias', 'n'], ['seguimiento_alerta', 't200'], ['cantidad_buzones', 'n'], ['cantidad_quejas', 'n'], ['buzones_detalle', 't2000']] },
   bs_quejas_seguim: { tabla: 'dbo.BS_Quejas_Seguimientos', cols: [
     ['id', 'n'], ['id_queja', 'n'], ['numero_seguimiento', 'n'], ['fecha_seguimiento', 'f'], ['detalle', 't4000'], ['created_by', 't100'], ['created_at', 'f'], ['created_at2', 'f']] },
+  bs_auditoria: { tabla: 'dbo.BS_Auditoria', cols: [   /* _BS_AUDITORIA_SUPA_V1 (07-nov): registro de auditoría completo (antes solo en Google, últimos 500) */
+    ['fecha', 'f'], ['usuario', 't100'], ['accion', 't60'], ['modulo', 't60'], ['registro_id', 't100'], ['detalle', 't1000']] },
   bs_descansos: { tabla: 'dbo.BS_Descansos', cols: [
     ['id', 't40'], ['dni', 't15'], ['nombre', 't200'], ['empresa', 't40'], ['sector', 't200'], ['tipo', 't100'], ['origen', 't100'], ['citt_numero', 't100'], ['citt_estado', 't100'],
     ['fecha_inicio', 'f'], ['fecha_fin', 'f'], ['dias', 'n'], ['diagnostico', 't1000'], ['cie10', 't40'], ['centro', 't200'], ['medico', 't200'], ['observaciones', 't2000'],

@@ -12214,6 +12214,15 @@ var require_tablas_hoja = __commonJS({
         ["created_at", "f"],
         ["created_at2", "f"]
       ] },
+      bs_auditoria: { tabla: "dbo.BS_Auditoria", cols: [
+        /* _BS_AUDITORIA_SUPA_V1 (07-nov): registro de auditoría completo (antes solo en Google, últimos 500) */
+        ["fecha", "f"],
+        ["usuario", "t100"],
+        ["accion", "t60"],
+        ["modulo", "t60"],
+        ["registro_id", "t100"],
+        ["detalle", "t1000"]
+      ] },
       bs_descansos: { tabla: "dbo.BS_Descansos", cols: [
         ["id", "t40"],
         ["dni", "t15"],
@@ -65115,7 +65124,7 @@ var require_bs = __commonJS({
     var { exigirAuth } = require_auth();
     var H = require_tablas_hoja();
     var EMP = require_empresas();
-    var CLAVES = ["bs_accidentes_casos", "bs_accidentes_seguim", "bs_hostigamiento", "bs_hostigamiento_olmos", "bs_subsidios", "bs_documentos", "bs_quejas", "bs_quejas_seguim", "bs_descansos"];
+    var CLAVES = ["bs_accidentes_casos", "bs_accidentes_seguim", "bs_hostigamiento", "bs_hostigamiento_olmos", "bs_subsidios", "bs_documentos", "bs_quejas", "bs_quejas_seguim", "bs_descansos", "bs_auditoria"];
     var CFG = { PERIODO_PRUEBA_DIAS: 90, INDETERMINADO_MESES: 54, PROXIMO_INDET_DIAS: 30, POR_VENCER_DIAS: 30, POR_COBRAR_DIAS: 90, DM_UMBRAL: 20 };
     var MES = { Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06", Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12" };
     function plano(c) {
@@ -65181,14 +65190,24 @@ var require_bs = __commonJS({
       if (/SEPELIO/.test(t)) return "Sepelio";
       return t ? t.charAt(0) + t.slice(1).toLowerCase() : "(Sin contingencia)";
     }
-    async function objetos(pool, clave) {
+    function planoHora(c) {
+      if (c && typeof c === "object" && ("$d" in c || "$s" in c)) {
+        if (c.$d) {
+          const d = new Date(new Date(c.$d).getTime() - 5 * 36e5);
+          return isNaN(d) ? plano(c) : d.toISOString().slice(0, 16).replace("T", " ");
+        }
+        return plano(c);
+      }
+      return c == null ? "" : c;
+    }
+    async function objetos(pool, clave, conHora) {
       const d = await H.leer(pool, clave);
       if (!d) return null;
-      const enc = d.encabezado.map(plano).map(String);
+      const enc = d.encabezado.map(plano).map(String), P = conHora ? planoHora : plano;
       return d.filas.map((f) => {
         const o = {};
         enc.forEach((k, i) => {
-          if (k) o[k] = plano(f[i]);
+          if (k) o[k] = P(f[i]);
         });
         return o;
       });
@@ -65387,7 +65406,11 @@ var require_bs = __commonJS({
         if (accion === "tabla") {
           const clave = String(q.clave || "");
           if (CLAVES.indexOf(clave) < 0) return res(400, { success: false, error: "clave desconocida" });
-          let filas = await objetos(pool, clave);
+          if (clave === "bs_auditoria") {
+            const rolA = String(u && (u.rol || u.role) || "").toLowerCase(), usA = String(u && u.usuario || "").toLowerCase();
+            if (rolA.indexOf("admin") < 0 && !/coordinador|jefa/.test(rolA) && ["jtimoteo", "ovilela"].indexOf(usA) < 0) return res(403, { success: false, error: "Solo administradores pueden ver la auditor\xEDa." });
+          }
+          let filas = await objetos(pool, clave, String(q.hora || "") === "1");
           if (filas === null) return res(200, { success: true, cargada: false, items: [] });
           filas = filas.filter((o) => !anulado(o));
           const dni = String(q.dni || "").trim();

@@ -15,7 +15,7 @@ const { exigirAuth } = require('../shared/auth');
 const H = require('../shared/tablas-hoja');
 const EMP = require('../shared/empresas');
 
-const CLAVES = ['bs_accidentes_casos', 'bs_accidentes_seguim', 'bs_hostigamiento', 'bs_hostigamiento_olmos', 'bs_subsidios', 'bs_documentos', 'bs_quejas', 'bs_quejas_seguim', 'bs_descansos'];
+const CLAVES = ['bs_accidentes_casos', 'bs_accidentes_seguim', 'bs_hostigamiento', 'bs_hostigamiento_olmos', 'bs_subsidios', 'bs_documentos', 'bs_quejas', 'bs_quejas_seguim', 'bs_descansos', 'bs_auditoria'];   /* _BS_AUDITORIA_SUPA_V1: + bs_auditoria */
 const CFG = { PERIODO_PRUEBA_DIAS: 90, INDETERMINADO_MESES: 54, PROXIMO_INDET_DIAS: 30, POR_VENCER_DIAS: 30, POR_COBRAR_DIAS: 90, DM_UMBRAL: 20 };
 const MES = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
 
@@ -51,10 +51,17 @@ function conting(o) {
 }
 
 /* hoja -> objetos por encabezado (null si la tabla aún no fue cargada) */
-async function objetos(pool, clave) {
+function planoHora(c) {   /* _BS_AUDITORIA_SUPA_V1: fecha y hora de Lima 'YYYY-MM-DD HH:mm' (la auditoría necesita la hora) */
+  if (c && typeof c === 'object' && ('$d' in c || '$s' in c)) {
+    if (c.$d) { const d = new Date(new Date(c.$d).getTime() - 5 * 3600e3); return isNaN(d) ? plano(c) : d.toISOString().slice(0, 16).replace('T', ' '); }
+    return plano(c);
+  }
+  return c == null ? '' : c;
+}
+async function objetos(pool, clave, conHora) {
   const d = await H.leer(pool, clave); if (!d) return null;
-  const enc = d.encabezado.map(plano).map(String);
-  return d.filas.map(f => { const o = {}; enc.forEach((k, i) => { if (k) o[k] = plano(f[i]); }); return o; });
+  const enc = d.encabezado.map(plano).map(String), P = conHora ? planoHora : plano;
+  return d.filas.map(f => { const o = {}; enc.forEach((k, i) => { if (k) o[k] = P(f[i]); }); return o; });
 }
 
 async function padron(pool, dni) {
@@ -185,7 +192,9 @@ module.exports = async function (context, req) {
     }
     if (accion === 'tabla') {
       const clave = String(q.clave || ''); if (CLAVES.indexOf(clave) < 0) return res(400, { success: false, error: 'clave desconocida' });
-      let filas = await objetos(pool, clave); if (filas === null) return res(200, { success: true, cargada: false, items: [] });
+      if (clave === 'bs_auditoria') { const rolA = String((u && (u.rol || u.role)) || '').toLowerCase(), usA = String((u && u.usuario) || '').toLowerCase();
+        if (rolA.indexOf('admin') < 0 && !/coordinador|jefa/.test(rolA) && ['jtimoteo', 'ovilela'].indexOf(usA) < 0) return res(403, { success: false, error: 'Solo administradores pueden ver la auditoría.' }); }
+      let filas = await objetos(pool, clave, String(q.hora || '') === '1'); if (filas === null) return res(200, { success: true, cargada: false, items: [] });
       filas = filas.filter(o => !anulado(o));
       const dni = String(q.dni || '').trim(); if (dni) filas = filas.filter(o => [o.dni, o.numero, o.denunciante_dni, o.denunciado_dni].some(v => String(v || '').trim() === dni));
       return res(200, { success: true, cargada: true, total: filas.length, items: filas });
