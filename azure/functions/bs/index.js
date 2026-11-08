@@ -190,6 +190,17 @@ module.exports = async function (context, req) {
       const dni = String(q.dni || '').trim(); if (dni) filas = filas.filter(o => [o.dni, o.numero, o.denunciante_dni, o.denunciado_dni].some(v => String(v || '').trim() === dni));
       return res(200, { success: true, cargada: true, total: filas.length, items: filas });
     }
+    if (accion === 'padron') {   /* _BS_DASH_PRO_V1 (07-nov): personal del padrón por empresa, para la tasa de casos de los dashboards (antes bs_clasificacion en Google, 2-4 s) */
+      const ex = await EMP.tablasExistentes(pool, sql);
+      const out = { ok: true, success: true, total: 0, vigentes: 0, porEmpresa: {}, fuente: 'supabase' };
+      for (const e of EMP.EMPRESAS) {
+        if (!ex.has(e.tabla)) continue;
+        const r = await pool.request().query(`SELECT COUNT(*) AS n, SUM(CASE WHEN fecha_termino IS NULL OR fecha_termino >= CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) AS v FROM dbo.${e.tabla} WHERE dni IS NOT NULL`);
+        const n = Number((r.recordset[0] || {}).n || 0), v = Number((r.recordset[0] || {}).v || 0);
+        out.porEmpresa[e.codigo] = { total: n, vigentes: v }; out.total += n; out.vigentes += v;
+      }
+      return res(200, out);
+    }
     if (accion === 'estado') {
       const r = await pool.request().query(`IF OBJECT_ID('dbo.TH_Estado','U') IS NULL SELECT CAST(NULL AS NVARCHAR(40)) clave, CAST(NULL AS INT) filas, CAST(NULL AS DATETIME2) actualizado WHERE 1=0
         ELSE SELECT clave, filas, actualizado FROM dbo.TH_Estado WHERE clave LIKE 'bs_%'`);
