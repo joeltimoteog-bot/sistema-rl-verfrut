@@ -7,6 +7,7 @@ const m = fs.readFileSync(path.join(__dirname, '.env'), 'utf8').match(/^\s*SUPAB
 if (!m) { console.error('Falta SUPABASE_DB_URL en migracion\\.env'); process.exit(1); }
 (async () => {
   const c = new Client({ connectionString: m[1].replace(/^"|"$/g, ''), ssl: { rejectUnauthorized: false } }); await c.connect();
+  await c.query('SET search_path TO rl, public, extensions');   /* 08-nov: la conexión de .env trae search_path public; todo lo del sistema vive en rl */
   await c.query(fs.readFileSync(path.join(__dirname, arch), 'utf8'));
   const t = await c.query(`SELECT event_object_table AS t, trigger_name AS n FROM information_schema.triggers WHERE trigger_schema = 'rl' AND trigger_name LIKE 'tr_kpi_%' GROUP BY 1, 2 ORDER BY 1`);
   console.log('OK ' + arch + ' -> ' + t.rows.map(r => r.t + ':' + r.n).join(', '));
