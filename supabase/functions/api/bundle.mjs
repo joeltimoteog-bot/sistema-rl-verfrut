@@ -76794,7 +76794,7 @@ var require_rutas_edge = __commonJS({
       { fn: "auth-renovar", ruta: "auth/renovar", metodos: ["POST"], llave: false, h: require_auth_renovar() },
       { fn: "auth-sso", ruta: "auth/sso", metodos: ["POST"], llave: false, h: require_auth_sso() },
       { fn: "blob-sas", ruta: "blob-sas", metodos: ["GET", "OPTIONS"], llave: false, h: require_blob_sas() },
-      { fn: "bs", ruta: "bs/{accion}", metodos: ["GET"], llave: false, h: require_bs() },
+      { fn: "bs", ruta: "bs/{accion}", metodos: ["GET", "POST"], llave: false, h: require_bs() },
       { fn: "cap-firmas", ruta: "cap-firmas/{accion}", metodos: ["POST", "OPTIONS"], llave: false, h: require_cap_firmas() },
       { fn: "cap-guardar", ruta: "cap/guardar/{accion}", metodos: ["POST"], llave: false, h: require_cap_guardar2() },
       { fn: "compromiso", ruta: "compromiso/{accion}", metodos: ["POST", "OPTIONS"], llave: false, h: require_compromiso() },
