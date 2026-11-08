@@ -240,7 +240,7 @@ module.exports = async function (context, req) {
       return res(200, out);
     }
     /* ═══ _BS_GUARDA_SUPABASE_V1 (08-nov-2026): ESCRITURAS directas en Supabase ═══
-       POST bs/guardar { clave, op: crear|actualizar|seguimiento|anular|restaurar|cierre_masivo, id, datos, motivo }
+       POST bs/guardar { clave, op: crear|actualizar|seguimiento|anular|restaurar|importar|cierre_masivo, id, datos, motivo, filas }
        Solo si BS_Fuente dice que esa tabla ya manda desde Supabase (si no: 409 fuente:'hoja' y el navegador sigue con Google).
        El rol sale del token y los permisos de "Acceso a Módulos" del RR.LL. (permisosBS). Todo queda en BS_Auditoria. */
     if (accion === 'guardar') {
@@ -262,6 +262,7 @@ module.exports = async function (context, req) {
       else if (op === 'seguimiento') { if (!BG.SEGUIMIENTO[clave]) return res(400, { ok: false, success: false, message: clave + ' no lleva seguimientos.' }); out = await BG.seguimiento(pool, clave, b.id, b.datos || {}, usuario); }
       else if (op === 'anular') out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
       else if (op === 'restaurar') out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
+      else if (op === 'importar') out = await BG.importar(pool, clave, b.filas, usuario);
       else if (op === 'cierre_masivo') { if (!PG.esAdmin) return res(403, { ok: false, success: false, message: 'Solo administradores pueden hacer cierres masivos.' }); out = await BG.cerrarMasivo(pool, clave, b, usuario); }
       else return res(400, { ok: false, success: false, message: 'Operación desconocida: ' + op });
       const st = out.status || 200; delete out.status;

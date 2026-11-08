@@ -65239,7 +65239,28 @@ var require_bs_guardar = __commonJS({
       const n = parseInt(String(v == null ? "" : v).replace(/[^\d-]/g, ""), 10);
       return isNaN(n) ? 0 : n;
     };
+    var DECIMAL = (v) => {
+      const n = parseFloat(String(v == null ? "" : v).replace(",", "."));
+      return isNaN(n) ? 0 : n;
+    };
     var NORMALIZAR = {
+      bs_accidentes_casos: (v, nuevo) => {
+        const INT = ["dias_restriccion", "numero_atenciones", "descanso_medico_dias", "goce_dias"];
+        if (nuevo) {
+          if (!v.estado_caso) v.estado_caso = "Activo";
+          INT.forEach((k) => {
+            v[k] = ENTERO(v[k]);
+          });
+          v.edad = v.edad === "" || v.edad == null || isNaN(parseInt(v.edad, 10)) ? "" : parseInt(v.edad, 10);
+          v.accidente_horas = DECIMAL(v.accidente_horas);
+        } else {
+          INT.forEach((k) => {
+            if (v[k] !== void 0) v[k] = ENTERO(v[k]);
+          });
+          if (v.edad !== void 0) v.edad = isNaN(parseInt(v.edad, 10)) ? 0 : parseInt(v.edad, 10);
+          if (v.accidente_horas !== void 0) v.accidente_horas = DECIMAL(v.accidente_horas);
+        }
+      },
       bs_quejas: (v, nuevo) => {
         if (nuevo) {
           if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(/* @__PURE__ */ new Date());
@@ -65429,10 +65450,17 @@ var require_bs_guardar = __commonJS({
         throw e;
       }
     }
-    function valoresDesde(datos, enc, usuario, ahora, nuevo) {
-      const v = {};
+    function valoresDesde(datos, enc, usuario, ahora, nuevo, clave) {
+      const v = {}, tipos = {};
+      ((TH.ESQ[clave] || {}).cols || []).forEach((c) => {
+        tipos[c[0]] = c[1];
+      });
       Object.keys(datos || {}).forEach((h) => {
-        if (enc.indexOf(h) >= 0 && NO_EDITABLES.indexOf(h) < 0) v[h] = comoHoja(datos[h]);
+        if (enc.indexOf(h) < 0 || NO_EDITABLES.indexOf(h) >= 0) return;
+        let x = comoHoja(datos[h]);
+        if (tipos[h] === "n" && typeof x === "string" && /^-?\d+(\.\d+)?$/.test(x.trim())) x = Number(x.trim());
+        if (tipos[h] && tipos[h][0] === "t" && typeof x === "number" && typeof datos[h] === "string") x = datos[h].trim();
+        v[h] = x;
       });
       if (nuevo) {
         v.created_by = String(usuario || "");
@@ -65446,7 +65474,7 @@ var require_bs_guardar = __commonJS({
       const o = opciones || {};
       return enTransaccion(pool, [clave, "bs_auditoria"], async (tx) => {
         const cab = await cabecera(tx, clave), ahora = /* @__PURE__ */ new Date(), enc = cab.enc;
-        const id = await siguienteId(tx, clave, enc), v = valoresDesde(datos, enc, usuario, ahora, true);
+        const id = await siguienteId(tx, clave, enc), v = valoresDesde(datos, enc, usuario, ahora, true, clave);
         v.id = id;
         if (NORMALIZAR[clave]) NORMALIZAR[clave](v, true);
         if (o.completar) o.completar(v, enc);
@@ -65464,7 +65492,7 @@ var require_bs_guardar = __commonJS({
         const reg = await buscarPorId(tx, clave, id, cab.ancho);
         if (!reg) return { ok: false, success: false, status: 404, message: "Registro #" + id + " no encontrado." };
         if (marcaAnulado(enc, reg.celdas) && !o.permitirAnulado) return { ok: false, success: false, status: 409, message: "El registro #" + id + " est\xE1 anulado; rest\xE1uralo antes de editarlo." };
-        const v = valoresDesde(datos, enc, usuario, ahora, false), celdas = reg.celdas.slice();
+        const v = valoresDesde(datos, enc, usuario, ahora, false, clave), celdas = reg.celdas.slice();
         if (NORMALIZAR[clave]) NORMALIZAR[clave](v, false);
         while (celdas.length < enc.length) celdas.push("");
         let cambios = 0;
@@ -65558,6 +65586,77 @@ var require_bs_guardar = __commonJS({
         await tocarMarca(tx, clave);
         await auditar(tx, usuario, "RESTAURAR", MODULO_DE_CLAVE[clave] || clave, id, String(motivo || "").trim() || "estaba: " + ya);
         return { ok: true, success: true, id, message: "Registro #" + id + " restaurado.", fuente: "supabase" };
+      });
+    }
+    var LLAVE_IMPORTAR = { bs_accidentes_casos: ["dni", "dia_accidente"], bs_subsidios: ["numero", "fecha_inicio"] };
+    async function importar(pool, clave, filas, usuario) {
+      const llave = LLAVE_IMPORTAR[clave];
+      if (!llave) return { ok: false, success: false, status: 400, message: "La tabla " + clave + " no admite importaci\xF3n." };
+      if (!Array.isArray(filas) || !filas.length) return { ok: false, success: false, status: 400, message: "No llegaron filas." };
+      if (filas.length > 500) return { ok: false, success: false, status: 400, message: "M\xE1ximo 500 filas por lote." };
+      const ymdCelda = (c) => {
+        if (esD(c)) {
+          const d = new Date(new Date(c.$d).getTime() - 5 * 36e5);
+          return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+        }
+        const s = String(c == null ? "" : c).trim();
+        const m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+        if (m) return m[1] + "-" + p2(+m[2]) + "-" + p2(+m[3]);
+        const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        return m2 ? m2[3] + "-" + p2(+m2[2]) + "-" + p2(+m2[1]) : s;
+      };
+      const firma = (c, enc) => llave.map((k) => {
+        const i = enc.indexOf(k);
+        const x = i < 0 ? "" : c[i];
+        return /fecha|dia_/.test(k) ? ymdCelda(x) : texto(x).trim().toLowerCase();
+      }).join("|");
+      return enTransaccion(pool, [clave, "bs_auditoria"], async (tx) => {
+        const cab = await cabecera(tx, clave), enc = cab.enc, E = TH.ESQ[clave];
+        const todo = await tx.request().query(`SELECT * FROM ${E.tabla} ORDER BY fila`);
+        const existentes = {};
+        todo.recordset.forEach((x) => {
+          const c = TH.aCeldas(clave, x, cab.ancho);
+          if (!marcaAnulado(enc, c)) existentes[firma(c, enc)] = { id_fila: x.id_fila, celdas: c };
+        });
+        let siguiente = await siguienteId(tx, clave, enc), fila = await siguienteFila(tx, clave);
+        const out = { ok: true, success: true, creados: 0, actualizados: 0, errores: [], fuente: "supabase" }, ahora = /* @__PURE__ */ new Date();
+        for (let n = 0; n < filas.length; n++) {
+          try {
+            const d = filas[n] || {};
+            if (llave.some((k) => !String(d[k] == null ? "" : d[k]).trim())) {
+              out.errores.push({ fila: n + 1, error: "falta " + llave.filter((k) => !String(d[k] == null ? "" : d[k]).trim()).join(", ") });
+              continue;
+            }
+            const vN = valoresDesde(d, enc, usuario, ahora, true, clave);
+            if (NORMALIZAR[clave]) NORMALIZAR[clave](vN, true);
+            const f = firma(enc.map((h) => vN[h] !== void 0 ? vN[h] : ""), enc), ex = existentes[f];
+            if (ex) {
+              const vU = valoresDesde(d, enc, usuario, ahora, false, clave);
+              if (NORMALIZAR[clave]) NORMALIZAR[clave](vU, false);
+              const c = ex.celdas.slice();
+              while (c.length < enc.length) c.push("");
+              enc.forEach((h, i) => {
+                if (vU[h] !== void 0) c[i] = vU[h];
+              });
+              await reemplazarCeldas(tx, clave, ex.id_fila, c);
+              ex.celdas = c;
+              out.actualizados++;
+            } else {
+              vN.id = siguiente++;
+              const c = enc.map((h) => vN[h] !== void 0 ? vN[h] : "");
+              await insertarCeldas(tx, clave, fila++, c);
+              existentes[f] = { id_fila: -1, celdas: c };
+              out.creados++;
+            }
+          } catch (e) {
+            out.errores.push({ fila: n + 1, error: String(e.message || e).slice(0, 200) });
+          }
+        }
+        if (out.creados || out.actualizados) {
+          await tocarMarca(tx, clave);
+          await auditar(tx, usuario, "IMPORTAR", MODULO_DE_CLAVE[clave] || clave, "lote", "Importaci\xF3n: " + out.creados + " nuevos, " + out.actualizados + " actualizados" + (out.errores.length ? ", " + out.errores.length + " con error" : ""));
+        }
+        return out;
       });
     }
     async function cerrarMasivo(pool, clave, p, usuario) {
@@ -65667,7 +65766,7 @@ var require_bs_guardar = __commonJS({
       }
       return out;
     }
-    module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, cerrarMasivo, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
+    module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, cerrarMasivo, importar, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
   }
 });
 
@@ -66033,6 +66132,7 @@ var require_bs = __commonJS({
             out = await BG.seguimiento(pool, clave, b.id, b.datos || {}, usuario);
           } else if (op === "anular") out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
           else if (op === "restaurar") out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
+          else if (op === "importar") out = await BG.importar(pool, clave, b.filas, usuario);
           else if (op === "cierre_masivo") {
             if (!PG.esAdmin) return res(403, { ok: false, success: false, message: "Solo administradores pueden hacer cierres masivos." });
             out = await BG.cerrarMasivo(pool, clave, b, usuario);
