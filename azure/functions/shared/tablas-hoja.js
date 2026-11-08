@@ -153,7 +153,17 @@ const ESQ = {
   bs_descansos: { tabla: 'dbo.BS_Descansos', cols: [
     ['id', 't40'], ['dni', 't15'], ['nombre', 't200'], ['empresa', 't40'], ['sector', 't200'], ['tipo', 't100'], ['origen', 't100'], ['citt_numero', 't100'], ['citt_estado', 't100'],
     ['fecha_inicio', 'f'], ['fecha_fin', 'f'], ['dias', 'n'], ['diagnostico', 't1000'], ['cie10', 't40'], ['centro', 't200'], ['medico', 't200'], ['observaciones', 't2000'],
-    ['id_accidente', 't40'], ['id_subsidio', 't40'], ['estado', 't60'], ['anulado', 't10'], ['created_by', 't100'], ['created_at', 'f'], ['updated_by', 't100'], ['updated_at', 'f']] }
+    ['id_accidente', 't40'], ['id_subsidio', 't40'], ['estado', 't60'], ['anulado', 't10'], ['created_by', 't100'], ['created_at', 'f'], ['updated_by', 't100'], ['updated_at', 'f']] },
+  /* _BS_GUARDA_SUPABASE_V1 (08-nov-2026): las tres hojas de Bienestar que aún no tenían tabla (mismo orden que sus encabezados en Google) */
+  bs_rendiciones: { tabla: 'dbo.BS_Rendiciones', cols: [
+    ['id', 'n'], ['fecha', 'f'], ['semana', 'n'], ['anio', 'n'], ['rendicion', 't200'], ['empresa', 't40'], ['monto_reclutamiento', 'n'], ['monto_relaciones_laborales', 'n'],
+    ['monto_capacitaciones', 'n'], ['monto_bienestar', 'n'], ['monto_total', 'n'], ['responsable', 't200'], ['estado', 't60'], ['fecha_deposito', 'f'], ['observaciones', 't2000'],
+    ['created_by', 't100'], ['created_at', 'f'], ['updated_at', 'f']] },
+  bs_sugerencias: { tabla: 'dbo.BS_Sugerencias', cols: [
+    ['id', 'n'], ['fecha', 'f'], ['usuario', 't100'], ['nombre_usuario', 't200'], ['titulo', 't300'], ['modulo', 't60'], ['descripcion', 't4000'], ['prioridad', 't40'], ['estado', 't60'],
+    ['respuesta_admin', 't4000'], ['fecha_finalizado', 'f'], ['created_by', 't100'], ['created_at', 'f'], ['updated_at', 'f']] },
+  bs_buzones: { tabla: 'dbo.BS_Buzones', cols: [
+    ['id', 'n'], ['empresa', 't40'], ['sector', 't200'], ['numero', 't40'], ['ubicacion', 't400'], ['activo', 't10'], ['created_at', 'f']] }
 };
 const tipoSql = t => t === 'f' ? 'DATETIME2(3) NULL' : t === 'n' ? 'FLOAT NULL' : 'NVARCHAR(' + t.slice(1) + ') NULL';
 const tipoMs = t => t === 'f' ? sql.DateTime2(3) : t === 'n' ? sql.Float : sql.NVarChar(parseInt(t.slice(1), 10));

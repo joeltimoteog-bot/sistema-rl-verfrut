@@ -27,6 +27,12 @@ module.exports = async function (context, req) {
       return res(200, { success: true, recibidas: b.filas.length, conOtros });
     }
     if (accion === 'fin') {
+      /* _BS_GUARDA_SUPABASE_V1 (08-nov-2026): si la tabla de Bienestar ya se guarda directo en Supabase, la hoja de Google ya no manda:
+         no se vuelve a cargar encima (perdería lo guardado aquí). El Apps Script la quita de BS_AZ_HOJAS; esto es el seguro por si no. */
+      if (clave.indexOf('bs_') === 0) {
+        const fuente = await require('../shared/bs-guardar').fuenteDe(pool, clave);
+        if (fuente === 'supabase') { await pool.request().query(`TRUNCATE TABLE ${E.tabla}__carga`); return res(409, { success: false, fuente, error: 'La tabla ' + clave + ' ya se guarda directo en Supabase: la hoja de Google no la reemplaza.' }); }
+      }
       const total = parseInt(b.total, 10);
       const n = (await pool.request().query(`SELECT COUNT(*) AS n FROM ${E.tabla}__carga`)).recordset[0].n;
       if (n !== total) return res(409, { success: false, error: 'La tabla de paso tiene ' + n + ' filas y se esperaban ' + total + ': no se cambio nada' });

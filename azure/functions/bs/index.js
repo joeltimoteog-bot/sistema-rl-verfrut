@@ -7,7 +7,11 @@
                             timeline — misma forma que bs_fichaTrabajador del Apps Script.
    GET bs/tabla?clave=      filas de una hoja como objetos (sin anulados), opcional &dni=
    GET bs/estado            marcas y fecha de carga de cada tabla BS_*
-   Solo lectura; exige sesión (Bearer rl_token). Google sigue siendo la copia de respaldo.
+   POST bs/guardar          _BS_GUARDA_SUPABASE_V1 (08-nov): crear/actualizar/seguimiento/anular/restaurar directo en Supabase
+   POST bs/auditar          evento de auditoría suelto (Apps Script con clave interna / navegador)
+   GET|POST bs/fuente       quién manda por tabla ('hoja' = Google + sync, 'supabase' = se guarda aquí)
+   POST bs/respaldo         copia diaria de todas las tablas bs_* a Storage (bucket privado 'respaldos')
+   Exige sesión (Bearer rl_token). Las tablas en fuente 'hoja' siguen subiéndose desde Google.
    ════════════════════════════════════════════════════════════════════════ */
 'use strict';
 const { sql, getPool } = require('../shared/db');
@@ -15,7 +19,8 @@ const { exigirAuth } = require('../shared/auth');
 const H = require('../shared/tablas-hoja');
 const EMP = require('../shared/empresas');
 
-const CLAVES = ['bs_accidentes_casos', 'bs_accidentes_seguim', 'bs_hostigamiento', 'bs_hostigamiento_olmos', 'bs_subsidios', 'bs_documentos', 'bs_quejas', 'bs_quejas_seguim', 'bs_descansos', 'bs_auditoria'];   /* _BS_AUDITORIA_SUPA_V1: + bs_auditoria */
+const BG = require('../shared/bs-guardar');   /* _BS_GUARDA_SUPABASE_V1 (08-nov-2026): escrituras directas + fuente por tabla + respaldo */
+const CLAVES = BG.CLAVES_BS;   /* _BS_AUDITORIA_SUPA_V1: + bs_auditoria */
 const CFG = { PERIODO_PRUEBA_DIAS: 90, INDETERMINADO_MESES: 54, PROXIMO_INDET_DIAS: 30, POR_VENCER_DIAS: 30, POR_COBRAR_DIAS: 90, DM_UMBRAL: 20 };
 const MES = { Jan: '01', Feb: '02', Mar: '03', Apr: '04', May: '05', Jun: '06', Jul: '07', Aug: '08', Sep: '09', Oct: '10', Nov: '11', Dec: '12' };
 
@@ -40,7 +45,8 @@ function ymd(v) {
 function aFecha(s) { const y = ymd(s); if (!/^\d{4}-\d{2}-\d{2}$/.test(y)) return null; return new Date(y + 'T00:00:00Z'); }
 function hoyLima() { return new Date(new Date(Date.now() - 5 * 3600e3).toISOString().slice(0, 10) + 'T00:00:00Z'); }
 function num(v) { const n = parseFloat(String(v == null ? '' : v).replace(/[^\d.-]/g, '')); return isNaN(n) ? 0 : n; }
-function anulado(o) { return /^(s|si|sí|true|1)$/i.test(String(o.anulado || '').trim()); }
+/* _BS_GUARDA_SUPABASE_V1: el Apps Script anula con el texto 'SI · usuario · fecha · motivo' (no solo 'SI'); antes esa marca no se reconocía y los anulados se seguían contando */
+function anulado(o) { const a = o.anulado; return a === true || /^(s|si|sí|true|1)(\b|$)/i.test(String(a || '').trim()); }
 function mascara(n) { return String(n || '').trim().split(/\s+/).map(p => p ? p.charAt(0) + '***' : '').join(' '); }
 function monto(o) { let v = num(o.monto_total); if (!v) v = num(o.pago_empresa) + num(o.recuperado_essalud); if (!v) v = num(o.reembolso_por_mes); if (!v) v = num(o.calculo_por_dia) * (parseInt(o.dias, 10) || 0); return Math.round(v * 100) / 100; }
 function catSub(o) { const e = String(o.estado_general || '').trim().toUpperCase(); if (e === 'COBRADO' || e === 'RECUPERADO') return 'cobrado'; if (e === 'NO RECUPERABLE') return 'no_recuperable'; return 'por_cobrar'; }
@@ -182,8 +188,7 @@ async function ficha(pool, dni, perm, esAdmin) {
    · Si el usuario esta configurado en "Acceso a Modulos" (definido=true): mandan esos permisos; lo que mande el navegador se ignora.
    · Si NO esta configurado (o la consulta no responde): se conserva el comportamiento anterior (permisos que envia Bienestar
      desde su hoja Usuarios), salvo HOSTIGAMIENTO, que queda cerrado hasta que el administrador lo configure en RR.LL. */
-const MODULO_DE_CLAVE = { bs_accidentes_casos: 'accidentes', bs_accidentes_seguim: 'accidentes', bs_hostigamiento: 'hostigamiento', bs_hostigamiento_olmos: 'hostigamiento',
-  bs_subsidios: 'subsidios', bs_documentos: '', bs_quejas: 'quejas', bs_quejas_seguim: 'quejas', bs_descansos: 'descansos', bs_auditoria: '' };
+const MODULO_DE_CLAVE = BG.MODULO_DE_CLAVE;
 async function permisosBS(u, q) {
   const rol = String((u && (u.rol || u.role)) || '').toLowerCase(), usuario = String((u && u.usuario) || '').toLowerCase();
   let esAdmin = rol.indexOf('admin') >= 0 || /coordinador|jefa/.test(rol);
@@ -233,6 +238,61 @@ module.exports = async function (context, req) {
         out.porEmpresa[e.codigo] = { total: n, vigentes: v }; out.total += n; out.vigentes += v;
       }
       return res(200, out);
+    }
+    /* ═══ _BS_GUARDA_SUPABASE_V1 (08-nov-2026): ESCRITURAS directas en Supabase ═══
+       POST bs/guardar { clave, op: crear|actualizar|seguimiento|anular|restaurar, id, datos, motivo }
+       Solo si BS_Fuente dice que esa tabla ya manda desde Supabase (si no: 409 fuente:'hoja' y el navegador sigue con Google).
+       El rol sale del token y los permisos de "Acceso a Módulos" del RR.LL. (permisosBS). Todo queda en BS_Auditoria. */
+    if (accion === 'guardar') {
+      if (String(req.method || 'POST').toUpperCase() !== 'POST') return res(405, { success: false, error: 'Usa POST' });
+      const b = req.body || {}, clave = String(b.clave || ''), op = String(b.op || '').toLowerCase();
+      if (CLAVES.indexOf(clave) < 0 || clave === 'bs_auditoria') return res(400, { ok: false, success: false, message: 'Tabla desconocida: ' + clave });
+      if (u && u.interno) return res(403, { ok: false, success: false, message: 'bs/guardar exige la sesión de un usuario.' });
+      const usuario = String((u && u.usuario) || '').toLowerCase();
+      if (!usuario) return res(401, { ok: false, success: false, message: 'Sesión sin usuario.' });
+      const fuente = await BG.fuenteDe(pool, clave);
+      if (fuente !== 'supabase') return res(409, { ok: false, success: false, fuente, message: 'La tabla ' + clave + ' todavía se guarda en Google.' });
+      const modG = MODULO_DE_CLAVE[clave] || '';
+      const PG = await permisosBS(u, q);
+      if (!PG.esAdmin && modG && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: 'Sin permiso para el módulo ' + modG + '.' });
+      if ((op === 'anular' || op === 'restaurar') && !PG.esAdmin) return res(403, { ok: false, success: false, message: 'Solo administradores pueden ' + op + ' registros.' });
+      let out;
+      if (op === 'crear') out = await BG.crear(pool, clave, b.datos || {}, usuario);
+      else if (op === 'actualizar') { if (b.id === undefined || b.id === null || b.id === '') return res(400, { ok: false, success: false, message: 'Falta el id.' }); out = await BG.actualizar(pool, clave, b.id, b.datos || {}, usuario); }
+      else if (op === 'seguimiento') { if (!BG.SEGUIMIENTO[clave]) return res(400, { ok: false, success: false, message: clave + ' no lleva seguimientos.' }); out = await BG.seguimiento(pool, clave, b.id, b.datos || {}, usuario); }
+      else if (op === 'anular') out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
+      else if (op === 'restaurar') out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
+      else return res(400, { ok: false, success: false, message: 'Operación desconocida: ' + op });
+      const st = out.status || 200; delete out.status;
+      return res(st, out);
+    }
+    /* POST bs/auditar { usuario, accion, modulo, registro_id, detalle } — evento suelto. Lo manda el Apps Script (clave interna) por cada
+       escritura que aún hace en Google, y el navegador (ACCESO / EXPORTAR). Con sesión de usuario, el usuario es el del token. */
+    if (accion === 'auditar') {
+      if (String(req.method || 'POST').toUpperCase() !== 'POST') return res(405, { success: false, error: 'Usa POST' });
+      const b = req.body || {}, usuario = u && u.interno ? String(b.usuario || 'servidor-google') : String((u && u.usuario) || '');
+      if (!usuario) return res(401, { ok: false, success: false, message: 'Sesión sin usuario.' });
+      const acc = String(b.accion || '').trim().toUpperCase().slice(0, 60);
+      if (!acc) return res(400, { ok: false, success: false, message: 'Falta la acción.' });
+      return res(200, await BG.registrarEvento(pool, { usuario, accion: acc, modulo: String(b.modulo || '').toLowerCase().slice(0, 60), registro_id: b.registro_id, detalle: String(b.detalle || '').slice(0, 500) }));
+    }
+    /* GET bs/fuente → quién manda por tabla · POST bs/fuente { clave, fuente } (solo Joel/clave interna) → cambia la fuente */
+    if (accion === 'fuente') {
+      if (String(req.method || 'GET').toUpperCase() === 'POST') {
+        const usF = String((u && u.usuario) || '').toLowerCase();
+        if (!(u && u.interno) && usF !== 'jtimoteo') return res(403, { ok: false, success: false, message: 'Solo el coordinador puede cambiar la fuente de una tabla.' });
+        const b = req.body || {};
+        const f = await BG.ponerFuente(pool, String(b.clave || ''), String(b.fuente || ''), usF || 'servidor-google');
+        return res(200, { ok: true, success: true, clave: b.clave, fuente: f });
+      }
+      return res(200, { ok: true, success: true, tablas: await BG.fuentes(pool) });
+    }
+    /* POST bs/respaldo [{ dias }] — copia diaria de todas las tablas bs_* al bucket privado 'respaldos' (lo dispara el Apps Script a la 01:00) */
+    if (accion === 'respaldo') {
+      if (String(req.method || 'POST').toUpperCase() !== 'POST') return res(405, { success: false, error: 'Usa POST' });
+      const usR = String((u && u.usuario) || '').toLowerCase();
+      if (!(u && u.interno) && usR !== 'jtimoteo') return res(403, { ok: false, success: false, message: 'Solo el sistema o el coordinador pueden lanzar el respaldo.' });
+      return res(200, await BG.respaldar(pool, (req.body || {}).dias));
     }
     if (accion === 'estado') {
       const r = await pool.request().query(`IF OBJECT_ID('dbo.TH_Estado','U') IS NULL SELECT CAST(NULL AS NVARCHAR(40)) clave, CAST(NULL AS INT) filas, CAST(NULL AS DATETIME2) actualizado WHERE 1=0
