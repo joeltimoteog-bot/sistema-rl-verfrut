@@ -240,6 +240,39 @@ const assert = (c, m) => { if (!c) { console.log('   ✗ ' + m); process.exitCod
   r = await bs('POST', { _accion: 'guardar', clave: 'bs_sugerencias', op: 'actualizar', id: 1, datos: { estado: 'Finalizada', respuesta_admin: 'Listo' } }, adm);
   r = await A.llamar('bs', { method: 'GET', bindingData: { accion: 'tabla' }, query: { clave: 'bs_sugerencias' } });
   assert(/^\d{4}-\d{2}-\d{2}$/.test(r.body.items[0].fecha_finalizado) && r.body.items[0].respuesta_admin === 'Listo', 'Finalizada pone fecha_finalizado');
+  /* 17) Adjuntos: Storage simulado en local */
+  const http = require('http'); const subidos = [];
+  const srv = http.createServer((rq, rs) => { let body = []; rq.on('data', c => body.push(c)); rq.on('end', () => { const u = rq.url;
+    if (rq.method === 'GET' && /\/storage\/v1\/bucket\//.test(u)) { rs.writeHead(200); rs.end('{}'); return; }
+    if (rq.method === 'POST' && /\/storage\/v1\/object\/sign\//.test(u)) { rs.writeHead(200, { 'Content-Type': 'application/json' }); rs.end(JSON.stringify({ signedURL: u.replace('/storage/v1', '') + '?token=abc' })); return; }
+    if (rq.method === 'POST' && /\/storage\/v1\/object\/bienestar\//.test(u)) { subidos.push({ u, n: Buffer.concat(body).length, ct: rq.headers['content-type'] }); rs.writeHead(200); rs.end('{"Key":"x"}'); return; }
+    rs.writeHead(404); rs.end('no'); }); });
+  await new Promise(ok => srv.listen(0, '127.0.0.1', ok)); process.env.SUPABASE_URL = 'http://127.0.0.1:' + srv.address().port; process.env.SUPABASE_SERVICE_ROLE_KEY = 'srk';
+  const doc = (method, extra, usuario) => A.llamar('bs', Object.assign({ method, bindingData: { accion: 'doc' }, usuario: usuario || adm }, extra));
+  r = await doc('GET', { query: { modulo: 'QUEJA', caso_id: '8' } });
+  assert(r.status === 409 && r.body.fuente === 'hoja', 'bs/doc con fuente hoja → 409');
+  r = await bs('POST', { _accion: 'fuente', clave: 'bs_documentos', fuente: 'supabase' }); assert(r.status === 200, 'fuente bs_documentos');
+  r = await doc('GET', { query: { modulo: 'QUEJA', caso_id: '8' } });
+  assert(r.status === 200 && r.body.items.length === 0, 'lista vacía del caso 8');
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex').toString('base64');
+  r = await doc('POST', { body: { modulo: 'queja', caso_id: 8, nombre: 'foto: evidencia?.png', mime: 'image/png', base64: png } });
+  assert(r.status === 200 && r.body.id === 1 && /^storage:QUEJA\/CASO_8\/\d{14}-foto_ evidencia_.png$/.test(r.body.url), 'subir evidencia → fila #1 y ruta en Storage: ' + JSON.stringify(r.body));
+  assert(subidos.length === 1 && subidos[0].n === 16 && subidos[0].ct === 'image/png', 'el binario llegó al bucket bienestar (16 bytes, image/png)');
+  r = await doc('POST', { body: { modulo: 'quejas', caso_id: 8, nombre: 'virus.exe', mime: 'application/x-msdownload', base64: png } });
+  assert(r.status === 400 && /imágenes o PDF/.test(r.body.message), 'solo imágenes o PDF');
+  r = await doc('POST', { body: { modulo: 'hostigamiento', caso_id: 1, nombre: 'a.pdf', mime: 'application/pdf', base64: png } }, { usuario: 'rperez', rol: 'usuario' });
+  assert(r.status === 403, 'subir a un módulo sin permiso → 403');
+  r = await doc('GET', { query: { modulo: 'QUEJA', caso_id: '8' } });
+  assert(r.body.items.length === 1 && r.body.items[0].en_storage && r.body.items[0].subido_por === 'ovilela' && /\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}/.test(r.body.items[0].fecha), 'lista: 1 evidencia con fecha dd/MM/yyyy HH:mm: ' + JSON.stringify(r.body.items[0]));
+  r = await doc('GET', { query: { id: '1' } });
+  assert(r.status === 200 && /token=abc/.test(r.body.url) && r.body.nombre.indexOf('foto') === 0, 'ver → enlace firmado: ' + r.body.url);
+  r = await doc('GET', { query: { id: '1' } }, { usuario: 'rperez', rol: 'usuario' });
+  assert(r.status === 403, 'ver sin permiso del módulo → 403');
+  r = await doc('GET', { query: { id: '99' } });
+  assert(r.status === 404, 'ver id inexistente → 404');
+  r = await A.llamar('bs', { method: 'GET', bindingData: { accion: 'tabla' }, query: { clave: 'bs_auditoria', hora: '1' } });
+  assert(r.body.items.some(o => o.modulo === 'quejas' && /evidencia foto/.test(o.detalle)), 'auditoría de la evidencia');
+  srv.close();
   console.log(process.exitCode ? 'HAY FALLAS' : 'TODO OK');
   process.exit();
 })().catch(e => { console.error('ERROR', e); process.exit(1); });

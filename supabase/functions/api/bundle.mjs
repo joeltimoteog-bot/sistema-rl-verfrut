@@ -65345,6 +65345,7 @@ var require_bs_guardar = __commonJS({
       bs_rendiciones: ["id", "fecha", "semana", "anio", "rendicion", "empresa", "monto_reclutamiento", "monto_relaciones_laborales", "monto_capacitaciones", "monto_bienestar", "monto_total", "responsable", "estado", "fecha_deposito", "observaciones", "created_by", "created_at", "updated_at"],
       bs_sugerencias: ["id", "fecha", "usuario", "nombre_usuario", "titulo", "modulo", "descripcion", "prioridad", "estado", "respuesta_admin", "fecha_finalizado", "created_by", "created_at", "updated_at"],
       bs_buzones: ["id", "empresa", "sector", "numero", "ubicacion", "activo", "created_at"],
+      bs_documentos: ["id", "modulo", "caso_id", "nombre", "url", "mime", "subido_por", "fecha"],
       /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
       bs_hostigamiento: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"],
       bs_hostigamiento_olmos: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"]
@@ -65611,7 +65612,7 @@ var require_bs_guardar = __commonJS({
         if (errC) return { ok: false, success: false, status: 400, message: errC };
         await insertarCeldas(tx, clave, await siguienteFila(tx, clave), celdas);
         await tocarMarca(tx, clave);
-        await auditar(tx, usuario, "CREAR", MODULO_DE_CLAVE[clave] || clave, id, o.detalle || "");
+        await auditar(tx, usuario, "CREAR", o.modulo || MODULO_DE_CLAVE[clave] || clave, id, o.detalle || "");
         const ob = filaObjeto(enc, celdas);
         return { ok: true, success: true, id, fuente: "supabase", dias: ob.dias, estado: ob.estado };
       });
@@ -65942,6 +65943,103 @@ var require_bs_guardar = __commonJS({
         return { ok: true, success: true, id_subsidio: idS, dias: diasSub, fuente: "supabase", message: "Expediente de subsidio #" + idS + " creado con " + diasSub + " d\xEDa(s)." };
       });
     }
+    var DOC_BUCKET = "bienestar";
+    var DOC_MAX = 6 * 1024 * 1024;
+    var docModulo = (m) => {
+      const x = String(m || "").toLowerCase().trim();
+      if (!x) return "";
+      if (/^(queja|hallazgo)/.test(x)) return "quejas";
+      if (/^accidente/.test(x)) return "accidentes";
+      if (/^subsidio/.test(x)) return "subsidios";
+      if (/^rendici/.test(x)) return "rendiciones";
+      if (/^hostig/.test(x)) return "hostigamiento";
+      if (/^descanso/.test(x)) return "descansos";
+      if (/^sugerencia/.test(x)) return "sugerencias";
+      return x;
+    };
+    async function docAsegurarBucket(s) {
+      const r = await fetch(s.url + "/storage/v1/bucket/" + DOC_BUCKET, { headers: s.h });
+      if (r.status === 404 || r.status === 400) {
+        const c = await fetch(s.url + "/storage/v1/bucket", { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, s.h), body: JSON.stringify({ id: DOC_BUCKET, name: DOC_BUCKET, public: false, file_size_limit: DOC_MAX }) });
+        if (!c.ok && c.status !== 409) throw new Error("Storage bucket HTTP " + c.status);
+      }
+    }
+    async function docFilas(tx, cab) {
+      const todo = await tx.request().query(`SELECT * FROM ${TH.ESQ.bs_documentos.tabla} ORDER BY fila`);
+      return todo.recordset.map((x) => {
+        const c = TH.aCeldas("bs_documentos", x, cab.ancho);
+        while (c.length < cab.enc.length) c.push("");
+        const o = filaObjeto(cab.enc, c);
+        o.__id_fila = x.id_fila;
+        return o;
+      });
+    }
+    var fechaTexto = (c) => {
+      if (esD(c)) {
+        const d = new Date(new Date(c.$d).getTime() - 5 * 36e5);
+        return isNaN(d) ? "" : p2(d.getUTCDate()) + "/" + p2(d.getUTCMonth() + 1) + "/" + d.getUTCFullYear() + " " + p2(d.getUTCHours()) + ":" + p2(d.getUTCMinutes());
+      }
+      return texto(c);
+    };
+    async function docListar(pool, modulo, casoId) {
+      const tx = new sql.Transaction(pool);
+      await tx.begin();
+      try {
+        const cab = await cabecera(tx, "bs_documentos"), mod = String(modulo || "").toUpperCase(), caso = String(casoId);
+        const items = (await docFilas(tx, cab)).filter((o) => String(o.modulo).toUpperCase() === mod && String(o.caso_id) === caso && !marcaAnulado(cab.enc, cab.enc.map((h) => o[h]))).map((o) => ({ id: o.id, modulo: o.modulo, caso_id: o.caso_id, nombre: texto(o.nombre), url: texto(o.url), mime: texto(o.mime), subido_por: texto(o.subido_por), fecha: fechaTexto(o.fecha), en_storage: /^storage:/.test(texto(o.url)) }));
+        await tx.commit();
+        return { ok: true, success: true, items, fuente: "supabase" };
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        throw e;
+      }
+    }
+    async function docSubir(pool, d, usuario) {
+      if (!d || !d.modulo || !d.caso_id || !d.base64 || !d.nombre) return { ok: false, success: false, status: 400, message: "Faltan datos (modulo, caso_id, nombre, base64)." };
+      const mime = String(d.mime || "application/octet-stream");
+      if (!/^image\/|^application\/pdf$/.test(mime)) return { ok: false, success: false, status: 400, message: "Solo se permiten im\xE1genes o PDF." };
+      const bytes = Buffer.from(String(d.base64), "base64");
+      if (!bytes.length) return { ok: false, success: false, status: 400, message: "Archivo vac\xEDo." };
+      if (bytes.length > DOC_MAX) return { ok: false, success: false, status: 400, message: "El archivo supera el m\xE1ximo de 6 MB." };
+      const s = storage();
+      await docAsegurarBucket(s);
+      const nombre = String(d.nombre).replace(/[\\/:*?"<>|]/g, "_").slice(0, 180), mod = String(d.modulo).toUpperCase().replace(/[^A-Z0-9_]/g, "_");
+      const ruta = mod + "/CASO_" + String(d.caso_id).replace(/[^A-Za-z0-9_-]/g, "_") + "/" + (/* @__PURE__ */ new Date()).toISOString().replace(/[-:T]/g, "").slice(0, 14) + "-" + nombre;
+      const up = await fetch(s.url + "/storage/v1/object/" + DOC_BUCKET + "/" + ruta.split("/").map(encodeURIComponent).join("/"), { method: "POST", headers: Object.assign({ "Content-Type": mime, "x-upsert": "false" }, s.h), body: bytes });
+      if (!up.ok) return { ok: false, success: false, status: 502, message: "Storage HTTP " + up.status + ": " + (await up.text()).slice(0, 200) };
+      const r = await crear(pool, "bs_documentos", { modulo: mod, caso_id: d.caso_id, nombre, url: "storage:" + ruta, mime, subido_por: String(d.subido_por || usuario || ""), fecha: celdaFecha(/* @__PURE__ */ new Date()) }, usuario, { modulo: docModulo(d.modulo) || "bs_documentos", detalle: "evidencia " + nombre + " del caso " + d.caso_id + " (" + Math.round(bytes.length / 1024) + " KB)" });
+      if (!r.ok) return r;
+      return { ok: true, success: true, id: r.id, nombre, url: "storage:" + ruta, fuente: "supabase" };
+    }
+    async function docVer(pool, id, permisos) {
+      const tx = new sql.Transaction(pool);
+      await tx.begin();
+      let doc = null;
+      try {
+        const cab = await cabecera(tx, "bs_documentos");
+        doc = (await docFilas(tx, cab)).find((o) => mismoId(o.id, id)) || null;
+        await tx.commit();
+      } catch (e) {
+        try {
+          await tx.rollback();
+        } catch (e2) {
+        }
+        throw e;
+      }
+      if (!doc) return { ok: false, success: false, status: 404, message: "Documento no encontrado." };
+      const mod = docModulo(doc.modulo);
+      if (mod && !permisos.esAdmin && permisos.permisos[mod] !== true) return { ok: false, success: false, status: 403, message: "No tienes permiso para ver documentos de " + mod + "." };
+      const url = texto(doc.url);
+      if (!/^storage:/.test(url)) return { ok: true, success: true, drive: true, nombre: texto(doc.nombre), mime: texto(doc.mime) };
+      const s = storage(), ruta = url.slice(8);
+      const r = await fetch(s.url + "/storage/v1/object/sign/" + DOC_BUCKET + "/" + ruta.split("/").map(encodeURIComponent).join("/"), { method: "POST", headers: Object.assign({ "Content-Type": "application/json" }, s.h), body: JSON.stringify({ expiresIn: 300 }) });
+      if (!r.ok) return { ok: false, success: false, status: 502, message: "Storage sign HTTP " + r.status };
+      const j = await r.json();
+      return { ok: true, success: true, nombre: texto(doc.nombre), mime: texto(doc.mime), url: s.url + "/storage/v1" + j.signedURL, expira_seg: 300 };
+    }
     async function registrarEvento(pool, ev) {
       return enTransaccion(pool, ["bs_auditoria"], async (tx) => {
         await auditar(tx, ev.usuario, ev.accion, ev.modulo, ev.registro_id, ev.detalle);
@@ -65989,7 +66087,7 @@ var require_bs_guardar = __commonJS({
       }
       return out;
     }
-    module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, BS_DM, cerrarMasivo, importar, generarSubsidioDM, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
+    module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, BS_DM, cerrarMasivo, importar, generarSubsidioDM, docListar, docSubir, docVer, docModulo, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
   }
 });
 
@@ -66366,6 +66464,32 @@ var require_bs = __commonJS({
           const st = out.status || 200;
           delete out.status;
           return res(st, out);
+        }
+        if (accion === "doc") {
+          if (u && u.interno) return res(403, { ok: false, success: false, message: "bs/doc exige la sesi\xF3n de un usuario." });
+          const usuario = String(u && u.usuario || "").toLowerCase();
+          if (!usuario) return res(401, { ok: false, success: false, message: "Sesi\xF3n sin usuario." });
+          const fuente = await BG.fuenteDe(pool, "bs_documentos");
+          if (fuente !== "supabase") return res(409, { ok: false, success: false, fuente, message: "Los adjuntos todav\xEDa se guardan en Google." });
+          const PG = await permisosBS(u, q);
+          if (String(req.method || "GET").toUpperCase() === "POST") {
+            const b = req.body || {}, modG = BG.docModulo(b.modulo);
+            if (modG && !PG.esAdmin && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: "Sin permiso para el m\xF3dulo " + modG + "." });
+            const out = await BG.docSubir(pool, b, usuario);
+            const st = out.status || 200;
+            delete out.status;
+            return res(st, out);
+          }
+          if (q.id) {
+            const out = await BG.docVer(pool, q.id, PG);
+            const st = out.status || 200;
+            delete out.status;
+            return res(st, out);
+          }
+          const modL = BG.docModulo(q.modulo);
+          if (!q.modulo || !q.caso_id) return res(400, { ok: false, success: false, message: "Faltan modulo y caso_id." });
+          if (modL && !PG.esAdmin && !PG.permisos[modL]) return res(403, { ok: false, success: false, message: "Sin permiso para el m\xF3dulo " + modL + "." });
+          return res(200, await BG.docListar(pool, q.modulo, q.caso_id));
         }
         if (accion === "auditar") {
           if (String(req.method || "POST").toUpperCase() !== "POST") return res(405, { success: false, error: "Usa POST" });

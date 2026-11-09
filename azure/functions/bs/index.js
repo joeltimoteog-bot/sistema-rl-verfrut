@@ -270,6 +270,26 @@ module.exports = async function (context, req) {
       const st = out.status || 200; delete out.status;
       return res(st, out);
     }
+    /* bs/doc — adjuntos (evidencias) en el bucket privado 'bienestar':
+       GET  bs/doc?modulo=&caso_id=   lista del caso · GET bs/doc?id=  enlace firmado (5 min) o {drive:true} si es histórico de Drive
+       POST bs/doc { modulo, caso_id, nombre, mime, base64 }  sube (imagen/PDF ≤ 6 MB) y registra la fila + auditoría */
+    if (accion === 'doc') {
+      if (u && u.interno) return res(403, { ok: false, success: false, message: 'bs/doc exige la sesión de un usuario.' });
+      const usuario = String((u && u.usuario) || '').toLowerCase(); if (!usuario) return res(401, { ok: false, success: false, message: 'Sesión sin usuario.' });
+      const fuente = await BG.fuenteDe(pool, 'bs_documentos');
+      if (fuente !== 'supabase') return res(409, { ok: false, success: false, fuente, message: 'Los adjuntos todavía se guardan en Google.' });
+      const PG = await permisosBS(u, q);
+      if (String(req.method || 'GET').toUpperCase() === 'POST') {
+        const b = req.body || {}, modG = BG.docModulo(b.modulo);
+        if (modG && !PG.esAdmin && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: 'Sin permiso para el módulo ' + modG + '.' });
+        const out = await BG.docSubir(pool, b, usuario); const st = out.status || 200; delete out.status; return res(st, out);
+      }
+      if (q.id) { const out = await BG.docVer(pool, q.id, PG); const st = out.status || 200; delete out.status; return res(st, out); }
+      const modL = BG.docModulo(q.modulo);
+      if (!q.modulo || !q.caso_id) return res(400, { ok: false, success: false, message: 'Faltan modulo y caso_id.' });
+      if (modL && !PG.esAdmin && !PG.permisos[modL]) return res(403, { ok: false, success: false, message: 'Sin permiso para el módulo ' + modL + '.' });
+      return res(200, await BG.docListar(pool, q.modulo, q.caso_id));
+    }
     /* POST bs/auditar { usuario, accion, modulo, registro_id, detalle } — evento suelto. Lo manda el Apps Script (clave interna) por cada
        escritura que aún hace en Google, y el navegador (ACCESO / EXPORTAR). Con sesión de usuario, el usuario es el del token. */
     if (accion === 'auditar') {
