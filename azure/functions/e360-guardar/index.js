@@ -53,11 +53,14 @@ async function getEvaluaciones360(pool, p) {
 module.exports = async function (context, req) {
   const accion = context.bindingData.accion;
   try {
-    if (accion !== 'getEvaluaciones360' && H.ACCIONES.indexOf(accion) < 0) { context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
+    const AS = require('../shared/e360-asistente');   /* _E360_ASISTENTE_V1 (08-nov): e360Pendientes · e360Programa */
+    if (accion !== 'getEvaluaciones360' && accion !== 'e360Pendientes' && accion !== 'e360Programa' && H.ACCIONES.indexOf(accion) < 0) { context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
     const t = token(req);
     if (!t || !t.usuario) { context.res = { status: 401, body: { success: false, error: 'Sin sesion valida' } }; return; }
     const pool = await getPool(); await CG.asegurarTablas(pool);
     if (accion === 'getEvaluaciones360') { context.res = { status: 200, body: await getEvaluaciones360(pool, req.body || {}) }; return; }   /* _E360_LEER_AZURE_V1 */
+    if (accion === 'e360Pendientes') { context.res = { status: 200, body: await AS.pendientes(pool, String(t.usuario)) }; return; }
+    if (accion === 'e360Programa') { const b = req.body || {}; if (b.dia_inicio !== undefined || b.evaluadores !== undefined) { const r = await AS.guardarPrograma(pool, b, String(t.usuario)); context.res = { status: r.status, body: r.body }; return; } context.res = { status: 200, body: Object.assign({ success: true }, await AS.programa(pool)) }; return; }
     if (!(await H.encendido(pool))) { context.res = { status: 503, body: { success: false, apagado: true, error: 'Guardado en Azure apagado' } }; return; }
     const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false);
     context.res = { status: r.status, body: r.body };
