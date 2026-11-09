@@ -71641,7 +71641,35 @@ var require_e360_guardar = __commonJS({
     var TH = require_tablas_hoja();
     var CG = require_cv_guardar();
     var CAP = require_cap_guardar();
+    var KDB = require_kpi_db();
     var ACCIONES = ["saveEvaluacion360", "deleteEvaluacion360"];
+    var norm_ = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
+    function misma(a, b) {
+      const A = norm_(a).split(" ").filter((w) => w.length > 2), B = " " + norm_(b) + " ";
+      let n = 0;
+      A.forEach((w) => {
+        if (B.indexOf(" " + w + " ") >= 0) n++;
+      });
+      return n >= 2;
+    }
+    async function fotoKpis(pool, supervisor, periodo, ahora) {
+      try {
+        const R = KDB.rangoMes(periodo), d = await KDB.calcular(pool, KDB.hoyLima(), R.desde, R.hasta);
+        const per = (d.personas || []).find((p) => misma(p.nombre, supervisor) || (p.alias || []).some((a) => misma(a, supervisor)));
+        if (!per) return { periodo, calculado: ahora.toISOString(), sin_datos: true };
+        return {
+          periodo,
+          calculado: ahora.toISOString(),
+          usuario: per.usuario,
+          tipo: per.tipo,
+          nota: per.nota == null ? null : per.nota,
+          cumpl: per.cumpl == null ? null : per.cumpl,
+          kpis: (per.kpis || []).map((k) => ({ codigo: k.codigo, corto: k.corto, num: k.num, den: k.den, pct: k.pct == null ? null : Math.round(k.pct * 1e4) / 1e4, meta: k.meta, nivel: k.nivel, estado: k.estado, unidad: k.unidad || "" }))
+        };
+      } catch (e) {
+        return { periodo, calculado: ahora.toISOString(), error: String(e.message || e).slice(0, 200) };
+      }
+    }
     var ADMINS_EVAL360 = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas"];
     var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
     var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
@@ -71716,6 +71744,12 @@ var require_e360_guardar = __commonJS({
             await tx.rollback();
             return { status: 200, body: { success: false, error: "Ejecutar eval360Setup() primero (faltan columnas Periodo/Detalle)" } };
           }
+          let iK = heads.indexOf("KPIs");
+          if (iK === -1) {
+            heads.push("KPIs");
+            iK = heads.length - 1;
+            await tx.request().input("k", sql.NVarChar(40), "e360_evaluaciones").input("e", sql.NVarChar(sql.MAX), JSON.stringify(heads)).input("a", sql.Int, heads.length).query("UPDATE dbo.TH_Estado SET encabezado = @e, ancho = @a WHERE clave = @k");
+          }
           const ancho = heads.length;
           const comps = d.competencias || [];
           let total = 0;
@@ -71757,7 +71791,14 @@ var require_e360_guardar = __commonJS({
           fila[18] = L.dia + " " + L.hm;
           fila[iP] = periodo;
           fila[iD] = detalle;
-          celdas = fila.map((v, k) => k === iP ? typeof v === "string" ? v : String(v) : CAP.comoHoja(v));
+          let fotoK = "";
+          try {
+            fotoK = JSON.stringify(await fotoKpis(pool, String(d.supervisor).trim(), periodo, ahora));
+          } catch (e) {
+            fotoK = "";
+          }
+          fila[iK] = fotoK;
+          celdas = fila.map((v, k) => k === iP || k === iK ? typeof v === "string" ? v : String(v) : CAP.comoHoja(v));
           if (i >= 0) {
             const r = tx.request();
             r.input("fila", sql.Int, i + 1);
@@ -71800,7 +71841,7 @@ var require_e360_guardar = __commonJS({
         throw e;
       }
     }
-    module.exports = { ejecutar, encendido, ACCIONES, ADMINS_EVAL360 };
+    module.exports = { ejecutar, encendido, ACCIONES, ADMINS_EVAL360, misma, fotoKpis };
   }
 });
 
@@ -73608,19 +73649,10 @@ var require_e360_asistente = __commonJS({
     var { sql } = require_db();
     var TH = require_tablas_hoja();
     var KPI = require_kpi_db();
-    var { ADMINS_EVAL360 } = require_e360_guardar();
+    var { ADMINS_EVAL360, misma } = require_e360_guardar();
     var MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "setiembre", "octubre", "noviembre", "diciembre"];
     var p2 = (n) => (n < 10 ? "0" : "") + n;
     var S = (v) => v && typeof v === "object" && typeof v.$d === "string" ? v.$s || v.$d : String(v == null ? "" : v);
-    var norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z ]/g, " ").replace(/\s+/g, " ").trim();
-    function misma(a, b) {
-      const A = norm(a).split(" ").filter((w) => w.length > 2), B = " " + norm(b) + " ";
-      let n = 0;
-      A.forEach((w) => {
-        if (B.indexOf(" " + w + " ") >= 0) n++;
-      });
-      return n >= 2;
-    }
     function hoyLima() {
       const d = new Date(Date.now() - 5 * 36e5);
       return { y: d.getUTCFullYear(), m: d.getUTCMonth(), d: d.getUTCDate(), ymd: d.toISOString().slice(0, 10) };
@@ -73668,7 +73700,39 @@ var require_e360_asistente = __commonJS({
           const d = f && typeof f === "object" && f.$d ? new Date(new Date(f.$d).getTime() - 5 * 36e5) : new Date(S(f));
           per = isNaN(d) ? S(f).slice(0, 7) : d.toISOString().slice(0, 7);
         }
-        if (per === periodo) out.push({ id: S(r[0]), supervisor: S(r[3]).trim(), evaluador: S(r[2]), porcentaje: Number(S(r[13])) || 0, nivel: S(r[14]) });
+        if (per !== periodo) return;
+        const iD = heads.indexOf("Detalle"), iK = heads.indexOf("KPIs");
+        let comps = [];
+        if (iD >= 0 && S(r[iD])) {
+          try {
+            comps = JSON.parse(S(r[iD]));
+          } catch (e) {
+            comps = [];
+          }
+        }
+        if (!Array.isArray(comps) || !comps.length) comps = [["Liderazgo", r[6]], ["Comunicaci\xF3n", r[7]], ["Cumplimiento", r[8]], ["Gesti\xF3n de Equipo", r[9]], ["Resoluci\xF3n de Problemas", r[10]], ["Planificaci\xF3n", r[11]]].map((pc) => ({ nombre: pc[0], promedio: Number(S(pc[1])) || 0 }));
+        let kpis = null;
+        if (iK >= 0 && S(r[iK])) {
+          try {
+            kpis = JSON.parse(S(r[iK]));
+          } catch (e) {
+            kpis = null;
+          }
+        }
+        out.push({
+          id: S(r[0]),
+          supervisor: S(r[3]).trim(),
+          evaluador: S(r[2]),
+          empresa: S(r[4]),
+          sector: S(r[5]),
+          porcentaje: Number(S(r[13])) || 0,
+          total: Number(S(r[12])) || 0,
+          nivel: S(r[14]),
+          observaciones: S(r[15]),
+          recomendaciones: S(r[16]),
+          competencias: comps.map((c) => ({ nombre: c.nombre, promedio: Math.round((Number(c.promedio) || 0) * 100) / 100 })),
+          kpis
+        });
       });
       return out;
     }
@@ -73700,7 +73764,106 @@ var require_e360_asistente = __commonJS({
         fuente: "supabase"
       };
     }
-    module.exports = { programa, guardarPrograma, pendientes, misma };
+    var PLAN = [
+      [/cumplimiento/i, "Revisi\xF3n semanal de casos abiertos y plazos con el coordinador; checklist de informes (5 d\xEDas h\xE1biles) y documentaci\xF3n al cierre de cada caso."],
+      [/comunicaci/i, "Reporte breve diario por el canal oficial; reuni\xF3n quincenal de coordinaci\xF3n con jefes de fundo y RR.LL."],
+      [/liderazgo/i, "Acompa\xF1amiento en campo del coordinador (2 visitas al mes) con retroalimentaci\xF3n inmediata; taller de liderazgo y trato al personal."],
+      [/gesti/i, "Plan de trabajo mensual del equipo a cargo con responsables y fechas; seguimiento de ausentismo y rotaci\xF3n del sector."],
+      [/resoluci/i, "Aplicar el protocolo de atenci\xF3n de conflictos (escucha, registro, soluci\xF3n, seguimiento); revisi\xF3n mensual de casos reincidentes."],
+      [/planificaci/i, "Programaci\xF3n mensual de visitas y capacitaciones ETI cargada al inicio de mes; proponer una mejora por mes en su sector."]
+    ];
+    function planDe(nombre) {
+      for (const x of PLAN) if (x[0].test(nombre)) return nombre + ": " + x[1];
+      return nombre + ": definir una acci\xF3n de mejora con el coordinador y hacer seguimiento mensual.";
+    }
+    var periodoAnterior = (p) => {
+      const y = +p.slice(0, 4), m = +p.slice(5, 7);
+      const d = new Date(Date.UTC(y, m - 2, 1));
+      return d.getUTCFullYear() + "-" + p2(d.getUTCMonth() + 1);
+    };
+    var prom = (a) => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10 : null;
+    async function reporte(pool, periodoPedido) {
+      const h = hoyLima(), periodo = /^\d{4}-\d{2}$/.test(String(periodoPedido || "")) ? String(periodoPedido) : h.y + "-" + p2(h.m + 1);
+      const ant = periodoAnterior(periodo);
+      const [evs, evsAnt, personas] = await Promise.all([evaluacionesDe(pool, periodo), evaluacionesDe(pool, ant), KPI.personas(pool)]);
+      const equipo = personas.filter((p) => p.activo && (p.tipo === "SUP" || p.tipo === "ASIST"));
+      const buscaEv = (lista, p) => lista.find((e) => misma(e.supervisor, p.nombre) || (p.alias || []).some((a) => misma(e.supervisor, a)));
+      const filas = equipo.map((p) => {
+        const e = buscaEv(evs, p), a = buscaEv(evsAnt, p);
+        if (!e) return { usuario: p.usuario, nombre: String(p.nombre).toUpperCase(), empresa: p.empresa || "", tipo: p.tipo, puesto: p.puesto || "", evaluado: false };
+        const brechas = (e.competencias || []).filter((c) => c.promedio > 0 && c.promedio < 3).map((c) => c.nombre);
+        const fuertes = (e.competencias || []).filter((c) => c.promedio >= 4.5).map((c) => c.nombre);
+        const kp = e.kpis && e.kpis.kpis ? e.kpis.kpis.filter((k) => k.estado === "ok" && k.den).map((k) => ({ codigo: k.codigo, corto: k.corto, pct: k.pct != null ? k.pct : k.den ? k.num / k.den : null, meta: k.meta, bajo_meta: k.meta != null && k.pct != null && k.pct < k.meta })) : [];
+        return {
+          usuario: p.usuario,
+          nombre: String(p.nombre).toUpperCase(),
+          empresa: e.empresa || p.empresa || "",
+          tipo: p.tipo,
+          puesto: p.puesto || "",
+          evaluado: true,
+          id: e.id,
+          evaluador: e.evaluador,
+          porcentaje: e.porcentaje,
+          nivel: e.nivel,
+          competencias: e.competencias,
+          kpis: kp,
+          kpis_bajo_meta: kp.filter((k) => k.bajo_meta).length,
+          anterior: a ? a.porcentaje : null,
+          delta: a ? Math.round((e.porcentaje - a.porcentaje) * 10) / 10 : null,
+          brechas,
+          fuertes,
+          observaciones: e.observaciones,
+          recomendaciones: e.recomendaciones
+        };
+      });
+      const evaluados = filas.filter((f) => f.evaluado).sort((x, y) => y.porcentaje - x.porcentaje);
+      evaluados.forEach((f, i) => {
+        f.puesto_ranking = i + 1;
+      });
+      const niveles = {};
+      evaluados.forEach((f) => {
+        const n = f.nivel || "Sin nivel";
+        niveles[n] = (niveles[n] || 0) + 1;
+      });
+      const porEmpresa = {};
+      evaluados.forEach((f) => {
+        const k = f.empresa || "\u2014";
+        (porEmpresa[k] = porEmpresa[k] || []).push(f.porcentaje);
+      });
+      const compNombres = [];
+      evaluados.forEach((f) => (f.competencias || []).forEach((c) => {
+        if (compNombres.indexOf(c.nombre) < 0) compNombres.push(c.nombre);
+      }));
+      const competencias = compNombres.map((n) => ({ nombre: n, promedio: prom(evaluados.map((f) => (f.competencias.find((c) => c.nombre === n) || {}).promedio).filter((v) => v > 0)), bajos: evaluados.filter((f) => ((f.competencias.find((c) => c.nombre === n) || {}).promedio || 0) > 0 && (f.competencias.find((c) => c.nombre === n) || {}).promedio < 3).length }));
+      const promAnt = prom(evsAnt.map((e) => e.porcentaje));
+      const plan = evaluados.filter((f) => f.brechas.length || f.kpis_bajo_meta || (f.recomendaciones || "").trim()).map((f) => ({ nombre: f.nombre, empresa: f.empresa, porcentaje: f.porcentaje, nivel: f.nivel, brechas: f.brechas, kpis_bajo_meta: f.kpis.filter((k) => k.bajo_meta).map((k) => k.corto + " " + Math.round(k.pct * 100) + "% (meta " + Math.round(k.meta * 100) + "%)"), acciones: f.brechas.map((b) => planDe(b)), recomendaciones: f.recomendaciones, observaciones: f.observaciones }));
+      return {
+        success: true,
+        periodo,
+        mes: MESES[+periodo.slice(5, 7) - 1] + " " + periodo.slice(0, 4),
+        periodo_anterior: ant,
+        generado: (/* @__PURE__ */ new Date()).toISOString(),
+        fuente: "supabase",
+        resumen: {
+          equipo: equipo.length,
+          evaluados: evaluados.length,
+          pendientes: filas.filter((f) => !f.evaluado).map((f) => f.nombre),
+          promedio: prom(evaluados.map((f) => f.porcentaje)),
+          promedio_anterior: promAnt,
+          niveles,
+          porEmpresa: Object.keys(porEmpresa).map((k) => ({ empresa: k, promedio: prom(porEmpresa[k]), n: porEmpresa[k].length })),
+          mejor: evaluados[0] ? { nombre: evaluados[0].nombre, porcentaje: evaluados[0].porcentaje } : null,
+          menor: evaluados.length ? { nombre: evaluados[evaluados.length - 1].nombre, porcentaje: evaluados[evaluados.length - 1].porcentaje } : null,
+          con_brechas: evaluados.filter((f) => f.brechas.length).length,
+          kpis_bajo_meta: evaluados.reduce((s, f) => s + f.kpis_bajo_meta, 0)
+        },
+        competencias,
+        ranking: evaluados,
+        plan_mejora: plan,
+        pendientes: filas.filter((f) => !f.evaluado)
+      };
+    }
+    module.exports = { programa, guardarPrograma, pendientes, reporte, misma };
   }
 });
 
@@ -73741,7 +73904,7 @@ var require_e360_guardar2 = __commonJS({
     async function getEvaluaciones360(pool, p) {
       const T = await TH.leer(pool, "e360_evaluaciones");
       if (!T) return { success: false, error: "Tabla de evaluaciones aun no cargada" };
-      const heads = (T.encabezado || []).map((h) => S(h).trim()), iP = heads.indexOf("Periodo"), iD = heads.indexOf("Detalle");
+      const heads = (T.encabezado || []).map((h) => S(h).trim()), iP = heads.indexOf("Periodo"), iD = heads.indexOf("Detalle"), iK = heads.indexOf("KPIs");
       let data = [];
       (T.filas || []).forEach((r) => {
         if (!r || !S(r[0])) return;
@@ -73761,6 +73924,14 @@ var require_e360_guardar2 = __commonJS({
             if (v > 0) comps.push({ nombre: pc[0], promedio: v, respondidas: 0, total: 0, respuestas: [] });
           });
         }
+        let kpis = null;
+        if (iK >= 0 && S(r[iK])) {
+          try {
+            kpis = JSON.parse(S(r[iK]));
+          } catch (e) {
+            kpis = null;
+          }
+        }
         data.push({
           id: S(r[0]),
           fecha,
@@ -73770,6 +73941,7 @@ var require_e360_guardar2 = __commonJS({
           empresa: S(r[4]),
           sector: S(r[5]),
           competencias: comps,
+          kpis,
           total: Number(S(r[12])) || 0,
           porcentaje: Number(S(r[13])) || 0,
           clasificacion: S(r[14]),
@@ -73791,7 +73963,7 @@ var require_e360_guardar2 = __commonJS({
       const accion = context.bindingData.accion;
       try {
         const AS = require_e360_asistente();
-        if (accion !== "getEvaluaciones360" && accion !== "e360Pendientes" && accion !== "e360Programa" && H.ACCIONES.indexOf(accion) < 0) {
+        if (["getEvaluaciones360", "e360Pendientes", "e360Programa", "e360Reporte"].indexOf(accion) < 0 && H.ACCIONES.indexOf(accion) < 0) {
           context.res = { status: 404, body: { success: false, error: "Accion desconocida" } };
           return;
         }
@@ -73804,6 +73976,15 @@ var require_e360_guardar2 = __commonJS({
         await CG.asegurarTablas(pool);
         if (accion === "getEvaluaciones360") {
           context.res = { status: 200, body: await getEvaluaciones360(pool, req.body || {}) };
+          return;
+        }
+        if (accion === "e360Reporte") {
+          const prog = await AS.programa(pool);
+          if (prog.evaluadores.indexOf(String(t.usuario).toLowerCase()) < 0) {
+            context.res = { status: 403, body: { success: false, error: "Solo los evaluadores autorizados ven el informe gerencial." } };
+            return;
+          }
+          context.res = { status: 200, body: await AS.reporte(pool, (req.body || {}).periodo) };
           return;
         }
         if (accion === "e360Pendientes") {

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Informe Gerencial · Evaluación 360° · Sistema RR.LL.</title>
+<script src="/sistema-rl-verfrut/frontend/js/azure-token.js?v=14"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  /* _E360_INFORME_V1 (08-nov-2026) — informe gerencial mensual de la Evaluación 360°. Datos: Supabase (e360Reporte). Imprimir = PDF. */
+  :root{--azul:#0b1e45;--azul2:#1e3a8a;--verde:#16a34a;--ambar:#d97706;--rojo:#dc2626;--gris:#64748b;--bd:#e2e8f0}
+  *{box-sizing:border-box}body{margin:0;font-family:Segoe UI,Inter,Arial,sans-serif;color:#0f172a;background:#f1f5f9}
+  .hoja{max-width:1080px;margin:0 auto;background:#fff;padding:28px 36px 40px;min-height:100vh}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:3px solid var(--azul);padding-bottom:14px;margin-bottom:18px}
+  .top h1{margin:0;font-size:22px;color:var(--azul)}.top .sub{color:var(--gris);font-size:13px;margin-top:4px}
+  .top .marca{text-align:right;font-size:12px;color:var(--gris)}.top .marca b{display:block;color:var(--azul);font-size:14px}
+  .ctrl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+  .ctrl select,.ctrl button{border:1px solid var(--bd);border-radius:10px;padding:8px 12px;font-size:13.5px;font-weight:700;background:#fff;color:var(--azul)}
+  .ctrl button.p{background:var(--azul2);color:#fff;border-color:var(--azul2);cursor:pointer}
+  h2{font-size:15px;color:var(--azul);margin:22px 0 10px;padding-left:10px;border-left:4px solid var(--azul2)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+  .k{border:1px solid var(--bd);border-radius:14px;padding:12px 14px}.k .t{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--gris);font-weight:800}.k .v{font-size:24px;font-weight:800;color:var(--azul);margin-top:2px}.k .d{font-size:12px;color:var(--gris)}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}th{background:#f8fafc;text-align:left;padding:8px;border-bottom:2px solid var(--bd);color:var(--gris);font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}td{padding:7px 8px;border-bottom:1px solid #eef2f7;vertical-align:top}
+  .bar{height:8px;background:#e2e8f0;border-radius:999px;overflow:hidden;min-width:90px}.bar i{display:block;height:100%}
+  .ok{color:var(--verde);font-weight:800}.med{color:var(--ambar);font-weight:800}.mal{color:var(--rojo);font-weight:800}
+  .chip{display:inline-block;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;margin:1px 2px 1px 0}.chip.r{background:#fee2e2;color:#991b1b}.chip.a{background:#fef3c7;color:#92400e}.chip.v{background:#dcfce7;color:#166534}.chip.g{background:#f1f5f9;color:#334155}
+  .nota{background:#f8fafc;border:1px solid var(--bd);border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.5;color:#334155}
+  .plan{border:1px solid var(--bd);border-radius:14px;padding:12px 14px;margin-bottom:10px;page-break-inside:avoid}.plan b.n{color:var(--azul);font-size:14px}.plan .m{color:var(--gris);font-size:12px}
+  .plan p{margin:6px 0 0;font-size:12.5px;white-space:pre-wrap}
+  .firma{margin-top:36px;display:flex;gap:40px;justify-content:space-between;font-size:12px;color:var(--gris)}.firma div{flex:1;border-top:1px solid #94a3b8;padding-top:6px;text-align:center}
+  .pie{margin-top:18px;font-size:11px;color:var(--gris);text-align:center}
+  @media print{body{background:#fff}.hoja{padding:0;max-width:none}.ctrl,.noprint{display:none!important}h2{page-break-after:avoid}@page{margin:14mm}}
+</style>
+</head>
+<body>
+<div class="hoja">
+  <div class="top">
+    <div><h1>📑 Informe Gerencial · Evaluación 360° de Desempeño</h1><div class="sub" id="sub">Supervisores de Gestión Humana y asistentes de Relaciones Laborales</div></div>
+    <div class="marca"><b>UNIFRUTTI GROUP</b>VERFRUT S.A.C. · RAPEL S.A.C.<br>Relaciones Laborales</div>
+  </div>
+  <div class="ctrl noprint">
+    <label>Periodo <select id="per"></select></label>
+    <button type="button" id="btnCargar">Actualizar</button>
+    <button type="button" class="p" id="btnPdf">🖨️ Imprimir / guardar PDF</button>
+    <button type="button" id="btnXls">📊 Excel</button>
+    <a href="evaluacion360.html" style="margin-left:auto;font-size:13px;color:var(--azul2);font-weight:700">← Volver a Evaluación 360°</a>
+  </div>
+  <div id="cuerpo"><div class="nota">Cargando informe desde Supabase…</div></div>
+  <div class="firma"><div>Coordinador de Relaciones Laborales</div><div>Jefatura de Gestión Humana</div><div>Gerencia</div></div>
+  <div class="pie" id="pie"></div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var EDGE = (window.RL_EDGE_URL || 'https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api') + '/e360/guardar/e360Reporte';
+  var MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'setiembre', 'octubre', 'noviembre', 'diciembre'];
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function titulo(n) { return String(n || '').toLowerCase().replace(/(^|\s)\S/g, function (c) { return c.toUpperCase(); }); }
+  function tk() { try { return sessionStorage.getItem('rl_token') || ''; } catch (e) { return ''; } }
+  function clase(p) { return p == null ? '' : p >= 85 ? 'ok' : p >= 70 ? 'med' : 'mal'; }
+  function color(p) { return p == null ? '#cbd5e1' : p >= 85 ? '#16a34a' : p >= 70 ? '#d97706' : '#dc2626'; }
+  function pct(v) { return v == null ? '—' : (Math.round(v * 10) / 10) + '%'; }
+  function periodos() {
+    var sel = $('per'), hoy = new Date(), q = new URLSearchParams(location.search).get('periodo');
+    for (var i = 0; i < 12; i++) { var d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1), v = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2); var o = document.createElement('option'); o.value = v; o.textContent = MESES[d.getMonth()] + ' ' + d.getFullYear(); sel.appendChild(o); }
+    if (q && /^\d{4}-\d{2}$/.test(q)) sel.value = q;
+    if (!sel.value) sel.selectedIndex = hoy.getDate() < 16 ? 1 : 0;
+  }
+  async function cargar() {
+    var t = tk(); if (!t) { $('cuerpo').innerHTML = '<div class="nota">Inicia sesión en el Sistema RR.LL. para ver el informe.</div>'; return; }
+    $('cuerpo').innerHTML = '<div class="nota">Cargando informe desde Supabase…</div>';
+    var r; try { r = await fetch(EDGE, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify({ periodo: $('per').value }) }); } catch (e) { $('cuerpo').innerHTML = '<div class="nota">No se pudo conectar: ' + esc(e.message) + '</div>'; return; }
+    if (r.status === 403) { $('cuerpo').innerHTML = '<div class="nota">Este informe es solo para los evaluadores autorizados de la Evaluación 360°.</div>'; return; }
+    if (r.status === 401) { $('cuerpo').innerHTML = '<div class="nota">Tu sesión venció. Vuelve a iniciar sesión en el Sistema RR.LL.</div>'; return; }
+    var d = await r.json().catch(function () { return null; });
+    if (!d || !d.success) { $('cuerpo').innerHTML = '<div class="nota">No se pudo generar el informe' + (d && d.error ? ': ' + esc(d.error) : '') + '.</div>'; return; }
+    pintar(d);
+  }
+  /* Excel: una hoja por sección (resumen, ranking, competencias, KPIs, plan de mejora, pendientes) */
+  var ULTIMO = null;
+  function excel() {
+    var d = ULTIMO; if (!d || !window.XLSX) { alert('Primero carga el informe.'); return; }
+    var R = d.resumen, wb = XLSX.utils.book_new(), add = function (nombre, filas) { XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas.length ? filas : [{ '': 'Sin datos' }]), nombre); };
+    add('Resumen', [{ Periodo: d.mes, Equipo: R.equipo, Evaluados: R.evaluados, 'Promedio %': R.promedio, 'Promedio mes anterior %': R.promedio_anterior, 'Con brechas': R.con_brechas, 'KPIs bajo meta': R.kpis_bajo_meta, Generado: new Date(d.generado).toLocaleString('es-PE') }]);
+    add('Ranking', d.ranking.map(function (f) { return { Puesto: f.puesto_ranking, Nombre: f.nombre, Empresa: f.empresa, Tipo: f.tipo === 'ASIST' ? 'Asistente RR.LL.' : 'Supervisor GH', 'Nota 360 %': f.porcentaje, Nivel: f.nivel, 'Mes anterior %': f.anterior, Variación: f.delta, 'KPIs bajo meta': f.kpis_bajo_meta, Brechas: (f.brechas || []).join(', '), Fortalezas: (f.fuertes || []).join(', '), Evaluador: f.evaluador, Observaciones: f.observaciones, Recomendaciones: f.recomendaciones }; }));
+    add('Competencias', (d.competencias || []).map(function (c) { return { Competencia: c.nombre, 'Promedio (1-5)': c.promedio, 'Personas con nota baja': c.bajos }; }));
+    var K = []; d.ranking.forEach(function (f) { (f.kpis || []).forEach(function (k) { K.push({ Nombre: f.nombre, KPI: k.codigo + ' · ' + k.corto, 'Resultado %': k.pct == null ? '' : Math.round(k.pct * 1000) / 10, 'Meta %': k.meta == null ? '' : Math.round(k.meta * 100), 'Bajo meta': k.bajo_meta ? 'Sí' : 'No' }); }); });
+    add('KPIs vs meta', K);
+    add('Plan de mejora', (d.plan_mejora || []).map(function (p) { return { Nombre: p.nombre, Empresa: p.empresa, 'Nota %': p.porcentaje, Nivel: p.nivel, Brechas: (p.brechas || []).join(', '), 'KPIs bajo meta': (p.kpis_bajo_meta || []).join(', '), 'Plan de acción': (p.acciones || []).join(' | '), Recomendación: p.recomendaciones || '' }; }));
+    add('Pendientes', (d.pendientes || []).map(function (f) { return { Nombre: f.nombre, Empresa: f.empresa, Tipo: f.tipo === 'ASIST' ? 'Asistente RR.LL.' : 'Supervisor GH' }; }));
+    XLSX.writeFile(wb, 'Informe-Gerencial-E360-' + d.periodo + '.xlsx');
+  }
+  function pintar(d) {
+    ULTIMO = d;
+    var R = d.resumen, h = [];
+    $('sub').textContent = 'Periodo ' + d.mes + ' · ' + R.evaluados + ' de ' + R.equipo + ' evaluados · generado ' + new Date(d.generado).toLocaleString('es-PE');
+    var delta = (R.promedio != null && R.promedio_anterior != null) ? Math.round((R.promedio - R.promedio_anterior) * 10) / 10 : null;
+    h.push('<h2>1. Resumen ejecutivo</h2><div class="kpis">'
+      + '<div class="k"><div class="t">Equipo evaluado</div><div class="v">' + R.evaluados + '<small style="font-size:14px;color:#64748b"> / ' + R.equipo + '</small></div><div class="d">' + (R.pendientes.length ? R.pendientes.length + ' pendiente(s)' : 'evaluación completa') + '</div></div>'
+      + '<div class="k"><div class="t">Desempeño promedio</div><div class="v ' + clase(R.promedio) + '">' + pct(R.promedio) + '</div><div class="d">' + (delta == null ? 'sin mes anterior comparable' : (delta >= 0 ? '▲ +' : '▼ ') + delta + ' pts vs. ' + d.periodo_anterior) + '</div></div>'
+      + '<div class="k"><div class="t">Mejor desempeño</div><div class="v" style="font-size:15px">' + (R.mejor ? esc(titulo(R.mejor.nombre)) : '—') + '</div><div class="d">' + (R.mejor ? pct(R.mejor.porcentaje) : '') + '</div></div>'
+      + '<div class="k"><div class="t">Requiere atención</div><div class="v" style="font-size:15px">' + (R.menor && R.menor.porcentaje < 70 ? esc(titulo(R.menor.nombre)) : (R.menor ? 'Ninguno crítico' : '—')) + '</div><div class="d">' + (R.menor ? 'menor: ' + pct(R.menor.porcentaje) : '') + '</div></div>'
+      + '<div class="k"><div class="t">Con brechas (&lt; 3)</div><div class="v ' + (R.con_brechas ? 'mal' : 'ok') + '">' + R.con_brechas + '</div><div class="d">competencias por debajo de "Bueno"</div></div>'
+      + '<div class="k"><div class="t">KPIs bajo meta</div><div class="v ' + (R.kpis_bajo_meta ? 'med' : 'ok') + '">' + R.kpis_bajo_meta + '</div><div class="d">indicadores del periodo</div></div>'
+      + '</div>');
+    if (R.porEmpresa && R.porEmpresa.length) h.push('<div class="nota" style="margin-top:10px">Por empresa: ' + R.porEmpresa.map(function (e) { return '<b>' + esc(e.empresa) + '</b> ' + pct(e.promedio) + ' (' + e.n + ')'; }).join(' · ') + ' &nbsp;·&nbsp; Niveles: ' + Object.keys(R.niveles).map(function (k) { return esc(k) + ' <b>' + R.niveles[k] + '</b>'; }).join(', ') + '</div>');
+    /* ranking */
+    h.push('<h2>2. Ranking del periodo</h2><table><thead><tr><th>#</th><th>Colaborador</th><th>Empresa</th><th>Puesto</th><th>Desempeño</th><th></th><th>Nivel</th><th>vs. mes anterior</th><th>KPIs bajo meta</th><th>Brechas</th></tr></thead><tbody>');
+    d.ranking.forEach(function (f) {
+      h.push('<tr><td>' + f.puesto_ranking + '</td><td><b>' + esc(titulo(f.nombre)) + '</b></td><td>' + esc(f.empresa) + '</td><td>' + esc(f.puesto || (f.tipo === 'ASIST' ? 'Asistente RR.LL.' : 'Supervisor GH')) + '</td>'
+        + '<td class="' + clase(f.porcentaje) + '">' + pct(f.porcentaje) + '</td><td><div class="bar"><i style="width:' + Math.min(100, f.porcentaje) + '%;background:' + color(f.porcentaje) + '"></i></div></td><td>' + esc(f.nivel || '—') + '</td>'
+        + '<td>' + (f.delta == null ? '—' : '<span class="' + (f.delta >= 0 ? 'ok' : 'mal') + '">' + (f.delta >= 0 ? '▲ +' : '▼ ') + f.delta + '</span>') + '</td>'
+        + '<td>' + (f.kpis_bajo_meta ? '<span class="chip a">' + f.kpis_bajo_meta + '</span>' : '<span class="chip v">0</span>') + '</td><td>' + (f.brechas.length ? f.brechas.map(function (b) { return '<span class="chip r">' + esc(b) + '</span>'; }).join('') : '<span class="chip v">sin brechas</span>') + '</td></tr>');
+    });
+    if (d.pendientes.length) d.pendientes.forEach(function (f) { h.push('<tr style="opacity:.6"><td>—</td><td>' + esc(titulo(f.nombre)) + '</td><td>' + esc(f.empresa) + '</td><td>' + esc(f.puesto || '') + '</td><td colspan="6"><span class="chip g">sin evaluación en el periodo</span></td></tr>'); });
+    h.push('</tbody></table>');
+    /* competencias */
+    if (d.competencias.length) {
+      h.push('<h2>3. Competencias del equipo (escala 1-5)</h2><table><thead><tr><th>Competencia</th><th>Promedio</th><th></th><th>Colaboradores &lt; 3</th></tr></thead><tbody>');
+      d.competencias.forEach(function (c) { var p = c.promedio == null ? null : c.promedio / 5 * 100; h.push('<tr><td><b>' + esc(c.nombre) + '</b></td><td class="' + clase(p) + '">' + (c.promedio == null ? '—' : c.promedio) + '</td><td><div class="bar"><i style="width:' + (p || 0) + '%;background:' + color(p) + '"></i></div></td><td>' + (c.bajos ? '<span class="chip r">' + c.bajos + '</span>' : '<span class="chip v">0</span>') + '</td></tr>'); });
+      h.push('</tbody></table>');
+    }
+    /* KPIs por persona */
+    var conK = d.ranking.filter(function (f) { return f.kpis && f.kpis.length; });
+    if (conK.length) {
+      h.push('<h2>4. Indicadores (KPIs) del periodo vs. meta</h2><table><thead><tr><th>Colaborador</th><th>Indicadores</th></tr></thead><tbody>');
+      conK.forEach(function (f) { h.push('<tr><td><b>' + esc(titulo(f.nombre)) + '</b></td><td>' + f.kpis.map(function (k) { return '<span class="chip ' + (k.pct == null ? 'g' : k.bajo_meta ? 'r' : 'v') + '" title="' + esc(k.codigo) + '">' + esc(k.corto) + ': ' + (k.pct == null ? '—' : Math.round(k.pct * 100) + '%') + (k.meta != null ? ' / meta ' + Math.round(k.meta * 100) + '%' : '') + '</span>'; }).join(' ') + '</td></tr>'); });
+      h.push('</tbody></table>');
+    }
+    /* plan de mejora */
+    h.push('<h2>5. Plan de mejora continua</h2>');
+    if (!d.plan_mejora.length) h.push('<div class="nota">Sin brechas ni recomendaciones registradas en el periodo.</div>');
+    d.plan_mejora.forEach(function (p) {
+      h.push('<div class="plan"><b class="n">' + esc(titulo(p.nombre)) + '</b> <span class="m">· ' + esc(p.empresa) + ' · ' + pct(p.porcentaje) + ' · ' + esc(p.nivel || '') + '</span>'
+        + (p.brechas.length ? '<p><b>Competencias a reforzar:</b> ' + p.brechas.map(esc).join(', ') + '</p>' : '')
+        + (p.kpis_bajo_meta.length ? '<p><b>Indicadores bajo meta:</b> ' + p.kpis_bajo_meta.map(esc).join(' · ') + '</p>' : '')
+        + ((p.acciones || []).length ? '<p><b>Plan de acción sugerido:</b></p><ul style="margin:4px 0 6px 18px">' + p.acciones.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>' : '')
+        + (String(p.recomendaciones || '').trim() ? '<p><b>Recomendaciones del evaluador:</b> ' + esc(p.recomendaciones) + '</p>' : '')
+        + (String(p.observaciones || '').trim() ? '<p><b>Observaciones:</b> ' + esc(p.observaciones) + '</p>' : '') + '</div>');
+    });
+    if (R.pendientes.length) h.push('<h2>6. Pendientes de evaluar</h2><div class="nota">' + R.pendientes.map(function (n) { return esc(titulo(n)); }).join(' · ') + '</div>');
+    $('cuerpo').innerHTML = h.join('');
+    $('pie').textContent = 'Fuente: Sistema de Relaciones Laborales · Evaluación 360° y módulo KPI (Supabase) · Documento de uso interno · ' + new Date().toLocaleDateString('es-PE');
+  }
+  periodos();
+  $('btnCargar').onclick = cargar; $('per').onchange = cargar; $('btnPdf').onclick = function () { window.print(); }; $('btnXls').onclick = excel;
+  cargar();
+})();
+</script>
+</body>
+</html>

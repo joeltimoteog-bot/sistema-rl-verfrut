@@ -23,11 +23,26 @@ const assert = (c, m) => { if (!c) { console.log('   ✗ ' + m); process.exitCod
   assert(r.body.evaluador_autorizado === false, 'ovilela no es evaluador autorizado');
   /* una evaluación guardada del periodo quita a la persona de pendientes */
   await c.query("UPDATE cv_estado SET valor='1' WHERE clave='e360_azure_primero'"); await c.query("INSERT INTO cv_estado (clave, valor) SELECT 'e360_azure_primero','1' WHERE NOT EXISTS (SELECT 1 FROM cv_estado WHERE clave='e360_azure_primero')");
-  r = await call('saveEvaluacion360', { client_id: 'p1', supervisor: 'Roberto Perez Ruiz', empresa: 'RAPEL', fecha: per + '-16', evaluador: 'Joel', competencias: [{ nombre: 'Liderazgo', promedio: 4 }], total: 80, porcentaje: 80, clasificacion: 'Bueno', obs: '' });
+  r = await call('saveEvaluacion360', { client_id: 'p' + Date.now(), supervisor: 'Roberto Perez Ruiz', empresa: 'RAPEL', fecha: per + '-16', evaluador: 'Joel', competencias: [{ nombre: 'Liderazgo', promedio: 4 }], total: 80, porcentaje: 80, clasificacion: 'Bueno', obs: '' });
   assert(r.status === 200 && r.body.success, 'saveEvaluacion360 guardó: ' + JSON.stringify(r.body).slice(0, 120));
+  r = await call('getEvaluaciones360', {});
+  const ev = (r.body.data || [])[0];
+  assert(r.body.success && ev && ev.kpis && ev.kpis.periodo === per && ev.kpis.usuario === 'rperez' && Array.isArray(ev.kpis.kpis), 'la evaluación guarda la foto de KPIs del periodo (usuario rperez): ' + JSON.stringify(ev && ev.kpis).slice(0, 200));
   r = await call('e360Pendientes');
   const desp = r.body.pendientes.map(p => p.nombre);
   assert(r.body.hechas === 1 && desp.length === antes - 1 && desp.indexOf('PEREZ RUIZ ROBERTO') < 0 && desp.indexOf('QUISPE LOPEZ ANA') >= 0, 'tras evaluar a "Roberto Perez Ruiz" (otro orden de nombre) sale de pendientes y Quispe sigue');
+  r = await call('e360Reporte', { periodo: per });
+  const rp = r.body;
+  assert(r.status === 200 && rp.success && rp.resumen.evaluados === 1 && rp.resumen.equipo >= 2 && rp.ranking[0].nombre === 'PEREZ RUIZ ROBERTO' && rp.ranking[0].porcentaje === 80 && rp.resumen.pendientes.indexOf('QUISPE LOPEZ ANA') >= 0 && Array.isArray(rp.competencias) && rp.ranking[0].kpis !== undefined, 'informe gerencial: 1 evaluado (Perez 80%), pendientes incluyen Quispe, competencias y KPIs → ' + JSON.stringify(rp.resumen).slice(0, 220));
+  /* informe gerencial */
+  r = await call('saveEvaluacion360', { client_id: 'p2', supervisor: 'QUISPE LOPEZ ANA', empresa: 'VERFRUT', fecha: per + '-17', evaluador: 'Joel', competencias: [{ nombre: 'Liderazgo y Conducta', promedio: 2.5 }, { nombre: 'Comunicación y Coordinación', promedio: 4.8 }], total: 55, porcentaje: 55, clasificacion: 'Crítico', obs: 'Debe mejorar', recomendaciones: 'Acompañamiento en campo' });
+  r = await call('e360Reporte', { periodo: per });
+  const R = r.body;
+  assert(r.status === 200 && R.success && R.resumen.evaluados === 2 && R.ranking[0].nombre.indexOf('PEREZ') === 0 && R.ranking[1].nombre === 'QUISPE LOPEZ ANA', 'informe: 2 evaluados, ranking Perez (80) > Quispe (55)');
+  assert(R.ranking[1].brechas.indexOf('Liderazgo y Conducta') >= 0 && R.plan_mejora.some(p => p.nombre === 'QUISPE LOPEZ ANA' && /Acompañamiento en campo/.test(p.acciones.join())), 'Quispe: brecha en Liderazgo y en el plan de mejora');
+  assert(R.resumen.pendientes.length === R.resumen.equipo - 2 && R.competencias.length >= 2, 'pendientes y competencias del equipo: ' + R.resumen.pendientes.length + ' pendientes');
+  r = await call('e360Reporte', { periodo: per }, { usuario: 'ovilela', rol: 'administrador' });
+  assert(r.status === 403, 'informe gerencial: usuario no autorizado → 403');
   await c.query("DELETE FROM kpi_personas WHERE usuario IN ('rperez','aquispe','bbien','xinact')"); await c.end();
   console.log(process.exitCode ? 'HAY FALLAS' : 'TODO OK'); process.exit();
 })().catch(e => { console.error('ERROR', e); process.exit(1); });

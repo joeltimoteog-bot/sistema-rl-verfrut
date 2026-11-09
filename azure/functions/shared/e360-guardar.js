@@ -14,7 +14,21 @@ const TH = require('./tablas-hoja');
 const CG = require('./cv-guardar');
 const CAP = require('./cap-guardar');
 
+const KDB = require('./kpi-db');   /* _E360_KPIS_V1 (08-nov-2026): foto de los KPIs del periodo dentro de cada evaluación */
 const ACCIONES = ['saveEvaluacion360', 'deleteEvaluacion360'];
+const norm_ = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+/* misma persona si comparten ≥ 2 palabras (apellidos / nombres) */
+function misma(a, b) { const A = norm_(a).split(' ').filter(w => w.length > 2), B = ' ' + norm_(b) + ' '; let n = 0; A.forEach(w => { if (B.indexOf(' ' + w + ' ') >= 0) n++; }); return n >= 2; }
+/* _E360_KPIS_V1: indicadores del supervisor en el mes del periodo (lo mismo que ve el evaluador en "Evidencia objetiva"), para el reporte gerencial */
+async function fotoKpis(pool, supervisor, periodo, ahora) {
+  try {
+    const R = KDB.rangoMes(periodo), d = await KDB.calcular(pool, KDB.hoyLima(), R.desde, R.hasta);
+    const per = (d.personas || []).find(p => misma(p.nombre, supervisor) || (p.alias || []).some(a => misma(a, supervisor)));
+    if (!per) return { periodo, calculado: ahora.toISOString(), sin_datos: true };
+    return { periodo, calculado: ahora.toISOString(), usuario: per.usuario, tipo: per.tipo, nota: per.nota == null ? null : per.nota, cumpl: per.cumpl == null ? null : per.cumpl,
+      kpis: (per.kpis || []).map(k => ({ codigo: k.codigo, corto: k.corto, num: k.num, den: k.den, pct: k.pct == null ? null : Math.round(k.pct * 10000) / 10000, meta: k.meta, nivel: k.nivel, estado: k.estado, unidad: k.unidad || '' })) };
+  } catch (e) { return { periodo, calculado: ahora.toISOString(), error: String(e.message || e).slice(0, 200) }; }
+}
 const ADMINS_EVAL360 = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas'];
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
 const S = v => esD(v) ? v.$s : String(v == null ? '' : v);
@@ -71,6 +85,10 @@ async function ejecutar(pool, accion, b, usuario, prueba, ahoraFija) {
       if (!periodo) { await tx.rollback(); return { status: 200, body: { success: false, error: 'No se pudo determinar el periodo' } }; }
       const heads = (T.encabezado || []).map(h => S(h).trim()), iP = heads.indexOf('Periodo'), iD = heads.indexOf('Detalle');
       if (iP === -1 || iD === -1) { await tx.rollback(); return { status: 200, body: { success: false, error: 'Ejecutar eval360Setup() primero (faltan columnas Periodo/Detalle)' } }; }
+      /* _E360_KPIS_V1: columna KPIs (JSON) al final del encabezado; se crea la primera vez */
+      let iK = heads.indexOf('KPIs');
+      if (iK === -1) { heads.push('KPIs'); iK = heads.length - 1;
+        await tx.request().input('k', sql.NVarChar(40), 'e360_evaluaciones').input('e', sql.NVarChar(sql.MAX), JSON.stringify(heads)).input('a', sql.Int, heads.length).query('UPDATE dbo.TH_Estado SET encabezado = @e, ancho = @a WHERE clave = @k'); }
       const ancho = heads.length;
       const comps = d.competencias || [];
       let total = 0;
@@ -88,7 +106,9 @@ async function ejecutar(pool, accion, b, usuario, prueba, ahoraFija) {
       fila[12] = total; fila[13] = Number(d.porcentaje) || 0; fila[14] = d.clasificacion || d.nivel || '';
       fila[15] = d.obs !== undefined ? d.obs : (d.observaciones || ''); fila[16] = d.recomendaciones || ''; fila[17] = usuarioReg;
       fila[18] = L.dia + ' ' + L.hm; fila[iP] = periodo; fila[iD] = detalle;
-      celdas = fila.map((v, k) => k === iP ? (typeof v === 'string' ? v : String(v)) : CAP.comoHoja(v));   /* Periodo: columna de texto */
+      let fotoK = ''; try { fotoK = JSON.stringify(await fotoKpis(pool, String(d.supervisor).trim(), periodo, ahora)); } catch (e) { fotoK = ''; }
+      fila[iK] = fotoK;
+      celdas = fila.map((v, k) => (k === iP || k === iK) ? (typeof v === 'string' ? v : String(v)) : CAP.comoHoja(v));   /* Periodo y KPIs: columnas de texto */
       if (i >= 0) {
         const r = tx.request(); r.input('fila', sql.Int, i + 1);
         const sets = params(r, celdas);
@@ -121,4 +141,4 @@ async function ejecutar(pool, accion, b, usuario, prueba, ahoraFija) {
     throw e;
   }
 }
-module.exports = { ejecutar, encendido, ACCIONES, ADMINS_EVAL360 };
+module.exports = { ejecutar, encendido, ACCIONES, ADMINS_EVAL360, misma, fotoKpis };

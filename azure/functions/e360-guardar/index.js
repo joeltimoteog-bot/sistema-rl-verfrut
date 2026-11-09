@@ -28,7 +28,7 @@ function fechaYmd(v) {
 async function getEvaluaciones360(pool, p) {
   const T = await TH.leer(pool, 'e360_evaluaciones');
   if (!T) return { success: false, error: 'Tabla de evaluaciones aun no cargada' };
-  const heads = (T.encabezado || []).map(h => S(h).trim()), iP = heads.indexOf('Periodo'), iD = heads.indexOf('Detalle');
+  const heads = (T.encabezado || []).map(h => S(h).trim()), iP = heads.indexOf('Periodo'), iD = heads.indexOf('Detalle'), iK = heads.indexOf('KPIs');   /* _E360_KPIS_V1 */
   let data = [];
   (T.filas || []).forEach(r => {
     if (!r || !S(r[0])) return;
@@ -40,7 +40,8 @@ async function getEvaluaciones360(pool, p) {
       [['Liderazgo', r[6]], ['Comunicación', r[7]], ['Cumplimiento', r[8]], ['Gestión de Equipo', r[9]], ['Resolución de Problemas', r[10]], ['Planificación', r[11]]]
         .forEach(pc => { const v = Number(S(pc[1])) || 0; if (v > 0) comps.push({ nombre: pc[0], promedio: v, respondidas: 0, total: 0, respuestas: [] }); });
     }
-    data.push({ id: S(r[0]), fecha, periodo, evaluador: S(r[2]), supervisor: S(r[3]).trim(), empresa: S(r[4]), sector: S(r[5]), competencias: comps,
+    let kpis = null; if (iK >= 0 && S(r[iK])) { try { kpis = JSON.parse(S(r[iK])); } catch (e) { kpis = null; } }
+    data.push({ id: S(r[0]), fecha, periodo, evaluador: S(r[2]), supervisor: S(r[3]).trim(), empresa: S(r[4]), sector: S(r[5]), competencias: comps, kpis,
       total: Number(S(r[12])) || 0, porcentaje: Number(S(r[13])) || 0, clasificacion: S(r[14]), obs: S(r[15]), evaluadorUser: S(r[17]), fechaRegistro: fechaYmd(r[18]) });
   });
   if (p && p.empresa && p.empresa !== 'AMBAS') data = data.filter(e => e.empresa === p.empresa);
@@ -54,11 +55,16 @@ module.exports = async function (context, req) {
   const accion = context.bindingData.accion;
   try {
     const AS = require('../shared/e360-asistente');   /* _E360_ASISTENTE_V1 (08-nov): e360Pendientes · e360Programa */
-    if (accion !== 'getEvaluaciones360' && accion !== 'e360Pendientes' && accion !== 'e360Programa' && H.ACCIONES.indexOf(accion) < 0) { context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
+    if (['getEvaluaciones360', 'e360Pendientes', 'e360Programa', 'e360Reporte'].indexOf(accion) < 0 && H.ACCIONES.indexOf(accion) < 0) { context.res = { status: 404, body: { success: false, error: 'Accion desconocida' } }; return; }
     const t = token(req);
     if (!t || !t.usuario) { context.res = { status: 401, body: { success: false, error: 'Sin sesion valida' } }; return; }
     const pool = await getPool(); await CG.asegurarTablas(pool);
     if (accion === 'getEvaluaciones360') { context.res = { status: 200, body: await getEvaluaciones360(pool, req.body || {}) }; return; }   /* _E360_LEER_AZURE_V1 */
+    if (accion === 'e360Reporte') {   /* _E360_REPORTE_V1: notas de todo el equipo → solo evaluadores autorizados (programación e360) */
+      const prog = await AS.programa(pool);
+      if (prog.evaluadores.indexOf(String(t.usuario).toLowerCase()) < 0) { context.res = { status: 403, body: { success: false, error: 'Solo los evaluadores autorizados ven el informe gerencial.' } }; return; }
+      context.res = { status: 200, body: await AS.reporte(pool, (req.body || {}).periodo) }; return;
+    }
     if (accion === 'e360Pendientes') { context.res = { status: 200, body: await AS.pendientes(pool, String(t.usuario)) }; return; }
     if (accion === 'e360Programa') { const b = req.body || {}; if (b.dia_inicio !== undefined || b.evaluadores !== undefined) { const r = await AS.guardarPrograma(pool, b, String(t.usuario)); context.res = { status: r.status, body: r.body }; return; } context.res = { status: 200, body: Object.assign({ success: true }, await AS.programa(pool)) }; return; }
     if (!(await H.encendido(pool))) { context.res = { status: 503, body: { success: false, apagado: true, error: 'Guardado en Azure apagado' } }; return; }
