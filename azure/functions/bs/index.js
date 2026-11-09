@@ -261,8 +261,10 @@ module.exports = async function (context, req) {
       else if (op === 'actualizar') { if (b.id === undefined || b.id === null || b.id === '') return res(400, { ok: false, success: false, message: 'Falta el id.' }); out = await BG.actualizar(pool, clave, b.id, b.datos || {}, usuario); }
       else if (op === 'seguimiento') { if (!BG.SEGUIMIENTO[clave]) return res(400, { ok: false, success: false, message: clave + ' no lleva seguimientos.' }); out = await BG.seguimiento(pool, clave, b.id, b.datos || {}, usuario); }
       else if (op === 'anular') out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
+      else if (op === 'eliminar') out = await BG.anular(pool, clave, b.id, String(b.motivo || 'Eliminado desde el módulo'), usuario);   /* en Supabase no se borra: queda anulado y sale de la vista */
       else if (op === 'restaurar') out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
       else if (op === 'importar') out = await BG.importar(pool, clave, b.filas, usuario, b.modo);
+      else if (op === 'generar_subsidio') { if (clave !== 'bs_descansos') return res(400, { ok: false, success: false, message: 'Solo desde descansos médicos.' }); out = await BG.generarSubsidioDM(pool, b.id, usuario); }
       else if (op === 'cierre_masivo') { if (!PG.esAdmin) return res(403, { ok: false, success: false, message: 'Solo administradores pueden hacer cierres masivos.' }); out = await BG.cerrarMasivo(pool, clave, b, usuario); }
       else return res(400, { ok: false, success: false, message: 'Operación desconocida: ' + op });
       const st = out.status || 200; delete out.status;

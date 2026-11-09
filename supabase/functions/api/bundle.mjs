@@ -65297,6 +65297,35 @@ var require_bs_guardar = __commonJS({
         }
         v.sede = "OLMOS";
       },
+      bs_rendiciones: (v, nuevo, usuario) => {
+        const DEC = ["monto_reclutamiento", "monto_relaciones_laborales", "monto_capacitaciones", "monto_bienestar", "monto_total"];
+        if (nuevo) {
+          if (!v.fecha) v.fecha = celdaFecha(/* @__PURE__ */ new Date());
+          const f = ymdDe(v.fecha);
+          v.anio = ENTERO(v.anio) || (f ? +f.slice(0, 4) : +hoyLima().slice(0, 4));
+          v.semana = ENTERO(v.semana) || "";
+          if (!v.estado) v.estado = "NO DEPOSITADO";
+          DEC.forEach((k) => {
+            v[k] = DECIMAL(v[k]);
+          });
+        } else {
+          if (v.anio !== void 0) v.anio = ENTERO(v.anio);
+          if (v.semana !== void 0) v.semana = ENTERO(v.semana) || "";
+          DEC.forEach((k) => {
+            if (v[k] !== void 0) v[k] = DECIMAL(v[k]);
+          });
+        }
+      },
+      bs_sugerencias: (v, nuevo, usuario) => {
+        if (nuevo) {
+          v.fecha = celdaFecha(/* @__PURE__ */ new Date());
+          v.usuario = String(usuario || "");
+          if (!v.prioridad) v.prioridad = "Media";
+          v.estado = "Recibida";
+          v.respuesta_admin = v.respuesta_admin || "";
+          v.fecha_finalizado = "";
+        } else if (v.estado === "Finalizada") v.fecha_finalizado = celdaFecha(/* @__PURE__ */ new Date());
+      },
       bs_quejas: (v, nuevo) => {
         if (nuevo) {
           if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(/* @__PURE__ */ new Date());
@@ -65321,6 +65350,66 @@ var require_bs_guardar = __commonJS({
       bs_hostigamiento_olmos: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"]
     };
     var NO_EDITABLES = ["id", "created_by", "created_at", "anulado"];
+    var ymdDe = (c) => {
+      if (esD(c)) {
+        const d = new Date(new Date(c.$d).getTime() - 5 * 36e5);
+        return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+      }
+      const t = String(c == null ? "" : c).trim();
+      const m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m) return m[1] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[3]).slice(-2);
+      const m2 = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      return m2 ? m2[3] + "-" + ("0" + m2[2]).slice(-2) + "-" + ("0" + m2[1]).slice(-2) : "";
+    };
+    var diasEntre = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 864e5) + 1;
+    var hoyLima = () => new Date(Date.now() - 5 * 36e5).toISOString().slice(0, 10);
+    var BS_DM = { UMBRAL_DIAS: 20, UMBRAL_AMBAR: 15, UMBRAL_INVALIDEZ: 150, PLAZO_CANJE_DIAS: 30, TIPOS: ["Enfermedad com\xFAn", "Accidente de trabajo", "Accidente com\xFAn", "Maternidad"], ORIGENES: ["Particular", "EsSalud"] };
+    var COMPLETAR = {
+      bs_descansos: (o, nuevo, usuario) => {
+        o.dni = String(o.dni == null ? "" : esD(o.dni) ? o.dni.$s : o.dni).trim();
+        if (!/^\d{8}$/.test(o.dni)) return "DNI inv\xE1lido (8 d\xEDgitos).";
+        if (!texto(o.nombre).trim()) return "Falta el nombre del trabajador.";
+        if (!texto(o.empresa).trim()) return "Falta la empresa.";
+        const ini = ymdDe(o.fecha_inicio), fin = ymdDe(o.fecha_fin);
+        if (!ini || !fin) return "Fechas de inicio y fin obligatorias.";
+        if (fin < ini) return "La fecha fin no puede ser anterior al inicio.";
+        const dias = diasEntre(ini, fin);
+        if (dias > 366) return "Un descanso no puede superar 366 d\xEDas; div\xEDdelo.";
+        if (texto(o.tipo) && BS_DM.TIPOS.indexOf(texto(o.tipo)) < 0) return "Tipo no v\xE1lido.";
+        o.nombre = texto(o.nombre).toUpperCase();
+        o.cie10 = texto(o.cie10).toUpperCase();
+        o.dias = dias;
+        if (nuevo) {
+          if (!texto(o.tipo)) o.tipo = BS_DM.TIPOS[0];
+          if (!texto(o.origen)) o.origen = BS_DM.ORIGENES[0];
+          if (!texto(o.citt_estado)) o.citt_estado = texto(o.origen) === "EsSalud" ? "Canjeado" : "Pendiente de canje";
+          o.id_subsidio = "";
+          o.anulado = "";
+        }
+        if (nuevo || !o.__estadoDado) o.estado = fin >= hoyLima() ? "Activo" : "Concluido";
+        if (o.updated_by !== void 0) o.updated_by = String(usuario || "");
+        return null;
+      }
+    };
+    var filaObjeto = (enc, celdas) => {
+      const o = {};
+      enc.forEach((h, i) => {
+        o[h] = celdas[i];
+      });
+      return o;
+    };
+    var aplicarCompletar = (clave, enc, celdas, nuevo, usuario, datos) => {
+      if (!COMPLETAR[clave]) return null;
+      const o = filaObjeto(enc, celdas);
+      if (datos && datos.estado !== void 0) o.__estadoDado = true;
+      const err = COMPLETAR[clave](o, nuevo, usuario);
+      delete o.__estadoDado;
+      if (err) return err;
+      enc.forEach((h, i) => {
+        if (o[h] !== void 0) celdas[i] = o[h];
+      });
+      return null;
+    };
     var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
     var texto = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
     var p2 = (n) => (n < 10 ? "0" : "") + n;
@@ -65407,10 +65496,10 @@ var require_bs_guardar = __commonJS({
         const r2 = await tx.request().query(`SELECT ISNULL(MAX(id), 0) AS m FROM ${E.tabla}`);
         return Math.floor(Number(r2.recordset[0].m) || 0) + 1;
       }
-      const r = await tx.request().query(`SELECT id, otros FROM ${E.tabla}`);
+      const r = await tx.request().query(`SELECT * FROM ${E.tabla}`);
       let m = 0;
       r.recordset.forEach((x) => {
-        const n = parseInt(x.id, 10);
+        const n = parseInt(texto(TH.aCeldas(clave, x, enc.length)[iId]), 10);
         if (!isNaN(n) && n > m) m = n;
       });
       return m + 1;
@@ -65515,13 +65604,16 @@ var require_bs_guardar = __commonJS({
         const cab = await cabecera(tx, clave), ahora = /* @__PURE__ */ new Date(), enc = cab.enc;
         const id = await siguienteId(tx, clave, enc), v = valoresDesde(datos, enc, usuario, ahora, true, clave);
         v.id = id;
-        if (NORMALIZAR[clave]) NORMALIZAR[clave](v, true);
+        if (NORMALIZAR[clave]) NORMALIZAR[clave](v, true, usuario);
         if (o.completar) o.completar(v, enc);
         const celdas = enc.map((h) => v[h] !== void 0 ? v[h] : "");
+        const errC = aplicarCompletar(clave, enc, celdas, true, usuario, datos);
+        if (errC) return { ok: false, success: false, status: 400, message: errC };
         await insertarCeldas(tx, clave, await siguienteFila(tx, clave), celdas);
         await tocarMarca(tx, clave);
         await auditar(tx, usuario, "CREAR", MODULO_DE_CLAVE[clave] || clave, id, o.detalle || "");
-        return { ok: true, success: true, id, fuente: "supabase" };
+        const ob = filaObjeto(enc, celdas);
+        return { ok: true, success: true, id, fuente: "supabase", dias: ob.dias, estado: ob.estado };
       });
     }
     async function actualizar(pool, clave, id, datos, usuario, opciones) {
@@ -65532,7 +65624,7 @@ var require_bs_guardar = __commonJS({
         if (!reg) return { ok: false, success: false, status: 404, message: "Registro #" + id + " no encontrado." };
         if (marcaAnulado(enc, reg.celdas) && !o.permitirAnulado) return { ok: false, success: false, status: 409, message: "El registro #" + id + " est\xE1 anulado; rest\xE1uralo antes de editarlo." };
         const v = valoresDesde(datos, enc, usuario, ahora, false, clave), celdas = reg.celdas.slice();
-        if (NORMALIZAR[clave]) NORMALIZAR[clave](v, false);
+        if (NORMALIZAR[clave]) NORMALIZAR[clave](v, false, usuario);
         while (celdas.length < enc.length) celdas.push("");
         let cambios = 0;
         enc.forEach((h, i) => {
@@ -65541,10 +65633,13 @@ var require_bs_guardar = __commonJS({
             celdas[i] = v[h];
           }
         });
+        const errA = aplicarCompletar(clave, enc, celdas, false, usuario, datos);
+        if (errA) return { ok: false, success: false, status: 400, message: errA };
         await reemplazarCeldas(tx, clave, reg.id_fila, celdas);
         await tocarMarca(tx, clave);
         await auditar(tx, usuario, "ACTUALIZAR", MODULO_DE_CLAVE[clave] || clave, id, o.detalle || "campos: " + Object.keys(v).filter((k) => k !== "updated_at" && k !== "updated_by").join(", "));
-        return { ok: true, success: true, id, cambios, fuente: "supabase" };
+        const obA = filaObjeto(enc, celdas);
+        return { ok: true, success: true, id, cambios, fuente: "supabase", dias: obA.dias, estado: obA.estado };
       });
     }
     async function seguimiento(pool, claveHija, idPadre, datos, usuario) {
@@ -65782,6 +65877,71 @@ var require_bs_guardar = __commonJS({
         };
       });
     }
+    var MESES = ["ENERO", "FEBRERO", "MARZO", "ABRIL", "MAYO", "JUNIO", "JULIO", "AGOSTO", "SETIEMBRE", "OCTUBRE", "NOVIEMBRE", "DICIEMBRE"];
+    async function generarSubsidioDM(pool, id, usuario) {
+      return enTransaccion(pool, ["bs_descansos", "bs_subsidios", "bs_auditoria"], async (tx) => {
+        const cab = await cabecera(tx, "bs_descansos"), enc = cab.enc;
+        const reg = await buscarPorId(tx, "bs_descansos", id, cab.ancho);
+        if (!reg) return { ok: false, success: false, status: 404, message: "Descanso #" + id + " no encontrado." };
+        const c = reg.celdas.slice();
+        while (c.length < enc.length) c.push("");
+        const dm = filaObjeto(enc, c);
+        Object.keys(dm).forEach((k) => {
+          if (esD(dm[k])) dm[k] = ymdDe(dm[k]);
+        });
+        if (texto(dm.id_subsidio).trim()) return { ok: false, success: false, status: 409, message: "Este descanso ya tiene el subsidio #" + texto(dm.id_subsidio) + "." };
+        if (dm.citt_estado !== "Canjeado" && dm.tipo !== "Maternidad") return { ok: false, success: false, status: 409, message: 'Primero registra el CITT como "Canjeado": EsSalud solo subsidia con CITT.' };
+        const ini = ymdDe(dm.fecha_inicio), fin = ymdDe(dm.fecha_fin), anio = parseInt(ini.slice(0, 4), 10) || +hoyLima().slice(0, 4);
+        let diasSub = Number(dm.dias) || 0;
+        if (dm.tipo !== "Maternidad") {
+          const todo = await tx.request().query(`SELECT * FROM ${TH.ESQ.bs_descansos.tabla} ORDER BY fila`);
+          let previos = 0;
+          todo.recordset.forEach((x) => {
+            const cc = TH.aCeldas("bs_descansos", x, cab.ancho);
+            while (cc.length < enc.length) cc.push("");
+            const o = filaObjeto(enc, cc);
+            if (marcaAnulado(enc, cc)) return;
+            if (String(o.dni).trim() === String(dm.dni).trim() && (parseInt(texto(o.id), 10) || 0) < (parseInt(texto(dm.id), 10) || 0) && texto(o.tipo) !== "Maternidad" && ymdDe(o.fecha_inicio).slice(0, 4) == anio) previos += Number(o.dias) || 0;
+          });
+          diasSub = Math.max(0, Math.min(Number(dm.dias) || 0, previos + (Number(dm.dias) || 0) - BS_DM.UMBRAL_DIAS));
+          if (diasSub <= 0) return { ok: false, success: false, status: 409, message: "A\xFAn no supera los " + BS_DM.UMBRAL_DIAS + " d\xEDas acumulados del a\xF1o (" + (previos + (Number(dm.dias) || 0)) + "): no hay d\xEDas subsidiables." };
+        }
+        const partes = texto(dm.nombre).trim().split(/\s+/), nombres = partes.slice(2).join(" ") || partes.join(" ");
+        const finD = /* @__PURE__ */ new Date(fin + "T05:00:00Z"), iniSub = dm.tipo === "Maternidad" ? /* @__PURE__ */ new Date(ini + "T05:00:00Z") : new Date(finD.getTime() - (diasSub - 1) * 864e5);
+        const datosSub = {
+          anio,
+          mes: MESES[iniSub.getUTCMonth()],
+          tipo: dm.tipo === "Maternidad" ? "MATERNIDAD" : "INCAPACIDAD TEMPORAL",
+          numero: String(dm.dni),
+          apellido_paterno: partes[0] || "",
+          apellido_materno: partes[1] || "",
+          nombres,
+          descripcion: (dm.tipo === "Maternidad" ? "Maternidad" : "Incapacidad temporal") + " \xB7 " + texto(dm.diagnostico) + (texto(dm.cie10) ? " (" + texto(dm.cie10) + ")" : ""),
+          estado: "Pendiente",
+          dias: diasSub,
+          inicio: iniSub.toISOString().slice(0, 10),
+          termino: fin,
+          expediente: texto(dm.citt_numero),
+          observaciones: "Generado desde Descanso M\xE9dico #" + texto(dm.id),
+          estado_general: "En proceso",
+          empresa: texto(dm.empresa)
+        };
+        const cabS = await cabecera(tx, "bs_subsidios"), ahora = /* @__PURE__ */ new Date(), encS = cabS.enc;
+        const idS = await siguienteId(tx, "bs_subsidios", encS), vS = valoresDesde(datosSub, encS, usuario, ahora, true, "bs_subsidios");
+        vS.id = idS;
+        NORMALIZAR.bs_subsidios(vS, true);
+        await insertarCeldas(tx, "bs_subsidios", await siguienteFila(tx, "bs_subsidios"), encS.map((h) => vS[h] !== void 0 ? vS[h] : ""));
+        await tocarMarca(tx, "bs_subsidios");
+        const iSub = enc.indexOf("id_subsidio"), iUb = enc.indexOf("updated_by"), iUa = enc.indexOf("updated_at");
+        if (iSub >= 0) c[iSub] = idS;
+        if (iUb >= 0) c[iUb] = String(usuario || "");
+        if (iUa >= 0) c[iUa] = celdaFecha(ahora);
+        await reemplazarCeldas(tx, "bs_descansos", reg.id_fila, c);
+        await tocarMarca(tx, "bs_descansos");
+        await auditar(tx, usuario, "CREAR", "subsidios", idS, "Generado desde DM #" + texto(dm.id) + " \xB7 " + diasSub + " d\xEDas");
+        return { ok: true, success: true, id_subsidio: idS, dias: diasSub, fuente: "supabase", message: "Expediente de subsidio #" + idS + " creado con " + diasSub + " d\xEDa(s)." };
+      });
+    }
     async function registrarEvento(pool, ev) {
       return enTransaccion(pool, ["bs_auditoria"], async (tx) => {
         await auditar(tx, ev.usuario, ev.accion, ev.modulo, ev.registro_id, ev.detalle);
@@ -65829,7 +65989,7 @@ var require_bs_guardar = __commonJS({
       }
       return out;
     }
-    module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, cerrarMasivo, importar, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
+    module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, BS_DM, cerrarMasivo, importar, generarSubsidioDM, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
   }
 });
 
@@ -66193,9 +66353,13 @@ var require_bs = __commonJS({
             if (!BG.SEGUIMIENTO[clave]) return res(400, { ok: false, success: false, message: clave + " no lleva seguimientos." });
             out = await BG.seguimiento(pool, clave, b.id, b.datos || {}, usuario);
           } else if (op === "anular") out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
+          else if (op === "eliminar") out = await BG.anular(pool, clave, b.id, String(b.motivo || "Eliminado desde el m\xF3dulo"), usuario);
           else if (op === "restaurar") out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
           else if (op === "importar") out = await BG.importar(pool, clave, b.filas, usuario, b.modo);
-          else if (op === "cierre_masivo") {
+          else if (op === "generar_subsidio") {
+            if (clave !== "bs_descansos") return res(400, { ok: false, success: false, message: "Solo desde descansos m\xE9dicos." });
+            out = await BG.generarSubsidioDM(pool, b.id, usuario);
+          } else if (op === "cierre_masivo") {
             if (!PG.esAdmin) return res(403, { ok: false, success: false, message: "Solo administradores pueden hacer cierres masivos." });
             out = await BG.cerrarMasivo(pool, clave, b, usuario);
           } else return res(400, { ok: false, success: false, message: "Operaci\xF3n desconocida: " + op });
