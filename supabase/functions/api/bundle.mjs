@@ -65283,6 +65283,20 @@ var require_bs_guardar = __commonJS({
           });
         }
       },
+      bs_hostigamiento: (v, nuevo) => {
+        if (nuevo) {
+          if (!v.fecha_denuncia) v.fecha_denuncia = celdaFecha(/* @__PURE__ */ new Date());
+          if (!v.status) v.status = "En investigaci\xF3n";
+        }
+        v.sede = "PIURA";
+      },
+      bs_hostigamiento_olmos: (v, nuevo) => {
+        if (nuevo) {
+          if (!v.fecha_denuncia) v.fecha_denuncia = celdaFecha(/* @__PURE__ */ new Date());
+          if (!v.status) v.status = "En investigaci\xF3n";
+        }
+        v.sede = "OLMOS";
+      },
       bs_quejas: (v, nuevo) => {
         if (nuevo) {
           if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(/* @__PURE__ */ new Date());
@@ -65301,7 +65315,10 @@ var require_bs_guardar = __commonJS({
     var ENCABEZADO_INICIAL = {
       bs_rendiciones: ["id", "fecha", "semana", "anio", "rendicion", "empresa", "monto_reclutamiento", "monto_relaciones_laborales", "monto_capacitaciones", "monto_bienestar", "monto_total", "responsable", "estado", "fecha_deposito", "observaciones", "created_by", "created_at", "updated_at"],
       bs_sugerencias: ["id", "fecha", "usuario", "nombre_usuario", "titulo", "modulo", "descripcion", "prioridad", "estado", "respuesta_admin", "fecha_finalizado", "created_by", "created_at", "updated_at"],
-      bs_buzones: ["id", "empresa", "sector", "numero", "ubicacion", "activo", "created_at"]
+      bs_buzones: ["id", "empresa", "sector", "numero", "ubicacion", "activo", "created_at"],
+      /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
+      bs_hostigamiento: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"],
+      bs_hostigamiento_olmos: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"]
     };
     var NO_EDITABLES = ["id", "created_by", "created_at", "anulado"];
     var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
