@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   eti-informes-acceso-v1.js — _ETI_INFORMES_ACCESO_V1 (10-nov-2026) · v4 (avisos visibles 5 s; modulos 17 v5 y 19 v5)
+   eti-informes-acceso-v1.js — _ETI_INFORMES_ACCESO_V1 (10-nov-2026) · v5 (Informe de Evaluaciones ETI; avisos visibles 5 s)
    Programacion ETI (Sistema RR.LL.): boton "📑 Informes ETI" en la barra de pestañas.
    v3: los informes se abren AQUI MISMO, en un cuadro sobre Programacion ETI (no abre otra pagina).
      Carga una sola vez, desde el mismo sitio (sistemarrll.com), los modulos de informes de Evaluaciones ETI
@@ -11,7 +11,7 @@
   'use strict';
   if (window._ETI_INFORMES_ACCESO_V1) return; window._ETI_INFORMES_ACCESO_V1 = true;
   var ETI = 'https://sistemarrll.com/eti-evaluacion-verfrut/';
-  var MODULOS = ['js/15-encuesta-sat-v1.js?v=1', 'js/16-alertas-ref-v1.js?v=3', 'js/17-informe-ciclo-v1.js?v=5', 'js/19-centro-informes-v1.js?v=5', 'js/20-informe-capacitaciones-v1.js?v=1'];
+  var MODULOS = ['js/15-encuesta-sat-v1.js?v=1', 'js/16-alertas-ref-v1.js?v=3', 'js/17-informe-ciclo-v1.js?v=5', 'js/19-centro-informes-v1.js?v=6', 'js/20-informe-capacitaciones-v1.js?v=1', 'js/21-informe-evaluaciones-v1.js?v=1'];
   var WORD = ['lib/docx.iife.js?v=951', 'lib/eti-informe-ciclo.js?v=2'];
   var LOGO = 'https://sistemarrll.com/sistema-rl-verfrut/frontend/img/unifrutti-logo.png';
   var XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -61,6 +61,7 @@
       await preparar(); prepararWord();
       if (que === 'expediente') window.etiCentroInformes.expediente();
       else if (que === 'capacitaciones') window.etiInformeCap.abrir();
+      else if (que === 'evaluaciones') window.etiInformeEval.abrir();
       else if (que === 'ciclo') { await prepararWord(); window.etiInformeCicloUI.abrir(); }
       else window.etiCentroInformes.abrir();
     } catch (e) { console.error('[_ETI_INFORMES_ACCESO_V1]', e); avisar('No se pudieron abrir los informes: ' + e.message); }
@@ -79,6 +80,7 @@
     P.innerHTML = '<div style="font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:.05em;padding:4px 10px 6px">Informes ETI · se abren aquí mismo</div>' +
       it('centro', '📑', 'Centro de informes', 'Todos los informes ETI en un solo lugar') +
       it('capacitaciones', '📘', 'Informe de Capacitaciones ETI', 'Mensual, por ciclo o cierre de año · general o por sector') +
+      it('evaluaciones', '📗', 'Informe de Evaluaciones ETI', 'Mensual, por ciclo o cierre de año · general o por sector') +
       it('expediente', '🗂', 'Expediente de auditoría', 'Por sector: temas, rutas y códigos, reforzamientos') +
       it('ciclo', '📊', 'Informe de cierre de ciclo', 'Por sector y general, en Word');
     document.body.appendChild(P);
