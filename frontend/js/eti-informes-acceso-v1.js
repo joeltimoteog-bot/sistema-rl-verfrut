@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   eti-informes-acceso-v1.js — _ETI_INFORMES_ACCESO_V1 (10-nov-2026) · v3
+   eti-informes-acceso-v1.js — _ETI_INFORMES_ACCESO_V1 (10-nov-2026) · v4 (avisos visibles 5 s; modulos 17 v5 y 19 v5)
    Programacion ETI (Sistema RR.LL.): boton "📑 Informes ETI" en la barra de pestañas.
    v3: los informes se abren AQUI MISMO, en un cuadro sobre Programacion ETI (no abre otra pagina).
      Carga una sola vez, desde el mismo sitio (sistemarrll.com), los modulos de informes de Evaluaciones ETI
@@ -11,7 +11,7 @@
   'use strict';
   if (window._ETI_INFORMES_ACCESO_V1) return; window._ETI_INFORMES_ACCESO_V1 = true;
   var ETI = 'https://sistemarrll.com/eti-evaluacion-verfrut/';
-  var MODULOS = ['js/15-encuesta-sat-v1.js?v=1', 'js/16-alertas-ref-v1.js?v=3', 'js/17-informe-ciclo-v1.js?v=4', 'js/19-centro-informes-v1.js?v=4', 'js/20-informe-capacitaciones-v1.js?v=1'];
+  var MODULOS = ['js/15-encuesta-sat-v1.js?v=1', 'js/16-alertas-ref-v1.js?v=3', 'js/17-informe-ciclo-v1.js?v=5', 'js/19-centro-informes-v1.js?v=5', 'js/20-informe-capacitaciones-v1.js?v=1'];
   var WORD = ['lib/docx.iife.js?v=951', 'lib/eti-informe-ciclo.js?v=2'];
   var LOGO = 'https://sistemarrll.com/sistema-rl-verfrut/frontend/img/unifrutti-logo.png';
   var XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
@@ -27,6 +27,8 @@
     try { sessionStorage.setItem('eti_token', tk); } catch (e) {}
     if (typeof window.SESSION === 'undefined') window.SESSION = { user: String(u.usuario).toLowerCase().trim(), nom: String(u.nombre || u.usuario).trim(), rol: /admin/i.test(String(u.rol || '')) ? 'admin' : 'supervisor' };
     window._ETI_EN_RL = true;
+    /* v4: los informes llaman toast(mensaje, 'e'|'s'|'i'); el toast de esta pagina espera milisegundos -> el aviso se borraba al instante */
+    if (typeof window.toast === 'function' && !window.toast._etiRL) { var t0 = window.toast; window.toast = function (m, ms) { return t0(m, typeof ms === 'string' ? 5000 : ms); }; window.toast._etiRL = true; }
   }
   async function logo() {
     if (getComputedStyle(document.documentElement).getPropertyValue('--logo')) return;
