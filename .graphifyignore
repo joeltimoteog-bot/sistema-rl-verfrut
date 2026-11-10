@@ -18,3 +18,8 @@ local.settings.json
 *.pdf
 graphify-out/
 _to_delete/
+
+# _GFY_SIN_BAK (10-nov-2026): las carpetas de respaldo no son codigo vivo del sistema
+_bak/
+_bak_*/
+**/_bak/

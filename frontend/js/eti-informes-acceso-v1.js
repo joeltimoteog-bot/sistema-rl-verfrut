@@ -3,7 +3,7 @@
    Programacion ETI (Sistema RR.LL.): boton "📑 Informes ETI" en la barra de pestañas.
    Abre Evaluaciones ETI en otra pestaña, YA con la sesion (mismo pase SSO que la tarjeta del
    menu principal: irAConSSO), directo en el Centro de informes, el Expediente de auditoria o el
-   Cierre de ciclo. Todo se lee de Supabase alla. SOLO agrega el boton: no cambia la programacion.
+   Cierre de ciclo o el Informe de Capacitaciones ETI (v2, 10-nov). Todo se lee de Supabase alla. SOLO agrega el boton: no cambia la programacion.
    Apagar: quitar la etiqueta <script> de programacion-eti.html.
    ════════════════════════════════════════════════════════════════════════════ */
 (function () {
@@ -53,6 +53,7 @@
       it('centro', '📑', 'Centro de informes', 'Todos los informes ETI en un solo lugar') +
       it('expediente', '🗂', 'Expediente de auditoría', 'Por sector: temas, rutas y códigos, reforzamientos') +
       it('ciclo', '📊', 'Informe de cierre de ciclo', 'Por sector y general, en Word');
+    P.innerHTML += it('capacitaciones', '📘', 'Informe de Capacitaciones ETI', 'Mensual, por ciclo o cierre de año · general o por sector');
     document.body.appendChild(P);
     Array.prototype.forEach.call(P.querySelectorAll('[data-ab]'), function (b) { b.onclick = function () { ir(b.getAttribute('data-ab')); }; });
     setTimeout(function () { document.addEventListener('click', function f(e) { if (P && !P.contains(e.target) && e.target !== btn) { cerrarPanel(); document.removeEventListener('click', f); } }); }, 0);
