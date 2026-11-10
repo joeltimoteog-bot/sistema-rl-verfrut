@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   77-filtros-equipo-v1.js — _FILTROS_EQUIPO_V1 (10-nov-2026) · v2
+   77-filtros-equipo-v1.js — _FILTROS_EQUIPO_V1 (10-nov-2026) · v3
    Visitas a Campo y Fusiones de Buses: el filtro de supervisor muestra al EQUIPO VIGENTE
    (supervisores de Gestion Humana y asistentes de Relaciones Laborales), tomado del padron de
    usuarios del sistema (usuarios/lista, Supabase). Un usuario nuevo con ese cargo aparece solo.
@@ -39,7 +39,7 @@
       var j = await r.json();
       TODOS = (j && (j.data || j.usuarios)) || [];
       cargos();
-      EQUIPO = TODOS.filter(esEquipo).map(function (u) { return { usuario: String(u.usuario || '').toLowerCase(), nombre: String(u.nombre || u.usuario || '').trim(), cargo: String(u.cargo || '').trim() }; })
+      EQUIPO = TODOS.filter(esEquipo).map(function (u) { return { usuario: String(u.usuario || '').toLowerCase(), nombre: String(u.nombre || u.usuario || '').trim(), cargo: String(u.cargo || '').trim(), correo: String(u.correo || '').trim(), sector: String(u.sector || '').trim(), empresa: String(u.empresa || '').trim().toUpperCase() }; })
         .sort(function (a, b) { return a.nombre.localeCompare(b.nombre); });
       console.log('[_FILTROS_EQUIPO_V1] equipo vigente: ' + EQUIPO.length + ' usuarios');
     } catch (e) { console.warn('[_FILTROS_EQUIPO_V1]', e.message); } finally { pidiendo = false; }
@@ -104,6 +104,32 @@
       var g = sel.querySelector('optgroup'); if (g) sel.insertBefore(o, g); else sel.appendChild(o);
     });
   }
+  /* v3 (10-nov): "Nueva visita de campo" -> el desplegable Supervisor sale de la hoja BD_Supervisores; aqui se agregan los
+     supervisores del equipo que aun no estan en esa hoja, con su correo, empresa y sector del padron de usuarios.
+     El DNI no existe en Gestion de Usuarios: para ellos el campo DNI queda editable (se escribe una vez en la visita).
+     El formulario se muestra en MAYUSCULAS (solo presentacion: lo guardado no cambia). */
+  function visitaNueva() {
+    var sel = $('vSup'); if (!sel || sel.options.length < 2) return;
+    if (!$('fe-css')) { var st = document.createElement('style'); st.id = 'fe-css'; st.textContent = '#vSup,#vSup option,#vFundo,#vPunto,#vSupTitular,#vFundoReemplazo,#cSupervisor{text-transform:uppercase}'; document.head.appendChild(st); }
+    /* el formulario rearma la lista sin quitar el grupo "Retirados" anterior: quedaba un titulo "Retirados" vacio ARRIBA y
+       los supervisores activos parecian retirados. Se quitan los grupos vacios y el grupo real queda al final. */
+    Array.prototype.forEach.call(sel.querySelectorAll('optgroup'), function (g) { if (!g.children.length) g.remove(); });
+    var gr = sel.querySelector('optgroup'); if (gr && sel.lastElementChild !== gr) sel.appendChild(gr);
+    var hay = Array.prototype.map.call(sel.options, function (o) { return o.value; }).filter(Boolean);
+    EQUIPO.forEach(function (u) {
+      if (/ASIST/.test(N(u.cargo)) || hay.some(function (n) { return coincide(u, n); })) return;   /* la asistente no hace visitas de campo */
+      var nom = u.nombre.toUpperCase(), o = new Option(nom + (u.sector ? ' — ' + u.sector.toUpperCase() : ''), nom);
+      o.dataset.dni = ''; o.dataset.correo = u.correo; o.dataset.empresa = /^(RAPEL|VERFRUT|OLMOS)$/.test(u.empresa) ? u.empresa : '';
+      o.dataset.fundo = u.sector; o.dataset.reemplazo = 'no'; o.dataset.equipo = '1';
+      var g = sel.querySelector('optgroup'); if (g) sel.insertBefore(o, g); else sel.appendChild(o);
+    });
+  }
+  document.addEventListener('change', function (ev) {
+    if (!ev.target || ev.target.id !== 'vSup') return;
+    var o = ev.target.options[ev.target.selectedIndex], d = $('vDNI'); if (!d) return;
+    var falta = !!(o && o.dataset && o.dataset.equipo === '1' && !o.dataset.dni);
+    d.readOnly = !falta; d.placeholder = falta ? 'Escriba el DNI del supervisor' : ''; d.style.background = falta ? '#fff' : '#f8fafc';
+  });
   /* consola: rlFiltrosEquipo.porQue('usuario') dice si esta en el equipo y con que cargo / sector quedo guardado */
   window.rlFiltrosEquipo = { equipo: function () { return (EQUIPO || []).slice(); }, porQue: function (usr) {
     var u = TODOS.filter(function (x) { return String(x.usuario || '').toLowerCase() === String(usr || '').toLowerCase(); })[0];
@@ -111,7 +137,7 @@
   function vuelta() {
     if (!EQUIPO) { cargarEquipo(); return; }
     if (!EQUIPO.length) return;
-    try { fusiones(); } catch (e) {} try { visitas(); } catch (e) {} try { casos(); } catch (e) {}
+    try { fusiones(); } catch (e) {} try { visitas(); } catch (e) {} try { casos(); } catch (e) {} try { visitaNueva(); } catch (e) {}
   }
   setInterval(vuelta, 2500); setTimeout(vuelta, 1200);
 })();
