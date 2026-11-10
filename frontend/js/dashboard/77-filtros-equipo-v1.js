@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════════════════════════════════
-   77-filtros-equipo-v1.js — _FILTROS_EQUIPO_V1 (10-nov-2026)
+   77-filtros-equipo-v1.js — _FILTROS_EQUIPO_V1 (10-nov-2026) · v2
    Visitas a Campo y Fusiones de Buses: el filtro de supervisor muestra al EQUIPO VIGENTE
    (supervisores de Gestion Humana y asistentes de Relaciones Laborales), tomado del padron de
    usuarios del sistema (usuarios/lista, Supabase). Un usuario nuevo con ese cargo aparece solo.
@@ -25,10 +25,11 @@
     if (!u || !u.activo || u.eliminado === true || u.eliminado === 1) return false;
     var c = N(u.cargo), usr = String(u.usuario || '').toLowerCase().trim();
     if (FUERA_USR.indexOf(usr) >= 0 || FUERA_SECTOR.indexOf(N(u.sector)) >= 0) return false;
-    if (c) return (/SUPERVISOR/.test(c) && /GESTION HUMANA|GH\b/.test(c)) || (/ASISTENTE/.test(c) && /RELACIONES LABORALES|RR\.?LL/.test(c));
+    /* v2: cualquier forma de escribir el cargo ("Supervisor GH", "Sup. de Gestion Humana", "Supervisor") vale, salvo otras areas */
+    if (c) return (/SUPERV|^SUP\b/.test(c) && !/BIENESTAR|RECLUT|REMUNER|PLANILLA/.test(c)) || (/ASIST/.test(c) && /RELACIONES LABORALES|RR\.? ?LL|\bRL\b/.test(c));
     return !/admin|coordinador|jefa/.test(String(u.rol || '').toLowerCase());
   }
-  var EQUIPO = null, pidiendo = false;
+  var EQUIPO = null, TODOS = [], pidiendo = false;
   async function cargarEquipo() {
     if (EQUIPO || pidiendo) return; pidiendo = true;
     try {
@@ -36,7 +37,9 @@
       var r = await fetch(URL_USR, { headers: { Authorization: 'Bearer ' + tk } });
       if (!r.ok) { if (r.status === 403) EQUIPO = []; return; }   /* no es administrador: se deja todo como esta */
       var j = await r.json();
-      EQUIPO = ((j && (j.data || j.usuarios)) || []).filter(esEquipo).map(function (u) { return { usuario: String(u.usuario || '').toLowerCase(), nombre: String(u.nombre || u.usuario || '').trim(), cargo: String(u.cargo || '').trim() }; })
+      TODOS = (j && (j.data || j.usuarios)) || [];
+      cargos();
+      EQUIPO = TODOS.filter(esEquipo).map(function (u) { return { usuario: String(u.usuario || '').toLowerCase(), nombre: String(u.nombre || u.usuario || '').trim(), cargo: String(u.cargo || '').trim() }; })
         .sort(function (a, b) { return a.nombre.localeCompare(b.nombre); });
       console.log('[_FILTROS_EQUIPO_V1] equipo vigente: ' + EQUIPO.length + ' usuarios');
     } catch (e) { console.warn('[_FILTROS_EQUIPO_V1]', e.message); } finally { pidiendo = false; }
@@ -84,10 +87,31 @@
     var f = EQUIPO.length + '|' + datos.join('|'); if (f === firmaV) return; firmaV = f;
     opciones(el, datos, 'Todos los supervisores');
   }
+  /* v2 (10-nov): un usuario NUEVO creado en Gestion de Usuarios no estaba en las listas fijas del sistema:
+     · "Supervisor" de Registro de Casos se llena con la hoja BD_Supervisores (otro padron) -> aqui se agregan los del equipo que falten;
+     · su cargo no estaba en la tabla fija CARGOS_USUARIOS (los documentos lo ponian como "Asistente de RR.LL.") -> se completa con el cargo del padron. */
+  function cargos() {
+    try {
+      TODOS.forEach(function (u) { var k = String(u.usuario || '').toLowerCase().trim(), c = String(u.cargo || '').trim(); if (k && c && !CARGOS_USUARIOS[k]) CARGOS_USUARIOS[k] = c; });
+    } catch (e) {}
+  }
+  function casos() {
+    var sel = $('cSupervisor'); if (!sel || sel.options.length < 2) return;
+    var hay = Array.prototype.map.call(sel.options, function (o) { return o.value; }).filter(Boolean);
+    EQUIPO.forEach(function (u) {
+      if (hay.some(function (n) { return coincide(u, n); })) return;
+      var o = document.createElement('option'); o.value = o.textContent = u.nombre.toUpperCase();
+      var g = sel.querySelector('optgroup'); if (g) sel.insertBefore(o, g); else sel.appendChild(o);
+    });
+  }
+  /* consola: rlFiltrosEquipo.porQue('usuario') dice si esta en el equipo y con que cargo / sector quedo guardado */
+  window.rlFiltrosEquipo = { equipo: function () { return (EQUIPO || []).slice(); }, porQue: function (usr) {
+    var u = TODOS.filter(function (x) { return String(x.usuario || '').toLowerCase() === String(usr || '').toLowerCase(); })[0];
+    return u ? { usuario: u.usuario, nombre: u.nombre, cargo: u.cargo || '(sin cargo)', sector: u.sector || '(sin sector)', rol: u.rol, activo: u.activo, enEquipo: esEquipo(u) } : 'No esta en el padron de usuarios de Supabase'; } };
   function vuelta() {
     if (!EQUIPO) { cargarEquipo(); return; }
     if (!EQUIPO.length) return;
-    try { fusiones(); } catch (e) {} try { visitas(); } catch (e) {}
+    try { fusiones(); } catch (e) {} try { visitas(); } catch (e) {} try { casos(); } catch (e) {}
   }
   setInterval(vuelta, 2500); setTimeout(vuelta, 1200);
 })();
