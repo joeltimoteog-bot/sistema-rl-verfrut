@@ -8026,7 +8026,7 @@ async function generarInformeVisita() {
     'correspondientes al período indicado, para su conocimiento y fines pertinentes.\n\n' +
     'Adj.: Informe de Visitas de Campo';
   const subj = encodeURIComponent('Informe Visita Campo Semana ' + semana + ' - ' + empresa + ' - ' + fundo);
-  const para = encodeURIComponent('ovilela@verfrut.pe;jchavez@verfrut.pe;jtimoteo@verfrut.pe');
+  const para = encodeURIComponent('eduardo.covenas@unifrutti.com;joel.timoteo@unifrutti.com'   /* _DESTINATARIOS_V2 (10-nov): solo Eduardo Coveñas y Joel Timoteo */);
   const cc   = encodeURIComponent(ccFinal);
   const body = encodeURIComponent(cuerpoEmail);
   setTimeout(async () => {
@@ -8063,7 +8063,7 @@ function enviarInformeVisita(idx) {
     'correspondientes al período indicado, para su conocimiento y fines pertinentes.\n\n' +
     'Adj.: Informe de Visitas de Campo';
   const subj = encodeURIComponent('Informe Visita Campo Semana ' + (v.semana||'') + ' - ' + (v.empresa||'') + ' - ' + (v.fundo||v.sector||''));
-  const para = encodeURIComponent('ovilela@verfrut.pe;jchavez@verfrut.pe;jtimoteo@verfrut.pe');
+  const para = encodeURIComponent('eduardo.covenas@unifrutti.com;joel.timoteo@unifrutti.com'   /* _DESTINATARIOS_V2 (10-nov): solo Eduardo Coveñas y Joel Timoteo */);
   const cc   = encodeURIComponent(ccFinal);
   const body = encodeURIComponent(cuerpo);
   const mailtoUrl = 'mailto:' + para + '?subject=' + subj + '&body=' + body + (ccFinal ? '&cc=' + cc : '');
@@ -8457,7 +8457,7 @@ function reenviarInformeVisita(idx) {
   setT('reenvioVisitaInfo', 'Sem ' + (v.semana||'?') + ' — ' + (v.empresa||'') + ' — ' + (v.fundo||v.sector||''));
   // Destinatarios por defecto
   const ccFundo = (typeof CC_FUNDO !== 'undefined' && CC_FUNDO[v.fundo||v.sector]) ? CC_FUNDO[v.fundo||v.sector] : '';
-  set('reenvioVisitaPara', 'ovilela@verfrut.pe;jchavez@verfrut.pe;jtimoteo@verfrut.pe');
+  set('reenvioVisitaPara', 'eduardo.covenas@unifrutti.com;joel.timoteo@unifrutti.com'   /* _DESTINATARIOS_V2 (10-nov): solo Eduardo Coveñas y Joel Timoteo */);
   set('reenvioVisitaCC',   ccFundo);
   set('reenvioVisitaAsunto', 'Informe Visita Campo Semana ' + (v.semana||'') + ' - ' + (v.empresa||'') + ' - ' + (v.fundo||v.sector||''));
   abrir('mReenvioVisita');

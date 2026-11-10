@@ -11,7 +11,7 @@
   'use strict';
   if (window._ETI_INFORMES_ACCESO_V1) return; window._ETI_INFORMES_ACCESO_V1 = true;
   var ETI = 'https://sistemarrll.com/eti-evaluacion-verfrut/';
-  var MODULOS = ['js/15-encuesta-sat-v1.js?v=1', 'js/16-alertas-ref-v1.js?v=3', 'js/17-informe-ciclo-v1.js?v=5', 'js/19-centro-informes-v1.js?v=11', 'js/20-informe-capacitaciones-v1.js?v=3', 'js/21-informe-evaluaciones-v1.js?v=4'];
+  var MODULOS = ['js/15-encuesta-sat-v1.js?v=1', 'js/16-alertas-ref-v1.js?v=3', 'js/17-informe-ciclo-v1.js?v=6', 'js/19-centro-informes-v1.js?v=11', 'js/20-informe-capacitaciones-v1.js?v=3', 'js/21-informe-evaluaciones-v1.js?v=5'];
   var WORD = ['lib/docx.iife.js?v=951', 'lib/eti-informe-ciclo.js?v=2'];
   var LOGO = 'https://sistemarrll.com/sistema-rl-verfrut/frontend/img/unifrutti-logo.png';
   var XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';

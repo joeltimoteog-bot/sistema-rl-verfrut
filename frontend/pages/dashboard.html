@@ -467,7 +467,6 @@ h3{font-size:16px !important}
             <label>Filtrar por Responsable de Recepción <span style="font-weight:400;color:#94a3b8">(opcional — sin selección incluye todos)</span></label>
             <select id="cRespMulti" multiple style="width:100%;padding:6px;border:2px solid var(--bd);border-radius:7px;font-size:12px;font-family:Barlow,sans-serif;min-height:130px">
               <option value="">Todos los responsables</option>
-              <option>JORGE CHAVEZ</option>
               <option>MURIEL MECHATO</option>
               <option>RUBI FIGUEROA</option>
               <option value="TANIA VERA">TANIA VERA (histórico)</option>
@@ -1015,8 +1014,7 @@ h3{font-size:16px !important}
         <select id="vPara">
           <option value="">— Seleccione destinatario —</option>
           <option value="JOEL ANGEL TIMOTEO GONZA|Coordinador de Relaciones Laborales">JOEL ANGEL TIMOTEO GONZA — Coordinador de Relaciones Laborales</option>
-          <option value="JORGE LUIS CHAVEZ CORDOVA|Coordinador de Relaciones Laborales">JORGE LUIS CHAVEZ CORDOVA — Coordinador de Relaciones Laborales</option>
-          <option value="OLGA STEFFANA VILELA LUDEÑA|Jefe de Relaciones Laborales">OLGA STEFFANA VILELA LUDEÑA — Jefe de Relaciones Laborales</option>
+          <option value="LUIS EDUARDO COVEÑAS CHERO|Subgerente de Personas">LUIS EDUARDO COVEÑAS CHERO — Subgerente de Personas</option>   <!-- _DESTINATARIOS_V2 (10-nov): solo Eduardo Coveñas y Joel Timoteo -->
         </select>
       </div>
     </div>
@@ -1206,11 +1204,9 @@ h3{font-size:16px !important}
         <option>JAIRO FERNANDEZ</option>
         <option>JOEL TIMOTEO</option>
         <option>JOISSY MORALES</option>
-        <option>JORGE CHAVEZ</option>
         <option>KARLA ARNAO</option>
         <option>LEANDRO MORALES</option>
         <option>MIGUEL PORTOCARRERO</option>
-        <option>OLGA VILELA</option>
         <option>ROSS MERY</option>
       </select>
       <button type="button" onclick="agregarResp()" style="margin-top:5px;padding:5px 10px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:6px;font-size:11px;cursor:pointer">+ Agregar responsable</button>
@@ -1327,7 +1323,7 @@ h3{font-size:16px !important}
 <!-- MODAL FUSIÓN DE BUSES -->
 
 
-<script src="../js/dashboard/04-nucleo-dashboard.js?v=7"></script>
+<script src="../js/dashboard/04-nucleo-dashboard.js?v=8"></script>
 <script src="../js/aviso-cambio-servidor.js?v=1"></script>  <!-- _AVISO_SUPABASE_V1: bienvenida y aviso del cambio de servidor, una sola vez por usuario -->
 <!-- FIREBASE SDK (módulo separado para exponer funciones al script principal) -->
 <script type="module" src="../js/dashboard/05-firebase-modulo.js?v=1"></script>
@@ -1434,8 +1430,6 @@ h3{font-size:16px !important}
             <select id="cSupervisor" style="width:100%;padding:7px 10px;border:2px solid #e2e8f0;border-radius:6px;font-size:12px">
               <option value="">-- Seleccionar --</option>
               <option>JOEL ANGEL TIMOTEO GONZA</option>
-              <option>OLGA STEFFANA VILELA LUDEÑA</option>
-              <option>JORGE LUIS CHAVEZ CORDOVA</option>
               <option>ELBERTH JAN PIERRE CASTRO BAYONA</option>
               <option>POOL WILFREDO TAMAYO RODRIGUEZ</option>
               <option>SERGIO VIERA GIRON</option>
@@ -2221,6 +2215,7 @@ h3{font-size:16px !important}
 <script src="../js/dashboard/74-encabezados-corp-v1.js?v=1"></script>   <!-- _ENCAB_CORP_V1 (02-nov): encabezados de seccion empresariales (apagar: localStorage.rl_encab_corp="off") -->
 <script src="../js/dashboard/75-visita-hoja-v1.js?v=3"></script>   <!-- _VISITA_HOJA_V1 (02-nov): Nueva visita como hoja unica, modelo de Atenciones (apagar: localStorage.rl_visita_hoja="off") -->
 <script src="../js/dashboard/76-modales-corp-v1.js?v=1"></script>   <!-- _MODALES_CORP_V1 (04-nov): formularios emergentes con identidad empresarial (apagar: localStorage.rl_modales_corp="off") -->
+<script src="../js/dashboard/77-filtros-equipo-v1.js?v=1"></script>   <!-- _FILTROS_EQUIPO_V1 (10-nov): filtros de Visitas a Campo y Fusiones de Buses con el equipo vigente (Supervisores GH y Asistentes RR.LL.) -->
 <script src="../js/tema-corporativo.js?v=6"></script>   <!-- _TEMA_CORP_V1 (01-nov): tema corporativo (solo presentacion; apagar con localStorage rl_tema_corp=off) -->
 <script src="../js/ui-piel.js?v=1"></script>  <!-- _UI_PIEL_V1 (15-oct): piel moderna (tablas, modales, Mis Atenciones, menu agrupado) -->
 <script src="../js/visitas-ui.js?v=1"></script>  <!-- _VISITAS_UI_V2 (16-oct): Visitas de Campo modernizado (solo presentacion) -->
