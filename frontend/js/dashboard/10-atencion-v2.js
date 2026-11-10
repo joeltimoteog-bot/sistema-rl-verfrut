@@ -11,7 +11,7 @@
 (function () {
 'use strict';
 
-var RESP_LEANDRO = 'LEANDRO BILL MORALES YARLEQUE';
+var RESP_LEANDRO = 'JHOANNA PHOLY GUISSELA LIÑAN NAVARRO';   /* _RESP_VERFRUT_V1 (10-nov-2026): la documentacion de VERFRUT la recepciona Jhoanna Liñan Navarro (Asistenta Social); antes Leandro Bill Morales Yarleque */
 var RESP_TANIA   = 'RUBI FIGUEROA FLORES';   /* _RESP_RUBI_V1 (28-set-2026): los documentos de RAPEL que llevaba Tania Vera (ceso) pasan a Rubi Figueroa */
 
 /* 1) Lo que recibia Jorge Chavez (eran documentos de Daniela Reyna, de forma
@@ -66,7 +66,7 @@ function _avisoRuteo(doc, empresa, quien) {
            : 'background:#fff7ed;border:1px solid #fed7aa;color:#7c2d12;');
   box.innerHTML = quien
     ? '\u{1F4CC} Documento de <b>' + String(empresa || '').toUpperCase() + '</b> · se asigna a <b>' + quien + '</b>'
-    : '⚠️ Falta la empresa del trabajador. Busca primero el DNI para saber si va a Rubí o a Leandro.';
+    : '⚠️ Falta la empresa del trabajador. Busca primero el DNI para saber si va a Rubí (RAPEL) o a Jhoanna (VERFRUT).';
   cont.parentNode.appendChild(box);
 }
 function _quitarAvisoRuteo() {

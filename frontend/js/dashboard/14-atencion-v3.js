@@ -17,7 +17,7 @@
 (function () {
 'use strict';
 
-var RESP_LEANDRO_V3 = 'LEANDRO BILL MORALES YARLEQUE';
+var RESP_LEANDRO_V3 = 'JHOANNA PHOLY GUISSELA LIÑAN NAVARRO';   /* _RESP_VERFRUT_V1 (10-nov-2026): la documentacion de VERFRUT la recepciona Jhoanna Liñan Navarro (Asistenta Social); antes Leandro Bill Morales Yarleque */
 var RESP_TANIA_V3   = 'RUBI FIGUEROA FLORES';   /* _RESP_RUBI_V1 */
 
 /* ── 1) Quien autoriza cada documento ───────────────────────────────────── */

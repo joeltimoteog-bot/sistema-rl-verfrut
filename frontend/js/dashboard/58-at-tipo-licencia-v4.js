@@ -29,9 +29,9 @@
 try {
 
 var RESP_RUBI    = 'RUBI FIGUEROA FLORES';            /* responsable (mismo texto que ya se guarda) */
-var RESP_LEANDRO = 'LEANDRO BILL MORALES YARLEQUE';
+var RESP_LEANDRO = 'JHOANNA PHOLY GUISSELA LIÑAN NAVARRO';   /* _RESP_VERFRUT_V1 (10-nov-2026): la documentacion de VERFRUT la recepciona Jhoanna Liñan Navarro (Asistenta Social); antes Leandro Bill Morales Yarleque */
 var AUT_RUBI     = 'RUBI ELIZABETH FIGUEROA FLORES - EMPRESA RAPEL';
-var AUT_LEANDRO  = 'LEANDRO BILL MORALES YARLEQUE - EMPRESA VERFRUT';
+var AUT_LEANDRO  = 'JHOANNA PHOLY GUISSELA LIÑAN NAVARRO - EMPRESA VERFRUT';   /* _RESP_VERFRUT_V1 */
 
 var DM_ETIQUETA = '35 DESCANSO MEDICO';   /* _AT_TIPO_LIC_V1: un solo documento; el tipo va en el campo general "Tipo de licencia" */
 var TIPOS = [   /* [lo que ve el usuario, lo que se guarda] */
@@ -106,7 +106,7 @@ function _opcion(sel, valor, texto) {
 }
 function _asegurarResponsables() {
   var s = document.getElementById('at_resp');
-  _opcion(s, RESP_RUBI); _opcion(s, RESP_LEANDRO);
+  _opcion(s, RESP_RUBI); _opcion(s, RESP_LEANDRO); _opcion(s, 'LEANDRO BILL MORALES YARLEQUE');   /* _RESP_VERFRUT_V1: Leandro queda elegible para atenciones antiguas */
 }
 var mapa = window._DOC_POR_EMPRESA;
 if (mapa) {
@@ -203,7 +203,8 @@ var AUT_OPCIONES = [
   ['CMP', 'CMP – Certificado médico particular'],
   ['COP', 'COP – Certificado odontológico particular'],
   [AUT_RUBI, 'RUBI ELIZABETH FIGUEROA FLORES – EMPRESA RAPEL'],
-  [AUT_LEANDRO, 'LEANDRO BILL MORALES YARLEQUE – EMPRESA VERFRUT'],
+  [AUT_LEANDRO, 'JHOANNA PHOLY GUISSELA LIÑAN NAVARRO – EMPRESA VERFRUT'],
+  ['LEANDRO BILL MORALES YARLEQUE - EMPRESA VERFRUT', 'LEANDRO BILL MORALES YARLEQUE – EMPRESA VERFRUT (histórico)'],   /* _RESP_VERFRUT_V1: para ver y editar atenciones antiguas sin perder el dato */
   ['OTRO', 'OTRO']
 ];
 function _asegurarAutoriza() {
@@ -235,7 +236,7 @@ function _refrescarAutorizaV4() {
     if (s.value !== quien) s.value = quien;
     if (ayuda) ayuda.innerHTML = quien
       ? 'Licencia otorgada por la empresa: autoriza <b>' + quien + '</b>. Se puede cambiar a mano.'
-      : '⚠️ Busca primero el DNI para saber la empresa (Rubí o Leandro).';
+      : '⚠️ Busca primero el DNI para saber la empresa (Rubí o Jhoanna).';
   } else if (s.value === AUT_RUBI || s.value === AUT_LEANDRO) {
     /* venia de otro documento: que lo recalcule la regla de siempre */
     try { if (typeof window._refrescarAutoriza === 'function') window._refrescarAutoriza(); } catch (e2) {}
