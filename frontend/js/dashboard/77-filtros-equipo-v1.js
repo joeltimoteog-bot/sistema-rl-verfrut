@@ -30,19 +30,41 @@
     return !/admin|coordinador|jefa/.test(String(u.rol || '').toLowerCase());
   }
   var EQUIPO = null, TODOS = [], pidiendo = false;
+  var SOLO_VISITA = false;
   async function cargarEquipo() {
     if (EQUIPO || pidiendo) return; pidiendo = true;
     try {
       var tk = sessionStorage.getItem('rl_token'); if (!tk) return;
+      /* _PADRON_EQUIPO_V1 (10-nov-2026): la lista del equipo sale del PADRON UNICO (personas/equipo, lo lee cualquier sesion):
+         supervisores de Gestion Humana y asistentes de RR.LL. vigentes, con su DNI, sector, empresa y correo. Asi lo que se
+         completa en el padron llega a Visitas, Fusiones y Casos. Si el padron no responde, sigue la regla anterior
+         (usuarios/lista). Apagar: localStorage.rl_equipo_padron = 'off'. */
+      var delPadron = null;
+      try {
+        if (localStorage.getItem('rl_equipo_padron') !== 'off') {
+          var rp = await fetch(URL_USR.replace('usuarios/lista', 'personas/equipo'), { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk }, body: '{}' });
+          var jp = rp.ok ? await rp.json() : null;
+          if (jp && jp.success && Array.isArray(jp.personas)) {
+            delPadron = jp.personas.filter(function (p) { return p.rol_campo === 'SUPERVISOR_GH' || p.rol_campo === 'ASISTENTE_RL'; }).map(function (p) {
+              return { usuario: String(p.usuario || '').toLowerCase(), nombre: (String(p.nombres || '').trim() + ' ' + String(p.apellidos || '').trim()).trim() || String(p.nombre_mostrar || '').trim(),
+                cargo: String(p.cargo || (p.rol_campo === 'ASISTENTE_RL' ? 'Asistente de Relaciones Laborales' : 'Supervisor de Gestion Humana')).trim(), correo: String(p.correo || '').trim(),
+                sector: String(p.sector || '').trim(), empresa: String(p.empresa || '').trim().toUpperCase(), dni: /^\d{8}$/.test(String(p.dni || '')) ? String(p.dni) : '' };
+            }).sort(function (a, b) { return a.nombre.localeCompare(b.nombre); });
+            if (!delPadron.length) delPadron = null;
+          }
+        }
+      } catch (eP) { delPadron = null; }
+      if (delPadron) console.log('[_PADRON_EQUIPO_V1] equipo desde el padron: ' + delPadron.length + ' personas');
       var r = await fetch(URL_USR, { headers: { Authorization: 'Bearer ' + tk } });
-      if (!r.ok) { if (r.status === 403) EQUIPO = []; return; }   /* no es administrador: se deja todo como esta */
+      if (!r.ok) { if (delPadron) { EQUIPO = delPadron; SOLO_VISITA = true; } else if (r.status === 403) EQUIPO = []; return; }   /* no es administrador: con padron, usa el padron; sin padron, se deja todo como esta */
       var j = await r.json();
       TODOS = (j && (j.data || j.usuarios)) || [];
       cargos();
       EQUIPO = TODOS.filter(esEquipo).map(function (u) { return { usuario: String(u.usuario || '').toLowerCase(), nombre: String(u.nombre || u.usuario || '').trim(), cargo: String(u.cargo || '').trim(), correo: String(u.correo || '').trim(), sector: String(u.sector || '').trim(), empresa: String(u.empresa || '').trim().toUpperCase() }; })
         .sort(function (a, b) { return a.nombre.localeCompare(b.nombre); });
+      if (delPadron) EQUIPO = delPadron;   /* _PADRON_EQUIPO_V1 */
       console.log('[_FILTROS_EQUIPO_V1] equipo vigente: ' + EQUIPO.length + ' usuarios');
-    } catch (e) { console.warn('[_FILTROS_EQUIPO_V1]', e.message); } finally { pidiendo = false; }
+    } catch (e) { console.warn('[_FILTROS_EQUIPO_V1]', e.message); if (!EQUIPO && typeof delPadron !== 'undefined' && delPadron) EQUIPO = delPadron; } finally { pidiendo = false; }
   }
   /* mismo nombre aunque este escrito mas corto ("POOL TAMAYO" = "POOL WILFREDO TAMAYO RODRIGUEZ") o sea el usuario */
   function coincide(u, nombreDato) {
@@ -115,11 +137,13 @@
        los supervisores activos parecian retirados. Se quitan los grupos vacios y el grupo real queda al final. */
     Array.prototype.forEach.call(sel.querySelectorAll('optgroup'), function (g) { if (!g.children.length) g.remove(); });
     var gr = sel.querySelector('optgroup'); if (gr && sel.lastElementChild !== gr) sel.appendChild(gr);
+    /* _PADRON_EQUIPO_V1: a quien ya estaba en la lista pero sin DNI se le completa con el del padron */
+    Array.prototype.forEach.call(sel.options, function (o) { if (!o.value || (o.dataset && o.dataset.dni)) return; EQUIPO.forEach(function (u) { if (u.dni && !o.dataset.dni && coincide(u, o.value)) o.dataset.dni = u.dni; }); });
     var hay = Array.prototype.map.call(sel.options, function (o) { return o.value; }).filter(Boolean);
     EQUIPO.forEach(function (u) {
       if (/ASIST/.test(N(u.cargo)) || hay.some(function (n) { return coincide(u, n); })) return;   /* la asistente no hace visitas de campo */
       var nom = u.nombre.toUpperCase(), o = new Option(nom + (u.sector ? ' — ' + u.sector.toUpperCase() : ''), nom);
-      o.dataset.dni = ''; o.dataset.correo = u.correo; o.dataset.empresa = /^(RAPEL|VERFRUT|OLMOS)$/.test(u.empresa) ? u.empresa : '';
+      o.dataset.dni = u.dni || ''; o.dataset.correo = u.correo;   /* _PADRON_EQUIPO_V1: DNI del padron */ o.dataset.empresa = /^(RAPEL|VERFRUT|OLMOS)$/.test(u.empresa) ? u.empresa : '';
       o.dataset.fundo = u.sector; o.dataset.reemplazo = 'no'; o.dataset.equipo = '1';
       var g = sel.querySelector('optgroup'); if (g) sel.insertBefore(o, g); else sel.appendChild(o);
     });
@@ -137,7 +161,9 @@
   function vuelta() {
     if (!EQUIPO) { cargarEquipo(); return; }
     if (!EQUIPO.length) return;
-    try { fusiones(); } catch (e) {} try { visitas(); } catch (e) {} try { casos(); } catch (e) {} try { visitaNueva(); } catch (e) {}
+    /* _PADRON_EQUIPO_V1: quien no es administrador conserva sus filtros como estaban; solo se le completa "Nueva visita" (lista y DNI) */
+    if (!SOLO_VISITA) { try { fusiones(); } catch (e) {} try { visitas(); } catch (e) {} try { casos(); } catch (e) {} }
+    try { visitaNueva(); } catch (e) {}
   }
   setInterval(vuelta, 2500); setTimeout(vuelta, 1200);
 })();

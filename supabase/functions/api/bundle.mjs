@@ -76958,10 +76958,10 @@ var require_personas = __commonJS({
     var ROLES_CAMPO = ["SUPERVISOR_GH", "ASISTENTE_RL", "BIENESTAR_SOCIAL", "COORDINACION", "JEFATURA", "ANALISTA_GH", "REMUNERACIONES", "DIGITADOR", "OTRO"];
     var EMPRESAS = ["RAPEL", "VERFRUT", "OLMOS", "AMBAS"];
     var SP = "SET LOCAL search_path TO rl, public, extensions";
-    var COLS = `id, codigo, dni, apellidos, nombres, nombre_mostrar, usuario, cargo, empresa, sector, rol_campo, correo, vigente,
+    var COLS = `id, codigo, dni, apellidos, nombres, nombre_mostrar, usuario, cargo, empresa, sector, rol_campo, correo, vigente, evalua_kpi, evalua_cumplimiento,
   to_char(desde, 'YYYY-MM-DD') AS desde, to_char(hasta, 'YYYY-MM-DD') AS hasta, reemplaza_a, alias, notas,
   to_char(actualizado, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS actualizado, actualizado_por`;
-    var CAMPOS = ["dni", "apellidos", "nombres", "nombre_mostrar", "usuario", "cargo", "empresa", "sector", "rol_campo", "correo", "vigente", "desde", "hasta", "alias", "notas"];
+    var CAMPOS = ["dni", "apellidos", "nombres", "nombre_mostrar", "usuario", "cargo", "empresa", "sector", "rol_campo", "correo", "vigente", "desde", "hasta", "alias", "notas", "evalua_kpi", "evalua_cumplimiento"];
     var txt = (v, max) => String(v == null ? "" : v).replace(/[\u0000-\u001F\u007F]+/g, " ").replace(/\s+/g, " ").trim().slice(0, max);
     var sinTilde = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "");
     var fechaOk = (s) => {
@@ -77035,6 +77035,14 @@ var require_personas = __commonJS({
         };
       });
     }
+    async function equipo() {
+      return enTx(async (cli) => {
+        const r = await cli.query(`SELECT p.usuario, p.dni, p.apellidos, p.nombres, p.nombre_mostrar, p.cargo, p.empresa, p.sector AS sector_codigo,
+        COALESCE(s.nombre, p.sector) AS sector, p.rol_campo, p.correo, p.evalua_kpi, p.evalua_cumplimiento, to_char(p.desde, 'YYYY-MM-DD') AS desde
+      FROM rl.personas p LEFT JOIN rl.sectores s ON s.codigo = p.sector WHERE p.vigente = 1 ORDER BY p.apellidos NULLS LAST, p.nombres NULLS LAST, p.id`);
+        return { success: true, version: 1, personas: r.rows };
+      });
+    }
     var normNom = (t) => String(t || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z ]/g, " ").replace(/\s+/g, " ").trim();
     async function sugerir() {
       return enTx(async (cli) => {
@@ -77097,6 +77105,11 @@ var require_personas = __commonJS({
       else if (vg === 1 || vg === "1") v.vigente = 1;
       else if (vg === 0 || vg === "0") v.vigente = 0;
       else throw new Mal("Indica si la persona est\xE1 vigente (S\xED o No)", "vigente");
+      ["evalua_kpi", "evalua_cumplimiento"].forEach((k) => {
+        const x = b[k];
+        v[k] = x === void 0 || x === null || x === "" ? null : x === true || String(x).trim() === "1" ? 1 : x === false || String(x).trim() === "0" ? 0 : -1;
+        if (v[k] === -1) throw new Mal("Indica S\xED o No", k);
+      });
       const d = txt(b.desde, 12), h = txt(b.hasta, 12);
       v.desde = d ? fechaOk(d) : null;
       if (d && !v.desde) throw new Mal('La fecha "desde" no es v\xE1lida', "desde");
@@ -77139,6 +77152,9 @@ var require_personas = __commonJS({
           antes = a.rows[0];
         }
         if (v.vigente === null) v.vigente = antes ? Number(antes.vigente) : 1;
+        ["evalua_kpi", "evalua_cumplimiento"].forEach((k) => {
+          if (v[k] === null) v[k] = antes ? Number(antes[k] || 0) : 0;
+        });
         if (v.vigente === 1 && v.hasta) throw new Mal('Una persona vigente no lleva fecha "hasta". Borra esa fecha o m\xE1rcala como no vigente.', "hasta");
         if (v.vigente === 0 && !v.hasta && antes && Number(antes.vigente) === 1) throw new Mal('Para dar de baja indica la fecha "hasta" (\xFAltimo d\xEDa en la funci\xF3n).', "hasta");
         if (v.dni) {
@@ -77212,6 +77228,7 @@ var require_personas = __commonJS({
       try {
         const t = sesion(req);
         if (!t || !t.usuario) return res(401, { success: false, error: "Sin sesion valida" });
+        if (accion === "equipo") return res(200, await equipo());
         if (String(t.usuario).trim().toLowerCase() !== SOLO_USUARIO) return res(403, { success: false, error: "El padr\xF3n de personas es solo para el creador del sistema" });
         if (accion === "lista") return res(200, await lista());
         if (accion === "sugerir") return res(200, await sugerir());

@@ -148,12 +148,13 @@
       ' <span class="chip">' + vig.length + ' vigentes de ' + D.personas.length + '</span> <span class="chip">Mostrando ' + L.length + '</span>';
     var cf = q('#cfalta'); if (cf && falta) cf.onclick = function () { F.estado = 'vigsindni'; F.q = ''; F.empresa = ''; F.sector = ''; pintarLista(); };
     if (!L.length) { q('#tabla').innerHTML = '<div class="vacio">' + (D.personas.length ? 'Ninguna persona coincide con la búsqueda o los filtros.' : 'El padrón todavía no tiene personas.') + '</div>'; return; }
-    q('#tabla').innerHTML = '<div class="tw"><table><thead><tr><th>DNI</th><th>Apellidos y nombres</th><th>Cargo</th><th>Empresa</th><th>Sector</th><th>Usuario</th><th>Correo</th><th>Vigente</th></tr></thead><tbody>' +
+    q('#tabla').innerHTML = '<div class="tw"><table><thead><tr><th>DNI</th><th>Apellidos y nombres</th><th>Cargo</th><th>Empresa</th><th>Sector</th><th>Usuario</th><th>Correo</th><th title="Se le miden los KPIs RR.LL.">KPI</th><th title="Entra al Control de Cumplimiento">Cumpl.</th><th>Vigente</th></tr></thead><tbody>' +
       L.map(function (p) {
         return '<tr tabindex="0" data-id="' + esc(p.id) + '"' + (esVig(p) ? '' : ' class="nv"') + '>' +
           '<td>' + (sinDni(p) ? '<span class="et f">FALTA</span>' : esc(p.dni)) + '</td>' +
           '<td><b>' + esc(nomCompleto(p)) + '</b></td><td>' + esc(MAY(p.cargo)) + '</td><td>' + esc(MAY(p.empresa)) + '</td><td>' + esc(MAY(secNombre(p.sector))) + '</td>' +
           '<td>' + esc(p.usuario || '') + '</td><td>' + esc(p.correo || '') + '</td>' +
+          '<td>' + (Number(p.evalua_kpi) === 1 ? '<span class="et s">SÍ</span>' : '') + '</td><td>' + (Number(p.evalua_cumplimiento) === 1 ? '<span class="et s">SÍ</span>' : '') + '</td>' +
           '<td>' + (esVig(p) ? '<span class="et s">SÍ</span>' : '<span class="et n">NO</span>' + (p.hasta ? '<br><small>hasta ' + esc(fF(p.hasta)) + '</small>' : '')) + '</td></tr>';
       }).join('') + '</tbody></table></div>';
     var tb = q('#tabla tbody');
@@ -164,7 +165,7 @@
   }
 
   /* ── formulario (una sola hoja) ── */
-  var CAMPOS = ['dni', 'apellidos', 'nombres', 'nombre_mostrar', 'usuario', 'cargo', 'empresa', 'sector', 'rol_campo', 'correo', 'vigente', 'desde', 'hasta', 'alias', 'notas'];
+  var CAMPOS = ['dni', 'apellidos', 'nombres', 'nombre_mostrar', 'usuario', 'cargo', 'empresa', 'sector', 'rol_campo', 'correo', 'vigente', 'desde', 'hasta', 'alias', 'notas', 'evalua_kpi', 'evalua_cumplimiento'];   /* _PADRON_BANDERAS_V1 */
   /* ── _PADRON_DNI_MASIVO_V1 (10-nov-2026): completar de una sola vez los DNI que faltan ──
      El servidor busca a cada persona vigente sin DNI en la base de trabajadores y PROPONE el DNI. Aqui se confirma
      (o se escribe a mano) y se guardan todos juntos, cada uno con las mismas validaciones del formulario. */
@@ -252,6 +253,8 @@
       sel('sector', 'Sector', Ls, selDe(Ls, p.sector)) +
       sel('rol_campo', 'Función / rol de campo', Lr, selDe(Lr, p.rol_campo)) +
       inp('correo', 'Correo', p.correo, 'type="email" maxlength="160" autocapitalize="none" spellcheck="false"') +
+      sel('evalua_kpi', 'Se le miden los KPIs', [['0', 'No'], ['1', 'Sí']], String(Number(p.evalua_kpi) === 1 ? 1 : 0), 'Solo supervisores de Gestión Humana y asistente de RR.LL.') +
+      sel('evalua_cumplimiento', 'Entra al Control de Cumplimiento', [['0', 'No'], ['1', 'Sí']], String(Number(p.evalua_cumplimiento) === 1 ? 1 : 0)) +
       '<div></div>' +
       inp('desde', 'Desde', p.desde, 'type="date"', 'Desde cuándo está en la función o sector.') +
       inp('hasta', 'Hasta', p.hasta, 'type="date"', 'Solo para quien ya no está vigente.') +
