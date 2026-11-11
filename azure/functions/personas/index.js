@@ -244,6 +244,8 @@ async function guardar(b, operador, log) {
       const k = await opcional(cli, 'sp_kpi', "UPDATE rl.kpi_personas SET dni = $1 WHERE lower(usuario::text) = lower($2) AND (dni IS NULL OR btrim(dni::text) = '')", [String(fila.dni), String(fila.usuario)]);
       if (k && k.rowCount) conectado.push('KPIs');
     }
+    /* _PADRON_SYNC_V1: la marca "Se le miden los KPIs" enciende o apaga a la persona en la tabla de KPIs (solo si cambio, o al crear) */
+    if (!antes || Number(antes.evalua_kpi || 0) !== Number(fila.evalua_kpi || 0)) { try { const mk = await require('../shared/padron-sync').marcaKpi(cli, opcional, fila); if (mk) conectado.push(mk); } catch (eK) {} }
     return { success: true, creado: !antes, rastro, conectado, persona: fila };
   });
 }

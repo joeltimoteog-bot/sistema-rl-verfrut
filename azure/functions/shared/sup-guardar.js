@@ -103,6 +103,8 @@ async function ejecutar(pool, accion, b, usuario, prueba, ahoraMs, rol) {
       .input('c', sql.NVarChar(sql.MAX), JSON.stringify(cuerpo)).input('r', sql.NVarChar(sql.MAX), JSON.stringify(resp))
       .query("INSERT INTO dbo.CV_Ops (clave, tipo, accion, nro, usuario, cuerpo, respuesta) VALUES (@k, 'sup', @a, NULL, @u, @c, @r)");
     if (prueba) { await tx.rollback(); resp.prueba = true; resp._op = cuerpo; resp._nuevas = nuevas; resp._cambiadas = cambiadas; } else await tx.commit();
+    /* _PADRON_SYNC_V1 (10-nov-2026): lo que se agrega o edita en "Supervisores" llega tambien al padron unico (solo completa o crea; si falla no afecta) */
+    if (!prueba && accion === 'saveSupervisor') { try { resp.padron = await require('./padron-sync').desdeSupervisores(Array.isArray(b.lista) ? b.lista : [b], usuario, null); } catch (eP) { resp.padron = { ok: false }; } }
     return { status: 200, body: resp };
   } catch (e) {
     try { await tx.rollback(); } catch (e2) {}
