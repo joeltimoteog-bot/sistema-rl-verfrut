@@ -34,6 +34,7 @@ const SUMAS = [
     if (modo === 'revertir') {
       /* solo se deshace si este paquete esta instalado: asi nunca se borra una tabla ajena que se llame igual */
       if (!(await c.query("SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'eti' AND p.proname = '_copiar'")).rows.length) { console.log('No hay nada que deshacer: las tablas ordenadas no estan instaladas.'); return; }
+      if ((await c.query("SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'eti' AND p.proname = '_copiar2'")).rows.length) { console.log('ALTO: primero deshaz la segunda parte (node aplicar-tablas-eti-2.js revertir). No se hizo nada.'); return; }
       await c.query(fs.readFileSync(path.join(__dirname, '01-tablas-eti-REVERTIR.sql'), 'utf8')); console.log('OK revertido: se quitaron las tablas ordenadas y sus disparadores (las de origen no se tocaron)'); return;
     }
     if (modo === 'aplicar') {
@@ -54,6 +55,8 @@ const SUMAS = [
       try { await c.query(fs.readFileSync(path.join(__dirname, '01-tablas-eti.sql'), 'utf8')); console.log('OK 01-tablas-eti.sql (tablas y disparadores creados)'); }
       catch (e) { try { await c.query('ROLLBACK'); } catch (e2) {} throw new Error('01-tablas-eti.sql: ' + e.message); }
       const r = await c.query('SELECT * FROM eti.tablas_reconstruir()');
+      /* volver a llenar la primera parte vacia en cascada los detalles de la segunda: si esta instalada, se rellena enseguida */
+      if ((await c.query("SELECT 1 FROM pg_proc p JOIN pg_namespace s ON s.oid = p.pronamespace WHERE s.nspname = 'eti' AND p.proname = 'tablas_reconstruir2'")).rows.length) await c.query('SELECT * FROM eti.tablas_reconstruir2()');
       console.log('\n== Llenado desde las tablas de origen ==');
       r.rows.forEach(x => { console.log('  ' + String(x.origen).padEnd(28) + String(x.filas).padStart(5) + ' copiadas' + (x.fallidas ? '   ' + x.fallidas + ' FALLIDAS' : '')); if (x.fallidas) mal++; });
     }

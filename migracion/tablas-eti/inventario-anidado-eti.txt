@@ -1,0 +1,255 @@
+
+== eti.banco_historial · 3 filas ==
+  en                                                       3  fecha-hora                largo max 24
+  por                                                      3  texto                     largo max 8
+  secs                                                     3  lista                     hasta 6 elementos
+  secs[]                                                  18  objeto                    hasta 4 elementos
+  secs[].id                                               18  texto                     largo max 3
+  secs[].nom                                              18  texto                     largo max 31
+  secs[].peso                                             18  decimal                 
+  secs[].pregs                                            18  lista                     hasta 17 elementos
+  secs[].pregs[]                                         170  objeto                    hasta 10 elementos
+  secs[].pregs[].max                                     170  entero                  
+  secs[].pregs[].n                                       170  entero                  
+  secs[].pregs[].ops                                     170  lista                   
+  secs[].pregs[].origen                                  134  texto                     largo max 45
+  secs[].pregs[].pct                                     170  decimal:84, entero:86   
+  secs[].pregs[].revisar                                 170  si/no                   
+  secs[].pregs[].t                                       170  texto                     largo max 159
+  secs[].pregs[].tipo                                    170  texto                     largo max 8
+  secs[].pregs[].tq                                      170  texto                     largo max 123
+  secs[].pregs[].vb                                      134  si/no                   
+  ts                                                       3  entero                  
+  version                                                  3  entero                  
+
+== eti.informes_cap · 1 filas ==
+  <clave>                                                 22  objeto:1, texto:11, fecha:1, lista:6, fecha-hora:2, entero:1  hasta 8 elementos  largo max 176
+  <clave>.area                                             1  texto                     largo max 19
+  <clave>.capDni                                           1  texto-numero              largo max 8
+  <clave>.creadaPor                                        1  texto                     largo max 8
+  <clave>.horas                                            1  entero                  
+  <clave>.idCapacitacion                                   1  texto                     largo max 17
+  <clave>.idCaps                                           1  lista                     hasta 3 elementos
+  <clave>.idCaps[]                                         3  texto                     largo max 17
+  <clave>.sesiones                                         1  entero                  
+  <clave>.tipo                                             1  texto                     largo max 12
+  <clave>[]                                               11  objeto:6, texto:4, fecha:1  hasta 3 elementos  largo max 213
+  <clave>[].h                                              6  entero                  
+  <clave>[].url                                            6  texto                     largo max 120
+  <clave>[].w                                              6  entero                  
+  fechaInforme                                             1  fecha                     largo max 10
+  firmaCargo                                               1  texto                     largo max 55
+  firmaDni                                                 1  texto-numero              largo max 8
+  firmaNom                                                 1  texto                     largo max 34
+  h                                                        1  entero                  
+  id                                                       1  texto                     largo max 33
+  idCaps                                                   1  lista                     hasta 3 elementos
+  idCaps[]                                                 3  texto                     largo max 17
+  m                                                        1  entero                  
+  n                                                        1  entero                  
+  nomUsuario                                               1  texto                     largo max 24
+  tipoInforme                                              1  texto                     largo max 12
+  ts                                                       1  entero                  
+
+== eti.evaluaciones_depuradas · 5 filas ==
+  <clave>                                                 33  texto:21, fecha:4, lista:4, nulo:4  hasta 4 elementos  largo max 21
+  <clave>[]                                                8  objeto                    hasta 5 elementos
+  <clave>[].cod                                            8  texto:2, texto-numero:6   largo max 3
+  <clave>[].ne                                             8  entero                  
+  <clave>[].nom                                            8  texto                     largo max 19
+  <clave>[].resGrupo                                       8  decimal                 
+  <clave>[].secs                                           8  lista                     hasta 6 elementos
+  <clave>[].secs[]                                        48  objeto                    hasta 6 elementos
+  <clave>[].secs[].id                                     12  texto                     largo max 3
+  <clave>[].secs[].nom                                    48  texto                     largo max 31
+  <clave>[].secs[].pct                                    48  decimal:42, entero:6    
+  <clave>[].secs[].peso                                   12  decimal                 
+  <clave>[].secs[].pond                                   48  decimal                 
+  <clave>[].secs[].promSec                                48  decimal:29, entero:19   
+  azEn                                                     1  fecha-hora                largo max 24
+  azOk                                                     1  si/no                   
+  coleccionOrigen                                          4  texto                     largo max 25
+  creadoEn                                                 4  fecha-hora                largo max 24
+  depuradoEn                                               5  fecha-hora                largo max 24
+  depuradoPor                                              5  texto                     largo max 8
+  evalId                                                   1  texto                     largo max 20
+  motivoDepuracion                                         5  texto                     largo max 67
+  nomUsuario                                               4  texto                     largo max 31
+  resGen                                                   4  decimal                 
+  ruta                                                     1  objeto                    hasta 5 elementos
+  ruta.cod                                                 1  texto-numero              largo max 3
+  ruta.ne                                                  1  entero                  
+  ruta.nom                                                 1  texto                     largo max 22
+  ruta.resGrupo                                            1  entero                  
+  ruta.secs                                                1  lista                     hasta 6 elementos
+  ruta.secs[]                                              6  objeto                    hasta 4 elementos
+  ruta.secs[].nom                                          6  texto                     largo max 31
+  ruta.secs[].pct                                          6  entero                  
+  ruta.secs[].pond                                         6  decimal                 
+  ruta.secs[].promSec                                      6  entero                  
+  sesionQR                                                 1  nulo                    
+  ts                                                       4  entero                  
+
+== eti.programaciones_eval · 1 filas ==
+  creadoEn                                                 1  fecha-hora                largo max 24
+  creadoPor                                                1  texto                     largo max 18
+  estado                                                   1  texto                     largo max 9
+  fechas                                                   1  lista                     hasta 2 elementos
+  fechasEjecutadas                                         1  lista                     hasta 1 elementos
+  fechasEjecutadas[]                                       1  fecha                     largo max 10
+  fechas[]                                                 2  fecha                     largo max 10
+  obs                                                      1  texto                   
+  sup                                                      1  texto                     largo max 19
+
+== eti.alertas_ref · 0 filas ==
+
+== eti.encuestas_qr · 0 filas ==
+
+== eti.encuestas_sat · 0 filas ==
+
+== eti.informes_eti · 0 filas ==
+
+== eti.config_eti  documento "banco" · 1 filas ==
+  en                                                       1  fecha-hora                largo max 24
+  por                                                      1  texto                     largo max 8
+  secs                                                     1  lista                     hasta 6 elementos
+  secs[]                                                   6  objeto                    hasta 4 elementos
+  secs[].id                                                6  texto                     largo max 3
+  secs[].nom                                               6  texto                     largo max 31
+  secs[].peso                                              6  decimal                 
+  secs[].pregs                                             6  lista                     hasta 12 elementos
+  secs[].pregs[]                                          36  objeto                    hasta 8 elementos
+  secs[].pregs[].max                                      36  entero                  
+  secs[].pregs[].n                                        36  entero                  
+  secs[].pregs[].ops                                      36  lista                   
+  secs[].pregs[].pct                                      36  entero                  
+  secs[].pregs[].revisar                                  36  si/no                   
+  secs[].pregs[].t                                        36  texto                     largo max 159
+  secs[].pregs[].tipo                                     36  texto                     largo max 8
+  secs[].pregs[].tq                                       36  texto                     largo max 123
+  ts                                                       1  entero                  
+  version                                                  1  entero                  
+
+== eti.config_eti  documento "coberturas" · 1 filas ==
+  actualizado                                              1  fecha-hora                largo max 24
+  fuente                                                   1  texto                     largo max 26
+  json                                                     1  texto                     largo max 501
+  por                                                      1  texto                     largo max 8
+
+== eti.config_eti  documento "respaldo" · 1 filas ==
+  en                                                       1  fecha-hora                largo max 24
+  manual                                                   1  entero                  
+  por                                                      1  texto                     largo max 8
+  qr                                                       1  entero                  
+  ultimo                                                   1  fecha                     largo max 10
+
+== eti.config_eti  documento "accesos" · 1 filas ==
+  en                                                       1  fecha-hora                largo max 24
+  por                                                      1  texto                     largo max 8
+  usuarios                                                 1  objeto                    hasta 10 elementos
+  usuarios.<clave>                                        10  objeto                    hasta 5 elementos
+  usuarios.<clave>.activo                                  7  si/no                   
+  usuarios.<clave>.eliminado                               2  si/no                   
+  usuarios.<clave>.eliminadoEn                             1  fecha-hora                largo max 24
+  usuarios.<clave>.eliminadoPor                            1  texto                     largo max 8
+  usuarios.<clave>.extra                                   4  si/no                   
+  usuarios.<clave>.nom                                     4  texto                     largo max 29
+  usuarios.<clave>.rol                                     4  texto                     largo max 10
+
+== eti.config_eti  documento "atribucion" · 1 filas ==
+  en                                                       1  fecha-hora                largo max 24
+  por                                                      1  texto                     largo max 8
+  regla                                                    1  texto                     largo max 12
+  sups                                                     1  lista                     hasta 10 elementos
+  sups[]                                                  10  objeto                    hasta 5 elementos
+  sups[].nom                                              10  texto                     largo max 31
+  sups[].reemplazante                                     10  si/no                   
+  sups[].sector                                           10  texto                     largo max 13
+  sups[].sectores                                         10  lista                     hasta 2 elementos
+  sups[].sectores[]                                        2  texto                     largo max 9
+  sups[].user                                             10  texto                     largo max 10
+
+== eti.evaluaciones_conocimiento  (solo lo anidado) · 18 filas ==
+  destiempo                                               18  nulo:14, objeto:4         hasta 5 elementos
+  destiempo.fechasProg                                     4  lista                     hasta 2 elementos
+  destiempo.fechasProg[]                                   6  fecha                     largo max 10
+  destiempo.motivo                                         4  texto                     largo max 118
+  destiempo.progId                                         4  texto                     largo max 20
+  destiempo.reportado                                      4  texto                     largo max 2
+  destiempo.tipo                                           4  texto                     largo max 29
+  detBanco                                                18  texto:17, objeto:1        hasta 3 elementos
+  detBanco.pregs                                           1  lista                     hasta 36 elementos
+  detBanco.pregs[]                                        36  objeto                    hasta 5 elementos
+  detBanco.pregs[].f                                      36  entero                  
+  detBanco.pregs[].max                                    36  entero                  
+  detBanco.pregs[].n                                      36  entero                  
+  detBanco.pregs[].s                                      36  texto                     largo max 3
+  detBanco.pregs[].t                                      36  texto                     largo max 159
+  detBanco.secs                                            1  lista                     hasta 6 elementos
+  detBanco.secs[]                                          6  objeto                    hasta 4 elementos
+  detBanco.secs[].id                                       6  texto                     largo max 3
+  detBanco.secs[].maxSec                                   6  entero                  
+  detBanco.secs[].nom                                      6  texto                     largo max 31
+  detBanco.secs[].peso                                     6  decimal                 
+  detBanco.v                                               1  entero                  
+  prog                                                    18  texto:17, objeto:1        hasta 1 elementos
+  prog.programada                                          1  si/no                   
+  rutas                                                   18  lista                     hasta 9 elementos
+  rutasOriginal                                           18  texto:16, lista:2         hasta 10 elementos
+  rutasOriginal[]                                         11  objeto                    hasta 5 elementos
+  rutasOriginal[].cod                                     11  texto:2, texto-numero:9   largo max 3
+  rutasOriginal[].ne                                      11  entero                  
+  rutasOriginal[].nom                                     11  texto                     largo max 25
+  rutasOriginal[].resGrupo                                11  decimal:8, entero:3     
+  rutasOriginal[].secs                                    11  lista                     hasta 6 elementos
+  rutasOriginal[].secs[]                                  66  objeto                    hasta 6 elementos
+  rutasOriginal[].secs[].id                                6  texto                     largo max 3
+  rutasOriginal[].secs[].nom                              66  texto                     largo max 31
+  rutasOriginal[].secs[].pct                              66  decimal:21, entero:45   
+  rutasOriginal[].secs[].peso                              6  decimal                 
+  rutasOriginal[].secs[].pond                             66  decimal                 
+  rutasOriginal[].secs[].promSec                          66  decimal:19, entero:47   
+  rutas[]                                                 70  objeto                    hasta 7 elementos
+  rutas[].cod                                             70  texto:10, texto-numero:60  largo max 3
+  rutas[].det                                              8  objeto                    hasta 2 elementos
+  rutas[].det.ev                                           8  lista                     hasta 5 elementos
+  rutas[].det.ev[]                                        40  objeto                  
+  rutas[].det.v                                            8  entero                  
+  rutas[].hom                                              5  nulo                    
+  rutas[].muj                                              5  nulo                    
+  rutas[].ne                                              70  entero                  
+  rutas[].nom                                             70  texto                     largo max 38
+  rutas[].resGrupo                                        70  decimal:68, entero:2    
+  rutas[].secs                                            70  lista                     hasta 6 elementos
+  rutas[].secs[]                                         420  objeto                    hasta 6 elementos
+  rutas[].secs[].id                                      162  texto                     largo max 3
+  rutas[].secs[].nom                                     420  texto                     largo max 31
+  rutas[].secs[].pct                                     420  decimal:335, entero:85  
+  rutas[].secs[].peso                                    162  decimal                 
+  rutas[].secs[].pond                                    420  decimal                 
+  rutas[].secs[].promSec                                 420  entero:152, decimal:268 
+
+== eti.sesiones_qr  (solo el banco guardado en cada QR) · 18 filas ==
+  banco                                                   18  lista                     hasta 6 elementos
+  banco[]                                                108  objeto                    hasta 5 elementos
+  banco[].id                                             108  texto                     largo max 3
+  banco[].maxSec                                         108  entero                  
+  banco[].nom                                            108  texto                     largo max 31
+  banco[].peso                                           108  decimal                 
+  banco[].pregs                                          108  lista                     hasta 12 elementos
+  banco[].pregs[]                                        648  objeto                    hasta 6 elementos
+  banco[].pregs[].k                                      648  lista                   
+  banco[].pregs[].max                                    648  entero                  
+  banco[].pregs[].n                                      648  entero                  
+  banco[].pregs[].ops                                    648  lista                   
+  banco[].pregs[].t                                      648  texto                     largo max 123
+  banco[].pregs[].tipo                                   648  texto                     largo max 8
+
+== eti.capacitaciones  (solo las listas) · 23 filas ==
+  areas                                                   23  lista:18, texto:5       
+  codigosCapacitados                                      23  lista:16, texto:7         hasta 286 elementos
+  codigosCapacitados[]                                   452  texto-numero:450, texto:2  largo max 9
+  rutas                                                   23  lista                     hasta 8 elementos
+  rutas[]                                                 26  objeto                    hasta 2 elementos
+  rutas[].codigo                                          26  texto-numero              largo max 4
+  rutas[].nombre                                          26  texto                     largo max 13
