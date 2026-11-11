@@ -74916,6 +74916,13 @@ var require_eti_sync = __commonJS({
       "usuarios_eti"
     ];
     var POR_DEFECTO = ["capacitaciones", "supervisores_eti", "programaciones_eti", "usuarios_eti"];
+    var RESTO = PERMITIDAS.filter(function(c) {
+      return POR_DEFECTO.indexOf(c) < 0;
+    });
+    var envS = function(k) {
+      return typeof process !== "undefined" && process.env && process.env[k] || "";
+    };
+    var SIN_CLAVE = { usuarios_eti: ["password_hash", "password"] };
     function valor(v) {
       if (!v || typeof v !== "object") return null;
       if ("nullValue" in v) return null;
@@ -74963,44 +74970,63 @@ var require_eti_sync = __commonJS({
         if (typeof db.pgDirecto !== "function") throw new Error("Este modulo solo funciona con Supabase");
         const pool = db.pgDirecto();
         const b = req && req.body && typeof req.body === "object" ? req.body : {};
-        const cols = (Array.isArray(b.cols) && b.cols.length ? b.cols : POR_DEFECTO).filter(function(c) {
+        let pedir = POR_DEFECTO;
+        if (Array.isArray(b.cols) && b.cols.length) pedir = b.cols;
+        else if (envS("ETI_SYNC_TODO") !== "0" && (b.todas === true || (/* @__PURE__ */ new Date()).getUTCMinutes() < 10)) pedir = POR_DEFECTO.concat(RESTO);
+        const cols = pedir.filter(function(c) {
           return PERMITIDAS.indexOf(c) >= 0;
         });
         const res = {};
+        let fallas = 0;
         for (const c of cols) {
-          const docs = await leerColeccion(c);
-          const cli = await pool.connect();
           try {
-            await cli.query("BEGIN");
-            const antes = (await cli.query(`SELECT COUNT(*)::int AS n FROM eti.${c}`)).rows[0].n;
-            const up = await cli.query(`INSERT INTO eti.${c} (id, datos, origen)
+            const inicio = (await pool.query("SELECT now() AS t")).rows[0].t;
+            const docs = await leerColeccion(c);
+            if (SIN_CLAVE[c]) docs.forEach(function(d) {
+              SIN_CLAVE[c].forEach(function(k) {
+                if (d.datos && k in d.datos) delete d.datos[k];
+              });
+            });
+            const cli = await pool.connect();
+            try {
+              await cli.query("BEGIN");
+              const antes = (await cli.query(`SELECT COUNT(*)::int AS n FROM eti.${c}`)).rows[0].n;
+              const up = await cli.query(`INSERT INTO eti.${c} (id, datos, origen)
             SELECT x->>'id', COALESCE(x->'datos', '{}'::jsonb), 'sync' FROM jsonb_array_elements($1::jsonb) x
             ON CONFLICT (id) DO UPDATE SET datos = EXCLUDED.datos, actualizado = now(), origen = 'sync'
-            WHERE eti.${c}.datos IS DISTINCT FROM EXCLUDED.datos`, [JSON.stringify(docs)]);
-            let borrados = 0;
-            if (docs.length || antes === 0) {
-              const del = await cli.query(`DELETE FROM eti.${c} WHERE NOT (id = ANY($1::text[]))`, [docs.map(function(d) {
+            WHERE eti.${c}.datos IS DISTINCT FROM EXCLUDED.datos AND eti.${c}.actualizado < $2`, [JSON.stringify(docs), inicio]);
+              let borrados = 0, sobran = 0;
+              const ids = docs.map(function(d) {
                 return d.id;
-              })]);
-              borrados = del.rowCount;
+              });
+              if (ids.length) await cli.query(`UPDATE eti.${c} SET origen = 'sync' WHERE id = ANY($1::text[]) AND origen IS DISTINCT FROM 'sync' AND actualizado < $2`, [ids, inicio]);
+              if (docs.length || antes === 0) {
+                const del = await cli.query(`DELETE FROM eti.${c} WHERE NOT (id = ANY($1::text[])) AND actualizado < $2 AND origen = 'sync'`, [ids, inicio]);
+                borrados = del.rowCount;
+                sobran = (await cli.query(`SELECT COUNT(*)::int AS n FROM eti.${c} WHERE NOT (id = ANY($1::text[]))`, [ids])).rows[0].n;
+              }
+              if (up.rowCount || borrados) await cli.query(
+                `INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`,
+                [c, "*", "sync", "servidor", "sync: " + up.rowCount + " altas/cambios, " + borrados + " bajas"]
+              );
+              await cli.query("COMMIT");
+              res[c] = { firestore: docs.length, altasCambios: up.rowCount, bajas: borrados, sobran };
+            } catch (e) {
+              try {
+                await cli.query("ROLLBACK");
+              } catch (x) {
+              }
+              throw e;
+            } finally {
+              cli.release();
             }
-            if (up.rowCount || borrados) await cli.query(
-              `INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`,
-              [c, "*", "sync", "servidor", "sync: " + up.rowCount + " altas/cambios, " + borrados + " bajas"]
-            );
-            await cli.query("COMMIT");
-            res[c] = { firestore: docs.length, altasCambios: up.rowCount, bajas: borrados };
           } catch (e) {
-            try {
-              await cli.query("ROLLBACK");
-            } catch (x) {
-            }
-            throw e;
-          } finally {
-            cli.release();
+            fallas++;
+            res[c] = { error: e.message };
+            context.log.error("[eti-sync] " + c + ": " + e.message);
           }
         }
-        context.res = { status: 200, body: { success: true, colecciones: res, ms: Date.now() - t0 } };
+        context.res = { status: fallas && fallas === cols.length ? 500 : 200, body: { success: !(fallas && fallas === cols.length), colecciones: res, fallas, ms: Date.now() - t0 } };
       } catch (e) {
         context.log.error("[eti-sync] " + e.message);
         context.res = { status: 500, body: { success: false, error: e.message } };
