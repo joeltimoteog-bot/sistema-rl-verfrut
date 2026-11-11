@@ -66839,8 +66839,10 @@ var require_cumpl_motor = __commonJS({
     var CUMPL_EXCLUIDOS = ["jsiancas", "mmechato", "jchavez", "dsanchez", "jcarranza", "jfernandez"];
     var CUMPL_SECTORES_FUERA = ["BIENESTAR SOCIAL", "RECLUTAMIENTO"];
     var secN = (s) => String(s || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+    var PADRON = null;
     function fueraEquipo(u) {
       if (!u) return false;
+      if (PADRON && PADRON[usr(u.usuario)] === 0) return true;
       if (CUMPL_EXCLUIDOS.indexOf(usr(u.usuario)) >= 0) return true;
       return CUMPL_SECTORES_FUERA.indexOf(secN(u.sector)) >= 0;
     }
@@ -67112,6 +67114,7 @@ var require_cumpl_motor = __commonJS({
       return actual;
     }
     function crearMotor(D) {
+      PADRON = D && D.padron || null;
       const K = D.constantes || {};
       const FER = K.feriados || [], AI = K.altaIni || { m: 1, d: 5 }, AF = K.altaFin || { m: 6, d: 26 };
       const PLAZO_CASOS = K.plazo == null ? 5 : K.plazo;
@@ -67322,6 +67325,7 @@ var require_cumpl_motor = __commonJS({
           if (aS) {
             rp = AUS.reemp(aS);
             if (!rp) return;
+            if (aunNoEntraba(rp, domPasadoDia)) return;
             if (CUMPL_SIN_VISITAS.indexOf(usr(rp.usuario)) >= 0) return;
             const kr = usr(rp.nombre);
             let okR = !!reportaron[kr];
@@ -67669,6 +67673,7 @@ var require_cumpl_motor = __commonJS({
           if (aS) {
             const rp = AUS.reemp(aS);
             if (!rp) return;
+            if (aunNoEntraba(rp, domDia)) return;
             if (CUMPL_SIN_VISITAS.indexOf(usr(rp.usuario)) >= 0) return;
             const kr = rp.nombre.toLowerCase();
             let okR = !!reportaron[kr];
@@ -69822,6 +69827,20 @@ var require_cumpl = __commonJS({
             D.restricc = w.restricc;
           }
         } catch (e) {
+        }
+      }
+      D.padron = null;
+      if (process.env.CUMPL_PADRON !== "0") {
+        try {
+          const pp = await pool.request().query("SELECT usuario, evalua_cumplimiento FROM dbo.personas WHERE vigente = 1 AND usuario IS NOT NULL");
+          const mp = {};
+          pp.recordset.forEach((f) => {
+            const k = String(f.usuario || "").trim().toLowerCase();
+            if (k) mp[k] = Number(f.evalua_cumplimiento) === 1 ? 1 : 0;
+          });
+          if (Object.keys(mp).length) D.padron = mp;
+        } catch (e) {
+          console.warn("[cumpl] _CUMPL_PADRON_V1: " + e.message);
         }
       }
       cache = { t: Date.now(), D, recientes, marcaW };

@@ -25,8 +25,13 @@ const CUMPL_EXCLUIDOS = ['jsiancas', 'mmechato', 'jchavez', 'dsanchez', 'jcarran
    para los tres lugares; antes CUMPL_EXCLUIDOS solo se aplicaba en cumplPanel y el aviso seguia mostrando a los excluidos. */
 const CUMPL_SECTORES_FUERA = ['BIENESTAR SOCIAL', 'RECLUTAMIENTO'];
 const secN = (s) => String(s || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+/* _CUMPL_PADRON_V1 (11-nov-2026, decision de Joel): la marca "Entra al Control de Cumplimiento" del padron unico manda.
+   Quien esta en el padron con la marca en NO queda fuera (panel, aviso y pendientes). Con la marca en SI siguen valiendo
+   las reglas de siempre. Quien no esta en el padron: sin cambio. PADRON lo carga cumpl/index.js en cada lectura. */
+let PADRON = null;
 function fueraEquipo(u) {
   if (!u) return false;
+  if (PADRON && PADRON[usr(u.usuario)] === 0) return true;
   if (CUMPL_EXCLUIDOS.indexOf(usr(u.usuario)) >= 0) return true;
   return CUMPL_SECTORES_FUERA.indexOf(secN(u.sector)) >= 0;
 }
@@ -233,6 +238,7 @@ function plazoEn(cfg, clave, fechaRegYmd) {
 }
 
 function crearMotor(D) {
+  PADRON = (D && D.padron) || null;   /* _CUMPL_PADRON_V1 */
   const K = D.constantes || {};
   const FER = K.feriados || [], AI = K.altaIni || { m: 1, d: 5 }, AF = K.altaFin || { m: 6, d: 26 };
   const PLAZO_CASOS = K.plazo == null ? 5 : K.plazo;
@@ -390,6 +396,7 @@ function crearMotor(D) {
       let rp = null;
       if (aS) {
         rp = AUS.reemp(aS); if (!rp) return;
+        if (aunNoEntraba(rp, domPasadoDia)) return;   /* _CUMPL_INGRESO_V2 (11-nov-2026): tampoco se le exige al REEMPLAZO una semana anterior a su inicio (Luigi salia vencido por la sem. 45 como reemplazo de Yhanelly) */
         if (CUMPL_SIN_VISITAS.indexOf(usr(rp.usuario)) >= 0) return;   /* _EQUIPO_RRLL_V1: la asistente cubre casos, no la visita semanal */
         const kr = usr(rp.nombre);
         let okR = !!reportaron[kr];
@@ -603,6 +610,7 @@ function crearMotor(D) {
       const tU = usuarioPor(usuarios, nombreSup), aS = tU ? AUS.semana(tU, lunesPasado, ymd, sumar) : null;   /* _AUSENCIAS_V1 */
       if (aS) {
         const rp = AUS.reemp(aS); if (!rp) return;
+        if (aunNoEntraba(rp, domDia)) return;   /* _CUMPL_INGRESO_V2 */
         if (CUMPL_SIN_VISITAS.indexOf(usr(rp.usuario)) >= 0) return;   /* _EQUIPO_RRLL_V1: la asistente cubre casos, no la visita semanal */
         const kr = rp.nombre.toLowerCase();
         let okR = !!reportaron[kr];

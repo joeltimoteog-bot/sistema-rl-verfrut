@@ -57,6 +57,16 @@ async function _datos() {
     recientes = c.recordset.map(x => JSON.parse(x.datos)).filter(x => x.nro !== '' && x.nro !== null && x.nro !== undefined);
   }
   if (marcaW) { try { const w = await CUW.paraMotor(pool); if (w) { D.config = w.config; D.restricc = w.restricc; } } catch (e) {} }   /* _CUMPL_W_V1 */
+  /* _CUMPL_PADRON_V1 (11-nov-2026): marcas "Entra al Control de Cumplimiento" del padron unico (rl.personas). Si la lectura
+     falla, el motor sigue con sus reglas de siempre. Apagar: secreto CUMPL_PADRON=0. */
+  D.padron = null;
+  if (process.env.CUMPL_PADRON !== '0') {
+    try {
+      const pp = await pool.request().query('SELECT usuario, evalua_cumplimiento FROM dbo.personas WHERE vigente = 1 AND usuario IS NOT NULL');
+      const mp = {}; pp.recordset.forEach(f => { const k = String(f.usuario || '').trim().toLowerCase(); if (k) mp[k] = Number(f.evalua_cumplimiento) === 1 ? 1 : 0; });
+      if (Object.keys(mp).length) D.padron = mp;
+    } catch (e) { console.warn('[cumpl] _CUMPL_PADRON_V1: ' + e.message); }
+  }
   cache = { t: Date.now(), D, recientes, marcaW };
   return cache;
 }
