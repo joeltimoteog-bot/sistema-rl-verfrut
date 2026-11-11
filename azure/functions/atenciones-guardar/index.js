@@ -57,7 +57,17 @@ module.exports = async function (context, req) {
     const d = G.armar(b);
     if (!/^\d{8}$/.test(d.dni) && !/^[A-Za-z0-9]{6,15}$/.test(d.dni)) { context.res = { status: 400, body: { success: false, error: 'DNI invalido' } }; return; }
     if (!d.nombre) { context.res = { status: 400, body: { success: false, error: 'Falta el nombre' } }; return; }
-    if (!d.usuario_sistema) d.usuario_sistema = String(t.usuario).slice(0, 50);
+    /* _SEG_SERVIDOR_V1 (10-nov-2026): el autor del registro sale del TOKEN. El del cuerpo solo se conserva si es el mismo
+       usuario (se respeta como lo escribe la pantalla) o si quien guarda es administrador/coordinador/jefatura (carga a nombre de otro). */
+    {
+      const _tu = String(t.usuario).trim(), _bu = String(d.usuario_sistema || '').trim(), _rolT = String(t.rol || '').toLowerCase().trim();
+      const _adm = /^admin/.test(_rolT) || ['coordinador', 'jefa_rl', 'jefe_rl'].indexOf(_rolT) >= 0;
+      if (!_bu) d.usuario_sistema = _tu.slice(0, 50);
+      else if (_bu.toLowerCase() !== _tu.toLowerCase() && !_adm) {
+        context.log.warn('[atenciones-guardar] _SEG_SERVIDOR_V1: usuario_sistema del cuerpo "' + _bu + '" distinto al del token "' + _tu + '": se usa el del token');
+        d.usuario_sistema = _tu.slice(0, 50);
+      }
+    }
     const L = G.lima(), anioHoja = L.anio;
 
     if (clave && !prueba) {

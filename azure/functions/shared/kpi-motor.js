@@ -57,7 +57,10 @@ const DEF = {
 const PERSONAS = [
   { usuario: 'smiranda', dni: '47262764', nombre: 'MIRANDA PASAPERA SOCORRO DEL PILAR', empresa: 'RAPEL', tipo: 'ASIST', puesto: 'ASISTENTE DE RELACIONES LABORALES', ingreso: '2015-08-04' },
   { usuario: 'jborrero', dni: '45984661', nombre: 'HERNANDEZ BORRERO JHON STEVE', empresa: 'RAPEL', tipo: 'SUP', puesto: 'SUPERVISOR(A) DE GESTIÓN HUMANA', ingreso: '2026-09-11' },
-  { usuario: 'yluzon', dni: '76329783', nombre: 'LUZON VENEGAS YHANELLY GERALDENY', empresa: 'VERFRUT', tipo: 'SUP', puesto: 'SUPERVISOR(A) DE GESTIÓN HUMANA', ingreso: '2021-06-01' },
+  { usuario: 'yluzon', dni: '76329783', nombre: 'LUZON VENEGAS YHANELLY GERALDENY', empresa: 'VERFRUT', tipo: 'SUP', puesto: 'SUPERVISOR(A) DE GESTIÓN HUMANA', ingreso: '2021-06-01' },   /* historico: Santa Rosa hasta el 10-nov-2026 (no se borra) */
+  /* _SEG_SERVIDOR_V1 (10-nov-2026): reemplaza a Yhanelly Luzon en Santa Rosa. alta:true = kpi-db lo agrega a dbo.KPI_Personas si aun no esta.
+     Sin "ingreso" (no se conoce la fecha): poner la fecha real en KPI_Personas.ingreso para que se mida desde ese dia. */
+  { usuario: 'lpalacios', dni: '73036989', nombre: 'QUEZADA PALACIOS LUIGI FABIAN', empresa: 'VERFRUT', tipo: 'SUP', puesto: 'SUPERVISOR(A) DE GESTIÓN HUMANA', alias: ['LUIGI FABIAN QUEZADA PALACIOS'], alta: true },
   { usuario: 'almartinez', dni: '72952975', nombre: 'MARTINEZ JUAREZ ALEXANDER', empresa: 'VERFRUT', tipo: 'SUP', puesto: 'SUPERVISOR(A) DE GESTIÓN HUMANA', ingreso: '2024-09-03' },
   { usuario: 'rmolero', dni: '74218729', nombre: 'MOLERO ABAD ROBERTO CARLOS', empresa: 'VERFRUT', tipo: 'SUP', puesto: 'SUPERVISOR(A) DE GESTIÓN HUMANA', ingreso: '2024-09-23' },
   { usuario: 'fpulache', dni: '46793507', nombre: 'PULACHE VIERA FLOR DE LOS MILAGROS', empresa: 'RAPEL', tipo: 'SUP', puesto: 'SUPERVISOR(A) DE GESTIÓN HUMANA', ingreso: '2012-07-23' },

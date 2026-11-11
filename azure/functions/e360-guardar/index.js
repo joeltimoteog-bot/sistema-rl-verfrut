@@ -5,7 +5,7 @@
    Apagado (CV_Estado e360_azure_primero <> '1') o sin token -> 503/401 y la pantalla usa Google.
    ═══════════════════════════════════════════════════════════════════════════ */
 const jwt = require('jsonwebtoken');
-const { getPool } = require('../shared/db');
+const { sql, getPool } = require('../shared/db');   /* _SEG_SERVIDOR_V1: + sql (consulta del nombre y del permiso de quien lee) */
 const CG = require('../shared/cv-guardar');
 const H = require('../shared/e360-guardar');
 const TH = require('../shared/tablas-hoja');   /* _E360_LEER_AZURE_V1 */
@@ -51,6 +51,47 @@ async function getEvaluaciones360(pool, p) {
   return { success: true, data, fuente: 'azure' };
 }
 
+/* _SEG_SERVIDOR_V1 (10-nov-2026) — quien puede LEER las evaluaciones 360 (antes: cualquier usuario con sesion las leia todas).
+   · todo:    rol administrador / coordinador / jefatura, o evaluador autorizado (programa e360).
+   · empresa: otro rol (no supervisor) con el permiso "navEval360" marcado en Acceso a Modulos -> solo su empresa.
+   · propio:  el resto (supervisores) -> solo las evaluaciones donde el es el evaluado (por nombre) o las que el registro.
+   Es la misma regla que ya aplicaba la pantalla (evaluacion360.html); ahora la aplica el servidor. */
+const E360_ROLES_TODO = ['administrador', 'administrador 01', 'administrador 02', 'admin', 'admin01', 'admin02', 'coordinador', 'jefa_rl', 'jefe_rl'];
+const nrmN = s => String(s || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim();
+function mismaPersona(a, b) {
+  const A = nrmN(a), B = nrmN(b); if (!A || !B) return false; if (A === B) return true;
+  const wa = A.split(' ').filter(w => w.length > 2), wb = B.split(' ').filter(w => w.length > 2);
+  if (wa.length < 2 || wb.length < 2) return false;
+  const corta = wa.length <= wb.length ? wa : wb, larga = wa.length <= wb.length ? wb : wa;
+  return corta.every(w => larga.indexOf(w) >= 0);   /* mismos nombres y apellidos en otro orden, o uno con un nombre de menos */
+}
+async function alcanceE360(pool, t, AS) {
+  const rol = String(t.rol || '').toLowerCase().trim(), yo = String(t.usuario || '').toLowerCase().trim();
+  if (E360_ROLES_TODO.indexOf(rol) >= 0) return { nivel: 'todo' };
+  try { const prog = await AS.programa(pool); if ((prog.evaluadores || []).indexOf(yo) >= 0) return { nivel: 'todo' }; } catch (e) {}
+  let nombre = '';
+  try { const r = await pool.request().input('u', sql.NVarChar(60), yo).query('SELECT TOP 1 nombre FROM dbo.usuarios WHERE LOWER(usuario) = @u'); nombre = String(((r.recordset || [])[0] || {}).nombre || '').trim(); } catch (e) {}
+  if (rol !== 'supervisor') {
+    try {
+      const p = await pool.request().input('u', sql.NVarChar(60), yo).query("SELECT COUNT(*) AS ok FROM dbo.PermisosModulos WHERE usuario = @u AND modulo = 'navEval360' AND permitido = 1");
+      if (Number(((p.recordset || [])[0] || {}).ok) > 0) return { nivel: 'empresa', empresa: String(t.empresa || '').toUpperCase().trim(), nombre, yo };
+      /* _SEG_SERVIDOR_V3 (10-nov-2026, decision de Joel: nadie pierde lo que ya veia): quien NO es supervisor y aun no tiene
+         ninguna fila en "Acceso a Modulos" (acceso heredado) sigue viendo como antes, hasta que Joel le asigne sus modulos */
+      const c = await pool.request().input('u', sql.NVarChar(60), yo).query('SELECT COUNT(*) AS n FROM dbo.PermisosModulos WHERE usuario = @u');
+      if (Number(((c.recordset || [])[0] || {}).n) === 0) return { nivel: 'todo', heredado: true };
+    } catch (e) {}
+  }
+  return { nivel: 'propio', nombre, yo };
+}
+function filtrarE360(out, al) {
+  if (!out || !out.success || !Array.isArray(out.data) || al.nivel === 'todo') return out;
+  const mio = e => (al.nombre && mismaPersona(e.supervisor, al.nombre)) || (al.nombre && mismaPersona(e.evaluadorUser, al.nombre)) || String(e.evaluadorUser || '').toLowerCase().trim() === al.yo;   /* _SEG_SERVIDOR_V2: la pantalla guarda el NOMBRE del evaluador */
+  if (al.nivel === 'empresa') out.data = out.data.filter(e => !al.empresa || al.empresa === 'AMBAS' || String(e.empresa || '').toUpperCase().trim() === al.empresa || mio(e));
+  else out.data = out.data.filter(mio);
+  out.alcance = al.nivel;
+  return out;
+}
+
 module.exports = async function (context, req) {
   const accion = context.bindingData.accion;
   try {
@@ -59,7 +100,7 @@ module.exports = async function (context, req) {
     const t = token(req);
     if (!t || !t.usuario) { context.res = { status: 401, body: { success: false, error: 'Sin sesion valida' } }; return; }
     const pool = await getPool(); await CG.asegurarTablas(pool);
-    if (accion === 'getEvaluaciones360') { context.res = { status: 200, body: await getEvaluaciones360(pool, req.body || {}) }; return; }   /* _E360_LEER_AZURE_V1 */
+    if (accion === 'getEvaluaciones360') { context.res = { status: 200, body: filtrarE360(await getEvaluaciones360(pool, req.body || {}), await alcanceE360(pool, t, AS)) }; return; }   /* _E360_LEER_AZURE_V1 · _SEG_SERVIDOR_V1: cada quien solo lo que le corresponde */
     if (accion === 'e360Reporte') {   /* _E360_REPORTE_V1: notas de todo el equipo → solo evaluadores autorizados (programación e360) */
       const prog = await AS.programa(pool);
       if (prog.evaluadores.indexOf(String(t.usuario).toLowerCase()) < 0) { context.res = { status: 403, body: { success: false, error: 'Solo los evaluadores autorizados ven el informe gerencial.' } }; return; }

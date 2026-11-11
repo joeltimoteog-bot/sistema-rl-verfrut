@@ -13,6 +13,7 @@ function admin(req) {
   if (!h.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
   try {
     const t = jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+    if (t && t.aud && t.aud !== 'eti-sesion') return null;   /* _SEG_SERVIDOR_V1 (10-nov-2026): el pase SSO (aud=eti-sso) no vale como sesion; solo sesion RR.LL. (sin aud) o sesion ETI */
     const u = String(t.usuario || '').toLowerCase(), r = String(t.rol || '').toLowerCase();
     return (u === 'jtimoteo' || r === 'admin' || r === 'administrador') ? t : null;
   } catch (e) { return null; }

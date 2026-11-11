@@ -16,7 +16,7 @@ const CAP = require('./cap-guardar');
 const HE = require('./horas-escritura');
 
 /* = HORAS_ADMINS y HORAS_REG_V7 del Apps Script (si cambian alla, cambiar aqui) */
-const ADMINS = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas', 'ovilela', 'jchavez'];
+const ADMINS = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas'];   /* _SEG_SERVIDOR_V1 (10-nov-2026): se retiro a ovilela y jchavez (ya no trabajan en el area) */
 const REGISTRADORES = ['dsanchez', 'lmorales', 'jsiancas'];
 const ACCIONES = ['horasRecalcJornada', 'horasRegistrar', 'horasEditar', 'horasEliminar', 'horasAprobar', 'horasAgregarMotivo', 'horasEliminarMotivo'];
 const CLAVES = ['horas_registros', 'horas_motivos', 'horas_horarios', 'horas_pagadas', 'horas_auditoria'];

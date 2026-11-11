@@ -198,9 +198,17 @@ async function permisosBS(u, q) {
     if (acc.bs.admin) esAdmin = true;
     return { esAdmin, permisos: Object.assign({}, acc.bs.permisos || {}), fuente: 'rrll' };
   }
-  let perm = {}; try { perm = JSON.parse((q && q.permisos) || '{}') || {}; } catch (e) { perm = {}; }
+  /* _SEG_SERVIDOR_V1 (10-nov-2026): los permisos YA NO se leen de la URL (?permisos=): cualquiera podia escribirlos.
+     Usuario sin configurar en "Acceso a Modulos" (o base sin responder): sin permisos de modulo, salvo que su rol sea
+     administrador/coordinador/jefa. Salida de emergencia (solo mientras se configura a los usuarios): secreto
+     BS_PERMISOS_URL=1 en el servidor vuelve al comportamiento anterior. */
+  const legadoUrl = process.env.BS_PERMISOS_URL !== '0';   /* _SEG_SERVIDOR_V3 (10-nov-2026, decision de Joel: nadie pierde acceso al desplegar): el respaldo por URL sigue SOLO para quien aun no esta configurado en "Acceso a Modulos"; se anota quien lo usa; se cierra con BS_PERMISOS_URL=0 cuando la lista quede vacia */
+  if (legadoUrl && usuario && !esAdmin) { try { console.warn('[bs] _SEG_SERVIDOR_V3 permisos por URL (usuario sin configurar o base sin respuesta): ' + usuario); } catch (e) {} }
+  /* _SEG_SERVIDOR_V2 (10-nov-2026, verificacion): si "Acceso a Modulos" no respondio (base lenta) no se niega el acceso: 503 para que la pantalla reintente */
+  if (acc === null && usuario && !esAdmin && !legadoUrl) throw Object.assign(new Error('No se pudieron leer tus permisos en este momento. Intenta de nuevo en unos segundos.'), { status: 503 });
+  let perm = {}; if (legadoUrl) { try { perm = JSON.parse((q && q.permisos) || '{}') || {}; } catch (e) { perm = {}; } }
   if (!esAdmin) perm.hostigamiento = false;
-  return { esAdmin, permisos: perm, fuente: acc === null ? 'bienestar:sin-respuesta-rrll' : 'bienestar:no-configurado' };
+  return { esAdmin, permisos: perm, fuente: (acc === null ? 'bienestar:sin-respuesta-rrll' : 'bienestar:no-configurado') + (legadoUrl ? '' : ':url-ignorada') };
 }
 
 module.exports = async function (context, req) {
@@ -219,7 +227,7 @@ module.exports = async function (context, req) {
     if (accion === 'tabla') {
       const clave = String(q.clave || ''); if (CLAVES.indexOf(clave) < 0) return res(400, { success: false, error: 'clave desconocida' });
       if (clave === 'bs_auditoria') { const rolA = String((u && (u.rol || u.role)) || '').toLowerCase(), usA = String((u && u.usuario) || '').toLowerCase();
-        if (rolA.indexOf('admin') < 0 && !/coordinador|jefa/.test(rolA) && ['jtimoteo', 'ovilela'].indexOf(usA) < 0) return res(403, { success: false, error: 'Solo administradores pueden ver la auditoría.' }); }
+        if (rolA.indexOf('admin') < 0 && !/coordinador|jefa/.test(rolA) && ['jtimoteo'].indexOf(usA) < 0) return res(403   /* _SEG_SERVIDOR_V1 (10-nov-2026): se retiro a ovilela (ya no trabaja en el area) */, { success: false, error: 'Solo administradores pueden ver la auditoría.' }); }
       /* _BS_PERMISOS_SERVIDOR_V1: cada tabla exige el permiso de su modulo (calculado en el servidor) */
       const modT = MODULO_DE_CLAVE[clave] || '';
       if (modT && clave !== 'bs_auditoria') { const PT = await permisosBS(u, q); if (!PT.esAdmin && !PT.permisos[modT]) return res(403, { success: false, error: 'Sin permiso para el módulo ' + modT + '.' }); }
@@ -327,6 +335,6 @@ module.exports = async function (context, req) {
     return res(404, { success: false, error: 'Acción desconocida: ' + accion });
   } catch (e) {
     context.log.error('bs/' + accion + ': ' + e.message);
-    return res(500, { ok: false, success: false, message: e.message });
+    return res(e.status || 500, { ok: false, success: false, message: e.message, error: e.message });   /* _SEG_SERVIDOR_V2: respeta el 503 de permisos sin respuesta */
   }
 };

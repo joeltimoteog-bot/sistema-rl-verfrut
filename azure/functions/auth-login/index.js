@@ -45,7 +45,8 @@ const FUNDOS_SUPERVISOR = {
   'ptamayo':    ['El Papayo', 'Limones'],
   'atineo':     ['Olivares Bajo'],
   'fpulache':   ['Los Olivares'],
-  'yluzon':     ['Santa Rosa'],
+  'lpalacios':  ['Santa Rosa'],   /* _SEG_SERVIDOR_V1 (10-nov-2026): Luigi Fabian Quezada Palacios reemplaza a Yhanelly Luzon en Santa Rosa */
+  'yluzon':     ['Santa Rosa'],   /* historico: titular de Santa Rosa hasta el 10-nov-2026 (se conserva; deja de aplicar al dar de baja su cuenta) */
   'sviera':     ['Algarrobos'],
   'ecastro':    ['San Vicente'],
   'almartinez': ['Punta Arenas'],

@@ -82,6 +82,19 @@ function asegurarTablas(pool) {
           .query('INSERT INTO dbo.KPI_Personas (usuario, dni, nombre, empresa, tipo, puesto, ingreso, alias, orden) VALUES (@u, @d, @n, @e, @t, @p, @i, @a, @o)');
       }
     }
+    /* _SEG_SERVIDOR_V1 (10-nov-2026): altas posteriores a la siembra (personas de kpi-motor con alta:true, p. ej. lpalacios).
+       Se agregan UNA vez si aun no estan en la tabla; no se toca ninguna fila existente. Si falla, no frena nada. */
+    try {
+      for (let i = 0; i < K.PERSONAS.length; i++) {
+        const p = K.PERSONAS[i]; if (!p.alta) continue;
+        const ya = await pool.request().input('u', sql.NVarChar(60), p.usuario).query('SELECT COUNT(*) AS n FROM dbo.KPI_Personas WHERE usuario = @u');
+        if (ya.recordset[0].n) continue;
+        await pool.request().input('u', sql.NVarChar(60), p.usuario).input('d', sql.NVarChar(15), p.dni).input('n', sql.NVarChar(200), p.nombre)
+          .input('e', sql.NVarChar(20), p.empresa).input('t', sql.NVarChar(10), p.tipo).input('p', sql.NVarChar(150), p.puesto)
+          .input('i', sql.Date, p.ingreso || null).input('o', sql.Int, i).input('a', sql.NVarChar(1000), (p.alias || []).join('|') || null)
+          .query('INSERT INTO dbo.KPI_Personas (usuario, dni, nombre, empresa, tipo, puesto, ingreso, alias, orden) VALUES (@u, @d, @n, @e, @t, @p, @i, @a, @o)');
+      }
+    } catch (eAlta) { try { console.warn('[kpi-db] _SEG_SERVIDOR_V1 alta de personas: ' + eAlta.message); } catch (x) {} }
   })().catch(e => { listo = null; throw e; });
   return listo;
 }

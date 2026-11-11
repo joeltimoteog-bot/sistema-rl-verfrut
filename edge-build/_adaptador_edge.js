@@ -62,7 +62,7 @@ async function manejar(request) {
     if (!dada || validas.indexOf(dada) < 0) return new Response(JSON.stringify({ success: false, error: 'Llave de funcion invalida o ausente' }), { status: 401, headers: Object.assign({ 'Content-Type': 'application/json' }, C) });
   }
   const params = {}; r.nombres.forEach(function (n, i) { params[n] = m[i + 1] !== undefined ? decodeURIComponent(m[i + 1]) : undefined; });
-  const query = {}; url.searchParams.forEach(function (v, k) { query[k] = v; });
+  const query = {}; url.searchParams.forEach(function (v, k) { if (k !== 'forceFunctionRegion') query[k] = v; });   /* _EDGE_REGION_V1: parametro de Supabase, no de la funcion */
   const headers = {}; request.headers.forEach(function (v, k) { headers[k.toLowerCase()] = v; });
 
   let rawBody = '', body;

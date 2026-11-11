@@ -36,10 +36,18 @@ function sesion(req) {
   try {
     const a = String((req.headers && (req.headers.authorization || req.headers.Authorization)) || '');
     if (!a.startsWith('Bearer ') || !env('JWT_SECRET')) return null;
-    return require('jsonwebtoken').verify(a.slice(7).trim(), env('JWT_SECRET'));
+    const p = require('jsonwebtoken').verify(a.slice(7).trim(), env('JWT_SECRET'));
+    /* _SEG_SERVIDOR_V1 (10-nov-2026): aqui valen la sesion del RR.LL. (sin "aud") y la sesion de los ETI (aud=eti-sesion).
+       El pase SSO de 90 s (aud=eti-sso) o cualquier otra audiencia NO vale como sesion; tampoco un token sin usuario. */
+    if (!p || !p.usuario || (p.aud && p.aud !== 'eti-sesion')) return null;
+    return p;
   } catch (e) { return null; }
 }
 const esAdmin = (u) => !!u && /^admin/i.test(String(u.rol || ''));
+/* _SEG_SERVIDOR_V1 (10-nov-2026): colecciones que solo leen los administradores/editores (padron de cuentas de los ETI) */
+const SOLO_GESTOR = ['usuarios_eti'];
+const gestor = (u) => editorInforme(u) || /coordinador|jefa|jefe/i.test(String((u && u.rol) || ''));
+function soloGestor(c, u) { if (SOLO_GESTOR.indexOf(c) >= 0 && !gestor(u)) throw Object.assign(new Error('Coleccion no permitida para este usuario'), { status: 403 }); }
 function col(c) { if (COLS.indexOf(c) < 0) throw Object.assign(new Error('Coleccion no permitida: ' + c), { status: 400 }); return c; }
 const campoOk = (f) => /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$/.test(String(f));
 function ruta(f) { return '{' + String(f).split('.').join(',') + '}'; }
@@ -47,6 +55,7 @@ function ruta(f) { return '{' + String(f).split('.').join(',') + '}'; }
 async function consultar(b, u) {
   const c = col(b.col);
   if (!u && LECTURA_ANONIMA.indexOf(c) < 0) throw Object.assign(new Error('Sesion requerida'), { status: 401 });
+  soloGestor(c, u);   /* _SEG_SERVIDOR_V1 */
   const w = [], v = [];
   for (const f of (Array.isArray(b.filtros) ? b.filtros : [])) {
     const [campo, op, valor] = f;
@@ -74,6 +83,7 @@ async function consultar(b, u) {
 async function leerDoc(b, u) {
   const c = col(b.col);
   if (!u && LECTURA_ANONIMA.indexOf(c) < 0 && DOC_ANONIMO.indexOf(c) < 0) throw Object.assign(new Error('Sesion requerida'), { status: 401 });
+  soloGestor(c, u);   /* _SEG_SERVIDOR_V1 */
   const r = await pool().query(`SELECT id, datos FROM eti.${c} WHERE id = $1`, [String(b.id)]);
   return { success: true, existe: r.rows.length > 0, id: String(b.id), datos: r.rows.length ? r.rows[0].datos : null };
 }
@@ -82,16 +92,54 @@ async function escribir(b, u) {
   const ops = Array.isArray(b.ops) ? b.ops.slice(0, 500) : [];
   if (!ops.length) return { success: true, aplicadas: 0 };
   for (const o of ops) {
+    if (!o || typeof o !== 'object') throw Object.assign(new Error('operacion invalida'), { status: 400 });   /* _SEG_SERVIDOR_V2 */
     col(o.col);
+    soloGestor(o.col, u);   /* _SEG_SERVIDOR_V2 (10-nov-2026, verificacion): el padron de cuentas tampoco se escribe ni se borra sin ser gestor */
     if (!o.id || String(o.id).length > 200) throw Object.assign(new Error('id invalido'), { status: 400 });
     /* sin sesion: solo la respuesta del trabajador (crear o marcar azOk), nunca borrar */
     if (!u && !(o.col === 'respuestas_qr' && (o.op === 'set' || o.op === 'update'))) throw Object.assign(new Error('Sesion requerida'), { status: 401 });
   }
   const cli = await pool().connect();
+  let omitidas = 0;   /* _SEG_SERVIDOR_V1 */
   try {
     await cli.query('BEGIN');
     for (const o of ops) {
       const id = String(o.id), d = JSON.stringify(o.datos || {});
+      /* _SEG_SERVIDOR_V1 (10-nov-2026): SIN SESION (pagina QR del trabajador) solo se puede
+           · CREAR su respuesta (set completo). Si ese id ya existe NO se sobrescribe (el reintento del celular
+             manda el mismo documento: se ignora sin error para no trabar su cola). Unica excepcion: si lo que
+             habia era solo la marca azOk/azEn (llego antes que la respuesta), se completa.
+           · MARCAR azOk/azEn en una respuesta que ya existe (set con merge / update). Cualquier otro campo se descarta.
+         Nunca borra, nunca reemplaza y nunca toca otra coleccion (eso ya lo corta la validacion de arriba). */
+      if (!u) {
+        if (d.length > 200000) throw Object.assign(new Error('Documento invalido (demasiado grande)'), { status: 413 });
+        let hecho = 0;
+        if (o.op === 'set' && !o.merge) {
+          const rA = await cli.query(`INSERT INTO eti.respuestas_qr (id, datos, origen) VALUES ($1, $2::jsonb, $3)
+              ON CONFLICT (id) DO UPDATE SET datos = EXCLUDED.datos || eti.respuestas_qr.datos, actualizado = now()
+              WHERE (eti.respuestas_qr.datos - 'azOk'::text - 'azEn'::text) = '{}'::jsonb`, [id, d, o.origen || 'espejo']);
+          hecho = rA.rowCount || 0;
+        } else {
+          const src = (o.datos && typeof o.datos === 'object') ? o.datos : {}, marca = {};
+          if (src.azOk === true) marca.azOk = true;
+          if (typeof src.azEn === 'string' && src.azEn.length <= 40) marca.azEn = src.azEn;
+          if (Object.keys(marca).length) {
+            const rB = await cli.query(`UPDATE eti.respuestas_qr SET datos = datos || $2::jsonb, actualizado = now() WHERE id = $1`, [id, JSON.stringify(marca)]);
+            hecho = rB.rowCount || 0;
+          }
+        }
+        if (hecho) await cli.query(`INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`, [o.col, id, o.op, 'anonimo', o.origen || 'espejo']);
+        else omitidas++;
+        continue;
+      }
+      /* _SEG_SERVIDOR_V1: el QR de una encuesta solo lo cambia o borra quien lo creo, el supervisor evaluado o un administrador/editor */
+      if (o.col === 'encuestas_qr' && !gestor(u)) {
+        const yaQ = await cli.query(`SELECT datos->>'creadoPor' AS c, datos->>'usuario' AS s FROM eti.encuestas_qr WHERE id = $1`, [id]);
+        if (yaQ.rows.length) {
+          const yo = String(u.usuario || '').toLowerCase().trim(), cQ = String(yaQ.rows[0].c || '').toLowerCase().trim(), sQ = String(yaQ.rows[0].s || '').toLowerCase().trim();
+          if ((cQ || sQ) && cQ !== yo && sQ !== yo) throw Object.assign(new Error('Este QR de encuesta pertenece a otro usuario'), { status: 403 });
+        }
+      }
       if ((o.col === 'informes_eti' || o.col === 'informes_cap') && !editorInforme(u)) {   /* _INFORME_ETI_V1: el supervisor solo crea su informe; corregir o borrar = editores */
         const ya = await cli.query(`SELECT 1 FROM eti.${o.col} WHERE id = $1`, [id]);
         if (o.op === 'delete' || ya.rows.length) throw Object.assign(new Error('Solo los administradores de informes pueden corregir un informe emitido'), { status: 403 });
@@ -115,7 +163,7 @@ async function escribir(b, u) {
       await cli.query(`INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`, [o.col, id, o.op, (u && u.usuario) || 'anonimo', o.origen || 'espejo']);
     }
     await cli.query('COMMIT');
-    return { success: true, aplicadas: ops.length };
+    return { success: true, aplicadas: ops.length, omitidas: omitidas };   /* _SEG_SERVIDOR_V1: omitidas = operaciones sin sesion que no cambiaron nada */
   } catch (e) { try { await cli.query('ROLLBACK'); } catch (x) {} throw e; } finally { cli.release(); }
 }
 

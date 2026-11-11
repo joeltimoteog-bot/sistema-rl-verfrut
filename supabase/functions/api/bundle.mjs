@@ -62220,7 +62220,15 @@ var require_atenciones_guardar = __commonJS({
           context.res = { status: 400, body: { success: false, error: "Falta el nombre" } };
           return;
         }
-        if (!d.usuario_sistema) d.usuario_sistema = String(t.usuario).slice(0, 50);
+        {
+          const _tu = String(t.usuario).trim(), _bu = String(d.usuario_sistema || "").trim(), _rolT = String(t.rol || "").toLowerCase().trim();
+          const _adm = /^admin/.test(_rolT) || ["coordinador", "jefa_rl", "jefe_rl"].indexOf(_rolT) >= 0;
+          if (!_bu) d.usuario_sistema = _tu.slice(0, 50);
+          else if (_bu.toLowerCase() !== _tu.toLowerCase() && !_adm) {
+            context.log.warn('[atenciones-guardar] _SEG_SERVIDOR_V1: usuario_sistema del cuerpo "' + _bu + '" distinto al del token "' + _tu + '": se usa el del token');
+            d.usuario_sistema = _tu.slice(0, 50);
+          }
+        }
         const L = G.lima(), anioHoja = L.anio;
         if (clave && !prueba) {
           const p = previoGuardado;
@@ -64763,7 +64771,10 @@ var require_auth_login = __commonJS({
       "ptamayo": ["El Papayo", "Limones"],
       "atineo": ["Olivares Bajo"],
       "fpulache": ["Los Olivares"],
+      "lpalacios": ["Santa Rosa"],
+      /* _SEG_SERVIDOR_V1 (10-nov-2026): Luigi Fabian Quezada Palacios reemplaza a Yhanelly Luzon en Santa Rosa */
       "yluzon": ["Santa Rosa"],
+      /* historico: titular de Santa Rosa hasta el 10-nov-2026 (se conserva; deja de aplicar al dar de baja su cuenta) */
       "sviera": ["Algarrobos"],
       "ecastro": ["San Vicente"],
       "almartinez": ["Punta Arenas"],
@@ -66372,14 +66383,24 @@ var require_bs = __commonJS({
         if (acc.bs.admin) esAdmin = true;
         return { esAdmin, permisos: Object.assign({}, acc.bs.permisos || {}), fuente: "rrll" };
       }
+      const legadoUrl = process.env.BS_PERMISOS_URL !== "0";
+      if (legadoUrl && usuario && !esAdmin) {
+        try {
+          console.warn("[bs] _SEG_SERVIDOR_V3 permisos por URL (usuario sin configurar o base sin respuesta): " + usuario);
+        } catch (e) {
+        }
+      }
+      if (acc === null && usuario && !esAdmin && !legadoUrl) throw Object.assign(new Error("No se pudieron leer tus permisos en este momento. Intenta de nuevo en unos segundos."), { status: 503 });
       let perm = {};
-      try {
-        perm = JSON.parse(q && q.permisos || "{}") || {};
-      } catch (e) {
-        perm = {};
+      if (legadoUrl) {
+        try {
+          perm = JSON.parse(q && q.permisos || "{}") || {};
+        } catch (e) {
+          perm = {};
+        }
       }
       if (!esAdmin) perm.hostigamiento = false;
-      return { esAdmin, permisos: perm, fuente: acc === null ? "bienestar:sin-respuesta-rrll" : "bienestar:no-configurado" };
+      return { esAdmin, permisos: perm, fuente: (acc === null ? "bienestar:sin-respuesta-rrll" : "bienestar:no-configurado") + (legadoUrl ? "" : ":url-ignorada") };
     }
     module.exports = async function(context, req) {
       const u = exigirAuth(context, req);
@@ -66404,7 +66425,7 @@ var require_bs = __commonJS({
           if (CLAVES.indexOf(clave) < 0) return res(400, { success: false, error: "clave desconocida" });
           if (clave === "bs_auditoria") {
             const rolA = String(u && (u.rol || u.role) || "").toLowerCase(), usA = String(u && u.usuario || "").toLowerCase();
-            if (rolA.indexOf("admin") < 0 && !/coordinador|jefa/.test(rolA) && ["jtimoteo", "ovilela"].indexOf(usA) < 0) return res(403, { success: false, error: "Solo administradores pueden ver la auditor\xEDa." });
+            if (rolA.indexOf("admin") < 0 && !/coordinador|jefa/.test(rolA) && ["jtimoteo"].indexOf(usA) < 0) return res(403, { success: false, error: "Solo administradores pueden ver la auditor\xEDa." });
           }
           const modT = MODULO_DE_CLAVE[clave] || "";
           if (modT && clave !== "bs_auditoria") {
@@ -66527,7 +66548,7 @@ var require_bs = __commonJS({
         return res(404, { success: false, error: "Acci\xF3n desconocida: " + accion });
       } catch (e) {
         context.log.error("bs/" + accion + ": " + e.message);
-        return res(500, { ok: false, success: false, message: e.message });
+        return res(e.status || 500, { ok: false, success: false, message: e.message, error: e.message });
       }
     };
   }
@@ -68526,6 +68547,10 @@ var require_kpi_motor = __commonJS({
       { usuario: "smiranda", dni: "47262764", nombre: "MIRANDA PASAPERA SOCORRO DEL PILAR", empresa: "RAPEL", tipo: "ASIST", puesto: "ASISTENTE DE RELACIONES LABORALES", ingreso: "2015-08-04" },
       { usuario: "jborrero", dni: "45984661", nombre: "HERNANDEZ BORRERO JHON STEVE", empresa: "RAPEL", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", ingreso: "2026-09-11" },
       { usuario: "yluzon", dni: "76329783", nombre: "LUZON VENEGAS YHANELLY GERALDENY", empresa: "VERFRUT", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", ingreso: "2021-06-01" },
+      /* historico: Santa Rosa hasta el 10-nov-2026 (no se borra) */
+      /* _SEG_SERVIDOR_V1 (10-nov-2026): reemplaza a Yhanelly Luzon en Santa Rosa. alta:true = kpi-db lo agrega a dbo.KPI_Personas si aun no esta.
+         Sin "ingreso" (no se conoce la fecha): poner la fecha real en KPI_Personas.ingreso para que se mida desde ese dia. */
+      { usuario: "lpalacios", dni: "73036989", nombre: "QUEZADA PALACIOS LUIGI FABIAN", empresa: "VERFRUT", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", alias: ["LUIGI FABIAN QUEZADA PALACIOS"], alta: true },
       { usuario: "almartinez", dni: "72952975", nombre: "MARTINEZ JUAREZ ALEXANDER", empresa: "VERFRUT", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", ingreso: "2024-09-03" },
       { usuario: "rmolero", dni: "74218729", nombre: "MOLERO ABAD ROBERTO CARLOS", empresa: "VERFRUT", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", ingreso: "2024-09-23" },
       { usuario: "fpulache", dni: "46793507", nombre: "PULACHE VIERA FLOR DE LOS MILAGROS", empresa: "RAPEL", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", ingreso: "2012-07-23" },
@@ -69326,6 +69351,20 @@ var require_kpi_db = __commonJS({
           for (let i = 0; i < K.PERSONAS.length; i++) {
             const p = K.PERSONAS[i];
             await pool.request().input("u", sql.NVarChar(60), p.usuario).input("d", sql.NVarChar(15), p.dni).input("n", sql.NVarChar(200), p.nombre).input("e", sql.NVarChar(20), p.empresa).input("t", sql.NVarChar(10), p.tipo).input("p", sql.NVarChar(150), p.puesto).input("i", sql.Date, p.ingreso).input("o", sql.Int, i).input("a", sql.NVarChar(1e3), (p.alias || []).join("|") || null).query("INSERT INTO dbo.KPI_Personas (usuario, dni, nombre, empresa, tipo, puesto, ingreso, alias, orden) VALUES (@u, @d, @n, @e, @t, @p, @i, @a, @o)");
+          }
+        }
+        try {
+          for (let i = 0; i < K.PERSONAS.length; i++) {
+            const p = K.PERSONAS[i];
+            if (!p.alta) continue;
+            const ya = await pool.request().input("u", sql.NVarChar(60), p.usuario).query("SELECT COUNT(*) AS n FROM dbo.KPI_Personas WHERE usuario = @u");
+            if (ya.recordset[0].n) continue;
+            await pool.request().input("u", sql.NVarChar(60), p.usuario).input("d", sql.NVarChar(15), p.dni).input("n", sql.NVarChar(200), p.nombre).input("e", sql.NVarChar(20), p.empresa).input("t", sql.NVarChar(10), p.tipo).input("p", sql.NVarChar(150), p.puesto).input("i", sql.Date, p.ingreso || null).input("o", sql.Int, i).input("a", sql.NVarChar(1e3), (p.alias || []).join("|") || null).query("INSERT INTO dbo.KPI_Personas (usuario, dni, nombre, empresa, tipo, puesto, ingreso, alias, orden) VALUES (@u, @d, @n, @e, @t, @p, @i, @a, @o)");
+          }
+        } catch (eAlta) {
+          try {
+            console.warn("[kpi-db] _SEG_SERVIDOR_V1 alta de personas: " + eAlta.message);
+          } catch (x) {
           }
         }
       })().catch((e) => {
@@ -70727,7 +70766,7 @@ var require_horas_guardar = __commonJS({
     var CG = require_cv_guardar();
     var CAP = require_cap_guardar();
     var HE = require_horas_escritura();
-    var ADMINS = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas", "ovilela", "jchavez"];
+    var ADMINS = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas"];
     var REGISTRADORES = ["dsanchez", "lmorales", "jsiancas"];
     var ACCIONES = ["horasRecalcJornada", "horasRegistrar", "horasEditar", "horasEliminar", "horasAprobar", "horasAgregarMotivo", "horasEliminarMotivo"];
     var CLAVES = ["horas_registros", "horas_motivos", "horas_horarios", "horas_pagadas", "horas_auditoria"];
@@ -72929,7 +72968,7 @@ var require_hor_guardar = __commonJS({
     var CLAVE = "horas_horarios";
     var ACCIONES = ["horariosGuardar", "horariosEliminar"];
     var LECTURAS = ["horariosListar"];
-    var ADMINS = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas", "ovilela", "jchavez"];
+    var ADMINS = ["jtimoteo", "mportocarrero", "jfernandez", "lcovenas"];
     var REGISTRADORES = ["dsanchez", "lmorales", "jsiancas"];
     var ANCHO = 11;
     var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
@@ -73871,7 +73910,7 @@ var require_e360_asistente = __commonJS({
 var require_e360_guardar2 = __commonJS({
   "e360-guardar/index.js"(exports, module) {
     var jwt = require_jsonwebtoken();
-    var { getPool } = require_db();
+    var { sql, getPool } = require_db();
     var CG = require_cv_guardar();
     var H = require_e360_guardar();
     var TH = require_tablas_hoja();
@@ -73959,6 +73998,50 @@ var require_e360_guardar2 = __commonJS({
       data.sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""));
       return { success: true, data, fuente: "azure" };
     }
+    var E360_ROLES_TODO = ["administrador", "administrador 01", "administrador 02", "admin", "admin01", "admin02", "coordinador", "jefa_rl", "jefe_rl"];
+    var nrmN = (s) => String(s || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z ]/g, " ").replace(/\s+/g, " ").trim();
+    function mismaPersona(a, b) {
+      const A = nrmN(a), B = nrmN(b);
+      if (!A || !B) return false;
+      if (A === B) return true;
+      const wa = A.split(" ").filter((w) => w.length > 2), wb = B.split(" ").filter((w) => w.length > 2);
+      if (wa.length < 2 || wb.length < 2) return false;
+      const corta = wa.length <= wb.length ? wa : wb, larga = wa.length <= wb.length ? wb : wa;
+      return corta.every((w) => larga.indexOf(w) >= 0);
+    }
+    async function alcanceE360(pool, t, AS) {
+      const rol = String(t.rol || "").toLowerCase().trim(), yo = String(t.usuario || "").toLowerCase().trim();
+      if (E360_ROLES_TODO.indexOf(rol) >= 0) return { nivel: "todo" };
+      try {
+        const prog = await AS.programa(pool);
+        if ((prog.evaluadores || []).indexOf(yo) >= 0) return { nivel: "todo" };
+      } catch (e) {
+      }
+      let nombre = "";
+      try {
+        const r = await pool.request().input("u", sql.NVarChar(60), yo).query("SELECT TOP 1 nombre FROM dbo.usuarios WHERE LOWER(usuario) = @u");
+        nombre = String(((r.recordset || [])[0] || {}).nombre || "").trim();
+      } catch (e) {
+      }
+      if (rol !== "supervisor") {
+        try {
+          const p = await pool.request().input("u", sql.NVarChar(60), yo).query("SELECT COUNT(*) AS ok FROM dbo.PermisosModulos WHERE usuario = @u AND modulo = 'navEval360' AND permitido = 1");
+          if (Number(((p.recordset || [])[0] || {}).ok) > 0) return { nivel: "empresa", empresa: String(t.empresa || "").toUpperCase().trim(), nombre, yo };
+          const c = await pool.request().input("u", sql.NVarChar(60), yo).query("SELECT COUNT(*) AS n FROM dbo.PermisosModulos WHERE usuario = @u");
+          if (Number(((c.recordset || [])[0] || {}).n) === 0) return { nivel: "todo", heredado: true };
+        } catch (e) {
+        }
+      }
+      return { nivel: "propio", nombre, yo };
+    }
+    function filtrarE360(out, al) {
+      if (!out || !out.success || !Array.isArray(out.data) || al.nivel === "todo") return out;
+      const mio = (e) => al.nombre && mismaPersona(e.supervisor, al.nombre) || al.nombre && mismaPersona(e.evaluadorUser, al.nombre) || String(e.evaluadorUser || "").toLowerCase().trim() === al.yo;
+      if (al.nivel === "empresa") out.data = out.data.filter((e) => !al.empresa || al.empresa === "AMBAS" || String(e.empresa || "").toUpperCase().trim() === al.empresa || mio(e));
+      else out.data = out.data.filter(mio);
+      out.alcance = al.nivel;
+      return out;
+    }
     module.exports = async function(context, req) {
       const accion = context.bindingData.accion;
       try {
@@ -73975,7 +74058,7 @@ var require_e360_guardar2 = __commonJS({
         const pool = await getPool();
         await CG.asegurarTablas(pool);
         if (accion === "getEvaluaciones360") {
-          context.res = { status: 200, body: await getEvaluaciones360(pool, req.body || {}) };
+          context.res = { status: 200, body: filtrarE360(await getEvaluaciones360(pool, req.body || {}), await alcanceE360(pool, t, AS)) };
           return;
         }
         if (accion === "e360Reporte") {
@@ -74056,12 +74139,19 @@ var require_eti = __commonJS({
       try {
         const a = String(req.headers && (req.headers.authorization || req.headers.Authorization) || "");
         if (!a.startsWith("Bearer ") || !env("JWT_SECRET")) return null;
-        return require_jsonwebtoken().verify(a.slice(7).trim(), env("JWT_SECRET"));
+        const p = require_jsonwebtoken().verify(a.slice(7).trim(), env("JWT_SECRET"));
+        if (!p || !p.usuario || p.aud && p.aud !== "eti-sesion") return null;
+        return p;
       } catch (e) {
         return null;
       }
     }
     var esAdmin = (u) => !!u && /^admin/i.test(String(u.rol || ""));
+    var SOLO_GESTOR = ["usuarios_eti"];
+    var gestor = (u) => editorInforme(u) || /coordinador|jefa|jefe/i.test(String(u && u.rol || ""));
+    function soloGestor(c, u) {
+      if (SOLO_GESTOR.indexOf(c) >= 0 && !gestor(u)) throw Object.assign(new Error("Coleccion no permitida para este usuario"), { status: 403 });
+    }
     function col(c) {
       if (COLS.indexOf(c) < 0) throw Object.assign(new Error("Coleccion no permitida: " + c), { status: 400 });
       return c;
@@ -74073,6 +74163,7 @@ var require_eti = __commonJS({
     async function consultar(b, u) {
       const c = col(b.col);
       if (!u && LECTURA_ANONIMA.indexOf(c) < 0) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
+      soloGestor(c, u);
       const w = [], v = [];
       for (const f of Array.isArray(b.filtros) ? b.filtros : []) {
         const [campo, op, valor] = f;
@@ -74108,6 +74199,7 @@ var require_eti = __commonJS({
     async function leerDoc(b, u) {
       const c = col(b.col);
       if (!u && LECTURA_ANONIMA.indexOf(c) < 0 && DOC_ANONIMO.indexOf(c) < 0) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
+      soloGestor(c, u);
       const r = await pool().query(`SELECT id, datos FROM eti.${c} WHERE id = $1`, [String(b.id)]);
       return { success: true, existe: r.rows.length > 0, id: String(b.id), datos: r.rows.length ? r.rows[0].datos : null };
     }
@@ -74115,15 +74207,46 @@ var require_eti = __commonJS({
       const ops = Array.isArray(b.ops) ? b.ops.slice(0, 500) : [];
       if (!ops.length) return { success: true, aplicadas: 0 };
       for (const o of ops) {
+        if (!o || typeof o !== "object") throw Object.assign(new Error("operacion invalida"), { status: 400 });
         col(o.col);
+        soloGestor(o.col, u);
         if (!o.id || String(o.id).length > 200) throw Object.assign(new Error("id invalido"), { status: 400 });
         if (!u && !(o.col === "respuestas_qr" && (o.op === "set" || o.op === "update"))) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
       }
       const cli = await pool().connect();
+      let omitidas = 0;
       try {
         await cli.query("BEGIN");
         for (const o of ops) {
           const id = String(o.id), d = JSON.stringify(o.datos || {});
+          if (!u) {
+            if (d.length > 2e5) throw Object.assign(new Error("Documento invalido (demasiado grande)"), { status: 413 });
+            let hecho = 0;
+            if (o.op === "set" && !o.merge) {
+              const rA = await cli.query(`INSERT INTO eti.respuestas_qr (id, datos, origen) VALUES ($1, $2::jsonb, $3)
+              ON CONFLICT (id) DO UPDATE SET datos = EXCLUDED.datos || eti.respuestas_qr.datos, actualizado = now()
+              WHERE (eti.respuestas_qr.datos - 'azOk'::text - 'azEn'::text) = '{}'::jsonb`, [id, d, o.origen || "espejo"]);
+              hecho = rA.rowCount || 0;
+            } else {
+              const src = o.datos && typeof o.datos === "object" ? o.datos : {}, marca = {};
+              if (src.azOk === true) marca.azOk = true;
+              if (typeof src.azEn === "string" && src.azEn.length <= 40) marca.azEn = src.azEn;
+              if (Object.keys(marca).length) {
+                const rB = await cli.query(`UPDATE eti.respuestas_qr SET datos = datos || $2::jsonb, actualizado = now() WHERE id = $1`, [id, JSON.stringify(marca)]);
+                hecho = rB.rowCount || 0;
+              }
+            }
+            if (hecho) await cli.query(`INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`, [o.col, id, o.op, "anonimo", o.origen || "espejo"]);
+            else omitidas++;
+            continue;
+          }
+          if (o.col === "encuestas_qr" && !gestor(u)) {
+            const yaQ = await cli.query(`SELECT datos->>'creadoPor' AS c, datos->>'usuario' AS s FROM eti.encuestas_qr WHERE id = $1`, [id]);
+            if (yaQ.rows.length) {
+              const yo = String(u.usuario || "").toLowerCase().trim(), cQ = String(yaQ.rows[0].c || "").toLowerCase().trim(), sQ = String(yaQ.rows[0].s || "").toLowerCase().trim();
+              if ((cQ || sQ) && cQ !== yo && sQ !== yo) throw Object.assign(new Error("Este QR de encuesta pertenece a otro usuario"), { status: 403 });
+            }
+          }
           if ((o.col === "informes_eti" || o.col === "informes_cap") && !editorInforme(u)) {
             const ya = await cli.query(`SELECT 1 FROM eti.${o.col} WHERE id = $1`, [id]);
             if (o.op === "delete" || ya.rows.length) throw Object.assign(new Error("Solo los administradores de informes pueden corregir un informe emitido"), { status: 403 });
@@ -74157,7 +74280,7 @@ var require_eti = __commonJS({
           await cli.query(`INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`, [o.col, id, o.op, u && u.usuario || "anonimo", o.origen || "espejo"]);
         }
         await cli.query("COMMIT");
-        return { success: true, aplicadas: ops.length };
+        return { success: true, aplicadas: ops.length, omitidas };
       } catch (e) {
         try {
           await cli.query("ROLLBACK");
@@ -74524,6 +74647,7 @@ var require_eti_eval_admin = __commonJS({
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
       try {
         const t = jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET);
+        if (t && t.aud && t.aud !== "eti-sesion") return null;
         const u = String(t.usuario || "").toLowerCase(), r = String(t.rol || "").toLowerCase();
         return u === "jtimoteo" || r === "admin" || r === "administrador" ? t : null;
       } catch (e) {
@@ -74913,6 +75037,523 @@ var require_inf_guardar2 = __commonJS({
         context.res = { status: 500, body: { success: false, error: err.message } };
       }
     };
+  }
+});
+
+// informe-gh/index.js
+var require_informe_gh = __commonJS({
+  "informe-gh/index.js"(exports, module) {
+    "use strict";
+    var { sql, getPool } = require_db();
+    var AUTH = require_auth();
+    var SOLO_USUARIO = "jtimoteo";
+    var MAX_DIAS = 366;
+    var META_ETI = 0.95;
+    var EMP_SECTOR = {
+      "EL PAPAYO": "RAPEL",
+      "LIMONES": "RAPEL",
+      "LOS OLIVARES": "RAPEL",
+      "APROA": "RAPEL",
+      "ALGARROBOS": "RAPEL",
+      "SAN VICENTE": "RAPEL",
+      "PLANTA RAPEL": "RAPEL",
+      "OLIVARES BAJO": "VERFRUT",
+      "SANTA ROSA": "VERFRUT",
+      "PUNTA ARENAS": "VERFRUT",
+      "SAN RAFAEL": "VERFRUT"
+    };
+    var ALIAS = {
+      "PAPAYO": "EL PAPAYO",
+      "OLIVARES APROA": "APROA",
+      "PLANTA": "PLANTA RAPEL",
+      "SANTA ROSA I": "SANTA ROSA",
+      "SANTA ROSA II": "SANTA ROSA",
+      "SANTA ROSA 1": "SANTA ROSA",
+      "SANTA ROSA 2": "SANTA ROSA"
+    };
+    var p2 = (n) => (n < 10 ? "0" : "") + n;
+    var U = (s) => String(s == null ? "" : s).trim().toUpperCase().replace(/\s+/g, " ");
+    var sinTilde = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "");
+    var secKey = (s) => {
+      const x = sinTilde(U(s)).replace(/^SECTOR\s+/, "");
+      return ALIAS[x] || x;
+    };
+    var empKey = (e) => {
+      const x = U(e);
+      return /RAPEL/.test(x) ? "RAPEL" : /VERFRUT/.test(x) ? "VERFRUT" : x.replace(/\s*S\.?\s*A\.?\s*C\.?$/, "");
+    };
+    var num = (v) => {
+      const n = parseFloat(String(v == null ? "" : v).replace(/[^\d.-]/g, ""));
+      return isNaN(n) ? 0 : n;
+    };
+    var r2 = (n) => Math.round(n * 100) / 100;
+    var fechaOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")) && !isNaN(Date.parse(s + "T00:00:00Z")) ? String(s) : null;
+    var masDias = (ymd, n) => new Date(Date.parse(ymd + "T00:00:00Z") + n * 864e5).toISOString().slice(0, 10);
+    var hoyLima = () => new Date(Date.now() - 5 * 36e5).toISOString().slice(0, 10);
+    function diaLima(v) {
+      if (v === null || v === void 0 || v === "") return "";
+      if (v instanceof Date) {
+        if (isNaN(v)) return "";
+        const iso = v.toISOString();
+        return iso.slice(11, 19) === "00:00:00" ? iso.slice(0, 10) : new Date(v.getTime() - 5 * 36e5).toISOString().slice(0, 10);
+      }
+      const s = String(v).trim();
+      let m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}:\d{2}:\d{2}))?/);
+      if (m) {
+        if (m[4] && m[4] !== "00:00:00" && /(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+          const d = new Date(s);
+          if (!isNaN(d)) return diaLima(d);
+        }
+        return m[1] + "-" + m[2] + "-" + m[3];
+      }
+      m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (m) return m[3] + "-" + p2(+m[2]) + "-" + p2(+m[1]);
+      return "";
+    }
+    var MES3 = { Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06", Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12" };
+    function plano(c) {
+      if (c && typeof c === "object" && ("$d" in c || "$s" in c)) {
+        const m = String(c.$s || "").match(/^\w{3} (\w{3}) (\d{2}) (\d{4})/);
+        if (m && MES3[m[1]]) return m[3] + "-" + MES3[m[1]] + "-" + m[2];
+        if (c.$d) {
+          const d = new Date(new Date(c.$d).getTime() - 5 * 36e5);
+          return isNaN(d) ? "" : d.toISOString().slice(0, 10);
+        }
+        return "";
+      }
+      return c == null ? "" : c;
+    }
+    var anulado = (o) => {
+      const a = o.anulado;
+      return a === true || /^(s|si|sí|true|1)(\b|$)/i.test(String(a || "").trim());
+    };
+    function Cuenta() {
+      this.m = {};
+    }
+    Cuenta.prototype.mas = function(k, n, extra) {
+      k = String(k == null ? "" : k).trim() || "(Sin dato)";
+      const o = this.m[k] || (this.m[k] = { k, n: 0 });
+      o.n += n === void 0 ? 1 : n;
+      if (extra) Object.keys(extra).forEach((x) => {
+        o[x] = (o[x] || 0) + extra[x];
+      });
+      return o;
+    };
+    Cuenta.prototype.lista = function(tope) {
+      const L = Object.keys(this.m).map((k) => this.m[k]).sort((a, b) => b.n - a.n || a.k.localeCompare(b.k));
+      if (!tope || L.length <= tope) return L;
+      const resto = L.slice(tope), o = { k: "Otros (" + resto.length + ")", n: 0 };
+      resto.forEach((x) => {
+        Object.keys(x).forEach((c) => {
+          if (c !== "k") o[c] = (o[c] || 0) + x[c];
+        });
+      });
+      return L.slice(0, tope).concat([o]);
+    };
+    function enAlcance(A, empresa, sector, sectorPrimero) {
+      if (A.sector) return secKey(sector) === A.sector;
+      if (!A.empresa) return true;
+      const porSector = EMP_SECTOR[secKey(sector)] || "", porEmpresa = empresa ? empKey(empresa) : "";
+      return (sectorPrimero ? porSector || porEmpresa : porEmpresa || porSector) === A.empresa;
+    }
+    function sesion(req) {
+      const h = String(req.headers && (req.headers.authorization || req.headers.Authorization) || "");
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        return AUTH.verificarSoloRL(h.slice(7).trim());
+      } catch (e) {
+        return null;
+      }
+    }
+    async function bAtenciones(pool, P, A) {
+      const r = await pool.request().input("d", sql.Date, P.desde).input("h", sql.Date, masDias(P.hasta, 1)).query(`
+    SELECT anio, mes, empresa, fundo, supervisor, detalle_documento, estado, COUNT(*) AS n
+    FROM dbo.Atenciones
+    WHERE fecha_atencion >= @d AND fecha_atencion < @h
+    GROUP BY anio, mes, empresa, fundo, supervisor, detalle_documento, estado`);
+      const tipo = new Cuenta(), resp = new Cuenta(), emp = new Cuenta(), est = new Cuenta(), mes = new Cuenta(), sec = new Cuenta();
+      let total = 0;
+      r.recordset.forEach((x) => {
+        if (!enAlcance(A, x.empresa, x.fundo, false)) return;
+        const n = Number(x.n) || 0;
+        total += n;
+        tipo.mas(x.detalle_documento, n);
+        resp.mas(x.supervisor, n);
+        emp.mas(empKey(x.empresa), n);
+        est.mas(U(x.estado), n);
+        sec.mas(x.fundo, n);
+        if (x.anio && x.mes) mes.mas(x.anio + "-" + p2(Number(x.mes)), n);
+      });
+      const E = est.m, fin = ((E.FINALIZADO || {}).n || 0) + ((E.ENVIADO || {}).n || 0);
+      return {
+        total,
+        finalizadas: fin,
+        enProceso: (E["EN PROCESO"] || {}).n || 0,
+        porTipo: tipo.lista(25),
+        porResponsable: resp.lista(40),
+        porEmpresa: emp.lista(),
+        porEstado: est.lista(),
+        porSector: sec.lista(25),
+        porMes: mes.lista().sort((a, b) => a.k.localeCompare(b.k))
+      };
+    }
+    async function leerCV(pool) {
+      const TC = require_tablas_cv();
+      const d = await TC.leerCV(pool);
+      if (!d) throw new Error("Las tablas de Casos y Visitas a\xFAn no tienen marca de carga (CV_Estado)");
+      return d;
+    }
+    async function bVisitas(pool, P, A, cv) {
+      const d = await cv;
+      const sup = new Cuenta(), sec = new Cuenta(), est = new Cuenta(), emp = new Cuenta();
+      let total = 0, conInforme = 0, conRetraso = 0;
+      d.visitas.forEach((v) => {
+        const f = diaLima(v.fecha_inicio) || diaLima(v.fecha_reg);
+        if (!(f >= P.desde && f <= P.hasta) || !enAlcance(A, v.empresa, v.fundo, false)) return;
+        const inf = /^https?:/i.test(String(v.enlace_informe || "")) ? 1 : 0, ret = (Number(v.dias_retraso) || 0) > 0 ? 1 : 0;
+        total++;
+        conInforme += inf;
+        conRetraso += ret;
+        sup.mas(v.supervisor, 1, { conInforme: inf, conRetraso: ret });
+        sec.mas(v.fundo);
+        est.mas(U(v.estado));
+        emp.mas(empKey(v.empresa));
+      });
+      return { total, conInforme, conRetraso, porSupervisor: sup.lista(40), porSector: sec.lista(25), porEstado: est.lista(), porEmpresa: emp.lista() };
+    }
+    async function bCasos(pool, P, A, cv) {
+      const d = await cv;
+      const sup = new Cuenta(), est = new Cuenta(), ges = new Cuenta(), gra = new Cuenta(), mot = new Cuenta(), sec = new Cuenta(), emp = new Cuenta();
+      let total = 0, conInforme = 0, conRetraso = 0;
+      d.casos.forEach((c) => {
+        const f = diaLima(c.fecha_reg);
+        if (!c.nro || !(f >= P.desde && f <= P.hasta) || !enAlcance(A, c.empresa, c.sector, false)) return;
+        const inf = /^https?:/i.test(String(c.enlace_informe || "")) ? 1 : 0, ret = (Number(c.dias_retraso) || 0) > 0 ? 1 : 0;
+        total++;
+        conInforme += inf;
+        conRetraso += ret;
+        sup.mas(c.supervisor, 1, { conInforme: inf, conRetraso: ret });
+        est.mas(U(c.estado));
+        ges.mas(U(c.estado_gestion));
+        gra.mas(U(c.gravedad));
+        mot.mas(c.motivo);
+        sec.mas(c.sector);
+        emp.mas(empKey(c.empresa));
+      });
+      return {
+        total,
+        conInforme,
+        conRetraso,
+        pctInforme: total ? conInforme / total : null,
+        porSupervisor: sup.lista(40),
+        porEstado: est.lista(),
+        porGestion: ges.lista(),
+        porGravedad: gra.lista(),
+        porMotivo: mot.lista(15),
+        porSector: sec.lista(25),
+        porEmpresa: emp.lista()
+      };
+    }
+    async function bFusiones(pool, P, A) {
+      const r = await pool.request().input("d", sql.DateTime2, /* @__PURE__ */ new Date(masDias(P.desde, -1) + "T00:00:00Z")).input("h", sql.DateTime2, /* @__PURE__ */ new Date(masDias(P.hasta, 2) + "T00:00:00Z")).query(`
+    SELECT fecha, sector, supervisor, cant_buses, total_trab, motivo, estado
+    FROM dbo.Fusiones_Buses WHERE fecha >= @d AND fecha < @h`);
+      const sup = new Cuenta(), sec = new Cuenta(), mot = new Cuenta(), est = new Cuenta();
+      let total = 0, buses = 0, trab = 0;
+      r.recordset.forEach((x) => {
+        const f = diaLima(x.fecha);
+        if (!(f >= P.desde && f <= P.hasta) || !enAlcance(A, "", x.sector, true)) return;
+        total++;
+        buses += num(x.cant_buses);
+        trab += num(x.total_trab);
+        sup.mas(x.supervisor, 1, { trab: num(x.total_trab) });
+        sec.mas(x.sector, 1, { trab: num(x.total_trab) });
+        mot.mas(x.motivo);
+        est.mas(x.estado);
+      });
+      return { total, buses, trabajadores: trab, porSupervisor: sup.lista(40), porSector: sec.lista(25), porMotivo: mot.lista(12), porEstado: est.lista() };
+    }
+    async function bCapEti(P, A) {
+      const db = require_db();
+      if (typeof db.pgDirecto !== "function") throw new Error("Este bloque solo funciona con Supabase");
+      const pg = db.pgDirecto();
+      const [qc, qp] = await Promise.all([
+        pg.query(`SELECT id, datos FROM eti.capacitaciones WHERE (datos->>'fechaEjecucion') >= $1 AND (datos->>'fechaEjecucion') < $2`, [P.desde, masDias(P.hasta, 1)]),
+        pg.query(`SELECT id, datos FROM eti.programaciones_eti`)
+      ]);
+      const hoy = hoyLima();
+      const CAP = qc.rows.map((x) => x.datos || {}).filter((x) => !(x.eliminado || x.anulado || x.eliminada) && enAlcance(A, x.empresa, x.sector, true));
+      const PRG = qp.rows.map((x) => x.datos || {}).filter((x) => /CAPACITACI/i.test(x.tema || "") && enAlcance(A, x.empresa, x.sector, true)).map((x) => {
+        const f = Array.isArray(x.fechas) && x.fechas.length ? x.fechas.slice() : [x.fechaProgramada, x.fechaFin || x.fechaProgramada].filter(Boolean);
+        return {
+          sector: x.sector,
+          supervisor: x.supervisor,
+          estado: x.estado,
+          fechas: f.map((v) => String(v).slice(0, 10)).sort(),
+          ejecutadas: (Array.isArray(x.fechasEjecutadas) ? x.fechasEjecutadas : []).map((v) => String(v).slice(0, 10)),
+          reprog: Array.isArray(x.reprogramaciones) ? x.reprogramaciones : []
+        };
+      });
+      const cumpl = (L) => {
+        const c = { prog: 0, ejec: 0, venc: 0, fut: 0 };
+        L.forEach((p) => p.fechas.filter((f) => f >= P.desde && f <= P.hasta).forEach((f) => {
+          const ok = p.estado === "ejecutada" || p.ejecutadas.indexOf(f) >= 0;
+          c.prog++;
+          c[ok ? "ejec" : f < hoy ? "venc" : "fut"]++;
+        }));
+        c.pct = c.ejec + c.venc ? c.ejec / (c.ejec + c.venc) : null;
+        return c;
+      };
+      const tot = { sesiones: CAP.length, capacitados: 0, hombres: 0, mujeres: 0, actasPlazo: 0, actasFuera: 0, sinActa: 0 };
+      const porSec = {}, tema = new Cuenta();
+      const secNom = (s) => {
+        const k = secKey(s);
+        return k ? k.toLowerCase().replace(/(^|\s)\S/g, (m) => m.toUpperCase()) : "(Sin sector)";
+      };
+      CAP.forEach((x) => {
+        const t = Number(x.total) || (Number(x.varones) || 0) + (Number(x.mujeres) || 0), k = secNom(x.sector);
+        const acta = x.fechaEnvio ? x.fechaLimite && String(x.fechaEnvio).slice(0, 10) > String(x.fechaLimite).slice(0, 10) ? "actasFuera" : "actasPlazo" : "sinActa";
+        tot.capacitados += t;
+        tot.hombres += Number(x.varones) || 0;
+        tot.mujeres += Number(x.mujeres) || 0;
+        tot[acta]++;
+        const s = porSec[k] || (porSec[k] = { sector: k, sesiones: 0, capacitados: 0, lista: [] });
+        s.sesiones++;
+        s.capacitados += t;
+        tema.mas(x.tema, 1, { capacitados: t });
+      });
+      PRG.forEach((p) => {
+        const k = secNom(p.sector);
+        (porSec[k] || (porSec[k] = { sector: k, sesiones: 0, capacitados: 0, lista: [] })).lista.push(p);
+      });
+      const sectores = Object.keys(porSec).sort().map((k) => {
+        const s = porSec[k], c = cumpl(s.lista);
+        return { sector: k, empresa: EMP_SECTOR[secKey(k)] || "", sesiones: s.sesiones, capacitados: s.capacitados, c };
+      }).filter((s) => s.sesiones || s.c.prog);
+      let reprog = 0;
+      PRG.forEach((p) => p.reprog.forEach((r) => {
+        const ant = String(r.fechaAnteriorIni || (r.fechasAnterior || [])[0] || "").slice(0, 10);
+        if (ant >= P.desde && ant <= P.hasta) reprog++;
+      }));
+      return { meta: META_ETI, cumpl: cumpl(PRG), tot, sectores, porTema: tema.lista(15), reprogramaciones: reprog };
+    }
+    async function bEvalEti(pool, P, A) {
+      const E = require_eti_eval();
+      const filas = await E.stats(pool, { desde: P.desde, hasta: P.hasta });
+      const sec = {}, mod = new Cuenta();
+      let n = 0, sr = 0, apr = 0, regs = 0;
+      filas.forEach((f) => {
+        if (!enAlcance(A, f.empresa, f.sector, false)) return;
+        n += f.n;
+        sr += f.sr;
+        apr += f.apr;
+        regs += f.regs;
+        mod.mas(f.modalidad, f.n);
+        const k = secKey(f.sector) || "(SIN SECTOR)", s = sec[k] || (sec[k] = { sector: k, empresa: empKey(f.empresa) || EMP_SECTOR[k] || "", n: 0, sr: 0, apr: 0, rutas: {} });
+        s.n += f.n;
+        s.sr += f.sr;
+        s.apr += f.apr;
+        if (f.ruta || f.codigo) s.rutas[(f.codigo || "") + "|" + (f.ruta || "")] = 1;
+      });
+      return {
+        evaluados: n,
+        registros: regs,
+        promedio: n ? sr / n : null,
+        aprobados: apr,
+        pctAprobados: n ? apr / n : null,
+        minimo: 0.7,
+        porModalidad: mod.lista(),
+        porSector: Object.keys(sec).sort().map((k) => ({
+          sector: sec[k].sector,
+          empresa: sec[k].empresa,
+          evaluados: sec[k].n,
+          promedio: sec[k].n ? sec[k].sr / sec[k].n : null,
+          aprobados: sec[k].apr,
+          rutas: Object.keys(sec[k].rutas).length
+        }))
+      };
+    }
+    async function bBienestar(pool, P, A) {
+      const H = require_tablas_hoja();
+      const objetos = async (clave) => {
+        try {
+          const d = await H.leer(pool, clave);
+          if (!d) return null;
+          const enc = d.encabezado.map(plano).map(String);
+          return d.filas.map((f) => {
+            const o = {};
+            enc.forEach((k, i) => {
+              if (k) o[k] = plano(f[i]);
+            });
+            return o;
+          }).filter((o) => !anulado(o));
+        } catch (e) {
+          return null;
+        }
+      };
+      const en = (f) => {
+        const d = diaLima(f);
+        return d >= P.desde && d <= P.hasta;
+      };
+      const [acc, des, sub, que, hos] = await Promise.all(["bs_accidentes_casos", "bs_descansos", "bs_subsidios", "bs_quejas", "bs_hostigamiento"].map(objetos));
+      const out = { accidentes: null, descansos: null, subsidios: null, quejas: null, hostigamiento: null };
+      if (acc) {
+        const L = acc.filter((o) => en(o.dia_accidente) && enAlcance(A, o.empresa, o.fundo, false)), t = new Cuenta(), e = new Cuenta();
+        L.forEach((o) => {
+          t.mas(o.tipo_accidente);
+          e.mas(o.estado_caso);
+        });
+        out.accidentes = { total: L.length, abiertos: L.filter((o) => !/cerrad|finaliz/i.test(String(o.estado_caso || ""))).length, porTipo: t.lista(10), porEstado: e.lista() };
+      }
+      if (des) {
+        const L = des.filter((o) => en(o.fecha_inicio) && enAlcance(A, o.empresa, o.sector, false)), t = new Cuenta();
+        let dias = 0;
+        L.forEach((o) => {
+          dias += num(o.dias);
+          t.mas(o.tipo, 1, { dias: num(o.dias) });
+        });
+        out.descansos = { total: L.length, dias, porTipo: t.lista(10) };
+      }
+      if (sub && !A.sector) {
+        const L = sub.filter((o) => en(o.inicio) && enAlcance(A, o.empresa, "", false)), e = new Cuenta();
+        let dias = 0;
+        L.forEach((o) => {
+          dias += num(o.dias);
+          e.mas(o.estado_general, 1, { dias: num(o.dias) });
+        });
+        out.subsidios = { total: L.length, dias, porEstado: e.lista(10) };
+      }
+      if (que) {
+        const L = que.filter((o) => en(o.fecha_recepcion) && enAlcance(A, o.empresa, o.sector, false)), c = new Cuenta(), g = new Cuenta();
+        L.forEach((o) => {
+          c.mas(o.clasificacion);
+          g.mas(o.categoria);
+        });
+        out.quejas = { total: L.length, porClasificacion: c.lista(10), porCategoria: g.lista(10) };
+      }
+      if (hos) {
+        const L = hos.filter((o) => en(o.fecha_denuncia) && enAlcance(A, o.empresa, o.fundo, false)), e = new Cuenta();
+        L.forEach((o) => e.mas(o.status));
+        out.hostigamiento = { total: L.length, porEstado: e.lista() };
+      }
+      if (!acc && !des && !sub && !que && !hos) throw new Error("Las tablas de Bienestar Social a\xFAn no est\xE1n cargadas en la base");
+      return out;
+    }
+    async function bHoras(pool, P, A) {
+      if (A.sector) return { ok: false, motivo: "El registro de horas no guarda el sector del trabajador: este cuadro solo sale en el alcance general o por empresa." };
+      const r = await pool.request().input("d", sql.DateTime2, /* @__PURE__ */ new Date(masDias(P.desde, -1) + "T00:00:00Z")).input("h", sql.DateTime2, /* @__PURE__ */ new Date(masDias(P.hasta, 2) + "T00:00:00Z")).query(`
+    SELECT fecha_registro, registrado_por, empresa, motivo, estado, horas_acumuladas, horas_permiso, horas_deuda
+    FROM dbo.Horas_Registros WHERE fecha_registro >= @d AND fecha_registro < @h`);
+      const mot = new Cuenta(), reg = new Cuenta(), emp = new Cuenta();
+      let n = 0, acum = 0, perm = 0, deuda = 0, rech = 0;
+      r.recordset.forEach((x) => {
+        const f = diaLima(x.fecha_registro);
+        if (!(f >= P.desde && f <= P.hasta) || !enAlcance(A, x.empresa, "", false)) return;
+        if (String(x.estado || "").toLowerCase() === "rechazado") {
+          rech++;
+          return;
+        }
+        const a = num(x.horas_acumuladas), p = num(x.horas_permiso), d = num(x.horas_deuda);
+        n++;
+        acum += a;
+        perm += p;
+        deuda += d;
+        mot.mas(x.motivo, 1, { acum: a, perm: p, deuda: d });
+        reg.mas(String(x.registrado_por || "").toLowerCase(), 1);
+        emp.mas(empKey(x.empresa), 1, { acum: a, perm: p, deuda: d });
+      });
+      return {
+        registros: n,
+        rechazados: rech,
+        acumuladas: r2(acum),
+        permiso: r2(perm),
+        deuda: r2(deuda),
+        saldo: r2(acum - perm - deuda),
+        porMotivo: mot.lista(15),
+        porRegistrador: reg.lista(30),
+        porEmpresa: emp.lista()
+      };
+    }
+    async function bKpis(pool, P, A) {
+      const KDB = require_kpi_db(), K = require_kpi_motor();
+      if (P.hasta < K.PERIODO.ini) return { ok: false, motivo: "La medici\xF3n de KPIs del equipo inicia el " + K.PERIODO.ini.split("-").reverse().join("/") + ": el periodo pedido es anterior." };
+      const B = await KDB.cargar(pool);
+      const d = KDB.calcularCon(B, KDB.hoyLima(), P.desde < K.PERIODO.ini ? K.PERIODO.ini : P.desde, P.hasta);
+      const personas = (d.personas || []).filter((p) => {
+        if (A.sector) return (p.sectores || []).some((s) => secKey(s) === A.sector);
+        if (A.empresa) return empKey(p.empresa) === A.empresa;
+        return true;
+      }).map((p) => ({
+        usuario: p.usuario,
+        nombre: p.nombre,
+        tipo: p.tipo,
+        puesto: p.puesto,
+        empresa: empKey(p.empresa),
+        sectores: p.sectores || [],
+        nota: p.nota,
+        cumpl: p.cumpl,
+        kpis: (p.kpis || []).map((k) => ({ codigo: k.codigo, corto: k.corto, meta: k.meta, estado: k.estado, num: k.num, den: k.den, pct: k.pct == null ? null : k.pct, nivel: k.nivel || null }))
+      }));
+      return { desde: d.rango && d.rango.desde ? d.rango.desde : P.desde < K.PERIODO.ini ? K.PERIODO.ini : P.desde, inicioMedicion: K.PERIODO.ini, copiaEti: d.eti_sync || null, personas };
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData && context.bindingData.accion;
+      const res = (status, body) => {
+        context.res = { status, headers: { "Cache-Control": "no-store" }, body };
+      };
+      try {
+        const t = sesion(req);
+        if (!t || !t.usuario) return res(401, { success: false, error: "Sin sesion valida" });
+        if (String(t.usuario).trim().toLowerCase() !== SOLO_USUARIO) return res(403, { success: false, error: "Este informe es solo para el creador del sistema" });
+        if (accion !== "datos") return res(404, { success: false, error: "Accion desconocida: " + accion });
+        const b = req.body && typeof req.body === "object" ? req.body : {};
+        const P = { desde: fechaOk(b.desde), hasta: fechaOk(b.hasta) };
+        if (!P.desde || !P.hasta || P.desde > P.hasta) return res(400, { success: false, error: "Indica el periodo (desde y hasta, aaaa-mm-dd)" });
+        if ((Date.parse(P.hasta) - Date.parse(P.desde)) / 864e5 > MAX_DIAS) return res(400, { success: false, error: "El periodo m\xE1ximo es de un a\xF1o" });
+        const empresa = ["RAPEL", "VERFRUT"].indexOf(U(b.empresa)) >= 0 ? U(b.empresa) : "";
+        const sector = b.sector ? secKey(String(b.sector).slice(0, 80)) : "";
+        const A = { empresa: sector ? "" : empresa, sector };
+        const pool = await getPool();
+        const B = async (fn) => {
+          const t0 = Date.now();
+          try {
+            const r = await fn();
+            return Object.assign({ ok: true }, r, { ms: Date.now() - t0 });
+          } catch (e) {
+            context.log.warn("[informe-gh] bloque: " + e.message);
+            return { ok: false, motivo: "No se pudo leer de la base: " + String(e.message || e).slice(0, 200), ms: Date.now() - t0 };
+          }
+        };
+        const cv = leerCV(pool);
+        cv.catch(() => {
+        });
+        const [atenciones, visitas, fusiones, casos, capEti, evalEti, bienestar, horas, kpis] = await Promise.all([
+          B(() => bAtenciones(pool, P, A)),
+          B(() => bVisitas(pool, P, A, cv)),
+          B(() => bFusiones(pool, P, A)),
+          B(() => bCasos(pool, P, A, cv)),
+          B(() => bCapEti(P, A)),
+          B(() => bEvalEti(pool, P, A)),
+          B(() => bBienestar(pool, P, A)),
+          B(() => bHoras(pool, P, A)),
+          B(() => bKpis(pool, P, A))
+        ]);
+        return res(200, {
+          success: true,
+          version: 1,
+          generado: (/* @__PURE__ */ new Date()).toISOString(),
+          hoy: hoyLima(),
+          emitidoPor: SOLO_USUARIO,
+          periodo: P,
+          alcance: { empresa: A.empresa, sector: A.sector, empresaDelSector: A.sector ? EMP_SECTOR[A.sector] || "" : "" },
+          bloques: { atenciones, visitas, fusiones, casos, capEti, evalEti, bienestar, horas, kpis }
+        });
+      } catch (err) {
+        context.log.error("[informe-gh] " + accion + ": " + err.message);
+        return res(500, { success: false, error: err.message });
+      }
+    };
+    module.exports._t = { diaLima, secKey, empKey, enAlcance, Cuenta, plano };
   }
 });
 
@@ -76133,7 +76774,27 @@ var require_mod = __commonJS({
     }
     var _enCurso = /* @__PURE__ */ new Map();
     module.exports = async function(context, req) {
-      if (require_auth().exigirSesionLectura(context, req) === null) return;
+      const _uSeg = require_auth().exigirSesionLectura(context, req);
+      if (_uSeg === null) return;
+      try {
+        if (_uSeg && _uSeg.usuario && !_uSeg.interno) {
+          if (req.body === void 0 || req.body === null || typeof req.body !== "object" || Array.isArray(req.body)) req.body = {};
+          if (typeof req.body.usuario !== "string" && req.body.usuario != null) req.body.usuario = "";
+          if (typeof req.body.rol !== "string" && req.body.rol != null) req.body.rol = "";
+          {
+            const _tu = String(_uSeg.usuario).toLowerCase().trim(), _tr = String(_uSeg.rol || "").toLowerCase().trim();
+            const _bu = String(req.body.usuario == null ? "" : req.body.usuario).toLowerCase().trim(), _br = String(req.body.rol == null ? "" : req.body.rol).toLowerCase().trim();
+            const _siempre = ["horas", "cap"].indexOf(String(context.bindingData.modulo)) >= 0;
+            if (_bu && _bu !== _tu || _br && _br !== _tr) context.log.warn('[mod] _SEG_SERVIDOR_V1: el cuerpo decia usuario/rol "' + _bu + '"/"' + _br + '" y el token "' + _tu + '"/"' + _tr + '": se usa el token');
+            if (_bu !== _tu && (_bu || _siempre)) req.body.usuario = _tu;
+            if (_br !== _tr && (_br || _siempre)) req.body.rol = _tr;
+          }
+        }
+      } catch (eSeg) {
+        context.log.warn("[mod] _SEG_SERVIDOR_V1: " + eSeg.message);
+        context.res = { status: 400, body: { success: false, error: "Solicitud invalida" } };
+        return;
+      }
       const modulo = context.bindingData.modulo, accion = context.bindingData.accion;
       let clave = "";
       try {
@@ -77241,6 +77902,7 @@ var require_usuarios_lista = __commonJS({
       ptamayo: ["El Papayo", "Limones"],
       atineo: ["Olivares Bajo"],
       fpulache: ["Los Olivares"],
+      lpalacios: ["Santa Rosa"],
       yluzon: ["Santa Rosa"],
       sviera: ["Algarrobos"],
       ecastro: ["San Vicente"],
@@ -77650,6 +78312,7 @@ var require_rutas_edge = __commonJS({
       { fn: "hor-guardar", ruta: "hor/{accion}", metodos: ["POST"], llave: false, h: require_hor_guardar2() },
       { fn: "horas-guardar", ruta: "horas/guardar/{accion}", metodos: ["POST"], llave: false, h: require_horas_guardar2() },
       { fn: "inf-guardar", ruta: "inf/{accion}", metodos: ["POST"], llave: false, h: require_inf_guardar2() },
+      { fn: "informe-gh", ruta: "informe-gh/{accion}", metodos: ["POST"], llave: false, h: require_informe_gh() },
       { fn: "inv-guardar", ruta: "inv/{accion}", metodos: ["POST"], llave: false, h: require_inv_guardar2() },
       { fn: "keepwarm", ruta: "_reloj/keepwarm", metodos: ["POST"], llave: true, reloj: true, h: require_keepwarm() },
       { fn: "kpi", ruta: "kpi/{accion}", metodos: ["POST"], llave: false, h: require_kpi() },

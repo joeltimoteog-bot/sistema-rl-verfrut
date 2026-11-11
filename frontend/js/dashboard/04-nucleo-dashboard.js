@@ -46,7 +46,7 @@ const SUPERVISORES_SECTOR = {
   'Limones':           'Paul Tamayo Rodríguez',
   'Olivares Bajo':     'Alex Tineo Ramos',
   'Olivares':          'Flor Pulache Viera',
-  'Santa Rosa':        'Yhanelly Luzón Venegas',
+  'Santa Rosa':        'Luigi Quezada Palacios',   /* _LISTAS_V2 (10-nov-2026): antes 'Yhanelly Luzón Venegas' */
   'Aproa':             'Alex Zapata Suárez',
   'Punta Arenas':      'Alexander Martínez Juárez',
   'Algarrobos':        'Sergio Viera Girón',
@@ -57,6 +57,8 @@ const SUPERVISORES_SECTOR = {
 const SUPERVISORES_LISTA = [
   { dni:'73091524', nombre:'Elberth Castro Bayona',          cargo:'Supervisor de Gestión Humana',        sector:'San Vicente',         empresa:'RAPEL',   correo:'ecastro@rapel.pe',    reemplazo: false },
   { dni:'76329783', nombre:'Yhanelly Luzón Venegas',         cargo:'Supervisor de Gestión Humana',        sector:'Santa Rosa',          empresa:'VERFRUT', correo:'yluzon@verfrut.pe',   reemplazo: false },
+  /* _LISTAS_V2 (10-nov-2026): Luigi reemplaza a Yhanelly en Santa Rosa. Ella se conserva arriba para lo antiguo. Correo aun sin confirmar. */
+  { dni:'73036989', nombre:'Luigi Quezada Palacios',         cargo:'Supervisor de Gestión Humana',        sector:'Santa Rosa',          empresa:'VERFRUT', correo:'luigi.palacios@unifrutti.com', reemplazo: false },
   { dni:'47262764', nombre:'Socorro Miranda Pasapera',       cargo:'Asistente de Relaciones Laborales',   sector:'Campo A',             empresa:'RAPEL',   correo:'smiranda@rapel.pe',   reemplazo: false  },
   { dni:'47524110', nombre:'Jaime Siancas Viera',            cargo:'Asistente de Relaciones Laborales',   sector:'Fundos Varios',       empresa:'',        correo:'jsiancas@rapel.pe',   reemplazo: true  },
   { dni:'72954772', nombre:'Pool Tamayo Rodríguez',          cargo:'Supervisor de Gestión Humana',        sector:'Limones / El Papayo', empresa:'RAPEL',   correo:'ptamayo@rapel.pe',    reemplazo: false },
@@ -1263,6 +1265,7 @@ const CARGOS_USUARIOS = {
   'atineo':     'Supervisor de Gestion Humana',
   'fpulache':   'Supervisor de Gestion Humana',
   'yluzon':     'Supervisor de Gestion Humana',
+  'lpalacios':  'Supervisor de Gestion Humana',   /* _LISTAS_V2 (10-nov-2026) */
   'sviera':     'Supervisor de Gestion Humana',
   'ecastro':    'Supervisor de Gestion Humana',
   'almartinez': 'Supervisor de Gestion Humana',
@@ -1781,7 +1784,7 @@ window.onload = async () => {
     document.getElementById('navInventario').style.display='';
     // Acumulación de Horas: solo jtimoteo, ovilela, jchavez
     const _usrHoras = (USER.usuario || '').toLowerCase().trim();
-    if (['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas', 'ovilela', 'jchavez'].includes(_usrHoras)) {
+    if (['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas'].includes(_usrHoras)) {   /* _LISTAS_V2 (10-nov-2026): sin ovilela ni jchavez */
       document.getElementById('navHoras').style.display='';
     }
     // Cartas de Preaviso: solo jtimoteo, ovilela, jchavez
@@ -1884,14 +1887,14 @@ window.onload = async () => {
         try {
           // Estos tres se muestran a proposito, aunque ya no sean administradores
           var _nh = document.getElementById('navHoras');
-          if (_nh) _nh.style.display = '';
+          if (_nh) _nh.style.display = 'none';   /* _LISTAS_V2 (10-nov-2026): ya no conservan Acumulacion de Horas */
           var _nb = document.getElementById('navBienestar');
           if (_nb) _nb.style.display = '';
           var _nm = document.getElementById('navMantenimiento');
           if (_nm) _nm.style.display = '';
 
           document.querySelectorAll('nav button.ni').forEach(function (btn) {
-            if (btn.id === 'navHoras' || btn.id === 'navBienestar' ||
+            if (/* _LISTAS_V2: sin navHoras */ btn.id === 'navBienestar' ||
                 btn.id === 'navMantenimiento' || btn.id === 'navInicio') return;
             var oc = btn.getAttribute('onclick') || '';
             var permitido = oc.indexOf("ir('dashboard'")    >= 0 ||
@@ -7586,7 +7589,7 @@ function autoFillFundoReemplazo() {
     const titulares = {
       'El Papayo': 'Paul Tamayo Rodríguez', 'Limones': 'Paul Tamayo Rodríguez',
       'Olivares Bajo': 'Alex Tineo Ramos', 'Olivares': 'Flor Pulache Viera',
-      'Santa Rosa': 'Yhanelly Luzón Venegas', 'Aproa': 'Alex Zapata Suárez',
+      'Santa Rosa': 'Luigi Quezada Palacios' /* _LISTAS_V2: antes Yhanelly Luzón Venegas */, 'Aproa': 'Alex Zapata Suárez',
       'Punta Arenas': 'Alexander Martínez Juárez', 'Algarrobos': 'Sergio Viera Girón',
       'San Vicente': 'Elberth Castro Bayona', 'Planta Rapel Packing': 'Roberto Molero Abad'
     };

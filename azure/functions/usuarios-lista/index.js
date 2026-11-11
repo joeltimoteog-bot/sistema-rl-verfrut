@@ -12,7 +12,7 @@ const { getPool } = require('../shared/db');
 const ADMIN = ['administrador', 'administrador 01', 'administrador 02', 'coordinador', 'jefa_rl'];
 /* = FUNDOS_SUPERVISOR del Apps Script (Código.js) — si cambia alla, cambiar aqui */
 const FUNDOS_SUPERVISOR = {
-  ptamayo: ['El Papayo', 'Limones'], atineo: ['Olivares Bajo'], fpulache: ['Los Olivares'], yluzon: ['Santa Rosa'],
+  ptamayo: ['El Papayo', 'Limones'], atineo: ['Olivares Bajo'], fpulache: ['Los Olivares'], lpalacios: ['Santa Rosa'] /* _SEG_SERVIDOR_V1 (10-nov-2026): reemplaza a yluzon en Santa Rosa */, yluzon: ['Santa Rosa'] /* historico */,
   sviera: ['Algarrobos'], ecastro: ['San Vicente'], almartinez: ['Punta Arenas'], fzapata: ['Aproa'],
   rmolero: ['Planta Rapel'], mmechato: []
 };

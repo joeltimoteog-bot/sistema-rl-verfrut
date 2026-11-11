@@ -2298,6 +2298,7 @@ var SUP_FUNDOS = {
   'FLOR DE LOS MILAGROS PULACHE VIERA': ['LOS OLIVARES'],
   'ALEX FABIAN ZAPATA JUAREZ':          ['APROA'],
   'YHANELLY GERALDINE LUZON VENEGAS':   ['SANTA ROSA'],
+  'LUIGI FABIAN QUEZADA PALACIOS':      ['SANTA ROSA'],   /* _LISTAS_V2 (10-nov-2026): reemplaza a Yhanelly; ella se conserva para sus registros anteriores */
   'ALEXANDER MARTINEZ JUAREZ':          ['PUNTA ARENAS'],
   'SERGIO VIERA GIRON':                 ['ALGARROBOS'],
   'ELBERTH CASTRO BAYONA':              ['SAN VICENTE'],

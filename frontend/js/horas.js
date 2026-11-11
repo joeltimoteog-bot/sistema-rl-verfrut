@@ -19,7 +19,9 @@
 /* _ADMINS_REMUNERACIONES_V1 (21-ago-2026): se agregan los tres nuevos
    administradores de Remuneraciones. ovilela y jchavez se quedan porque
    conservan el modulo de Horas, pero como usuarios basicos (ver abajo). */
-const USUARIOS_PERMITIDOS = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas', 'ovilela', 'jchavez', 'dsanchez', 'lmorales', 'jsiancas'];
+/* _LISTAS_V2 (10-nov-2026): ovilela y jchavez ya no trabajan en el area; salen del modulo de Horas.
+   ANTES: [..., 'lcovenas', 'ovilela', 'jchavez', 'dsanchez', ...] */
+const USUARIOS_PERMITIDOS = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas', 'dsanchez', 'lmorales', 'jsiancas'];
 // Acceso BÁSICO: solo pueden ver Registrar y Resumen Individual.
 // (Resumen General, Aprobaciones y Config quedan ocultos y bloqueados.)
 /* _ACCESOS_REMUNERACIONES_V1 (19-ago-2026)
@@ -28,7 +30,7 @@ const USUARIOS_PERMITIDOS = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovena
    igual que dsanchez: solo ven Registrar y Resumen Individual, y solo sus
    propios registros. Siguen entrando al modulo de Horas con normalidad.
    ANTES: ['dsanchez', 'lmorales', 'jsiancas'] */
-const USUARIOS_BASICOS = ['dsanchez', 'lmorales', 'jsiancas', 'ovilela', 'jchavez'];
+const USUARIOS_BASICOS = ['dsanchez', 'lmorales', 'jsiancas'];   /* _LISTAS_V2: sin ovilela ni jchavez */
 const TABS_SOLO_ADMIN  = ['general', 'aprobaciones', 'config'];
 
 let USER = null;
@@ -53,7 +55,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const u = (USER.usuario || '').toLowerCase().trim();
   /* _PERM_PAGINA_V1 */ function _pOk(k){try{return (JSON.parse(sessionStorage.getItem('rl_perm_mios')||'{}')||{})[k]===true}catch(e){return false}}
-  if (!USUARIOS_PERMITIDOS.includes(u) && !_pOk('navHoras')) {
+  /* _LISTAS_V3 (10-nov-2026): cuentas retiradas del area; no entran ni con el permiso navHoras */
+  const _HORAS_RETIRADOS = ['ovilela', 'jchavez'];
+  if (_HORAS_RETIRADOS.includes(u) || (!USUARIOS_PERMITIDOS.includes(u) && !_pOk('navHoras'))) {
     document.body.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:Barlow,sans-serif;gap:12px;color:#64748b">
       <div style="font-size:48px">🔒</div>
       <div style="font-size:18px;font-weight:700;color:#0f172a">Acceso restringido a administradores</div>

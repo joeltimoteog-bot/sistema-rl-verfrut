@@ -115,7 +115,27 @@ async function datos(modulo) {
 const _enCurso = new Map();
 module.exports = async function (context, req) {
   /* _LECTURAS_SESION_V1 (18-oct-2026): con LECTURAS_CON_SESION=1 las lecturas exigen sesion (o clave interna del Apps Script) */
-  if (require('../shared/auth').exigirSesionLectura(context, req) === null) return;
+  const _uSeg = require('../shared/auth').exigirSesionLectura(context, req); if (_uSeg === null) return;
+  /* _SEG_SERVIDOR_V1 (10-nov-2026): quien consulta y con que rol salen del TOKEN verificado, no del cuerpo.
+     Si el cuerpo trae usuario/rol distintos a los del token se reemplazan (y se anota). En horas y cap (los unicos
+     calculos que filtran por usuario/rol) se ponen siempre. La llamada interna del Apps Script (clave de funciones)
+     conserva lo que envia, porque no trae token de usuario. */
+  try {
+    if (_uSeg && _uSeg.usuario && !_uSeg.interno) {
+      /* _SEG_SERVIDOR_V2 (10-nov-2026, verificacion): un cuerpo que no es objeto plano (arreglo, texto, numero) saltaba el filtro: se trata como vacio */
+      if (req.body === undefined || req.body === null || typeof req.body !== 'object' || Array.isArray(req.body)) req.body = {};
+      if (typeof req.body.usuario !== 'string' && req.body.usuario != null) req.body.usuario = '';
+      if (typeof req.body.rol !== 'string' && req.body.rol != null) req.body.rol = '';
+      {
+        const _tu = String(_uSeg.usuario).toLowerCase().trim(), _tr = String(_uSeg.rol || '').toLowerCase().trim();
+        const _bu = String(req.body.usuario == null ? '' : req.body.usuario).toLowerCase().trim(), _br = String(req.body.rol == null ? '' : req.body.rol).toLowerCase().trim();
+        const _siempre = ['horas', 'cap'].indexOf(String(context.bindingData.modulo)) >= 0;
+        if ((_bu && _bu !== _tu) || (_br && _br !== _tr)) context.log.warn('[mod] _SEG_SERVIDOR_V1: el cuerpo decia usuario/rol "' + _bu + '"/"' + _br + '" y el token "' + _tu + '"/"' + _tr + '": se usa el token');
+        if (_bu !== _tu && (_bu || _siempre)) req.body.usuario = _tu;
+        if (_br !== _tr && (_br || _siempre)) req.body.rol = _tr;
+      }
+    }
+  } catch (eSeg) { context.log.warn('[mod] _SEG_SERVIDOR_V1: ' + eSeg.message); context.res = { status: 400, body: { success: false, error: 'Solicitud invalida' } }; return; }   /* _SEG_SERVIDOR_V2: si la comprobacion falla no se continua */
   const modulo = context.bindingData.modulo, accion = context.bindingData.accion;
   let clave = '';
   try { clave = modulo + '/' + accion + '|' + JSON.stringify(req.body || {}).slice(0, 2000); } catch (e) { clave = ''; }

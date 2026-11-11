@@ -1145,7 +1145,7 @@ function abrirEditarEntrega(id) {
   let optsMot = '<option value="">Seleccionar...</option>';
   if (motActual && !MOTIVOS.includes(motActual)) optsMot += `<option value="${esc(motActual)}" selected>${motActual}</option>`;
   optsMot += MOTIVOS.map(m => `<option value="${m}" ${m===motActual?'selected':''}>${m}</option>`).join('');
-  const SOLIC = ['Eduardo Covenas','Olga Vilela Ludeña','Jorge Chávez Córdova','Joel Timoteo Gonza','Daniela Sánchez'];
+  const SOLIC = ['Eduardo Covenas','Joel Timoteo Gonza','Daniela Sánchez'];   /* _LISTAS_V3 (10-nov-2026): sin Olga Vilela ni Jorge Chavez; un registro antiguo con su nombre se sigue mostrando */
   const solActual = String(item.solicitante || '');
   let optsSol = '<option value="">Seleccionar...</option>';
   if (solActual && !SOLIC.includes(solActual)) optsSol += `<option value="${esc(solActual)}" selected>${solActual}</option>`;

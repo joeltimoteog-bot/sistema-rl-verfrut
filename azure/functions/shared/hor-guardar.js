@@ -17,7 +17,7 @@ const CAP = require('./cap-guardar');
 const CLAVE = 'horas_horarios';
 const ACCIONES = ['horariosGuardar', 'horariosEliminar'];
 const LECTURAS = ['horariosListar'];
-const ADMINS = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas', 'ovilela', 'jchavez'];   /* = HORAS_ADMINS */
+const ADMINS = ['jtimoteo', 'mportocarrero', 'jfernandez', 'lcovenas'];   /* = HORAS_ADMINS · _SEG_SERVIDOR_V1 (10-nov-2026): se retiro a ovilela y jchavez (ya no trabajan en el area) */
 const REGISTRADORES = ['dsanchez', 'lmorales', 'jsiancas'];                                   /* = HORAS_REG_V7 */
 const ANCHO = 11;
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
