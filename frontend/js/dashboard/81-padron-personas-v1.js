@@ -127,7 +127,7 @@
       '<div class="g"><label for="fe">Mostrar</label><select id="fe">' + opt([['vigentes', 'Vigentes'], ['no', 'No vigentes'], ['sindni', 'Sin DNI'], ['vigsindni', 'Vigentes sin DNI'], ['todos', 'Todos']], F.estado) + '</select></div>' +
       '<div class="g"><label for="fm">Empresa</label><select id="fm">' + opt(emps, F.empresa) + '</select></div>' +
       '<div class="g"><label for="fs">Sector</label><select id="fs">' + opt(secs, F.sector) + '</select></div></div>' +
-      '<div class="acc"><button class="b p" id="nueva" type="button">+ Nueva persona</button><button class="b" id="xls" type="button">Exportar a Excel</button><button class="b" id="rec" type="button">Actualizar</button>' +
+      '<div class="acc"><button class="b p" id="nueva" type="button">+ Nueva persona</button><button class="b" id="masivo" type="button" title="Busca en la base de trabajadores el DNI de quienes no lo tienen y te los propone para confirmar todos de una vez">Completar DNI que faltan</button><button class="b" id="xls" type="button">Exportar a Excel</button><button class="b" id="rec" type="button">Actualizar</button>' +
       '<span id="cont"></span></div><div id="tabla"></div>' +
       '<div class="nota">Toca una fila para editarla. Nadie se elimina del padrón: para dar de baja se marca Vigente “No” y se indica la fecha “hasta”.</div>';
     q('#fq').oninput = function () { F.q = this.value; pintarTabla(); };
@@ -135,6 +135,7 @@
     q('#fm').onchange = function () { F.empresa = this.value; pintarTabla(); };
     q('#fs').onchange = function () { F.sector = this.value; pintarTabla(); };
     q('#nueva').onclick = function () { pintarForm(null); };
+    q('#masivo').onclick = pintarMasivo;   /* _PADRON_DNI_MASIVO_V1 */
     q('#xls').onclick = excel;
     q('#rec').onclick = cargar;
     pintarTabla();
@@ -164,6 +165,68 @@
 
   /* ── formulario (una sola hoja) ── */
   var CAMPOS = ['dni', 'apellidos', 'nombres', 'nombre_mostrar', 'usuario', 'cargo', 'empresa', 'sector', 'rol_campo', 'correo', 'vigente', 'desde', 'hasta', 'alias', 'notas'];
+  /* ── _PADRON_DNI_MASIVO_V1 (10-nov-2026): completar de una sola vez los DNI que faltan ──
+     El servidor busca a cada persona vigente sin DNI en la base de trabajadores y PROPONE el DNI. Aqui se confirma
+     (o se escribe a mano) y se guardan todos juntos, cada uno con las mismas validaciones del formulario. */
+  async function pintarMasivo() {
+    q('#out').innerHTML = '<div class="hoja"><h3>COMPLETAR DNI QUE FALTAN</h3><div class="vacio">Buscando en la base de trabajadores…</div></div>';
+    var J;
+    try { J = await pedir('sugerir', {}); }
+    catch (e) { q('#out').innerHTML = '<div class="hoja"><h3>COMPLETAR DNI QUE FALTAN</h3><div class="err" style="display:block" role="alert">' + esc(e.message) + '</div><div class="acc"><button class="b" id="mv" type="button">Volver a la lista</button></div></div>'; q('#mv').onclick = pintarLista; return; }
+    var L = (J && J.personas) || [];
+    if (!L.length) { q('#out').innerHTML = '<div class="hoja"><h3>COMPLETAR DNI QUE FALTAN</h3><div class="vacio">Todas las personas vigentes ya tienen DNI.</div><div class="acc"><button class="b" id="mv" type="button">Volver a la lista</button></div></div>'; q('#mv').onclick = pintarLista; return; }
+    var filas = L.map(function (x, i) {
+      var unico = x.candidatos.length === 1 && x.candidatos[0].exacto;
+      var ops = x.candidatos.map(function (c, k) {
+        return '<label style="display:block;margin:2px 0;font-weight:400;text-transform:none"><input type="radio" name="m' + i + '" value="' + esc(c.dni) + '"' + (unico && k === 0 ? ' checked' : '') + '> <b>' + esc(c.dni) + '</b> · ' + esc(MAY(c.nombre)) + ' · ' + esc(c.empresa) + (c.exacto ? '' : ' <i>(nombre parecido, revisar)</i>') + '</label>';
+      }).join('');
+      return '<tr><td><b>' + esc(MAY(x.nombre)) + '</b>' + (x.empresa ? '<br>' + esc(x.empresa) : '') + '</td><td>' +
+        (ops || '<i>No se encontró en la base de trabajadores</i>') +
+        '<label style="display:block;margin:2px 0;font-weight:400;text-transform:none"><input type="radio" name="m' + i + '" value=""' + (unico ? '' : ' checked') + '> Dejar pendiente</label>' +
+        '<label style="display:block;margin:4px 0 0;font-weight:400;text-transform:none"><input type="radio" name="m' + i + '" value="*"> Escribir: <input id="mt' + i + '" type="text" inputmode="numeric" maxlength="8" placeholder="8 dígitos" style="width:110px"></label>' +
+        '</td><td id="me' + i + '"></td></tr>';
+    }).join('');
+    q('#out').innerHTML = '<div class="hoja"><h3>COMPLETAR DNI QUE FALTAN</h3>' +
+      '<p style="margin:0 0 10px">Se buscó a cada persona en la base de trabajadores (la misma de «Buscar trabajador»). <b>Nada se guarda hasta que presiones Guardar.</b> Solo viene marcado cuando hay una única coincidencia con el nombre completo; en los demás casos elige tú o escribe el DNI.' +
+      (J.fuente_disponible === false ? ' <b>No se pudo leer la base de trabajadores: escribe los DNI a mano.</b>' : '') + '</p>' +
+      '<div class="err" id="merr" role="alert"></div><div class="tw"><table><thead><tr><th>Persona</th><th>DNI propuesto</th><th>Resultado</th></tr></thead><tbody>' + filas + '</tbody></table></div>' +
+      '<div class="acc"><button class="b p" id="mg" type="button">Guardar los DNI marcados</button><button class="b" id="mv" type="button">Volver a la lista</button></div></div>';
+    L.forEach(function (x, i) { var t = q('#mt' + i); if (t) t.oninput = function () { var r = RAIZ.querySelector('input[name="m' + i + '"][value="*"]'); if (r) r.checked = true; }; });
+    q('#mv').onclick = function () { cargar(); };
+    q('#mg').onclick = async function () {
+      var btn = this, pend = [], mal = '';
+      L.forEach(function (x, i) {
+        var r = RAIZ.querySelector('input[name="m' + i + '"]:checked'), v = r ? r.value : '';
+        if (v === '*') v = String((q('#mt' + i) || {}).value || '').trim();
+        if (!v) return;
+        if (!/^\d{8}$/.test(v)) { mal = 'El DNI de ' + MAY(x.nombre) + ' debe tener exactamente 8 dígitos.'; return; }
+        pend.push({ i: i, x: x, dni: v });
+      });
+      var E = q('#merr');
+      if (mal) { E.textContent = mal; E.style.display = 'block'; return; }
+      var rep = {}; pend.forEach(function (o) { rep[o.dni] = (rep[o.dni] || 0) + 1; });
+      var dup = Object.keys(rep).filter(function (k) { return rep[k] > 1; });
+      if (dup.length) { E.textContent = 'El DNI ' + dup[0] + ' está marcado para más de una persona. Revisa.'; E.style.display = 'block'; return; }
+      if (!pend.length) { E.textContent = 'No marcaste ningún DNI para guardar.'; E.style.display = 'block'; return; }
+      E.style.display = 'none'; btn.disabled = true; btn.textContent = 'Guardando…';
+      var ok = 0, fallo = 0;
+      for (var n = 0; n < pend.length; n++) {
+        var o = pend[n], per = null, celda = q('#me' + o.i);
+        D.personas.forEach(function (pp) { if (String(pp.id) === String(o.x.id)) per = pp; });
+        if (!per) { celda.textContent = 'Actualiza la lista y vuelve a intentar'; fallo++; continue; }
+        try {
+          var cuerpo = {}; Object.keys(per).forEach(function (k) { cuerpo[k] = per[k]; }); cuerpo.dni = o.dni;
+          var R = await pedir('guardar', cuerpo);
+          if (R && R.persona) { Object.keys(R.persona).forEach(function (k) { per[k] = R.persona[k]; }); }
+          celda.innerHTML = '<span class="chip ok">Guardado' + (R && R.conectado && R.conectado.length ? ' · también en ' + esc(R.conectado.join(', ')) : '') + '</span>'; ok++;
+          RAIZ.querySelectorAll('input[name="m' + o.i + '"]').forEach(function (el) { el.disabled = true; });
+        } catch (e2) { celda.innerHTML = '<span class="chip al">' + esc(e2.message) + '</span>'; fallo++; }
+      }
+      btn.disabled = false; btn.textContent = 'Guardar los DNI marcados';
+      aviso(ok + (ok === 1 ? ' DNI guardado' : ' DNI guardados') + (fallo ? ' · ' + fallo + ' con observación (mira la columna Resultado)' : ''), fallo ? 'error' : 'success');
+    };
+  }
+
   function pintarForm(p) {
     if (!RAIZ) return;
     var n = !p; p = p || { vigente: 1 };

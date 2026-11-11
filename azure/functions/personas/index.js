@@ -26,11 +26,11 @@ const ROLES_CAMPO = ['SUPERVISOR_GH', 'ASISTENTE_RL', 'BIENESTAR_SOCIAL', 'COORD
 /* el esquema no restringe "empresa" (comentario: RAPEL / VERFRUT / OLMOS); AMBAS = trabaja para las dos razones sociales */
 const EMPRESAS = ['RAPEL', 'VERFRUT', 'OLMOS', 'AMBAS'];
 const SP = 'SET LOCAL search_path TO rl, public, extensions';
-const COLS = `id, codigo, dni, apellidos, nombres, nombre_mostrar, usuario, cargo, empresa, sector, rol_campo, correo, vigente,
+const COLS = `id, codigo, dni, apellidos, nombres, nombre_mostrar, usuario, cargo, empresa, sector, rol_campo, correo, vigente, evalua_kpi, evalua_cumplimiento,
   to_char(desde, 'YYYY-MM-DD') AS desde, to_char(hasta, 'YYYY-MM-DD') AS hasta, reemplaza_a, alias, notas,
   to_char(actualizado, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS actualizado, actualizado_por`;
 /* campos que la pantalla puede cambiar (codigo, reemplaza_a y las tablas vecinas no se tocan aqui) */
-const CAMPOS = ['dni', 'apellidos', 'nombres', 'nombre_mostrar', 'usuario', 'cargo', 'empresa', 'sector', 'rol_campo', 'correo', 'vigente', 'desde', 'hasta', 'alias', 'notas'];
+const CAMPOS = ['dni', 'apellidos', 'nombres', 'nombre_mostrar', 'usuario', 'cargo', 'empresa', 'sector', 'rol_campo', 'correo', 'vigente', 'desde', 'hasta', 'alias', 'notas', 'evalua_kpi', 'evalua_cumplimiento'];   /* _PADRON_BANDERAS_V1 */
 
 const txt = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u001F\u007F]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 const sinTilde = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -78,6 +78,54 @@ async function lista() {
   });
 }
 
+/* ── equipo (lectura para TODA sesion valida) ──────────────────────────────── */
+/* _PADRON_EQUIPO_V1 (10-nov-2026): los filtros y listas de supervisores de los modulos leen de aqui (una sola fuente).
+   Solo personas vigentes y solo los datos que esas listas ya mostraban (nombre, DNI, cargo, empresa, sector, correo). */
+async function equipo() {
+  return enTx(async (cli) => {
+    const r = await cli.query(`SELECT p.usuario, p.dni, p.apellidos, p.nombres, p.nombre_mostrar, p.cargo, p.empresa, p.sector AS sector_codigo,
+        COALESCE(s.nombre, p.sector) AS sector, p.rol_campo, p.correo, p.evalua_kpi, p.evalua_cumplimiento, to_char(p.desde, 'YYYY-MM-DD') AS desde
+      FROM rl.personas p LEFT JOIN rl.sectores s ON s.codigo = p.sector WHERE p.vigente = 1 ORDER BY p.apellidos NULLS LAST, p.nombres NULLS LAST, p.id`);
+    return { success: true, version: 1, personas: r.rows };
+  });
+}
+
+/* ── sugerir DNI ───────────────────────────────────────────────────────────── */
+/* _PADRON_DNI_MASIVO_V1 (10-nov-2026): para cada persona VIGENTE sin DNI busca su nombre en la base de trabajadores
+   (rl.trabajadores_rapel / rl.trabajadores_verfrut, la misma de "Buscar trabajador") y propone el DNI. SOLO PROPONE:
+   nada se guarda hasta que Joel lo confirma en pantalla (puede haber homonimos). No devuelve DNIs que ya son de otra persona. */
+const normNom = (t) => String(t || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim();
+async function sugerir() {
+  return enTx(async (cli) => {
+    const p = await cli.query('SELECT id, apellidos, nombres, nombre_mostrar, empresa FROM rl.personas WHERE vigente = 1 AND dni IS NULL ORDER BY apellidos NULLS LAST, nombres NULLS LAST, id');
+    const usados = {}; (await cli.query('SELECT dni FROM rl.personas WHERE dni IS NOT NULL')).rows.forEach(r => { usados[String(r.dni)] = 1; });
+    const NORM = "translate(upper(nombre_completo::text), 'ÁÉÍÓÚÜÑ', 'AEIOUUN')";
+    const fuentes = [['RAPEL', 'trabajadores_rapel'], ['VERFRUT', 'trabajadores_verfrut']];
+    const out = []; let fuenteOk = false;
+    for (const per of p.rows) {
+      const palabras = normNom((per.apellidos || '') + ' ' + (per.nombres || '')).split(' ').filter(w => w.length >= 3).slice(0, 6);
+      const item = { id: per.id, nombre: per.nombre_mostrar || ((per.apellidos || '') + ' ' + (per.nombres || '')).trim(), empresa: per.empresa || '', candidatos: [] };
+      if (palabras.length >= 2) {
+        const pat = palabras.map(w => '%' + w.replace(/N/g, '_') + '%');   /* N/Ñ: la base puede traer la Ñ de otra forma */
+        const vistos = {};
+        for (const f of fuentes) {
+          const r = await opcional(cli, 'sp_sug', `SELECT dni::text AS dni, nombre_completo::text AS nombre FROM rl.${f[1]} WHERE ${NORM} LIKE ALL($1::text[]) LIMIT 6`, [pat]);
+          if (!r) continue; fuenteOk = true;
+          r.rows.forEach(t => {
+            let d = String(t.dni == null ? '' : t.dni).trim(); if (/^\d{7}$/.test(d)) d = '0' + d;
+            if (!/^\d{8}$/.test(d) || usados[d] || vistos[d]) return; vistos[d] = 1;
+            const nt = normNom(t.nombre).split(' ').filter(w => w.length >= 3);
+            item.candidatos.push({ dni: d, nombre: String(t.nombre || '').trim(), empresa: f[0], exacto: nt.length === palabras.length });
+          });
+        }
+      }
+      item.candidatos = item.candidatos.slice(0, 6);
+      out.push(item);
+    }
+    return { success: true, fuente_disponible: fuenteOk, personas: out };
+  });
+}
+
 /* ── guardar ───────────────────────────────────────────────────────────────── */
 /* limpia y valida lo que NO necesita la base. Devuelve los valores listos (vacio -> null). */
 function limpiar(b) {
@@ -101,6 +149,8 @@ function limpiar(b) {
   if (vg === null) v.vigente = null;
   else if (vg === 1 || vg === '1') v.vigente = 1; else if (vg === 0 || vg === '0') v.vigente = 0;
   else throw new Mal('Indica si la persona está vigente (Sí o No)', 'vigente');
+  /* _PADRON_BANDERAS_V1 (10-nov-2026): se le miden los KPIs / entra al Control de Cumplimiento (Si o No). Sin dato = se conserva lo que tenia. */
+  ['evalua_kpi', 'evalua_cumplimiento'].forEach(k => { const x = b[k]; v[k] = (x === undefined || x === null || x === '') ? null : (x === true || String(x).trim() === '1') ? 1 : (x === false || String(x).trim() === '0') ? 0 : -1; if (v[k] === -1) throw new Mal('Indica Sí o No', k); });
   const d = txt(b.desde, 12), h = txt(b.hasta, 12);
   v.desde = d ? fechaOk(d) : null; if (d && !v.desde) throw new Mal('La fecha "desde" no es válida', 'desde');
   v.hasta = h ? fechaOk(h) : null; if (h && !v.hasta) throw new Mal('La fecha "hasta" no es válida', 'hasta');
@@ -138,6 +188,7 @@ async function guardar(b, operador, log) {
       antes = a.rows[0];
     }
     if (v.vigente === null) v.vigente = antes ? Number(antes.vigente) : 1;
+    ['evalua_kpi', 'evalua_cumplimiento'].forEach(k => { if (v[k] === null) v[k] = antes ? Number(antes[k] || 0) : 0; });   /* _PADRON_BANDERAS_V1 */
     if (v.vigente === 1 && v.hasta) throw new Mal('Una persona vigente no lleva fecha "hasta". Borra esa fecha o márcala como no vigente.', 'hasta');
     if (v.vigente === 0 && !v.hasta && antes && Number(antes.vigente) === 1) throw new Mal('Para dar de baja indica la fecha "hasta" (último día en la función).', 'hasta');
 
@@ -186,7 +237,14 @@ async function guardar(b, operador, log) {
       rastro = !!r;
       if (!r && log) log.warn('[personas] no se pudo anotar el rastro en rl.cv_ops (persona ' + fila.id + ')');
     }
-    return { success: true, creado: !antes, rastro, persona: fila };
+    /* _PADRON_DNI_MASIVO_V1: el DNI del padron se lleva a las tablas que ya guardan DNI del equipo, SOLO donde esta vacio
+       (nunca pisa un DNI existente). Si alguna no existe o falla, el guardado sigue. */
+    const conectado = [];
+    if (fila.dni && fila.usuario) {
+      const k = await opcional(cli, 'sp_kpi', "UPDATE rl.kpi_personas SET dni = $1 WHERE lower(usuario::text) = lower($2) AND (dni IS NULL OR btrim(dni::text) = '')", [String(fila.dni), String(fila.usuario)]);
+      if (k && k.rowCount) conectado.push('KPIs');
+    }
+    return { success: true, creado: !antes, rastro, conectado, persona: fila };
   });
 }
 
@@ -210,9 +268,11 @@ module.exports = async function (context, req) {
     /* 1. quien llama: SOLO el token firmado (nunca el cuerpo ni la URL) */
     const t = sesion(req);
     if (!t || !t.usuario) return res(401, { success: false, error: 'Sin sesion valida' });
+    if (accion === 'equipo') return res(200, await equipo());   /* _PADRON_EQUIPO_V1: cualquier sesion valida del RR.LL. */
     if (String(t.usuario).trim().toLowerCase() !== SOLO_USUARIO) return res(403, { success: false, error: 'El padrón de personas es solo para el creador del sistema' });
 
     if (accion === 'lista') return res(200, await lista());
+    if (accion === 'sugerir') return res(200, await sugerir());   /* _PADRON_DNI_MASIVO_V1 */
     if (accion === 'guardar') {
       let b = req.body;
       if (typeof b === 'string') { try { b = JSON.parse(b); } catch (e) { b = null; } }

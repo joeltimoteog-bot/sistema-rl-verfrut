@@ -77035,6 +77035,44 @@ var require_personas = __commonJS({
         };
       });
     }
+    var normNom = (t) => String(t || "").toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z ]/g, " ").replace(/\s+/g, " ").trim();
+    async function sugerir() {
+      return enTx(async (cli) => {
+        const p = await cli.query("SELECT id, apellidos, nombres, nombre_mostrar, empresa FROM rl.personas WHERE vigente = 1 AND dni IS NULL ORDER BY apellidos NULLS LAST, nombres NULLS LAST, id");
+        const usados = {};
+        (await cli.query("SELECT dni FROM rl.personas WHERE dni IS NOT NULL")).rows.forEach((r) => {
+          usados[String(r.dni)] = 1;
+        });
+        const NORM = "translate(upper(nombre_completo::text), '\xC1\xC9\xCD\xD3\xDA\xDC\xD1', 'AEIOUUN')";
+        const fuentes = [["RAPEL", "trabajadores_rapel"], ["VERFRUT", "trabajadores_verfrut"]];
+        const out = [];
+        let fuenteOk = false;
+        for (const per of p.rows) {
+          const palabras = normNom((per.apellidos || "") + " " + (per.nombres || "")).split(" ").filter((w) => w.length >= 3).slice(0, 6);
+          const item = { id: per.id, nombre: per.nombre_mostrar || ((per.apellidos || "") + " " + (per.nombres || "")).trim(), empresa: per.empresa || "", candidatos: [] };
+          if (palabras.length >= 2) {
+            const pat = palabras.map((w) => "%" + w.replace(/N/g, "_") + "%");
+            const vistos = {};
+            for (const f of fuentes) {
+              const r = await opcional(cli, "sp_sug", `SELECT dni::text AS dni, nombre_completo::text AS nombre FROM rl.${f[1]} WHERE ${NORM} LIKE ALL($1::text[]) LIMIT 6`, [pat]);
+              if (!r) continue;
+              fuenteOk = true;
+              r.rows.forEach((t) => {
+                let d = String(t.dni == null ? "" : t.dni).trim();
+                if (/^\d{7}$/.test(d)) d = "0" + d;
+                if (!/^\d{8}$/.test(d) || usados[d] || vistos[d]) return;
+                vistos[d] = 1;
+                const nt = normNom(t.nombre).split(" ").filter((w) => w.length >= 3);
+                item.candidatos.push({ dni: d, nombre: String(t.nombre || "").trim(), empresa: f[0], exacto: nt.length === palabras.length });
+              });
+            }
+          }
+          item.candidatos = item.candidatos.slice(0, 6);
+          out.push(item);
+        }
+        return { success: true, fuente_disponible: fuenteOk, personas: out };
+      });
+    }
     function limpiar(b) {
       const v = {};
       v.dni = txt(b.dni, 20).replace(/\s+/g, "") || null;
@@ -77150,7 +77188,12 @@ var require_personas = __commonJS({
           rastro = !!r;
           if (!r && log) log.warn("[personas] no se pudo anotar el rastro en rl.cv_ops (persona " + fila.id + ")");
         }
-        return { success: true, creado: !antes, rastro, persona: fila };
+        const conectado = [];
+        if (fila.dni && fila.usuario) {
+          const k = await opcional(cli, "sp_kpi", "UPDATE rl.kpi_personas SET dni = $1 WHERE lower(usuario::text) = lower($2) AND (dni IS NULL OR btrim(dni::text) = '')", [String(fila.dni), String(fila.usuario)]);
+          if (k && k.rowCount) conectado.push("KPIs");
+        }
+        return { success: true, creado: !antes, rastro, conectado, persona: fila };
       });
     }
     function deBase(e) {
@@ -77171,6 +77214,7 @@ var require_personas = __commonJS({
         if (!t || !t.usuario) return res(401, { success: false, error: "Sin sesion valida" });
         if (String(t.usuario).trim().toLowerCase() !== SOLO_USUARIO) return res(403, { success: false, error: "El padr\xF3n de personas es solo para el creador del sistema" });
         if (accion === "lista") return res(200, await lista());
+        if (accion === "sugerir") return res(200, await sugerir());
         if (accion === "guardar") {
           let b = req.body;
           if (typeof b === "string") {
