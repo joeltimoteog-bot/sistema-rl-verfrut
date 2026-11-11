@@ -47,6 +47,11 @@ const ymd = (d) => d ? d.toISOString().slice(0, 10) : '';
 const dmy = (d) => { const s = ymd(d); return s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : ''; };
 const ddmm = (d) => ('0' + d.getUTCDate()).slice(-2) + '/' + ('0' + (d.getUTCMonth() + 1)).slice(-2);
 const usr = (u) => String(u || '').trim().toLowerCase();
+/* _CUMPL_INGRESO_V1 (10-nov-2026, decision de Joel): quien ingresa al equipo se mide desde su fecha de inicio. La visita
+   semanal de una semana que termino ANTES de esa fecha no se le exige (Luigi Quezada inicia en Santa Rosa el 10-nov-2026
+   y salia "vencido" por la semana 45, del 02 al 08-nov). Cuando el padron unico alimente al motor, esta fecha saldra de rl.personas.desde. */
+const CUMPL_DESDE = { lpalacios: '2026-11-10' };
+const aunNoEntraba = (u, finSemana) => { const d = u && CUMPL_DESDE[usr(u.usuario)]; return !!(d && finSemana && ymd(finSemana) < d); };
 const dias = (a, b) => Math.round((b.getTime() - a.getTime()) / DIA);
 const esAdminRol = (rol) => ROLES_ADMIN.indexOf(String(rol || '').trim().toLowerCase()) >= 0;
 
@@ -378,6 +383,7 @@ function crearMotor(D) {
       const key = usr(nombreSup);
       let ok = !!reportaron[key];
       if (!ok) for (const k in reportaron) { if (nombreMatch(k, key) || nombreMatch(key, k)) { ok = true; break; } }
+      if (aunNoEntraba(usuarioPor(usuarios, nombreSup), domPasadoDia)) return;   /* _CUMPL_INGRESO_V1 */
       if (ok) return;
       /* _AUSENCIAS_V1: falto la mayor parte de esa semana -> la responde su reemplazo (o nadie, si no hay) */
       const tU = usuarioPor(usuarios, nombreSup), aS = tU ? AUS.semana(tU, lunesPasado, ymd, sumar) : null;
@@ -452,6 +458,7 @@ function crearMotor(D) {
         const dom = sumar(d, 6);
         const limV = limiteVisita(sumar(d, 7), cfg.plazo_visita_dias || 1);   /* _CALENDARIO_V1 */
         if (dom >= hoy || limV >= hoy) break;
+        if (aunNoEntraba(u, dom)) continue;   /* _CUMPL_INGRESO_V1: las semanas anteriores a su inicio no entran en su indice */
         const propia = (propio && !AUS.semana(u, d, ymd, sumar)) ? 1 : 0;
         const titulares = []; cobV.forEach(a => { if (AUS.semana(AUS.titular(a), d, ymd, sumar) === a) titulares.push(AUS.titular(a)); });
         const obl = propia + titulares.length;
@@ -592,6 +599,7 @@ function crearMotor(D) {
       let ok = !!reportaron[key];
       if (!ok) for (const k in reportaron) { if (nombreMatch(k, key) || nombreMatch(key, k)) { ok = true; break; } }
       if (ok) return;
+      if (aunNoEntraba(usuarioPor(usuarios, nombreSup), domDia)) return;   /* _CUMPL_INGRESO_V1 */
       const tU = usuarioPor(usuarios, nombreSup), aS = tU ? AUS.semana(tU, lunesPasado, ymd, sumar) : null;   /* _AUSENCIAS_V1 */
       if (aS) {
         const rp = AUS.reemp(aS); if (!rp) return;

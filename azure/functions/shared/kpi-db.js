@@ -88,7 +88,10 @@ function asegurarTablas(pool) {
       for (let i = 0; i < K.PERSONAS.length; i++) {
         const p = K.PERSONAS[i]; if (!p.alta) continue;
         const ya = await pool.request().input('u', sql.NVarChar(60), p.usuario).query('SELECT COUNT(*) AS n FROM dbo.KPI_Personas WHERE usuario = @u');
-        if (ya.recordset[0].n) continue;
+        if (ya.recordset[0].n) {   /* _CUMPL_INGRESO_V1 (10-nov-2026): la fila ya existe; si quedo sin fecha de ingreso se completa una vez (no pisa una fecha ya puesta) */
+          if (p.ingreso) await pool.request().input('u', sql.NVarChar(60), p.usuario).input('i', sql.Date, p.ingreso).query('UPDATE dbo.KPI_Personas SET ingreso = @i WHERE usuario = @u AND ingreso IS NULL');
+          continue;
+        }
         await pool.request().input('u', sql.NVarChar(60), p.usuario).input('d', sql.NVarChar(15), p.dni).input('n', sql.NVarChar(200), p.nombre)
           .input('e', sql.NVarChar(20), p.empresa).input('t', sql.NVarChar(10), p.tipo).input('p', sql.NVarChar(150), p.puesto)
           .input('i', sql.Date, p.ingreso || null).input('o', sql.Int, i).input('a', sql.NVarChar(1000), (p.alias || []).join('|') || null)

@@ -66865,6 +66865,11 @@ var require_cumpl_motor = __commonJS({
     };
     var ddmm = (d) => ("0" + d.getUTCDate()).slice(-2) + "/" + ("0" + (d.getUTCMonth() + 1)).slice(-2);
     var usr = (u) => String(u || "").trim().toLowerCase();
+    var CUMPL_DESDE = { lpalacios: "2026-11-10" };
+    var aunNoEntraba = (u, finSemana) => {
+      const d = u && CUMPL_DESDE[usr(u.usuario)];
+      return !!(d && finSemana && ymd(finSemana) < d);
+    };
     var dias = (a, b) => Math.round((b.getTime() - a.getTime()) / DIA);
     var esAdminRol = (rol) => ROLES_ADMIN.indexOf(String(rol || "").trim().toLowerCase()) >= 0;
     function parse(v) {
@@ -67310,6 +67315,7 @@ var require_cumpl_motor = __commonJS({
               break;
             }
           }
+          if (aunNoEntraba(usuarioPor(usuarios, nombreSup), domPasadoDia)) return;
           if (ok) return;
           const tU = usuarioPor(usuarios, nombreSup), aS = tU ? AUS.semana(tU, lunesPasado, ymd, sumar) : null;
           let rp = null;
@@ -67417,6 +67423,7 @@ var require_cumpl_motor = __commonJS({
             const dom = sumar(d, 6);
             const limV = limiteVisita(sumar(d, 7), cfg.plazo_visita_dias || 1);
             if (dom >= hoy || limV >= hoy) break;
+            if (aunNoEntraba(u, dom)) continue;
             const propia = propio && !AUS.semana(u, d, ymd, sumar) ? 1 : 0;
             const titulares = [];
             cobV.forEach((a) => {
@@ -67657,6 +67664,7 @@ var require_cumpl_motor = __commonJS({
             }
           }
           if (ok) return;
+          if (aunNoEntraba(usuarioPor(usuarios, nombreSup), domDia)) return;
           const tU = usuarioPor(usuarios, nombreSup), aS = tU ? AUS.semana(tU, lunesPasado, ymd, sumar) : null;
           if (aS) {
             const rp = AUS.reemp(aS);
@@ -68550,7 +68558,8 @@ var require_kpi_motor = __commonJS({
       /* historico: Santa Rosa hasta el 10-nov-2026 (no se borra) */
       /* _SEG_SERVIDOR_V1 (10-nov-2026): reemplaza a Yhanelly Luzon en Santa Rosa. alta:true = kpi-db lo agrega a dbo.KPI_Personas si aun no esta.
          Sin "ingreso" (no se conoce la fecha): poner la fecha real en KPI_Personas.ingreso para que se mida desde ese dia. */
-      { usuario: "lpalacios", dni: "73036989", nombre: "QUEZADA PALACIOS LUIGI FABIAN", empresa: "VERFRUT", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", alias: ["LUIGI FABIAN QUEZADA PALACIOS"], alta: true },
+      { usuario: "lpalacios", dni: "73036989", nombre: "QUEZADA PALACIOS LUIGI FABIAN", empresa: "VERFRUT", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", alias: ["LUIGI FABIAN QUEZADA PALACIOS"], alta: true, ingreso: "2026-11-10" },
+      /* _CUMPL_INGRESO_V1: inicia en Santa Rosa el 10-nov-2026 (Joel) */
       { usuario: "almartinez", dni: "72952975", nombre: "MARTINEZ JUAREZ ALEXANDER", empresa: "VERFRUT", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", ingreso: "2024-09-03" },
       { usuario: "rmolero", dni: "74218729", nombre: "MOLERO ABAD ROBERTO CARLOS", empresa: "VERFRUT", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", ingreso: "2024-09-23" },
       { usuario: "fpulache", dni: "46793507", nombre: "PULACHE VIERA FLOR DE LOS MILAGROS", empresa: "RAPEL", tipo: "SUP", puesto: "SUPERVISOR(A) DE GESTI\xD3N HUMANA", ingreso: "2012-07-23" },
@@ -69358,7 +69367,10 @@ var require_kpi_db = __commonJS({
             const p = K.PERSONAS[i];
             if (!p.alta) continue;
             const ya = await pool.request().input("u", sql.NVarChar(60), p.usuario).query("SELECT COUNT(*) AS n FROM dbo.KPI_Personas WHERE usuario = @u");
-            if (ya.recordset[0].n) continue;
+            if (ya.recordset[0].n) {
+              if (p.ingreso) await pool.request().input("u", sql.NVarChar(60), p.usuario).input("i", sql.Date, p.ingreso).query("UPDATE dbo.KPI_Personas SET ingreso = @i WHERE usuario = @u AND ingreso IS NULL");
+              continue;
+            }
             await pool.request().input("u", sql.NVarChar(60), p.usuario).input("d", sql.NVarChar(15), p.dni).input("n", sql.NVarChar(200), p.nombre).input("e", sql.NVarChar(20), p.empresa).input("t", sql.NVarChar(10), p.tipo).input("p", sql.NVarChar(150), p.puesto).input("i", sql.Date, p.ingreso || null).input("o", sql.Int, i).input("a", sql.NVarChar(1e3), (p.alias || []).join("|") || null).query("INSERT INTO dbo.KPI_Personas (usuario, dni, nombre, empresa, tipo, puesto, ingreso, alias, orden) VALUES (@u, @d, @n, @e, @t, @p, @i, @a, @o)");
           }
         } catch (eAlta) {

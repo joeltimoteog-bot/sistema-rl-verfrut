@@ -33,7 +33,7 @@ window.RLTrafico = window.RLTrafico || (function () {
       ultimo[clave] = Date.now();
       var id = Date.now() + '_' + Math.random().toString(36).slice(2, 7);
       var body = { ts: Date.now(), u: String(us.u).toLowerCase().slice(0, 60), n: String(us.n).slice(0, 120), rol: String(us.rol || '').slice(0, 40),
-        sis: String(o.sis || SIS).slice(0, 40), accion: String(o.accion || '').slice(0, 80), destino: String(o.destino || '').slice(0, 40),
+        sis: String(o.sis || SIS).slice(0, 40), accion: String(o.accion || '').slice(0, 80), destino: String(o.destino || '').replace(/^azure\s*blob$/i, 'Supabase Storage').replace(/^azure(\s*sql)?$/i, 'Supabase').slice(0, 40),   /* _ETIQUETA_SUPABASE_V1 (10-nov-2026): desde el 05-nov todo se guarda en Supabase; varios modulos aun rotulaban "Azure SQL" */
         detalle: String(o.detalle || '').slice(0, 160), tipo: String(o.tipo || 'ok').slice(0, 12) };
       var f = nativo || window.fetch;
       f(DB + '/trafico/' + id + '.json', { method: 'PUT', body: JSON.stringify(body), keepalive: true }).catch(function () {});
