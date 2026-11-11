@@ -23,10 +23,11 @@
   var activo = true;
   try { var me = localStorage.getItem('rl_edge'); if (me === 'off') activo = false; } catch (e) {}
   var fallas = 0;
-  function pausado() { try { return Date.now() < +(sessionStorage.getItem('rl_edge_pausa') || 0); } catch (e) { return false; } }
+  function pausado() { return false; /* _SIN_AZURE_V1 (10-nov-2026): Azure se apaga el 12-nov; ya no hay respaldo al que ir (igual que azure-token.js) */ }
+  function pausadoViejo_() { try { return Date.now() < +(sessionStorage.getItem('rl_edge_pausa') || 0); } catch (e) { return false; } }
   function falla(m) {
     fallas++;
-    try { console.warn('[_EDGE_V1] Supabase no respondio (' + m + '): se usa Azure'); } catch (e) {}
+    try { console.warn('[_EDGE_V1] Supabase no respondio (' + m + ')'); } catch (e) {}
     if (fallas >= 3) { fallas = 0; try { sessionStorage.setItem('rl_edge_pausa', String(Date.now() + 5 * 60000)); } catch (e) {} }
   }
   window.fetch = function (input, init) {
@@ -38,11 +39,11 @@
       if (SOLO_AZURE.test(ruta)) return fOrig.apply(this, arguments);   /* _EDGE_TODO_SUPABASE_V1: POST /atenciones tambien va a Supabase */
       var url = input;
       return fOrig.call(window, rg(EDGE + ruta), init).then(function (r) {
-        if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { falla('HTTP ' + r.status); return fOrig.call(window, url, init); }
+        if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { falla('HTTP ' + r.status); return r; }   /* _SIN_AZURE_V1: no se reintenta en Azure; la pantalla muestra su propio aviso */
         fallas = 0; return r;
       }, function (e) {
         if (init && init.signal && init.signal.aborted) throw e;
-        falla(e && e.message); return fOrig.call(window, url, init);
+        falla(e && e.message); throw e;   /* _SIN_AZURE_V1: sin respaldo a Azure */
       });
     } catch (e) { return fOrig.apply(this, arguments); }
   };

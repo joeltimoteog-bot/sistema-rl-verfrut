@@ -29,7 +29,7 @@
     { n: 'Capacitación y evaluación',  c: ['mod_capacitaciones', 'navProgEti', 'navAppEti', 'navEval360'] },
     { n: 'Bienestar',                  c: ['navBienestar', 'navInventario'] },
     { n: 'Reportes',                   c: ['navMisEstadisticas', 'navEstadisticas', 'navKpis', 'navInformeGH', 'navRes'] },
-    { n: 'Administración',             c: ['navUsr', 'navPermisos', 'navSegUsuarios', 'navActividad', 'navMonitor', 'navFbAlertas', 'navCerebro'] }
+    { n: 'Administración',             c: ['navUsr', 'navPadron', 'navPermisos', 'navSegUsuarios', 'navActividad', 'navMonitor', 'navFbAlertas', 'navCerebro'] }
   ];
   var OTROS = 'Otros';
 
