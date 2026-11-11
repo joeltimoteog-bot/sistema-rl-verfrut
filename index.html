@@ -989,36 +989,27 @@ async function doLogin(){
 
    Si algo fallara al firmar, se navega igual sin pase: el ETI mostrara su
    login de siempre. Nunca deja al usuario en blanco. */
-const SSO_SECRETO = 'RL-SSO-VERFRUT-2026';   // debe coincidir con el de los ETI
 const SSO_SERVIDOR_URL = 'https://rl-fn-verfrut.azurewebsites.net/api/auth/sso'; // _SSO_SERVIDOR_V1
 
+/* _SSO_SOLO_SERVIDOR_V1 (10-nov-2026): el ingreso a los ETI usa SOLO el pase firmado por el servidor (sso2).
+   Se retiro el pase antiguo (#sso=), que se firmaba en esta pagina con un secreto visible en el codigo:
+   cualquiera que lo leyera podia fabricar un pase a nombre de otro usuario. Si el pase del servidor aun no
+   esta listo, se espera hasta 7 s; si no llega, se navega sin pase y el ETI muestra su login (misma clave). */
 async function irAConSSO(base){
   let destino = base;
   try{ RLTrafico.emit({accion: base.indexOf('sistema-eti')>=0 ? 'Fue a Capacitaciones ETI' : 'Fue a Evaluaciones ETI', destino:'Firebase'}); }catch(e){} /* _TRAFICO_V1 */
   try{
-    const raw = sessionStorage.getItem('user');
-    const usuario = raw ? String(JSON.parse(raw).usuario || '').toLowerCase().trim() : '';
-    if (usuario && window.crypto && window.crypto.subtle) {
-      /* _SSO_PASE_V2 (20-set-2026): el pase lleva ademas nombre y rol, para que los
-         ETI puedan dar de alta al usuario al vuelo si aun no lo tienen registrado. */
-      const _uObj = raw ? JSON.parse(raw) : {};
-      const pase  = btoa(unescape(encodeURIComponent(JSON.stringify({ u: usuario, n: String(_uObj.nombre || '').trim(), r: String(_uObj.rol || '').toLowerCase().trim(), exp: Date.now() + 90000 }))));
-      const buf   = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pase + '|' + SSO_SECRETO));
-      const firma = Array.from(new Uint8Array(buf)).map(x => x.toString(16).padStart(2,'0')).join('');
-      destino = base + '#sso=' + pase + '.' + firma;
+    const fresco = () => { const c = window._ssoCache; return (c && c.pase && (Date.now() - c.t) < 70000) ? c : null; };
+    if (!fresco()) {
+      window._ssoCache = null;
+      document.body.style.cursor = 'progress';
+      const t0 = Date.now();
+      while (!fresco() && Date.now() - t0 < 7000) { _ssoPrefetch(); await new Promise(r => setTimeout(r, 200)); }
+      document.body.style.cursor = '';
     }
+    const c = fresco();
+    if (c) destino = base + '#sso2=' + c.pase;
   }catch(e){ destino = base; }
-  /* _SSO_SERVIDOR_V1 (24-set-2026): ademas del pase de siempre, pide al servidor
-     un pase firmado ALLA (el secreto no esta en esta pagina) y lo agrega como
-     &sso2=. Evaluaciones ETI lo usa primero; Capacitaciones ETI lo ignora.
-     Si el servidor no responde en 4 s o falla, se navega igual que antes. */
-  /* _SSO_RAPIDO_V1: el pase del servidor ya se pidio por adelantado (ver
-     _ssoPrefetch); aqui NO se espera al servidor → el clic es instantaneo. */
-  try{
-    const c = window._ssoCache;
-    if (c && c.pase && (Date.now() - c.t) < 70000)
-      destino += (destino.indexOf('#') >= 0 ? '&' : '#') + 'sso2=' + c.pase;
-  }catch(e){ /* sin pase del servidor: se usa el de siempre */ }
   window.location.href = destino;
 }
 
