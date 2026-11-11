@@ -74970,9 +74970,16 @@ var require_eti_sync = __commonJS({
         if (typeof db.pgDirecto !== "function") throw new Error("Este modulo solo funciona con Supabase");
         const pool = db.pgDirecto();
         const b = req && req.body && typeof req.body === "object" ? req.body : {};
-        let pedir = POR_DEFECTO;
+        let pedir;
         if (Array.isArray(b.cols) && b.cols.length) pedir = b.cols;
-        else if (envS("ETI_SYNC_TODO") !== "0" && (b.todas === true || (/* @__PURE__ */ new Date()).getUTCMinutes() < 10)) pedir = POR_DEFECTO.concat(RESTO);
+        else if (b.todas === true) pedir = envS("ETI_SYNC_TODO") === "0" ? POR_DEFECTO : POR_DEFECTO.concat(RESTO);
+        else {
+          const ah = /* @__PURE__ */ new Date(), tramo = Math.floor(ah.getUTCMinutes() / 10) * 10;
+          const cadaMin = [10, 20, 30, 60].indexOf(parseInt(envS("ETI_SYNC_MIN"), 10)) >= 0 ? parseInt(envS("ETI_SYNC_MIN"), 10) : 20;
+          const cadaH = Math.max(1, Math.min(24, parseInt(envS("ETI_SYNC_RESTO_H"), 10) || 3));
+          pedir = tramo % cadaMin === 0 ? POR_DEFECTO.slice() : [];
+          if (envS("ETI_SYNC_TODO") !== "0" && tramo === 0 && ah.getUTCHours() % cadaH === 0) pedir = pedir.concat(RESTO);
+        }
         const cols = pedir.filter(function(c) {
           return PERMITIDAS.indexOf(c) >= 0;
         });

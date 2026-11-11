@@ -7,9 +7,8 @@
      POST /api/eti-sync   { cols?: [...] }   (llave x-functions-key; por defecto las 4 de Capacitaciones)
    Proteccion: si Firestore devuelve 0 documentos y Supabase tiene datos, NO se borra nada.
    _ETI_SYNC_V2 (11-nov-2026): el servidor pasa a ser quien mantiene iguales las 12 colecciones.
-     · Las 4 de Capacitaciones siguen en cada pasada (10 min). Las otras 8 van UNA vez por hora
-       (la pasada que cae en los primeros 10 minutos de la hora) o cuando se pide { todas: true }.
-       Asi las lecturas a Firestore suben poco (cuota diaria). Se apaga con el secreto ETI_SYNC_TODO=0.
+     · Cada cuanto se copia cada grupo: ver _ETI_SYNC_V3 mas abajo (cuota diaria de Firestore).
+       Con { todas: true } se copian las 12 en el momento. Las 8 nuevas se apagan con el secreto ETI_SYNC_TODO=0.
      · No pisa ni borra lo que el navegador acaba de escribir: solo toca filas cuya ultima
        actualizacion es ANTERIOR al momento en que se empezo a leer Firestore.
      · Solo da de baja lo que el mismo servidor ya habia visto en Firestore; lo demas lo informa en "sobran".
@@ -70,9 +69,21 @@ module.exports = async function (context, req) {
     if (typeof db.pgDirecto !== 'function') throw new Error('Este modulo solo funciona con Supabase');
     const pool = db.pgDirecto();
     const b = (req && req.body && typeof req.body === 'object') ? req.body : {};
-    let pedir = POR_DEFECTO;
+    /* _ETI_SYNC_V3 (11-nov-2026): cuidar la cuota diaria de lecturas de Firestore (plan sin costo: 50 000 al dia;
+       el 10-nov se usaron ~44 000). La tarea sigue llamando cada 10 min, pero aqui se decide que toca:
+         · las 4 de Capacitaciones: cada ETI_SYNC_MIN minutos (por defecto 20; antes 10)
+         · las otras 8: cada ETI_SYNC_RESTO_H horas (por defecto 3), en la pasada del minuto 0
+       Resultado: menos lecturas que ANTES de _ETI_SYNC_V2 (≈7 800 al dia frente a ≈11 800). */
+    let pedir;
     if (Array.isArray(b.cols) && b.cols.length) pedir = b.cols;
-    else if (envS('ETI_SYNC_TODO') !== '0' && (b.todas === true || new Date().getUTCMinutes() < 10)) pedir = POR_DEFECTO.concat(RESTO);   /* _ETI_SYNC_V2 */
+    else if (b.todas === true) pedir = envS('ETI_SYNC_TODO') === '0' ? POR_DEFECTO : POR_DEFECTO.concat(RESTO);
+    else {
+      const ah = new Date(), tramo = Math.floor(ah.getUTCMinutes() / 10) * 10;
+      const cadaMin = [10, 20, 30, 60].indexOf(parseInt(envS('ETI_SYNC_MIN'), 10)) >= 0 ? parseInt(envS('ETI_SYNC_MIN'), 10) : 20;
+      const cadaH = Math.max(1, Math.min(24, parseInt(envS('ETI_SYNC_RESTO_H'), 10) || 3));
+      pedir = (tramo % cadaMin === 0) ? POR_DEFECTO.slice() : [];
+      if (envS('ETI_SYNC_TODO') !== '0' && tramo === 0 && ah.getUTCHours() % cadaH === 0) pedir = pedir.concat(RESTO);
+    }
     const cols = pedir.filter(function (c) { return PERMITIDAS.indexOf(c) >= 0; });
     const res = {}; let fallas = 0;
     for (const c of cols) {
