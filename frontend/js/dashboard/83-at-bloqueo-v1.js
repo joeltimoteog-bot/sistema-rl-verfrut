@@ -136,6 +136,31 @@
     w._atBloq = true; window.abrirAt = w;
   }
 
+  /* ── _AT_BLOQUEO_V2 (12-nov, visto en el primer ensayo): que una atencion en espera no se registre dos veces ──
+     Cuando una atencion queda en la cola del equipo (por bloqueo o por falta de señal) el formulario sigue abierto.
+     Si el usuario vuelve a pulsar Guardar, la hora de termino ya cambio y entraba como OTRA atencion (duplicado).
+     Ahora, si esa misma atencion (mismo DNI, documento y fecha) ya esta en la cola, no se envia de nuevo. */
+  function yaEnCola(b) {
+    try {
+      var u = String(U().usuario || ''), c = JSON.parse(localStorage.getItem('rl_at_pendientes') || '[]') || [];
+      var f = function (v) { return String(v || '').slice(0, 10); };
+      return c.some(function (x) { var y = x && x.body; return y && x.u === u && String(y.dni || '').trim() === String(b.dni || '').trim() &&
+        String(y.detalle_documento || '') === String(b.detalle_documento || '') && f(y.fecha_atencion) === f(b.fecha_atencion); });
+    } catch (e) { return false; }
+  }
+  function envolverGuardar() {
+    var prev = window.apiPost;
+    if (typeof prev !== 'function' || prev._atBloqCola) return;
+    var w = function (b) {
+      if (b && b.action === 'saveAtencion' && b.dni && yaEnCola(b)) {
+        return Promise.resolve({ success: false, _enCola: true, yaEnCola: true,
+          error: 'Esta atención ya está guardada en este equipo y se enviará sola (aviso ⏳ abajo a la izquierda). No la registres de nuevo: puedes cerrar el formulario.' });
+      }
+      return prev.apply(this, arguments);
+    };
+    w._atBloqCola = true; window.apiPost = w;
+  }
+
   /* ── panel del administrador ── */
   function montar() {
     if ($('mAtBloq')) return;
@@ -233,6 +258,7 @@
 
   /* ── arranque ── */
   envolverAbrir(); window.addEventListener('load', envolverAbrir);
+  envolverGuardar();
   if (!inyectarBoton()) { var n = 0, it = setInterval(function () { if (inyectarBoton() || ++n > 60) clearInterval(it); }, 500); }
   setTimeout(leerEstado, 3000);
   /* consulta liviana: cada 5 min; cada 1 min solo si hay un bloqueo activo o por empezar (para enterarse si lo cancelan).

@@ -62363,6 +62363,112 @@ var require_atenciones_editar = __commonJS({
   }
 });
 
+// atenciones-eliminar/index.js
+var require_atenciones_eliminar = __commonJS({
+  "atenciones-eliminar/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    function token(req) {
+      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        return require_auth().verificarSoloRL(h.slice(7).trim());
+      } catch (e) {
+        return null;
+      }
+    }
+    var low = (v) => String(v == null ? "" : v).trim().toLowerCase();
+    module.exports = async function(context, req) {
+      const b = req.body && typeof req.body === "object" ? req.body : {};
+      const prueba = String(req.query && req.query.prueba || "") === "1";
+      const t0 = Date.now();
+      try {
+        const t = token(req);
+        if (!t || !t.usuario) {
+          context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
+          return;
+        }
+        if (String(process.env.AT_ELIMINAR_SUPABASE || "") === "0") {
+          context.res = { status: 503, body: { success: false, apagado: true, error: "Eliminacion en Supabase apagada" } };
+          return;
+        }
+        if (!prueba) {
+          const _bq = await require_at_bloqueo().revisar(t);
+          if (_bq) {
+            context.res = { status: 403, body: _bq };
+            return;
+          }
+        }
+        const nro = parseInt(b.nro, 10);
+        if (!nro) {
+          context.res = { status: 400, body: { success: false, error: "Falta N\xB0" } };
+          return;
+        }
+        const pool = await getPool();
+        let filas = [];
+        const id = parseInt(b.id, 10) || 0;
+        if (id) {
+          const f = await pool.request().input("id", sql.Int, id).query("SELECT * FROM dbo.Atenciones WHERE id = @id");
+          filas = f.recordset.filter((x) => parseInt(x.nro, 10) === nro);
+        }
+        if (!filas.length) {
+          const dni = String(b.dni == null ? "" : b.dni).trim();
+          const f = await pool.request().input("n", sql.Int, nro).input("d", sql.NVarChar(15), dni).query(`
+        SELECT * FROM dbo.Atenciones
+        WHERE nro = @n AND (@d = N'' OR dni = @d)
+          AND anio = (SELECT MAX(anio) FROM dbo.Atenciones WHERE nro = @n AND (@d = N'' OR dni = @d))`);
+          filas = f.recordset;
+        }
+        if (!filas.length) {
+          context.res = { status: 404, body: { success: false, noEsta: true, error: "Atencion no encontrada en Supabase" } };
+          return;
+        }
+        if (filas.length > 1) {
+          context.res = { status: 409, body: { success: false, ambiguo: true, error: "Hay " + filas.length + " atenciones con el N\xB0 " + nro + ". No se elimino ninguna: avisa al administrador." } };
+          return;
+        }
+        const fila = filas[0];
+        const rol = low(t.rol), usuario = String(t.usuario).trim();
+        if (rol === "supervisor" && low(fila.usuario_sistema) !== low(usuario) && low(fila.supervisor) !== low(usuario)) {
+          context.res = { status: 403, body: { success: false, error: "No tienes permiso para eliminar este registro." } };
+          return;
+        }
+        const motivo = String(b.motivo == null ? "" : b.motivo).trim();
+        const datos = JSON.stringify(Object.assign({}, fila, { _eliminada_por: usuario, _eliminada_en: (/* @__PURE__ */ new Date()).toISOString(), _motivo: motivo }));
+        const etiqueta = ("eliminada por " + usuario + (motivo ? ": " + motivo : "")).slice(0, 100);
+        const tx = new sql.Transaction(pool);
+        await tx.begin();
+        let borradas = 0;
+        try {
+          await new sql.Request(tx).input("id", sql.Int, fila.id).input("datos", sql.NVarChar(sql.MAX), datos).input("m", sql.NVarChar(100), etiqueta).query("INSERT INTO dbo.Atenciones_Respaldo (id, datos, motivo) VALUES (@id, @datos, @m)");
+          const d = await new sql.Request(tx).input("id", sql.Int, fila.id).query("SET NOCOUNT ON; DELETE FROM dbo.Atenciones WHERE id = @id; SELECT @@ROWCOUNT AS n;");
+          borradas = d.recordset[0].n;
+          if (borradas !== 1) throw new Error("Se esperaba borrar 1 fila y serian " + borradas);
+          if (prueba) await tx.rollback();
+          else await tx.commit();
+        } catch (e) {
+          try {
+            await tx.rollback();
+          } catch (e2) {
+          }
+          throw e;
+        }
+        if (!prueba) {
+          try {
+            require_stats_pizarron().invalidar();
+          } catch (eP) {
+          }
+        }
+        const ms = Date.now() - t0;
+        context.log("[atenciones-eliminar] _AT_ELIMINAR_SUPABASE_V1: N\xB0 " + nro + " (id " + fila.id + ", DNI " + String(fila.dni || "").trim() + ") eliminada por " + usuario + (motivo ? " \xB7 motivo: " + motivo.slice(0, 80) : "") + " \xB7 " + ms + " ms" + (prueba ? " [PRUEBA, deshecho]" : ""));
+        context.res = { status: 200, body: { success: true, nro, id: fila.id, dni: String(fila.dni || "").trim(), prueba, fuente: "supabase", ms } };
+      } catch (err) {
+        context.log.error("[atenciones-eliminar] " + err.message);
+        context.res = { status: 500, body: { success: false, error: err.message } };
+      }
+    };
+  }
+});
+
 // atenciones-guardar/index.js
 var require_atenciones_guardar = __commonJS({
   "atenciones-guardar/index.js"(exports, module) {
@@ -79126,6 +79232,7 @@ var require_rutas_edge = __commonJS({
       { fn: "atenciones-create", ruta: "atenciones", metodos: ["POST"], llave: true, h: require_atenciones_create() },
       { fn: "atenciones-depurar", ruta: "mantenimiento/atenciones/{accion}", metodos: ["GET", "POST"], llave: true, h: require_atenciones_depurar() },
       { fn: "atenciones-editar", ruta: "atenciones/editar", metodos: ["POST"], llave: false, h: require_atenciones_editar() },
+      { fn: "atenciones-eliminar", ruta: "atenciones/eliminar", metodos: ["POST"], llave: false, h: require_atenciones_eliminar() },
       { fn: "atenciones-guardar", ruta: "atenciones/guardar", metodos: ["POST"], llave: false, h: require_atenciones_guardar() },
       { fn: "atenciones-guardar-admin", ruta: "mantenimiento/guardar/{accion}", metodos: ["GET", "POST"], llave: true, h: require_atenciones_guardar_admin() },
       { fn: "atenciones-list", ruta: "atenciones", metodos: ["GET"], llave: false, h: require_atenciones_list() },
