@@ -45,6 +45,8 @@ module.exports = async function (context, req) {
   try {
     const t = token(req);
     if (!t || !t.usuario) { context.res = { status: 401, body: { success: false, error: 'Sin sesion valida' } }; return; }
+    /* _AT_BLOQUEO_V1 (12-nov-2026): durante el bloqueo temporal tampoco se edita (403 = la pantalla muestra el aviso tal cual) */
+    if (!prueba) { const _bq = await require('../shared/at-bloqueo').revisar(t); if (_bq) { context.res = { status: 403, body: _bq }; return; } }
     const nro = parseInt(b.nro, 10);
     if (!nro) { context.res = { status: 400, body: { success: false, error: 'Falta N°' } }; return; }
     const pool = await getPool();

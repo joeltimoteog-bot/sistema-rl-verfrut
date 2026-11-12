@@ -55,7 +55,7 @@ window.apiPost = function (b) {
     for (var intento = 1; intento <= 2; intento++) {
       try { r = await azure(b, clave, 8000); } catch (e) { r = null; }   /* _GUARDAR_RAPIDO_V1 (01-oct): 8 s por intento (antes 12) */
       if (r && r.status === 200 && r.j && r.j.success && r.j.nro) break;
-      if (r && (r.status === 503 || r.status === 401 || r.status === 400 || r.status === 404)) break;   // decide Google, sin reintentar
+      if (r && (r.status === 503 || r.status === 401 || r.status === 400 || r.status === 404 || r.status === 423)) break;   // decide Google, sin reintentar (_AT_BLOQUEO_V1: 423 = bloqueo temporal; el respaldo la deja en la cola del equipo)
       if (intento < 2) await new Promise(function (z) { setTimeout(z, 1500); });
     }
     if (r && r.status === 200 && r.j && r.j.success && r.j.nro) {

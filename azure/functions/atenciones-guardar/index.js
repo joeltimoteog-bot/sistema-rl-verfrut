@@ -43,6 +43,9 @@ module.exports = async function (context, req) {
   try {
     const t = token(req);
     if (!t || !t.usuario) { context.res = { status: 401, body: { success: false, error: 'Sin sesion valida' } }; return; }
+    /* _AT_BLOQUEO_V1 (12-nov-2026): bloqueo temporal por cierre de quincena / de mes. HTTP 423: la pantalla NO pierde la
+       atencion (sigue al respaldo, que la deja en la cola del equipo y la envia sola cuando se abre). Nunca lanza error. */
+    if (!prueba) { const _bq = await require('../shared/at-bloqueo').revisar(t); if (_bq) { context.res = { status: 423, body: _bq }; return; } }
     const pool = await getPool();
     await G.asegurarTablas(pool);
     /* _GUARDAR_RAPIDO_V1 (01-oct-2026): interruptor y "¿ya se guardo este formulario?" en paralelo (1 ida y vuelta menos) */

@@ -1,0 +1,7 @@
+{
+  "bindings": [
+    { "authLevel": "anonymous", "type": "httpTrigger", "direction": "in", "name": "req",
+      "methods": ["post", "get"], "route": "at-bloqueo/{accion}" },
+    { "type": "http", "direction": "out", "name": "res" }
+  ]
+}
