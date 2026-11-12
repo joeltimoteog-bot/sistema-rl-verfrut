@@ -122,6 +122,16 @@ module.exports = async function (context, req) {
         pool.request().input('dni', sql.NVarChar(20), dni).query(`SELECT TOP (50) nro, fecha_reg, fecha_reporte, motivo, sector, supervisor, registrado_por
           FROM dbo.Casos WHERE dni = @dni AND nro IS NOT NULL ORDER BY COALESCE(fecha_reporte, fecha_reg) DESC, nro DESC`).catch(() => ({ recordset: [] }))
       ]);
+      /* _PREC_USUARIO_V2 (12-nov, verificado con datos reales): en los CASOS "registrado_por" es el NOMBRE de quien lo registro
+         (el campo "supervisor" es el del trabajador). Se muestra quien lo registro y SU sector segun el padron unico;
+         si no esta en el padron, el sector del propio caso. */
+      const nrm = (v) => s(v, 300).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+      let secDe = {};
+      try {
+        const pp = await pool.request().query('SELECT p.nombre_mostrar, p.usuario, COALESCE(sc.nombre, p.sector) AS sector FROM dbo.personas p LEFT JOIN dbo.sectores sc ON sc.codigo = p.sector');
+        pp.recordset.forEach((x) => { const sec = s(x.sector, 120); if (!sec) return; if (x.nombre_mostrar) secDe[nrm(x.nombre_mostrar)] = sec; if (x.usuario) secDe[nrm(x.usuario)] = sec; });
+      } catch (e) { secDe = {}; }
+      const miosN = mios.map(nrm);
       const excluir = parseInt(b.excluir_id, 10) || 0;
       const items = [];
       rp.recordset.filter((x) => x.id !== excluir).forEach((x) => {
@@ -130,10 +140,10 @@ module.exports = async function (context, req) {
           por: s(x.creado_nombre, 200) || s(x.creado_por, 100), sector: s(x.creado_sector, 120), mio: mio, id: (mio || esAdm) ? x.id : undefined, codigo: (mio || esAdm) ? x.codigo : undefined });
       });
       rc.recordset.forEach((x) => {
-        const reg = s(x.registrado_por).toLowerCase(), sup = s(x.supervisor).toLowerCase();
-        const mio = mios.indexOf(reg) >= 0 || mios.indexOf(sup) >= 0;
-        items.push({ tipo: 'CASO', fecha: ymd(x.fecha_reporte || x.fecha_reg), motivo: s(x.motivo, 200), por: s(x.supervisor, 150) || s(x.registrado_por, 150),
-          sector: s(x.sector, 120), mio: mio, nro: (mio || esAdm) ? x.nro : undefined });
+        const reg = nrm(x.registrado_por);
+        const mio = !!reg && miosN.indexOf(reg) >= 0;
+        items.push({ tipo: 'CASO', fecha: ymd(x.fecha_reporte || x.fecha_reg), motivo: s(x.motivo, 200), por: s(x.registrado_por, 150) || s(x.supervisor, 150),
+          sector: secDe[reg] || s(x.sector, 120), mio: mio, nro: (mio || esAdm) ? x.nro : undefined });
       });
       items.sort((a, c) => String(c.fecha || '').localeCompare(String(a.fecha || '')));
       const tope = Math.min(Math.max(parseInt(b.tope, 10) || 5, 1), 20);
