@@ -32,6 +32,12 @@ module.exports = async function (context, req) {
       UNION ALL SELECT clave, CAST(valor AS NVARCHAR(100)) FROM dbo.CV_Estado WHERE clave IN ('tablas_casos', 'tablas_visitas')
       UNION ALL SELECT clave, marca FROM dbo.TH_Estado WHERE marca IS NOT NULL`);
     const marcas = {}; (r.recordset || []).forEach(x => { marcas[x.clave] = x.marca == null ? '' : String(x.marca); });
+    /* _AT_ELIMINADAS_VIVO_V1 (12-nov-2026): marca de BAJAS de atenciones (ultima copia 'eliminada…' del respaldo), para que las
+       demas pantallas quiten lo que otro usuario elimino. Va en consulta aparte: si falla, el resto del vigia sigue igual. */
+    try {
+      const e = await pool.request().query("SELECT COALESCE(MAX(rid), 0) AS m FROM dbo.Atenciones_Respaldo WHERE motivo LIKE 'eliminada%'");
+      marcas.at_eliminadas = String((e.recordset[0] && e.recordset[0].m) || 0);
+    } catch (eE) { /* sin la tabla o sin permiso: no hay marca, nada mas cambia */ }
     const body = { success: true, marcas, hoy: parseInt(marcas.atenciones_hoy || '0', 10) || 0, ms: Date.now() - t0 };
     _c = { ts: Date.now(), body };
     context.res = { status: 200, headers: { 'X-Cache': 'MISS' }, body };

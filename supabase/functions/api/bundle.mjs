@@ -62363,6 +62363,59 @@ var require_atenciones_editar = __commonJS({
   }
 });
 
+// atenciones-eliminadas/index.js
+var require_atenciones_eliminadas = __commonJS({
+  "atenciones-eliminadas/index.js"(exports, module) {
+    "use strict";
+    var { getPool } = require_db();
+    function token(req) {
+      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        return require_auth().verificarSoloRL(h.slice(7).trim());
+      } catch (e) {
+        return null;
+      }
+    }
+    var _c = { ts: 0, body: null };
+    module.exports = async function(context, req) {
+      const u = token(req);
+      if (!u || !u.usuario) {
+        context.res = { status: 401, body: { success: false, error: "Sin sesion valida" } };
+        return;
+      }
+      const t0 = Date.now();
+      if (_c.body && t0 - _c.ts < 15e3) {
+        context.res = { status: 200, headers: { "X-Cache": "HIT" }, body: _c.body };
+        return;
+      }
+      try {
+        const pool = await getPool();
+        const r = await pool.request().query(`SELECT TOP (400) rid, id, datos FROM dbo.Atenciones_Respaldo
+        WHERE motivo LIKE 'eliminada%' AND fecha >= DATEADD(day, -45, SYSUTCDATETIME()) ORDER BY rid DESC`);
+        const out = [];
+        let marca = 0;
+        (r.recordset || []).forEach((x) => {
+          if (x.rid > marca) marca = x.rid;
+          let d = {};
+          try {
+            d = JSON.parse(x.datos || "{}");
+          } catch (e) {
+            d = {};
+          }
+          out.push({ id: x.id, nro: d.nro == null ? null : d.nro, dni: String(d.dni == null ? "" : d.dni).trim() });
+        });
+        const body = { success: true, marca: String(marca), eliminadas: out, ms: Date.now() - t0 };
+        _c = { ts: Date.now(), body };
+        context.res = { status: 200, headers: { "X-Cache": "MISS" }, body };
+      } catch (e) {
+        context.log.error("atenciones-eliminadas: " + e.message);
+        context.res = { status: 500, body: { success: false, error: e.message } };
+      }
+    };
+  }
+});
+
 // atenciones-eliminar/index.js
 var require_atenciones_eliminar = __commonJS({
   "atenciones-eliminar/index.js"(exports, module) {
@@ -79206,6 +79259,11 @@ var require_vigia = __commonJS({
         (r.recordset || []).forEach((x) => {
           marcas[x.clave] = x.marca == null ? "" : String(x.marca);
         });
+        try {
+          const e = await pool.request().query("SELECT COALESCE(MAX(rid), 0) AS m FROM dbo.Atenciones_Respaldo WHERE motivo LIKE 'eliminada%'");
+          marcas.at_eliminadas = String(e.recordset[0] && e.recordset[0].m || 0);
+        } catch (eE) {
+        }
         const body = { success: true, marcas, hoy: parseInt(marcas.atenciones_hoy || "0", 10) || 0, ms: Date.now() - t0 };
         _c = { ts: Date.now(), body };
         context.res = { status: 200, headers: { "X-Cache": "MISS" }, body };
@@ -79232,6 +79290,7 @@ var require_rutas_edge = __commonJS({
       { fn: "atenciones-create", ruta: "atenciones", metodos: ["POST"], llave: true, h: require_atenciones_create() },
       { fn: "atenciones-depurar", ruta: "mantenimiento/atenciones/{accion}", metodos: ["GET", "POST"], llave: true, h: require_atenciones_depurar() },
       { fn: "atenciones-editar", ruta: "atenciones/editar", metodos: ["POST"], llave: false, h: require_atenciones_editar() },
+      { fn: "atenciones-eliminadas", ruta: "atenciones/eliminadas", metodos: ["GET", "POST"], llave: false, h: require_atenciones_eliminadas() },
       { fn: "atenciones-eliminar", ruta: "atenciones/eliminar", metodos: ["POST"], llave: false, h: require_atenciones_eliminar() },
       { fn: "atenciones-guardar", ruta: "atenciones/guardar", metodos: ["POST"], llave: false, h: require_atenciones_guardar() },
       { fn: "atenciones-guardar-admin", ruta: "mantenimiento/guardar/{accion}", metodos: ["GET", "POST"], llave: true, h: require_atenciones_guardar_admin() },
