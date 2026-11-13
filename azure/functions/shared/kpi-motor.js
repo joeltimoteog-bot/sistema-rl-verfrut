@@ -27,6 +27,11 @@ const TEMAS_ETI = ['CAPACITACIONES ETI', 'EVALUACIONES DE CHECKLIST', 'INGRESOS 
 const TEMA_OPCIONAL = 'REFORZAMIENTO';
 const HORA_CIERRE = '16:36';                          /* cierre de la jornada: hasta esa hora se registra lo del dia (decision de Joel, 30-set) */
 const DIAS_CONSULTA = 5;
+/* _KPI_A2_SUSPENDIDO_V1 (12-nov-2026, decision de Joel): el boton "Remitido a" no se esta usando (las 3 asistentes en 0%).
+   A2 queda SUSPENDIDO: se muestra como informativo y NO suma a la nota, hasta que las asistentes sean capacitadas.
+   Para reactivarlo: definir el secreto KPI_A2_ACTIVO_DESDE=aaaa-mm-dd -> A2 vuelve a sumar, midiendo SOLO las atenciones
+   registradas desde ese dia (lo anterior no se castiga). Sin ese secreto (o con una fecha invalida) sigue suspendido. */
+const a2ActivoDesde = () => { const v = String((typeof process !== 'undefined' && process.env && process.env.KPI_A2_ACTIVO_DESDE) || '').trim().slice(0, 10); return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : ''; };
 const A2_DESDE = '2026-10-26';                        /* _KPI_A2_V1: el boton "Remitir" existe desde el 25-oct-2026; A2 se mide desde el lunes 26 */                              /* A3: consulta EN PROCESO mas de 5 dias habiles = no atendida */
 
 /* Definicion oficial (texto tal cual del archivo de la empresa) */
@@ -521,10 +526,11 @@ function calcular(E) {
      Sin "Remitido a" y ya pasado el plazo = no cumple; dentro del plazo = pendiente (no cuenta). */
   function a2(ats) {
     const ev = []; let num = 0, den = 0, pend = 0;
+    const activo = a2ActivoDesde(), desdeA2 = activo && activo > A2_DESDE ? activo : A2_DESDE;   /* _KPI_A2_SUSPENDIDO_V1 */
     ats.forEach(a => {
       if (!a.fecha_registro) return;   /* sin hora de registro (antes de la migracion): no se evalua */
       const fr = String(a.fecha_registro).slice(0, 10), hReg = String(a.fecha_registro).slice(11, 16);
-      if (fr < A2_DESDE) return;   /* antes no existia la marca "Remitido a": no se evalua */
+      if (fr < desdeA2) return;   /* antes no existia la marca "Remitido a" (o el indicador aun no estaba activo): no se evalua */
       const fd = aFecha(fr); if (!fd) return;
       const limite = (!M.esHabil(fd) || (hReg && hReg > HORA_CIERRE)) ? ymd(M.sumarHabiles(fd, 1)) : fr;
       if (!enR(limite)) return;   /* cuenta en el dia en que debia remitirse */
@@ -537,10 +543,16 @@ function calcular(E) {
       else { pend++; return; }
       ev.push(e);
     });
+    if (!activo) {   /* _KPI_A2_SUSPENDIDO_V1: informativo, no suma ni resta */
+      return { estado: 'sin_datos', num: 0, den: 0, suspendido: true, info: { num, den },
+        evidencia: [{ ref: 'Indicador suspendido (informativo)', ok: null, resumen: true,
+          detalle: 'Desde el ' + dm(A2_DESDE) + ': ' + num + ' de ' + den + ' atenciones se marcaron "Remitido a" el mismo día hábil. No suma ni resta a la nota mientras esté suspendido.' }],
+        nota_def: 'Suspendido por decisión del Coordinador (12-nov-2026) hasta capacitar en el uso del botón 📤 "Remitido a". No suma ni resta a la nota. Al reactivarse se medirán solo las atenciones registradas desde esa fecha.' };
+    }
     if (den) ev.unshift({ ref: 'Documentación remitida el mismo día', ok: true, resumen: true, detalle: num + ' de ' + den + ' atenciones se remitieron a su área el mismo día hábil del registro (hasta las ' + HORA_CIERRE + ').' });
     if (pend) ev.push({ ref: 'Pendientes de remitir', ok: null, resumen: true, detalle: pend + ' atención(es) registradas hoy, aún dentro del plazo para remitir.' });
     return { estado: den ? 'ok' : 'sin_datos', num, den, evidencia: ev,
-      nota_def: den ? undefined : 'Se mide desde el ' + dm(A2_DESDE) + ': cada atención registrada debe marcarse "Remitido a (área)" (botón 📤 en Mis Atenciones) el mismo día hábil, hasta las ' + HORA_CIERRE + '.' };
+      nota_def: den ? undefined : 'Se mide desde el ' + dm(desdeA2) + ': cada atención registrada debe marcarse "Remitido a (área)" (botón 📤 en Mis Atenciones) el mismo día hábil, hasta las ' + HORA_CIERRE + '.' };
   }
   /* _KPI_A4_V1: capacitaciones planificadas por la empresa (KPI_CapPlan, las registra el Coordinador) vs asistencia real
      (dbo.Cap_Asistentes: su DNI figura como asistente en una capacitacion de esa fecha). */

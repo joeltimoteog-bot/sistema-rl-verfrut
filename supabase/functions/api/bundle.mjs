@@ -68852,6 +68852,10 @@ var require_kpi_motor = __commonJS({
     var TEMA_OPCIONAL = "REFORZAMIENTO";
     var HORA_CIERRE = "16:36";
     var DIAS_CONSULTA = 5;
+    var a2ActivoDesde = () => {
+      const v = String(typeof process !== "undefined" && process.env && process.env.KPI_A2_ACTIVO_DESDE || "").trim().slice(0, 10);
+      return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
+    };
     var A2_DESDE = "2026-10-26";
     var DEF = {
       SUP: [
@@ -69562,10 +69566,11 @@ var require_kpi_motor = __commonJS({
       function a2(ats) {
         const ev = [];
         let num = 0, den = 0, pend = 0;
+        const activo = a2ActivoDesde(), desdeA2 = activo && activo > A2_DESDE ? activo : A2_DESDE;
         ats.forEach((a) => {
           if (!a.fecha_registro) return;
           const fr = String(a.fecha_registro).slice(0, 10), hReg = String(a.fecha_registro).slice(11, 16);
-          if (fr < A2_DESDE) return;
+          if (fr < desdeA2) return;
           const fd = aFecha(fr);
           if (!fd) return;
           const limite = !M.esHabil(fd) || hReg && hReg > HORA_CIERRE ? ymd(M.sumarHabiles(fd, 1)) : fr;
@@ -69587,6 +69592,22 @@ var require_kpi_motor = __commonJS({
           }
           ev.push(e);
         });
+        if (!activo) {
+          return {
+            estado: "sin_datos",
+            num: 0,
+            den: 0,
+            suspendido: true,
+            info: { num, den },
+            evidencia: [{
+              ref: "Indicador suspendido (informativo)",
+              ok: null,
+              resumen: true,
+              detalle: "Desde el " + dm(A2_DESDE) + ": " + num + " de " + den + ' atenciones se marcaron "Remitido a" el mismo d\xEDa h\xE1bil. No suma ni resta a la nota mientras est\xE9 suspendido.'
+            }],
+            nota_def: 'Suspendido por decisi\xF3n del Coordinador (12-nov-2026) hasta capacitar en el uso del bot\xF3n \u{1F4E4} "Remitido a". No suma ni resta a la nota. Al reactivarse se medir\xE1n solo las atenciones registradas desde esa fecha.'
+          };
+        }
         if (den) ev.unshift({ ref: "Documentaci\xF3n remitida el mismo d\xEDa", ok: true, resumen: true, detalle: num + " de " + den + " atenciones se remitieron a su \xE1rea el mismo d\xEDa h\xE1bil del registro (hasta las " + HORA_CIERRE + ")." });
         if (pend) ev.push({ ref: "Pendientes de remitir", ok: null, resumen: true, detalle: pend + " atenci\xF3n(es) registradas hoy, a\xFAn dentro del plazo para remitir." });
         return {
@@ -69594,7 +69615,7 @@ var require_kpi_motor = __commonJS({
           num,
           den,
           evidencia: ev,
-          nota_def: den ? void 0 : "Se mide desde el " + dm(A2_DESDE) + ': cada atenci\xF3n registrada debe marcarse "Remitido a (\xE1rea)" (bot\xF3n \u{1F4E4} en Mis Atenciones) el mismo d\xEDa h\xE1bil, hasta las ' + HORA_CIERRE + "."
+          nota_def: den ? void 0 : "Se mide desde el " + dm(desdeA2) + ': cada atenci\xF3n registrada debe marcarse "Remitido a (\xE1rea)" (bot\xF3n \u{1F4E4} en Mis Atenciones) el mismo d\xEDa h\xE1bil, hasta las ' + HORA_CIERRE + "."
         };
       }
       function a4(p, u) {

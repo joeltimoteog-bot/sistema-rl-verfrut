@@ -307,7 +307,7 @@ async function subirArchivoAzure(file, carpeta, msgElId, meta) {
 
   function chip(k) {
     if (!k || k.estado === 'pendiente') return '<span class="chip np">—<small>dic-2026</small></span>';
-    if (k.estado === 'sin_datos') return '<span class="chip np">—<small>sin datos</small></span>';
+    if (k.estado === 'sin_datos') return '<span class="chip np">—<small>' + (k.suspendido ? 'suspendido' : 'sin datos') + '</small></span>';   /* _KPI_A2_SUSPENDIDO_V1 (12-nov) */
     if (k.estado === 'en_evaluacion') return '<span class="chip np">—<small>en evaluación</small></span>';
     if (k.codigo === 'K4') return '<span class="chip n' + k.nivel + '">' + k.nota_curso + '<small>Nivel ' + k.nivel + '</small></span>';
     return '<span class="chip n' + k.nivel + '"' + (k.den < MUESTRA_MIN ? ' title="Muestra pequeña: solo ' + k.den + ' registro(s). El nivel puede cambiar mucho con el próximo registro."' : '') + '>' + pct(k.pct) + '<small>' + k.num + '/' + k.den + ' · N' + k.nivel + (k.den < MUESTRA_MIN ? ' · ⚠ muestra pequeña' : '') + '</small></span>';
