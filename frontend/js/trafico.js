@@ -143,7 +143,7 @@ window.RLTrafico = window.RLTrafico || (function () {
       var tk = sessionStorage.getItem('rl_token'); if (!tk || !mod) return;
       var kk = '_act_' + mod, u0 = Number(sessionStorage.getItem(kk) || 0);
       if (Date.now() - u0 < 45000) return; sessionStorage.setItem(kk, String(Date.now()));
-      (nativoF || window.fetch)('https://rl-fn-verfrut.azurewebsites.net/api/actividad/ingreso', { method: 'POST', keepalive: true,
+      (nativoF || window.fetch)('https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/actividad/ingreso'   /* _SIN_AZURE_V2 (12-nov-2026): directo a Supabase (antes la direccion de Azure, que reescribia el enrutador) */, { method: 'POST', keepalive: true,
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk }, body: JSON.stringify({ sistema: 'RR.LL.', modulo: mod }) }).catch(function () {});
     } catch (e) {}
   }
