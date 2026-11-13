@@ -70808,6 +70808,27 @@ var require_horas_escritura = __commonJS({
               if (!(jornadaEsp > 0)) return { success: false, error: "El " + String(r.fechaEntrada).substring(0, 10).split("-").reverse().join("/") + " no tiene jornada (domingo o d\xEDa de descanso): un permiso ese d\xEDa no descuenta horas. Revisa la fecha." };
               if (pedidas > jornadaEsp) pedidas = r2(jornadaEsp);
             }
+            let notaTope = "";
+            if (motivo === "permiso" && r.fechaEntrada) {
+              const feP = String(r.fechaEntrada).substring(0, 10);
+              if (!r.fechaSalida || String(r.fechaSalida).substring(0, 10) === feP) {
+                let yaP = 0;
+                todas().forEach((x) => {
+                  if (normDni(x[3]) !== normDni(r.dni)) return;
+                  if ((x[20] ? S(x[20]) : "").toLowerCase() === "rechazado") return;
+                  if (norm(esD(x[16]) ? x[16].$s : x[16]) !== "permiso") return;
+                  if (hjFecha(x[7]) !== feP) return;
+                  yaP += (N(x[14]) || 0) + (N(x[15]) || 0);
+                });
+                yaP = r2(yaP);
+                const libreP = r2(jornadaEsp - yaP);
+                if (yaP > 0 && libreP < 0.01) return { success: false, error: "El " + feP.split("-").reverse().join("/") + " este trabajador ya tiene " + yaP.toFixed(2) + " h de permiso registradas, que cubren la jornada del d\xEDa (" + r2(jornadaEsp).toFixed(2) + " h). No se registr\xF3 otro permiso." };
+                if (yaP > 0 && pedidas > libreP) {
+                  notaTope = " - Tope diario: ya ten\xEDa " + yaP.toFixed(2) + "h de permiso ese d\xEDa; se cobran solo " + libreP.toFixed(2) + "h (jornada " + r2(jornadaEsp).toFixed(2) + "h)";
+                  pedidas = libreP;
+                }
+              }
+            }
             const dias = r.fechaEntrada && r.fechaSalida ? Math.floor((new Date(r.fechaSalida) - new Date(r.fechaEntrada)) / (24 * 60 * 60 * 1e3)) + 1 : 1;
             if (dias >= 2) {
               alerta = "OBSERVADO: Permiso por " + dias + " d\xEDa(s). Requiere validaci\xF3n.";
@@ -70816,6 +70837,7 @@ var require_horas_escritura = __commonJS({
               alerta = "OBSERVADO: Permiso excede 12 horas. Revisar autorizaci\xF3n.";
               estado = "pendiente";
             } else alerta = "Permiso registrado";
+            alerta += notaTope;
             const s = saldo(r.dni);
             if (s.saldo >= pedidas) {
               horasPermiso = pedidas;

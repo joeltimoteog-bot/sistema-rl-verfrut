@@ -169,10 +169,32 @@ function crear(ctx) {
           if (!(jornadaEsp > 0)) return { success: false, error: 'El ' + String(r.fechaEntrada).substring(0, 10).split('-').reverse().join('/') + ' no tiene jornada (domingo o día de descanso): un permiso ese día no descuenta horas. Revisa la fecha.' };
           if (pedidas > jornadaEsp) pedidas = r2(jornadaEsp);
         }
+        /* _HORAS_PERMISO_TOPE_DIA_V1 (13-nov-2026): tope DIARIO de permisos. Los permisos de un mismo trabajador en un mismo dia,
+           sumados, nunca descuentan mas que la jornada de ese dia (antes el tope era por registro: dos permisos el mismo dia
+           podian cobrar mas de una jornada). Si el dia ya esta cubierto se rechaza; si queda una parte, solo se cobra lo que falta. */
+        let notaTope = '';
+        if (motivo === 'permiso' && r.fechaEntrada) {
+          const feP = String(r.fechaEntrada).substring(0, 10);
+          if (!r.fechaSalida || String(r.fechaSalida).substring(0, 10) === feP) {
+            let yaP = 0;
+            todas().forEach(x => {
+              if (normDni(x[3]) !== normDni(r.dni)) return;
+              if ((x[20] ? S(x[20]) : '').toLowerCase() === 'rechazado') return;
+              if (norm(esD(x[16]) ? x[16].$s : x[16]) !== 'permiso') return;
+              if (hjFecha(x[7]) !== feP) return;
+              yaP += (N(x[14]) || 0) + (N(x[15]) || 0);
+            });
+            yaP = r2(yaP);
+            const libreP = r2(jornadaEsp - yaP);
+            if (yaP > 0 && libreP < 0.01) return { success: false, error: 'El ' + feP.split('-').reverse().join('/') + ' este trabajador ya tiene ' + yaP.toFixed(2) + ' h de permiso registradas, que cubren la jornada del día (' + r2(jornadaEsp).toFixed(2) + ' h). No se registró otro permiso.' };
+            if (yaP > 0 && pedidas > libreP) { notaTope = ' - Tope diario: ya tenía ' + yaP.toFixed(2) + 'h de permiso ese día; se cobran solo ' + libreP.toFixed(2) + 'h (jornada ' + r2(jornadaEsp).toFixed(2) + 'h)'; pedidas = libreP; }
+          }
+        }
         const dias = (r.fechaEntrada && r.fechaSalida) ? Math.floor((new Date(r.fechaSalida) - new Date(r.fechaEntrada)) / (24 * 60 * 60 * 1000)) + 1 : 1;
         if (dias >= 2) { alerta = 'OBSERVADO: Permiso por ' + dias + ' día(s). Requiere validación.'; estado = 'pendiente'; }
         else if (pedidas > 12) { alerta = 'OBSERVADO: Permiso excede 12 horas. Revisar autorización.'; estado = 'pendiente'; }
         else alerta = 'Permiso registrado';
+        alerta += notaTope;
         const s = saldo(r.dni);
         if (s.saldo >= pedidas) { horasPermiso = pedidas; horasDeuda = 0; alerta += ' - Cubierto con saldo (' + s.saldo.toFixed(2) + 'h disponibles)'; }
         else if (s.saldo > 0) { horasPermiso = s.saldo; horasDeuda = r2(pedidas - s.saldo); alerta += ' - ' + s.saldo.toFixed(2) + 'h del saldo + ' + horasDeuda.toFixed(2) + 'h de deuda'; }
