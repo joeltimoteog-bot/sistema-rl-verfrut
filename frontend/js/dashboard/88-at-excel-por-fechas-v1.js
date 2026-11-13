@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   88-at-excel-por-fechas-v1.js — _AT_EXCEL_FECHAS_V1 (13-nov-2026)
+   88-at-excel-por-fechas-v1.js — _AT_EXCEL_FECHAS_V1 / V2 (13-nov-2026)
    Boton "📥 Excel por fechas" en Mis Atenciones: descarga TODAS las atenciones de un rango
    de fechas, pedidas completas a Supabase (no depende de lo que este cargado en pantalla).
    ---------------------------------------------------------------------------
@@ -9,7 +9,7 @@
    Como: pide /atenciones?desde&hasta de 1000 en 1000 (la misma consulta de solo lectura que
    usa el Reporte por rango), y SOLO genera el Excel si el numero de filas recibidas es igual
    al total que informa el servidor y no hay repetidas. Si no cuadra, no descarga nada y avisa.
-   Quien lo ve: solo los roles que ya ven todas las atenciones (ROLES_VER_TODO). No amplia permisos.
+   Quien lo ve: TODOS los usuarios con sesion (V2, decision de Joel del 13-nov: las atenciones son generales).
    Usa las mismas columnas y el mismo generador que el Excel de siempre (COLS_AT_TODAS, exportarExcelGen).
    No guarda ni cambia nada. Funciona tambien con el modulo bloqueado (es solo lectura).
    Apagar en un equipo: localStorage.rl_at_excel_fechas = 'off'.
@@ -23,8 +23,10 @@
   var dos = function (n) { return (n < 10 ? '0' : '') + n; };
   var ymd = function (d) { return d.getFullYear() + '-' + dos(d.getMonth() + 1) + '-' + dos(d.getDate()); };
   var dmy = function (s) { return s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4); };
+  /* _AT_EXCEL_FECHAS_V2 (13-nov, decision de Joel): la descarga es para TODOS los usuarios con sesion
+     (las atenciones son generales). Antes era solo para los roles que ven todo. */
   function veTodo() {
-    try { return typeof ROLES_VER_TODO !== 'undefined' && typeof USER !== 'undefined' && USER && ROLES_VER_TODO.indexOf(USER.rol) >= 0; } catch (e) { return false; }
+    try { return typeof USER !== 'undefined' && !!USER && !!String(USER.usuario || '').trim(); } catch (e) { return false; }
   }
   function aviso(t, tipo) { try { if (typeof mostrarToast === 'function') return mostrarToast(t, tipo || 'info'); } catch (e) {} try { console.log('[_AT_EXCEL_FECHAS_V1] ' + t); } catch (e2) {} }
 
@@ -68,7 +70,7 @@
 
   function cerrar() { var o = document.getElementById(ID_OV); if (o) o.remove(); }
   function abrir() {
-    if (!veTodo()) return aviso('Esta descarga es solo para Coordinación y Administración.', 'error');
+    if (!veTodo()) return aviso('Ingresa al sistema para descargar.', 'error');
     cerrar();
     var hoy = new Date(), ini = ymd(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() <= 15 ? 1 : 16));
     var o = document.createElement('div'); o.id = ID_OV;
