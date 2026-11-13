@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   86-auto-actualizar-v1.js — _AUTO_ACTUALIZAR_V1 (12-nov-2026)
+   86-auto-actualizar-v1.js — _AUTO_ACTUALIZAR_V1 / V2 (12-nov-2026)
    El sistema se actualiza SOLO cuando se publica una version nueva: el usuario ya no tiene
    que pulsar Ctrl + Shift + R.
    ---------------------------------------------------------------------------
@@ -31,11 +31,16 @@
 
   var conVersion = function (s) { return /[?&]v=[^&]+/.test(s || ''); };
   function srcsDe(doc) { return Array.prototype.slice.call(doc.querySelectorAll('script[src]')).map(function (s) { return s.getAttribute('src') || ''; }).filter(conVersion); }
-  /* lo que ESTA pestaña cargo (se toma una vez, al inicio: los que el codigo agregue despues no cuentan) */
-  var mios = {}; srcsDe(document).forEach(function (s) { mios[s] = 1; });
+  /* lo que ESTA pestaña cargo. _AUTO_ACTUALIZAR_V2 (12-nov): se toma cuando la pagina TERMINO de leerse.
+     Antes se tomaba al ejecutarse este archivo, y los <script> que van DESPUES de el en la pagina todavia
+     no existian: se contaban como "nuevos" y el aviso de version nueva salia siempre. */
+  var mios = null;
+  function tomarMios() { if (mios) return; var m = {}; srcsDe(document).forEach(function (s) { m[s] = 1; }); mios = m; }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', tomarMios); else tomarMios();
 
   function sinCache(metodo) { return fetch(PAG, { method: metodo, cache: 'no-store', credentials: 'same-origin' }); }
   async function comparar() {
+    if (!mios) return false;   /* la pagina aun no termina de cargar */
     var r = await sinCache('GET'); if (!r.ok) return false;
     var e = r.headers.get('etag') || r.headers.get('last-modified'); if (e) etag = e;
     var doc = new DOMParser().parseFromString(await r.text(), 'text/html');

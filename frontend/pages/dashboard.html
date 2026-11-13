@@ -2225,7 +2225,12 @@ h3{font-size:16px !important}
 <script src="../js/dashboard/83-at-bloqueo-v1.js?v=2"></script>   <!-- _AT_BLOQUEO_V1 (12-nov): bloqueo temporal del Registro de Atenciones por cierre de quincena / de mes (apagar la pantalla: localStorage.rl_at_bloqueo="off") -->
 <script src="../js/dashboard/84-at-eliminar-supabase-v1.js?v=1"></script>   <!-- _AT_ELIMINAR_SUPABASE_V1 (12-nov): eliminar atencion borra primero y de verdad en Supabase (apagar: localStorage.rl_at_eliminar="off") -->
 <script src="../js/dashboard/85-at-eliminadas-vivo-v1.js?v=1"></script>   <!-- _AT_ELIMINADAS_VIVO_V1 (12-nov): lo que un usuario elimina desaparece tambien de la pantalla de los demas (apagar: localStorage.rl_at_elim_vivo="off") -->
-<script src="../js/dashboard/86-auto-actualizar-v1.js?v=1"></script>   <!-- _AUTO_ACTUALIZAR_V1 (12-nov): el sistema se actualiza solo cuando se publica una version nueva, sin Ctrl+Shift+R (apagar: localStorage.rl_auto_act="off") -->
+<style id="atElimRojoV1">/* _AT_ELIMINAR_ROJO_V1 (12-nov): el boton Eliminar de Atenciones se ve claro: rojo con un tacho blanco (solo presentacion) */
+html body button.btn-a.bd[onclick^="eliminarAt("]{background:#dc2626!important;border:1px solid #b91c1c!important;color:#fff!important;font-size:0!important;line-height:0!important;padding:5px 8px!important;vertical-align:middle;display:inline-flex!important;align-items:center;justify-content:center;min-width:28px;min-height:24px}
+html body button.btn-a.bd[onclick^="eliminarAt("]::before{content:"";display:block;width:14px;height:14px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M8 6V4h8v2'/%3E%3Cpath d='M6 6l1 14h10l1-14'/%3E%3Cpath d='M10 11v5M14 11v5'/%3E%3C/svg%3E") center/contain no-repeat}
+html body button.btn-a.bd[onclick^="eliminarAt("]:hover{background:#b91c1c!important;border-color:#991b1b!important}
+</style>
+<script src="../js/dashboard/86-auto-actualizar-v1.js?v=2"></script>   <!-- _AUTO_ACTUALIZAR_V1 (12-nov): el sistema se actualiza solo cuando se publica una version nueva, sin Ctrl+Shift+R (apagar: localStorage.rl_auto_act="off") -->
 <script src="../js/tema-corporativo.js?v=6"></script>   <!-- _TEMA_CORP_V1 (01-nov): tema corporativo (solo presentacion; apagar con localStorage rl_tema_corp=off) -->
 <script src="../js/ui-piel.js?v=1"></script>  <!-- _UI_PIEL_V1 (15-oct): piel moderna (tablas, modales, Mis Atenciones, menu agrupado) -->
 <script src="../js/visitas-ui.js?v=1"></script>  <!-- _VISITAS_UI_V2 (16-oct): Visitas de Campo modernizado (solo presentacion) -->
