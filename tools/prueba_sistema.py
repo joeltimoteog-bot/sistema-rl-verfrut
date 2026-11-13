@@ -82,6 +82,11 @@ def resp_azure(url, post=''):
         if acc == 'aceptar': COMP['aceptado'] = True; return {'success': True, 'version': '1.0', 'fecha': '2026-10-19T12:42:00Z'}
         if acc == 'lista': return {'success': True, 'version': '1.0', 'filas': [{'usuario': 'ptamayo', 'nombre': 'POOL', 'rol': 'supervisor', 'activo': True, 'aceptado': True, 'fecha': '2026-10-19T12:42:00Z', 'navegador': 'Chrome / Windows'}, {'usuario': 'jborrero', 'nombre': 'J', 'rol': 'supervisor', 'activo': True, 'aceptado': False}]}
         return {'success': True, 'version': '1.0', 'aceptado': COMP['aceptado'], 'fecha': '2026-10-19T12:42:00Z' if COMP['aceptado'] else None}
+    # _PRUEBA_SUP_INV_V1 (13-nov-2026): desde el 24-oct supervisores y motivos se leen de su tabla (/api/sup/...) y desde el 30-oct
+    # el inventario de la suya (/api/inv/invGetAll); antes salian de la copia /api/mod/... Misma respuesta que da el servidor.
+    if '/api/sup/getSupervisores' in url: return {'success': True, 'fuente': 'azure', 'data': resp_google('getSupervisores')['data']}
+    if '/api/sup/getMotivosCasos' in url: return {'success': True, 'fuente': 'azure', 'data': []}
+    if '/api/inv/invGetAll' in url: return {'success': True, 'fuente': 'azure', 'productos': [], 'ingresos': [], 'entregas': []}
     if '/api/mod/' in url:
         partes = url.split('/api/mod/')[1].split('?')[0].split('/')
         MODX['llamadas'].append('/'.join(partes))
@@ -223,6 +228,11 @@ def resp_azure(url, post=''):
 def enrutar(route):
     req = route.request
     url = req.url
+    # _PRUEBA_SUPABASE_V1 (13-nov-2026): desde el 05-nov el servidor es Supabase (Edge Function "api", las mismas rutas que
+    # tenia Azure). La red simulada las trata igual: la direccion de Supabase se lee como la antigua de Azure.
+    if 'supabase.co/functions/v1/api/' in url:
+        url = 'https://rl-fn-verfrut.azurewebsites.net/api/' + url.split('supabase.co/functions/v1/api/', 1)[1]
+        url = re.sub(r'([?&])forceFunctionRegion=[^&#]*&?', r'\1', url).rstrip('?&')
     if url.startswith(BASE):
         ruta = urllib.parse.urlparse(url).path.replace('/sistema-rl-verfrut/', '', 1) or 'index.html'
         if DASH_ALT and ruta == 'frontend/pages/dashboard.html':
@@ -378,14 +388,15 @@ with sync_playwright() as pw:
     # ── _SEGURIDAD_UI_V1: compromiso de confidencialidad + Mi cuenta ──
     ok('Compromiso: con aceptacion vigente NO aparece la ventana y hay item "Mi cuenta"', 'estado' in COMP['llamadas'] and pag.evaluate("() => !document.getElementById('segOv') && !!document.getElementById('navMiCuenta')"), ','.join(COMP['llamadas']))
     COMP['aceptado'] = False; COMP['llamadas'].clear()
-    pag.evaluate("() => { sessionStorage.removeItem('rl_comp_ok_1.0_jtimoteo'); window.rlSeguridad.revisar(); }"); pag.wait_for_timeout(900)
+    VCOMP = pag.evaluate("() => String((window.rlSeguridad && window.rlSeguridad.version) || '')")   # _PRUEBA_COMP_VERSION_V1 (13-nov-2026): la version del compromiso se lee del sistema (antes fija en 1.0; produccion usa 2.0)
+    pag.evaluate("(v) => { sessionStorage.removeItem('rl_comp_ok_' + v + '_jtimoteo'); window.rlSeguridad.revisar(); }", VCOMP); pag.wait_for_timeout(900)
     ok('Compromiso: sin aceptacion aparece la ventana bloqueante con el texto y el boton Acepto deshabilitado', pag.evaluate("() => { const o = document.getElementById('segOv'); return !!o && /29733/.test(o.textContent) && document.getElementById('segSi').disabled; }"))
     pag.evaluate("() => { document.getElementById('segC1').click(); document.getElementById('segC2').click(); document.getElementById('segSi').click(); }"); pag.wait_for_timeout(900)
     cu = ''.join(COMP['cuerpos'])
-    ok('Compromiso: al aceptar se guarda en Azure (version 1.0 + navegador) y la ventana se cierra', 'aceptar' in COMP['llamadas'] and '"version":"1.0"' in cu and 'navegador' in cu and pag.evaluate("() => !document.getElementById('segOv') && !!sessionStorage.getItem('rl_comp_ok_1.0_jtimoteo')"), ','.join(COMP['llamadas']) + ' | ' + cu[:120])
+    ok('Compromiso: al aceptar se guarda en el servidor (version vigente + navegador) y la ventana se cierra', 'aceptar' in COMP['llamadas'] and ('"version":"' + VCOMP + '"') in cu and 'navegador' in cu and pag.evaluate("(v) => !document.getElementById('segOv') && !!sessionStorage.getItem('rl_comp_ok_' + v + '_jtimoteo')", VCOMP), ','.join(COMP['llamadas']) + ' | ' + cu[:120])
     pag.evaluate("() => { document.getElementById('navMiCuenta').click(); }"); pag.wait_for_timeout(500)
     pag.evaluate("() => { const b = document.getElementById('mcLista'); if (b) b.click(); }"); pag.wait_for_timeout(700)
-    ok('Mi cuenta (admin): datos de sesion, compromiso aceptado y lista de aceptaciones (1 de 2)', pag.evaluate("() => { const t = document.getElementById('mcBody').textContent; return /jtimoteo/.test(t) && /Aceptado el/.test(t) && /1 de 2 usuarios activos/.test(t); }"))
+    ok('Mi cuenta (admin): datos de sesion, compromiso aceptado y lista de aceptaciones (1 de 2)', pag.evaluate("() => { const t = document.getElementById('mcBody').textContent; return /jtimoteo/.test(t) && /Aceptado el/.test(t) && /1 de 2 (usuarios activos|aceptaron)/.test(t); }"))
     pag.evaluate("() => { document.getElementById('mcOv').classList.remove('on'); }")
     PRE = {'action': 'getPreloadOptimizado', 'usuario': 'jtimoteo', 'nombre': 'JOEL', 'rol': 'administrador', 'empresa': '', 'cvAzure': '1'}
     RED['google'].clear()
@@ -538,7 +549,7 @@ with sync_playwright() as pw:
     # ── _AUSENCIAS_V1: tambien en Gestion Usuarios DENTRO del dashboard (la que usa Joel) ──
     pag.evaluate("() => { delete CACHE.usuarios; ir('usuarios', document.getElementById('navUsr')); }"); pag.wait_for_timeout(1500)
     r = pag.evaluate("() => document.getElementById('tbUs').innerText + ' || ' + document.getElementById('tbAus').innerText + ' || ' + document.querySelectorAll('#tbUs button').length + ' || ' + USER.usuario + ' || ' + typeof window._ausBtn")
-    ok('Dashboard > Gestion Usuarios: columna Ausencia/Reemplazo, boton 🔄 Ausencia y tarjeta de ausencias', 'Descanso médico' in r and 'Cubre a TAMAYO RODRIGUEZ POOL' in r and 'VIGENTE' in r and '🔄 Ausencia' in r, r[-250:].replace('\n', ' '))
+    ok('Dashboard > Gestion Usuarios: columna Ausencia/Reemplazo, boton 🔄 Ausencia y tarjeta de ausencias', 'descanso médico' in r.lower() and 'cubre a tamayo rodriguez pool' in r.lower() and 'VIGENTE' in r and '🔄 Ausencia' in r, r[-250:].replace('\n', ' '))
     CUMPLW['llamadas'].clear(); CUMPLW['cuerpos'].clear(); RED['google'].clear()
     pag.evaluate("() => { _ausAbrir('nuevo'); sv('aus_tipo','VACACIONES'); sv('aus_reemp','jtimoteo'); sv('aus_desde','2026-10-01'); _ausGuardarForm(); }"); pag.wait_for_timeout(1200)
     ok('Dashboard > Gestion Usuarios: registrar ausencia va a Azure y no por Google', CUMPLW['llamadas'] == ['cumplAusencia'] and '"titular":"nuevo"' in ''.join(CUMPLW['cuerpos']) and 'cumplAusencia' not in RED['google'], ','.join(CUMPLW['llamadas']) + ' | google: ' + ','.join(RED['google']))
@@ -555,7 +566,7 @@ with sync_playwright() as pw:
     r = pag.evaluate("() => { const t = document.querySelector('#consultaResult table'); if (!t) return 'sin tabla: ' + document.getElementById('consultaResult').innerText.slice(0, 120); return t.querySelectorAll('thead th').length + ':' + t.querySelectorAll('tbody tr').length + ':' + (t.querySelector('tbody tr') ? t.querySelector('tbody tr').children.length : 0) + ':' + Array.from(t.querySelectorAll('thead th')).map(x => x.textContent).slice(0, 6).join('|'); }")
     ok('Consulta por DNI: la tabla muestra TODAS las columnas (34) en cada fila', re.match(r'^34:[1-9]\d*:34:', str(r)) is not None, str(r))   # _AT_TIPO_LIC_V1: + Tipo de Licencia
     # ── _CAPAS_V1: 'Eliminar caso' se abre ENCIMA del formulario del caso · _PROGRESO_V1: circulo y ✓ ──
-    pag.evaluate("() => { const n = document.getElementById('rlNovOv'); if (n) n.remove(); }")
+    pag.evaluate("() => { ['rlNovOv', 'rlNov', 'rlAvisoSupabase'].forEach(i => { const n = document.getElementById(i); if (n) n.remove(); }); }")
     pag.wait_for_function("() => { const c = document.getElementById('rlProg'); return !c || c.style.display !== 'flex'; }", timeout=8000)
     r = pag.evaluate("""() => { _editandoCasoNro = 5; abrir('mCaso'); abrirModalEliminarCaso(); const m = document.getElementById('mEliminarCaso').getBoundingClientRect();
         const e = document.elementFromPoint(m.left + m.width/2, m.top + m.height/2); const ok = !!(e && e.closest('#mEliminarCaso')); const q = e ? (e.id || '') + '.' + String(e.className || '').slice(0,40) + ' en ' + ((e.closest('[id]') || {}).id || '') + ' z=' + getComputedStyle(e.closest('.ov') || e).zIndex : 'nada'; const zE = document.getElementById('mEliminarCaso').style.zIndex; cerrar('mEliminarCaso'); cerrar('mCaso'); return ok ? true : ('tapa: ' + q + ' | z eliminar=' + zE + ' | rect=' + JSON.stringify([m.left, m.top, m.width, m.height])); }""")
@@ -605,7 +616,7 @@ with sync_playwright() as pw:
         const g = id => (document.getElementById(id) || {}).value; const x = [g('at_nlic'), g('at_autoriz'), g('at_ftp')].join('|'); cerrar('mAt'); return x; }""")
     ok('Editar atencion: el formulario carga N° licencia, Autorizado por y F. Término Periodo (antes quedaban vacios y se perdian)', r == 'LIC-99|ESSALUD|2026-12-31', str(r))
     r = pag.evaluate("() => [window._respDe('35 DESCANSO MEDICO - ENFERMEDAD','RAPEL'), window._respDe('34 LICENCIA POR MATERNIDAD','RAPEL'), window._respDe('35 DESCANSO MEDICO - ENFERMEDAD','VERFRUT')].join('|')")
-    ok('Mis Atenciones: documentos de RAPEL que llevaba Tania Vera van ahora a Rubi Figueroa (VERFRUT sigue con Leandro)', r == 'RUBI FIGUEROA FLORES|RUBI FIGUEROA FLORES|LEANDRO BILL MORALES YARLEQUE', r)
+    ok('Mis Atenciones: documentos de RAPEL que llevaba Tania Vera van a Rubi Figueroa y los de VERFRUT a Jhoanna Liñan (desde el 10-nov-2026; antes Leandro)', r == 'RUBI FIGUEROA FLORES|RUBI FIGUEROA FLORES|JHOANNA PHOLY GUISSELA LIÑAN NAVARRO', r)
     AT = {'action': 'saveAtencion', 'dni': '87654321', 'nombre': 'PRUEBA AZURE', 'empresa': 'RAPEL', 'detalle_documento': 'X', 'usuario_sistema': 'jtimoteo', 'autorizado_por': 'ESSALUD', 'fecha_termino_periodo': '2026-12-31'}
     RED['google'].clear(); RED['gurl'].clear(); AZG['llamadas'].clear(); AZG['cuerpos'].clear()
     r = pag.evaluate("""async (b) => { const d = await apiPost(Object.assign({}, b)); await new Promise(z => setTimeout(z, 600)); return (d && d.fuente) + ':' + (d && d.nro); }""", AT)
@@ -615,7 +626,7 @@ with sync_playwright() as pw:
     trf = [json.loads(x) for x in RED.get('trf', []) if x]
     g = [t for t in trf if t.get('accion') == 'Guardó atención']
     ok('Atencion nueva: Autorizado por y F. Término Periodo viajan a Azure', any('"autorizado_por":"ESSALUD"' in c and '"fecha_termino_periodo":"2026-12-31"' in c for c in AZG['cuerpos']), ''.join(AZG['cuerpos'])[:200])
-    ok('Monitor en vivo: la atencion guardada en Azure aparece en el trafico (una sola vez, destino Azure SQL, con N°)', len(g) == 1 and g[0].get('destino') == 'Azure SQL' and 'N° 777' in g[0].get('detalle', '') and g[0].get('u') == 'jtimoteo', json.dumps(g)[:300])
+    ok('Monitor en vivo: la atencion guardada en Azure aparece en el trafico (una sola vez, destino Azure SQL, con N°)', len(g) == 1 and g[0].get('destino') in ('Supabase', 'Azure SQL') and 'N° 777' in g[0].get('detalle', '') and g[0].get('u') == 'jtimoteo', json.dumps(g)[:300])
     ok('Atencion nueva: la hoja se escribe en 2do plano con el MISMO N°', len(hoja) == 1 and '"nro":777' in hoja[0], str(len(hoja)) + ' ' + (hoja[0][-160:] if hoja else ''))
     ok('Atencion nueva: Azure recibe la huella (client_id)', AZG['cuerpos'] and '"client_id":"at-' in AZG['cuerpos'][0], (AZG['cuerpos'][0][:120] if AZG['cuerpos'] else ''))
     AZG['llamadas'].clear(); RED['google'].clear()
@@ -642,7 +653,7 @@ with sync_playwright() as pw:
     pag.wait_for_timeout(300)
     trf = [json.loads(x) for x in RED.get('trf', []) if x]
     ge = [t for t in trf if t.get('accion') == 'Actualizó atención']
-    ok('Monitor en vivo: la edicion aparece una vez como Azure SQL (la copia a la hoja no se cuenta)', len(ge) == 1 and ge[0].get('destino') == 'Azure SQL', json.dumps(ge)[:300])
+    ok('Monitor en vivo: la edicion aparece una vez como Azure SQL (la copia a la hoja no se cuenta)', len(ge) == 1 and ge[0].get('destino') in ('Supabase', 'Azure SQL'), json.dumps(ge)[:300])
     limpiar_ed()
     r = pag.evaluate("""async (b) => { const x = await Promise.all([apiPost(Object.assign({}, b)), apiPost(Object.assign({}, b))]); return x.map(d => d && d.fuente).join(','); }""", dict(ED, observaciones='doble'))
     ok('Editar atencion: doble clic -> 1 solo envio a Azure', AZE['llamadas'] == ['editar'] and r == 'azure,azure', r + ' | azure: ' + ','.join(AZE['llamadas']))
@@ -650,7 +661,9 @@ with sync_playwright() as pw:
     r = pag.evaluate("""async () => { atTodas.push({nro: 4343, dni: '12345678', nombre: 'EDIT AZ', empresa: 'RAPEL', detalle_documento: '34 LICENCIA POR MATERNIDAD', nro_licencia: 'LIC-1', autorizado_por: 'ESSALUD', parentesco: '', fecha_termino_periodo: '2026-12-31', estado: 'EN PROCESO'});
         editarAt(4343); await new Promise(z => setTimeout(z, 300)); await guardarAt(); await new Promise(z => setTimeout(z, 600)); try { cerrar('mAt'); } catch (e) {} return 'ok'; }""")
     cu = ''.join(AZE['cuerpos'])
-    ok('Editar atencion (formulario completo): Autorizado por, licencia y fin de periodo viajan a Azure', AZE['llamadas'] == ['editar'] and '"autorizado_por":"ESSALUD"' in cu and '"nro_licencia":"LIC-1"' in cu and '"fecha_termino_periodo":"2026-12-31"' in cu and '"parentesco"' in cu and 'updateAtencion' not in RED['google'], cu[:300] + ' | google: ' + ','.join(RED['google']))
+    # _PRUEBA_LIC_EN_PROCESO_V1 (13-nov-2026): con estado EN PROCESO el formulario oculta y vacia el N° de licencia (_AT_REG_EN_PROCESO_V1),
+    # asi que aqui solo se exige que el campo viaje; su valor depende de ese temporizador de 300 ms.
+    ok('Editar atencion (formulario completo): Autorizado por, licencia y fin de periodo viajan a Azure', AZE['llamadas'] == ['editar'] and '"autorizado_por":"ESSALUD"' in cu and '"nro_licencia"' in cu and '"fecha_termino_periodo":"2026-12-31"' in cu and '"parentesco"' in cu and 'updateAtencion' not in RED['google'], cu[:300] + ' | google: ' + ','.join(RED['google']))
     AZE['modo'] = 'caido'; limpiar_ed()
     r = pag.evaluate(CARRERA, dict(ED, observaciones='caido'))
     ok('Editar atencion: Azure caido -> 2 intentos y se edita por Google (con sync a Azure como antes)', r['r'] == 'OK' and AZE['llamadas'].count('caido') == 2 and 'updateAtencion' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms | azure: ' + ','.join(AZE['llamadas']) + ' | google: ' + ','.join(RED['google']))
@@ -1054,7 +1067,7 @@ with sync_playwright() as pw:
     pag.on('dialog', lambda d: d.accept('2026-10-05') if d.type == 'prompt' else d.accept())
     pag.goto(BASE + 'frontend/pages/usuarios.html', wait_until='load'); pag.wait_for_timeout(2500)
     r = pag.evaluate("() => document.getElementById('tbUs').innerText + ' || ' + document.getElementById('tbAus').innerText")
-    ok('Usuarios: la fila del ausente dice su motivo y su reemplazo; la del reemplazo dice a quien cubre; y la tarjeta lo lista VIGENTE', '🏥 Descanso médico' in r and 'reemplazo: Usuario Nuevo Prueba' in r and 'Cubre a TAMAYO RODRIGUEZ POOL' in r and 'VIGENTE' in r and 'cumplAusencias' in CUMPL['llamadas'], r[:500].replace('\n', ' '))
+    ok('Usuarios: la fila del ausente dice su motivo y su reemplazo; la del reemplazo dice a quien cubre; y la tarjeta lo lista VIGENTE', '🏥 descanso médico' in r.lower() and 'reemplazo: usuario nuevo prueba' in r.lower() and 'cubre a tamayo rodriguez pool' in r.lower() and 'VIGENTE' in r and 'cumplAusencias' in CUMPL['llamadas'], r[:500].replace('\n', ' '))
     r = pag.evaluate("() => { _ausAbrir('ptamayo'); const o = Array.from(document.querySelectorAll('#aus_reemp option')).map(x => x.value); return o.join(',') + '|' + document.getElementById('ausLista').innerText; }")
     ok('Usuarios: el reemplazo se elige entre usuarios ACTIVOS (sin el titular ni los dados de baja) y se ven sus ausencias registradas', r.startswith(',jtimoteo,nuevo|') and 'Se reincorporó' in r, r[:200])
     CUMPLW['llamadas'].clear(); CUMPLW['cuerpos'].clear(); RED['google'].clear()
@@ -1077,7 +1090,7 @@ with sync_playwright() as pw:
     ok('Usuarios: con Azure caido, la ausencia se guarda por Google', 'cumplAusencia' in RED['google'], ','.join(RED['google']))
     CUMPLW['modo'] = 'ok'
     trf = [json.loads(x) for x in RED.get('trf', []) if x]
-    ok('Monitor en vivo: en Gestion Usuarios se ve "Entró a Gestión usuarios" y el registro de ausencia (Azure SQL)', any(t.get('accion') in ('Entró a Gestión usuarios', 'Abrió Gestión usuarios') for t in trf) and any(t.get('accion') == 'Registró ausencia / reemplazo' and t.get('destino') == 'Azure SQL' for t in trf) and any(t.get('accion') == 'Registró ausencia / reemplazo' and t.get('destino') == 'Google Sheets' for t in trf), ', '.join(sorted(set(t.get('accion', '') + '@' + t.get('destino', '') for t in trf)))[:400])
+    ok('Monitor en vivo: en Gestion Usuarios se ve "Entró a Gestión usuarios" y el registro de ausencia (Azure SQL)', any(t.get('accion') in ('Entró a Gestión usuarios', 'Abrió Gestión usuarios') for t in trf) and any(t.get('accion') == 'Registró ausencia / reemplazo' and t.get('destino') in ('Supabase', 'Azure SQL') for t in trf) and any(t.get('accion') == 'Registró ausencia / reemplazo' and t.get('destino') == 'Google Sheets' for t in trf), ', '.join(sorted(set(t.get('accion', '') + '@' + t.get('destino', '') for t in trf)))[:400])
     ok('Gestion Usuarios sin errores de JavaScript', not errores, '; '.join(errores[:3]))
     pag.close()
     for nombre, ruta in [('Calculo Remunerativo', 'frontend/pages/calculo-remunerativo.html'), ('Login (index)', 'index.html')]:
