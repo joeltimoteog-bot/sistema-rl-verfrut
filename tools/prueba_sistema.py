@@ -661,9 +661,8 @@ with sync_playwright() as pw:
     r = pag.evaluate("""async () => { atTodas.push({nro: 4343, dni: '12345678', nombre: 'EDIT AZ', empresa: 'RAPEL', detalle_documento: '34 LICENCIA POR MATERNIDAD', nro_licencia: 'LIC-1', autorizado_por: 'ESSALUD', parentesco: '', fecha_termino_periodo: '2026-12-31', estado: 'EN PROCESO'});
         editarAt(4343); await new Promise(z => setTimeout(z, 300)); await guardarAt(); await new Promise(z => setTimeout(z, 600)); try { cerrar('mAt'); } catch (e) {} return 'ok'; }""")
     cu = ''.join(AZE['cuerpos'])
-    # _PRUEBA_LIC_EN_PROCESO_V1 (13-nov-2026): con estado EN PROCESO el formulario oculta y vacia el N° de licencia (_AT_REG_EN_PROCESO_V1),
-    # asi que aqui solo se exige que el campo viaje; su valor depende de ese temporizador de 300 ms.
-    ok('Editar atencion (formulario completo): Autorizado por, licencia y fin de periodo viajan a Azure', AZE['llamadas'] == ['editar'] and '"autorizado_por":"ESSALUD"' in cu and '"nro_licencia"' in cu and '"fecha_termino_periodo":"2026-12-31"' in cu and '"parentesco"' in cu and 'updateAtencion' not in RED['google'], cu[:300] + ' | google: ' + ','.join(RED['google']))
+    # _LIC_CONSERVA_V1 (13-nov-2026): una atencion EN PROCESO conserva el N° de licencia que ya tenia (el campo se oculta, no se vacia)
+    ok('Editar atencion (formulario completo): Autorizado por, licencia y fin de periodo viajan a Azure', AZE['llamadas'] == ['editar'] and '"autorizado_por":"ESSALUD"' in cu and '"nro_licencia":"LIC-1"' in cu and '"fecha_termino_periodo":"2026-12-31"' in cu and '"parentesco"' in cu and 'updateAtencion' not in RED['google'], cu[:300] + ' | google: ' + ','.join(RED['google']))
     AZE['modo'] = 'caido'; limpiar_ed()
     r = pag.evaluate(CARRERA, dict(ED, observaciones='caido'))
     ok('Editar atencion: Azure caido -> 2 intentos y se edita por Google (con sync a Azure como antes)', r['r'] == 'OK' and AZE['llamadas'].count('caido') == 2 and 'updateAtencion' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms | azure: ' + ','.join(AZE['llamadas']) + ' | google: ' + ','.join(RED['google']))

@@ -50,7 +50,7 @@ function _ocultarCampoLicencia() {
     var caja = document.getElementById('at_nlic_wrap');
     var inp  = document.getElementById('at_nlic');
     if (caja) caja.style.display = 'none';
-    if (inp) { inp.removeAttribute('required'); inp.value = ''; }
+    if (inp) { inp.removeAttribute('required'); }   /* _LIC_CONSERVA_V1 (13-nov-2026): el campo se oculta pero el numero ya escrito o guardado se conserva (antes se vaciaba y al editar una atencion EN PROCESO se borraba) */
   } catch (e) {}
 }
 
