@@ -67233,6 +67233,133 @@ var require_bs = __commonJS({
       });
       return { ok: true, success: true, alertas, resumen, generado: (/* @__PURE__ */ new Date()).toISOString(), fuente: "supabase" };
     }
+    var EST_CFG = [
+      { modulo: "Quejas", claves: ["bs_quejas"], col_estado: "resultado", estados_cierre: ["cerrado"], col_fecha_inicio: "fecha_recepcion", col_fecha_cierre: "", col_responsable: "created_by", plazo_dias: 7, usa_seguimiento: true },
+      { modulo: "Accidentes", claves: ["bs_accidentes_casos"], col_estado: "estado_caso", estados_cierre: ["revisar (ej: cerrado, finalizado)"], col_fecha_inicio: "dia_accidente", col_fecha_cierre: "", col_responsable: "created_by", plazo_dias: 15, usa_seguimiento: false },
+      { modulo: "Hostigamiento", claves: ["bs_hostigamiento", "bs_hostigamiento_olmos"], col_estado: "decision", estados_cierre: ["proceso de resoluci\xF3n", "improcedente"], col_fecha_inicio: "fecha_denuncia", col_fecha_cierre: "", col_responsable: "created_by", plazo_dias: 30, usa_seguimiento: false },
+      { modulo: "Subsidios", claves: ["bs_subsidios"], col_estado: "estado_general", estados_cierre: ["revisar (ej: cerrado, pagado)"], col_fecha_inicio: "inicio", col_fecha_cierre: "", col_responsable: "created_by", plazo_dias: 15, usa_seguimiento: false },
+      { modulo: "Sugerencias", claves: ["bs_sugerencias"], col_estado: "estado", estados_cierre: ["finalizada"], col_fecha_inicio: "fecha", col_fecha_cierre: "fecha_finalizado", col_responsable: "created_by", plazo_dias: 3, usa_seguimiento: false }
+    ];
+    var estDMY = (d) => d ? ("0" + d.getUTCDate()).slice(-2) + "/" + ("0" + (d.getUTCMonth() + 1)).slice(-2) + "/" + d.getUTCFullYear() : "";
+    async function resEstadisticas(pool, P, q) {
+      const ver = resPermisos(P), fModulo = q.modulo && q.modulo !== "Todos" ? q.modulo : null, fUsuario = q.usuario && q.usuario !== "Todos" ? q.usuario : null, fEmpresa = q.empresa && q.empresa !== "Todas" ? q.empresa : null;
+      const fDesde = q.desde ? rFecha(q.desde) : null, fHasta = q.hasta ? rFecha(q.hasta) : null, hoy = rHoy();
+      const cfgs = EST_CFG.filter((c) => c.modulo !== "Hostigamiento" || ver.hostigamiento);
+      const cache = {};
+      for (const cfg of cfgs) {
+        let rows = [];
+        for (const k of cfg.claves) rows = rows.concat(await resObjetos(pool, k));
+        cache[cfg.modulo] = rows;
+      }
+      const usuariosSet = {};
+      cfgs.forEach((cfg) => cache[cfg.modulo].forEach((r) => {
+        const u = rTxt(r.created_by);
+        if (u) usuariosSet[u] = true;
+      }));
+      const totales = {}, estados = {}, porEmpresa = { RAPEL: {}, VERFRUT: {} }, tendMap = {}, usuariosMap = {}, cumpModulo = {}, cumpUsuario = {}, vencidos = [];
+      let generalTotal = 0;
+      const nuevoCump = () => ({ total: 0, cerrados: 0, a_tiempo: 0, fuera: 0, abierto_plazo: 0, vencido: 0, suma_dias_cierre: 0, n_cierre: 0 });
+      const cumpGlobal = nuevoCump();
+      cfgs.forEach((cfg) => {
+        if (fModulo && cfg.modulo !== fModulo) return;
+        totales[cfg.modulo] = totales[cfg.modulo] || 0;
+        estados[cfg.modulo] = estados[cfg.modulo] || {};
+        cumpModulo[cfg.modulo] = cumpModulo[cfg.modulo] || nuevoCump();
+        cache[cfg.modulo].forEach((row) => {
+          const cbVal = rTxt(row.created_by), respVal = rTxt(row[cfg.col_responsable]) || cbVal, emp = rTxt(row.empresa);
+          let fIni = rFecha(row[cfg.col_fecha_inicio]) || rFecha(row.created_at);
+          if (fUsuario && respVal !== fUsuario && cbVal !== fUsuario) return;
+          if (fEmpresa && emp !== fEmpresa) return;
+          if (fDesde && fIni && fIni < fDesde) return;
+          if (fHasta && fIni && fIni > fHasta) return;
+          totales[cfg.modulo]++;
+          generalTotal++;
+          const est = rTxt(row[cfg.col_estado]) || "(sin estado)";
+          estados[cfg.modulo][est] = (estados[cfg.modulo][est] || 0) + 1;
+          if (emp === "RAPEL" || emp === "VERFRUT") porEmpresa[emp][cfg.modulo] = (porEmpresa[emp][cfg.modulo] || 0) + 1;
+          if (fIni) {
+            const ym = rYmd(fIni).slice(0, 7);
+            tendMap[ym] = tendMap[ym] || {};
+            tendMap[ym][cfg.modulo] = (tendMap[ym][cfg.modulo] || 0) + 1;
+          }
+          const ukey = cbVal || respVal || "(sin usuario)";
+          usuariosMap[ukey] = usuariosMap[ukey] || { total: 0, porModulo: {} };
+          usuariosMap[ukey].total++;
+          usuariosMap[ukey].porModulo[cfg.modulo] = (usuariosMap[ukey].porModulo[cfg.modulo] || 0) + 1;
+          const esCierre = cfg.estados_cierre.length > 0 && cfg.estados_cierre.indexOf(est.toLowerCase()) >= 0;
+          let limite = null;
+          if (cfg.usa_seguimiento && rTxt(row.seguimiento) === "S\xED") limite = rFecha(row.seguimiento_fin);
+          if (!limite && fIni && cfg.plazo_dias > 0) limite = rSumaCal(fIni, cfg.plazo_dias);
+          const CM = cumpModulo[cfg.modulo];
+          cumpUsuario[ukey] = cumpUsuario[ukey] || nuevoCump();
+          const CU = cumpUsuario[ukey];
+          CM.total++;
+          CU.total++;
+          cumpGlobal.total++;
+          if (esCierre) {
+            CM.cerrados++;
+            CU.cerrados++;
+            cumpGlobal.cerrados++;
+            const fCierre = (cfg.col_fecha_cierre ? rFecha(row[cfg.col_fecha_cierre]) : null) || rFecha(row.updated_at);
+            const aTiempo = limite && fCierre ? fCierre <= limite : true;
+            if (aTiempo) {
+              CM.a_tiempo++;
+              CU.a_tiempo++;
+              cumpGlobal.a_tiempo++;
+            } else {
+              CM.fuera++;
+              CU.fuera++;
+              cumpGlobal.fuera++;
+            }
+            if (fIni && fCierre) {
+              const dd = Math.round((fCierre - fIni) / 864e5);
+              if (dd >= 0) {
+                CM.suma_dias_cierre += dd;
+                CM.n_cierre++;
+                CU.suma_dias_cierre += dd;
+                CU.n_cierre++;
+                cumpGlobal.suma_dias_cierre += dd;
+                cumpGlobal.n_cierre++;
+              }
+            }
+          } else if (limite && hoy > limite) {
+            CM.vencido++;
+            CU.vencido++;
+            cumpGlobal.vencido++;
+            vencidos.push({ modulo: cfg.modulo, id: row.id != null ? row.id : "", usuario: ukey, empresa: emp, fecha_inicio: estDMY(fIni), limite: estDMY(limite), dias_vencido: Math.round((hoy - limite) / 864e5) });
+          } else {
+            CM.abierto_plazo++;
+            CU.abierto_plazo++;
+            cumpGlobal.abierto_plazo++;
+          }
+        });
+      });
+      const cerrar = (c) => {
+        const cumplidos = c.a_tiempo + c.abierto_plazo;
+        c.pct_cierre = c.total ? Math.round(c.cerrados * 1e3 / c.total) / 10 : 0;
+        c.pct_cumplimiento = c.total ? Math.round(cumplidos * 1e3 / c.total) / 10 : 0;
+        c.pct_a_tiempo = c.cerrados ? Math.round(c.a_tiempo * 1e3 / c.cerrados) / 10 : 0;
+        c.tiempo_prom_cierre = c.n_cierre ? Math.round(c.suma_dias_cierre * 10 / c.n_cierre) / 10 : 0;
+        delete c.suma_dias_cierre;
+        delete c.n_cierre;
+        return c;
+      };
+      cerrar(cumpGlobal);
+      Object.keys(cumpModulo).forEach((k) => cerrar(cumpModulo[k]));
+      const porUsuario = Object.keys(cumpUsuario).map((k) => {
+        const c = cerrar(cumpUsuario[k]);
+        c.usuario = k;
+        return c;
+      }).sort((a, b) => b.pct_cumplimiento - a.pct_cumplimiento);
+      vencidos.sort((a, b) => b.dias_vencido - a.dias_vencido);
+      const ymKeys = Object.keys(tendMap).sort(), modList = cfgs.filter((cf) => !fModulo || cf.modulo === fModulo).map((cf) => cf.modulo), tendencia = { labels: ymKeys, series: {} };
+      modList.forEach((m) => {
+        tendencia.series[m] = ymKeys.map((k) => tendMap[k][m] || 0);
+      });
+      const usuarios = Object.keys(usuariosMap).map((k) => ({ usuario: k, total: usuariosMap[k].total, porModulo: usuariosMap[k].porModulo })).sort((a, b) => b.total - a.total);
+      const gen = new Date(Date.now() - 5 * 36e5).toISOString();
+      return { ok: true, success: true, generado: gen.slice(0, 10) + " " + gen.slice(11, 16), filtros: { modulo: fModulo || "Todos", usuario: fUsuario || "Todos", empresa: fEmpresa || "Todas", desde: q.desde || "", hasta: q.hasta || "" }, totales, general: generalTotal, porEmpresa, estados, tendencia, usuarios, usuariosDisponibles: Object.keys(usuariosSet).sort(), cumplimiento: { global: cumpGlobal, porModulo: cumpModulo, porUsuario, vencidosAbiertos: vencidos.slice(0, 100) }, fuente: "supabase" };
+    }
     module.exports = async function(context, req) {
       const accion = String(context.bindingData.accion || "").toLowerCase(), q = req.query || {};
       const res = (status, body) => {
@@ -67258,6 +67385,11 @@ var require_bs = __commonJS({
           out.success = true;
           out.permisos_fuente = P.fuente;
           return res(200, out);
+        }
+        if (accion === "estadisticas") {
+          const P = await permisosBS(u, q);
+          if (!P.esAdmin && !P.permisos.estadisticas) return res(403, { ok: false, success: false, message: "Sin permiso para Estad\xEDsticas." });
+          return res(200, await resEstadisticas(pool, P, q));
         }
         if (accion === "dashboard" || accion === "alertas") {
           const P = await permisosBS(u, q);
