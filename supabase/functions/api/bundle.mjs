@@ -75592,6 +75592,10 @@ var require_eti = __commonJS({
               });
               await cli.query(`UPDATE eti.${o.col} SET datos = eti.mezclar(datos, $2::jsonb), actualizado = now() WHERE id = $1`, [id, JSON.stringify(n)]);
             }
+            if (Array.isArray(o.borrar) && o.borrar.length) {
+              const campos = o.borrar.map((k) => String(k)).filter((k) => /^[A-Za-z0-9_]+$/.test(k));
+              if (campos.length) await cli.query(`UPDATE eti.${o.col} SET datos = datos - $2::text[], actualizado = now() WHERE id = $1`, [id, campos]);
+            }
           } else throw Object.assign(new Error("op invalida: " + o.op), { status: 400 });
           await cli.query(`INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`, [o.col, id, o.op, u && u.usuario || "anonimo", o.origen || "espejo"]);
         }

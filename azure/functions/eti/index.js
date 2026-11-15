@@ -4,7 +4,7 @@
    que usa el codigo (where ==, >=, <=, <, >, in, array-contains · orderBy · limit).
      POST /api/eti/consultar  { col, filtros:[[campo,op,valor]], orden:[campo,'asc'|'desc'], limite }
      POST /api/eti/doc        { col, id }
-     POST /api/eti/escribir   { ops:[{ col, id, op:'set'|'update'|'delete', datos, merge }] }
+     POST /api/eti/escribir   { ops:[{ col, id, op:'set'|'update'|'delete', datos, merge, borrar:[campos] }] }   (borrar: _ETI_SUPABASE_V3)
      POST /api/eti/importar   { col, docs:[{ id, datos }] }        (solo administrador)
      POST /api/eti/contar     { cols:[...] }                         (solo administrador)
      POST /api/eti/encuesta   { ses, resp:{...} }                    (sin sesion: respuesta de la encuesta de satisfaccion)
@@ -159,6 +159,8 @@ async function escribir(b, u) {
         /* "a.b.c": crea los mapas intermedios que falten (como Firestore) y cambia solo esa hoja */
         for (const [p, val] of rutas) { const n = {}; let x = n; p.forEach((k, i) => { if (i === p.length - 1) x[k] = val; else x = (x[k] = {}); });
           await cli.query(`UPDATE eti.${o.col} SET datos = eti.mezclar(datos, $2::jsonb), actualizado = now() WHERE id = $1`, [id, JSON.stringify(n)]); }
+        /* _ETI_SUPABASE_V3 (15-nov-2026): borrar campos (deleteField de Firestore) -> o.borrar = ['campo', ...] */
+        if (Array.isArray(o.borrar) && o.borrar.length) { const campos = o.borrar.map(k => String(k)).filter(k => /^[A-Za-z0-9_]+$/.test(k)); if (campos.length) await cli.query(`UPDATE eti.${o.col} SET datos = datos - $2::text[], actualizado = now() WHERE id = $1`, [id, campos]); }
       } else throw Object.assign(new Error('op invalida: ' + o.op), { status: 400 });
       await cli.query(`INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`, [o.col, id, o.op, (u && u.usuario) || 'anonimo', o.origen || 'espejo']);
     }
