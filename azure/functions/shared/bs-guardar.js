@@ -23,14 +23,19 @@ const TH = require('./tablas-hoja');
 const { comoHoja } = require('./cap-guardar');
 
 const CLAVES_BS = ['bs_accidentes_casos', 'bs_accidentes_seguim', 'bs_hostigamiento', 'bs_hostigamiento_olmos', 'bs_subsidios', 'bs_documentos',
-  'bs_quejas', 'bs_quejas_seguim', 'bs_descansos', 'bs_auditoria', 'bs_rendiciones', 'bs_sugerencias', 'bs_buzones'];
+  'bs_quejas', 'bs_quejas_seguim', 'bs_descansos', 'bs_auditoria', 'bs_rendiciones', 'bs_sugerencias', 'bs_buzones',
+  'bs_gs_casos', 'bs_gs_seguimientos'];   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) */
+/* tablas que nacen en Supabase (nunca tuvieron hoja de Google): mandan desde Supabase aunque BS_Fuente no las liste */
+const SIN_HOJA = ['bs_gs_casos', 'bs_gs_seguimientos'];
 const MODULO_DE_CLAVE = { bs_accidentes_casos: 'accidentes', bs_accidentes_seguim: 'accidentes', bs_hostigamiento: 'hostigamiento', bs_hostigamiento_olmos: 'hostigamiento',
   bs_subsidios: 'subsidios', bs_documentos: '', bs_quejas: 'quejas', bs_quejas_seguim: 'quejas', bs_descansos: 'descansos', bs_auditoria: '',
-  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas' };
+  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social' };
 /* seguimientos: tabla hija → padre, llave y contador que se actualiza en el padre (accidentes: numero_atenciones; hallazgos: solo updated_at) */
 const SEGUIMIENTO = {
   bs_accidentes_seguim: { padre: 'bs_accidentes_casos', fk: 'id_caso', contador: 'numero_atenciones', exige: ['detalle'] },
-  bs_quejas_seguim: { padre: 'bs_quejas', fk: 'id_queja', contador: null, exige: ['fecha_seguimiento', 'detalle'], mensaje: 'Completa fecha y detalle' }
+  bs_quejas_seguim: { padre: 'bs_quejas', fk: 'id_queja', contador: null, exige: ['fecha_seguimiento', 'detalle'], mensaje: 'Completa fecha y detalle' },
+  /* _BS_GESTION_SOCIAL_V1: ademas de fecha y detalle guarda tipo, acuerdos, proxima fecha y ubicacion (campos 'extra') */
+  bs_gs_seguimientos: { padre: 'bs_gs_casos', fk: 'id_caso', contador: 'numero_seguimientos', exige: ['detalle'], extra: ['tipo', 'acuerdos', 'ubicacion'], extraFecha: ['proxima_fecha'] }
 };
 /* valores por defecto y tipos al CREAR, iguales a los que ponía el Apps Script (bs_crearQueja, etc.) */
 const ENTERO = v => { const n = parseInt(String(v == null ? '' : v).replace(/[^\d-]/g, ''), 10); return isNaN(n) ? 0 : n; };
@@ -82,6 +87,26 @@ const NORMALIZAR = {
     if (nuevo) { v.fecha = celdaFecha(new Date()); v.usuario = String(usuario || ''); if (!v.prioridad) v.prioridad = 'Media'; v.estado = 'Recibida'; v.respuesta_admin = v.respuesta_admin || ''; v.fecha_finalizado = ''; }
     else if (v.estado === 'Finalizada') v.fecha_finalizado = celdaFecha(new Date());
   },
+  /* _BS_GESTION_SOCIAL_V1: codigo GS-AAAA-0000 con el id, estado Abierto, prioridad Media, caso reservado por defecto */
+  bs_gs_casos: (v, nuevo, usuario) => {
+    const SN = x => (String(x == null ? '' : x).trim().toUpperCase() === 'NO' || x === false) ? 'NO' : 'SI';
+    if (nuevo) {
+      const anio = (ymdDe(v.fecha_deteccion) || hoyLima()).slice(0, 4);
+      v.codigo = 'GS-' + anio + '-' + String(ENTERO(v.id)).padStart(4, '0');
+      if (!v.fecha_deteccion) v.fecha_deteccion = celdaFecha(new Date());
+      if (!v.estado) v.estado = 'Abierto';
+      if (!v.prioridad) v.prioridad = 'Media';
+      v.reservado = SN(v.reservado === undefined || v.reservado === '' ? 'SI' : v.reservado);
+      v.numero_seguimientos = 0; v.resultado = v.resultado || ''; v.fecha_cierre = '';
+      v.dni = String(v.dni || '').replace(/\D/g, ''); v.nombre = String(v.nombre || '').toUpperCase();
+    } else {
+      if (v.reservado !== undefined) v.reservado = SN(v.reservado);
+      if (v.dni !== undefined) v.dni = String(v.dni || '').replace(/\D/g, '');
+      if (v.nombre !== undefined) v.nombre = String(v.nombre || '').toUpperCase();
+      if (v.estado === 'Cerrado' && !v.fecha_cierre) v.fecha_cierre = celdaFecha(new Date());
+      if (v.estado && v.estado !== 'Cerrado') v.fecha_cierre = '';
+    }
+  },
   bs_quejas: (v, nuevo) => {
     if (nuevo) {
       if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(new Date());
@@ -99,6 +124,8 @@ const ENCABEZADO_INICIAL = {
   bs_sugerencias: ['id', 'fecha', 'usuario', 'nombre_usuario', 'titulo', 'modulo', 'descripcion', 'prioridad', 'estado', 'respuesta_admin', 'fecha_finalizado', 'created_by', 'created_at', 'updated_at'],
   bs_buzones: ['id', 'empresa', 'sector', 'numero', 'ubicacion', 'activo', 'created_at'],
   bs_documentos: ['id', 'modulo', 'caso_id', 'nombre', 'url', 'mime', 'subido_por', 'fecha'],
+  bs_gs_casos: TH.ESQ.bs_gs_casos.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V1 */
+  bs_gs_seguimientos: TH.ESQ.bs_gs_seguimientos.cols.map(c => c[0]),
   /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
   bs_hostigamiento: ['id', 'fecha_denuncia', 'denunciante_dni', 'denunciante_nombre', 'denunciante_puesto', 'medida_proteccion', 'denunciado_dni', 'denunciado_nombre', 'denunciado_puesto', 'sede', 'fundo', 'decision', 'status', 'observaciones', 'empresa', 'created_by', 'created_at', 'updated_at'],
   bs_hostigamiento_olmos: ['id', 'fecha_denuncia', 'denunciante_dni', 'denunciante_nombre', 'denunciante_puesto', 'medida_proteccion', 'denunciado_dni', 'denunciado_nombre', 'denunciado_puesto', 'sede', 'fundo', 'decision', 'status', 'observaciones', 'empresa', 'created_by', 'created_at', 'updated_at']
@@ -161,7 +188,7 @@ function asegurarFuente(pool) {
 async function fuenteDe(pool, clave) {
   await asegurarFuente(pool);
   const r = await pool.request().input('k', sql.NVarChar(40), clave).query('SELECT fuente FROM dbo.BS_Fuente WHERE clave = @k');
-  return r.recordset.length ? String(r.recordset[0].fuente) : 'hoja';
+  return r.recordset.length ? String(r.recordset[0].fuente) : (SIN_HOJA.indexOf(clave) >= 0 ? 'supabase' : 'hoja');   /* _BS_GESTION_SOCIAL_V1: sin hoja de Google = Supabase */
 }
 async function fuentes(pool) {
   await asegurarFuente(pool);
@@ -334,6 +361,8 @@ async function seguimiento(pool, claveHija, idPadre, datos, usuario) {
     const id = await siguienteId(tx, claveHija, enc);
     const v = { id, numero_seguimiento: numero, fecha_seguimiento: datos && datos.fecha_seguimiento ? comoHoja(datos.fecha_seguimiento) : celdaFecha(ahora),
       detalle: String((datos && datos.detalle) || ''), created_by: String(usuario || ''), created_at: celdaFecha(ahora) };
+    (S.extra || []).forEach(k => { if (datos && datos[k] !== undefined) v[k] = String(datos[k] == null ? '' : datos[k]).slice(0, 4000); });   /* _BS_GESTION_SOCIAL_V1 */
+    (S.extraFecha || []).forEach(k => { if (datos && datos[k]) v[k] = comoHoja(datos[k]); });
     v[S.fk] = Number(idPadre) > 0 ? Number(idPadre) : String(idPadre);
     await insertarCeldas(tx, claveHija, await siguienteFila(tx, claveHija), enc.map(h => (v[h] !== undefined ? v[h] : '')));
     await tocarMarca(tx, claveHija);

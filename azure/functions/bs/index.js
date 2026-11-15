@@ -7,6 +7,7 @@
                             timeline — misma forma que bs_fichaTrabajador del Apps Script.
    GET bs/tabla?clave=      filas de una hoja como objetos (sin anulados), opcional &dni=
    GET bs/estado            marcas y fecha de carga de cada tabla BS_*
+   GET bs/permisos          _BS_GESTION_SOCIAL_V1 (14-nov): permisos del usuario segun "Acceso a Modulos" del RR.LL.
    POST bs/guardar          _BS_GUARDA_SUPABASE_V1 (08-nov): crear/actualizar/seguimiento/anular/restaurar directo en Supabase
    POST bs/auditar          evento de auditoría suelto (Apps Script con clave interna / navegador)
    GET|POST bs/fuente       quién manda por tabla ('hoja' = Google + sync, 'supabase' = se guarda aquí)
@@ -223,6 +224,10 @@ module.exports = async function (context, req) {
          decidia). Ahora el rol sale SOLO del token y los permisos de "Acceso a Modulos" del RR.LL. (dbo.PermisosModulos). */
       const P = await permisosBS(u, q);
       const out = await ficha(pool, dni, P.permisos, P.esAdmin); out.success = true; out.permisos_fuente = P.fuente; return res(200, out);
+    }
+    if (accion === 'permisos') {   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026): permisos de Bienestar decididos en el servidor ("Acceso a Modulos" del RR.LL.), para que el portal de Bienestar los use en vez de la hoja Usuarios congelada */
+      const P = await permisosBS(u, q);
+      return res(200, { ok: true, success: true, usuario: String((u && u.usuario) || '').toLowerCase(), esAdmin: P.esAdmin, permisos: P.permisos, fuente: P.fuente });
     }
     if (accion === 'tabla') {
       const clave = String(q.clave || ''); if (CLAVES.indexOf(clave) < 0) return res(400, { success: false, error: 'clave desconocida' });

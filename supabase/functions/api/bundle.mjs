@@ -9583,7 +9583,7 @@ var require_tsql2pg = __commonJS({
 var require_esquema_pg = __commonJS({
   "shared/esquema-pg.json"(exports, module) {
     module.exports = {
-      generado: "2026-11-05T13:17:11.376Z",
+      generado: "2026-11-05T14:18:26.713Z",
       columnasBit: {
         accesohorarios: [
           "activo"
@@ -12434,6 +12434,52 @@ var require_tablas_hoja = __commonJS({
         ["ubicacion", "t400"],
         ["activo", "t10"],
         ["created_at", "f"]
+      ] },
+      /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) — modulo nuevo "Gestion Social del Trabajador", etapa 1: casos sociales + seguimientos.
+         Tablas propias (no hay hoja de Google detras): dbo.BS_GS_Casos y dbo.BS_GS_Seguimientos. */
+      bs_gs_casos: { tabla: "dbo.BS_GS_Casos", cols: [
+        ["id", "n"],
+        ["codigo", "t20"],
+        ["fecha_deteccion", "f"],
+        ["dni", "t20"],
+        ["nombre", "t200"],
+        ["empresa", "t40"],
+        ["fundo", "t200"],
+        ["cargo", "t150"],
+        ["sede", "t20"],
+        ["tipo", "t100"],
+        ["prioridad", "t20"],
+        ["origen", "t100"],
+        ["descripcion", "t4000"],
+        ["accion_inmediata", "t100"],
+        ["fecha_programada", "f"],
+        ["derivacion", "t100"],
+        ["responsable", "t200"],
+        ["compromisos", "t4000"],
+        ["reservado", "t10"],
+        ["estado", "t40"],
+        ["resultado", "t4000"],
+        ["fecha_cierre", "f"],
+        ["numero_seguimientos", "n"],
+        ["created_by", "t100"],
+        ["created_at", "f"],
+        ["updated_by", "t100"],
+        ["updated_at", "f"],
+        ["anulado", "t400"]
+      ] },
+      bs_gs_seguimientos: { tabla: "dbo.BS_GS_Seguimientos", cols: [
+        ["id", "n"],
+        ["id_caso", "n"],
+        ["numero_seguimiento", "n"],
+        ["fecha_seguimiento", "f"],
+        ["tipo", "t60"],
+        ["detalle", "t4000"],
+        ["acuerdos", "t2000"],
+        ["proxima_fecha", "f"],
+        ["ubicacion", "t200"],
+        ["created_by", "t100"],
+        ["created_at", "f"],
+        ["anulado", "t400"]
       ] }
     };
     var tipoSql = (t) => t === "f" ? "DATETIME2(3) NULL" : t === "n" ? "FLOAT NULL" : "NVARCHAR(" + t.slice(1) + ") NULL";
@@ -16328,7 +16374,7 @@ var require_src = __commonJS({
 var require_helpers2 = __commonJS({
   "node_modules/agent-base/dist/helpers.js"(exports) {
     "use strict";
-    var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
+    var __createBinding2 = exports && exports.__createBinding || (Object.create ? function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       var desc = Object.getOwnPropertyDescriptor(m, k);
       if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -16337,13 +16383,13 @@ var require_helpers2 = __commonJS({
         } };
       }
       Object.defineProperty(o, k2, desc);
-    }) : (function(o, m, k, k2) {
+    } : function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       o[k2] = m[k];
-    }));
-    var __setModuleDefault2 = exports && exports.__setModuleDefault || (Object.create ? (function(o, v) {
+    });
+    var __setModuleDefault2 = exports && exports.__setModuleDefault || (Object.create ? function(o, v) {
       Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
+    } : function(o, v) {
       o["default"] = v;
     });
     var __importStar2 = exports && exports.__importStar || function(mod) {
@@ -16398,7 +16444,7 @@ var require_helpers2 = __commonJS({
 var require_dist2 = __commonJS({
   "node_modules/agent-base/dist/index.js"(exports) {
     "use strict";
-    var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
+    var __createBinding2 = exports && exports.__createBinding || (Object.create ? function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       var desc = Object.getOwnPropertyDescriptor(m, k);
       if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -16407,13 +16453,13 @@ var require_dist2 = __commonJS({
         } };
       }
       Object.defineProperty(o, k2, desc);
-    }) : (function(o, m, k, k2) {
+    } : function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       o[k2] = m[k];
-    }));
-    var __setModuleDefault2 = exports && exports.__setModuleDefault || (Object.create ? (function(o, v) {
+    });
+    var __setModuleDefault2 = exports && exports.__setModuleDefault || (Object.create ? function(o, v) {
       Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
+    } : function(o, v) {
       o["default"] = v;
     });
     var __importStar2 = exports && exports.__importStar || function(mod) {
@@ -16650,7 +16696,7 @@ var require_parse_proxy_response = __commonJS({
 var require_dist3 = __commonJS({
   "node_modules/https-proxy-agent/dist/index.js"(exports) {
     "use strict";
-    var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
+    var __createBinding2 = exports && exports.__createBinding || (Object.create ? function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       var desc = Object.getOwnPropertyDescriptor(m, k);
       if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -16659,13 +16705,13 @@ var require_dist3 = __commonJS({
         } };
       }
       Object.defineProperty(o, k2, desc);
-    }) : (function(o, m, k, k2) {
+    } : function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       o[k2] = m[k];
-    }));
-    var __setModuleDefault2 = exports && exports.__setModuleDefault || (Object.create ? (function(o, v) {
+    });
+    var __setModuleDefault2 = exports && exports.__setModuleDefault || (Object.create ? function(o, v) {
       Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
+    } : function(o, v) {
       o["default"] = v;
     });
     var __importStar2 = exports && exports.__importStar || function(mod) {
@@ -16800,7 +16846,7 @@ var require_dist3 = __commonJS({
 var require_dist4 = __commonJS({
   "node_modules/http-proxy-agent/dist/index.js"(exports) {
     "use strict";
-    var __createBinding2 = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
+    var __createBinding2 = exports && exports.__createBinding || (Object.create ? function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       var desc = Object.getOwnPropertyDescriptor(m, k);
       if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -16809,13 +16855,13 @@ var require_dist4 = __commonJS({
         } };
       }
       Object.defineProperty(o, k2, desc);
-    }) : (function(o, m, k, k2) {
+    } : function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       o[k2] = m[k];
-    }));
-    var __setModuleDefault2 = exports && exports.__setModuleDefault || (Object.create ? (function(o, v) {
+    });
+    var __setModuleDefault2 = exports && exports.__setModuleDefault || (Object.create ? function(o, v) {
       Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
+    } : function(o, v) {
       o["default"] = v;
     });
     var __importStar2 = exports && exports.__importStar || function(mod) {
@@ -17309,13 +17355,13 @@ var require_concat = __commonJS({
       return function() {
         const streams = sources.map((x) => typeof x === "function" ? x() : x).map(toStream);
         return import_stream.Readable.from(
-          (async function* () {
+          async function* () {
             for (const stream of streams) {
               for await (const chunk of stream) {
                 yield chunk;
               }
             }
-          })()
+          }()
         );
       };
     }
@@ -20115,7 +20161,7 @@ var init_tslib_es6 = __esm({
       };
       return __assign.apply(this, arguments);
     };
-    __createBinding = Object.create ? (function(o, m, k, k2) {
+    __createBinding = Object.create ? function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       var desc = Object.getOwnPropertyDescriptor(m, k);
       if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
@@ -20124,13 +20170,13 @@ var init_tslib_es6 = __esm({
         } };
       }
       Object.defineProperty(o, k2, desc);
-    }) : (function(o, m, k, k2) {
+    } : function(o, m, k, k2) {
       if (k2 === void 0) k2 = k;
       o[k2] = m[k];
-    });
-    __setModuleDefault = Object.create ? (function(o, v) {
+    };
+    __setModuleDefault = Object.create ? function(o, v) {
       Object.defineProperty(o, "default", { enumerable: true, value: v });
-    }) : function(o, v) {
+    } : function(o, v) {
       o["default"] = v;
     };
     ownKeys = function(o) {
@@ -24980,14 +25026,14 @@ var require_fxp = __commonJS({
       }
       function b(t2, e2) {
         if (";" === t2[++e2]) return -1;
-        if ("#" === t2[e2]) return (function(t3, e3) {
+        if ("#" === t2[e2]) return function(t3, e3) {
           let i3 = /\d/;
           for ("x" === t3[e3] && (e3++, i3 = /[\da-fA-F]/); e3 < t3.length; e3++) {
             if (";" === t3[e3]) return e3;
             if (!t3[e3].match(i3)) break;
           }
           return -1;
-        })(t2, ++e2);
+        }(t2, ++e2);
         let i2 = 0;
         for (; e2 < t2.length; e2++, i2++) if (!(t2[e2].match(/\w/) && i2 < 20)) {
           if (";" === t2[e2]) break;
@@ -25202,7 +25248,7 @@ var require_fxp = __commonJS({
         if (0 === i2.length) return t2;
         if (void 0 !== e2.skipLike && e2.skipLike.test(i2)) return t2;
         if ("0" === i2) return 0;
-        if (e2.unicode && (i2 = (function(t3) {
+        if (e2.unicode && (i2 = function(t3) {
           if ("string" != typeof t3) return t3;
           const e3 = t3.length;
           if (0 === e3) return t3;
@@ -25267,12 +25313,12 @@ var require_fxp = __commonJS({
             n3.push(255 !== s2 ? String.fromCharCode(s2 + 48) : t3[r2]);
           }
           return n3.join("");
-        })(i2), "0" === i2)) return 0;
+        }(i2), "0" === i2)) return 0;
         if (e2.hex && H.test(i2)) return it(i2, 16);
         if (e2.binary && Q.test(i2)) return it(i2, 2);
         if (e2.octal && J.test(i2)) return it(i2, 8);
         if (isFinite(i2)) {
-          if (i2.includes("e") || i2.includes("E")) return (function(t3, e3, i3) {
+          if (i2.includes("e") || i2.includes("E")) return function(t3, e3, i3) {
             if (!i3.eNotation) return t3;
             const n3 = e3.match(et);
             if (n3) {
@@ -25281,7 +25327,7 @@ var require_fxp = __commonJS({
               return o2.length > 1 && a2 ? t3 : (1 !== o2.length || !n3[3].startsWith(`.${s2}`) && n3[3][0] !== s2) && o2.length > 0 ? i3.leadingZeros && !a2 ? (e3 = (n3[1] || "") + n3[3], Number(e3)) : t3 : Number(e3);
             }
             return t3;
-          })(t2, i2, e2);
+          }(t2, i2, e2);
           {
             const r2 = Z.exec(i2);
             if (r2) {
@@ -25302,7 +25348,7 @@ var require_fxp = __commonJS({
           }
         }
         var n2;
-        return (function(t3, e3, i3) {
+        return function(t3, e3, i3) {
           const n3 = e3 === 1 / 0;
           switch (i3.infinity.toLowerCase()) {
             case "null":
@@ -25314,7 +25360,7 @@ var require_fxp = __commonJS({
             default:
               return t3;
           }
-        })(t2, Number(i2), e2);
+        }(t2, Number(i2), e2);
       }
       const et = /^([-+])?(0*)(\d*(\.\d*)?[eE][-\+]?\d+)$/;
       function it(t2, e2) {
@@ -25662,11 +25708,11 @@ var require_fxp = __commonJS({
         constructor(t2 = {}) {
           var e2;
           this._limit = t2.limit || {}, this._maxTotalExpansions = this._limit.maxTotalExpansions || 0, this._maxExpandedLength = this._limit.maxExpandedLength || 0, this._postCheck = "function" == typeof t2.postCheck ? t2.postCheck : (t3) => t3, this._limitTiers = (e2 = this._limit.applyLimitsTo ?? ft) && e2 !== ft ? e2 === mt ? /* @__PURE__ */ new Set([mt]) : e2 === gt ? /* @__PURE__ */ new Set([gt]) : Array.isArray(e2) ? new Set(e2) : /* @__PURE__ */ new Set([ft]) : /* @__PURE__ */ new Set([ft]), this._numericAllowed = t2.numericAllowed ?? true, this._baseMap = ut(lt, t2.namedEntities || null), this._externalMap = /* @__PURE__ */ Object.create(null), this._inputMap = /* @__PURE__ */ Object.create(null), this._totalExpansions = 0, this._expandedLength = 0, this._removeSet = new Set(t2.remove && Array.isArray(t2.remove) ? t2.remove : []), this._leaveSet = new Set(t2.leave && Array.isArray(t2.leave) ? t2.leave : []);
-          const i2 = (function(t3) {
+          const i2 = function(t3) {
             if (!t3) return { xmlVersion: 1, onLevel: xt.allow, nullLevel: xt.remove };
             const e3 = 1.1 === t3.xmlVersion ? 1.1 : 1, i3 = xt[t3.onNCR] ?? xt.allow, n2 = xt[t3.nullNCR] ?? xt.remove;
             return { xmlVersion: e3, onLevel: i3, nullLevel: Math.max(n2, xt.remove) };
-          })(t2.ncr);
+          }(t2.ncr);
           this._ncrXmlVersion = i2.xmlVersion, this._ncrOnLevel = i2.onLevel, this._ncrNullLevel = i2.nullLevel, this._onExternalEntity = "function" == typeof t2.onExternalEntity ? t2.onExternalEntity : null, this._onInputEntity = "function" == typeof t2.onInputEntity ? t2.onInputEntity : null;
         }
         _applyRegistrationHook(t2, e2, i2, n2) {
@@ -25795,7 +25841,7 @@ var require_fxp = __commonJS({
       function Ot(t2, e2) {
         (function(t3) {
           if ("string" != typeof t3) throw new TypeError("is-unsafe: first argument must be a string, got " + typeof t3);
-        })(t2), (function(t3) {
+        })(t2), function(t3) {
           if (!(t3 instanceof RegExp)) {
             if (!Array.isArray(t3)) throw new TypeError("is-unsafe: second argument must be a PatternList (e.g. HTML), an array of PatternLists (e.g. [HTML, XML]), or a RegExp. Got: " + typeof t3);
             if (0 === t3.length) throw new TypeError("is-unsafe: context must not be an empty array");
@@ -25803,10 +25849,10 @@ var require_fxp = __commonJS({
               for (const e3 of t3) if (!Array.isArray(e3) || 0 === e3.length) throw new TypeError("is-unsafe: each context in the array must be a non-empty pattern array (PatternList)");
             }
           }
-        })(e2);
-        const { lists: i2, regex: n2 } = (function(t3) {
+        }(e2);
+        const { lists: i2, regex: n2 } = function(t3) {
           return t3 instanceof RegExp ? { lists: null, regex: t3 } : Array.isArray(t3[0]) ? { lists: t3, regex: null } : { lists: [t3], regex: null };
-        })(e2);
+        }(e2);
         if (n2) return n2.test(t2);
         for (const e3 of i2) if (null !== Pt(t2, e3)) return true;
         return false;
@@ -26035,7 +26081,7 @@ var require_fxp = __commonJS({
         return r2;
       }
       function Wt(t2, e2, i2, n2 = ">") {
-        const r2 = (function(t3, e3, i3 = ">") {
+        const r2 = function(t3, e3, i3 = ">") {
           let n3 = 0;
           const r3 = t3.length, s3 = i3.charCodeAt(0), o3 = i3.length > 1 ? i3.charCodeAt(1) : -1;
           let a3 = "", l3 = e3;
@@ -26048,7 +26094,7 @@ var require_fxp = __commonJS({
               if (t3.charCodeAt(i4 + 1) === o3) return a3 += t3.substring(l3, i4), { data: a3, index: i4 };
             } else 9 !== e4 || n3 || (a3 += t3.substring(l3, i4) + " ", l3 = i4 + 1);
           }
-        })(t2, e2 + 1, n2);
+        }(t2, e2 + 1, n2);
         if (!r2) return;
         let s2 = r2.data;
         const o2 = r2.index, a2 = s2.search(/\s/);
@@ -26204,7 +26250,7 @@ var require_fxp = __commonJS({
           const i3 = e2.stopNodes[t3];
           "string" == typeof i3 ? n2.push(new st(i3)) : i3 instanceof st && n2.push(i3);
         }
-        const r2 = (function(t3, e3) {
+        const r2 = function(t3, e3) {
           if (!Array.isArray(t3) || 0 === t3.length) return "1.0";
           const i3 = t3[0];
           if ("?xml" === Ee(i3)) {
@@ -26215,7 +26261,7 @@ var require_fxp = __commonJS({
             }
           }
           return "1.0";
-        })(t2, e2);
+        }(t2, e2);
         return xe(t2, e2, i2, new rt(), n2, r2);
       }
       function xe(t2, e2, i2, n2, r2, s2) {
@@ -26366,7 +26412,7 @@ var require_fxp = __commonJS({
         if (this.options.preserveOrder) return me(t2, this.options);
         {
           Array.isArray(t2) && this.options.arrayNodeName && this.options.arrayNodeName.length > 1 && (t2 = { [this.options.arrayNodeName]: t2 });
-          const e2 = new rt(), i2 = (function(t3, e3) {
+          const e2 = new rt(), i2 = function(t3, e3) {
             const i3 = t3["?xml"];
             if (i3 && "object" == typeof i3) {
               if (e3.attributesGroupName && i3[e3.attributesGroupName]) {
@@ -26377,7 +26423,7 @@ var require_fxp = __commonJS({
               if (t4) return t4;
             }
             return "1.0";
-          })(t2, this.options);
+          }(t2, this.options);
           return this.j2x(t2, 0, e2, i2).val;
         }
       }, Te.prototype.j2x = function(t2, e2, i2, n2) {
@@ -27315,7 +27361,7 @@ var require_crc64 = __commonJS({
     var NativeCRC64 = (() => {
       var _scriptDir = typeof document !== "undefined" && document.currentScript ? document.currentScript.src : void 0;
       if (typeof __filename !== "undefined") _scriptDir = _scriptDir || __filename;
-      return (function(NativeCRC642) {
+      return function(NativeCRC642) {
         NativeCRC642 = NativeCRC642 || {};
         var Module = typeof NativeCRC642 != "undefined" ? NativeCRC642 : {};
         var readyPromiseResolve, readyPromiseReject;
@@ -29556,7 +29602,7 @@ var require_crc64 = __commonJS({
           _emscripten_bind_Crc64Hash___destroy___0(self2);
         };
         return NativeCRC642.ready;
-      });
+      };
     })();
     module.exports = NativeCRC64;
   }
@@ -63638,7 +63684,7 @@ var require_bcrypt = __commonJS({
           res.push(rs[off].charCodeAt(0));
         return res;
       }
-      var utfx = (function() {
+      var utfx = function() {
         "use strict";
         var utfx2 = {};
         utfx2.MAX_CODEPOINT = 1114111;
@@ -63740,7 +63786,7 @@ var require_bcrypt = __commonJS({
           return [n, l];
         };
         return utfx2;
-      })();
+      }();
       Date.now = Date.now || function() {
         return +/* @__PURE__ */ new Date();
       };
@@ -65379,7 +65425,7 @@ var require_auth_sso = __commonJS({
         return false;
       }
     }
-    var BS_MODS = ["quejas", "accidentes", "hostigamiento", "subsidios", "rendiciones", "panel", "estadisticas", "descansos"];
+    var BS_MODS = ["quejas", "accidentes", "hostigamiento", "subsidios", "rendiciones", "panel", "estadisticas", "descansos", "gestion_social"];
     async function accesosDe(usuario) {
       try {
         const { getPool, sql } = require_db();
@@ -65592,8 +65638,11 @@ var require_bs_guardar = __commonJS({
       "bs_auditoria",
       "bs_rendiciones",
       "bs_sugerencias",
-      "bs_buzones"
+      "bs_buzones",
+      "bs_gs_casos",
+      "bs_gs_seguimientos"
     ];
+    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos"];
     var MODULO_DE_CLAVE = {
       bs_accidentes_casos: "accidentes",
       bs_accidentes_seguim: "accidentes",
@@ -65607,11 +65656,15 @@ var require_bs_guardar = __commonJS({
       bs_auditoria: "",
       bs_rendiciones: "rendiciones",
       bs_sugerencias: "sugerencias",
-      bs_buzones: "quejas"
+      bs_buzones: "quejas",
+      bs_gs_casos: "gestion_social",
+      bs_gs_seguimientos: "gestion_social"
     };
     var SEGUIMIENTO = {
       bs_accidentes_seguim: { padre: "bs_accidentes_casos", fk: "id_caso", contador: "numero_atenciones", exige: ["detalle"] },
-      bs_quejas_seguim: { padre: "bs_quejas", fk: "id_queja", contador: null, exige: ["fecha_seguimiento", "detalle"], mensaje: "Completa fecha y detalle" }
+      bs_quejas_seguim: { padre: "bs_quejas", fk: "id_queja", contador: null, exige: ["fecha_seguimiento", "detalle"], mensaje: "Completa fecha y detalle" },
+      /* _BS_GESTION_SOCIAL_V1: ademas de fecha y detalle guarda tipo, acuerdos, proxima fecha y ubicacion (campos 'extra') */
+      bs_gs_seguimientos: { padre: "bs_gs_casos", fk: "id_caso", contador: "numero_seguimientos", exige: ["detalle"], extra: ["tipo", "acuerdos", "ubicacion"], extraFecha: ["proxima_fecha"] }
     };
     var ENTERO = (v) => {
       const n = parseInt(String(v == null ? "" : v).replace(/[^\d-]/g, ""), 10);
@@ -65704,6 +65757,29 @@ var require_bs_guardar = __commonJS({
           v.fecha_finalizado = "";
         } else if (v.estado === "Finalizada") v.fecha_finalizado = celdaFecha(/* @__PURE__ */ new Date());
       },
+      /* _BS_GESTION_SOCIAL_V1: codigo GS-AAAA-0000 con el id, estado Abierto, prioridad Media, caso reservado por defecto */
+      bs_gs_casos: (v, nuevo, usuario) => {
+        const SN = (x) => String(x == null ? "" : x).trim().toUpperCase() === "NO" || x === false ? "NO" : "SI";
+        if (nuevo) {
+          const anio = (ymdDe(v.fecha_deteccion) || hoyLima()).slice(0, 4);
+          v.codigo = "GS-" + anio + "-" + String(ENTERO(v.id)).padStart(4, "0");
+          if (!v.fecha_deteccion) v.fecha_deteccion = celdaFecha(/* @__PURE__ */ new Date());
+          if (!v.estado) v.estado = "Abierto";
+          if (!v.prioridad) v.prioridad = "Media";
+          v.reservado = SN(v.reservado === void 0 || v.reservado === "" ? "SI" : v.reservado);
+          v.numero_seguimientos = 0;
+          v.resultado = v.resultado || "";
+          v.fecha_cierre = "";
+          v.dni = String(v.dni || "").replace(/\D/g, "");
+          v.nombre = String(v.nombre || "").toUpperCase();
+        } else {
+          if (v.reservado !== void 0) v.reservado = SN(v.reservado);
+          if (v.dni !== void 0) v.dni = String(v.dni || "").replace(/\D/g, "");
+          if (v.nombre !== void 0) v.nombre = String(v.nombre || "").toUpperCase();
+          if (v.estado === "Cerrado" && !v.fecha_cierre) v.fecha_cierre = celdaFecha(/* @__PURE__ */ new Date());
+          if (v.estado && v.estado !== "Cerrado") v.fecha_cierre = "";
+        }
+      },
       bs_quejas: (v, nuevo) => {
         if (nuevo) {
           if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(/* @__PURE__ */ new Date());
@@ -65724,6 +65800,9 @@ var require_bs_guardar = __commonJS({
       bs_sugerencias: ["id", "fecha", "usuario", "nombre_usuario", "titulo", "modulo", "descripcion", "prioridad", "estado", "respuesta_admin", "fecha_finalizado", "created_by", "created_at", "updated_at"],
       bs_buzones: ["id", "empresa", "sector", "numero", "ubicacion", "activo", "created_at"],
       bs_documentos: ["id", "modulo", "caso_id", "nombre", "url", "mime", "subido_por", "fecha"],
+      bs_gs_casos: TH.ESQ.bs_gs_casos.cols.map((c) => c[0]),
+      /* _BS_GESTION_SOCIAL_V1 */
+      bs_gs_seguimientos: TH.ESQ.bs_gs_seguimientos.cols.map((c) => c[0]),
       /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
       bs_hostigamiento: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"],
       bs_hostigamiento_olmos: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"]
@@ -65810,7 +65889,7 @@ var require_bs_guardar = __commonJS({
     async function fuenteDe(pool, clave) {
       await asegurarFuente(pool);
       const r = await pool.request().input("k", sql.NVarChar(40), clave).query("SELECT fuente FROM dbo.BS_Fuente WHERE clave = @k");
-      return r.recordset.length ? String(r.recordset[0].fuente) : "hoja";
+      return r.recordset.length ? String(r.recordset[0].fuente) : SIN_HOJA.indexOf(clave) >= 0 ? "supabase" : "hoja";
     }
     async function fuentes(pool) {
       await asegurarFuente(pool);
@@ -66040,6 +66119,12 @@ var require_bs_guardar = __commonJS({
           created_by: String(usuario || ""),
           created_at: celdaFecha(ahora)
         };
+        (S.extra || []).forEach((k) => {
+          if (datos && datos[k] !== void 0) v[k] = String(datos[k] == null ? "" : datos[k]).slice(0, 4e3);
+        });
+        (S.extraFecha || []).forEach((k) => {
+          if (datos && datos[k]) v[k] = comoHoja(datos[k]);
+        });
         v[S.fk] = Number(idPadre) > 0 ? Number(idPadre) : String(idPadre);
         await insertarCeldas(tx, claveHija, await siguienteFila(tx, claveHija), enc.map((h) => v[h] !== void 0 ? v[h] : ""));
         await tocarMarca(tx, claveHija);
@@ -66786,6 +66871,10 @@ var require_bs = __commonJS({
           out.success = true;
           out.permisos_fuente = P.fuente;
           return res(200, out);
+        }
+        if (accion === "permisos") {
+          const P = await permisosBS(u, q);
+          return res(200, { ok: true, success: true, usuario: String(u && u.usuario || "").toLowerCase(), esAdmin: P.esAdmin, permisos: P.permisos, fuente: P.fuente });
         }
         if (accion === "tabla") {
           const clave = String(q.clave || "");
@@ -67844,11 +67933,11 @@ var require_cumpl_motor = __commonJS({
         const denom = cerrados + vencidos + semanas;
         const pct = denom ? Math.round(100 * (enPlazo + visEnPlazo) / denom) : null;
         const nivel = pct === null ? "SIN DATOS" : pct >= cfg.excelente ? "EXCELENTE" : pct >= cfg.regular ? "REGULAR" : "BAJO";
-        const extraVis = visitasPend && !(visitasPend.dias_retraso > 0 && primerLunesV && (function() {
+        const extraVis = visitasPend && !(visitasPend.dias_retraso > 0 && primerLunesV && function() {
           const l0 = parse(visitasPend.fecha_registro);
           if (!l0) return false;
           return sumar(l0, -7) >= primerLunesV;
-        })()) ? 1 : 0;
+        }()) ? 1 : 0;
         return {
           mes: MESES[m] + " " + y,
           porcentaje: pct,

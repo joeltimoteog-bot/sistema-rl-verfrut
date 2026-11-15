@@ -163,7 +163,17 @@ const ESQ = {
     ['id', 'n'], ['fecha', 'f'], ['usuario', 't100'], ['nombre_usuario', 't200'], ['titulo', 't300'], ['modulo', 't60'], ['descripcion', 't4000'], ['prioridad', 't40'], ['estado', 't60'],
     ['respuesta_admin', 't4000'], ['fecha_finalizado', 'f'], ['created_by', 't100'], ['created_at', 'f'], ['updated_at', 'f']] },
   bs_buzones: { tabla: 'dbo.BS_Buzones', cols: [
-    ['id', 'n'], ['empresa', 't40'], ['sector', 't200'], ['numero', 't40'], ['ubicacion', 't400'], ['activo', 't10'], ['created_at', 'f']] }
+    ['id', 'n'], ['empresa', 't40'], ['sector', 't200'], ['numero', 't40'], ['ubicacion', 't400'], ['activo', 't10'], ['created_at', 'f']] },
+  /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) — modulo nuevo "Gestion Social del Trabajador", etapa 1: casos sociales + seguimientos.
+     Tablas propias (no hay hoja de Google detras): dbo.BS_GS_Casos y dbo.BS_GS_Seguimientos. */
+  bs_gs_casos: { tabla: 'dbo.BS_GS_Casos', cols: [
+    ['id', 'n'], ['codigo', 't20'], ['fecha_deteccion', 'f'], ['dni', 't20'], ['nombre', 't200'], ['empresa', 't40'], ['fundo', 't200'], ['cargo', 't150'], ['sede', 't20'],
+    ['tipo', 't100'], ['prioridad', 't20'], ['origen', 't100'], ['descripcion', 't4000'], ['accion_inmediata', 't100'], ['fecha_programada', 'f'], ['derivacion', 't100'],
+    ['responsable', 't200'], ['compromisos', 't4000'], ['reservado', 't10'], ['estado', 't40'], ['resultado', 't4000'], ['fecha_cierre', 'f'], ['numero_seguimientos', 'n'],
+    ['created_by', 't100'], ['created_at', 'f'], ['updated_by', 't100'], ['updated_at', 'f'], ['anulado', 't400']] },
+  bs_gs_seguimientos: { tabla: 'dbo.BS_GS_Seguimientos', cols: [
+    ['id', 'n'], ['id_caso', 'n'], ['numero_seguimiento', 'n'], ['fecha_seguimiento', 'f'], ['tipo', 't60'], ['detalle', 't4000'], ['acuerdos', 't2000'], ['proxima_fecha', 'f'],
+    ['ubicacion', 't200'], ['created_by', 't100'], ['created_at', 'f'], ['anulado', 't400']] }
 };
 const tipoSql = t => t === 'f' ? 'DATETIME2(3) NULL' : t === 'n' ? 'FLOAT NULL' : 'NVARCHAR(' + t.slice(1) + ') NULL';
 const tipoMs = t => t === 'f' ? sql.DateTime2(3) : t === 'n' ? sql.Float : sql.NVarChar(parseInt(t.slice(1), 10));
