@@ -12471,6 +12471,8 @@ var require_tablas_hoja = __commonJS({
       /* _BS_GESTION_SOCIAL_V2 (14-nov-2026): gestantes y lactancia */
       bs_gs_canal: { tabla: "dbo.BS_GS_Canal", cols: [["id", "n"], ["codigo", "t20"], ["fecha", "f"], ["empresa", "t40"], ["fundo", "t200"], ["sede", "t20"], ["categoria", "t100"], ["mensaje", "t4000"], ["contacto", "t200"], ["origen", "t40"], ["huella", "t64"], ["estado", "t40"], ["atendido_por", "t100"], ["fecha_atencion", "f"], ["respuesta", "t2000"], ["derivado_a", "t60"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
       /* _BS_GESTION_SOCIAL_V3 (15-nov-2026): canal anónimo QR */
+      bs_gs_visitas: { tabla: "dbo.BS_GS_Visitas", cols: [["id", "n"], ["codigo", "t20"], ["fecha", "f"], ["empresa", "t40"], ["fundo", "t200"], ["sede", "t20"], ["visitante", "t200"], ["acompanantes", "t400"], ["personas_presentes", "n"], ["respuestas", "t4000"], ["puntaje", "n"], ["items_ok", "n"], ["items_obs", "n"], ["items_na", "n"], ["hallazgos", "t4000"], ["compromisos", "t2000"], ["responsable_compromiso", "t200"], ["fecha_compromiso", "f"], ["estado", "t40"], ["fecha_cierre", "f"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
+      /* _BS_GESTION_SOCIAL_V4 (15-nov-2026): condiciones en campo */
       bs_gs_seguimientos: { tabla: "dbo.BS_GS_Seguimientos", cols: [
         ["id", "n"],
         ["id_caso", "n"],
@@ -65646,9 +65648,10 @@ var require_bs_guardar = __commonJS({
       "bs_gs_casos",
       "bs_gs_seguimientos",
       "bs_gs_gestantes",
-      "bs_gs_canal"
+      "bs_gs_canal",
+      "bs_gs_visitas"
     ];
-    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos", "bs_gs_gestantes", "bs_gs_canal"];
+    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos", "bs_gs_gestantes", "bs_gs_canal", "bs_gs_visitas"];
     var MODULO_DE_CLAVE = {
       bs_accidentes_casos: "accidentes",
       bs_accidentes_seguim: "accidentes",
@@ -65666,7 +65669,8 @@ var require_bs_guardar = __commonJS({
       bs_gs_casos: "gestion_social",
       bs_gs_seguimientos: "gestion_social",
       bs_gs_gestantes: "gestion_social",
-      bs_gs_canal: "gestion_social"
+      bs_gs_canal: "gestion_social",
+      bs_gs_visitas: "gestion_social"
     };
     var SEGUIMIENTO = {
       bs_accidentes_seguim: { padre: "bs_accidentes_casos", fk: "id_caso", contador: "numero_atenciones", exige: ["detalle"] },
@@ -65861,6 +65865,63 @@ var require_bs_guardar = __commonJS({
           if (v.estado && v.estado !== "Nuevo" && !ymdDe(v.fecha_atencion)) v.fecha_atencion = celdaFecha(/* @__PURE__ */ new Date());
         }
       },
+      /* _BS_GESTION_SOCIAL_V4 (15-nov-2026): visitas de condiciones en campo. El puntaje se calcula AQUÍ a partir de
+         respuestas = JSON { clave_item: 'OK'|'OBS'|'NA' } y de los pesos que manda el navegador en pesos = JSON { clave_item: n }
+         (catálogo de la pantalla; si no llega, cada ítem pesa 1). Puntaje = suma(peso·OK) / suma(peso de los ítems evaluados) · 100. */
+      bs_gs_visitas: (v, nuevo, usuario, actual) => {
+        const A = actual || {}, get = (k) => v[k] !== void 0 ? v[k] : A[k];
+        if (nuevo) {
+          const anio = (ymdDe(v.fecha) || hoyLima()).slice(0, 4);
+          v.codigo = "VC-" + anio + "-" + String(ENTERO(v.id)).padStart(4, "0");
+          if (!v.fecha) v.fecha = celdaFecha(/* @__PURE__ */ new Date());
+          v.empresa = String(v.empresa || "").toUpperCase();
+          v.sede = String(v.sede || "PIURA").toUpperCase();
+          v.fecha_cierre = "";
+        }
+        let R = {}, P = {};
+        try {
+          R = JSON.parse(String(get("respuestas") || "{}")) || {};
+        } catch (e) {
+          R = {};
+        }
+        try {
+          P = JSON.parse(String(v.pesos || "{}")) || {};
+        } catch (e) {
+          P = {};
+        }
+        delete v.pesos;
+        let ok = 0, obs = 0, na = 0, num = 0, den = 0;
+        Object.keys(R).forEach((k) => {
+          const r = String(R[k] || "").toUpperCase(), w = Math.max(0, Number(P[k]) || 1);
+          if (r === "NA") {
+            na++;
+            return;
+          }
+          den += w;
+          if (r === "OK") {
+            ok++;
+            num += w;
+          } else {
+            obs++;
+          }
+        });
+        if (v.respuestas !== void 0 || nuevo) {
+          v.respuestas = JSON.stringify(R);
+          v.items_ok = ok;
+          v.items_obs = obs;
+          v.items_na = na;
+          v.puntaje = den ? Math.round(num / den * 1e3) / 10 : 0;
+        }
+        if (v.personas_presentes !== void 0) v.personas_presentes = ENTERO(v.personas_presentes);
+        const estado = String(get("estado") || "");
+        if (estado === "Cerrada") {
+          if (!ymdDe(get("fecha_cierre"))) v.fecha_cierre = celdaFecha(/* @__PURE__ */ new Date());
+        } else {
+          v.fecha_cierre = "";
+          const o = v.items_obs !== void 0 ? v.items_obs : ENTERO(A.items_obs);
+          v.estado = o > 0 ? "Con pendientes" : "Registrada";
+        }
+      },
       bs_quejas: (v, nuevo) => {
         if (nuevo) {
           if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(/* @__PURE__ */ new Date());
@@ -65888,6 +65949,8 @@ var require_bs_guardar = __commonJS({
       /* _BS_GESTION_SOCIAL_V2 */
       bs_gs_canal: TH.ESQ.bs_gs_canal.cols.map((c) => c[0]),
       /* _BS_GESTION_SOCIAL_V3 */
+      bs_gs_visitas: TH.ESQ.bs_gs_visitas.cols.map((c) => c[0]),
+      /* _BS_GESTION_SOCIAL_V4 */
       /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
       bs_hostigamiento: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"],
       bs_hostigamiento_olmos: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"]

@@ -24,12 +24,12 @@ const { comoHoja } = require('./cap-guardar');
 
 const CLAVES_BS = ['bs_accidentes_casos', 'bs_accidentes_seguim', 'bs_hostigamiento', 'bs_hostigamiento_olmos', 'bs_subsidios', 'bs_documentos',
   'bs_quejas', 'bs_quejas_seguim', 'bs_descansos', 'bs_auditoria', 'bs_rendiciones', 'bs_sugerencias', 'bs_buzones',
-  'bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal'];   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V2: gestantes */
+  'bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_visitas'];   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V2 gestantes · V3 canal · V4 visitas */
 /* tablas que nacen en Supabase (nunca tuvieron hoja de Google): mandan desde Supabase aunque BS_Fuente no las liste */
-const SIN_HOJA = ['bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal'];
+const SIN_HOJA = ['bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_visitas'];
 const MODULO_DE_CLAVE = { bs_accidentes_casos: 'accidentes', bs_accidentes_seguim: 'accidentes', bs_hostigamiento: 'hostigamiento', bs_hostigamiento_olmos: 'hostigamiento',
   bs_subsidios: 'subsidios', bs_documentos: '', bs_quejas: 'quejas', bs_quejas_seguim: 'quejas', bs_descansos: 'descansos', bs_auditoria: '',
-  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social', bs_gs_gestantes: 'gestion_social', bs_gs_canal: 'gestion_social' };
+  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social', bs_gs_gestantes: 'gestion_social', bs_gs_canal: 'gestion_social', bs_gs_visitas: 'gestion_social' };
 /* seguimientos: tabla hija → padre, llave y contador que se actualiza en el padre (accidentes: numero_atenciones; hallazgos: solo updated_at) */
 const SEGUIMIENTO = {
   bs_accidentes_seguim: { padre: 'bs_accidentes_casos', fk: 'id_caso', contador: 'numero_atenciones', exige: ['detalle'] },
@@ -161,6 +161,27 @@ const NORMALIZAR = {
       if (v.estado && v.estado !== 'Nuevo' && !ymdDe(v.fecha_atencion)) v.fecha_atencion = celdaFecha(new Date());
     }
   },
+  /* _BS_GESTION_SOCIAL_V4 (15-nov-2026): visitas de condiciones en campo. El puntaje se calcula AQUÍ a partir de
+     respuestas = JSON { clave_item: 'OK'|'OBS'|'NA' } y de los pesos que manda el navegador en pesos = JSON { clave_item: n }
+     (catálogo de la pantalla; si no llega, cada ítem pesa 1). Puntaje = suma(peso·OK) / suma(peso de los ítems evaluados) · 100. */
+  bs_gs_visitas: (v, nuevo, usuario, actual) => {
+    const A = actual || {}, get = k => (v[k] !== undefined ? v[k] : A[k]);
+    if (nuevo) {
+      const anio = (ymdDe(v.fecha) || hoyLima()).slice(0, 4);
+      v.codigo = 'VC-' + anio + '-' + String(ENTERO(v.id)).padStart(4, '0');
+      if (!v.fecha) v.fecha = celdaFecha(new Date());
+      v.empresa = String(v.empresa || '').toUpperCase(); v.sede = String(v.sede || 'PIURA').toUpperCase(); v.fecha_cierre = '';
+    }
+    let R = {}, P = {}; try { R = JSON.parse(String(get('respuestas') || '{}')) || {}; } catch (e) { R = {}; } try { P = JSON.parse(String(v.pesos || '{}')) || {}; } catch (e) { P = {}; }
+    delete v.pesos;
+    let ok = 0, obs = 0, na = 0, num = 0, den = 0;
+    Object.keys(R).forEach(k => { const r = String(R[k] || '').toUpperCase(), w = Math.max(0, Number(P[k]) || 1); if (r === 'NA') { na++; return; } den += w; if (r === 'OK') { ok++; num += w; } else { obs++; } });
+    if (v.respuestas !== undefined || nuevo) { v.respuestas = JSON.stringify(R); v.items_ok = ok; v.items_obs = obs; v.items_na = na; v.puntaje = den ? Math.round(num / den * 1000) / 10 : 0; }
+    if (v.personas_presentes !== undefined) v.personas_presentes = ENTERO(v.personas_presentes);
+    const estado = String(get('estado') || '');
+    if (estado === 'Cerrada') { if (!ymdDe(get('fecha_cierre'))) v.fecha_cierre = celdaFecha(new Date()); }
+    else { v.fecha_cierre = ''; const o = v.items_obs !== undefined ? v.items_obs : ENTERO(A.items_obs); v.estado = o > 0 ? 'Con pendientes' : 'Registrada'; }
+  },
   bs_quejas: (v, nuevo) => {
     if (nuevo) {
       if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(new Date());
@@ -182,6 +203,7 @@ const ENCABEZADO_INICIAL = {
   bs_gs_seguimientos: TH.ESQ.bs_gs_seguimientos.cols.map(c => c[0]),
   bs_gs_gestantes: TH.ESQ.bs_gs_gestantes.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V2 */
   bs_gs_canal: TH.ESQ.bs_gs_canal.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V3 */
+  bs_gs_visitas: TH.ESQ.bs_gs_visitas.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V4 */
   /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
   bs_hostigamiento: ['id', 'fecha_denuncia', 'denunciante_dni', 'denunciante_nombre', 'denunciante_puesto', 'medida_proteccion', 'denunciado_dni', 'denunciado_nombre', 'denunciado_puesto', 'sede', 'fundo', 'decision', 'status', 'observaciones', 'empresa', 'created_by', 'created_at', 'updated_at'],
   bs_hostigamiento_olmos: ['id', 'fecha_denuncia', 'denunciante_dni', 'denunciante_nombre', 'denunciante_puesto', 'medida_proteccion', 'denunciado_dni', 'denunciado_nombre', 'denunciado_puesto', 'sede', 'fundo', 'decision', 'status', 'observaciones', 'empresa', 'created_by', 'created_at', 'updated_at']
