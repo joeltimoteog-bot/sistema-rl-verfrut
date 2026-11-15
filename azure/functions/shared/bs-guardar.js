@@ -24,12 +24,12 @@ const { comoHoja } = require('./cap-guardar');
 
 const CLAVES_BS = ['bs_accidentes_casos', 'bs_accidentes_seguim', 'bs_hostigamiento', 'bs_hostigamiento_olmos', 'bs_subsidios', 'bs_documentos',
   'bs_quejas', 'bs_quejas_seguim', 'bs_descansos', 'bs_auditoria', 'bs_rendiciones', 'bs_sugerencias', 'bs_buzones',
-  'bs_gs_casos', 'bs_gs_seguimientos'];   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) */
+  'bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes'];   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V2: gestantes */
 /* tablas que nacen en Supabase (nunca tuvieron hoja de Google): mandan desde Supabase aunque BS_Fuente no las liste */
-const SIN_HOJA = ['bs_gs_casos', 'bs_gs_seguimientos'];
+const SIN_HOJA = ['bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes'];
 const MODULO_DE_CLAVE = { bs_accidentes_casos: 'accidentes', bs_accidentes_seguim: 'accidentes', bs_hostigamiento: 'hostigamiento', bs_hostigamiento_olmos: 'hostigamiento',
   bs_subsidios: 'subsidios', bs_documentos: '', bs_quejas: 'quejas', bs_quejas_seguim: 'quejas', bs_descansos: 'descansos', bs_auditoria: '',
-  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social' };
+  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social', bs_gs_gestantes: 'gestion_social' };
 /* seguimientos: tabla hija → padre, llave y contador que se actualiza en el padre (accidentes: numero_atenciones; hallazgos: solo updated_at) */
 const SEGUIMIENTO = {
   bs_accidentes_seguim: { padre: 'bs_accidentes_casos', fk: 'id_caso', contador: 'numero_atenciones', exige: ['detalle'] },
@@ -107,6 +107,48 @@ const NORMALIZAR = {
       if (v.estado && v.estado !== 'Cerrado') v.fecha_cierre = '';
     }
   },
+  /* _BS_GESTION_SOCIAL_V2 (14-nov-2026): gestantes y lactancia. Las fechas legales se calculan AQUÍ (no en el navegador):
+     · Ley 26644: descanso 98 días = prenatal (49, diferible total o parcialmente al postnatal) + postnatal; +30 días por
+       parto múltiple o niño con discapacidad (dias_adicionales). Prenatal termina el día anterior a la fecha probable
+       de parto; postnatal arranca en la fecha real del parto (si ya se conoce) o en la probable.
+     · Ley 27240: hora de lactancia hasta que el hijo cumpla 1 año (lactancia_hasta).
+     · Ley 28048: si el puesto es de riesgo (riesgo_puesto=SI) debe reubicarse (reubicada / fecha_reubicacion).
+     En 'actualizar' se recibe la fila actual (4º argumento) para recalcular con los datos completos. */
+  bs_gs_gestantes: (v, nuevo, usuario, actual) => {
+    const SN = x => (String(x == null ? '' : x).trim().toUpperCase() === 'SI' || x === true) ? 'SI' : 'NO';
+    const A = actual || {}, get = k => (v[k] !== undefined ? v[k] : A[k]);
+    const dYmd = s => { const y = ymdDe(s); return y ? new Date(y + 'T12:00:00Z') : null; };
+    const suma = (d, n) => new Date(d.getTime() + n * 86400000);
+    const F = d => d ? celdaFecha(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 5))) : '';
+    if (nuevo) {
+      const anio = (ymdDe(v.fecha_comunicacion) || hoyLima()).slice(0, 4);
+      v.codigo = 'GM-' + anio + '-' + String(ENTERO(v.id)).padStart(4, '0');
+      if (!v.fecha_comunicacion) v.fecha_comunicacion = celdaFecha(new Date());
+      v.dni = String(v.dni || '').replace(/\D/g, ''); v.nombre = String(v.nombre || '').toUpperCase();
+      if (v.dias_prenatal === undefined || v.dias_prenatal === '') v.dias_prenatal = 49;
+      v.fecha_cierre = ''; v.motivo_cierre = v.motivo_cierre || '';
+    } else {
+      if (v.dni !== undefined) v.dni = String(v.dni || '').replace(/\D/g, '');
+      if (v.nombre !== undefined) v.nombre = String(v.nombre || '').toUpperCase();
+    }
+    ['riesgo_puesto', 'reubicada', 'subsidio_tramitado', 'lactario'].forEach(k => { if (nuevo || v[k] !== undefined) v[k] = SN(v[k]); });
+    const pre = Math.min(49, Math.max(0, ENTERO(get('dias_prenatal')))), adic = Math.max(0, ENTERO(get('dias_adicionales')));
+    v.dias_prenatal = pre; v.dias_adicionales = adic;
+    const fpp = dYmd(get('fecha_probable_parto')), real = dYmd(get('fecha_parto_real'));
+    if (fpp) {
+      const inicioPost = real || fpp;
+      v.descanso_pre_inicio = pre > 0 ? F(suma(fpp, -pre)) : ''; v.descanso_pre_fin = pre > 0 ? F(suma(fpp, -1)) : '';
+      v.descanso_post_inicio = F(inicioPost); v.descanso_post_fin = F(suma(inicioPost, (98 - pre) + adic - 1));
+      const lact = new Date(inicioPost.getTime()); lact.setUTCFullYear(lact.getUTCFullYear() + 1); v.lactancia_hasta = F(lact);
+    }
+    const estado = String(get('estado') || '');
+    if (estado === 'Cerrado') { if (!ymdDe(get('fecha_cierre'))) v.fecha_cierre = celdaFecha(new Date()); }
+    else {
+      v.fecha_cierre = ''; const hoy = hoyLima(), y = k => ymdDe(v[k] !== undefined ? v[k] : A[k]);
+      v.estado = !fpp ? 'Gestante' : (y('descanso_pre_inicio') && hoy < y('descanso_pre_inicio')) || (!y('descanso_pre_inicio') && hoy < y('descanso_post_inicio')) ? 'Gestante'
+        : hoy < y('descanso_post_inicio') ? 'Descanso prenatal' : hoy <= y('descanso_post_fin') ? 'Descanso postnatal' : hoy <= y('lactancia_hasta') ? 'Lactancia' : 'Concluido';
+    }
+  },
   bs_quejas: (v, nuevo) => {
     if (nuevo) {
       if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(new Date());
@@ -126,6 +168,7 @@ const ENCABEZADO_INICIAL = {
   bs_documentos: ['id', 'modulo', 'caso_id', 'nombre', 'url', 'mime', 'subido_por', 'fecha'],
   bs_gs_casos: TH.ESQ.bs_gs_casos.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V1 */
   bs_gs_seguimientos: TH.ESQ.bs_gs_seguimientos.cols.map(c => c[0]),
+  bs_gs_gestantes: TH.ESQ.bs_gs_gestantes.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V2 */
   /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
   bs_hostigamiento: ['id', 'fecha_denuncia', 'denunciante_dni', 'denunciante_nombre', 'denunciante_puesto', 'medida_proteccion', 'denunciado_dni', 'denunciado_nombre', 'denunciado_puesto', 'sede', 'fundo', 'decision', 'status', 'observaciones', 'empresa', 'created_by', 'created_at', 'updated_at'],
   bs_hostigamiento_olmos: ['id', 'fecha_denuncia', 'denunciante_dni', 'denunciante_nombre', 'denunciante_puesto', 'medida_proteccion', 'denunciado_dni', 'denunciado_nombre', 'denunciado_puesto', 'sede', 'fundo', 'decision', 'status', 'observaciones', 'empresa', 'created_by', 'created_at', 'updated_at']
@@ -337,7 +380,8 @@ async function actualizar(pool, clave, id, datos, usuario, opciones) {
     if (!reg) return { ok: false, success: false, status: 404, message: 'Registro #' + id + ' no encontrado.' };
     if (marcaAnulado(enc, reg.celdas) && !o.permitirAnulado) return { ok: false, success: false, status: 409, message: 'El registro #' + id + ' está anulado; restáuralo antes de editarlo.' };
     const v = valoresDesde(datos, enc, usuario, ahora, false, clave), celdas = reg.celdas.slice();
-    if (NORMALIZAR[clave]) NORMALIZAR[clave](v, false, usuario);
+    const actualObj = {}; enc.forEach((h, i) => { if (h) actualObj[h] = reg.celdas[i]; });   /* _BS_GESTION_SOCIAL_V2: fila actual para normalizadores que recalculan */
+    if (NORMALIZAR[clave]) NORMALIZAR[clave](v, false, usuario, actualObj);
     while (celdas.length < enc.length) celdas.push('');
     let cambios = 0; enc.forEach((h, i) => { if (v[h] !== undefined) { if (h !== 'updated_at' && h !== 'updated_by' && texto(celdas[i]) !== texto(v[h])) cambios++; celdas[i] = v[h]; } });
     const errA = aplicarCompletar(clave, enc, celdas, false, usuario, datos); if (errA) return { ok: false, success: false, status: 400, message: errA };
@@ -637,4 +681,4 @@ async function respaldar(pool, dias) {
   return out;
 }
 
-module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, BS_DM, cerrarMasivo, importar, generarSubsidioDM, docListar, docSubir, docVer, docModulo, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
+module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, NORMALIZAR, BS_DM, cerrarMasivo, importar, generarSubsidioDM, docListar, docSubir, docVer, docModulo, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };

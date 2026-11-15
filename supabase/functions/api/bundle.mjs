@@ -12467,6 +12467,8 @@ var require_tablas_hoja = __commonJS({
         ["updated_at", "f"],
         ["anulado", "t400"]
       ] },
+      bs_gs_gestantes: { tabla: "dbo.BS_GS_Gestantes", cols: [["id", "n"], ["codigo", "t20"], ["dni", "t20"], ["nombre", "t200"], ["empresa", "t40"], ["fundo", "t200"], ["cargo", "t150"], ["sede", "t20"], ["fecha_comunicacion", "f"], ["fecha_probable_parto", "f"], ["fecha_parto_real", "f"], ["dias_prenatal", "n"], ["dias_adicionales", "n"], ["descanso_pre_inicio", "f"], ["descanso_pre_fin", "f"], ["descanso_post_inicio", "f"], ["descanso_post_fin", "f"], ["lactancia_hasta", "f"], ["riesgo_puesto", "t10"], ["reubicada", "t10"], ["fecha_reubicacion", "f"], ["puesto_reubicada", "t200"], ["certificado_citt", "t100"], ["subsidio_tramitado", "t10"], ["lactario", "t10"], ["responsable", "t200"], ["observaciones", "t4000"], ["estado", "t40"], ["motivo_cierre", "t400"], ["fecha_cierre", "f"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
+      /* _BS_GESTION_SOCIAL_V2 (14-nov-2026): gestantes y lactancia */
       bs_gs_seguimientos: { tabla: "dbo.BS_GS_Seguimientos", cols: [
         ["id", "n"],
         ["id_caso", "n"],
@@ -65640,9 +65642,10 @@ var require_bs_guardar = __commonJS({
       "bs_sugerencias",
       "bs_buzones",
       "bs_gs_casos",
-      "bs_gs_seguimientos"
+      "bs_gs_seguimientos",
+      "bs_gs_gestantes"
     ];
-    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos"];
+    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos", "bs_gs_gestantes"];
     var MODULO_DE_CLAVE = {
       bs_accidentes_casos: "accidentes",
       bs_accidentes_seguim: "accidentes",
@@ -65658,7 +65661,8 @@ var require_bs_guardar = __commonJS({
       bs_sugerencias: "sugerencias",
       bs_buzones: "quejas",
       bs_gs_casos: "gestion_social",
-      bs_gs_seguimientos: "gestion_social"
+      bs_gs_seguimientos: "gestion_social",
+      bs_gs_gestantes: "gestion_social"
     };
     var SEGUIMIENTO = {
       bs_accidentes_seguim: { padre: "bs_accidentes_casos", fk: "id_caso", contador: "numero_atenciones", exige: ["detalle"] },
@@ -65780,6 +65784,61 @@ var require_bs_guardar = __commonJS({
           if (v.estado && v.estado !== "Cerrado") v.fecha_cierre = "";
         }
       },
+      /* _BS_GESTION_SOCIAL_V2 (14-nov-2026): gestantes y lactancia. Las fechas legales se calculan AQUÍ (no en el navegador):
+         · Ley 26644: descanso 98 días = prenatal (49, diferible total o parcialmente al postnatal) + postnatal; +30 días por
+           parto múltiple o niño con discapacidad (dias_adicionales). Prenatal termina el día anterior a la fecha probable
+           de parto; postnatal arranca en la fecha real del parto (si ya se conoce) o en la probable.
+         · Ley 27240: hora de lactancia hasta que el hijo cumpla 1 año (lactancia_hasta).
+         · Ley 28048: si el puesto es de riesgo (riesgo_puesto=SI) debe reubicarse (reubicada / fecha_reubicacion).
+         En 'actualizar' se recibe la fila actual (4º argumento) para recalcular con los datos completos. */
+      bs_gs_gestantes: (v, nuevo, usuario, actual) => {
+        const SN = (x) => String(x == null ? "" : x).trim().toUpperCase() === "SI" || x === true ? "SI" : "NO";
+        const A = actual || {}, get = (k) => v[k] !== void 0 ? v[k] : A[k];
+        const dYmd = (s) => {
+          const y = ymdDe(s);
+          return y ? /* @__PURE__ */ new Date(y + "T12:00:00Z") : null;
+        };
+        const suma = (d, n) => new Date(d.getTime() + n * 864e5);
+        const F = (d) => d ? celdaFecha(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 5))) : "";
+        if (nuevo) {
+          const anio = (ymdDe(v.fecha_comunicacion) || hoyLima()).slice(0, 4);
+          v.codigo = "GM-" + anio + "-" + String(ENTERO(v.id)).padStart(4, "0");
+          if (!v.fecha_comunicacion) v.fecha_comunicacion = celdaFecha(/* @__PURE__ */ new Date());
+          v.dni = String(v.dni || "").replace(/\D/g, "");
+          v.nombre = String(v.nombre || "").toUpperCase();
+          if (v.dias_prenatal === void 0 || v.dias_prenatal === "") v.dias_prenatal = 49;
+          v.fecha_cierre = "";
+          v.motivo_cierre = v.motivo_cierre || "";
+        } else {
+          if (v.dni !== void 0) v.dni = String(v.dni || "").replace(/\D/g, "");
+          if (v.nombre !== void 0) v.nombre = String(v.nombre || "").toUpperCase();
+        }
+        ["riesgo_puesto", "reubicada", "subsidio_tramitado", "lactario"].forEach((k) => {
+          if (nuevo || v[k] !== void 0) v[k] = SN(v[k]);
+        });
+        const pre = Math.min(49, Math.max(0, ENTERO(get("dias_prenatal")))), adic = Math.max(0, ENTERO(get("dias_adicionales")));
+        v.dias_prenatal = pre;
+        v.dias_adicionales = adic;
+        const fpp = dYmd(get("fecha_probable_parto")), real = dYmd(get("fecha_parto_real"));
+        if (fpp) {
+          const inicioPost = real || fpp;
+          v.descanso_pre_inicio = pre > 0 ? F(suma(fpp, -pre)) : "";
+          v.descanso_pre_fin = pre > 0 ? F(suma(fpp, -1)) : "";
+          v.descanso_post_inicio = F(inicioPost);
+          v.descanso_post_fin = F(suma(inicioPost, 98 - pre + adic - 1));
+          const lact = new Date(inicioPost.getTime());
+          lact.setUTCFullYear(lact.getUTCFullYear() + 1);
+          v.lactancia_hasta = F(lact);
+        }
+        const estado = String(get("estado") || "");
+        if (estado === "Cerrado") {
+          if (!ymdDe(get("fecha_cierre"))) v.fecha_cierre = celdaFecha(/* @__PURE__ */ new Date());
+        } else {
+          v.fecha_cierre = "";
+          const hoy = hoyLima(), y = (k) => ymdDe(v[k] !== void 0 ? v[k] : A[k]);
+          v.estado = !fpp ? "Gestante" : y("descanso_pre_inicio") && hoy < y("descanso_pre_inicio") || !y("descanso_pre_inicio") && hoy < y("descanso_post_inicio") ? "Gestante" : hoy < y("descanso_post_inicio") ? "Descanso prenatal" : hoy <= y("descanso_post_fin") ? "Descanso postnatal" : hoy <= y("lactancia_hasta") ? "Lactancia" : "Concluido";
+        }
+      },
       bs_quejas: (v, nuevo) => {
         if (nuevo) {
           if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(/* @__PURE__ */ new Date());
@@ -65803,6 +65862,8 @@ var require_bs_guardar = __commonJS({
       bs_gs_casos: TH.ESQ.bs_gs_casos.cols.map((c) => c[0]),
       /* _BS_GESTION_SOCIAL_V1 */
       bs_gs_seguimientos: TH.ESQ.bs_gs_seguimientos.cols.map((c) => c[0]),
+      bs_gs_gestantes: TH.ESQ.bs_gs_gestantes.cols.map((c) => c[0]),
+      /* _BS_GESTION_SOCIAL_V2 */
       /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
       bs_hostigamiento: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"],
       bs_hostigamiento_olmos: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"]
@@ -66082,7 +66143,11 @@ var require_bs_guardar = __commonJS({
         if (!reg) return { ok: false, success: false, status: 404, message: "Registro #" + id + " no encontrado." };
         if (marcaAnulado(enc, reg.celdas) && !o.permitirAnulado) return { ok: false, success: false, status: 409, message: "El registro #" + id + " est\xE1 anulado; rest\xE1uralo antes de editarlo." };
         const v = valoresDesde(datos, enc, usuario, ahora, false, clave), celdas = reg.celdas.slice();
-        if (NORMALIZAR[clave]) NORMALIZAR[clave](v, false, usuario);
+        const actualObj = {};
+        enc.forEach((h, i) => {
+          if (h) actualObj[h] = reg.celdas[i];
+        });
+        if (NORMALIZAR[clave]) NORMALIZAR[clave](v, false, usuario, actualObj);
         while (celdas.length < enc.length) celdas.push("");
         let cambios = 0;
         enc.forEach((h, i) => {
@@ -66550,7 +66615,7 @@ var require_bs_guardar = __commonJS({
       }
       return out;
     }
-    module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, BS_DM, cerrarMasivo, importar, generarSubsidioDM, docListar, docSubir, docVer, docModulo, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
+    module.exports = { CLAVES_BS, MODULO_DE_CLAVE, SEGUIMIENTO, NORMALIZAR, BS_DM, cerrarMasivo, importar, generarSubsidioDM, docListar, docSubir, docVer, docModulo, fuenteDe, fuentes, ponerFuente, crear, actualizar, seguimiento, anular, restaurar, registrarEvento, respaldar, auditar, cabecera };
   }
 });
 
