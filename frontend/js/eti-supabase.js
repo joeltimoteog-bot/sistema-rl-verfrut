@@ -9,6 +9,16 @@
      etiSupabase.verificar()    compara documento por documento Firestore vs Supabase
      etiSupabase.estado()       cola pendiente y ultimo error
    Apagar el espejo: localStorage.eti_supabase = 'off'
+   ─────────────────────────────────────────────────────────────────
+   _ETI_SUPABASE_V4 (15-nov-2026) — ETAPA 3: SUPABASE MANDA (index.html de Evaluacion ETI)
+   · Escrituras: primero Supabase (si el servidor responde con error, el usuario lo ve); luego la copia a
+     Firestore, que queda como RESPALDO. Sin red: se guarda en Firestore (cola local) y Supabase se pone al dia
+     con la cola del espejo, como antes.
+   · Lecturas (.get): Supabase primero, Firestore solo si Supabase falla. Ya no hay carrera.
+   · Escuchas en vivo (onSnapshot): se consultan a Supabase cada 12 s, al volver a la pestaña y al instante
+     despues de cada escritura propia.
+   · La pagina QR del trabajador (evaluar.html) NO cambia: Firestore con cola sin conexion + espejo.
+   Volver atras sin publicar: localStorage.eti_motor = 'firestore' y recargar.   etiSupabase.estado() lo muestra.
    ═══════════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
@@ -21,13 +31,17 @@
   var CLAVE_COLA = 'eti_supabase_cola';
   var activo = true; try { if (localStorage.getItem('eti_supabase') === 'off') activo = false; } catch (e) {}
   var ultimoError = '';
+  var MANDA = activo && !/evaluar\.html/i.test(location.pathname);   /* _ETI_SUPABASE_V4 */
+  try { if (localStorage.getItem('eti_motor') === 'firestore') MANDA = false; } catch (e) {}
+  var POLL_MS = 12000, oyentes = {}, est4 = { escritasSupabase: 0, respaldosFirestore: 0, respaldosFallidos: 0, escuchas: 0, sinRed: 0 };
+  function avisar(col) { (oyentes[col] || []).slice().forEach(function (fn) { try { fn(); } catch (e) {} }); }
 
   function token() { try { return sessionStorage.getItem('eti_token') || ''; } catch (e) { return ''; } }
   function post(accion, cuerpo) {
     var h = { 'Content-Type': 'application/json' }, t = token(); if (t) h.Authorization = 'Bearer ' + t;
     return fetch(API + accion + '?forceFunctionRegion=sa-east-1', {   /* _EDGE_REGION_V1: servidor en Sao Paulo, junto a la base */
        method: 'POST', headers: h, body: JSON.stringify(cuerpo) }).then(function (r) {
-      return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || !j.success) throw new Error((j && j.error) || ('HTTP ' + r.status)); return j; });
+      return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || !j.success) { var e = new Error((j && j.error) || ('HTTP ' + r.status)); e.status = r.status; throw e; } return j; });   /* _ETI_SUPABASE_V4: status para distinguir error del servidor vs sin red */
     });
   }
   /* datos a JSON puro (Date -> ISO; undefined fuera), como los guarda Firestore en este sistema */
@@ -70,17 +84,35 @@
   /* ── ganchos sobre Firestore (compat) ── */
   var DR = firebase.firestore.DocumentReference.prototype, CR = firebase.firestore.CollectionReference.prototype, WB = firebase.firestore.WriteBatch && firebase.firestore.WriteBatch.prototype;
   var o_set = DR.set, o_update = DR.update, o_delete = DR.delete, o_add = CR.add;
+  /* _ETI_SUPABASE_V4: con sesion y red, Supabase PRIMERO; Firestore despues como respaldo (no bloquea).
+     Si Supabase responde un error (permiso, validacion) la escritura NO se hace y el usuario lo ve.
+     Si no hay red o el servidor no contesta: camino de siempre (Firestore + cola del espejo). */
+  function esRed(e) { return !e || !e.status || e.status >= 500 || e.status === 0; }
+  function escribirManda(ops, fsFn) {
+    if (!MANDA || !token() || !navigator.onLine || !ops.length) { enviar(ops); return fsFn(); }
+    ops.forEach(function (o) { o.origen = 'evaluacion'; });
+    marcar(ops, 1);
+    return post('escribir', { ops: ops }).then(function () {
+      marcar(ops, -1); est4.escritasSupabase += ops.length; ops.forEach(function (o) { avisar(o.col); });
+      try { var p = fsFn(); if (p && p.then) p.then(function () { est4.respaldosFirestore += ops.length; }, function (e) { est4.respaldosFallidos += ops.length; ultimoError = 'respaldo: ' + (e && e.message); }); } catch (e) { est4.respaldosFallidos += ops.length; }
+    }, function (e) {
+      marcar(ops, -1);
+      if (esRed(e)) { est4.sinRed++; ultimoError = 'sin servidor: ' + (e && e.message); enviar(ops); return fsFn(); }   /* sin red: como antes */
+      ultimoError = e.message; throw e;
+    });
+  }
   DR.set = function (datos, opc) {
-    var r = deRef(this); if (r) enviar([{ col: r.col, id: r.id, op: 'set', datos: limpio(datos), merge: !!(opc && (opc.merge || opc.mergeFields)) }]);
-    return o_set.apply(this, arguments);
+    var r = deRef(this), self = this, args = arguments;
+    if (!r) return o_set.apply(this, arguments);
+    return escribirManda([{ col: r.col, id: r.id, op: 'set', datos: limpio(datos), merge: !!(opc && (opc.merge || opc.mergeFields)) }], function () { return o_set.apply(self, args); });
   };
   DR.update = function (a) {
-    var r = deRef(this);
-    if (r) { var d = a; if (typeof a === 'string' || (a && a.constructor && a.constructor.name === 'FieldPath')) { d = {}; for (var i = 0; i + 1 < arguments.length; i += 2) d[String(arguments[i])] = arguments[i + 1]; }
-      enviar([{ col: r.col, id: r.id, op: 'update', datos: limpio(d) }]); }
-    return o_update.apply(this, arguments);
+    var r = deRef(this), self = this, args = arguments;
+    if (!r) return o_update.apply(this, arguments);
+    var d = a; if (typeof a === 'string' || (a && a.constructor && a.constructor.name === 'FieldPath')) { d = {}; for (var i = 0; i + 1 < arguments.length; i += 2) d[String(arguments[i])] = arguments[i + 1]; }
+    return escribirManda([{ col: r.col, id: r.id, op: 'update', datos: limpio(d) }], function () { return o_update.apply(self, args); });
   };
-  DR.delete = function () { var r = deRef(this); if (r) enviar([{ col: r.col, id: r.id, op: 'delete' }]); return o_delete.apply(this, arguments); };
+  DR.delete = function () { var r = deRef(this), self = this, args = arguments; if (!r) return o_delete.apply(this, arguments); return escribirManda([{ col: r.col, id: r.id, op: 'delete' }], function () { return o_delete.apply(self, args); }); };
   /* add = doc() nuevo + set: mismo id en Firestore y en Supabase */
   CR.add = function (datos) {
     try { if (deRef(this.doc('x'))) { var ref = this.doc(); return ref.set(datos).then(function () { return ref; }); } } catch (e) {}
@@ -91,7 +123,12 @@
     WB.set = function (ref, datos, opc) { var r = deRef(ref); if (r) (this._etiOps = this._etiOps || []).push({ col: r.col, id: r.id, op: 'set', datos: limpio(datos), merge: !!(opc && (opc.merge || opc.mergeFields)) }); return b_set.apply(this, arguments); };
     WB.update = function (ref, datos) { var r = deRef(ref); if (r && datos && typeof datos === 'object') (this._etiOps = this._etiOps || []).push({ col: r.col, id: r.id, op: 'update', datos: limpio(datos) }); return b_update.apply(this, arguments); };
     WB.delete = function (ref) { var r = deRef(ref); if (r) (this._etiOps = this._etiOps || []).push({ col: r.col, id: r.id, op: 'delete' }); return b_delete.apply(this, arguments); };
-    WB.commit = function () { var ops = this._etiOps || []; this._etiOps = []; var p = b_commit.apply(this, arguments); if (ops.length) p.then(function () { enviar(ops); }, function () {}); return p; };
+    WB.commit = function () {
+      var ops = this._etiOps || [], self = this, args = arguments; this._etiOps = [];
+      if (!ops.length) return b_commit.apply(this, arguments);
+      if (!MANDA || !token() || !navigator.onLine) { var p = b_commit.apply(this, arguments); p.then(function () { enviar(ops); }, function () {}); return p; }
+      return escribirManda(ops, function () { return b_commit.apply(self, args); });   /* _ETI_SUPABASE_V4 */
+    };
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════
@@ -109,7 +146,8 @@
      Apagar solo las lecturas: localStorage.eti_supabase_lectura = 'off'
      ═══════════════════════════════════════════════════════════════════════════ */
   var COLS_LECTURA = ['respuestas_qr', 'evaluaciones_conocimiento', 'config_eti', 'sesiones_qr', 'programaciones_eval',
-    'informes_enviados', 'evaluaciones_depuradas', 'banco_historial'];
+    'informes_enviados', 'evaluaciones_depuradas', 'banco_historial',
+    'programaciones_eti'];   /* _ETI_SUPABASE_V4: Capacitaciones ya la escribe en Supabase primero */
   var lecturaOn = activo && !/evaluar\.html/i.test(location.pathname);
   try { if (localStorage.getItem('eti_supabase_lectura') === 'off') lecturaOn = false; } catch (e) {}
   var est = { supabase: 0, firestore: 0, sombraOk: 0, sombraDif: 0, reparados: 0, ms: [] };
@@ -147,6 +185,11 @@
      (nunca mas lento que antes). Cuando llegan las dos, se comparan (verificacion en sombra) sin lecturas extra. */
   function carrera(promSb, fsFn, armar, sombra) {
     var t0 = Date.now();
+    if (MANDA) return promSb.then(function (r) {   /* _ETI_SUPABASE_V4: Supabase manda; Firestore solo si Supabase falla */
+      var snap = armar(r); est.supabase++; est.ms.push(Date.now() - t0); if (est.ms.length > 50) est.ms.shift();
+      if (SOMBRA && (est.sombraOk + est.sombraDif) < 40) { try { fsFn().then(function (s) { try { sombra(r, s); } catch (e) {} }, function () {}); } catch (e) {} }
+      return snap;
+    }, function (e) { ultimoError = 'lectura: ' + (e && e.message); est.firestore++; try { console.warn('[_ETI_SUPABASE_V4] Supabase no respondio (' + (e && e.message) + '); se lee de Firestore (respaldo)'); } catch (x) {} return fsFn(); });
     return new Promise(function (ok, mal) {
       var listo = false, rSb = null, sFs = null, sbMal = false, fsMal = null, comparado = false;
       function comparar() { if (comparado || !rSb || !sFs) return; comparado = true; try { sombra(rSb, sFs); } catch (e) {} }
@@ -169,6 +212,7 @@
   }
   function huella(id, datos) { return id + '=' + JSON.stringify(canon(limpio(datos))); }
   function reparar(col, fsDocs, idsSobran) {
+    if (MANDA) return;   /* _ETI_SUPABASE_V4: Supabase es la fuente; no se sobrescribe con Firestore */
     var ops = fsDocs.map(function (d) { return { col: col, id: d.id, op: 'set', datos: limpio(d.data()), merge: false, origen: 'reparacion' }; });
     var revisar = idsSobran.map(function (id) { return o_dget.call(db().collection(col).doc(id)).then(function (s) {
       if (s.exists) ops.push({ col: col, id: id, op: 'set', datos: limpio(s.data()), merge: false, origen: 'reparacion' });
@@ -176,8 +220,12 @@
     }, function () {}); });
     Promise.all(revisar).then(function () { if (ops.length) post('escribir', { ops: ops }).then(function () { est.reparados += ops.length; }, function (e) { ultimoError = 'reparacion: ' + e.message; }); });
   }
+  var SOMBRA = true; try { if (localStorage.getItem('eti_sombra') === 'off') SOMBRA = false; } catch (e) {}
+  var difs = [];
   function diferencia(col, detalle) {
-    est.sombraDif++; apagar(col, detalle);
+    est.sombraDif++;
+    if (MANDA) { difs.push(col + ': ' + detalle); if (difs.length > 30) difs.shift(); try { console.warn('[_ETI_SUPABASE_V4] ' + col + ' difiere de Firestore (' + detalle + '); Supabase manda, se anota para revision'); } catch (e) {} return; }
+    apagar(col, detalle);
     try { console.warn('[_ETI_SUPABASE_V2] ' + col + ' no coincidio con Firestore (' + detalle + '); se repara y esta sesion lee de Firestore'); } catch (e) {}
   }
 
@@ -239,6 +287,51 @@
         reparar(r.col, s.exists ? [s] : [], s.exists ? [] : [r.id]);
       });
   };
+  /* _ETI_SUPABASE_V4: escuchas en vivo desde Supabase (sondeo). Si la primera lectura falla, escucha de Firestore como antes. */
+  function escucharSondeo(self, col, leer, onNext, onErr) {
+    var vivo = true, huellaAnt = null, enVuelo = false, iv = null, unsubFs = null;
+    function tick() {
+      if (!vivo || enVuelo) return; enVuelo = true;
+      leer().then(function (s) {
+        enVuelo = false; if (!vivo) return;
+        var h = s.docs ? s.docs.map(function (d) { return huella(d.id, d.data()); }).join('\n') : (s.exists ? huella(s.id, s.data()) : '-');
+        if (h !== huellaAnt) { huellaAnt = h; try { onNext(s); } catch (e) {} }
+      }, function (e) {
+        enVuelo = false; if (!vivo) return;
+        if (huellaAnt === null) { vivo = false; clearInterval(iv); try { unsubFs = self._etiOnSnapshotOrig(onNext, onErr); } catch (x) { if (onErr) onErr(e); } }
+      });
+    }
+    iv = setInterval(function () { if (!document.hidden) tick(); }, POLL_MS);
+    function vis() { if (!document.hidden) tick(); }
+    document.addEventListener('visibilitychange', vis);
+    (oyentes[col] = oyentes[col] || []).push(tick);
+    est4.escuchas++; tick();
+    return function () { vivo = false; clearInterval(iv); document.removeEventListener('visibilitychange', vis); var i = (oyentes[col] || []).indexOf(tick); if (i >= 0) oyentes[col].splice(i, 1); if (unsubFs) unsubFs(); };
+  }
+  function argsSnap(args) {   /* onSnapshot(cb, err) | onSnapshot(opciones, cb, err) | onSnapshot({next, error}) */
+    var a = Array.prototype.slice.call(args), opc = null;
+    if (a[0] && typeof a[0] === 'object' && typeof a[0].next !== 'function') opc = a.shift();
+    if (a[0] && typeof a[0] === 'object') return { opc: opc, next: a[0].next, error: a[0].error };
+    return { opc: opc, next: a[0], error: a[1] };
+  }
+  if (QP && typeof QP.onSnapshot === 'function') {
+    var o_qsnap = QP.onSnapshot;
+    QP.onSnapshot = function () {
+      var q = this, args = arguments, m = metaDe(q), s = argsSnap(args);
+      if (!MANDA || !m.ok || (s.opc && s.opc.includeMetadataChanges) || typeof s.next !== 'function' || !puedeLeer(m.col)) return o_qsnap.apply(q, args);
+      q._etiOnSnapshotOrig = function (n, e) { return o_qsnap.call(q, n, e); };
+      return escucharSondeo(q, m.col, function () { return QP.get.call(q); }, s.next, s.error);
+    };
+  }
+  if (typeof DR.onSnapshot === 'function') {
+    var o_dsnap = DR.onSnapshot;
+    DR.onSnapshot = function () {
+      var ref = this, args = arguments, r = deRef(ref), s = argsSnap(args);
+      if (!MANDA || !r || (s.opc && s.opc.includeMetadataChanges) || typeof s.next !== 'function' || !puedeLeer(r.col)) return o_dsnap.apply(ref, args);
+      ref._etiOnSnapshotOrig = function (n, e) { return o_dsnap.call(ref, n, e); };
+      return escucharSondeo(ref, r.col, function () { return DR.get.call(ref); }, s.next, s.error);
+    };
+  }
   if (lecturaOn && token()) setTimeout(function () { post('consultar', { col: 'config_eti', limite: 1 }).catch(function () {}); }, 1500);   /* calentar el servidor */
 
   /* ── herramientas del administrador ── */
@@ -269,7 +362,8 @@
     copiarTodo: copiarTodo, verificar: verificar,
     estado: function () {
       var ms = est.ms.slice().sort(function (a, b) { return a - b; });
-      var e = { activo: activo, enCola: cola().length, ultimoError: ultimoError,
+      var e = { motor: MANDA ? 'supabase (Firestore de respaldo)' : 'firestore + espejo', activo: activo, enCola: cola().length, ultimoError: ultimoError,
+        escritasSupabase: est4.escritasSupabase, respaldosFirestore: est4.respaldosFirestore, respaldosFallidos: est4.respaldosFallidos, escuchasSupabase: est4.escuchas, vecesSinRed: est4.sinRed, diferenciasAnotadas: difs.slice(),
         lectura: lecturaOn ? 'Supabase' : 'Firestore', leidasSupabase: est.supabase, leidasFirestore: est.firestore,
         msMediana: ms.length ? ms[Math.floor(ms.length / 2)] : null, sombraOk: est.sombraOk, sombraDistintas: est.sombraDif,
         reparados: est.reparados, coleccionesEnFirestore: Object.keys(apagadas) };
