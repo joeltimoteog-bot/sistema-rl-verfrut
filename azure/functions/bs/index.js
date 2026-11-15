@@ -8,6 +8,7 @@
    GET bs/tabla?clave=      filas de una hoja como objetos (sin anulados), opcional &dni=
    GET bs/estado            marcas y fecha de carga de cada tabla BS_*
    GET bs/permisos          _BS_GESTION_SOCIAL_V1 (14-nov): permisos del usuario segun "Acceso a Modulos" del RR.LL.
+   POST bs/canal            _BS_GESTION_SOCIAL_V3 (15-nov): canal anonimo QR (SIN sesion; limites por huella y por dia)
    POST bs/guardar          _BS_GUARDA_SUPABASE_V1 (08-nov): crear/actualizar/seguimiento/anular/restaurar directo en Supabase
    POST bs/auditar          evento de auditoría suelto (Apps Script con clave interna / navegador)
    GET|POST bs/fuente       quién manda por tabla ('hoja' = Google + sync, 'supabase' = se guarda aquí)
@@ -212,10 +213,48 @@ async function permisosBS(u, q) {
   return { esAdmin, permisos: perm, fuente: (acc === null ? 'bienestar:sin-respuesta-rrll' : 'bienestar:no-configurado') + (legadoUrl ? '' : ':url-ignorada') };
 }
 
+/* ═══ _BS_GESTION_SOCIAL_V3 (15-nov-2026): CANAL ANÓNIMO (QR en fundos, comedores y buses) ═══
+   POST bs/canal { empresa, fundo, sede, categoria, mensaje, contacto?, hp }  — SIN sesión: lo llena el trabajador desde su celular.
+   Protecciones: honeypot (hp debe venir vacío), tamaño del mensaje (10–2000), catálogo cerrado de categoría/empresa,
+   límite por huella (IP+navegador) 5 mensajes / 10 min y 30 / día, y tope global 400 / día. La IP nunca se guarda en claro
+   (huella = sha256 recortado). Lo demás del módulo (leer, atender, anular) sigue exigiendo sesión y permiso gestion_social. */
+const CANAL_CATEGORIAS = ['Queja', 'Sugerencia', 'Reconocimiento', 'Seguridad / salud en el trabajo', 'Trato / discriminación', 'Pago / horas', 'Transporte / comedor / SS.HH.', 'Hostigamiento (se deriva al comité)', 'Otro'];
+const CANAL_EMPRESAS = ['RAPEL', 'VERFRUT', 'OLMOS'];
+const canalMem = { porHuella: new Map(), dia: '', total: 0 };
+function canalHuella(req) {
+  const h = req.headers || {}, ip = String(h['x-forwarded-for'] || h['x-real-ip'] || '').split(',')[0].trim(), ua = String(h['user-agent'] || '').slice(0, 120);
+  return require('crypto').createHash('sha256').update(ip + '|' + ua + '|' + (process.env.JWT_SECRET || 'canal')).digest('hex').slice(0, 32);
+}
+function canalPermitido(huella) {
+  const hoy = new Date().toISOString().slice(0, 10), ahora = Date.now();
+  if (canalMem.dia !== hoy) { canalMem.dia = hoy; canalMem.total = 0; canalMem.porHuella.clear(); }
+  if (canalMem.total >= 400) return 'El canal recibió demasiados mensajes hoy. Intenta mañana o acércate a Bienestar Social.';
+  const r = canalMem.porHuella.get(huella) || { t: [] }; r.t = r.t.filter(t => ahora - t < 86400e3);
+  if (r.t.filter(t => ahora - t < 600e3).length >= 5) return 'Enviaste varios mensajes seguidos. Espera unos minutos para enviar otro.';
+  if (r.t.length >= 30) return 'Llegaste al máximo de mensajes por día desde este dispositivo.';
+  r.t.push(ahora); canalMem.porHuella.set(huella, r); canalMem.total++;
+  return '';
+}
+async function canalRecibir(req, res) {
+  if (String(req.method || '').toUpperCase() !== 'POST') return res(405, { ok: false, success: false, message: 'Usa POST' });
+  const b = req.body || {}, limpio = (x, n) => String(x == null ? '' : x).replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, n);
+  if (limpio(b.hp, 10)) return res(200, { ok: true, success: true, codigo: 'CQ-0000' });   /* bot: se le responde ok sin guardar */
+  const empresa = limpio(b.empresa, 40).toUpperCase(), fundo = limpio(b.fundo, 200), sede = limpio(b.sede || 'PIURA', 20).toUpperCase(), categoria = limpio(b.categoria, 100), mensaje = limpio(b.mensaje, 2000), contacto = limpio(b.contacto, 200);
+  if (CANAL_EMPRESAS.indexOf(empresa) < 0) return res(400, { ok: false, success: false, message: 'Empresa no válida.' });
+  if (CANAL_CATEGORIAS.indexOf(categoria) < 0) return res(400, { ok: false, success: false, message: 'Elige una categoría de la lista.' });
+  if (mensaje.length < 10) return res(400, { ok: false, success: false, message: 'Cuéntanos un poco más (mínimo 10 letras).' });
+  const huella = canalHuella(req), bloqueo = canalPermitido(huella); if (bloqueo) return res(429, { ok: false, success: false, message: bloqueo });
+  const pool = await getPool();
+  const r = await BG.crear(pool, 'bs_gs_canal', { empresa, fundo, sede, categoria, mensaje, contacto, origen: 'QR', huella }, 'canal-qr');
+  if (!r.ok) return res(r.status || 500, { ok: false, success: false, message: r.message || 'No se pudo registrar.' });
+  return res(200, { ok: true, success: true, id: r.id, codigo: r.codigo || ('CQ-' + String(r.id).padStart(4, '0')) });
+}
+
 module.exports = async function (context, req) {
-  const u = exigirAuth(context, req); if (u === null) return;
   const accion = String(context.bindingData.accion || '').toLowerCase(), q = req.query || {};
   const res = (status, body) => { context.res = { status, headers: { 'Content-Type': 'application/json' }, body }; };
+  if (accion === 'canal') { try { return await canalRecibir(req, res); } catch (e) { context.log && context.log.error && context.log.error('[bs/canal] ' + (e && e.message)); return res(500, { ok: false, success: false, message: 'Error del servidor: ' + ((e && e.message) || e) }); } }
+  const u = exigirAuth(context, req); if (u === null) return;
   try {
     const pool = await getPool();
     if (accion === 'ficha') {

@@ -24,12 +24,12 @@ const { comoHoja } = require('./cap-guardar');
 
 const CLAVES_BS = ['bs_accidentes_casos', 'bs_accidentes_seguim', 'bs_hostigamiento', 'bs_hostigamiento_olmos', 'bs_subsidios', 'bs_documentos',
   'bs_quejas', 'bs_quejas_seguim', 'bs_descansos', 'bs_auditoria', 'bs_rendiciones', 'bs_sugerencias', 'bs_buzones',
-  'bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes'];   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V2: gestantes */
+  'bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal'];   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V2: gestantes */
 /* tablas que nacen en Supabase (nunca tuvieron hoja de Google): mandan desde Supabase aunque BS_Fuente no las liste */
-const SIN_HOJA = ['bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes'];
+const SIN_HOJA = ['bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal'];
 const MODULO_DE_CLAVE = { bs_accidentes_casos: 'accidentes', bs_accidentes_seguim: 'accidentes', bs_hostigamiento: 'hostigamiento', bs_hostigamiento_olmos: 'hostigamiento',
   bs_subsidios: 'subsidios', bs_documentos: '', bs_quejas: 'quejas', bs_quejas_seguim: 'quejas', bs_descansos: 'descansos', bs_auditoria: '',
-  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social', bs_gs_gestantes: 'gestion_social' };
+  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social', bs_gs_gestantes: 'gestion_social', bs_gs_canal: 'gestion_social' };
 /* seguimientos: tabla hija → padre, llave y contador que se actualiza en el padre (accidentes: numero_atenciones; hallazgos: solo updated_at) */
 const SEGUIMIENTO = {
   bs_accidentes_seguim: { padre: 'bs_accidentes_casos', fk: 'id_caso', contador: 'numero_atenciones', exige: ['detalle'] },
@@ -149,6 +149,18 @@ const NORMALIZAR = {
         : hoy < y('descanso_post_inicio') ? 'Descanso prenatal' : hoy <= y('descanso_post_fin') ? 'Descanso postnatal' : hoy <= y('lactancia_hasta') ? 'Lactancia' : 'Concluido';
     }
   },
+  /* _BS_GESTION_SOCIAL_V3 (15-nov-2026): canal anónimo (QR). El mensaje entra sin sesión por POST bs/canal; aquí solo se normaliza. */
+  bs_gs_canal: (v, nuevo) => {
+    if (nuevo) {
+      const anio = hoyLima().slice(0, 4);
+      v.codigo = 'CQ-' + anio + '-' + String(ENTERO(v.id)).padStart(4, '0');
+      if (!v.fecha) v.fecha = celdaFecha(new Date());
+      v.estado = 'Nuevo'; v.origen = v.origen || 'QR'; v.respuesta = ''; v.derivado_a = ''; v.atendido_por = ''; v.fecha_atencion = '';
+      v.empresa = String(v.empresa || '').toUpperCase(); v.sede = String(v.sede || 'PIURA').toUpperCase();
+    } else {
+      if (v.estado && v.estado !== 'Nuevo' && !ymdDe(v.fecha_atencion)) v.fecha_atencion = celdaFecha(new Date());
+    }
+  },
   bs_quejas: (v, nuevo) => {
     if (nuevo) {
       if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(new Date());
@@ -169,6 +181,7 @@ const ENCABEZADO_INICIAL = {
   bs_gs_casos: TH.ESQ.bs_gs_casos.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V1 */
   bs_gs_seguimientos: TH.ESQ.bs_gs_seguimientos.cols.map(c => c[0]),
   bs_gs_gestantes: TH.ESQ.bs_gs_gestantes.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V2 */
+  bs_gs_canal: TH.ESQ.bs_gs_canal.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V3 */
   /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
   bs_hostigamiento: ['id', 'fecha_denuncia', 'denunciante_dni', 'denunciante_nombre', 'denunciante_puesto', 'medida_proteccion', 'denunciado_dni', 'denunciado_nombre', 'denunciado_puesto', 'sede', 'fundo', 'decision', 'status', 'observaciones', 'empresa', 'created_by', 'created_at', 'updated_at'],
   bs_hostigamiento_olmos: ['id', 'fecha_denuncia', 'denunciante_dni', 'denunciante_nombre', 'denunciante_puesto', 'medida_proteccion', 'denunciado_dni', 'denunciado_nombre', 'denunciado_puesto', 'sede', 'fundo', 'decision', 'status', 'observaciones', 'empresa', 'created_by', 'created_at', 'updated_at']
@@ -369,7 +382,7 @@ async function crear(pool, clave, datos, usuario, opciones) {
     await tocarMarca(tx, clave);
     await auditar(tx, usuario, 'CREAR', o.modulo || MODULO_DE_CLAVE[clave] || clave, id, o.detalle || '');
     const ob = filaObjeto(enc, celdas);
-    return { ok: true, success: true, id, fuente: 'supabase', dias: ob.dias, estado: ob.estado };
+    return { ok: true, success: true, id, fuente: 'supabase', dias: ob.dias, estado: ob.estado, codigo: ob.codigo };   /* _BS_GESTION_SOCIAL_V3: + codigo (GS-/GM-/CQ-) */
   });
 }
 async function actualizar(pool, clave, id, datos, usuario, opciones) {

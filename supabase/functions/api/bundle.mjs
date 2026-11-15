@@ -12469,6 +12469,8 @@ var require_tablas_hoja = __commonJS({
       ] },
       bs_gs_gestantes: { tabla: "dbo.BS_GS_Gestantes", cols: [["id", "n"], ["codigo", "t20"], ["dni", "t20"], ["nombre", "t200"], ["empresa", "t40"], ["fundo", "t200"], ["cargo", "t150"], ["sede", "t20"], ["fecha_comunicacion", "f"], ["fecha_probable_parto", "f"], ["fecha_parto_real", "f"], ["dias_prenatal", "n"], ["dias_adicionales", "n"], ["descanso_pre_inicio", "f"], ["descanso_pre_fin", "f"], ["descanso_post_inicio", "f"], ["descanso_post_fin", "f"], ["lactancia_hasta", "f"], ["riesgo_puesto", "t10"], ["reubicada", "t10"], ["fecha_reubicacion", "f"], ["puesto_reubicada", "t200"], ["certificado_citt", "t100"], ["subsidio_tramitado", "t10"], ["lactario", "t10"], ["responsable", "t200"], ["observaciones", "t4000"], ["estado", "t40"], ["motivo_cierre", "t400"], ["fecha_cierre", "f"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
       /* _BS_GESTION_SOCIAL_V2 (14-nov-2026): gestantes y lactancia */
+      bs_gs_canal: { tabla: "dbo.BS_GS_Canal", cols: [["id", "n"], ["codigo", "t20"], ["fecha", "f"], ["empresa", "t40"], ["fundo", "t200"], ["sede", "t20"], ["categoria", "t100"], ["mensaje", "t4000"], ["contacto", "t200"], ["origen", "t40"], ["huella", "t64"], ["estado", "t40"], ["atendido_por", "t100"], ["fecha_atencion", "f"], ["respuesta", "t2000"], ["derivado_a", "t60"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
+      /* _BS_GESTION_SOCIAL_V3 (15-nov-2026): canal anónimo QR */
       bs_gs_seguimientos: { tabla: "dbo.BS_GS_Seguimientos", cols: [
         ["id", "n"],
         ["id_caso", "n"],
@@ -65643,9 +65645,10 @@ var require_bs_guardar = __commonJS({
       "bs_buzones",
       "bs_gs_casos",
       "bs_gs_seguimientos",
-      "bs_gs_gestantes"
+      "bs_gs_gestantes",
+      "bs_gs_canal"
     ];
-    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos", "bs_gs_gestantes"];
+    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos", "bs_gs_gestantes", "bs_gs_canal"];
     var MODULO_DE_CLAVE = {
       bs_accidentes_casos: "accidentes",
       bs_accidentes_seguim: "accidentes",
@@ -65662,7 +65665,8 @@ var require_bs_guardar = __commonJS({
       bs_buzones: "quejas",
       bs_gs_casos: "gestion_social",
       bs_gs_seguimientos: "gestion_social",
-      bs_gs_gestantes: "gestion_social"
+      bs_gs_gestantes: "gestion_social",
+      bs_gs_canal: "gestion_social"
     };
     var SEGUIMIENTO = {
       bs_accidentes_seguim: { padre: "bs_accidentes_casos", fk: "id_caso", contador: "numero_atenciones", exige: ["detalle"] },
@@ -65839,6 +65843,24 @@ var require_bs_guardar = __commonJS({
           v.estado = !fpp ? "Gestante" : y("descanso_pre_inicio") && hoy < y("descanso_pre_inicio") || !y("descanso_pre_inicio") && hoy < y("descanso_post_inicio") ? "Gestante" : hoy < y("descanso_post_inicio") ? "Descanso prenatal" : hoy <= y("descanso_post_fin") ? "Descanso postnatal" : hoy <= y("lactancia_hasta") ? "Lactancia" : "Concluido";
         }
       },
+      /* _BS_GESTION_SOCIAL_V3 (15-nov-2026): canal anónimo (QR). El mensaje entra sin sesión por POST bs/canal; aquí solo se normaliza. */
+      bs_gs_canal: (v, nuevo) => {
+        if (nuevo) {
+          const anio = hoyLima().slice(0, 4);
+          v.codigo = "CQ-" + anio + "-" + String(ENTERO(v.id)).padStart(4, "0");
+          if (!v.fecha) v.fecha = celdaFecha(/* @__PURE__ */ new Date());
+          v.estado = "Nuevo";
+          v.origen = v.origen || "QR";
+          v.respuesta = "";
+          v.derivado_a = "";
+          v.atendido_por = "";
+          v.fecha_atencion = "";
+          v.empresa = String(v.empresa || "").toUpperCase();
+          v.sede = String(v.sede || "PIURA").toUpperCase();
+        } else {
+          if (v.estado && v.estado !== "Nuevo" && !ymdDe(v.fecha_atencion)) v.fecha_atencion = celdaFecha(/* @__PURE__ */ new Date());
+        }
+      },
       bs_quejas: (v, nuevo) => {
         if (nuevo) {
           if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(/* @__PURE__ */ new Date());
@@ -65864,6 +65886,8 @@ var require_bs_guardar = __commonJS({
       bs_gs_seguimientos: TH.ESQ.bs_gs_seguimientos.cols.map((c) => c[0]),
       bs_gs_gestantes: TH.ESQ.bs_gs_gestantes.cols.map((c) => c[0]),
       /* _BS_GESTION_SOCIAL_V2 */
+      bs_gs_canal: TH.ESQ.bs_gs_canal.cols.map((c) => c[0]),
+      /* _BS_GESTION_SOCIAL_V3 */
       /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
       bs_hostigamiento: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"],
       bs_hostigamiento_olmos: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"]
@@ -66132,7 +66156,7 @@ var require_bs_guardar = __commonJS({
         await tocarMarca(tx, clave);
         await auditar(tx, usuario, "CREAR", o.modulo || MODULO_DE_CLAVE[clave] || clave, id, o.detalle || "");
         const ob = filaObjeto(enc, celdas);
-        return { ok: true, success: true, id, fuente: "supabase", dias: ob.dias, estado: ob.estado };
+        return { ok: true, success: true, id, fuente: "supabase", dias: ob.dias, estado: ob.estado, codigo: ob.codigo };
       });
     }
     async function actualizar(pool, clave, id, datos, usuario, opciones) {
@@ -66919,13 +66943,60 @@ var require_bs = __commonJS({
       if (!esAdmin) perm.hostigamiento = false;
       return { esAdmin, permisos: perm, fuente: (acc === null ? "bienestar:sin-respuesta-rrll" : "bienestar:no-configurado") + (legadoUrl ? "" : ":url-ignorada") };
     }
+    var CANAL_CATEGORIAS = ["Queja", "Sugerencia", "Reconocimiento", "Seguridad / salud en el trabajo", "Trato / discriminaci\xF3n", "Pago / horas", "Transporte / comedor / SS.HH.", "Hostigamiento (se deriva al comit\xE9)", "Otro"];
+    var CANAL_EMPRESAS = ["RAPEL", "VERFRUT", "OLMOS"];
+    var canalMem = { porHuella: /* @__PURE__ */ new Map(), dia: "", total: 0 };
+    function canalHuella(req) {
+      const h = req.headers || {}, ip = String(h["x-forwarded-for"] || h["x-real-ip"] || "").split(",")[0].trim(), ua = String(h["user-agent"] || "").slice(0, 120);
+      return __require("crypto").createHash("sha256").update(ip + "|" + ua + "|" + (process.env.JWT_SECRET || "canal")).digest("hex").slice(0, 32);
+    }
+    function canalPermitido(huella) {
+      const hoy = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), ahora = Date.now();
+      if (canalMem.dia !== hoy) {
+        canalMem.dia = hoy;
+        canalMem.total = 0;
+        canalMem.porHuella.clear();
+      }
+      if (canalMem.total >= 400) return "El canal recibi\xF3 demasiados mensajes hoy. Intenta ma\xF1ana o ac\xE9rcate a Bienestar Social.";
+      const r = canalMem.porHuella.get(huella) || { t: [] };
+      r.t = r.t.filter((t) => ahora - t < 864e5);
+      if (r.t.filter((t) => ahora - t < 6e5).length >= 5) return "Enviaste varios mensajes seguidos. Espera unos minutos para enviar otro.";
+      if (r.t.length >= 30) return "Llegaste al m\xE1ximo de mensajes por d\xEDa desde este dispositivo.";
+      r.t.push(ahora);
+      canalMem.porHuella.set(huella, r);
+      canalMem.total++;
+      return "";
+    }
+    async function canalRecibir(req, res) {
+      if (String(req.method || "").toUpperCase() !== "POST") return res(405, { ok: false, success: false, message: "Usa POST" });
+      const b = req.body || {}, limpio = (x, n) => String(x == null ? "" : x).replace(/[\u0000-\u001f]/g, " ").trim().slice(0, n);
+      if (limpio(b.hp, 10)) return res(200, { ok: true, success: true, codigo: "CQ-0000" });
+      const empresa = limpio(b.empresa, 40).toUpperCase(), fundo = limpio(b.fundo, 200), sede = limpio(b.sede || "PIURA", 20).toUpperCase(), categoria = limpio(b.categoria, 100), mensaje = limpio(b.mensaje, 2e3), contacto = limpio(b.contacto, 200);
+      if (CANAL_EMPRESAS.indexOf(empresa) < 0) return res(400, { ok: false, success: false, message: "Empresa no v\xE1lida." });
+      if (CANAL_CATEGORIAS.indexOf(categoria) < 0) return res(400, { ok: false, success: false, message: "Elige una categor\xEDa de la lista." });
+      if (mensaje.length < 10) return res(400, { ok: false, success: false, message: "Cu\xE9ntanos un poco m\xE1s (m\xEDnimo 10 letras)." });
+      const huella = canalHuella(req), bloqueo = canalPermitido(huella);
+      if (bloqueo) return res(429, { ok: false, success: false, message: bloqueo });
+      const pool = await getPool();
+      const r = await BG.crear(pool, "bs_gs_canal", { empresa, fundo, sede, categoria, mensaje, contacto, origen: "QR", huella }, "canal-qr");
+      if (!r.ok) return res(r.status || 500, { ok: false, success: false, message: r.message || "No se pudo registrar." });
+      return res(200, { ok: true, success: true, id: r.id, codigo: r.codigo || "CQ-" + String(r.id).padStart(4, "0") });
+    }
     module.exports = async function(context, req) {
-      const u = exigirAuth(context, req);
-      if (u === null) return;
       const accion = String(context.bindingData.accion || "").toLowerCase(), q = req.query || {};
       const res = (status, body) => {
         context.res = { status, headers: { "Content-Type": "application/json" }, body };
       };
+      if (accion === "canal") {
+        try {
+          return await canalRecibir(req, res);
+        } catch (e) {
+          context.log && context.log.error && context.log.error("[bs/canal] " + (e && e.message));
+          return res(500, { ok: false, success: false, message: "Error del servidor: " + (e && e.message || e) });
+        }
+      }
+      const u = exigirAuth(context, req);
+      if (u === null) return;
       try {
         const pool = await getPool();
         if (accion === "ficha") {
