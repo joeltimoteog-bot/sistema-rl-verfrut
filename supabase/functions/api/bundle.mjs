@@ -12473,6 +12473,12 @@ var require_tablas_hoja = __commonJS({
       /* _BS_GESTION_SOCIAL_V3 (15-nov-2026): canal anónimo QR */
       bs_gs_visitas: { tabla: "dbo.BS_GS_Visitas", cols: [["id", "n"], ["codigo", "t20"], ["fecha", "f"], ["empresa", "t40"], ["fundo", "t200"], ["sede", "t20"], ["visitante", "t200"], ["acompanantes", "t400"], ["personas_presentes", "n"], ["respuestas", "t4000"], ["puntaje", "n"], ["items_ok", "n"], ["items_obs", "n"], ["items_na", "n"], ["hallazgos", "t4000"], ["compromisos", "t2000"], ["responsable_compromiso", "t200"], ["fecha_compromiso", "f"], ["estado", "t40"], ["fecha_cierre", "f"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
       /* _BS_GESTION_SOCIAL_V4 (15-nov-2026): condiciones en campo */
+      /* _BS_GESTION_SOCIAL_V6 (15-nov-2026): cumplimiento legal para auditoría (SMETA/GRASP/SUNAFIL) */
+      bs_gs_consentimientos: { tabla: "dbo.BS_GS_Consentimientos", cols: [["id", "n"], ["codigo", "t20"], ["dni", "t20"], ["nombre", "t200"], ["empresa", "t40"], ["fundo", "t200"], ["sede", "t20"], ["fecha", "f"], ["medio", "t60"], ["version_texto", "t20"], ["finalidades", "t600"], ["firmado", "t10"], ["revocado", "t10"], ["fecha_revocacion", "f"], ["registrado_por", "t200"], ["observaciones", "t1000"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
+      bs_gs_comite: { tabla: "dbo.BS_GS_Comite", cols: [["id", "n"], ["codigo", "t20"], ["tipo", "t60"], ["fecha", "f"], ["empresa", "t40"], ["sede", "t20"], ["lugar", "t200"], ["caso_ref", "t40"], ["participantes", "t2000"], ["asistentes", "n"], ["temas", "t2000"], ["acuerdos", "t4000"], ["vigencia_hasta", "f"], ["proxima_fecha", "f"], ["documento", "t400"], ["responsable", "t200"], ["estado", "t40"], ["observaciones", "t1000"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
+      bs_gs_adolescentes: { tabla: "dbo.BS_GS_Adolescentes", cols: [["id", "n"], ["codigo", "t20"], ["dni", "t20"], ["nombre", "t200"], ["fecha_nacimiento", "f"], ["edad", "n"], ["empresa", "t40"], ["fundo", "t200"], ["cargo", "t150"], ["sede", "t20"], ["fecha_ingreso", "f"], ["autorizacion_mtpe", "t100"], ["fecha_autorizacion", "f"], ["vigencia_autorizacion", "f"], ["horario", "t100"], ["horas_semana", "n"], ["labor_permitida", "t10"], ["examen_medico", "f"], ["estudia", "t10"], ["centro_estudios", "t200"], ["apoderado", "t200"], ["contacto_apoderado", "t100"], ["estado", "t40"], ["fecha_cese", "f"], ["observaciones", "t1000"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
+      bs_gs_lactarios: { tabla: "dbo.BS_GS_Lactarios", cols: [["id", "n"], ["codigo", "t20"], ["empresa", "t40"], ["sede", "t20"], ["fundo", "t200"], ["ubicacion", "t200"], ["fecha_implementacion", "f"], ["mujeres_edad_fertil", "n"], ["refrigeradora", "t10"], ["lavabo", "t10"], ["privacidad", "t10"], ["mobiliario", "t10"], ["comunicado_mimp", "t10"], ["fecha_comunicado", "f"], ["responsable", "t200"], ["usuarias_mes", "n"], ["estado", "t40"], ["observaciones", "t1000"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
+      bs_gs_discapacidad: { tabla: "dbo.BS_GS_Discapacidad", cols: [["id", "n"], ["codigo", "t20"], ["dni", "t20"], ["nombre", "t200"], ["empresa", "t40"], ["fundo", "t200"], ["cargo", "t150"], ["sede", "t20"], ["tipo_discapacidad", "t100"], ["certificado_conadis", "t100"], ["vigencia_certificado", "f"], ["grado", "t60"], ["ajustes", "t2000"], ["fecha_ajustes", "f"], ["estado", "t40"], ["fecha_cese", "f"], ["observaciones", "t1000"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
       bs_gs_seguimientos: { tabla: "dbo.BS_GS_Seguimientos", cols: [
         ["id", "n"],
         ["id_caso", "n"],
@@ -65431,7 +65437,7 @@ var require_auth_sso = __commonJS({
         return false;
       }
     }
-    var BS_MODS = ["quejas", "accidentes", "hostigamiento", "subsidios", "rendiciones", "panel", "estadisticas", "descansos", "gestion_social", "gs_gestantes", "gs_canal", "gs_condiciones"];
+    var BS_MODS = ["quejas", "accidentes", "hostigamiento", "subsidios", "rendiciones", "panel", "estadisticas", "descansos", "gestion_social", "gs_gestantes", "gs_canal", "gs_condiciones", "gs_datos", "gs_comite", "gs_adolescentes", "gs_lactario", "gs_discapacidad"];
     async function accesosDe(usuario) {
       try {
         const { getPool, sql } = require_db();
@@ -65649,9 +65655,14 @@ var require_bs_guardar = __commonJS({
       "bs_gs_seguimientos",
       "bs_gs_gestantes",
       "bs_gs_canal",
-      "bs_gs_visitas"
+      "bs_gs_visitas",
+      "bs_gs_consentimientos",
+      "bs_gs_comite",
+      "bs_gs_adolescentes",
+      "bs_gs_lactarios",
+      "bs_gs_discapacidad"
     ];
-    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos", "bs_gs_gestantes", "bs_gs_canal", "bs_gs_visitas"];
+    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos", "bs_gs_gestantes", "bs_gs_canal", "bs_gs_visitas", "bs_gs_consentimientos", "bs_gs_comite", "bs_gs_adolescentes", "bs_gs_lactarios", "bs_gs_discapacidad"];
     var MODULO_DE_CLAVE = {
       bs_accidentes_casos: "accidentes",
       bs_accidentes_seguim: "accidentes",
@@ -65670,7 +65681,12 @@ var require_bs_guardar = __commonJS({
       bs_gs_seguimientos: "gestion_social",
       bs_gs_gestantes: "gs_gestantes",
       bs_gs_canal: "gs_canal",
-      bs_gs_visitas: "gs_condiciones"
+      bs_gs_visitas: "gs_condiciones",
+      bs_gs_consentimientos: "gs_datos",
+      bs_gs_comite: "gs_comite",
+      bs_gs_adolescentes: "gs_adolescentes",
+      bs_gs_lactarios: "gs_lactario",
+      bs_gs_discapacidad: "gs_discapacidad"
     };
     var SEGUIMIENTO = {
       bs_accidentes_seguim: { padre: "bs_accidentes_casos", fk: "id_caso", contador: "numero_atenciones", exige: ["detalle"] },
@@ -65918,6 +65934,113 @@ var require_bs_guardar = __commonJS({
           v.estado = o > 0 ? "Con pendientes" : "Registrada";
         }
       },
+      /* _BS_GESTION_SOCIAL_V6 (15-nov-2026): módulos de cumplimiento legal. Reglas de negocio en el servidor. */
+      bs_gs_consentimientos: (v, nuevo, usuario) => {
+        const SN = (x) => String(x == null ? "" : x).trim().toUpperCase() === "NO" || x === false ? "NO" : "SI";
+        if (nuevo) {
+          v.codigo = "CD-" + (ymdDe(v.fecha) || hoyLima()).slice(0, 4) + "-" + String(ENTERO(v.id)).padStart(4, "0");
+          if (!v.fecha) v.fecha = celdaFecha(/* @__PURE__ */ new Date());
+          v.dni = String(v.dni || "").replace(/\D/g, "");
+          v.nombre = String(v.nombre || "").toUpperCase();
+          v.firmado = SN(v.firmado === void 0 ? "SI" : v.firmado);
+          v.revocado = "NO";
+          v.fecha_revocacion = "";
+          if (!v.version_texto) v.version_texto = "v1-2026";
+          if (!v.registrado_por) v.registrado_por = usuario || "";
+        } else {
+          if (v.dni !== void 0) v.dni = String(v.dni || "").replace(/\D/g, "");
+          if (v.nombre !== void 0) v.nombre = String(v.nombre || "").toUpperCase();
+          if (v.firmado !== void 0) v.firmado = SN(v.firmado);
+          if (v.revocado !== void 0) {
+            v.revocado = String(v.revocado).toUpperCase() === "SI" ? "SI" : "NO";
+            if (v.revocado === "SI" && !ymdDe(v.fecha_revocacion)) v.fecha_revocacion = celdaFecha(/* @__PURE__ */ new Date());
+            if (v.revocado === "NO") v.fecha_revocacion = "";
+          }
+        }
+      },
+      bs_gs_comite: (v, nuevo, usuario, actual) => {
+        const A = actual || {}, get = (k) => v[k] !== void 0 ? v[k] : A[k];
+        if (nuevo) {
+          v.codigo = "CH-" + (ymdDe(v.fecha) || hoyLima()).slice(0, 4) + "-" + String(ENTERO(v.id)).padStart(4, "0");
+          if (!v.fecha) v.fecha = celdaFecha(/* @__PURE__ */ new Date());
+          if (!v.estado) v.estado = "Registrada";
+          v.empresa = String(v.empresa || "").toUpperCase();
+        }
+        if (v.asistentes !== void 0) v.asistentes = ENTERO(v.asistentes);
+        const tipo = String(get("tipo") || ""), f = ymdDe(get("fecha"));
+        if (f && (v.fecha !== void 0 || v.tipo !== void 0 || nuevo)) {
+          const d = /* @__PURE__ */ new Date(f + "T12:00:00Z");
+          if (/conformaci|renovaci/i.test(tipo)) {
+            d.setUTCFullYear(d.getUTCFullYear() + 2);
+            v.vigencia_hasta = celdaFecha(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 5)));
+          } else if (/capacitaci/i.test(tipo)) {
+            d.setUTCFullYear(d.getUTCFullYear() + 1);
+            v.vigencia_hasta = celdaFecha(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 5)));
+          } else if (nuevo) v.vigencia_hasta = "";
+        }
+      },
+      bs_gs_adolescentes: (v, nuevo, usuario, actual) => {
+        const A = actual || {}, get = (k) => v[k] !== void 0 ? v[k] : A[k];
+        const SN = (x) => String(x == null ? "" : x).trim().toUpperCase() === "SI" || x === true ? "SI" : "NO";
+        if (nuevo) {
+          v.codigo = "AD-" + (ymdDe(v.fecha_ingreso) || hoyLima()).slice(0, 4) + "-" + String(ENTERO(v.id)).padStart(4, "0");
+          v.dni = String(v.dni || "").replace(/\D/g, "");
+          v.nombre = String(v.nombre || "").toUpperCase();
+          if (!v.estado) v.estado = "Activo";
+          v.fecha_cese = "";
+        } else {
+          if (v.dni !== void 0) v.dni = String(v.dni || "").replace(/\D/g, "");
+          if (v.nombre !== void 0) v.nombre = String(v.nombre || "").toUpperCase();
+        }
+        ["labor_permitida", "estudia"].forEach((k) => {
+          if (nuevo || v[k] !== void 0) v[k] = SN(v[k]);
+        });
+        if (v.horas_semana !== void 0) v.horas_semana = ENTERO(v.horas_semana);
+        const fn = ymdDe(get("fecha_nacimiento"));
+        if (fn) {
+          const h = hoyLima(), a = +h.slice(0, 4) - +fn.slice(0, 4) - (h.slice(5) < fn.slice(5) ? 1 : 0);
+          v.edad = a;
+        }
+        const est = String(get("estado") || "");
+        if (est === "Cesado") {
+          if (!ymdDe(get("fecha_cese"))) v.fecha_cese = celdaFecha(/* @__PURE__ */ new Date());
+        } else if (v.estado !== void 0) v.fecha_cese = "";
+      },
+      bs_gs_lactarios: (v, nuevo, usuario, actual) => {
+        const A = actual || {}, get = (k) => v[k] !== void 0 ? v[k] : A[k];
+        const SN = (x) => String(x == null ? "" : x).trim().toUpperCase() === "SI" || x === true ? "SI" : "NO";
+        if (nuevo) {
+          v.codigo = "LC-" + hoyLima().slice(0, 4) + "-" + String(ENTERO(v.id)).padStart(4, "0");
+          v.empresa = String(v.empresa || "").toUpperCase();
+          v.sede = String(v.sede || "PIURA").toUpperCase();
+        }
+        ["refrigeradora", "lavabo", "privacidad", "mobiliario", "comunicado_mimp"].forEach((k) => {
+          if (nuevo || v[k] !== void 0) v[k] = SN(v[k]);
+        });
+        ["mujeres_edad_fertil", "usuarias_mes"].forEach((k) => {
+          if (v[k] !== void 0) v[k] = ENTERO(v[k]);
+        });
+        const ok = ["refrigeradora", "lavabo", "privacidad", "mobiliario"].every((k) => String(get(k)).toUpperCase() === "SI");
+        v.estado = !ymdDe(get("fecha_implementacion")) ? "Pendiente" : ok ? "Operativo" : "Observado";
+      },
+      bs_gs_discapacidad: (v, nuevo, usuario, actual) => {
+        const A = actual || {}, get = (k) => v[k] !== void 0 ? v[k] : A[k];
+        if (nuevo) {
+          v.codigo = "PD-" + hoyLima().slice(0, 4) + "-" + String(ENTERO(v.id)).padStart(4, "0");
+          v.dni = String(v.dni || "").replace(/\D/g, "");
+          v.nombre = String(v.nombre || "").toUpperCase();
+          if (!v.estado) v.estado = "Activo";
+          v.fecha_cese = "";
+          v.empresa = String(v.empresa || "").toUpperCase();
+        } else {
+          if (v.dni !== void 0) v.dni = String(v.dni || "").replace(/\D/g, "");
+          if (v.nombre !== void 0) v.nombre = String(v.nombre || "").toUpperCase();
+        }
+        const est = String(get("estado") || "");
+        if (est === "Cesado") {
+          if (!ymdDe(get("fecha_cese"))) v.fecha_cese = celdaFecha(/* @__PURE__ */ new Date());
+        } else if (v.estado !== void 0) v.fecha_cese = "";
+      },
       bs_quejas: (v, nuevo) => {
         if (nuevo) {
           if (!v.fecha_recepcion) v.fecha_recepcion = celdaFecha(/* @__PURE__ */ new Date());
@@ -65947,6 +66070,12 @@ var require_bs_guardar = __commonJS({
       /* _BS_GESTION_SOCIAL_V3 */
       bs_gs_visitas: TH.ESQ.bs_gs_visitas.cols.map((c) => c[0]),
       /* _BS_GESTION_SOCIAL_V4 */
+      bs_gs_consentimientos: TH.ESQ.bs_gs_consentimientos.cols.map((c) => c[0]),
+      bs_gs_comite: TH.ESQ.bs_gs_comite.cols.map((c) => c[0]),
+      bs_gs_adolescentes: TH.ESQ.bs_gs_adolescentes.cols.map((c) => c[0]),
+      bs_gs_lactarios: TH.ESQ.bs_gs_lactarios.cols.map((c) => c[0]),
+      bs_gs_discapacidad: TH.ESQ.bs_gs_discapacidad.cols.map((c) => c[0]),
+      /* _BS_GESTION_SOCIAL_V6 */
       /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
       bs_hostigamiento: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"],
       bs_hostigamiento_olmos: ["id", "fecha_denuncia", "denunciante_dni", "denunciante_nombre", "denunciante_puesto", "medida_proteccion", "denunciado_dni", "denunciado_nombre", "denunciado_puesto", "sede", "fundo", "decision", "status", "observaciones", "empresa", "created_by", "created_at", "updated_at"]

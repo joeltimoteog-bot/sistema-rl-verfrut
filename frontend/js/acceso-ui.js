@@ -27,7 +27,7 @@
     { n: 'Operación RR.LL.', ic: '🗂️', c: ['navCorreo', 'navVisitas', 'navCasos', 'navFusiones', 'mod_capacitaciones', 'navMantenimiento', 'navSolicitudes', 'navHoras', 'navAlmuerzos', 'navInventario', 'navPreaviso', 'navCalcRemu', 'navBienestar'] },
     { n: 'Análisis y gerencia', ic: '📈', c: ['navRes', 'navEstadisticas', 'navKpis', 'navEval360'] },
     { n: 'Sistema ETI', ic: '🎓', c: ['navProgEti', 'navAppEti', 'eti_acceso'] },
-    { n: 'Bienestar Social (otro sistema)', ic: '💚', c: ['bs_acceso', 'bs_admin', 'bs_quejas', 'bs_accidentes', 'bs_hostigamiento', 'bs_subsidios', 'bs_rendiciones', 'bs_panel', 'bs_estadisticas', 'bs_descansos', 'bs_gestion_social', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_condiciones'] },   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V5: submódulos separados */
+    { n: 'Bienestar Social (otro sistema)', ic: '💚', c: ['bs_acceso', 'bs_admin', 'bs_quejas', 'bs_accidentes', 'bs_hostigamiento', 'bs_subsidios', 'bs_rendiciones', 'bs_panel', 'bs_estadisticas', 'bs_descansos', 'bs_gestion_social', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_condiciones', 'bs_gs_datos', 'bs_gs_comite', 'bs_gs_adolescentes', 'bs_gs_lactario', 'bs_gs_discapacidad'] },   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V5: submódulos separados */
     { n: 'Evaluaciones ETI (otro sistema)', ic: '📝', c: ['ev_acceso'] },
     { n: 'Administración', ic: '🛡️', c: ['navUsr', 'navPermisos', 'navActividad', 'act_todos', 'navMonitor', 'navFbAlertas'] }
   ];
@@ -59,7 +59,7 @@
      ['bs_quejas', 'Bienestar: Quejas y reclamos', '📣'], ['bs_accidentes', 'Bienestar: Accidentes', '🚑'],
      ['bs_hostigamiento', 'Bienestar: Hostigamiento', '🔒'], ['bs_subsidios', 'Bienestar: Subsidios', '💊'],
      ['bs_rendiciones', 'Bienestar: Rendiciones', '🧾'], ['bs_panel', 'Bienestar: Panel', '📊'],
-     ['bs_estadisticas', 'Bienestar: Estadísticas', '📈'], ['bs_descansos', 'Bienestar: Descansos médicos', '🩺'], ['bs_gestion_social', 'Bienestar: Gestión Social (casos sociales)', '🤝'], ['bs_gs_gestantes', 'Bienestar: Gestantes y lactancia', '🤱'], ['bs_gs_canal', 'Bienestar: Canal anónimo QR', '🗣️'], ['bs_gs_condiciones', 'Bienestar: Condiciones en campo', '🌾'],
+     ['bs_estadisticas', 'Bienestar: Estadísticas', '📈'], ['bs_descansos', 'Bienestar: Descansos médicos', '🩺'], ['bs_gestion_social', 'Bienestar: Gestión Social (casos sociales)', '🤝'], ['bs_gs_gestantes', 'Bienestar: Gestantes y lactancia', '🤱'], ['bs_gs_canal', 'Bienestar: Canal anónimo QR', '🗣️'], ['bs_gs_condiciones', 'Bienestar: Condiciones en campo', '🌾'], ['bs_gs_datos', 'Bienestar: Protección de datos (consentimientos)', '🛡️'], ['bs_gs_comite', 'Bienestar: Comité de hostigamiento (actas)', '📜'], ['bs_gs_adolescentes', 'Bienestar: Adolescentes autorizados', '🧒'], ['bs_gs_lactario', 'Bienestar: Lactarios', '🍼'], ['bs_gs_discapacidad', 'Bienestar: Discapacidad y cuota 3 %', '♿'],
      ['ev_acceso', 'Evaluaciones ETI: puede ingresar', '📝'],
      ['navActividad', 'Actividad de Usuarios', '📊'], ['act_todos', 'Actividad: ver a TODOS los usuarios', '👥']].forEach(function (x) { if (!hay[x[0]]) out.push({ clave: x[0], etiqueta: x[1], ic: x[2] }); });
     return out;
