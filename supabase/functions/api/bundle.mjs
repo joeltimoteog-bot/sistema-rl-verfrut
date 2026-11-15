@@ -65878,20 +65878,16 @@ var require_bs_guardar = __commonJS({
           v.sede = String(v.sede || "PIURA").toUpperCase();
           v.fecha_cierre = "";
         }
-        let R = {}, P = {};
+        let R = {};
         try {
           R = JSON.parse(String(get("respuestas") || "{}")) || {};
         } catch (e) {
           R = {};
         }
-        try {
-          P = JSON.parse(String(v.pesos || "{}")) || {};
-        } catch (e) {
-          P = {};
-        }
-        delete v.pesos;
+        const P = R._pesos && typeof R._pesos === "object" ? R._pesos : {};
         let ok = 0, obs = 0, na = 0, num = 0, den = 0;
         Object.keys(R).forEach((k) => {
+          if (k === "_pesos") return;
           const r = String(R[k] || "").toUpperCase(), w = Math.max(0, Number(P[k]) || 1);
           if (r === "NA") {
             na++;
@@ -65899,7 +65895,7 @@ var require_bs_guardar = __commonJS({
           }
           den += w;
           if (r === "OK") {
-            ok++;
+            ok += 1;
             num += w;
           } else {
             obs++;

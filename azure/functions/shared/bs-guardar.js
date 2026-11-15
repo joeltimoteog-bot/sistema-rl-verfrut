@@ -172,10 +172,12 @@ const NORMALIZAR = {
       if (!v.fecha) v.fecha = celdaFecha(new Date());
       v.empresa = String(v.empresa || '').toUpperCase(); v.sede = String(v.sede || 'PIURA').toUpperCase(); v.fecha_cierre = '';
     }
-    let R = {}, P = {}; try { R = JSON.parse(String(get('respuestas') || '{}')) || {}; } catch (e) { R = {}; } try { P = JSON.parse(String(v.pesos || '{}')) || {}; } catch (e) { P = {}; }
-    delete v.pesos;
+    /* los pesos viajan y se GUARDAN dentro del JSON de respuestas bajo la clave _pesos (valoresDesde descarta cualquier campo
+       que no sea columna, así que no pueden venir aparte). Guardarlos con la visita deja constancia de con qué pesos se calculó. */
+    let R = {}; try { R = JSON.parse(String(get('respuestas') || '{}')) || {}; } catch (e) { R = {}; }
+    const P = (R._pesos && typeof R._pesos === 'object') ? R._pesos : {};
     let ok = 0, obs = 0, na = 0, num = 0, den = 0;
-    Object.keys(R).forEach(k => { const r = String(R[k] || '').toUpperCase(), w = Math.max(0, Number(P[k]) || 1); if (r === 'NA') { na++; return; } den += w; if (r === 'OK') { ok++; num += w; } else { obs++; } });
+    Object.keys(R).forEach(k => { if (k === '_pesos') return; const r = String(R[k] || '').toUpperCase(), w = Math.max(0, Number(P[k]) || 1); if (r === 'NA') { na++; return; } den += w; if (r === 'OK') { ok += 1; num += w; } else { obs++; } });
     if (v.respuestas !== undefined || nuevo) { v.respuestas = JSON.stringify(R); v.items_ok = ok; v.items_obs = obs; v.items_na = na; v.puntaje = den ? Math.round(num / den * 1000) / 10 : 0; }
     if (v.personas_presentes !== undefined) v.personas_presentes = ENTERO(v.personas_presentes);
     const estado = String(get('estado') || '');
