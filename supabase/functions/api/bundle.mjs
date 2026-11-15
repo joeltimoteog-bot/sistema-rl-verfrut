@@ -65431,7 +65431,7 @@ var require_auth_sso = __commonJS({
         return false;
       }
     }
-    var BS_MODS = ["quejas", "accidentes", "hostigamiento", "subsidios", "rendiciones", "panel", "estadisticas", "descansos", "gestion_social"];
+    var BS_MODS = ["quejas", "accidentes", "hostigamiento", "subsidios", "rendiciones", "panel", "estadisticas", "descansos", "gestion_social", "gs_gestantes", "gs_canal", "gs_condiciones"];
     async function accesosDe(usuario) {
       try {
         const { getPool, sql } = require_db();
@@ -65668,9 +65668,9 @@ var require_bs_guardar = __commonJS({
       bs_buzones: "quejas",
       bs_gs_casos: "gestion_social",
       bs_gs_seguimientos: "gestion_social",
-      bs_gs_gestantes: "gestion_social",
-      bs_gs_canal: "gestion_social",
-      bs_gs_visitas: "gestion_social"
+      bs_gs_gestantes: "gs_gestantes",
+      bs_gs_canal: "gs_canal",
+      bs_gs_visitas: "gs_condiciones"
     };
     var SEGUIMIENTO = {
       bs_accidentes_seguim: { padre: "bs_accidentes_casos", fk: "id_caso", contador: "numero_atenciones", exige: ["detalle"] },

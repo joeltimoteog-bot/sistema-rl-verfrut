@@ -29,7 +29,7 @@ const CLAVES_BS = ['bs_accidentes_casos', 'bs_accidentes_seguim', 'bs_hostigamie
 const SIN_HOJA = ['bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_visitas'];
 const MODULO_DE_CLAVE = { bs_accidentes_casos: 'accidentes', bs_accidentes_seguim: 'accidentes', bs_hostigamiento: 'hostigamiento', bs_hostigamiento_olmos: 'hostigamiento',
   bs_subsidios: 'subsidios', bs_documentos: '', bs_quejas: 'quejas', bs_quejas_seguim: 'quejas', bs_descansos: 'descansos', bs_auditoria: '',
-  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social', bs_gs_gestantes: 'gestion_social', bs_gs_canal: 'gestion_social', bs_gs_visitas: 'gestion_social' };
+  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social', bs_gs_gestantes: 'gs_gestantes', bs_gs_canal: 'gs_canal', bs_gs_visitas: 'gs_condiciones' };   /* _BS_GESTION_SOCIAL_V5 (15-nov): permisos separados por submódulo */
 /* seguimientos: tabla hija → padre, llave y contador que se actualiza en el padre (accidentes: numero_atenciones; hallazgos: solo updated_at) */
 const SEGUIMIENTO = {
   bs_accidentes_seguim: { padre: 'bs_accidentes_casos', fk: 'id_caso', contador: 'numero_atenciones', exige: ['detalle'] },
