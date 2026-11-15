@@ -9,6 +9,8 @@
    GET bs/estado            marcas y fecha de carga de cada tabla BS_*
    GET bs/permisos          _BS_GESTION_SOCIAL_V1 (14-nov): permisos del usuario segun "Acceso a Modulos" del RR.LL.
    POST bs/canal            _BS_GESTION_SOCIAL_V3 (15-nov): canal anonimo QR (SIN sesion; limites por huella y por dia)
+   GET bs/dashboard         _BS_RESUMEN_SUPABASE_V1 (15-nov): KPIs del portal (antes bs_dashboard en Google)
+   GET bs/alertas           _BS_RESUMEN_SUPABASE_V1 (15-nov): alertas legales del portal (antes bs_alertas en Google)
    POST bs/guardar          _BS_GUARDA_SUPABASE_V1 (08-nov): crear/actualizar/seguimiento/anular/restaurar directo en Supabase
    POST bs/auditar          evento de auditoría suelto (Apps Script con clave interna / navegador)
    GET|POST bs/fuente       quién manda por tabla ('hoja' = Google + sync, 'supabase' = se guarda aquí)
@@ -250,6 +252,61 @@ async function canalRecibir(req, res) {
   return res(200, { ok: true, success: true, id: r.id, codigo: r.codigo || ('CQ-' + String(r.id).padStart(4, '0')) });
 }
 
+/* ═══ _BS_RESUMEN_SUPABASE_V1 (15-nov-2026): el portal de Bienestar deja de pedir a Google (hoja congelada el 14-nov)
+   los KPIs (bs_dashboard = getEstadisticasBienestar) y las alertas legales (bs_alertas = calcularAlertasBienestar).
+   Misma lógica y misma forma de salida que el Apps Script, pero leyendo las tablas bs_* de Supabase (sin anulados).
+   GET bs/dashboard  → { ok, quejas, accidentes, hostigamiento, subsidios, tendencia, recientes, generado }
+   GET bs/alertas    → { ok, alertas:[{modulo,id,regla,descripcion,fechaBase,fechaLimite,diasRestantes,estado,empresa}], resumen, generado } */
+const RES_CFG = { PLAZO_QUEJAS_DIAS: 15, PLAZO_QUEJAS_TIPO: 'habiles', UMBRAL_AMBAR_DIAS: 2, PLAZO_CANJE_CITT: 30,
+  FERIADOS: ['2026-01-01', '2026-04-02', '2026-04-03', '2026-05-01', '2026-06-07', '2026-06-29', '2026-07-23', '2026-07-28', '2026-07-29', '2026-08-06', '2026-08-30', '2026-10-08', '2026-11-01', '2026-12-08', '2026-12-09', '2026-12-25',
+    '2027-01-01', '2027-03-25', '2027-03-26', '2027-05-01', '2027-06-07', '2027-06-29', '2027-07-23', '2027-07-28', '2027-07-29', '2027-08-06', '2027-08-30', '2027-10-08', '2027-11-01', '2027-12-08', '2027-12-09', '2027-12-25'] };
+const rTxt = v => String(v == null ? '' : v).trim();
+const rNum = v => { const x = Number(rTxt(v).replace(/,/g, '')); return isNaN(x) ? 0 : x; };
+const rEmp = v => { const s = rTxt(v).toUpperCase(); return s.indexOf('RAPEL') >= 0 ? 'RAPEL' : s.indexOf('VERFRUT') >= 0 ? 'VERFRUT' : 'OTRO'; };
+const rFecha = v => { const m = rTxt(v).match(/^(\d{4})-(\d{2})-(\d{2})/); if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3])); const m2 = rTxt(v).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return m2 ? new Date(Date.UTC(+m2[3], +m2[2] - 1, +m2[1])) : null; };
+const rYmd = d => d ? d.toISOString().slice(0, 10) : '';
+const rYm = v => { const d = rFecha(v); if (d) return rYmd(d).slice(0, 7); const m = rTxt(v).match(/(\d{4})\D(\d{1,2})/); return m ? m[1] + '-' + ('0' + m[2]).slice(-2) : ''; };
+const rHoy = () => hoyLima();   /* ya es Date UTC-medianoche de Lima */
+const rHabil = d => { const w = d.getUTCDay(); return w !== 0 && w !== 6 && RES_CFG.FERIADOS.indexOf(rYmd(d)) < 0; };
+const rSumaCal = (d, n) => new Date(d.getTime() + n * 86400000);
+const rSumaHab = (d, n) => { let x = new Date(d.getTime()), c = 0; while (c < n) { x = rSumaCal(x, 1); if (rHabil(x)) c++; } return x; };
+const rVenc = fl => { const dr = Math.round((fl - rHoy()) / 86400000); return { estado: dr < 0 ? 'rojo' : dr <= RES_CFG.UMBRAL_AMBAR_DIAS ? 'ambar' : 'verde', diasRestantes: dr }; };
+async function resObjetos(pool, clave) { try { const f = await objetos(pool, clave); return (f || []).filter(o => !anulado(o)); } catch (e) { return []; } }
+function resPermisos(P) { const v = k => P.esAdmin || !!P.permisos[k]; return { quejas: v('quejas'), accidentes: v('accidentes'), hostigamiento: v('hostigamiento'), descansos: v('descansos'), subsidios: v('subsidios') }; }
+
+async function resDashboard(pool, P) {
+  const ver = resPermisos(P), tend = {}, recientes = [];
+  const bump = (per, mod) => { if (!per) return; if (!tend[per]) tend[per] = { quejas: 0, accidentes: 0, hostigamiento: 0, subsidios: 0 }; tend[per][mod]++; };
+  const addRec = (modulo, icon, fecha, titulo, estado, empresa) => { const d = rFecha(fecha); recientes.push({ modulo, icon, fecha: rYmd(d), titulo, estado, empresa, _ts: d ? d.getTime() : 0 }); };
+  const [Q, A, H1, H2, S] = await Promise.all([resObjetos(pool, 'bs_quejas'), resObjetos(pool, 'bs_accidentes_casos'), ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento') : [], ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento_olmos') : [], resObjetos(pool, 'bs_subsidios')]);
+  const quejas = { total: 0, resueltas: 0, pendientes: 0, porEmpresa: { RAPEL: 0, VERFRUT: 0 } };
+  Q.forEach(r => { quejas.total++; if (/resuelt|cerrad/i.test(rTxt(r.resultado))) quejas.resueltas++; const e = rEmp(r.empresa); if (quejas.porEmpresa[e] !== undefined) quejas.porEmpresa[e]++; bump(rYm(r.fecha_recepcion), 'quejas'); addRec('Quejas', '📋', r.fecha_recepcion, 'Queja' + (rTxt(r.categoria) ? ' · ' + rTxt(r.categoria) : ''), rTxt(r.resultado) || 'Pendiente', e); });
+  quejas.pendientes = quejas.total - quejas.resueltas;
+  const accidentes = { total: 0, cerrados: 0, enSeguimiento: 0, porEmpresa: { RAPEL: 0, VERFRUT: 0 } };
+  A.forEach(r => { accidentes.total++; if (/cerrad/i.test(rTxt(r.estado_caso))) accidentes.cerrados++; const e = rEmp(r.empresa); if (accidentes.porEmpresa[e] !== undefined) accidentes.porEmpresa[e]++; const fa = rTxt(r.dia_reportado) || r.dia_accidente; bump(rYm(fa), 'accidentes'); const det = rTxt(r.parte_cuerpo) || rTxt(r.tipo_accidente); addRec('Accidentes', '🩺', fa, 'Accidente' + (det ? ' · ' + det : ''), rTxt(r.estado_caso) || 'En seguimiento', e); });
+  accidentes.enSeguimiento = accidentes.total - accidentes.cerrados;
+  const hostigamiento = { acceso: ver.hostigamiento, total: 0 };
+  if (ver.hostigamiento) H1.concat(H2).forEach(r => { hostigamiento.total++; bump(rYm(r.fecha_denuncia), 'hostigamiento'); addRec('Hostigamiento', '🔒', r.fecha_denuncia, 'Denuncia registrada', rTxt(r.status) || 'En proceso', ''); });
+  const subsidios = { total: 0, recuperadoEssalud: 0, montoTotal: 0, porEmpresa: { RAPEL: 0, VERFRUT: 0 }, porEstado: {} };
+  S.forEach(r => { subsidios.total++; subsidios.recuperadoEssalud += rNum(r.recuperado_essalud); subsidios.montoTotal += rNum(r.monto_total); const e = rEmp(r.empresa); if (subsidios.porEmpresa[e] !== undefined) subsidios.porEmpresa[e]++; const e2 = rTxt(r.estado_general) || 'Sin estado'; subsidios.porEstado[e2] = (subsidios.porEstado[e2] || 0) + 1;
+    const per = rTxt(r.anio) ? rYm(rTxt(r.anio) + '-' + rTxt(r.mes)) : rYm(r.inicio); bump(per, 'subsidios'); const fsub = rTxt(r.inicio) || (rTxt(r.anio) ? rTxt(r.anio) + '-' + ('0' + rTxt(r.mes)).slice(-2) + '-01' : ''); addRec('Subsidios', '💰', fsub, 'Subsidio' + (rTxt(r.tipo) ? ' · ' + rTxt(r.tipo) : ''), e2, e); });
+  const tendencia = Object.keys(tend).sort().slice(-12).map(p => Object.assign({ periodo: p }, tend[p]));
+  recientes.sort((x, y) => y._ts - x._ts);
+  return { ok: true, success: true, quejas, accidentes, hostigamiento, subsidios, tendencia, recientes: recientes.slice(0, 10).map(it => ({ modulo: it.modulo, icon: it.icon, fecha: it.fecha, titulo: it.titulo, estado: it.estado, empresa: it.empresa })), generado: new Date().toISOString(), fuente: 'supabase' };
+}
+async function resAlertas(pool, P) {
+  const ver = resPermisos(P), alertas = [];
+  const push = (modulo, id, regla, descripcion, fb, fl, empresa) => { const e = rVenc(fl); alertas.push({ modulo, id, regla, descripcion, fechaBase: rYmd(fb), fechaLimite: rYmd(fl), diasRestantes: e.diasRestantes, estado: e.estado, empresa }); };
+  const [Q, D, H1, H2, A] = await Promise.all([ver.quejas ? resObjetos(pool, 'bs_quejas') : [], ver.descansos ? resObjetos(pool, 'bs_descansos') : [], ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento') : [], ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento_olmos') : [], ver.accidentes ? resObjetos(pool, 'bs_accidentes_casos') : []]);
+  Q.forEach(r => { if (/resuelt|cerrad/i.test(rTxt(r.resultado))) return; const fb = rFecha(r.fecha_recepcion); if (!fb) return; const fl = RES_CFG.PLAZO_QUEJAS_TIPO === 'calendario' ? rSumaCal(fb, RES_CFG.PLAZO_QUEJAS_DIAS) : rSumaHab(fb, RES_CFG.PLAZO_QUEJAS_DIAS); push('Quejas', rTxt(r.id), 'Atencion/resolucion', 'Queja' + (rTxt(r.categoria) ? ' · ' + rTxt(r.categoria) : ''), fb, fl, rTxt(r.empresa) ? rEmp(r.empresa) : ''); });
+  D.forEach(x => { if (rTxt(x.citt_estado) !== 'Pendiente de canje') return; const fb = rFecha(x.fecha_inicio); if (!fb) return; push('Descansos', x.id, 'Canje de CITT', 'DM ' + rTxt(x.tipo) + ' · ' + rTxt(x.nombre).split(/\s+/).slice(0, 2).join(' '), fb, rSumaCal(fb, RES_CFG.PLAZO_CANJE_CITT), rTxt(x.empresa)); });
+  H1.concat(H2).forEach(r => { const fb = rFecha(r.fecha_denuncia); if (!fb) return; const cerrado = /cerrad|resuelt|archivad/i.test(rTxt(r.status)); if (!rTxt(r.medida_proteccion)) push('Hostigamiento', rTxt(r.id), 'Medidas de proteccion (3 dh)', 'Caso de hostigamiento #' + rTxt(r.id), fb, rSumaHab(fb, 3), ''); if (!cerrado) push('Hostigamiento', rTxt(r.id), 'Informe de investigacion (15 dcal)', 'Caso de hostigamiento #' + rTxt(r.id), fb, rSumaCal(fb, 15), ''); });
+  A.forEach(r => { if (!/mortal|grave|incidente peligroso/i.test(rTxt(r.tipo_accidente) + ' ' + rTxt(r.estatus_accidente))) return; if (/cerrad/i.test(rTxt(r.estado_caso))) return; const fb = rFecha(r.dia_accidente); if (!fb) return; push('Accidentes', rTxt(r.id), 'Notificacion MTPE (24h)', 'Accidente' + (rTxt(r.parte_cuerpo) ? ' · ' + rTxt(r.parte_cuerpo) : '') + ' (mortal/grave)', fb, rSumaCal(fb, 1), rTxt(r.empresa) ? rEmp(r.empresa) : ''); });
+  const orden = { rojo: 0, ambar: 1, verde: 2 }; alertas.sort((x, y) => (orden[x.estado] - orden[y.estado]) || (x.diasRestantes - y.diasRestantes));
+  const resumen = { rojo: 0, ambar: 0, verde: 0 }; alertas.forEach(a => { resumen[a.estado]++; });
+  return { ok: true, success: true, alertas, resumen, generado: new Date().toISOString(), fuente: 'supabase' };
+}
+
 module.exports = async function (context, req) {
   const accion = String(context.bindingData.accion || '').toLowerCase(), q = req.query || {};
   const res = (status, body) => { context.res = { status, headers: { 'Content-Type': 'application/json' }, body }; };
@@ -263,6 +320,10 @@ module.exports = async function (context, req) {
          decidia). Ahora el rol sale SOLO del token y los permisos de "Acceso a Modulos" del RR.LL. (dbo.PermisosModulos). */
       const P = await permisosBS(u, q);
       const out = await ficha(pool, dni, P.permisos, P.esAdmin); out.success = true; out.permisos_fuente = P.fuente; return res(200, out);
+    }
+    if (accion === 'dashboard' || accion === 'alertas') {   /* _BS_RESUMEN_SUPABASE_V1 (15-nov-2026): KPIs y alertas del portal desde Supabase */
+      const P = await permisosBS(u, q);
+      return res(200, accion === 'dashboard' ? await resDashboard(pool, P) : await resAlertas(pool, P));
     }
     if (accion === 'permisos') {   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026): permisos de Bienestar decididos en el servidor ("Acceso a Modulos" del RR.LL.), para que el portal de Bienestar los use en vez de la hoja Usuarios congelada */
       const P = await permisosBS(u, q);
