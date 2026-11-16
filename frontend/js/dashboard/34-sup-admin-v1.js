@@ -37,8 +37,39 @@ function cargar(forzar) {
   }).catch(function () { return S.lista; }).finally(function () { S.cargando = null; });
   return S.cargando;
 }
-/* lista a usar: la de la hoja si tiene datos; si no, la de siempre */
-function fuente() { return (S.lista && S.lista.length) ? S.lista : (typeof SUPERVISORES_LISTA !== 'undefined' ? SUPERVISORES_LISTA.map(function (s) { var o = Object.assign({}, s); o.activo = true; return o; }) : []); }
+/* _PADRON_MANDA_V1 (16-nov-2026): el servidor ya corrige el DNI de la lista con el Padron de personas. Aqui se cubre el
+   unico camino que no pasa por el servidor: la lista fija del codigo (respaldo). Se lee /personas/equipo una vez por
+   sesion (toda sesion valida puede) y se corrige el DNI por nombre. Si no responde, todo sigue como antes. */
+var PAD = { porNombre: null, pidiendo: null };
+function padNorm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+function padClave(s) { return padNorm(s).split(' ').filter(Boolean).sort().join(' '); }
+function padronCargar() {
+  if (PAD.porNombre || PAD.pidiendo) return PAD.pidiendo || Promise.resolve(PAD.porNombre);
+  var tk = ''; try { tk = sessionStorage.getItem('rl_token') || ''; } catch (e) {}
+  if (!tk) return Promise.resolve(null);
+  var base = (typeof AZURE_FN_BASE === 'string' && AZURE_FN_BASE) ? AZURE_FN_BASE : 'https://rl-fn-verfrut.azurewebsites.net/api';
+  PAD.pidiendo = fetch(base + '/personas/equipo', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk }, body: '{}' })
+    .then(function (r) { return r.json(); }).then(function (j) {
+      var m = {}, lista = []; ((j && j.personas) || []).forEach(function (p) { var dni = String(p.dni || '').replace(/\D+/g, ''); if (!dni) return;
+        var n = (p.nombres || '') + ' ' + (p.apellidos || ''); if (padNorm(n)) { m[padNorm(n)] = dni; m[padClave(n)] = dni; lista.push({ dni: dni, w: padClave(n).split(' ') }); }
+        if (padNorm(p.nombre_mostrar)) { m[padNorm(p.nombre_mostrar)] = dni; m[padClave(p.nombre_mostrar)] = dni; } });
+      PAD.porNombre = m; PAD.lista = lista; return m;
+    }).catch(function () { return null; }).finally(function () { PAD.pidiendo = null; });
+  return PAD.pidiendo;
+}
+function conPadron(L) {
+  if (!PAD.porNombre) return L;
+  function parcial(nombre) {   /* nombre corto contenido en el nombre completo del padron (min. 3 palabras en comun) y persona unica */
+    var w = padClave(nombre).split(' ').filter(Boolean); if (w.length < 2) return '';
+    var hall = '', n = 0;
+    PAD.lista.forEach(function (p) { var chica = w.length <= p.w.length ? w : p.w, grande = chica === w ? p.w : w; var ok = chica.every(function (x) { return grande.indexOf(x) >= 0; }); if (ok && chica.length >= Math.min(3, grande.length)) { n++; hall = p.dni; } });
+    return n === 1 ? hall : '';
+  }
+  return L.map(function (s) { var d = PAD.porNombre[padNorm(s.nombre)] || PAD.porNombre[padClave(s.nombre)] || parcial(s.nombre); if (d && String(s.dni || '').replace(/\D+/g, '') !== d) { var o = Object.assign({}, s); o.dni_anterior = s.dni; o.dni = d; o.fuente_dni = 'padron'; return o; } return s; });
+}
+padronCargar();
+/* lista a usar: la de la hoja si tiene datos; si no, la de siempre (ambas con el DNI del Padron cuando la persona esta en el) */
+function fuente() { return conPadron((S.lista && S.lista.length) ? S.lista : (typeof SUPERVISORES_LISTA !== 'undefined' ? SUPERVISORES_LISTA.map(function (s) { var o = Object.assign({}, s); o.activo = true; return o; }) : [])); }
 /* el PDF de la visita busca el cargo en SUPERVISORES_LISTA: se le agregan los nuevos */
 function sincronizarLegado() {
   try {

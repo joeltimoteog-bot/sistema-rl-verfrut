@@ -40,7 +40,9 @@ async function indice() {
         .concat(String(p.alias || '').split(/[;,|\n]+/));
       nombres.forEach(n => { const k = norm(n); if (!k) return; porNombre[k] = fila; porPalabras[clavePalabras(n)] = fila; });
     });
-    memo = { t: Date.now(), idx: { porUsuario, porNombre, porPalabras, total: r.rows.length } };
+    const personas = []; const vistos = new Set();
+    Object.keys(porPalabras).forEach(k => { const f = porPalabras[k]; if (!vistos.has(f)) { vistos.add(f); personas.push({ fila: f, palabras: new Set(k.split(' ')) }); } });
+    memo = { t: Date.now(), idx: { porUsuario, porNombre, porPalabras, personas, total: r.rows.length } };
     return memo.idx;
   } finally { cli.release(); }
 }
@@ -49,7 +51,19 @@ function buscar(idx, item) {
   const u = String(item.usuario || '').toLowerCase().trim();
   if (u && idx.porUsuario[u]) return idx.porUsuario[u];
   const n = String(item.nombre || '');
-  return idx.porNombre[norm(n)] || idx.porPalabras[clavePalabras(n)] || null;
+  const directo = idx.porNombre[norm(n)] || idx.porPalabras[clavePalabras(n)];
+  if (directo) return directo;
+  /* el padrón suele traer el nombre completo (dos nombres, dos apellidos) y las listas solo una parte:
+     vale si TODAS las palabras del nombre corto están en el largo (mínimo 3 en común) y la persona es única */
+  const w = new Set(clavePalabras(n).split(' ').filter(Boolean));
+  if (w.size < 2) return null;
+  let hallado = null, cuantos = 0;
+  idx.personas.forEach(p => {
+    const chica = w.size <= p.palabras.size ? w : p.palabras, grande = chica === w ? p.palabras : w;
+    let ok = true; chica.forEach(x => { if (!grande.has(x)) ok = false; });
+    if (ok && chica.size >= Math.min(3, grande.size)) { cuantos++; hallado = p.fila; }
+  });
+  return cuantos === 1 ? hallado : null;
 }
 
 /* lista: arreglo de objetos con al menos { nombre } (y opcionalmente dni, usuario, correo, cargo, sector, empresa). Devuelve la misma lista corregida. */
