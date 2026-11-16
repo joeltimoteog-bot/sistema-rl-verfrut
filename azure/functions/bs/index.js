@@ -273,7 +273,7 @@ const rSumaCal = (d, n) => new Date(d.getTime() + n * 86400000);
 const rSumaHab = (d, n) => { let x = new Date(d.getTime()), c = 0; while (c < n) { x = rSumaCal(x, 1); if (rHabil(x)) c++; } return x; };
 const rVenc = fl => { const dr = Math.round((fl - rHoy()) / 86400000); return { estado: dr < 0 ? 'rojo' : dr <= RES_CFG.UMBRAL_AMBAR_DIAS ? 'ambar' : 'verde', diasRestantes: dr }; };
 async function resObjetos(pool, clave) { try { const f = await objetos(pool, clave); return (f || []).filter(o => !anulado(o)); } catch (e) { return []; } }
-function resPermisos(P) { const v = k => P.esAdmin || !!P.permisos[k]; return { quejas: v('quejas'), accidentes: v('accidentes'), hostigamiento: v('hostigamiento'), descansos: v('descansos'), subsidios: v('subsidios') }; }
+function resPermisos(P) { const v = k => P.esAdmin || !!P.permisos[k]; return { quejas: v('quejas'), accidentes: v('accidentes'), hostigamiento: v('hostigamiento'), descansos: v('descansos'), subsidios: v('subsidios'), lactancia: v('gs_lactancia') || v('gs_gestantes') }; }   /* _BS_LACTANCIA_V1: alertas de lactancia para quien tiene el módulo (o Gestantes) */
 
 async function resDashboard(pool, P) {
   const ver = resPermisos(P), tend = {}, recientes = [];
@@ -303,6 +303,23 @@ async function resAlertas(pool, P) {
   D.forEach(x => { if (rTxt(x.citt_estado) !== 'Pendiente de canje') return; const fb = rFecha(x.fecha_inicio); if (!fb) return; push('Descansos', x.id, 'Canje de CITT', 'DM ' + rTxt(x.tipo) + ' · ' + rTxt(x.nombre).split(/\s+/).slice(0, 2).join(' '), fb, rSumaCal(fb, RES_CFG.PLAZO_CANJE_CITT), rTxt(x.empresa)); });
   H1.concat(H2).forEach(r => { const fb = rFecha(r.fecha_denuncia); if (!fb) return; const cerrado = /cerrad|resuelt|archivad/i.test(rTxt(r.status)); if (!rTxt(r.medida_proteccion)) push('Hostigamiento', rTxt(r.id), 'Medidas de proteccion (3 dh)', 'Caso de hostigamiento #' + rTxt(r.id), fb, rSumaHab(fb, 3), ''); if (!cerrado) push('Hostigamiento', rTxt(r.id), 'Informe de investigacion (15 dcal)', 'Caso de hostigamiento #' + rTxt(r.id), fb, rSumaCal(fb, 15), ''); });
   A.forEach(r => { if (!/mortal|grave|incidente peligroso/i.test(rTxt(r.tipo_accidente) + ' ' + rTxt(r.estatus_accidente))) return; if (/cerrad/i.test(rTxt(r.estado_caso))) return; const fb = rFecha(r.dia_accidente); if (!fb) return; push('Accidentes', rTxt(r.id), 'Notificacion MTPE (24h)', 'Accidente' + (rTxt(r.parte_cuerpo) ? ' · ' + rTxt(r.parte_cuerpo) : '') + ' (mortal/grave)', fb, rSumaCal(fb, 1), rTxt(r.empresa) ? rEmp(r.empresa) : ''); });
+  /* _BS_LACTANCIA_V1 (16-nov-2026): descansos por acumulación de horas de lactancia (motor compartido con la pantalla) */
+  if (ver.lactancia) {
+    try {
+      const Lm = require('../shared/bs-lactancia-motor');
+      const [LA, HO] = await Promise.all([resObjetos(pool, 'bs_gs_lactancia'), resObjetos(pool, 'bs_gs_lactancia_horarios')]);
+      const hoy = rYmd(rHoy()), horarios = HO.filter(h => !rTxt(h.anulado));
+      LA.forEach(r => {
+        if (rTxt(r.anulado) || rTxt(r.estado) === 'Cerrada') return;
+        const R = Lm.calcular(r, { horarios, feriados: RES_CFG.FERIADOS, hoy });
+        R.alertas.forEach(al => {
+          const fl = new Date(al.fecha + 'T00:00:00Z');
+          alertas.push({ modulo: 'Lactancia', id: rTxt(r.codigo || r.id), regla: al.tipo === 'vencido' ? 'Descanso no registrado' : al.tipo === 'fin' ? 'Fin de lactancia' : al.tipo === 'sin_programar' ? 'Horas acumuladas' : 'Descanso por lactancia',
+            descripcion: rTxt(r.nombre).split(/\s+/).slice(0, 3).join(' ') + ' · ' + al.t, fechaBase: hoy, fechaLimite: al.fecha, diasRestantes: Math.round((fl - rHoy()) / 86400000), estado: al.n === 'rojo' ? 'rojo' : 'ambar', empresa: rTxt(r.empresa) });
+        });
+      });
+    } catch (e) { try { console.warn('[bs/alertas] lactancia: ' + e.message); } catch (x) {} }
+  }
   const orden = { rojo: 0, ambar: 1, verde: 2 }; alertas.sort((x, y) => (orden[x.estado] - orden[y.estado]) || (x.diasRestantes - y.diasRestantes));
   const resumen = { rojo: 0, ambar: 0, verde: 0 }; alertas.forEach(a => { resumen[a.estado]++; });
   return { ok: true, success: true, alertas, resumen, generado: new Date().toISOString(), fuente: 'supabase' };

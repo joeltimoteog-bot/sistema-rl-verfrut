@@ -12478,6 +12478,10 @@ var require_tablas_hoja = __commonJS({
       bs_gs_comite: { tabla: "dbo.BS_GS_Comite", cols: [["id", "n"], ["codigo", "t20"], ["tipo", "t60"], ["fecha", "f"], ["empresa", "t40"], ["sede", "t20"], ["lugar", "t200"], ["caso_ref", "t40"], ["participantes", "t2000"], ["asistentes", "n"], ["temas", "t2000"], ["acuerdos", "t4000"], ["vigencia_hasta", "f"], ["proxima_fecha", "f"], ["documento", "t400"], ["responsable", "t200"], ["estado", "t40"], ["observaciones", "t1000"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
       bs_gs_adolescentes: { tabla: "dbo.BS_GS_Adolescentes", cols: [["id", "n"], ["codigo", "t20"], ["dni", "t20"], ["nombre", "t200"], ["fecha_nacimiento", "f"], ["edad", "n"], ["empresa", "t40"], ["fundo", "t200"], ["cargo", "t150"], ["sede", "t20"], ["fecha_ingreso", "f"], ["autorizacion_mtpe", "t100"], ["fecha_autorizacion", "f"], ["vigencia_autorizacion", "f"], ["horario", "t100"], ["horas_semana", "n"], ["labor_permitida", "t10"], ["examen_medico", "f"], ["estudia", "t10"], ["centro_estudios", "t200"], ["apoderado", "t200"], ["contacto_apoderado", "t100"], ["estado", "t40"], ["fecha_cese", "f"], ["observaciones", "t1000"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
       bs_gs_lactarios: { tabla: "dbo.BS_GS_Lactarios", cols: [["id", "n"], ["codigo", "t20"], ["empresa", "t40"], ["sede", "t20"], ["fundo", "t200"], ["ubicacion", "t200"], ["fecha_implementacion", "f"], ["mujeres_edad_fertil", "n"], ["refrigeradora", "t10"], ["lavabo", "t10"], ["privacidad", "t10"], ["mobiliario", "t10"], ["comunicado_mimp", "t10"], ["fecha_comunicado", "f"], ["responsable", "t200"], ["usuarias_mes", "n"], ["estado", "t40"], ["observaciones", "t1000"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
+      bs_gs_lactancia: { tabla: "dbo.BS_GS_Lactancia", cols: [["id", "n"], ["codigo", "t20"], ["dni", "t20"], ["nombre", "t200"], ["empresa", "t40"], ["sede", "t20"], ["fundo", "t200"], ["cargo", "t150"], ["supervisor", "t200"], ["fecha_parto", "f"], ["parto_multiple", "t10"], ["horas_dia", "n"], ["fecha_retorno", "f"], ["fecha_fin", "f"], ["acuerdo_firmado", "t10"], ["fecha_acuerdo", "f"], ["descansos", "t8000"], ["ausencias", "t4000"], ["estado", "t40"], ["fecha_cierre", "f"], ["observaciones", "t1000"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
+      /* _BS_LACTANCIA_V1 (16-nov-2026) */
+      bs_gs_lactancia_horarios: { tabla: "dbo.BS_GS_LactanciaHorarios", cols: [["id", "n"], ["nombre", "t100"], ["meses", "t40"], ["desde_fecha", "f"], ["hasta_fecha", "f"], ["lv_horas", "n"], ["sab_horas", "n"], ["detalle", "t200"], ["activo", "t10"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
+      /* _BS_LACTANCIA_V1 */
       bs_gs_discapacidad: { tabla: "dbo.BS_GS_Discapacidad", cols: [["id", "n"], ["codigo", "t20"], ["dni", "t20"], ["nombre", "t200"], ["empresa", "t40"], ["fundo", "t200"], ["cargo", "t150"], ["sede", "t20"], ["tipo_discapacidad", "t100"], ["certificado_conadis", "t100"], ["vigencia_certificado", "f"], ["grado", "t60"], ["ajustes", "t2000"], ["fecha_ajustes", "f"], ["estado", "t40"], ["fecha_cese", "f"], ["observaciones", "t1000"], ["created_by", "t100"], ["created_at", "f"], ["updated_by", "t100"], ["updated_at", "f"], ["anulado", "t400"]] },
       bs_gs_seguimientos: { tabla: "dbo.BS_GS_Seguimientos", cols: [
         ["id", "n"],
@@ -65437,7 +65441,7 @@ var require_auth_sso = __commonJS({
         return false;
       }
     }
-    var BS_MODS = ["quejas", "accidentes", "hostigamiento", "subsidios", "rendiciones", "panel", "estadisticas", "descansos", "gestion_social", "gs_gestantes", "gs_canal", "gs_condiciones", "gs_datos", "gs_comite", "gs_adolescentes", "gs_lactario", "gs_discapacidad"];
+    var BS_MODS = ["quejas", "accidentes", "hostigamiento", "subsidios", "rendiciones", "panel", "estadisticas", "descansos", "gestion_social", "gs_gestantes", "gs_canal", "gs_condiciones", "gs_datos", "gs_comite", "gs_adolescentes", "gs_lactario", "gs_discapacidad", "gs_lactancia"];
     async function accesosDe(usuario) {
       try {
         const { getPool, sql } = require_db();
@@ -65630,6 +65634,240 @@ var require_empresas = __commonJS({
   }
 });
 
+// shared/bs-lactancia-motor.js
+var require_bs_lactancia_motor = __commonJS({
+  "shared/bs-lactancia-motor.js"(exports, module) {
+    (function(root, fabrica) {
+      if (typeof module === "object" && module.exports) module.exports = fabrica();
+      else root.BSLactancia = fabrica();
+    })(typeof self !== "undefined" ? self : exports, function() {
+      "use strict";
+      var DIA = 864e5;
+      var HORARIOS_DEFECTO = [
+        { nombre: "Temporada alta", meses: "6-12", lv_horas: 9.6, sab_horas: 0, activo: "SI", detalle: "L\u2013V 06:15\u201316:36 \xB7 s\xE1b y dom descanso" },
+        { nombre: "Temporada baja", meses: "1-5", lv_horas: 8.45, sab_horas: 5.75, activo: "SI", detalle: "L\u2013V 06:15\u201315:27 \xB7 s\xE1b 06:15\u201312:00" }
+      ];
+      function ymd(v) {
+        if (!v) return "";
+        if (v instanceof Date) {
+          if (isNaN(v)) return "";
+          var z = new Date(v.getTime() - v.getTimezoneOffset() * 6e4);
+          return z.toISOString().slice(0, 10);
+        }
+        var m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+        return m ? m[1] + "-" + m[2] + "-" + m[3] : "";
+      }
+      function fechaUTC(s) {
+        return /* @__PURE__ */ new Date(s + "T00:00:00Z");
+      }
+      function aYmd(d) {
+        return d.toISOString().slice(0, 10);
+      }
+      function sumaDias(s, n) {
+        var d = fechaUTC(s);
+        d.setUTCDate(d.getUTCDate() + n);
+        return aYmd(d);
+      }
+      function sumaAnios(s, n) {
+        var d = fechaUTC(s);
+        d.setUTCFullYear(d.getUTCFullYear() + n);
+        return aYmd(d);
+      }
+      function diasEntre(a, b) {
+        return Math.round((fechaUTC(b) - fechaUTC(a)) / DIA);
+      }
+      function num(v) {
+        var n = Number(String(v == null ? "" : v).replace(",", "."));
+        return isNaN(n) ? 0 : n;
+      }
+      function si(v) {
+        return v === true || String(v || "").trim().toUpperCase() === "SI";
+      }
+      function lista(v) {
+        if (Array.isArray(v)) return v;
+        if (!v) return [];
+        try {
+          var j = JSON.parse(v);
+          return Array.isArray(j) ? j : [];
+        } catch (e) {
+          return [];
+        }
+      }
+      function r2(n) {
+        return Math.round(n * 100) / 100;
+      }
+      function mesEn(rango, mes) {
+        var s = String(rango || "").trim();
+        if (!s) return true;
+        return s.split(",").some(function(p) {
+          var m = p.trim().match(/^(\d+)\s*-\s*(\d+)$/);
+          if (m) return mes >= +m[1] && mes <= +m[2];
+          return +p.trim() === mes;
+        });
+      }
+      function horarioDe(fecha, horarios) {
+        var H = (horarios && horarios.length ? horarios : HORARIOS_DEFECTO).filter(function(h) {
+          return h && !String(h.anulado || "").trim() && (h.activo === void 0 || si(h.activo));
+        });
+        var mes = +fecha.slice(5, 7);
+        var conVig = H.filter(function(h) {
+          var d = ymd(h.desde_fecha), hs = ymd(h.hasta_fecha);
+          return (d || hs) && (!d || fecha >= d) && (!hs || fecha <= hs) && mesEn(h.meses, mes);
+        });
+        if (conVig.length) return conVig[0];
+        var gen = H.filter(function(h) {
+          return !ymd(h.desde_fecha) && !ymd(h.hasta_fecha) && mesEn(h.meses, mes);
+        });
+        return gen[0] || null;
+      }
+      function enAusencia(fecha, ausencias) {
+        return ausencias.some(function(a) {
+          var d = ymd(a.desde), h = ymd(a.hasta) || d;
+          return d && fecha >= d && fecha <= h;
+        });
+      }
+      function jornada(fecha, cfg) {
+        if ((cfg.feriados || []).indexOf(fecha) >= 0) return { h: 0, motivo: "feriado" };
+        if (enAusencia(fecha, cfg.ausencias || [])) return { h: 0, motivo: "ausencia" };
+        var dow = fechaUTC(fecha).getUTCDay(), H = horarioDe(fecha, cfg.horarios);
+        if (!H) return { h: 0, motivo: "sin horario" };
+        if (dow === 0) return { h: 0, motivo: "domingo" };
+        if (dow === 6) return { h: num(H.sab_horas), motivo: num(H.sab_horas) ? "" : "s\xE1bado descanso", horario: H };
+        return { h: num(H.lv_horas), motivo: "", horario: H };
+      }
+      function habilesDesde(hoy, fecha, cfg) {
+        var n = 0, d = hoy;
+        while (d < fecha && n < 400) {
+          d = sumaDias(d, 1);
+          if (jornada(d, { feriados: cfg.feriados, horarios: cfg.horarios, ausencias: [] }).h > 0) n++;
+        }
+        return n;
+      }
+      function calcular(reg, cfg) {
+        cfg = cfg || {};
+        var hoy = ymd(cfg.hoy) || aYmd(/* @__PURE__ */ new Date());
+        var parto = ymd(reg.fecha_parto), retorno = ymd(reg.fecha_retorno);
+        var fin = ymd(reg.fecha_fin) || (parto ? sumaDias(sumaAnios(parto, 1), -1) : "");
+        var horasLact = si(reg.parto_multiple) ? 2 : 1;
+        var R = {
+          inicio: retorno,
+          fin,
+          horasLact,
+          hoy,
+          saldo: 0,
+          horasGanadas: 0,
+          horasDescansadas: 0,
+          diasTomados: 0,
+          diasProgramados: 0,
+          diasDisponibles: 0,
+          proximo: null,
+          proyeccion: [],
+          descansos: [],
+          bitacora: [],
+          alertas: [],
+          diasRestantes: fin ? diasEntre(hoy, fin) : null,
+          vigente: false,
+          errores: []
+        };
+        if (!parto) R.errores.push("Falta la fecha de parto.");
+        if (!retorno) R.errores.push("Falta la fecha de retorno al trabajo.");
+        if (R.errores.length) return R;
+        if (retorno > fin) {
+          R.errores.push("El retorno (" + retorno + ") es posterior al fin de la lactancia (" + fin + ").");
+          return R;
+        }
+        var C = { horarios: cfg.horarios, feriados: cfg.feriados || [], ausencias: lista(reg.ausencias) };
+        var regDesc = {};
+        lista(reg.descansos).forEach(function(d2) {
+          var f = ymd(d2.fecha);
+          if (f && !/anulad/i.test(d2.estado || "")) regDesc[f] = d2;
+        });
+        var saldo = 0, d = retorno, tope = fin, guard = 0;
+        R.vigente = String(reg.estado || "Activa") !== "Cerrada" && hoy <= fin;
+        while (d <= tope && guard++ < 800) {
+          var J = jornada(d, C), rd = regDesc[d], futuro = d > hoy;
+          if (rd && !futuro && d < hoy && !/tomad/i.test(rd.estado || "")) {
+            R.descansos.push({ fecha: d, estado: rd.estado || "programado", horas: 0, saldo: null, registrado_por: rd.registrado_por || "", nota: rd.nota || "", vencido: true });
+            rd = null;
+          }
+          if (rd) {
+            var h = rd.horas ? num(rd.horas) : J.h || num((horarioDe(d, C.horarios) || {}).lv_horas);
+            saldo -= h;
+            R.horasDescansadas += h;
+            if (/tomad/i.test(rd.estado)) R.diasTomados++;
+            else R.diasProgramados++;
+            R.descansos.push({ fecha: d, estado: rd.estado || "programado", horas: r2(h), saldo: r2(saldo), registrado_por: rd.registrado_por || "", nota: rd.nota || "", vencido: !futuro && d < hoy && !/tomad/i.test(rd.estado) });
+            R.bitacora.push({ fecha: d, tipo: "descanso", horas: -r2(h), saldo: r2(saldo), estado: rd.estado });
+            d = sumaDias(d, 1);
+            continue;
+          }
+          if (J.h <= 0) {
+            d = sumaDias(d, 1);
+            continue;
+          }
+          var esSab = fechaUTC(d).getUTCDay() === 6, evitarSab = cfg.evitarSabado !== false;
+          if (futuro && saldo >= J.h - 1e-9 && !(esSab && evitarSab)) {
+            saldo -= J.h;
+            R.proyeccion.push({ fecha: d, horas: r2(J.h), saldo: r2(saldo) });
+            R.bitacora.push({ fecha: d, tipo: "propuesto", horas: -r2(J.h), saldo: r2(saldo) });
+            d = sumaDias(d, 1);
+            continue;
+          }
+          if (!futuro) {
+            saldo += horasLact;
+            R.horasGanadas += horasLact;
+            R.bitacora.push({ fecha: d, tipo: "trabajo", horas: horasLact, saldo: r2(saldo) });
+          } else {
+            saldo += horasLact;
+          }
+          if (d === hoy) R.saldo = r2(saldo);
+          d = sumaDias(d, 1);
+        }
+        if (hoy < retorno) R.saldo = 0;
+        else if (hoy > fin) {
+          R.saldo = r2(saldo);
+        } else if (R.saldo === 0 && R.bitacora.length) {
+          var ult = R.bitacora.filter(function(b) {
+            return b.fecha <= hoy;
+          }).pop();
+          R.saldo = ult ? ult.saldo : 0;
+        }
+        var sig = hoy, k = 0, JS = null;
+        while (k++ < 60) {
+          sig = sumaDias(sig, 1);
+          JS = jornada(sig, C);
+          if (JS.h > 0) break;
+        }
+        var jProx = JS && JS.h > 0 ? JS.h : num((horarioDe(hoy, C.horarios) || {}).lv_horas) || 9.6;
+        R.jornadaProxima = r2(jProx);
+        R.proximoLaborable = sig;
+        R.diasDisponibles = Math.floor((R.saldo + 1e-9) / jProx);
+        var progFuturos = R.descansos.filter(function(x) {
+          return x.fecha >= hoy && !/tomad/i.test(x.estado);
+        }).sort(function(a, b) {
+          return a.fecha < b.fecha ? -1 : 1;
+        });
+        R.proximo = progFuturos.length ? { fecha: progFuturos[0].fecha, horas: progFuturos[0].horas, estado: progFuturos[0].estado } : R.proyeccion.length ? { fecha: R.proyeccion[0].fecha, horas: R.proyeccion[0].horas, estado: "propuesto" } : null;
+        var ant = cfg.anticipacionHabiles == null ? 3 : cfg.anticipacionHabiles, finAviso = cfg.avisoFinDias == null ? 30 : cfg.avisoFinDias;
+        if (R.vigente) {
+          R.descansos.forEach(function(x) {
+            if (x.vencido) R.alertas.push({ n: "rojo", t: "Descanso por lactancia programado el " + x.fecha + " sin registrar como tomado", fecha: x.fecha, tipo: "vencido" });
+          });
+          if (R.proximo) {
+            var hab = habilesDesde(hoy, R.proximo.fecha, C);
+            if (R.proximo.fecha === hoy) R.alertas.push({ n: "rojo", t: "HOY le corresponde descanso por lactancia (" + R.proximo.horas + " h)" + (R.proximo.estado === "propuesto" ? " \xB7 falta programarlo" : ""), fecha: R.proximo.fecha, tipo: "hoy" });
+            else if (hab <= ant) R.alertas.push({ n: "ambar", t: "Le corresponde descanso por lactancia el " + R.proximo.fecha + " (" + R.proximo.horas + " h)" + (R.proximo.estado === "propuesto" ? " \xB7 falta programarlo" : " \xB7 programado"), fecha: R.proximo.fecha, tipo: "proximo" });
+          }
+          if (R.diasDisponibles >= 1 && !progFuturos.length && (!R.proyeccion.length || R.proyeccion[0].fecha > sig)) R.alertas.push({ n: "ambar", t: "Tiene " + R.saldo + " h acumuladas (" + R.diasDisponibles + " d\xEDa(s)) sin descanso programado", fecha: hoy, tipo: "sin_programar" });
+          if (R.diasRestantes != null && R.diasRestantes <= finAviso && R.saldo > 0) R.alertas.push({ n: R.diasRestantes <= 7 ? "rojo" : "ambar", t: "La lactancia termina el " + fin + " (" + R.diasRestantes + " d\xEDas): quedan " + R.saldo + " h por programar", fecha: fin, tipo: "fin" });
+        }
+        return R;
+      }
+      return { calcular, jornada, horarioDe, HORARIOS_DEFECTO, sumaDias, sumaAnios, diasEntre, ymd, lista };
+    });
+  }
+});
+
 // shared/bs-guardar.js
 var require_bs_guardar = __commonJS({
   "shared/bs-guardar.js"(exports, module) {
@@ -65660,9 +65898,11 @@ var require_bs_guardar = __commonJS({
       "bs_gs_comite",
       "bs_gs_adolescentes",
       "bs_gs_lactarios",
-      "bs_gs_discapacidad"
+      "bs_gs_discapacidad",
+      "bs_gs_lactancia",
+      "bs_gs_lactancia_horarios"
     ];
-    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos", "bs_gs_gestantes", "bs_gs_canal", "bs_gs_visitas", "bs_gs_consentimientos", "bs_gs_comite", "bs_gs_adolescentes", "bs_gs_lactarios", "bs_gs_discapacidad"];
+    var SIN_HOJA = ["bs_gs_casos", "bs_gs_seguimientos", "bs_gs_gestantes", "bs_gs_canal", "bs_gs_visitas", "bs_gs_consentimientos", "bs_gs_comite", "bs_gs_adolescentes", "bs_gs_lactarios", "bs_gs_discapacidad", "bs_gs_lactancia", "bs_gs_lactancia_horarios"];
     var MODULO_DE_CLAVE = {
       bs_accidentes_casos: "accidentes",
       bs_accidentes_seguim: "accidentes",
@@ -65686,7 +65926,9 @@ var require_bs_guardar = __commonJS({
       bs_gs_comite: "gs_comite",
       bs_gs_adolescentes: "gs_adolescentes",
       bs_gs_lactarios: "gs_lactario",
-      bs_gs_discapacidad: "gs_discapacidad"
+      bs_gs_discapacidad: "gs_discapacidad",
+      bs_gs_lactancia: "gs_lactancia",
+      bs_gs_lactancia_horarios: "gs_lactancia"
     };
     var SEGUIMIENTO = {
       bs_accidentes_seguim: { padre: "bs_accidentes_casos", fk: "id_caso", contador: "numero_atenciones", exige: ["detalle"] },
@@ -66006,6 +66248,61 @@ var require_bs_guardar = __commonJS({
           if (!ymdDe(get("fecha_cese"))) v.fecha_cese = celdaFecha(/* @__PURE__ */ new Date());
         } else if (v.estado !== void 0) v.fecha_cese = "";
       },
+      bs_gs_lactancia: (v, nuevo, usuario, actual) => {
+        const A = actual || {}, get = (k) => v[k] !== void 0 ? v[k] : A[k];
+        const SN = (x) => String(x == null ? "" : x).trim().toUpperCase() === "SI" || x === true ? "SI" : "NO";
+        const L = require_bs_lactancia_motor();
+        if (nuevo) {
+          v.codigo = "LA-" + (ymdDe(v.fecha_retorno) || hoyLima()).slice(0, 4) + "-" + String(ENTERO(v.id)).padStart(4, "0");
+          v.dni = String(v.dni || "").replace(/\D/g, "");
+          v.nombre = String(v.nombre || "").toUpperCase();
+          if (!v.estado) v.estado = "Activa";
+          if (!v.sede) v.sede = "PIURA";
+          if (v.descansos === void 0) v.descansos = "[]";
+          if (v.ausencias === void 0) v.ausencias = "[]";
+        } else {
+          if (v.dni !== void 0) v.dni = String(v.dni || "").replace(/\D/g, "");
+          if (v.nombre !== void 0) v.nombre = String(v.nombre || "").toUpperCase();
+        }
+        ["parto_multiple", "acuerdo_firmado"].forEach((k) => {
+          if (nuevo || v[k] !== void 0) v[k] = SN(v[k]);
+        });
+        v.horas_dia = SN(get("parto_multiple")) === "SI" ? 2 : 1;
+        const parto = ymdDe(get("fecha_parto"));
+        if (parto) v.fecha_fin = L.sumaDias(L.sumaAnios(parto, 1), -1);
+        ["descansos", "ausencias"].forEach((k) => {
+          if (v[k] !== void 0 && typeof v[k] !== "string") v[k] = JSON.stringify(v[k]);
+          if (v[k] !== void 0) {
+            try {
+              const arr = JSON.parse(v[k] || "[]");
+              if (!Array.isArray(arr)) throw 0;
+              v[k] = JSON.stringify(arr.map((x) => ({ fecha: ymdDe(x.fecha) || "", desde: ymdDe(x.desde) || void 0, hasta: ymdDe(x.hasta) || void 0, estado: x.estado || void 0, horas: x.horas != null ? Number(x.horas) : void 0, motivo: x.motivo || void 0, nota: x.nota || void 0, registrado_por: x.registrado_por || usuario || "", registrado_en: x.registrado_en || (/* @__PURE__ */ new Date()).toISOString() })).filter((x) => x.fecha || x.desde));
+            } catch (e) {
+              throw new Error("El campo " + k + " debe ser una lista v\xE1lida");
+            }
+          }
+        });
+        const est = String(get("estado") || "");
+        if (est === "Cerrada") {
+          if (!ymdDe(get("fecha_cierre"))) v.fecha_cierre = celdaFecha(/* @__PURE__ */ new Date());
+        } else if (v.estado !== void 0) v.fecha_cierre = "";
+      },
+      bs_gs_lactancia_horarios: (v, nuevo, usuario, actual) => {
+        const SN = (x) => String(x == null ? "" : x).trim().toUpperCase() === "SI" || x === true ? "SI" : "NO";
+        if (nuevo) {
+          if (!v.activo) v.activo = "SI";
+          v.nombre = String(v.nombre || "").trim();
+        }
+        if (nuevo || v.activo !== void 0) v.activo = SN(v.activo);
+        ["lv_horas", "sab_horas"].forEach((k) => {
+          if (v[k] !== void 0) {
+            const n = Number(String(v[k]).replace(",", "."));
+            if (isNaN(n) || n < 0 || n > 12) throw new Error(k + ": horas inv\xE1lidas (0\u201312)");
+            v[k] = Math.round(n * 100) / 100;
+          }
+        });
+        if (v.meses !== void 0 && v.meses && !/^\s*\d{1,2}(\s*-\s*\d{1,2})?(\s*,\s*\d{1,2}(\s*-\s*\d{1,2})?)*\s*$/.test(String(v.meses))) throw new Error("Meses: usa el formato 6-12 o 1,2,3");
+      },
       bs_gs_lactarios: (v, nuevo, usuario, actual) => {
         const A = actual || {}, get = (k) => v[k] !== void 0 ? v[k] : A[k];
         const SN = (x) => String(x == null ? "" : x).trim().toUpperCase() === "SI" || x === true ? "SI" : "NO";
@@ -66073,6 +66370,8 @@ var require_bs_guardar = __commonJS({
       bs_gs_consentimientos: TH.ESQ.bs_gs_consentimientos.cols.map((c) => c[0]),
       bs_gs_comite: TH.ESQ.bs_gs_comite.cols.map((c) => c[0]),
       bs_gs_adolescentes: TH.ESQ.bs_gs_adolescentes.cols.map((c) => c[0]),
+      bs_gs_lactancia: TH.ESQ.bs_gs_lactancia.cols.map((c) => c[0]),
+      bs_gs_lactancia_horarios: TH.ESQ.bs_gs_lactancia_horarios.cols.map((c) => c[0]),
       bs_gs_lactarios: TH.ESQ.bs_gs_lactarios.cols.map((c) => c[0]),
       bs_gs_discapacidad: TH.ESQ.bs_gs_discapacidad.cols.map((c) => c[0]),
       /* _BS_GESTION_SOCIAL_V6 */
@@ -67260,7 +67559,7 @@ var require_bs = __commonJS({
     }
     function resPermisos(P) {
       const v = (k) => P.esAdmin || !!P.permisos[k];
-      return { quejas: v("quejas"), accidentes: v("accidentes"), hostigamiento: v("hostigamiento"), descansos: v("descansos"), subsidios: v("subsidios") };
+      return { quejas: v("quejas"), accidentes: v("accidentes"), hostigamiento: v("hostigamiento"), descansos: v("descansos"), subsidios: v("subsidios"), lactancia: v("gs_lactancia") || v("gs_gestantes") };
     }
     async function resDashboard(pool, P) {
       const ver = resPermisos(P), tend = {}, recientes = [];
@@ -67354,6 +67653,36 @@ var require_bs = __commonJS({
         if (!fb) return;
         push("Accidentes", rTxt(r.id), "Notificacion MTPE (24h)", "Accidente" + (rTxt(r.parte_cuerpo) ? " \xB7 " + rTxt(r.parte_cuerpo) : "") + " (mortal/grave)", fb, rSumaCal(fb, 1), rTxt(r.empresa) ? rEmp(r.empresa) : "");
       });
+      if (ver.lactancia) {
+        try {
+          const Lm = require_bs_lactancia_motor();
+          const [LA, HO] = await Promise.all([resObjetos(pool, "bs_gs_lactancia"), resObjetos(pool, "bs_gs_lactancia_horarios")]);
+          const hoy = rYmd(rHoy()), horarios = HO.filter((h) => !rTxt(h.anulado));
+          LA.forEach((r) => {
+            if (rTxt(r.anulado) || rTxt(r.estado) === "Cerrada") return;
+            const R = Lm.calcular(r, { horarios, feriados: RES_CFG.FERIADOS, hoy });
+            R.alertas.forEach((al) => {
+              const fl = /* @__PURE__ */ new Date(al.fecha + "T00:00:00Z");
+              alertas.push({
+                modulo: "Lactancia",
+                id: rTxt(r.codigo || r.id),
+                regla: al.tipo === "vencido" ? "Descanso no registrado" : al.tipo === "fin" ? "Fin de lactancia" : al.tipo === "sin_programar" ? "Horas acumuladas" : "Descanso por lactancia",
+                descripcion: rTxt(r.nombre).split(/\s+/).slice(0, 3).join(" ") + " \xB7 " + al.t,
+                fechaBase: hoy,
+                fechaLimite: al.fecha,
+                diasRestantes: Math.round((fl - rHoy()) / 864e5),
+                estado: al.n === "rojo" ? "rojo" : "ambar",
+                empresa: rTxt(r.empresa)
+              });
+            });
+          });
+        } catch (e) {
+          try {
+            console.warn("[bs/alertas] lactancia: " + e.message);
+          } catch (x) {
+          }
+        }
+      }
       const orden = { rojo: 0, ambar: 1, verde: 2 };
       alertas.sort((x, y) => orden[x.estado] - orden[y.estado] || x.diasRestantes - y.diasRestantes);
       const resumen = { rojo: 0, ambar: 0, verde: 0 };
@@ -69313,7 +69642,32 @@ var require_kpi_eti = __commonJS({
       });
       return o;
     }
+    async function coleccionSupabase(nombre) {
+      const db = require_db();
+      if (typeof db.pgDirecto !== "function") throw new Error("sin pgDirecto");
+      if (!/^[a-z_]+$/.test(nombre)) throw new Error("coleccion invalida");
+      const cli = await db.pgDirecto().connect();
+      try {
+        const r = await cli.query(`SELECT id, datos, actualizado FROM eti.${nombre}`);
+        return r.rows.map((x) => Object.assign({ _id: String(x.id), _upd: x.actualizado ? new Date(x.actualizado).toISOString() : "" }, x.datos && typeof x.datos === "object" ? x.datos : {}));
+      } finally {
+        cli.release();
+      }
+    }
     async function coleccion(nombre, fetchFn) {
+      if (!fetchFn) {
+        try {
+          return await coleccionSupabase(nombre);
+        } catch (e) {
+          try {
+            console.warn("[kpi-eti] Supabase " + nombre + ": " + e.message + " -> Firestore");
+          } catch (x) {
+          }
+        }
+      }
+      return coleccionFirestore(nombre, fetchFn);
+    }
+    async function coleccionFirestore(nombre, fetchFn) {
       const f = fetchFn || fetch, out = [];
       let tok = "", vueltas = 0;
       do {
@@ -69357,7 +69711,32 @@ var require_kpi_eti = __commonJS({
     }
     async function sincronizar(pool, fetchFn) {
       await asegurarTablas(pool);
-      const evals = await coleccion("evaluaciones_conocimiento", fetchFn).catch(() => null);
+      let evals = await coleccion("evaluaciones_conocimiento", fetchFn).catch(() => null);
+      if (evals) {
+        try {
+          const qr = await coleccion("respuestas_qr", fetchFn);
+          const porDia = {};
+          qr.forEach((d) => {
+            const f = dia(d.fecha) || dia(d.creadoEn) || (d.ts ? dia(new Date(Number(d.ts) < 1e12 ? Number(d.ts) * 1e3 : Number(d.ts)).toISOString()) : null);
+            const u = String(d.usuarioSup || "").trim().toLowerCase(), nom = String(d.sup || "").trim();
+            if (!f || !u && !nom) return;
+            const k = (u || nom.toLowerCase()) + "|" + f;
+            if (!porDia[k]) porDia[k] = { _id: "qr:" + (u || nom.toLowerCase().replace(/\s+/g, "-")).slice(0, 40) + ":" + f, usuario: u, sup: nom, fecha: f, tipo: "QR", sector: d.sector || "", emp: d.emp || "", creadoEn: d.creadoEn || "", n: 0 };
+            porDia[k].n++;
+          });
+          const extra = Object.keys(porDia).map((k) => porDia[k]);
+          evals = evals.concat(extra);
+          try {
+            console.log("[kpi-eti] _KPI_QR_V1: " + extra.length + " dia(s) de evaluacion por QR agregados");
+          } catch (e) {
+          }
+        } catch (e) {
+          try {
+            console.warn("[kpi-eti] respuestas_qr: " + e.message);
+          } catch (x) {
+          }
+        }
+      }
       let [pEti, pEval, regs, usus, sups] = await Promise.all([
         coleccion("programaciones_eti", fetchFn),
         coleccion("programaciones_eval", fetchFn),
@@ -77000,6 +77379,7 @@ var require_kpi = __commonJS({
     var base = { t: 0, B: null };
     var CACHE_MS = 6e4;
     var fechaOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || "")) ? String(s) : null;
+    var serieMemo = null;
     async function datosBase(pool, context, forzar) {
       if (!forzar && base.B && Date.now() - base.t < CACHE_MS) return base;
       try {
@@ -77047,7 +77427,24 @@ var require_kpi = __commonJS({
           const desde = fechaOk(b.desde) || K.PERIODO.ini;
           let hasta = fechaOk(b.hasta) || hoy;
           if (K.PERIODO.fin && hasta > K.PERIODO.fin) hasta = K.PERIODO.fin;
-          return res(200, { success: true, desde, hasta, serie: KDB.serie(c.B, hoy, desde < K.PERIODO.ini ? K.PERIODO.ini : desde, hasta) });
+          const d0 = desde < K.PERIODO.ini ? K.PERIODO.ini : desde;
+          if (!serieMemo || serieMemo.t !== c.t) serieMemo = { t: c.t, dias: {} };
+          const LOTE = 12, serie = [];
+          let nuevos = 0, parcial = false;
+          for (let t2 = Date.parse(d0 + "T00:00:00Z"); t2 <= Date.parse(hasta + "T00:00:00Z"); t2 += 864e5) {
+            const d = new Date(t2).toISOString().slice(0, 10);
+            if (d > hoy) break;
+            if (!serieMemo.dias[d]) {
+              if (nuevos >= LOTE) {
+                parcial = true;
+                break;
+              }
+              serieMemo.dias[d] = KDB.serie(c.B, hoy, d, d)[0] || { fecha: d, equipo: {}, personas: {} };
+              nuevos++;
+            }
+            serie.push(serieMemo.dias[d]);
+          }
+          return res(200, { success: true, desde: d0, hasta, serie, parcial, calculados: nuevos });
         }
         if (accion === "informe") {
           const mes = String(b.mes || "");
@@ -77702,7 +78099,16 @@ var require_padron_personas = __commonJS({
             porPalabras[clavePalabras(n)] = fila;
           });
         });
-        memo = { t: Date.now(), idx: { porUsuario, porNombre, porPalabras, total: r.rows.length } };
+        const personas = [];
+        const vistos = /* @__PURE__ */ new Set();
+        Object.keys(porPalabras).forEach((k) => {
+          const f = porPalabras[k];
+          if (!vistos.has(f)) {
+            vistos.add(f);
+            personas.push({ fila: f, palabras: new Set(k.split(" ")) });
+          }
+        });
+        memo = { t: Date.now(), idx: { porUsuario, porNombre, porPalabras, personas, total: r.rows.length } };
         return memo.idx;
       } finally {
         cli.release();
@@ -77712,7 +78118,23 @@ var require_padron_personas = __commonJS({
       const u = String(item.usuario || "").toLowerCase().trim();
       if (u && idx.porUsuario[u]) return idx.porUsuario[u];
       const n = String(item.nombre || "");
-      return idx.porNombre[norm(n)] || idx.porPalabras[clavePalabras(n)] || null;
+      const directo = idx.porNombre[norm(n)] || idx.porPalabras[clavePalabras(n)];
+      if (directo) return directo;
+      const w = new Set(clavePalabras(n).split(" ").filter(Boolean));
+      if (w.size < 2) return null;
+      let hallado = null, cuantos = 0;
+      idx.personas.forEach((p) => {
+        const chica = w.size <= p.palabras.size ? w : p.palabras, grande = chica === w ? p.palabras : w;
+        let ok = true;
+        chica.forEach((x) => {
+          if (!grande.has(x)) ok = false;
+        });
+        if (ok && chica.size >= Math.min(3, grande.size)) {
+          cuantos++;
+          hallado = p.fila;
+        }
+      });
+      return cuantos === 1 ? hallado : null;
     }
     async function aplicar(lista, opciones) {
       const op = Object.assign({ completar: true }, opciones || {});

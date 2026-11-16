@@ -21,6 +21,7 @@ let base = { t: 0, B: null };   /* datos leidos (se reusan 60 s para tablero / s
 const CACHE_MS = 60000;
 const fechaOk = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : null;
 
+let serieMemo = null;   /* _KPI_SERIE_MEMO_V1 */
 async function datosBase(pool, context, forzar) {
   if (!forzar && base.B && Date.now() - base.t < CACHE_MS) return base;
   /* lo registrado en ETI se ve al instante: si la ultima copia tiene mas de 3 minutos, se copia antes de calcular */
@@ -58,7 +59,19 @@ module.exports = async function (context, req) {
       const c = await datosBase(pool, context);
       const hoy = KDB.hoyLima();
       const desde = fechaOk(b.desde) || K.PERIODO.ini; let hasta = fechaOk(b.hasta) || hoy; if (K.PERIODO.fin && hasta > K.PERIODO.fin) hasta = K.PERIODO.fin;   /* _KPI_FIX_V2: desde 2027 no pasar del fin del periodo (rango max. de la serie) */
-      return res(200, { success: true, desde, hasta, serie: KDB.serie(c.B, hoy, desde < K.PERIODO.ini ? K.PERIODO.ini : desde, hasta) });
+      /* _KPI_SERIE_MEMO_V1 (16-nov-2026): la serie recalcula TODO el motor una vez por dia; "todo el periodo" son 70+ dias y el
+         servidor de Supabase cortaba por falta de recursos (WORKER_RESOURCE_LIMIT) -> "No se pudo cargar la evolucion diaria".
+         Ahora cada dia calculado se guarda en memoria mientras los datos base no cambien (misma c.t) y solo se calculan los
+         dias que faltan; ademas se devuelven como maximo LOTE dias nuevos por llamada (parcial:true) y la pantalla pide el resto. */
+      const d0 = desde < K.PERIODO.ini ? K.PERIODO.ini : desde;
+      if (!serieMemo || serieMemo.t !== c.t) serieMemo = { t: c.t, dias: {} };
+      const LOTE = 12, serie = []; let nuevos = 0, parcial = false;
+      for (let t = Date.parse(d0 + 'T00:00:00Z'); t <= Date.parse(hasta + 'T00:00:00Z'); t += 86400000) {
+        const d = new Date(t).toISOString().slice(0, 10); if (d > hoy) break;
+        if (!serieMemo.dias[d]) { if (nuevos >= LOTE) { parcial = true; break; } serieMemo.dias[d] = KDB.serie(c.B, hoy, d, d)[0] || { fecha: d, equipo: {}, personas: {} }; nuevos++; }
+        serie.push(serieMemo.dias[d]);
+      }
+      return res(200, { success: true, desde: d0, hasta, serie, parcial, calculados: nuevos });
     }
     if (accion === 'informe') {   /* informe de un mes CERRADO (foto inmutable) */
       const mes = String(b.mes || '');

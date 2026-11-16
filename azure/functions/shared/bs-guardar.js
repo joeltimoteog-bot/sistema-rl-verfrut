@@ -24,12 +24,12 @@ const { comoHoja } = require('./cap-guardar');
 
 const CLAVES_BS = ['bs_accidentes_casos', 'bs_accidentes_seguim', 'bs_hostigamiento', 'bs_hostigamiento_olmos', 'bs_subsidios', 'bs_documentos',
   'bs_quejas', 'bs_quejas_seguim', 'bs_descansos', 'bs_auditoria', 'bs_rendiciones', 'bs_sugerencias', 'bs_buzones',
-  'bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_visitas', 'bs_gs_consentimientos', 'bs_gs_comite', 'bs_gs_adolescentes', 'bs_gs_lactarios', 'bs_gs_discapacidad'];   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V2 gestantes · V3 canal · V4 visitas */
+  'bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_visitas', 'bs_gs_consentimientos', 'bs_gs_comite', 'bs_gs_adolescentes', 'bs_gs_lactarios', 'bs_gs_discapacidad', 'bs_gs_lactancia', 'bs_gs_lactancia_horarios'];   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V2 gestantes · V3 canal · V4 visitas · _BS_LACTANCIA_V1 (16-nov) */
 /* tablas que nacen en Supabase (nunca tuvieron hoja de Google): mandan desde Supabase aunque BS_Fuente no las liste */
-const SIN_HOJA = ['bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_visitas', 'bs_gs_consentimientos', 'bs_gs_comite', 'bs_gs_adolescentes', 'bs_gs_lactarios', 'bs_gs_discapacidad'];
+const SIN_HOJA = ['bs_gs_casos', 'bs_gs_seguimientos', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_visitas', 'bs_gs_consentimientos', 'bs_gs_comite', 'bs_gs_adolescentes', 'bs_gs_lactarios', 'bs_gs_discapacidad', 'bs_gs_lactancia', 'bs_gs_lactancia_horarios'];
 const MODULO_DE_CLAVE = { bs_accidentes_casos: 'accidentes', bs_accidentes_seguim: 'accidentes', bs_hostigamiento: 'hostigamiento', bs_hostigamiento_olmos: 'hostigamiento',
   bs_subsidios: 'subsidios', bs_documentos: '', bs_quejas: 'quejas', bs_quejas_seguim: 'quejas', bs_descansos: 'descansos', bs_auditoria: '',
-  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social', bs_gs_gestantes: 'gs_gestantes', bs_gs_canal: 'gs_canal', bs_gs_visitas: 'gs_condiciones', bs_gs_consentimientos: 'gs_datos', bs_gs_comite: 'gs_comite', bs_gs_adolescentes: 'gs_adolescentes', bs_gs_lactarios: 'gs_lactario', bs_gs_discapacidad: 'gs_discapacidad' };   /* _BS_GESTION_SOCIAL_V6 */   /* _BS_GESTION_SOCIAL_V5 (15-nov): permisos separados por submódulo */
+  bs_rendiciones: 'rendiciones', bs_sugerencias: 'sugerencias', bs_buzones: 'quejas', bs_gs_casos: 'gestion_social', bs_gs_seguimientos: 'gestion_social', bs_gs_gestantes: 'gs_gestantes', bs_gs_canal: 'gs_canal', bs_gs_visitas: 'gs_condiciones', bs_gs_consentimientos: 'gs_datos', bs_gs_comite: 'gs_comite', bs_gs_adolescentes: 'gs_adolescentes', bs_gs_lactarios: 'gs_lactario', bs_gs_discapacidad: 'gs_discapacidad', bs_gs_lactancia: 'gs_lactancia', bs_gs_lactancia_horarios: 'gs_lactancia' };   /* _BS_GESTION_SOCIAL_V6 */   /* _BS_GESTION_SOCIAL_V5 (15-nov): permisos separados por submódulo */
 /* seguimientos: tabla hija → padre, llave y contador que se actualiza en el padre (accidentes: numero_atenciones; hallazgos: solo updated_at) */
 const SEGUIMIENTO = {
   bs_accidentes_seguim: { padre: 'bs_accidentes_casos', fk: 'id_caso', contador: 'numero_atenciones', exige: ['detalle'] },
@@ -214,6 +214,26 @@ const NORMALIZAR = {
     const est = String(get('estado') || '');
     if (est === 'Cesado') { if (!ymdDe(get('fecha_cese'))) v.fecha_cese = celdaFecha(new Date()); } else if (v.estado !== undefined) v.fecha_cese = '';
   },
+  bs_gs_lactancia: (v, nuevo, usuario, actual) => {   /* _BS_LACTANCIA_V1 · Ley 27240 (mod. 27591, 28731): 1 h diaria (2 si parto múltiple) hasta el 1er año; acumulada en días con acuerdo escrito */
+    const A = actual || {}, get = k => (v[k] !== undefined ? v[k] : A[k]);
+    const SN = x => (String(x == null ? '' : x).trim().toUpperCase() === 'SI' || x === true) ? 'SI' : 'NO';
+    const L = require('./bs-lactancia-motor');
+    if (nuevo) { v.codigo = 'LA-' + (ymdDe(v.fecha_retorno) || hoyLima()).slice(0, 4) + '-' + String(ENTERO(v.id)).padStart(4, '0'); v.dni = String(v.dni || '').replace(/\D/g, ''); v.nombre = String(v.nombre || '').toUpperCase(); if (!v.estado) v.estado = 'Activa'; if (!v.sede) v.sede = 'PIURA'; if (v.descansos === undefined) v.descansos = '[]'; if (v.ausencias === undefined) v.ausencias = '[]'; }
+    else { if (v.dni !== undefined) v.dni = String(v.dni || '').replace(/\D/g, ''); if (v.nombre !== undefined) v.nombre = String(v.nombre || '').toUpperCase(); }
+    ['parto_multiple', 'acuerdo_firmado'].forEach(k => { if (nuevo || v[k] !== undefined) v[k] = SN(v[k]); });
+    v.horas_dia = SN(get('parto_multiple')) === 'SI' ? 2 : 1;
+    const parto = ymdDe(get('fecha_parto')); if (parto) v.fecha_fin = L.sumaDias(L.sumaAnios(parto, 1), -1);   /* hasta el día anterior al primer cumpleaños */
+    ['descansos', 'ausencias'].forEach(k => { if (v[k] !== undefined && typeof v[k] !== 'string') v[k] = JSON.stringify(v[k]); if (v[k] !== undefined) { try { const arr = JSON.parse(v[k] || '[]'); if (!Array.isArray(arr)) throw 0; v[k] = JSON.stringify(arr.map(x => ({ fecha: ymdDe(x.fecha) || '', desde: ymdDe(x.desde) || undefined, hasta: ymdDe(x.hasta) || undefined, estado: x.estado || undefined, horas: x.horas != null ? Number(x.horas) : undefined, motivo: x.motivo || undefined, nota: x.nota || undefined, registrado_por: x.registrado_por || usuario || '', registrado_en: x.registrado_en || new Date().toISOString() })).filter(x => x.fecha || x.desde)); } catch (e) { throw new Error('El campo ' + k + ' debe ser una lista válida'); } } });
+    const est = String(get('estado') || '');
+    if (est === 'Cerrada') { if (!ymdDe(get('fecha_cierre'))) v.fecha_cierre = celdaFecha(new Date()); } else if (v.estado !== undefined) v.fecha_cierre = '';
+  },
+  bs_gs_lactancia_horarios: (v, nuevo, usuario, actual) => {   /* _BS_LACTANCIA_V1 · jornadas por temporada (editables) */
+    const SN = x => (String(x == null ? '' : x).trim().toUpperCase() === 'SI' || x === true) ? 'SI' : 'NO';
+    if (nuevo) { if (!v.activo) v.activo = 'SI'; v.nombre = String(v.nombre || '').trim(); }
+    if (nuevo || v.activo !== undefined) v.activo = SN(v.activo);
+    ['lv_horas', 'sab_horas'].forEach(k => { if (v[k] !== undefined) { const n = Number(String(v[k]).replace(',', '.')); if (isNaN(n) || n < 0 || n > 12) throw new Error(k + ': horas inválidas (0–12)'); v[k] = Math.round(n * 100) / 100; } });
+    if (v.meses !== undefined && v.meses && !/^\s*\d{1,2}(\s*-\s*\d{1,2})?(\s*,\s*\d{1,2}(\s*-\s*\d{1,2})?)*\s*$/.test(String(v.meses))) throw new Error('Meses: usa el formato 6-12 o 1,2,3');
+  },
   bs_gs_lactarios: (v, nuevo, usuario, actual) => {   /* Ley 29896 · D.S. 001-2016-MIMP: lactario con ≥ 20 mujeres en edad fértil; refrigeradora, lavabo, privacidad, mobiliario; comunicación al MIMP */
     const A = actual || {}, get = k => (v[k] !== undefined ? v[k] : A[k]);
     const SN = x => (String(x == null ? '' : x).trim().toUpperCase() === 'SI' || x === true) ? 'SI' : 'NO';
@@ -252,7 +272,7 @@ const ENCABEZADO_INICIAL = {
   bs_gs_gestantes: TH.ESQ.bs_gs_gestantes.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V2 */
   bs_gs_canal: TH.ESQ.bs_gs_canal.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V3 */
   bs_gs_visitas: TH.ESQ.bs_gs_visitas.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V4 */
-  bs_gs_consentimientos: TH.ESQ.bs_gs_consentimientos.cols.map(c => c[0]), bs_gs_comite: TH.ESQ.bs_gs_comite.cols.map(c => c[0]), bs_gs_adolescentes: TH.ESQ.bs_gs_adolescentes.cols.map(c => c[0]), bs_gs_lactarios: TH.ESQ.bs_gs_lactarios.cols.map(c => c[0]), bs_gs_discapacidad: TH.ESQ.bs_gs_discapacidad.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V6 */
+  bs_gs_consentimientos: TH.ESQ.bs_gs_consentimientos.cols.map(c => c[0]), bs_gs_comite: TH.ESQ.bs_gs_comite.cols.map(c => c[0]), bs_gs_adolescentes: TH.ESQ.bs_gs_adolescentes.cols.map(c => c[0]), bs_gs_lactancia: TH.ESQ.bs_gs_lactancia.cols.map(c => c[0]), bs_gs_lactancia_horarios: TH.ESQ.bs_gs_lactancia_horarios.cols.map(c => c[0]), bs_gs_lactarios: TH.ESQ.bs_gs_lactarios.cols.map(c => c[0]), bs_gs_discapacidad: TH.ESQ.bs_gs_discapacidad.cols.map(c => c[0]),   /* _BS_GESTION_SOCIAL_V6 */
   /* hostigamiento OLMOS: la hoja puede no existir todavía; mismo encabezado que BS_HOSTIG_HEADERS del Apps Script */
   bs_hostigamiento: ['id', 'fecha_denuncia', 'denunciante_dni', 'denunciante_nombre', 'denunciante_puesto', 'medida_proteccion', 'denunciado_dni', 'denunciado_nombre', 'denunciado_puesto', 'sede', 'fundo', 'decision', 'status', 'observaciones', 'empresa', 'created_by', 'created_at', 'updated_at'],
   bs_hostigamiento_olmos: ['id', 'fecha_denuncia', 'denunciante_dni', 'denunciante_nombre', 'denunciante_puesto', 'medida_proteccion', 'denunciado_dni', 'denunciado_nombre', 'denunciado_puesto', 'sede', 'fundo', 'decision', 'status', 'observaciones', 'empresa', 'created_by', 'created_at', 'updated_at']

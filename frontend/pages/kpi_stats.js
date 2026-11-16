@@ -140,7 +140,18 @@
     var R = D.rango || {}, hasta = R.hasta > D.hoy ? D.hoy : R.hasta, key = R.desde + '|' + hasta;
     if (SERIE && SERIE_KEY === key) pintarSerie(SERIE);
     else K.prog(['Cargando la evolución diaria…', 'Estadísticas listas', 'No se pudo cargar la evolución diaria'], function () {
-      return K.api('serie', { desde: R.desde, hasta: hasta }).then(function (j) { if (!j || !j.success) throw new Error((j && j.error) || 'Sin respuesta'); SERIE = j.serie; SERIE_KEY = key; pintarSerie(SERIE); });
+      /* _KPI_SERIE_MEMO_V1 (16-nov): el servidor entrega la serie por partes (parcial:true) para no agotar sus recursos; se pide hasta completar */
+      var acum = [], desdeP = R.desde, vueltas = 0;
+      function pedir() {
+        return K.api('serie', { desde: desdeP, hasta: hasta }).then(function (j) {
+          if (!j || !j.success) throw new Error((j && j.error) || 'Sin respuesta');
+          acum = acum.concat(j.serie || []);
+          var ult = acum.length ? acum[acum.length - 1].fecha : null;
+          if (j.parcial && ult && ult < hasta && ++vueltas < 20) { var n = new Date(ult + 'T00:00:00Z'); n.setUTCDate(n.getUTCDate() + 1); desdeP = n.toISOString().slice(0, 10); return pedir(); }
+          SERIE = acum; SERIE_KEY = key; pintarSerie(SERIE);
+        });
+      }
+      return pedir();
     }).catch(function () {});
     /* ranking + plan */
     var orden = P.slice().sort(function (a, b) { return (a.cumpl == null ? 9 : a.cumpl) - (b.cumpl == null ? 9 : b.cumpl); });
@@ -155,14 +166,35 @@
         '<ul>' + plan(p).join('') + '<li><b>Seguimiento:</b> conversación 1 a 1 de 15 minutos esta semana para entender la causa y acordar compromisos; revisar el avance en 7 días en este mismo tablero.</li></ul></div>';
     }).join('') : '<div class="sub">✅ Nadie en desfase en este rango.</div>';
   };
-  function pintarSerie(S) {
-    var codes = ['K1', 'K2', 'K3', 'A1'].filter(function (c) { return S.some(function (d) { return d.equipo[c]; }); });
-    grafico('cSerie', { type: 'line', data: { labels: S.map(function (d) { return dmy(d.fecha).slice(0, 5); }),
+  /* _KPI_SERIE_LIMPIA_V1 (16-nov-2026): con mas de 3 semanas la serie se agrupa por SEMANA (lunes a domingo):
+     cada punto = lo que vencia esa semana y se cumplio (suma de numeradores / suma de denominadores). Menos puntos,
+     sin picos de 0/100 de un solo documento, lineas suaves y etiquetas legibles. Con 21 dias o menos sigue siendo diaria. */
+  function lunesDe(f) { var d = new Date(f + 'T00:00:00Z'); var n = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); }
+  function agruparSemana(S) {
+    var sem = {}, orden = [];
+    S.forEach(function (d) {
+      var k = lunesDe(d.fecha); if (!sem[k]) { sem[k] = { fecha: k, hasta: d.fecha, equipo: {}, dias: 0 }; orden.push(k); }
+      var w = sem[k]; w.hasta = d.fecha; w.dias++;
+      Object.keys(d.equipo || {}).forEach(function (c) { var e = d.equipo[c]; if (!e || !e.den) return; w.equipo[c] = w.equipo[c] || { num: 0, den: 0 }; w.equipo[c].num += e.num; w.equipo[c].den += e.den; });
+    });
+    return orden.map(function (k) { return sem[k]; });
+  }
+  function pintarSerie(S0) {
+    var semanal = S0.length > 21, S = semanal ? agruparSemana(S0) : S0;
+    var codes = ['K1', 'K2', 'K3', 'A1'].filter(function (c) { return S.some(function (d) { return d.equipo[c] && d.equipo[c].den; }); });
+    var nota = $('cSerie') && $('cSerie').parentNode && $('cSerie').parentNode.nextElementSibling;
+    if (nota && /Cada punto/.test(nota.textContent)) nota.textContent = semanal
+      ? 'Cada punto = % de lo que vencía esa semana (lunes a domingo) y se cumplió. Semanas sin puntos = no vencía nada.'
+      : 'Cada punto = % de lo que vencía ese día y se cumplió. Días sin puntos = no vencía nada.';
+    grafico('cSerie', { type: 'line', data: { labels: S.map(function (d) { return (semanal ? 'Sem. ' : '') + dmy(d.fecha).slice(0, 5); }),
       datasets: codes.map(function (c) { return { label: NOMK[c], data: S.map(function (d) { var e = d.equipo[c]; return e && e.den ? Math.round(e.num / e.den * 1000) / 10 : null; }),
-        borderColor: SER[c], backgroundColor: SER[c], borderWidth: 2, pointRadius: 3, spanGaps: false, tension: 0 }; }) },
+        borderColor: SER[c], backgroundColor: SER[c], borderWidth: 2.5, pointRadius: semanal ? 4 : 3, pointHoverRadius: 6, spanGaps: true, tension: 0.35 }; }) },
       options: Object.assign({}, baseOpc, { interaction: { mode: 'index', intersect: false },
-        plugins: { legend: { labels: { boxWidth: 12, font: { family: 'Barlow', size: 12 } } }, tooltip: { callbacks: { label: function (c) { var e = S[c.dataIndex].equipo[codes[c.datasetIndex]]; return c.dataset.label + ': ' + c.parsed.y + '% (' + e.num + '/' + e.den + ')'; } } } },
-        scales: { y: { min: 0, max: 100, grid: { color: '#eef2f7' } }, x: { grid: { display: false } } } }) });
+        plugins: { legend: { labels: { boxWidth: 12, font: { family: 'Barlow', size: 12 } } }, tooltip: { callbacks: {
+          title: function (it) { var d = S[it[0].dataIndex]; return semanal ? 'Semana del ' + dmy(d.fecha) + ' al ' + dmy(d.hasta) : dmy(d.fecha); },
+          label: function (c) { var e = S[c.dataIndex].equipo[codes[c.datasetIndex]]; return c.dataset.label + ': ' + c.parsed.y + '% (' + (e ? e.num + ' de ' + e.den : '') + ')'; } } } },
+        scales: { y: { min: 0, max: 100, grid: { color: '#eef2f7' }, ticks: { stepSize: 25, callback: function (v) { return v + '%'; } } },
+                  x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: semanal ? 12 : 8, font: { size: 11 } } } } }) });
   }
 
   /* ── INFORME MENSUAL ── */

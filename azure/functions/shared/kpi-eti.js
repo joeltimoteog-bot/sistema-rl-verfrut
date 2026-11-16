@@ -64,7 +64,23 @@ function doc(d) {
   const f = d.fields || {}; Object.keys(f).forEach(k => { o[k] = val(f[k]); });
   return o;
 }
+/* _KPI_ETI_SUPABASE_V1 (16-nov-2026): los ETI ya guardan en Supabase (eti.<coleccion>, etapa 3). Se lee de ahi, en la misma
+   base, y Firestore queda solo como respaldo si Supabase no responde. */
+async function coleccionSupabase(nombre) {
+  const db = require('./db');
+  if (typeof db.pgDirecto !== 'function') throw new Error('sin pgDirecto');
+  if (!/^[a-z_]+$/.test(nombre)) throw new Error('coleccion invalida');
+  const cli = await db.pgDirecto().connect();
+  try {
+    const r = await cli.query(`SELECT id, datos, actualizado FROM eti.${nombre}`);
+    return r.rows.map(x => Object.assign({ _id: String(x.id), _upd: x.actualizado ? new Date(x.actualizado).toISOString() : '' }, (x.datos && typeof x.datos === 'object') ? x.datos : {}));
+  } finally { cli.release(); }
+}
 async function coleccion(nombre, fetchFn) {
+  if (!fetchFn) { try { return await coleccionSupabase(nombre); } catch (e) { try { console.warn('[kpi-eti] Supabase ' + nombre + ': ' + e.message + ' -> Firestore'); } catch (x) {} } }
+  return coleccionFirestore(nombre, fetchFn);
+}
+async function coleccionFirestore(nombre, fetchFn) {
   const f = fetchFn || fetch, out = [];
   let tok = '', vueltas = 0;
   do {
@@ -104,7 +120,28 @@ function evalUsuario(d) {
 /* Lee Firestore y reemplaza las tablas. Devuelve { programaciones, registros } */
 async function sincronizar(pool, fetchFn) {
   await asegurarTablas(pool);
-  const evals = await coleccion('evaluaciones_conocimiento', fetchFn).catch(() => null);   /* _K3_REALIZADAS_V1: si falla, se conserva lo anterior */
+  let evals = await coleccion('evaluaciones_conocimiento', fetchFn).catch(() => null);   /* _K3_REALIZADAS_V1: si falla, se conserva lo anterior */
+  /* _KPI_QR_V1 (16-nov-2026): las evaluaciones de checklist por QR (respuestas_qr: cada trabajador que responde) tambien son
+     evaluaciones REALIZADAS por el supervisor evaluado (usuarioSup / sup). Antes solo contaban las registradas a mano
+     (evaluaciones_conocimiento) y el K3 salia "sin datos" para quien evaluo decenas de trabajadores por QR.
+     Se agrupa: un supervisor + un dia = una evaluacion de checklist (con cuantos trabajadores respondieron). */
+  if (evals) {
+    try {
+      const qr = await coleccion('respuestas_qr', fetchFn);
+      const porDia = {};
+      qr.forEach(d => {
+        const f = dia(d.fecha) || dia(d.creadoEn) || (d.ts ? dia(new Date(Number(d.ts) < 1e12 ? Number(d.ts) * 1000 : Number(d.ts)).toISOString()) : null);
+        const u = String(d.usuarioSup || '').trim().toLowerCase(), nom = String(d.sup || '').trim();
+        if (!f || (!u && !nom)) return;
+        const k = (u || nom.toLowerCase()) + '|' + f;
+        if (!porDia[k]) porDia[k] = { _id: 'qr:' + (u || nom.toLowerCase().replace(/\s+/g, '-')).slice(0, 40) + ':' + f, usuario: u, sup: nom, fecha: f, tipo: 'QR', sector: d.sector || '', emp: d.emp || '', creadoEn: d.creadoEn || '', n: 0 };
+        porDia[k].n++;
+      });
+      const extra = Object.keys(porDia).map(k => porDia[k]);
+      evals = evals.concat(extra);
+      try { console.log('[kpi-eti] _KPI_QR_V1: ' + extra.length + ' dia(s) de evaluacion por QR agregados'); } catch (e) {}
+    } catch (e) { try { console.warn('[kpi-eti] respuestas_qr: ' + e.message); } catch (x) {} }
+  }
   let [pEti, pEval, regs, usus, sups] = await Promise.all([
     coleccion('programaciones_eti', fetchFn), coleccion('programaciones_eval', fetchFn)   /* _IND_FIX_V1 (08-oct-2026): antes .catch(() => []): si fallaba la lectura se BORRABAN las programaciones de checklist y el K3 subia; ahora se aborta y queda lo de la vuelta anterior */, coleccion('capacitaciones', fetchFn),
     coleccion('usuarios_eti', fetchFn), coleccion('supervisores_eti', fetchFn)]);
