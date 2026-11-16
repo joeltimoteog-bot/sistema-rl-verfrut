@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   82-bienestar-pase-v1.js — _BS_PASE_FRESCO_V1 (10-nov-2026)
+   82-bienestar-pase-v1.js — _BS_PASE_FRESCO_V1 (10-nov-2026) · V2 (15-nov-2026): entrada inmediata, sin esperar a Google
    PROBLEMA: al iniciar sesion en el RR.LL. se pide en segundo plano la sesion de Bienestar Social (tarda ~5 s). Si el
    usuario pasa al panel antes de que llegue, queda guardada la sesion ANTERIOR. "_irBienestar" la usaba tal cual: si ya
    habia vencido (dura 12 h), Bienestar abria y enseguida devolvia al login.
@@ -26,26 +26,17 @@
     var nuevo = function () {
       var u = yo(), tk = ''; try { tk = sessionStorage.getItem('rl_token') || ''; } catch (e) {}
       if (!u || !tk || fresca(guardada(), u)) return orig.apply(this, arguments);
-      if (pidiendo) return; pidiendo = true;
-      aviso('Abriendo Bienestar Social…');
-      var ctl = (typeof AbortController === 'function') ? new AbortController() : null;
-      var reloj = setTimeout(function () { if (ctl) { try { ctl.abort(); } catch (e) {} } }, 15000);
-      var self = this, args = arguments;
-      fetch(GAS_BS, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, signal: ctl ? ctl.signal : undefined,
-        body: JSON.stringify({ action: 'bs_login', usuario: u, password: '', rl_token: tk }) })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          clearTimeout(reloj); pidiendo = false;
-          if (d && d.ok && d.user && d.user.token) {
-            localStorage.setItem('bienestarSocialAuth', JSON.stringify({ usuario: d.user.usuario, nombre: d.user.nombre, rol: d.user.rol, permisos: d.user.permisos,
-              token: d.user.token, rl_token: tk, loginAt: new Date().toISOString(), source: 'sistema-rl-verfrut' }));
-            window.location.href = PORTAL; return;
-          }
-          /* sin acceso a Bienestar (o respuesta inesperada): el camino de siempre decide y muestra su mensaje */
-          if (d && d.ok === false && d.message && /acceso/i.test(d.message)) { try { if (typeof appAlert === 'function') { appAlert(d.message); return; } } catch (e) {} }
-          orig.apply(self, args);
-        })
-        .catch(function () { clearTimeout(reloj); pidiendo = false; orig.apply(self, args); });
+      /* _BS_PASE_FRESCO_V2 (15-nov-2026): ya NO se espera a Google (3-8 s, a veces sin respuesta: por eso Bienestar
+         mandaba al login). Se entra AL INSTANTE con la sesion del RR.LL.; el portal de Bienestar (bs-sesion-rl.js) lee
+         los permisos de Supabase y renueva el token de Google en segundo plano. */
+      try {
+        var U = window.USER || {}, prev = guardada() || {};
+        localStorage.setItem('bienestarSocialAuth', JSON.stringify({ usuario: u, nombre: U.nombre || u, rol: U.rol || '', sector: U.sector || '', empresa: U.empresa || '',
+          permisos: (String(prev.usuario || '').toLowerCase() === u && prev.permisos) ? prev.permisos : {},
+          token: (String(prev.usuario || '').toLowerCase() === u && prev.token) ? prev.token : '', rl_token: tk,
+          loginAt: (String(prev.usuario || '').toLowerCase() === u && prev.loginAt) ? prev.loginAt : new Date(0).toISOString(), source: 'sistema-rl-verfrut' }));
+      } catch (e) {}
+      window.location.href = PORTAL;
     };
     nuevo._bsPase = true; window._irBienestar = nuevo; return true;
   }
