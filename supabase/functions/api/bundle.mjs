@@ -65843,7 +65843,7 @@ var require_bs_lactancia_motor = __commonJS({
         R.proximoLaborable = sig;
         R.diasDisponibles = Math.floor((R.saldo + 1e-9) / jProx);
         var progFuturos = R.descansos.filter(function(x) {
-          return x.fecha >= hoy && !/tomad/i.test(x.estado);
+          return x.fecha >= hoy;
         }).sort(function(a, b) {
           return a.fecha < b.fecha ? -1 : 1;
         });
@@ -65856,7 +65856,7 @@ var require_bs_lactancia_motor = __commonJS({
           if (R.proximo) {
             var hab = habilesDesde(hoy, R.proximo.fecha, C);
             if (R.proximo.fecha === hoy) R.alertas.push({ n: "rojo", t: "HOY le corresponde descanso por lactancia (" + R.proximo.horas + " h)" + (R.proximo.estado === "propuesto" ? " \xB7 falta programarlo" : ""), fecha: R.proximo.fecha, tipo: "hoy" });
-            else if (hab <= ant) R.alertas.push({ n: "ambar", t: "Le corresponde descanso por lactancia el " + R.proximo.fecha + " (" + R.proximo.horas + " h)" + (R.proximo.estado === "propuesto" ? " \xB7 falta programarlo" : " \xB7 programado"), fecha: R.proximo.fecha, tipo: "proximo" });
+            else if (hab <= ant) R.alertas.push({ n: "ambar", t: "Le corresponde descanso por lactancia el " + R.proximo.fecha + " (" + R.proximo.horas + " h)" + (R.proximo.estado === "propuesto" ? " \xB7 falta programarlo" : /tomad/i.test(R.proximo.estado) ? " \xB7 registrado como tomado" : " \xB7 programado"), fecha: R.proximo.fecha, tipo: "proximo" });
           }
           if (R.diasDisponibles >= 1 && !progFuturos.length && (!R.proyeccion.length || R.proyeccion[0].fecha > sig)) R.alertas.push({ n: "ambar", t: "Tiene " + R.saldo + " h acumuladas (" + R.diasDisponibles + " d\xEDa(s)) sin descanso programado", fecha: hoy, tipo: "sin_programar" });
           if (R.diasRestantes != null && R.diasRestantes <= finAviso && R.saldo > 0) R.alertas.push({ n: R.diasRestantes <= 7 ? "rojo" : "ambar", t: "La lactancia termina el " + fin + " (" + R.diasRestantes + " d\xEDas): quedan " + R.saldo + " h por programar", fecha: fin, tipo: "fin" });
