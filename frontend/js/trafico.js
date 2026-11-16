@@ -151,27 +151,10 @@ window.RLTrafico = window.RLTrafico || (function () {
   window.RLActividadIngreso = ingresoAz;
   /* en el Dashboard, los modulos se abren con los botones del menu */
   try {
-    /* _ACTIVIDAD_NOMBRES_V1 (15-nov-2026): nombre UNICO por modulo. Antes se anotaba el texto del boton, que cambia
-       con el tema (Mis Atenciones/Atenciones), con el contador pegado (Control de cumplimiento3) o con mayusculas
-       distintas; asi "Actividad de usuarios" sumaba un mismo modulo bajo 2-6 nombres. Ahora se anota por el id del
-       boton (o por su destino) con el mismo nombre que usan las paginas (NOMP). */
-    var CANON = { navAt: 'Mis Atenciones', mod_dashboard: 'Inicio', mod_trabajadores: 'Trabajadores', mod_consulta: 'Consulta por DNI', 'mod_consulta-masiva': 'Consulta masiva',
-      navCorreo: 'Enviar Reporte', navSolicitudes: 'Solicitudes', navHoras: 'Horas', navCalcRemu: 'Cálculo remunerativo', navVisitas: 'Visitas de campo', navFusiones: 'Fusiones de buses',
-      navAlmuerzos: 'Almuerzos', navMantenimiento: 'Mantenimiento', navCasos: 'Registro de casos', navCumpl: 'Control de cumplimiento', navPreaviso: 'Preavisos',
-      mod_capacitaciones: 'Capacitaciones', navProgEti: 'Programación ETI', navAppEti: 'Programación ETI', navEval360: 'Evaluación 360', navBienestar: 'Bienestar Social',
-      navInventario: 'Inventario', navMisEstadisticas: 'Mis Estadísticas', navEstadisticas: 'Estadísticas', navKpis: 'Indicadores KPI', navInformeGH: 'Informe gerencial',
-      navRes: 'Resumen general', navUsr: 'Gestión usuarios', navPadron: 'Padrón de personas', navPermisos: 'Acceso a Módulos', navSegUsuarios: 'Seguridad de usuarios',
-      navActividad: 'Actividad de usuarios', navMonitor: 'Monitor en vivo', navFbAlertas: 'Alertas del sistema', navCerebro: 'Cerebro del sistema' };
-    function claveBoton(b) {
-      if (b.id) return b.id;
-      var oc = b.getAttribute('onclick') || '', m = oc.match(/ir\('([^']+)'/) || oc.match(/location\.href='([^']+?)(\.html)?'/);
-      return m ? 'mod_' + m[1].replace(/[^A-Za-z0-9_-]/g, '') : '';
-    }
     if (pag === 'dashboard') document.addEventListener('click', function (ev) {
-      var b = ev.target && ev.target.closest && ev.target.closest('button.ni'); if (!b) return;
-      var nom = CANON[claveBoton(b)];
-      if (!nom) nom = String(b.textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ]+/, '').replace(/\s*\d+\s*$/, '').trim();
-      if (nom) ingresoAz(nom.slice(0, 80));
+      var b = ev.target && ev.target.closest && ev.target.closest('button.ni[id]'); if (!b) return;
+      var txt = String(b.textContent || '').replace(/^[^A-Za-zÁÉÍÓÚÑáéíóúñ]+/, '').replace(/\s+\d+$/, '').trim();
+      if (txt) ingresoAz(txt.slice(0, 80));
     }, true);
   } catch (e) {}
 })();
