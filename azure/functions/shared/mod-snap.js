@@ -8,7 +8,7 @@ function crear(D) {
     getFusiones: () => copia(D.getFusiones),
     getMotivosCasos: () => copia(D.getMotivosCasos),
     invGetAll: () => copia(D.invGetAll),
-    getSupervisores: () => copia(D.getSupervisores),   /* _PRELOAD_AZURE_V1 (01-oct): BD_Supervisores */
+    getSupervisores: async () => { const r = copia(D.getSupervisores); if (r && Array.isArray(r.data)) { try { await require('./padron-personas').aplicar(r.data); r.padron = r.data._padron || null; } catch (e) {} } return r; },   /* _PRELOAD_AZURE_V1 (01-oct): BD_Supervisores · _PADRON_MANDA_V1 (16-nov): DNI del Padron */
     getSolicitudes: (p) => {
       const r = copia(D.getSolicitudes);
       if (r && r.success && p && p.estado) r.data = (r.data || []).filter(s => s.estado === p.estado);

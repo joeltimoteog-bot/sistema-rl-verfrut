@@ -77660,6 +77660,95 @@ var require_mod_cap = __commonJS({
   }
 });
 
+// shared/padron-personas.js
+var require_padron_personas = __commonJS({
+  "shared/padron-personas.js"(exports, module) {
+    "use strict";
+    var sinTilde = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "");
+    var norm = (s) => sinTilde(s).toLowerCase().replace(/[^a-z0-9ñ ]+/g, " ").replace(/\s+/g, " ").trim();
+    var clavePalabras = (s) => norm(s).split(" ").filter(Boolean).sort().join(" ");
+    var soloDni = (v) => String(v == null ? "" : v).replace(/\D+/g, "");
+    var memo = { t: 0, idx: null };
+    var VIDA_MS = 60 * 1e3;
+    async function indice() {
+      if (process.env.PADRON_MANDA === "0") return null;
+      if (memo.idx && Date.now() - memo.t < VIDA_MS) return memo.idx;
+      const db = require_db();
+      if (typeof db.pgDirecto !== "function") return null;
+      const cli = await db.pgDirecto().connect();
+      try {
+        await cli.query("SET search_path TO rl, public, extensions");
+        const r = await cli.query(`SELECT p.dni, p.apellidos, p.nombres, p.nombre_mostrar, p.usuario, p.cargo, p.empresa, COALESCE(s.nombre, p.sector) AS sector, p.correo, p.alias
+      FROM rl.personas p LEFT JOIN rl.sectores s ON s.codigo = p.sector WHERE p.vigente = 1`);
+        const porUsuario = {}, porNombre = {}, porPalabras = {};
+        r.rows.forEach((p) => {
+          const dni = soloDni(p.dni);
+          if (!dni) return;
+          const fila = {
+            dni,
+            usuario: String(p.usuario || "").toLowerCase().trim(),
+            correo: String(p.correo || "").trim(),
+            cargo: String(p.cargo || "").trim(),
+            sector: String(p.sector || "").trim(),
+            empresa: String(p.empresa || "").trim(),
+            nombre: String(p.nombre_mostrar || (p.nombres || "") + " " + (p.apellidos || "")).trim()
+          };
+          if (fila.usuario) porUsuario[fila.usuario] = fila;
+          const nombres = [fila.nombre, (p.nombres || "") + " " + (p.apellidos || ""), (p.apellidos || "") + " " + (p.nombres || "")].concat(String(p.alias || "").split(/[;,|\n]+/));
+          nombres.forEach((n) => {
+            const k = norm(n);
+            if (!k) return;
+            porNombre[k] = fila;
+            porPalabras[clavePalabras(n)] = fila;
+          });
+        });
+        memo = { t: Date.now(), idx: { porUsuario, porNombre, porPalabras, total: r.rows.length } };
+        return memo.idx;
+      } finally {
+        cli.release();
+      }
+    }
+    function buscar(idx, item) {
+      const u = String(item.usuario || "").toLowerCase().trim();
+      if (u && idx.porUsuario[u]) return idx.porUsuario[u];
+      const n = String(item.nombre || "");
+      return idx.porNombre[norm(n)] || idx.porPalabras[clavePalabras(n)] || null;
+    }
+    async function aplicar(lista, opciones) {
+      const op = Object.assign({ completar: true }, opciones || {});
+      if (!Array.isArray(lista) || !lista.length) return lista;
+      let idx = null;
+      try {
+        idx = await indice();
+      } catch (e) {
+        return lista;
+      }
+      if (!idx) return lista;
+      let corregidos = 0;
+      lista.forEach((it) => {
+        if (!it || typeof it !== "object") return;
+        const p = buscar(idx, it);
+        if (!p) return;
+        const dniAnt = soloDni(it.dni);
+        if (dniAnt !== p.dni) {
+          it.dni_anterior = it.dni === void 0 ? "" : it.dni;
+          it.dni = p.dni;
+          it.fuente_dni = "padron";
+          corregidos++;
+        }
+        if (op.completar) {
+          if (!String(it.correo || "").trim() && p.correo) it.correo = p.correo;
+          if (!String(it.cargo || "").trim() && p.cargo) it.cargo = p.cargo;
+          if (!String(it.empresa || "").trim() && p.empresa) it.empresa = p.empresa;
+        }
+      });
+      lista._padron = { personas: idx.total, corregidos };
+      return lista;
+    }
+    module.exports = { aplicar, indice, norm };
+  }
+});
+
 // shared/mod-snap.js
 var require_mod_snap = __commonJS({
   "shared/mod-snap.js"(exports, module) {
@@ -77670,8 +77759,18 @@ var require_mod_snap = __commonJS({
         getFusiones: () => copia(D.getFusiones),
         getMotivosCasos: () => copia(D.getMotivosCasos),
         invGetAll: () => copia(D.invGetAll),
-        getSupervisores: () => copia(D.getSupervisores),
-        /* _PRELOAD_AZURE_V1 (01-oct): BD_Supervisores */
+        getSupervisores: async () => {
+          const r = copia(D.getSupervisores);
+          if (r && Array.isArray(r.data)) {
+            try {
+              await require_padron_personas().aplicar(r.data);
+              r.padron = r.data._padron || null;
+            } catch (e) {
+            }
+          }
+          return r;
+        },
+        /* _PRELOAD_AZURE_V1 (01-oct): BD_Supervisores · _PADRON_MANDA_V1 (16-nov): DNI del Padron */
         getSolicitudes: (p) => {
           const r = copia(D.getSolicitudes);
           if (r && r.success && p && p.estado) r.data = (r.data || []).filter((s) => s.estado === p.estado);
@@ -79105,7 +79204,16 @@ var require_sup_guardar2 = __commonJS({
             context.res = { status: 503, body: { success: false, error: "Tabla aun no cargada" } };
             return;
           }
-          context.res = { status: 200, body: accion === "getSupervisores" ? H.getSupervisores(T) : H.getMotivosCasos(T) };
+          const body = accion === "getSupervisores" ? H.getSupervisores(T) : H.getMotivosCasos(T);
+          if (accion === "getSupervisores" && body && Array.isArray(body.data)) {
+            try {
+              await require_padron_personas().aplicar(body.data);
+              body.padron = body.data._padron || null;
+            } catch (e) {
+              context.log.warn("[sup-guardar] padron: " + e.message);
+            }
+          }
+          context.res = { status: 200, body };
           return;
         }
         const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false, null, t.rol);

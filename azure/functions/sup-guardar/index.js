@@ -27,7 +27,9 @@ module.exports = async function (context, req) {
     if (H.LECTURAS.indexOf(accion) >= 0) {
       const T = await TH.leer(pool, accion === 'getSupervisores' ? H.K_SUP : H.K_MOT);
       if (!T) { context.res = { status: 503, body: { success: false, error: 'Tabla aun no cargada' } }; return; }
-      context.res = { status: 200, body: accion === 'getSupervisores' ? H.getSupervisores(T) : H.getMotivosCasos(T) };
+      const body = accion === 'getSupervisores' ? H.getSupervisores(T) : H.getMotivosCasos(T);
+      if (accion === 'getSupervisores' && body && Array.isArray(body.data)) { try { await require('../shared/padron-personas').aplicar(body.data); body.padron = body.data._padron || null; } catch (e) { context.log.warn('[sup-guardar] padron: ' + e.message); } }   /* _PADRON_MANDA_V1 (16-nov): el DNI (y datos vacios) salen del Padron de personas */
+      context.res = { status: 200, body };
       return;
     }
     const r = await H.ejecutar(pool, accion, req.body || {}, String(t.usuario), false, null, t.rol);
