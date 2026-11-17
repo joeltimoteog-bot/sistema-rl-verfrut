@@ -895,15 +895,15 @@ with sync_playwright() as pw:
     ok('Horas: si Azure dice que no (p. ej. sin permiso), esa es la respuesta y NO se reintenta por Google', r == 'false:Solo administradores pueden registrar' and 'horasRegistrar' not in RED['google'] and 'cvAplicarDesdeAzure' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     HORASG['modo'] = 'caido'; RED['google'].clear()
     r = pag.evaluate(CARRERA, {'action': 'horasRegistrar', 'dni': '33333333', 'x': 'reg'})
-    ok('Horas: con Azure caido, registrar se guarda por Google', r['r'] == 'OK' and 'horasRegistrar' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms | google: ' + ','.join(RED['google']))
+    ok('Horas: con Supabase caido, registrar NO va a Google y avisa (_HORAS_SOLO_SUPABASE_V1)', r['r'].startswith('ERROR No hubo respuesta') and 'horasRegistrar' not in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms | google: ' + ','.join(RED['google']))
     HORASG['modo'] = '503'; RED['google'].clear(); HORASG['llamadas'].clear()
     r = pag.evaluate(CARRERA, {'action': 'horasAprobar', 'id': 'H9', 'x': 'a1'})
     r2 = pag.evaluate(CARRERA, {'action': 'horasAprobar', 'id': 'H8', 'x': 'a2'})
-    ok('Horas: con el guardado en Azure apagado (503) va a Google y no insiste por 5 min', r['r'] == 'OK' and r2['r'] == 'OK' and RED['google'].count('horasAprobar') == 2 and HORASG['llamadas'] == ['503'], ','.join(HORASG['llamadas']) + ' | google: ' + ','.join(RED['google']))
+    ok('Horas: con el guardado apagado (503) NO va a Google, avisa y no insiste por 5 min (_HORAS_SOLO_SUPABASE_V1)', r['r'].startswith('ERROR') and r2['r'].startswith('ERROR') and 'horasAprobar' not in RED['google'] and HORASG['llamadas'] == ['503'], ','.join(HORASG['llamadas']) + ' | google: ' + ','.join(RED['google']))
     HORASG['modo'] = 'ok'
     MODX['modo'] = 'caido'; RED['google'].clear()
     r = pag.evaluate(CARRERA, {'action': 'horasListar', 'usuario': 'jtimoteo'})
-    ok('Horas: con Azure caido, el listado sale de Google', r['r'] == 'OK' and 'horasListar' in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms')
+    ok('Horas: con Supabase caido, el listado reintenta Supabase, NO va a Google y avisa (_HORAS_SOLO_SUPABASE_V1)', r['r'].startswith('ERROR Sin conexi') and 'horasListar' not in RED['google'], r['r'] + ' ' + str(r['ms']) + ' ms | google: ' + ','.join(RED['google']))
     MODX['modo'] = 'ok'
     ok('Horas sin errores de JavaScript', not errores, '; '.join(errores[:4]))
     pag.close()

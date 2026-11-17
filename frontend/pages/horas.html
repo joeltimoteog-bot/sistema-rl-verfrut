@@ -557,6 +557,58 @@ h3{font-size:16px !important}
 
 <script src="../js/modal-system.js"></script>  <!-- _MODALES_FIX (23-set): horas.js usa appAlert/appConfirm -->
 <script src="../js/horas.js?v=8"></script>  <!-- _HORAS_PERIODO_V1 (17-nov) -->
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   _HORAS_SOLO_SUPABASE_V1 (17-nov-2026) — Acumulacion de Horas: TODO desde Supabase (decision de Joel)
+   ---------------------------------------------------------------------------
+   Antes, si Supabase no respondia, las consultas, guardados, horarios y la busqueda por DNI se
+   pasaban solos a Google, que calcula con las reglas VIEJAS (sin el corte por reingreso). Ahora el
+   ultimo eslabon (el que llamaba a Google) ya no llama a Google para Horas:
+     · consultas: se reintenta con Supabase (2 veces mas) y, si no responde, aviso claro.
+     · guardados/horarios: aviso claro (nunca se guarda por otra via).
+   Este script envuelve el apiPost ORIGINAL (el de Google) ANTES que los demas: los de Supabase
+   quedan por encima y funcionan igual. Solo la copia a la hoja (cvAplicarDesdeAzure) sigue a Google.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+  if (window._HORAS_SOLO_SUPABASE_V1) return; window._HORAS_SOLO_SUPABASE_V1 = true;
+  var google = window.apiPost; if (typeof google !== 'function') return;
+  var BASE = 'https://rl-fn-verfrut.azurewebsites.net/api/';
+  var LEER = { horasListar: 'mod/horas/', horasResumenIndividual: 'mod/horas/', horasResumenGeneral: 'mod/horas/', horasListarMotivos: 'mod/horas/', horariosListar: 'hor/' };
+  var GUARDAR = { horasRegistrar: 1, horasEditar: 1, horasEliminar: 1, horasAprobar: 1, horasAgregarMotivo: 1, horasEliminarMotivo: 1, horariosGuardar: 1, horariosEliminar: 1 };
+  function tk() { try { return sessionStorage.getItem('rl_token') || ''; } catch (e) { return ''; } }
+  var SIN_SESION = 'Tu sesión venció. Vuelve a ingresar al sistema e intenta de nuevo.';
+  async function leer(b) {
+    var cuerpo = {}; Object.keys(b).forEach(function (k) { if (k !== 'action') cuerpo[k] = b[k]; });
+    for (var i = 1; i <= 2; i++) {
+      var c = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var t = setTimeout(function () { try { c && c.abort(); } catch (e) {} }, 12000);
+      try {
+        var op = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tk() }, body: JSON.stringify(cuerpo) };
+        if (c) op.signal = c.signal;
+        var r = await fetch(BASE + LEER[b.action] + b.action, op), j = await r.json().catch(function () { return null; });
+        clearTimeout(t);
+        if (r.status === 401) return { success: false, error: SIN_SESION };
+        if (r.status === 200 && j) return j;
+      } catch (e) { clearTimeout(t); }
+      await new Promise(function (z) { setTimeout(z, 1500 * i); });
+    }
+    return { success: false, error: 'Sin conexión con el servidor. Revisa tu internet e intenta de nuevo en unos segundos.' };
+  }
+  window.apiPost = function (b) {
+    var a = b && b.action;
+    if (LEER[a]) { console.warn('[_HORAS_SOLO_SUPABASE_V1] ' + a + ': reintento con Supabase (Google ya no se usa en Horas)'); return leer(b); }
+    if (GUARDAR[a]) {
+      console.warn('[_HORAS_SOLO_SUPABASE_V1] ' + a + ': Supabase no confirmo el guardado; no se usa Google');
+      return Promise.resolve({ success: false, error: !tk() ? SIN_SESION :
+        'No hubo respuesta del servidor. Antes de volver a intentarlo, actualiza la lista: puede que el registro sí se haya guardado.' });
+    }
+    if (a === 'horasBuscarTrabajador') return Promise.resolve({ success: false, error: 'No se encontró ese DNI en el padrón de trabajadores (o no hubo conexión). Verifica el DNI e intenta de nuevo.' });
+    return google.apply(this, arguments);   /* cvAplicarDesdeAzure (copia a la hoja) y cualquier otra accion: como siempre */
+  };
+  try { apiPost = window.apiPost; } catch (e) {}
+  console.log('[_HORAS_SOLO_SUPABASE_V1] listo: Horas solo con Supabase');
+})();
+</script>
 <script src="../js/antidoble.js"></script>  <!-- _ANTIDOBLE_V1 (23-set): sin registros duplicados por doble clic -->
 <script>
 /* _MOD_AZURE_V1 (26-set-2026) — Acumulacion de Horas: las consultas salen de Azure (mismo calculo que
