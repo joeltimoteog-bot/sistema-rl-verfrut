@@ -987,6 +987,7 @@ async function guardarProgramacion(){
         if (load) load.style.display = 'none';
         _CONDUCTORES = f.j.items; window._RESP_FUENTE = 'Supabase';
         window._ruCargarFicha(f.j.usuarios);
+        if (window._unCargar) window._unCargar(f.j.unidades);   /* _MANT_UNIDADES_V1: catalogo en la misma consulta */
         renderConductores(); return;
       }
     } catch(e){ console.warn('[_MANT_TODOS_V2] ficha no respondio, se usa el camino anterior:', e && e.message); }
@@ -1183,10 +1184,12 @@ async function guardarProgramacion(){
     if (!Object.keys(campos).length){ aviso('No hay cambios para guardar.', 'inf'); return; }
     var b = $('ruGuardar'); b.disabled = true; b.textContent = 'Guardando...';
     try {
-      var r = await api('guardar', { dni: dni, campos: campos }, 20000);
+      var r = await api('guardar', { dni: dni, campos: campos, transferir: window._ruTransferir || '' }, 20000);
       if (r.status !== 200 || !r.j || !r.j.ok){ aviso((r.j && r.j.msg) || ('No se pudo guardar (codigo ' + r.status + ').'), 'err'); return; }
       var it = r.j.item;
       if (it){ var L = _CONDUCTORES || (_CONDUCTORES = []); var i = L.findIndex(function(x){ return String(x.dni) === String(it.dni); }); if (i >= 0) L[i] = it; else L.push(it); }
+      (r.j.quitados || []).forEach(function(q){ var L2 = _CONDUCTORES || []; var j = L2.findIndex(function(x){ return String(x.dni) === String(q.dni); }); if (j >= 0) L2[j] = q; });   /* _MANT_UNIDADES_V1 */
+      if (window._unTras) window._unTras();
       window._RESP_FUENTE = 'Supabase';
       ruCerrar(); renderConductores();
       try { if (typeof mostrarToast === 'function') mostrarToast('Unidad guardada. La hoja se actualiza en unos minutos.', 'success'); else if (typeof appAlert === 'function') appAlert('Unidad guardada. La hoja BB.DD. RESPONSABLES se actualiza en unos minutos.'); } catch(e){}
@@ -1209,6 +1212,214 @@ async function guardarProgramacion(){
       }
     } catch(e){}
     return fOrig.apply(this, arguments);
+  };
+  })();
+  </script>
+
+  <!-- === _MANT_UNIDADES_V1 (17-nov-2026): catalogo de unidades (Supabase) y lista desplegable del codigo interno === -->
+  <style>
+    .un-est{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.3px;padding:3px 9px;border-radius:4px;white-space:nowrap}
+    .un-disp{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0}
+    .un-asig{background:#eef2f7;color:#0a2540;border:1px solid #d9e1ec}
+    .un-tall{background:#fffbeb;color:#b45309;border:1px solid #fde68a}
+    .un-baja{background:#f8fafc;color:#94a3b8;border:1px solid #e2e8f0}
+    .un-rev{display:block;margin-top:3px;font-size:11px;font-weight:700;color:#9a3412}
+    .un-cod{font-weight:700;white-space:nowrap;font-variant-numeric:tabular-nums}
+    #unOverlay .fic-tools input{flex:1;min-width:200px}
+    #unOverlay .fic-tools select{width:auto;min-width:150px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-family:Barlow,sans-serif;font-size:12.5px;color:#0f172a;background:#fff}
+    #unForm{display:none;border:1px solid #e2e8f0;border-radius:10px;padding:14px 16px;margin-bottom:14px;background:#f8fafc}
+    .un-ayuda{display:block;font-size:11.5px;color:#64748b;margin-top:4px}
+    @media(max-width:700px){#unOverlay .fic-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important}#unOverlay .fic-tabla{min-width:860px}}
+  </style>
+  <div class="fic-ov" id="unOverlay" style="z-index:1250" onclick="if(event.target===this)unCerrar()">
+    <div class="fic-card" style="max-width:1100px;width:96vw">
+      <div class="fic-h"><h3>Unidades<span class="fic-sub">Cat&#xe1;logo de la flota por c&#xf3;digo interno &#xb7; Supabase</span></h3><button class="fic-x" onclick="unCerrar()" title="Cerrar">&#x2715;</button></div>
+      <div class="fic-cuerpo">
+        <div class="fic-kpis" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+          <div class="fic-kpi k-tot"><b id="unTot">0</b><span>Unidades</span></div>
+          <div class="fic-kpi k-vig"><b id="unDisp">0</b><span>Disponibles</span></div>
+          <div class="fic-kpi"><b id="unAsig">0</b><span>Asignadas</span></div>
+          <div class="fic-kpi k-pv"><b id="unTall">0</b><span>En taller / de baja</span></div>
+        </div>
+        <div id="unForm">
+          <div class="ru-sec" id="unFormTit" style="margin-top:0">Nueva unidad</div>
+          <div class="ru-g ru-g3">
+            <div class="ru-f"><label for="un_codInterno">C&#xf3;d. interno *</label><input id="un_codInterno" maxlength="30" placeholder="ML-15" autocomplete="off"></div>
+            <div class="ru-f"><label for="un_marca">Marca</label><input id="un_marca" maxlength="100" placeholder="HONDA"></div>
+            <div class="ru-f"><label for="un_modelo">Modelo</label><input id="un_modelo" maxlength="100" placeholder="XR-150L"></div>
+            <div class="ru-f"><label for="un_anio">A&#xf1;o</label><input id="un_anio" maxlength="10" inputmode="numeric"></div>
+            <div class="ru-f"><label for="un_codSist">C&#xf3;d. sistema</label><input id="un_codSist" maxlength="60"></div>
+            <div class="ru-f"><label for="un_estado">Estado</label><select id="un_estado"><option value="OPERATIVA">Operativa</option><option value="EN TALLER">En taller</option><option value="DE BAJA">De baja</option></select></div>
+            <div class="ru-f"><label for="un_nMotor">N&#xb0; motor</label><input id="un_nMotor" maxlength="80"></div>
+            <div class="ru-f"><label for="un_nChasis">N&#xb0; chasis</label><input id="un_nChasis" maxlength="80"></div>
+            <div class="ru-f"><label for="un_obs">Observaci&#xf3;n</label><input id="un_obs" maxlength="300"></div>
+          </div>
+          <span class="un-ayuda" id="unFormAyuda">Si la unidad ya tiene responsable, sus datos se actualizan tambi&#xe9;n en su ficha y en la hoja.</span>
+          <div class="ru-msg" id="unMsg"></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px"><button class="fic-btn" type="button" onclick="unFormCerrar()">Cancelar</button><button class="fic-btn pri" type="button" id="unGuardarBtn" onclick="unGuardar()">Guardar unidad</button></div>
+        </div>
+        <div class="fic-tools">
+          <input type="text" id="unFiltro" placeholder="Buscar por c&#xf3;digo, marca, modelo o responsable" oninput="unPintar()">
+          <select id="unVer" onchange="unPintar()"><option value="todas">Todas</option><option value="DISPONIBLE">Disponibles</option><option value="ASIGNADA">Asignadas</option><option value="EN TALLER">En taller</option><option value="DE BAJA">De baja</option><option value="REVISAR">Revisar (2 personas)</option></select>
+          <button class="fic-btn pri" type="button" onclick="unNueva()">Nueva unidad</button>
+          <button class="fic-btn" type="button" onclick="unRecargar()">Actualizar</button>
+        </div>
+        <div class="fic-msg" id="unErr"></div>
+        <div class="fic-tablewrap" style="max-height:56vh"><table class="fic-tabla"><thead><tr><th>C&#xf3;digo</th><th>Unidad</th><th>A&#xf1;o</th><th>C&#xf3;d. sistema</th><th>Motor / chasis</th><th>Estado</th><th>Responsable</th><th></th></tr></thead><tbody id="unBody"></tbody></table></div>
+        <div class="fic-pie" id="unPie"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function(){
+  'use strict';
+  if (window._MANT_UNIDADES_V1) return; window._MANT_UNIDADES_V1 = true;
+  var UNIDADES = null, editU = null;
+  var VEH = ['marca','modelo','anio','codSist','nMotor','nChasis'];
+  function $(id){ return document.getElementById(id); }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function cod(v){ return String(v == null ? '' : v).toUpperCase().replace(/\s+/g, ' ').trim(); }
+  function api(a, b, ms){ return window._respApi ? window._respApi(a, b, ms) : Promise.reject(new Error('sin api')); }
+  function porCod(c){ c = cod(c); return (UNIDADES || []).find(function(u){ return cod(u.codInterno) === c; }) || null; }
+  function nombreU(u){ return [u.marca, u.modelo].filter(Boolean).join(' ') || 'Sin datos'; }
+  function otros(u, dni){ return (u.asignados || []).filter(function(a){ return String(a.dni) !== String(dni || ''); }); }
+
+  /* 1) catalogo: llega con la Ficha (una sola consulta) o se pide aparte */
+  window._unCargar = function(lista){ UNIDADES = Array.isArray(lista) ? lista : null; boton(); if ($('unOverlay').classList.contains('show')) unPintar(); };
+  function recargar(){ return api('unidades', {}, 12000).then(function(r){ if (r.status === 200 && r.j && r.j.ok) window._unCargar(r.j.unidades); return r; }); }
+  window._unTras = function(){ recargar().catch(function(){}); };
+
+  function boton(){
+    var tools = document.querySelector('#ficOverlay .fic-tools'); if (!tools) return;
+    var b = $('unBtn');
+    if (!UNIDADES){ if (b) b.style.display = 'none'; return; }
+    if (!b){ b = document.createElement('button'); b.className = 'fic-btn'; b.id = 'unBtn'; b.type = 'button'; b.onclick = function(){ unAbrir(); };
+      tools.insertBefore(b, $('ficRefresh')); }
+    var n = UNIDADES.filter(function(u){ return u.situacion === 'DISPONIBLE'; }).length;
+    b.style.display = ''; b.textContent = 'Unidades (' + n + (n === 1 ? ' disponible)' : ' disponibles)');
+  }
+
+  /* 2) Asignar / Editar: el codigo interno pasa a ser lista desplegable */
+  function campoCodigo(){
+    var el = $('ru_codInterno'); if (!el) return null;
+    if (!UNIDADES){   /* sin catalogo: queda el campo de texto de siempre */
+      if (el.tagName === 'SELECT'){ var i = document.createElement('input'); i.id = 'ru_codInterno'; i.maxLength = 60; i.value = el.value; el.parentNode.replaceChild(i, el); el = i; }
+      return el;
+    }
+    if (el.tagName !== 'SELECT'){ var s = document.createElement('select'); s.id = 'ru_codInterno'; s.onchange = alCambiar; el.parentNode.replaceChild(s, el); s._previo = el.value; el = s; }
+    return el;
+  }
+  function opciones(actual){
+    var el = campoCodigo(); if (!el || el.tagName !== 'SELECT') return;
+    var dni = String($('ru_dni').value || '').replace(/\D/g, ''), a = cod(actual);
+    var disp = [], asig = [], fuera = [];
+    (UNIDADES || []).forEach(function(u){
+      var c = cod(u.codInterno), mia = (u.asignados || []).some(function(x){ return String(x.dni) === dni && dni; }) || c === a;
+      if (mia || u.situacion === 'DISPONIBLE') disp.push(u); else if (u.situacion === 'ASIGNADA') asig.push(u); else fuera.push(u);
+    });
+    function op(u, extra, off){ var c = cod(u.codInterno); return '<option value="' + esc(c) + '"' + (off ? ' disabled' : '') + '>' + esc(c + ' · ' + nombreU(u) + (u.anio ? ' ' + u.anio : '') + (extra || '')) + '</option>'; }
+    var h = '<option value="">— Sin unidad —</option>';
+    if (a && !porCod(a)) h += '<option value="' + esc(a) + '">' + esc(a + ' · (no está en el catálogo)') + '</option>';
+    h += '<optgroup label="Disponibles (' + disp.filter(function(u){ return cod(u.codInterno) !== a; }).length + ')">' + disp.map(function(u){ return op(u, cod(u.codInterno) === a ? '  — actual' : ''); }).join('') + '</optgroup>';
+    if (asig.length) h += '<optgroup label="Asignadas a otra persona">' + asig.map(function(u){ return op(u, '  — ' + otros(u, dni).map(function(x){ return x.nombre; }).join(' y ')); }).join('') + '</optgroup>';
+    if (fuera.length) h += '<optgroup label="En taller o de baja">' + fuera.map(function(u){ return op(u, '  — ' + (u.situacion === 'DE BAJA' ? 'de baja' : 'en taller'), true); }).join('') + '</optgroup>';
+    el.innerHTML = h; el.value = a; el._actual = a;
+  }
+  function aviso(t, tipo){ var m = $('ruMsg'); m.className = 'ru-msg ' + (tipo || ''); m.textContent = t || ''; m.style.display = t ? 'block' : 'none'; }
+  function alCambiar(){
+    window._ruTransferir = ''; var b = $('ruGuardar'); if (b && !b.disabled) b.textContent = 'Guardar unidad';
+    var c = cod(this.value), u = porCod(c);
+    if (!c){ VEH.forEach(function(k){ var e = $('ru_' + k); if (e) e.value = ''; }); aviso('La persona quedará sin unidad al guardar.', 'inf'); return; }
+    if (u){ VEH.forEach(function(k){ var e = $('ru_' + k); if (e) e.value = u[k] || ''; }); }
+    var o = (u && c !== this._actual) ? otros(u, String($('ru_dni').value || '').replace(/\D/g, '')) : [];
+    if (o.length) aviso('La unidad ' + c + ' está asignada a ' + o.map(function(x){ return x.nombre; }).join(' y ') + '. Si guardas, se le quitará.', 'err');
+    else aviso('');
+  }
+  var abrirBase = window.ruAbrir;
+  window.ruAbrir = function(dni){
+    window._ruTransferir = '';
+    return Promise.resolve(abrirBase.apply(this, arguments)).then(function(){
+      /* el codigo actual se toma del registro (no del campo): "ml-10 " de la hoja debe verse como ML-10 */
+      var reg = dni ? (_CONDUCTORES || []).find(function(x){ return String(x.dni) === String(dni); }) : null;
+      opciones(reg ? reg.codInterno : '');
+    });
+  };
+  /* si el DNI cambia (asignar a alguien nuevo), "su" unidad actual se recalcula */
+  document.addEventListener('change', function(e){ if (e.target && e.target.id === 'ru_dni' && UNIDADES){ var el = $('ru_codInterno'); if (el && el.tagName === 'SELECT'){ var v = el.value, w = el._actual; opciones(w); el.value = v; } } }, true);
+  var guardarBase = window.ruGuardar;
+  window.ruGuardar = function(){
+    var el = $('ru_codInterno'), c = el ? cod(el.value) : '', u = c ? porCod(c) : null;
+    var o = u ? otros(u, String($('ru_dni').value || '').replace(/\D/g, '')) : [];
+    if (UNIDADES && o.length && c !== el._actual && window._ruTransferir !== c){
+      window._ruTransferir = c;
+      aviso('La unidad ' + c + ' está asignada a ' + o.map(function(x){ return x.nombre; }).join(' y ') + '. Si confirmas, se le quitará y quedará sin unidad.', 'err');
+      var b = $('ruGuardar'); if (b) b.textContent = 'Confirmar traspaso';
+      return Promise.resolve();
+    }
+    return Promise.resolve(guardarBase.apply(this, arguments)).then(function(){ window._ruTransferir = ''; });
+  };
+
+  /* 3) Ventana Unidades: lista, nueva y editar */
+  window.unAbrir = function(){ unFormCerrar(); $('unOverlay').classList.add('show'); unPintar(); if (!UNIDADES) unRecargar(); };
+  window.unCerrar = function(){ $('unOverlay').classList.remove('show'); };
+  window.unRecargar = function(){
+    var e = $('unErr'); e.style.display = 'none';
+    $('unBody').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#64748b;padding:22px">Cargando...</td></tr>';
+    recargar().then(function(r){ if (!(r.status === 200 && r.j && r.j.ok)){ e.textContent = (r.j && r.j.msg) || 'No se pudo cargar el catálogo.'; e.style.display = 'block'; } unPintar(); })
+      .catch(function(){ e.textContent = 'Sin conexión con el servidor.'; e.style.display = 'block'; unPintar(); });
+  };
+  window.unPintar = function(){
+    var L = UNIDADES || [], q = cod($('unFiltro').value), ver = $('unVer').value;
+    var cuenta = function(f){ return L.filter(f).length; };
+    $('unTot').textContent = L.length;
+    $('unDisp').textContent = cuenta(function(u){ return u.situacion === 'DISPONIBLE'; });
+    $('unAsig').textContent = cuenta(function(u){ return u.situacion === 'ASIGNADA'; });
+    $('unTall').textContent = cuenta(function(u){ return u.situacion === 'EN TALLER' || u.situacion === 'DE BAJA'; });
+    var M = L.filter(function(u){
+      if (ver === 'REVISAR' ? (u.asignados || []).length < 2 : (ver !== 'todas' && u.situacion !== ver)) return false;
+      return !q || cod([u.codInterno, u.marca, u.modelo, u.codSist].concat((u.asignados || []).map(function(a){ return a.nombre; })).join(' ')).indexOf(q) >= 0;
+    });
+    var CL = { 'DISPONIBLE': ['un-disp','Disponible'], 'ASIGNADA': ['un-asig','Asignada'], 'EN TALLER': ['un-tall','En taller'], 'DE BAJA': ['un-baja','De baja'] };
+    $('unBody').innerHTML = M.length ? M.map(function(u, i){
+      var e = CL[u.situacion] || ['un-asig', u.situacion], as = u.asignados || [];
+      var mc = [u.nMotor, u.nChasis].filter(Boolean);
+      return '<tr><td class="un-cod">' + esc(u.codInterno) + '</td>' +
+        '<td>' + esc(nombreU(u)) + (u.obs ? '<span class="sub">' + esc(u.obs) + '</span>' : '') + '</td>' +
+        '<td class="nw">' + (u.anio ? esc(u.anio) : '<span class="vacio">—</span>') + '</td>' +
+        '<td class="nw">' + (u.codSist ? esc(u.codSist) : '<span class="vacio">—</span>') + '</td>' +
+        '<td>' + (mc.length ? mc.map(esc).join('<br>') : '<span class="vacio">—</span>') + '</td>' +
+        '<td><span class="un-est ' + e[0] + '">' + esc(e[1]) + '</span></td>' +
+        '<td>' + (as.length ? as.map(function(a){ return '<span class="nom" style="white-space:normal">' + esc(a.nombre) + '</span>'; }).join('<br>') : '<span class="vacio">—</span>') +
+          (as.length > 1 ? '<span class="un-rev">Revisar: ' + as.length + ' personas con la misma unidad</span>' : '') + '</td>' +
+        '<td><button class="fic-hist" type="button" data-u="' + esc(u.codInterno) + '">Editar</button></td></tr>';
+    }).join('') : '<tr><td colspan="8" style="text-align:center;color:#64748b;padding:22px">' + (UNIDADES ? 'Sin unidades para este filtro.' : 'Catálogo no disponible.') + '</td></tr>';
+    Array.prototype.forEach.call($('unBody').querySelectorAll('button[data-u]'), function(b){ b.onclick = function(){ unEditar(b.getAttribute('data-u')); }; });
+    $('unPie').textContent = M.length + ' de ' + L.length + ' unidades · Fuente: Supabase · "Disponible" = operativa y sin responsable';
+  };
+  function unMsg(t, tipo){ var m = $('unMsg'); m.className = 'ru-msg ' + (tipo || ''); m.textContent = t || ''; m.style.display = t ? 'block' : 'none'; }
+  function formLlenar(u){
+    ['codInterno','marca','modelo','anio','codSist','nMotor','nChasis','obs'].forEach(function(k){ $('un_' + k).value = (u && u[k]) || ''; });
+    $('un_estado').value = (u && u.estado) || 'OPERATIVA';
+  }
+  window.unNueva = function(){ editU = null; formLlenar(null); $('unFormTit').textContent = 'Nueva unidad'; $('un_codInterno').readOnly = false; unMsg(''); $('unForm').style.display = 'block'; setTimeout(function(){ $('un_codInterno').focus(); }, 30); };
+  window.unEditar = function(c){ var u = porCod(c); if (!u) return; editU = u; formLlenar(u); $('unFormTit').textContent = 'Editar unidad ' + u.codInterno; $('un_codInterno').readOnly = true; unMsg(''); $('unForm').style.display = 'block'; $('unForm').scrollIntoView({ block: 'nearest' }); };
+  window.unFormCerrar = function(){ $('unForm').style.display = 'none'; editU = null; };
+  window.unGuardar = function(){
+    var c = cod($('un_codInterno').value);
+    if (!/^[A-Z0-9][A-Z0-9 \-\/.]{0,29}$/.test(c)){ unMsg('Escribe un código interno válido (letras, números y guion), por ejemplo ML-15.', 'err'); $('un_codInterno').focus(); return; }
+    if (!editU && porCod(c)){ unMsg('Ya existe la unidad ' + c + '. Usa Editar en su fila.', 'err'); return; }
+    var campos = {}, base = editU || {};
+    ['marca','modelo','anio','codSist','nMotor','nChasis','obs','estado'].forEach(function(k){ var v = String($('un_' + k).value || '').trim(); if (k === 'marca' || k === 'modelo') v = v.toUpperCase(); if (!editU || v !== String(base[k] || '')) campos[k] = v; });
+    if (editU && !Object.keys(campos).length){ unMsg('No hay cambios para guardar.', 'inf'); return; }
+    var b = $('unGuardarBtn'); b.disabled = true; b.textContent = 'Guardando...';
+    api('unidad_guardar', { codInterno: c, nuevo: !editU, campos: campos }, 20000).then(function(r){
+      if (r.status !== 200 || !r.j || !r.j.ok){ unMsg((r.j && r.j.msg) || ('No se pudo guardar (código ' + r.status + ').'), 'err'); return; }
+      window._unCargar(r.j.unidades);
+      if (Array.isArray(r.j.items) && r.j.items.length && typeof _CONDUCTORES !== 'undefined'){ _CONDUCTORES = r.j.items; try { if ($('ficOverlay').classList.contains('show')) renderConductores(); } catch(e){} }
+      unFormCerrar(); unPintar();
+      try { if (typeof mostrarToast === 'function') mostrarToast('Unidad ' + c + ' guardada.', 'success'); } catch(e){}
+    }).catch(function(){ unMsg('Sin conexión con el servidor. Intenta de nuevo.', 'err'); })
+      .then(function(){ b.disabled = false; b.textContent = 'Guardar unidad'; });
   };
   })();
   </script>
