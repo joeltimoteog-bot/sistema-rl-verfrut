@@ -76,10 +76,21 @@
   }
   function revisar() {
     if (!hayUsuario()) return;
-    if (window._rlAvisoLlaveHasta && Date.now() < window._rlAvisoLlaveHasta) return;
     var e = estadoLlave();
-    if (e !== 'ok') pintar(e);
+    /* _SESION_PREVIA_V1 (17-nov-2026): si la llave ya se renovo, se quita el aviso */
+    if (e === 'ok') { var av = document.getElementById('rlAvisoLlave'); if (av) av.remove(); return; }
+    if (window._rlAvisoLlaveHasta && Date.now() < window._rlAvisoLlaveHasta) return;
+    if (navigator.onLine === false) return;   /* sin internet: la llave se renueva sola al volver la red */
+    /* vencida: primero se intenta renovar sin molestar; solo si no se pudo, se avisa */
+    if (e === 'vencida' && window.rlSesion && typeof window.rlSesion.renovar === 'function' && !window._rlLlaveIntento) {
+      window._rlLlaveIntento = true;
+      try { window.rlSesion.renovar(); } catch (x) {}
+      setTimeout(function () { window._rlLlaveIntento = false; if (estadoLlave() === 'vencida') pintar('vencida'); }, 12000);
+      return;
+    }
+    if (e === 'vencida' && window._rlLlaveIntento) return;
+    pintar(e);
   }
-  function iniciar() { setTimeout(revisar, 3000); setInterval(revisar, 5 * 60 * 1000); }
+  function iniciar() { setTimeout(revisar, 6000); setInterval(revisar, 5 * 60 * 1000); }   /* _SESION_PREVIA_V1: 6 s (antes 3 s, antes de que corriera la renovacion) */
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();

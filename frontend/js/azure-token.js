@@ -88,7 +88,65 @@
     });
   }
   window.rlEdge = { activo: function () { return EDGE_ACTIVO && !edgePausado(); }, base: EDGE };
-  window.fetch = function (input, init) {
+  /* _SESION_PREVIA_V1 (17-nov-2026): al abrir la pagina con la llave vencida (la PC quedo de un dia para otro), las primeras
+     consultas salian ANTES de la renovacion (4 s), recibian 401 y ese 401 BORRABA la llave: ya no se podia renovar y el
+     usuario terminaba en el respaldo de Google (lento) todo el dia. Ahora, si la llave vencio o vence en < 2 min, se
+     renueva UNA vez (todas las consultas esperan la misma renovacion) y la consulta sale con la llave nueva.
+     Sin red o si la renovacion falla, la consulta sale igual que antes (sin bucles). Apagar: localStorage.rl_previa = 'off' */
+  var PREVIA = true; try { if (localStorage.getItem('rl_previa') === 'off') PREVIA = false; } catch (e) {}
+  var previaEnCurso = null, previaFalloTk = '', previaFalloHasta = 0;
+  function expDe(t) { try { var p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return (p.exp || 0) * 1000; } catch (e) { return 0; } }
+  function guardarTk(nuevo) {
+    try { sessionStorage.setItem('rl_token', nuevo); } catch (e) {}
+    try { var s = JSON.parse(localStorage.getItem('rl_session') || 'null'); if (s) { s.token = nuevo; s.timestamp = Date.now(); localStorage.setItem('rl_session', JSON.stringify(s)); } } catch (e) {}
+    try { var b = JSON.parse(localStorage.getItem('bienestarSocialAuth') || 'null'); if (b && b.rl_token !== undefined) { b.rl_token = nuevo; localStorage.setItem('bienestarSocialAuth', JSON.stringify(b)); } } catch (e) {}
+  }
+  function renovarPrevia(viejo) {
+    if (previaEnCurso) return previaEnCurso;
+    previaEnCurso = new Promise(function (listo) {
+      var ctl = typeof AbortController !== 'undefined' ? new AbortController() : null, reloj = setTimeout(function () { try { ctl && ctl.abort(); } catch (x) {} }, 10000);
+      fOrig.call(window, rg(EDGE + 'auth/renovar'), { method: 'POST', headers: { Authorization: 'Bearer ' + viejo }, signal: ctl ? ctl.signal : undefined })
+        .then(function (r) { return r.json().catch(function () { return null; }).then(function (j) { return { st: r.status, j: j }; }); })
+        .then(function (x) {
+          if (x.st === 200 && x.j && x.j.success && x.j.token) { guardarTk(x.j.token); try { console.log('[_SESION_PREVIA_V1] llave renovada antes de consultar'); } catch (e) {} listo(x.j.token); }
+          else { previaFalloTk = viejo; previaFalloHasta = Date.now() + 30000; listo(null); }   /* 401 (> 36 h) u otro: sigue el flujo de siempre */
+        }, function () { previaFalloTk = viejo; previaFalloHasta = Date.now() + 30000; listo(null); })   /* sin red: se reintenta en 30 s */
+        .then(function () { clearTimeout(reloj); previaEnCurso = null; });
+    });
+    return previaEnCurso;
+  }
+  function necesitaPrevia(url, init) {
+    if (!PREVIA || /\/api\/auth\//.test(url)) return '';
+    var t = ''; try { t = sessionStorage.getItem('rl_token') || ''; } catch (e) { return ''; }
+    if (!t) return '';
+    var e = expDe(t); if (!e || e > Date.now() + 120000) return '';
+    if (t === previaFalloTk && Date.now() < previaFalloHasta) return '';
+    if (init && tieneAuth(init.headers)) {   /* la pantalla puso su propia llave: solo si es esta misma (vencida) */
+      var h = init.headers, v = '';
+      try { v = (typeof Headers !== 'undefined' && h instanceof Headers) ? (h.get('Authorization') || '') : Array.isArray(h) ? ((h.filter(function (p) { return String(p[0]).toLowerCase() === 'authorization'; })[0] || [])[1] || '') : (h[Object.keys(h).filter(function (k) { return k.toLowerCase() === 'authorization'; })[0]] || ''); } catch (x) {}
+      if (String(v).indexOf(t) < 0) return '';
+    }
+    return t;
+  }
+  function cambiarLlave(init, viejo, nuevo) {
+    if (!init || !init.headers || !tieneAuth(init.headers)) return init;
+    var i3 = Object.assign({}, init), h = i3.headers;
+    if (typeof Headers !== 'undefined' && h instanceof Headers) { h = new Headers(h); h.set('Authorization', 'Bearer ' + nuevo); }
+    else if (Array.isArray(h)) { h = h.map(function (p) { return String(p[0]).toLowerCase() === 'authorization' ? [p[0], 'Bearer ' + nuevo] : p; }); }
+    else { h = Object.assign({}, h); Object.keys(h).forEach(function (k) { if (k.toLowerCase() === 'authorization') h[k] = 'Bearer ' + nuevo; }); }
+    i3.headers = h; return i3;
+  }
+  var envoltura = function (input, init) {
+    try {
+      var uP = (typeof input === 'string') ? input : '';
+      if (uP && uP.indexOf(MARCA) >= 0) {
+        var viejoP = necesitaPrevia(uP, init);
+        if (viejoP) { var selfP = this; return renovarPrevia(viejoP).then(function (nuevoP) { return envoltura.call(selfP, input, nuevoP ? cambiarLlave(init, viejoP, nuevoP) : init); }); }
+      }
+    } catch (e) {}
+    return envolturaBase.apply(this, arguments);
+  };
+  var envolturaBase = function (input, init) {
     try {
       var url = (typeof input === 'string') ? input : (input && input.url) || '';
       /* _EDGE_MODOGOOGLE_V1 (05-nov): con Supabase activo el modo Google de emergencia (de la caida de Azure del 04-nov) ya no bloquea:
@@ -127,6 +185,7 @@
       return enviar(url, i2);
     } catch (e) { return fOrig.apply(this, arguments); }
   };
+  window.fetch = envoltura;   /* _SESION_PREVIA_V1 */
 })();
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -243,5 +302,6 @@
   setTimeout(function () { revisar('inicio'); }, 4000);
   setInterval(function () { if (document.visibilityState === 'visible') revisar('reloj'); }, CADA_MS);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(function () { revisar('al volver'); }, 500); });
+  window.addEventListener('online', function () { setTimeout(function () { revisar('volvio internet'); }, 1500); });   /* _SESION_PREVIA_V1 */
   window.rlSesion = { renovar: function () { return revisar('manual'); }, vence: function () { var e = exp(tk()); return e ? new Date(e) : null; }, vencida: function (msg) { if (!esLogin) aviso(msg || 'Vuelve a ingresar para continuar.'); } };   /* _SEG_401_V1: aviso disponible para el enrutador */
 })();

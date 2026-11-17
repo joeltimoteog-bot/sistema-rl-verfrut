@@ -831,7 +831,11 @@ async function doLogin(){
     try{
       const r=await _conReloj(AZURE_LOGIN_URL,{method:'POST',body:JSON.stringify({usuario:u,password:p}),headers:{'Content-Type':'application/json'}},12000);
       d=await r.json();
-    }catch(eAz){ console.warn('[login] Azure no respondio:', eAz&&eAz.name); }
+    }catch(eAz){ console.warn('[login] Supabase no respondio:', eAz&&eAz.name);
+      /* _LOGIN_REINTENTO_V1 (17-nov-2026): un corte de red de 1-2 s dejaba la sesion SIN llave todo el dia (todo por Google, lento).
+         Antes de usar el respaldo se reintenta Supabase una vez. */
+      try{ await new Promise(z=>setTimeout(z,1500)); const r2=await _conReloj(AZURE_LOGIN_URL,{method:'POST',body:JSON.stringify({usuario:u,password:p}),headers:{'Content-Type':'application/json'}},10000); d=await r2.json(); if(d&&d.success) console.log('[login] Supabase respondio al reintento'); }catch(eAz2){ console.warn('[login] reintento Supabase:', eAz2&&eAz2.name); }
+    }
     /* _LOGIN_INTENTOS_V1 (18-oct): si Azure RECHAZO la clave (o bloqueo por intentos), no se prueba por Google */
     if((!d||!d.success) && !(d&&d.rechazado)){
       try{
