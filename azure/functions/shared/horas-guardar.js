@@ -62,7 +62,10 @@ async function ejecutar(pool, accion, b, usuario, prueba, ahoraMs) {
     let ahora = new Date(prueba && ahoraMs ? +ahoraMs : Date.now());
     const ids = new Set(R.filas.map(f => S(f[0])));
     while (ids.has('H' + ahora.getTime()) || ids.has('HC' + ahora.getTime())) ahora = new Date(ahora.getTime() + 1);   /* ID unico */
-    const M = HE.crear({ registros: R.filas, motivos: Mo.filas, horarios: Ho.filas, ahora, admins: ADMINS, registradores: REGISTRADORES });
+    /* _HORAS_PERIODO_V1 (17-nov-2026): el saldo que cubre un permiso nuevo cuenta solo desde el ingreso actual */
+    let cortes = {};
+    try { const HP = require('./horas-periodo'); cortes = HP.cortes(await HP.ingresos(pool, sql), R.filas, f => HP.normDni(f[3]), f => HP.dia(f[7]) || HP.dia(f[1])); } catch (eP) { cortes = {}; }
+    const M = HE.crear({ registros: R.filas, motivos: Mo.filas, horarios: Ho.filas, ahora, admins: ADMINS, registradores: REGISTRADORES, cortes });
     const o = M.ejecutar(accion, body), resp = o.res;
     if (!resp || !resp.success) { await tx.rollback(); return { status: 200, body: resp || { success: false, error: 'Sin respuesta' } }; }
     if (accion === 'horasRecalcJornada' && body.aplicar !== true) { await tx.rollback(); return { status: 200, body: resp }; }   /* _HORAS_RECALC_JORNADA_V1: vista previa, no guarda */

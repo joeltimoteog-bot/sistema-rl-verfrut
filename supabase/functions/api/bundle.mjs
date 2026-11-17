@@ -71714,6 +71714,82 @@ var require_cv_guardar2 = __commonJS({
   }
 });
 
+// shared/horas-periodo.js
+var require_horas_periodo = __commonJS({
+  "shared/horas-periodo.js"(exports, module) {
+    "use strict";
+    var DIAS_RENOVACION = 30;
+    var DIA = 864e5;
+    function normDni(x) {
+      const v = x && typeof x === "object" && typeof x.$s === "string" ? x.$s : x;
+      let s = String(v == null ? "" : v).replace(/\D/g, "");
+      if (!s) return "";
+      while (s.length < 8) s = "0" + s;
+      return s;
+    }
+    function dia(v) {
+      if (v == null || v === "") return "";
+      if (typeof v === "object" && !(v instanceof Date)) {
+        if (typeof v.$d === "string" && v.$d) return dia(new Date(v.$d));
+        return "";
+      }
+      if (v instanceof Date) {
+        const t = v.getTime();
+        if (isNaN(t)) return "";
+        return new Date(t - 5 * 36e5).toISOString().slice(0, 10);
+      }
+      const s = String(v).trim();
+      let m = s.match(/^(\d{4})-(\d{2})-(\d{2})(T(\d{2}):(\d{2}))?/);
+      if (m) {
+        if (!m[4]) return m[1] + "-" + m[2] + "-" + m[3];
+        return dia(new Date(s));
+      }
+      m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (m) return m[3] + "-" + ("0" + m[2]).slice(-2) + "-" + ("0" + m[1]).slice(-2);
+      return "";
+    }
+    var _cache = { t: 0, v: null };
+    async function ingresos(pool, sql) {
+      if (_cache.v && Date.now() - _cache.t < 6e5) return _cache.v;
+      const out = {};
+      try {
+        const EMP = require_empresas();
+        const tablas = Array.from(await EMP.tablasExistentes(pool, sql));
+        for (const t of tablas) {
+          const r = await pool.request().query(`SELECT dni, fecha_inicio FROM dbo.${t} WHERE fecha_inicio IS NOT NULL`);
+          (r.recordset || []).forEach((x) => {
+            const d = normDni(x.dni);
+            const f = x.fecha_inicio instanceof Date ? x.fecha_inicio.toISOString().slice(0, 10) : dia(x.fecha_inicio);
+            if (d && f && (!out[d] || f > out[d])) out[d] = f;
+          });
+        }
+        _cache = { t: Date.now(), v: out };
+      } catch (e) {
+        return _cache.v || {};
+      }
+      return out;
+    }
+    function cortes(ing, registros, dniDe, fechaDe) {
+      const ultimoViejo = {};
+      (registros || []).forEach((r) => {
+        const d = dniDe(r), fi = ing && ing[d];
+        if (!fi) return;
+        const f = fechaDe(r);
+        if (!f || f >= fi) return;
+        if (!ultimoViejo[d] || f > ultimoViejo[d]) ultimoViejo[d] = f;
+      });
+      const out = {};
+      Object.keys(ultimoViejo).forEach((d) => {
+        const fi = ing[d], uv = ultimoViejo[d];
+        const pausa = (Date.parse(fi + "T00:00:00Z") - Date.parse(uv + "T00:00:00Z")) / DIA;
+        if (pausa >= DIAS_RENOVACION) out[d] = fi;
+      });
+      return out;
+    }
+    module.exports = { ingresos, cortes, dia, normDni, DIAS_RENOVACION };
+  }
+});
+
 // shared/horas-escritura.js
 var require_horas_escritura = __commonJS({
   "shared/horas-escritura.js"(exports, module) {
@@ -71881,12 +71957,15 @@ var require_horas_escritura = __commonJS({
         }
       }
       const todas = () => filas.concat(nuevas);
+      const CORTES = ctx.cortes || {}, HP = require_horas_periodo();
       function saldo(dni) {
         const obj = normDni(dni);
         let acum = 0, perm = 0, deuda = 0;
+        const corte = CORTES[obj] || "";
         todas().forEach((r) => {
           if (normDni(r[3]) !== obj) return;
           if ((r[20] ? S(r[20]) : "").toLowerCase() === "rechazado") return;
+          if (corte && (HP.dia(r[7]) || HP.dia(r[1])) < corte) return;
           acum += N(r[13]) || 0;
           perm += N(r[14]) || 0;
           deuda += N(r[15]) || 0;
@@ -72375,7 +72454,14 @@ var require_horas_guardar = __commonJS({
         let ahora = new Date(prueba && ahoraMs ? +ahoraMs : Date.now());
         const ids = new Set(R.filas.map((f) => S(f[0])));
         while (ids.has("H" + ahora.getTime()) || ids.has("HC" + ahora.getTime())) ahora = new Date(ahora.getTime() + 1);
-        const M = HE.crear({ registros: R.filas, motivos: Mo.filas, horarios: Ho.filas, ahora, admins: ADMINS, registradores: REGISTRADORES });
+        let cortes = {};
+        try {
+          const HP = require_horas_periodo();
+          cortes = HP.cortes(await HP.ingresos(pool, sql), R.filas, (f) => HP.normDni(f[3]), (f) => HP.dia(f[7]) || HP.dia(f[1]));
+        } catch (eP) {
+          cortes = {};
+        }
+        const M = HE.crear({ registros: R.filas, motivos: Mo.filas, horarios: Ho.filas, ahora, admins: ADMINS, registradores: REGISTRADORES, cortes });
         const o = M.ejecutar(accion, body), resp = o.res;
         if (!resp || !resp.success) {
           await tx.rollback();
@@ -78224,6 +78310,7 @@ var require_mod_horas = __commonJS({
       return s;
     }
     var r2 = (n) => Math.round(n * 100) / 100;
+    var HP = require_horas_periodo();
     function crear(D) {
       const C = D.config || {};
       const ADMINS = C.admins || [], REG = C.registradores || [];
@@ -78238,10 +78325,28 @@ var require_mod_horas = __commonJS({
         });
         return o;
       };
+      const CORTES = D.cortes || {};
+      const diaReg = (r) => HP.dia(r.fechaEntrada) || HP.dia(r.fechaRegistro);
+      const esViejo = (r) => {
+        const c = CORTES[r.dni];
+        return !!c && diaReg(r) < c;
+      };
+      const totales = (acum, perm, deuda, dni) => ({
+        acum: r2(acum),
+        perm: r2(perm),
+        deuda: r2(deuda),
+        saldo: r2(acum - perm - deuda),
+        permTotal: r2(perm + deuda),
+        desde: dni && CORTES[dni] || ""
+      });
       function horasListar(body) {
         const quien = String(body && body.usuario || "").trim();
         if (!quien) return { success: false, sesionInvalida: true, error: C.msgSesion };
-        let regs = todas.filter((r) => r._conId).map(sinMarca);
+        let regs = todas.filter((r) => r._conId).map((r) => {
+          const o = sinMarca(r);
+          if (esViejo(r)) o.periodoAnterior = true;
+          return o;
+        });
         if (esRestringido(quien)) {
           const u = quien.toLowerCase();
           regs = regs.filter((r) => String(r.registradoPor || "").toLowerCase().trim() === u);
@@ -78259,21 +78364,23 @@ var require_mod_horas = __commonJS({
         todas.forEach((r) => {
           if (r.dni !== dni) return;
           if (String(r._estadoCrudo || "").toLowerCase() === "rechazado") return;
+          if (esViejo(r)) return;
           acum += Number(r.horasAcumuladas) || 0;
           perm += Number(r.horasPermiso) || 0;
           deuda += Number(r.horasDeuda) || 0;
         });
-        return { acum: r2(acum), perm: r2(perm), deuda: r2(deuda), saldo: r2(acum - perm - deuda) };
+        return totales(acum, perm, deuda, dni);
       }
       function saldoDeRegistros(regs) {
         let acum = 0, perm = 0, deuda = 0;
         (regs || []).forEach((r) => {
           if (String(r.estado || "").toLowerCase() === "rechazado") return;
+          if (r.periodoAnterior) return;
           acum += Number(r.horasAcumuladas) || 0;
           perm += Number(r.horasPermiso) || 0;
           deuda += Number(r.horasDeuda) || 0;
         });
-        return { acum: r2(acum), perm: r2(perm), deuda: r2(deuda), saldo: r2(acum - perm - deuda) };
+        return totales(acum, perm, deuda, regs && regs[0] && regs[0].dni);
       }
       function horasResumenIndividual(body) {
         const quien = String(body && body.usuario || "").trim();
@@ -78292,7 +78399,7 @@ var require_mod_horas = __commonJS({
           dni,
           registros: lista.registros,
           totales: saldo,
-          comentario: (restringido ? "TOTALES SOLO DE TUS REGISTROS \xB7 " : "") + (saldo.saldo > 0 ? "Saldo a favor: " + saldo.saldo.toFixed(2) + " horas" : saldo.saldo < 0 ? "Deuda pendiente: " + Math.abs(saldo.saldo).toFixed(2) + " horas" : "Sin saldo pendiente")
+          comentario: (restringido ? "TOTALES SOLO DE TUS REGISTROS \xB7 " : "") + (saldo.desde ? "SALDO DESDE SU INGRESO DEL " + saldo.desde.split("-").reverse().join("/") + " (lo anterior es de su periodo anterior y no suma) \xB7 " : "") + (saldo.saldo > 0 ? "Saldo a favor: " + saldo.saldo.toFixed(2) + " horas" : saldo.saldo < 0 ? "Deuda pendiente: " + Math.abs(saldo.saldo).toFixed(2) + " horas" : "Sin saldo pendiente")
         };
       }
       function horasResumenGeneral() {
@@ -78301,12 +78408,13 @@ var require_mod_horas = __commonJS({
           const dni = r.dni;
           if (!dni) return;
           if (String(r._estadoCrudo || "").toLowerCase() === "rechazado") return;
+          if (esViejo(r)) return;
           if (!map[dni]) map[dni] = { dni, nombre: r.nombre, empresa: r.empresa, cargo: r.cargo, acum: 0, perm: 0, deuda: 0 };
           map[dni].acum += Number(r.horasAcumuladas) || 0;
           map[dni].perm += Number(r.horasPermiso) || 0;
           map[dni].deuda += Number(r.horasDeuda) || 0;
         });
-        const resumen = Object.values(map).map((t) => Object.assign({}, t, { acum: r2(t.acum), perm: r2(t.perm), deuda: r2(t.deuda), saldo: r2(t.acum - t.perm - t.deuda) })).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
+        const resumen = Object.values(map).map((t) => Object.assign({}, t, totales(t.acum, t.perm, t.deuda, t.dni))).sort((a, b) => (a.nombre || "").localeCompare(b.nombre || ""));
         return { success: true, resumen };
       }
       function horasListarMotivos() {
@@ -79061,6 +79169,12 @@ var require_mod = __commonJS({
         if (!reg || !mot) return false;
         D.registros = reg.filas.map((r) => registroHoras(Array.from({ length: 23 }, (_, i) => r[i] === void 0 ? "" : r[i])));
         D.motivos = mot.filas.map((r) => String(esD(r[0]) ? r[0].$s : r[0] || "").trim()).filter((m) => m).sort((a, b) => a.localeCompare(b));
+        try {
+          const HP = require_horas_periodo();
+          D.cortes = HP.cortes(await HP.ingresos(pool, sql), D.registros, (r) => r.dni, (r) => HP.dia(r.fechaEntrada) || HP.dia(r.fechaRegistro));
+        } catch (eP) {
+          D.cortes = {};
+        }
         return true;
       }
       if (modulo === "cap") {
@@ -79125,6 +79239,7 @@ var require_mod = __commonJS({
       const v = await pool.request().input("m", sql.NVarChar(40), modulo).query("SELECT CONVERT(VARCHAR(30), MAX(actualizado), 126) AS v, COUNT(*) AS n FROM dbo.MOD_Datos WHERE modulo = @m");
       let ver = (v.recordset[0].v || "") + "#" + v.recordset[0].n;
       if (TABLAS[modulo]) ver += "#" + await TH.marcas(pool, TABLAS[modulo]);
+      if (modulo === "horas") ver += "#p" + Math.floor(Date.now() / 6e5);
       const c = cache[modulo];
       if (c && c.ver === ver) return c.m;
       const r = await pool.request().input("m", sql.NVarChar(40), modulo).query("SELECT clave, datos FROM dbo.MOD_Datos WHERE modulo = @m AND NOT (modulo = 'cap' AND clave = 'bbdd')");

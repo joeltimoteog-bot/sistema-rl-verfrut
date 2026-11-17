@@ -118,11 +118,15 @@ function crear(ctx) {
     } catch (e) { return 0; }
   }
   const todas = () => filas.concat(nuevas);
+  /* _HORAS_PERIODO_V1 (17-nov-2026): ctx.cortes = { dni: 'AAAA-MM-DD' }: lo anterior al ingreso actual no suma al saldo */
+  const CORTES = ctx.cortes || {}, HP = require('./horas-periodo');
   function saldo(dni) {   /* horasCalcularSaldo */
     const obj = normDni(dni); let acum = 0, perm = 0, deuda = 0;
+    const corte = CORTES[obj] || '';
     todas().forEach(r => {
       if (normDni(r[3]) !== obj) return;
       if ((r[20] ? S(r[20]) : '').toLowerCase() === 'rechazado') return;
+      if (corte && (HP.dia(r[7]) || HP.dia(r[1])) < corte) return;   /* _HORAS_PERIODO_V1: periodo anterior */
       acum += N(r[13]) || 0; perm += N(r[14]) || 0; deuda += N(r[15]) || 0;
     });
     return { acum: r2(acum), perm: r2(perm), deuda: r2(deuda), saldo: r2(acum - perm - deuda) };

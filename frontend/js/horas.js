@@ -392,21 +392,28 @@ async function cargarSaldoTrabajador(dni) {
   } catch (e) { console.error('[HORAS] saldo:', e); }
 }
 
+/* _HORAS_PERIODO_V1 (17-nov-2026): "Permiso" = TODAS las horas de permiso (las cubiertas con saldo + las que quedaron
+   sin saldo). Antes mostraba solo las cubiertas y parecia que Acumuladas >= Permiso con deuda. Saldo = Acumuladas - Permiso. */
+function _permTotal(t) { t = t || {}; return (t.permTotal !== undefined) ? Number(t.permTotal) : (Number(t.perm || 0) + Number(t.deuda || 0)); }
+function _permDetalle(t) { t = t || {}; const sin = Number(t.deuda || 0); return sin > 0 ? (Number(t.perm || 0).toFixed(2) + ' con saldo · ' + sin.toFixed(2) + ' sin saldo') : ''; }
+function _desdeTxt(t) { const d = (t && t.desde) || ''; return d ? d.split('-').reverse().join('/') : ''; }
+
 function renderSaldoCard(data) {
   const t = data.totales || {};
   const acum = Number(t.acum || 0);
-  const perm = Number(t.perm || 0);
-  const saldo = (t.saldo !== undefined) ? Number(t.saldo) : (acum - perm - Number(t.deuda || 0));
+  const perm = _permTotal(t);   /* _HORAS_PERIODO_V1 */
+  const saldo = (t.saldo !== undefined) ? Number(t.saldo) : (acum - perm);
   /* _HORAS_DEUDA_REAL_V1 (06-nov): la deuda que se muestra es la que el trabajador DEBE HOY (saldo negativo). Antes se sumaba la columna deuda: si un permiso se cubrio con un saldo que luego se anulo/corrigio, esa deuda no aparecia (ADANAQUE: mostraba 23.98 h y debe 95.54 h). */ const deuda = Math.max(0, Math.round(-saldo * 100) / 100);
+  const det = _permDetalle(t), desde = _desdeTxt(t);
   document.getElementById('saldoWrap').innerHTML = `
     <div class="saldo-card">
       <div class="lbl-w">📊 Saldo actual</div>
       <div class="val-w">${saldo.toFixed(2)} <span style="font-size:14px;font-weight:600;opacity:.85">horas</span></div>
       <div class="row3">
         <div class="mini">🟢 Acumuladas<b>${acum.toFixed(2)}</b></div>
-        <div class="mini">🔵 Permiso<b>${perm.toFixed(2)}</b></div>
+        <div class="mini">🔵 Permiso<b>${perm.toFixed(2)}</b>${det ? `<span style="display:block;font-size:10.5px;font-weight:500;opacity:.85">${det}</span>` : ''}</div>
         <div class="mini">🔴 Deuda<b>${deuda.toFixed(2)}</b></div>
-      </div>
+      </div>${desde ? `<div style="margin-top:8px;font-size:11.5px;opacity:.9">Saldo desde su ingreso del ${desde} · lo anterior es de su periodo anterior y no suma</div>` : ''}
     </div>`;
 }
 
@@ -612,8 +619,9 @@ function renderResumenIndividual(d) {
   const registros = d.registros || [];
   const t = d.totales || {};
   const acum = Number(t.acum || 0);
-  const perm = Number(t.perm || 0);
-  const saldo = (t.saldo !== undefined) ? Number(t.saldo) : (acum - perm - Number(t.deuda || 0));
+  const perm = _permTotal(t);   /* _HORAS_PERIODO_V1 */
+  const saldo = (t.saldo !== undefined) ? Number(t.saldo) : (acum - perm);
+  const det = _permDetalle(t), desde = _desdeTxt(t);
   /* _HORAS_DEUDA_REAL_V1 (06-nov): la deuda que se muestra es la que el trabajador DEBE HOY (saldo negativo). Antes se sumaba la columna deuda: si un permiso se cubrio con un saldo que luego se anulo/corrigio, esa deuda no aparecia (ADANAQUE: mostraba 23.98 h y debe 95.54 h). */ const deuda = Math.max(0, Math.round(-saldo * 100) / 100);
 
   // Header con datos del trabajador (tomados del primer registro si vienen)
@@ -631,12 +639,15 @@ function renderResumenIndividual(d) {
   document.getElementById('indSaldos').innerHTML = `
     <div class="grid4" style="margin-bottom:14px">
       <div class="stat-card green"><div class="stat-label">🟢 Acumuladas</div><div class="stat-val">${acum.toFixed(2)}</div></div>
-      <div class="stat-card blue"><div class="stat-label">🔵 Permiso</div><div class="stat-val">${perm.toFixed(2)}</div></div>
+      <div class="stat-card blue"><div class="stat-label">🔵 Permiso</div><div class="stat-val">${perm.toFixed(2)}</div>${det ? `<div style="font-size:11px;color:#475569;margin-top:2px">${det}</div>` : ''}</div>
       <div class="stat-card red"><div class="stat-label">🔴 Deuda</div><div class="stat-val">${deuda.toFixed(2)}</div></div>
       <div class="stat-card ${saldo < 0 ? 'red' : 'green'}"><div class="stat-label">⚖️ Saldo final</div><div class="stat-val">${saldo.toFixed(2)}</div></div>
     </div>` + (d.parcial ? `
     <div style="font-size:12px;color:#92400e;background:#fffbeb;border-left:3px solid #f59e0b;padding:8px 10px;border-radius:6px;margin-bottom:14px">
       ℹ️ Estos totales corresponden <b>solo a los registros que tú ingresaste</b>, no al saldo total del trabajador.
+    </div>` : '') + (desde ? `
+    <div style="font-size:12px;color:#334155;background:#f1f5f9;border-left:3px solid #64748b;padding:8px 10px;border-radius:6px;margin-bottom:14px">
+      ℹ️ Reingresó el <b>${desde}</b>: el saldo cuenta desde esa fecha. Los registros anteriores (en gris, <i>Periodo anterior</i>) son de su periodo anterior y <b>no suman</b>.
     </div>` : '');
 
   // Tabla
@@ -657,14 +668,15 @@ function renderResumenIndividual(d) {
         : `<button class="btn-tbl btn-edit" onclick="abrirEditarRegistro('${esc(r.id)}', ${JSON.stringify(r.observaciones || '').replace(/"/g, '&quot;')})">✏️</button>`;
       const btnDel = ES_BASICO ? ''
         : `<button class="btn-tbl btn-del"  onclick="eliminarRegistro('${esc(r.id)}')">🗑️</button>`;
-      return `<tr>
+      const viejo = !!r.periodoAnterior;   /* _HORAS_PERIODO_V1 */
+      return `<tr${viejo ? ' style="opacity:.55;background:#f8fafc" title="Periodo anterior: no suma al saldo actual"' : ''}>
         <td>${formatFecha(r.fechaEntrada || r.fecha)}${ES_BASICO ? '' : `<div style="font-size:11px;color:#64748b;margin-top:2px">👤 ${esc(String(r.registradoPor || '—'))}</div>`}</td>
         <td>${r.motivo || ''}</td>
         <td>${num(r.horasTrabajadas)}</td>
         <td>${num(r.horasAcum)}</td>
         <td>${num(r.horasPermiso)}</td>
         <td>${num(r.horasDeuda)}</td>
-        <td>${badgeEst}</td>
+        <td>${badgeEst}${r.periodoAnterior ? '<div style="margin-top:3px"><span class="badge" style="background:#e2e8f0;color:#475569">Periodo anterior</span></div>' : ''}</td>
         <td style="font-size:12px">${r.observaciones || ''}</td>
         <td style="white-space:nowrap">
           ${btnEdit}
@@ -757,8 +769,8 @@ function renderResumenGeneral(rows) {
   let totAcum = 0, totPerm = 0, totDeuda = 0, totSaldo = 0;
   const html = rows.map(r => {
     const acum = Number(r.acum || 0);
-    const perm = Number(r.perm || 0);
-    const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm - Number(r.deuda || 0));
+    const perm = _permTotal(r);   /* _HORAS_PERIODO_V1 */
+    const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm);
     const deuda = Math.max(0, Math.round(-saldo * 100) / 100);   /* _HORAS_DEUDA_REAL_V1 */
     totAcum += acum; totPerm += perm; totDeuda += deuda; totSaldo += saldo;
     let cls = '';
@@ -875,15 +887,16 @@ async function exportarIndividualPDF() {
   y += 22;
   const t = d.totales || {};
   doc.setTextColor(15, 23, 42); doc.setFontSize(10);
-  doc.text(`Acumuladas: ${num(t.acum)}   Permiso: ${num(t.perm)}   Deuda: ${num(Math.max(0, -(Number(t.saldo) || 0)))}   Saldo: ${num(t.saldo)}`, mg, y);
+  doc.text(`Acumuladas: ${num(t.acum)}   Permiso: ${num(_permTotal(t))}   Deuda: ${num(Math.max(0, -(Number(t.saldo) || 0)))}   Saldo: ${num(t.saldo)}`, mg, y);
   y += 6;
+  if (_desdeTxt(t)) { doc.setFontSize(8); doc.text(`Saldo desde su ingreso del ${_desdeTxt(t)}; los registros marcados "periodo anterior" no suman.`, mg, y); doc.setFontSize(10); y += 5; }   /* _HORAS_PERIODO_V1 */
   doc.autoTable({
     startY: y, margin: { left: mg, right: mg },
     head: [['Fecha','Motivo','H.Trab','Acum','Permiso','Deuda','Estado','Obs']],
     body: (d.registros || []).map(r => [
       formatFecha(r.fechaEntrada || r.fecha), r.motivo || '',
       num(r.horasTrabajadas), num(r.horasAcum), num(r.horasPermiso), num(r.horasDeuda),
-      r.estado || '', r.observaciones || ''
+      (r.estado || '') + (r.periodoAnterior ? ' (periodo anterior)' : ''), r.observaciones || ''
     ]),
     styles: { font: 'helvetica', fontSize: 8 },
     headStyles: { fillColor: [10,36,99], textColor: 255 }
@@ -902,6 +915,7 @@ async function exportarIndividualExcel() {
     Permiso: Number(r.horasPermiso || 0),
     Deuda: Number(r.horasDeuda || 0),
     Estado: r.estado || '',
+    Periodo: r.periodoAnterior ? 'Anterior (no suma)' : 'Actual',   /* _HORAS_PERIODO_V1 */
     Observaciones: r.observaciones || ''
   }));
   const wb = XLSX.utils.book_new();
@@ -925,8 +939,8 @@ async function exportarGeneralPDF() {
     startY: y, margin: { left: mg, right: mg },
     head: [['DNI','Nombre','Empresa','Cargo','Acum','Permiso','Deuda','Saldo']],
     body: rows.map(r => {
-      const acum = Number(r.acum || 0), perm = Number(r.perm || 0);
-      const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm - Number(r.deuda || 0)), deuda = Math.max(0, Math.round(-saldo * 100) / 100);   /* _HORAS_DEUDA_REAL_V1 */
+      const acum = Number(r.acum || 0), perm = _permTotal(r);   /* _HORAS_PERIODO_V1 */
+      const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm), deuda = Math.max(0, Math.round(-saldo * 100) / 100);   /* _HORAS_DEUDA_REAL_V1 */
       return [r.dni || '', r.nombre || '', r.empresa || '', r.cargo || '',
               acum.toFixed(2), perm.toFixed(2), deuda.toFixed(2), saldo.toFixed(2)];
     }),
@@ -940,8 +954,8 @@ async function exportarGeneralExcel() {
   const rows = window.horasCache.resumenGeneral;
   if (!rows || !rows.length) { await appAlert('No hay datos para exportar'); return; }
   const data = rows.map(r => {
-    const acum = Number(r.acum || 0), perm = Number(r.perm || 0);
-    const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm - Number(r.deuda || 0)), deuda = Math.max(0, Math.round(-saldo * 100) / 100);   /* _HORAS_DEUDA_REAL_V1 */
+    const acum = Number(r.acum || 0), perm = _permTotal(r);   /* _HORAS_PERIODO_V1 */
+    const saldo = (r.saldo !== undefined) ? Number(r.saldo) : (acum - perm), deuda = Math.max(0, Math.round(-saldo * 100) / 100);   /* _HORAS_DEUDA_REAL_V1 */
     return {
       DNI: r.dni || '', Nombre: r.nombre || '', Empresa: r.empresa || '', Cargo: r.cargo || '',
       Acumuladas: acum, Permiso: perm, Deuda: deuda, Saldo: saldo
@@ -1515,6 +1529,7 @@ function _planillaPanelResumen(d) {
     var pagadas = 0, acum = 0, permiso = 0, deuda = 0;
     var quincenas = {};
     regs.forEach(function (r) {
+      if (r.periodoAnterior) return;   /* _HORAS_PERIODO_V1: no suma al periodo actual */
       var a = Number(r.horasAcumuladas) || 0;
       var p = Number(r.horasPermiso)    || 0;
       var u = Number(r.horasDeuda)      || 0;

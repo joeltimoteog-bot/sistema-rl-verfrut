@@ -30,6 +30,8 @@ async function desdeTablas(pool, modulo, D) {
     if (!reg || !mot) return false;
     D.registros = reg.filas.map(r => registroHoras(Array.from({ length: 23 }, (_, i) => r[i] === undefined ? '' : r[i])));
     D.motivos = mot.filas.map(r => String(esD(r[0]) ? r[0].$s : (r[0] || '')).trim()).filter(m => m).sort((a, b) => a.localeCompare(b));
+    /* _HORAS_PERIODO_V1 (17-nov-2026): fecha de corte de quien reingreso (padron); si falla, sin cortes (como antes) */
+    try { const HP = require('../shared/horas-periodo'); D.cortes = HP.cortes(await HP.ingresos(pool, sql), D.registros, r => r.dni, r => HP.dia(r.fechaEntrada) || HP.dia(r.fechaRegistro)); } catch (eP) { D.cortes = {}; }
     return true;
   }
   if (modulo === 'cap') {
@@ -92,6 +94,7 @@ async function datos(modulo) {
     .query("SELECT CONVERT(VARCHAR(30), MAX(actualizado), 126) AS v, COUNT(*) AS n FROM dbo.MOD_Datos WHERE modulo = @m");
   let ver = (v.recordset[0].v || '') + '#' + v.recordset[0].n;
   if (TABLAS[modulo]) ver += '#' + (await TH.marcas(pool, TABLAS[modulo]));   /* _TABLAS_HC_V1 */
+  if (modulo === 'horas') ver += '#p' + Math.floor(Date.now() / 600000);   /* _HORAS_PERIODO_V1: el padron (fechas de ingreso) se relee cada 10 min */
   const c = cache[modulo];
   if (c && c.ver === ver) return c.m;
   const r = await pool.request().input('m', sql.NVarChar(40), modulo).query("SELECT clave, datos FROM dbo.MOD_Datos WHERE modulo = @m AND NOT (modulo = 'cap' AND clave = 'bbdd')");   /* _MEMO_CAP_V1: el JSON de asistentes (15 MB) ya no se lee ni se guarda en memoria */
