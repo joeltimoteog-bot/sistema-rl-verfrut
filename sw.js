@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'v4.0.0-ver';   /* _SW_VERSION_V1 (17-nov-2026) · antes: _SW_RED_LENTA_V1 (05-oct) + _SW_DOC_12S_V1 (08-nov) */
+const CACHE_VERSION = 'v4.0.0-ver';   /* _SW_VERSION_V1 + _SW_CAMBIOS_V1 (17-nov-2026) · NO cambiar el nombre: se perderian las copias */
 const CACHE_NAME    = 'sistema-rl-' + CACHE_VERSION;
 const BASE          = '/sistema-rl-verfrut';
 // Solo lo mínimo para soporte offline básico — el resto se pide por red
@@ -26,6 +26,9 @@ const ARCHIVOS_BASE = [
      · version nueva (hubo publicacion) -> se borran las copias de html/js/css y todo se pide a la red (como antes).
      · sin version.json / sin red      -> se hace exactamente lo de antes (network-first con copia de respaldo).
    SEGURO: ninguna copia de html/js/css se usa si tiene mas de 12 h; pasado eso se vuelve a pedir a la red.
+   _SW_CAMBIOS_V1 (17-nov-2026): version.json trae ademas "cambios" (los archivos de los ultimos 30 commits). Si la
+   version guardada esta en esa lista, al publicar se borran SOLO los archivos que cambiaron desde entonces
+   (normalmente 1 a 4) y el resto sigue saliendo al instante. Si no esta (o no hay lista), se borra todo como antes.
    ═══════════════════════════════════════════════════════════════════════════ */
 const VER_URL   = BASE + '/version.json';
 const VER_KEY   = BASE + '/__sw_version__';
@@ -68,9 +71,10 @@ function revisarVersion() {
       const ant = await verGuardada();
       if (ant === v) { verMem = { v, t: Date.now() }; return 'igual'; }
       const c = await caches.open(CACHE_NAME);
-      if (ant) {   // hubo publicacion: fuera las copias de html/js/css (imagenes se quedan)
+      if (ant) {   // hubo publicacion: fuera las copias que cambiaron (o todas las de html/js/css si no se sabe cuales)
+        const quitar = archivosCambiados(j, ant);   // Set de rutas, o null = no se sabe -> todo
         const keys = await c.keys();
-        await Promise.all(keys.filter((k) => { try { return esCodigo(new URL(k.url).pathname); } catch (e) { return false; } })
+        await Promise.all(keys.filter((k) => { try { const p = new URL(k.url).pathname; return esCodigo(p) && (!quitar || quitar.has(p)); } catch (e) { return false; } })
                               .map((k) => c.delete(k)));
       }
       await c.put(VER_KEY, new Response(v));
@@ -84,6 +88,23 @@ function revisarVersion() {
     }
   })();
   return chequeo;
+}
+
+/* _SW_CAMBIOS_V1: rutas que cambiaron entre la version guardada (ant) y la publicada; null si no se puede saber */
+function archivosCambiados(j, ant) {
+  try {
+    const L = j && j.cambios;
+    if (!Array.isArray(L) || !L.length) return null;
+    const i = L.findIndex((x) => x && x.v === ant);
+    if (i <= 0) return null;                       // la guardada no esta en la lista (muy antigua): se borra todo
+    const s = new Set();
+    for (let k = 0; k < i; k++) {
+      const a = L[k] && L[k].a;
+      if (!Array.isArray(a)) return null;
+      a.forEach((p) => { s.add(String(p)); if (/\/index\.html$/.test(p)) s.add(String(p).replace(/index\.html$/, '')); });
+    }
+    return s;
+  } catch (e) { return null; }
 }
 
 function guardarCopia(clave, resp) {
@@ -149,7 +170,7 @@ self.addEventListener('fetch', (event) => {
       /* _SW_VERSION_V1: misma version publicada y copia de menos de 12 h -> al instante */
       try {
         const estado = await revisarVersion();
-        if (estado === 'igual') {
+        if (estado === 'igual' || estado === 'nueva') {   /* 'nueva': las copias cambiadas ya se borraron; las que quedan valen */
           const c = await caches.open(CACHE_NAME);
           const r = await c.match(clave);
           if (copiaFresca(r)) return r;

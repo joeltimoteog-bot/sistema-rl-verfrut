@@ -51,6 +51,8 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 40   # _SW_CAMBIOS_V1: historial corto para saber que archivos cambio cada publicacion
       # _ACTUALIZAR_V3 (15-oct-2026): version.json se genera solo en cada publicacion
       # (version = commit corto, fecha de Lima, titulo = mensaje del commit). Las pantallas
       # lo consultan cada 3 min y avisan / actualizan solas (frontend/js/actualizar.js).
@@ -62,7 +64,19 @@ jobs:
           try: msg = subprocess.check_output(['git', 'log', '-1', '--pretty=%s']).decode('utf-8', 'ignore').strip()
           except Exception: msg = ''
           fecha = (datetime.datetime.utcnow() - datetime.timedelta(hours=5)).strftime('%d/%m/%Y %H:%M')
-          json.dump({'version': sha, 'fecha': fecha, 'titulo': msg[:140], 'notas': ''}, open('version.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+          # _SW_CAMBIOS_V1 (17-nov-2026): por cada uno de los ultimos 30 commits, las pantallas/scripts/estilos que cambio.
+          # El SW borra SOLO esas copias al detectar una version nueva (antes borraba las ~125 en cada publicacion).
+          cambios = []
+          try:
+            out = subprocess.check_output(['git', 'log', '-30', '--no-renames', '--pretty=format:@@%H', '--name-only']).decode('utf-8', 'ignore')
+            for bloque in out.split('@@')[1:]:
+              lin = [x.strip() for x in bloque.strip().splitlines() if x.strip()]
+              if not lin: continue
+              arch = sorted(set('/sistema-rl-verfrut/' + x for x in lin[1:] if x.endswith(('.html', '.js', '.css'))))
+              cambios.append({'v': lin[0][:7], 'a': arch})
+          except Exception as e:
+            print('sin historial:', e); cambios = []
+          json.dump({'version': sha, 'fecha': fecha, 'titulo': msg[:140], 'notas': '', 'cambios': cambios}, open('version.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
           print(open('version.json', encoding='utf-8').read())
           EOF
       - name: Armar el sitio (mismos archivos que publicaba GitHub Pages)
