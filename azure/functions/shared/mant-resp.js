@@ -11,9 +11,12 @@
      buscar   (con sesion)     uno por DNI, con la forma de buscarResponsableMantenimiento
      guardar  (admin)          crea o actualiza UNA persona (solo los campos enviados)
      sembrar  (admin)          agrega desde la hoja los DNI que aun no estan (nunca pisa nada)
+     ficha    (admin)          _MANT_TODOS_V2: TODO en una sola respuesta: responsables + usuarios activos del sistema
+                               + el DNI de cada usuario segun el padron (busqueda por nombre; solo si hay UN DNI)
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 const { sql, getPool } = require('./db');
+const EMP = require('./empresas');
 
 /* columnas de la hoja en orden A..V: [campo de la tabla, campo de la pantalla, largo] */
 const CAMPOS = [
@@ -146,5 +149,47 @@ async function sembrar(b, t) {
   return { status: 200, body: { ok: true, recibidos: items.length, agregados, invalidos, total: ya.size } };
 }
 
-const ACCIONES = { listar, buscar, guardar, sembrar };
+/* ── _MANT_TODOS_V2 (17-nov-2026): la Ficha completa en UNA consulta del navegador ── */
+const sinTilde = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+const CACHE_PADRON = new Map();          /* nombre normalizado -> { v, t }  (10 min) */
+async function dniDelPadron(p, tablas, nombre) {
+  const q = sinTilde(nombre).toUpperCase();
+  const palabras = q.split(/\s+/).filter(w => w.length >= 2).slice(0, 5);
+  if (palabras.length < 2 || !tablas.length) return null;
+  const c = CACHE_PADRON.get(q); if (c && Date.now() - c.t < 600000) return c.v;
+  const rq = p.request();
+  const conds = palabras.map((w, i) => { rq.input('w' + i, sql.NVarChar(120), '%' + w + '%'); return 'nombre_completo LIKE @w' + i; }).join(' AND ');
+  const r = await rq.query(tablas.map(t => `(SELECT TOP 30 dni, nombre_completo FROM dbo.${t} WHERE ${conds})`).join(' UNION ALL '));
+  const d = {};
+  (r.recordset || []).forEach(x => { const k = String(x.dni == null ? '' : x.dni).replace(/\D/g, ''); if (k) d[k] = String(x.nombre_completo || '').toUpperCase().trim(); });
+  const ks = Object.keys(d), v = ks.length === 1 ? { dni: ks[0], nombre: d[ks[0]] } : null;
+  CACHE_PADRON.set(q, { v, t: Date.now() });
+  return v;
+}
+async function ficha(b, t) {
+  if (!esAdmin(t)) return { status: 403, body: { ok: false, msg: 'Solo un administrador puede ver la ficha de conductores.' } };
+  const p = await pool();
+  const items = (await p.request().query('SELECT * FROM dbo.Mant_Responsables ORDER BY nombre')).recordset.map(aItem);
+  let us;
+  try { us = (await p.request().query('SELECT usuario, nombre, rol, empresa, activo, correo, cargo, eliminado FROM dbo.usuarios')).recordset; }
+  catch (e) { us = (await p.request().query('SELECT usuario, nombre, rol, empresa, activo, correo, cargo FROM dbo.usuarios')).recordset; }
+  const activos = us.filter(u => u.usuario && u.activo !== false && u.activo !== 0 && !(u.eliminado === true || u.eliminado === 1));
+  let tablas = [];
+  try { tablas = Array.from(await EMP.tablasExistentes(p, sql)); } catch (e) {}
+  const usuarios = [];
+  let i = 0;
+  async function trabajador() {
+    while (i < activos.length) {
+      const u = activos[i++];
+      let pd = null; try { pd = await dniDelPadron(p, tablas, u.nombre); } catch (e) { pd = null; }
+      usuarios.push({ usuario: usr(u.usuario), nombre: u.nombre || '', rol: u.rol || '', empresa: u.empresa || '', correo: u.correo || '', cargo: u.cargo || '',
+                      dni: pd ? pd.dni : '', nombreCompleto: pd ? pd.nombre : '' });
+    }
+  }
+  await Promise.all([trabajador(), trabajador(), trabajador(), trabajador()]);
+  usuarios.sort((a, b2) => String(a.nombre).localeCompare(String(b2.nombre)));
+  return { status: 200, body: { ok: true, items, usuarios, fuente: 'supabase' } };
+}
+
+const ACCIONES = { listar, buscar, guardar, sembrar, ficha };
 module.exports = { ACCIONES, CAMPOS, esAdmin, dniOk, fecha, asegurarTablas, aItem };

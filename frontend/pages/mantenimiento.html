@@ -981,6 +981,16 @@ async function guardarProgramacion(){
     if (msg) msg.style.display = 'none';
     if (!_CONDUCTORES || forzar){ if (load) load.style.display = 'block'; if (tw) tw.style.display = 'none'; }
     try {
+      /* _MANT_TODOS_V2: UNA sola consulta trae responsables + usuarios activos + DNI del padron (lo cruza Supabase) */
+      var f = await api('ficha', {}, 12000);
+      if (f.status === 200 && f.j && f.j.ok && Array.isArray(f.j.items) && f.j.items.length && Array.isArray(f.j.usuarios)){
+        if (load) load.style.display = 'none';
+        _CONDUCTORES = f.j.items; window._RESP_FUENTE = 'Supabase';
+        window._ruCargarFicha(f.j.usuarios);
+        renderConductores(); return;
+      }
+    } catch(e){ console.warn('[_MANT_TODOS_V2] ficha no respondio, se usa el camino anterior:', e && e.message); }
+    try {
       var r = await api('listar', {}, 9000);
       if (r.status === 200 && r.j && r.j.ok && Array.isArray(r.j.items) && r.j.items.length){
         if (load) load.style.display = 'none';
@@ -1078,6 +1088,12 @@ async function guardarProgramacion(){
       }).catch(function(){ return null; });
   }
   var padronListo = false;
+  window._ruCargarFicha = function(lista){   /* _MANT_TODOS_V2: usuarios y padron ya resueltos por el servidor */
+    USUARIOS = lista.map(function(u){ return { usuario: String(u.usuario || '').toLowerCase(), nombre: u.nombre || '', cargo: u.cargo || '', empresa: u.empresa || '', correo: u.correo || '', rol: u.rol || '' }; });
+    lista.forEach(function(u){ PADRON[String(u.usuario || '').toLowerCase()] = u.dni ? { dni: String(u.dni), nombre: String(u.nombreCompleto || '').toUpperCase() } : null; });
+    try { sessionStorage.setItem('mant_padron_v1', JSON.stringify(PADRON)); } catch(e){}
+    padronListo = true; window._ruUsrIntento = true;
+  };
   function completarPadron(){
     if (padronListo) return; padronListo = true;
     var pend = (USUARIOS || []).filter(function(u){ return !Object.prototype.hasOwnProperty.call(PADRON, u.usuario); }), i = 0;
