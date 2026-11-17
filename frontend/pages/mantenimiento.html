@@ -630,7 +630,7 @@ async function guardarProgramacion(){
     .fic-x{width:32px;height:32px;flex:0 0 32px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font-size:15px;cursor:pointer;line-height:1}
     .fic-x:hover{background:rgba(255,255,255,.18)}
     .fic-cuerpo{padding:18px 22px 20px}
-    .fic-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+    .fic-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin-bottom:16px}
     .fic-kpi{border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:8px;padding:10px 14px;background:#fff}
     .fic-kpi b{display:block;font-size:22px;font-weight:800;color:#0f172a;line-height:1.1}
     .fic-kpi span{font-size:11.5px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.4px}
@@ -882,6 +882,14 @@ async function guardarProgramacion(){
     .ru-mas{margin-top:14px;font-size:12.5px;color:#0a2540;font-weight:600;cursor:pointer;background:none;border:none;padding:0;font-family:Barlow,sans-serif}
     .fic-ed{padding:5px 10px;font-size:12px;font-weight:600;border-radius:6px;border:1px solid #0a2540;background:#0a2540;color:#fff;cursor:pointer;font-family:Barlow,sans-serif;margin-left:6px}
     .fic-ed:hover{background:#13355a}
+    .fic-tabla tbody tr.fila-sin td{background:#fafbfc}
+    .fic-tabla tbody tr.fila-sin .nom{color:#475569}
+    .fic-asig{padding:5px 12px;font-size:12px;font-weight:600;border-radius:6px;border:1px dashed #0a2540;background:#fff;color:#0a2540;cursor:pointer;font-family:Barlow,sans-serif}
+    .fic-asig:hover{background:#0a2540;color:#fff;border-style:solid}
+    #ficOverlay .fic-tools .fic-ver{width:auto!important;flex:0 0 auto;min-width:130px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-family:Barlow,sans-serif;font-size:12.5px;color:#0f172a;background:#fff}
+    #ficOverlay .fic-acc{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+    #ficOverlay .fic-acc .fic-ed{margin-left:0}
+    .fic-kpi.k-sin{border-left-color:#64748b}
     .fic-fuente{margin-left:8px;color:#94a3b8}
     @media(max-width:700px){.ru-g3,.ru-g2{grid-template-columns:minmax(0,1fr)}}
   </style>
@@ -993,17 +1001,52 @@ async function guardarProgramacion(){
     tools.insertBefore(b, tools.querySelector('#ficRefresh'));
   }
   var renderBase = window.renderConductores;
+  function ponerFiltro(){
+    var tools = document.querySelector('#ficOverlay .fic-tools');
+    if (tools && !$('ficVer')){
+      var sel = document.createElement('select'); sel.id = 'ficVer'; sel.className = 'fic-ver'; sel.title = 'Que personas mostrar';
+      sel.innerHTML = '<option value="todos">Todos</option><option value="con">Con unidad</option><option value="sin">Sin unidad</option>';
+      sel.onchange = function(){ renderConductores(); };
+      var f = $('ficFiltro'); tools.insertBefore(sel, f ? f.nextSibling : tools.firstChild);
+    }
+    var k = document.querySelector('#ficOverlay .fic-kpis');
+    if (k && !$('kpiSin')){ var c = document.createElement('div'); c.className = 'fic-kpi k-sin'; c.innerHTML = '<b id="kpiSin">0</b><span>Sin unidad</span>'; k.appendChild(c); }
+  }
+  function sinUnidad(){
+    return (USUARIOS || []).filter(function(u){ return !existente(u); }).map(function(u){
+      var pd = PADRON[u.usuario], e = String(u.empresa || '').toUpperCase();
+      return { dni: '', usuario: String((pd && pd.nombre) || u.nombre || u.usuario).toUpperCase(), cargo: u.cargo || '',
+               empresa: (e === 'RAPEL' || e === 'VERFRUT') ? e : '', _sin: true, _u: u };
+    });
+  }
   window.renderConductores = function(){
-    renderBase.apply(this, arguments);
+    ponerFiltro();
+    var real = _CONDUCTORES; if (!real) return renderBase.apply(this, arguments);
+    if (!USUARIOS && !window._ruUsrIntento){ window._ruUsrIntento = true; cargarUsuarios().then(function(){ if (USUARIOS){ completarPadron(); renderConductores(); } }); }
+    var ver = ($('ficVer') && $('ficVer').value) || 'todos', sin = USUARIOS ? sinUnidad() : [];
+    _CONDUCTORES = ver === 'con' ? real : ver === 'sin' ? sin : real.concat(sin);
+    try { renderBase.apply(this, arguments); } finally { _CONDUCTORES = real; }
+    if ($('kpiTot')) $('kpiTot').textContent = real.length;
+    if ($('kpiSin')) $('kpiSin').textContent = USUARIOS ? sin.length : '...';
+    var pie0 = $('ficPie'); if (pie0) pie0.textContent = pie0.textContent.replace(' conductores', ' personas' + (USUARIOS ? ' (' + sin.length + ' sin unidad)' : ''));
     ponerBoton();
     var pie = $('ficPie'); if (pie && window._RESP_FUENTE) pie.textContent = pie.textContent.replace('Fuente: BB.DD. RESPONSABLES', 'Fuente: ' + (window._RESP_FUENTE === 'Supabase' ? 'Supabase' : 'BB.DD. RESPONSABLES (Google)'));
     var filas = document.querySelectorAll('#ficTabla tbody tr');
     filas.forEach(function(tr, i){
       var d = _ULTIMA_LISTA[i]; if (!d) return;
-      var td = tr.lastElementChild; if (!td || td.querySelector('.fic-ed')) return;
+      var td = tr.lastElementChild; if (!td || td.querySelector('.fic-ed') || td.querySelector('.fic-asig')) return;
+      if (d._sin){
+        tr.classList.add('fila-sin');
+        var sub = tr.querySelector('.sub'); if (sub) sub.textContent = 'Usuario ' + d._u.usuario + (d.cargo ? ' \u00b7 ' + d.cargo : '');
+        td.innerHTML = ''; var a = document.createElement('button'); a.className = 'fic-asig'; a.type = 'button'; a.textContent = 'Asignar';
+        a.title = 'Asignar unidad a esta persona'; a.onclick = function(){ ruAbrir(null).then(function(){ ruElegir(d._u); }); };
+        td.appendChild(a); return;
+      }
       var b = document.createElement('button'); b.className = 'fic-ed'; b.type = 'button'; b.textContent = 'Editar';
       b.title = 'Editar unidad y licencias'; b.onclick = function(){ ruAbrir(d.dni); };
-      td.appendChild(b); td.style.whiteSpace = 'nowrap';
+      var caja = document.createElement('div'); caja.className = 'fic-acc';
+      while (td.firstChild) caja.appendChild(td.firstChild);
+      caja.appendChild(b); td.appendChild(caja);
     });
   };
 
@@ -1019,11 +1062,34 @@ async function guardarProgramacion(){
     return USUARIOS || [];
   }
   function palabras(s){ return norm(s).split(' ').filter(function(w){ return w.length > 2; }); }
+  /* _MANT_TODOS_V1: DNI y nombre completo desde el padron de trabajadores (busqueda por nombre; solo si hay UN DNI) */
+  var PADRON = {}; try { PADRON = JSON.parse(sessionStorage.getItem('mant_padron_v1') || '{}') || {}; } catch(e){ PADRON = {}; }
+  function padronDe(u){
+    if (Object.prototype.hasOwnProperty.call(PADRON, u.usuario)) return Promise.resolve(PADRON[u.usuario]);
+    var q = String(u.nombre || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+    if (q.length < 3) return Promise.resolve(null);
+    return fetch(BASE + '/trabajadores/buscar?q=' + encodeURIComponent(q), { headers: { Authorization: 'Bearer ' + tk() } })
+      .then(function(r){ return r.json(); }).then(function(j){
+        var L = (j && j.trabajadores) || [], d = {};
+        L.forEach(function(x){ var k = String(x.dni || '').replace(/\D/g, ''); if (k) d[k] = x.nombre_completo || ''; });
+        var ks = Object.keys(d), v = ks.length === 1 ? { dni: ks[0], nombre: String(d[ks[0]] || '').toUpperCase().trim() } : null;
+        PADRON[u.usuario] = v; try { sessionStorage.setItem('mant_padron_v1', JSON.stringify(PADRON)); } catch(e){}
+        return v;
+      }).catch(function(){ return null; });
+  }
+  var padronListo = false;
+  function completarPadron(){
+    if (padronListo) return; padronListo = true;
+    var pend = (USUARIOS || []).filter(function(u){ return !Object.prototype.hasOwnProperty.call(PADRON, u.usuario); }), i = 0;
+    function uno(){ if (i >= pend.length) return Promise.resolve(); var u = pend[i++]; return padronDe(u).then(uno); }
+    Promise.all([uno(), uno(), uno(), uno(), uno()]).then(function(){ if ($('ficOverlay').classList.contains('show')) renderConductores(); });
+  }
   /* el usuario del sistema tiene nombre corto ("Pool Tamayo"); la hoja, el completo: todas sus palabras deben estar, y una sola coincidencia */
   function existente(u){
     var L = _CONDUCTORES || [];
     var x = L.find(function(r){ return r.usuarioSistema && r.usuarioSistema.toLowerCase() === u.usuario; });
     if (x) return x;
+    var pd = PADRON[u.usuario]; if (pd && pd.dni){ x = L.find(function(r){ return String(r.dni) === pd.dni; }); if (x) return x; }
     var t = palabras(u.nombre); if (t.length < 2) return null;
     var m = L.filter(function(r){ var w = palabras(r.usuario); return t.every(function(p){ return w.indexOf(p) >= 0; }); });
     return m.length === 1 ? m[0] : null;
@@ -1074,6 +1140,14 @@ async function guardarProgramacion(){
     $('ru_cargo').value = u.cargo || ''; $('ru_correo').value = u.correo || '';
     var e = String(u.empresa || '').toUpperCase(); $('ru_empresa').value = (e === 'RAPEL' || e === 'VERFRUT') ? e : '';
     setTimeout(function(){ try { $('ru_dni').focus(); } catch(x){} }, 30);
+    padronDe(u).then(function(pd){
+      if (!pd || elegido !== u) return;
+      var ya2 = (_CONDUCTORES || []).find(function(x){ return String(x.dni) === pd.dni; });
+      if (ya2){ ruAbrir(ya2.dni).then(function(){ if (!ya2.usuarioSistema) editando._ponerUsuario = u.usuario; aviso((u.nombre || u.usuario) + ' ya tiene una unidad registrada (DNI del padron): puedes editarla aqui.', 'inf'); }); return; }
+      if (!$('ru_dni').value) $('ru_dni').value = pd.dni;
+      if (pd.nombre) $('ru_usuario').value = pd.nombre;
+      aviso('DNI y nombre completo tomados del padron de trabajadores. Verificalos antes de guardar.', 'inf');
+    });
   }
   window.ruGuardar = async function(){
     aviso('');
