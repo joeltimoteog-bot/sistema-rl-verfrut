@@ -536,7 +536,7 @@ async function verHistorialConductor(dni,nombre){
     }
     const lista=_solicitudes.filter(function(s){return String(s.dni||'').trim()===String(dni).trim();});
     if(!lista.length){document.getElementById('histBody').innerHTML='<div style="padding:18px;text-align:center;color:var(--gr)">Este conductor no tiene solicitudes de mantenimiento registradas.</div>';return;}
-    let h='<table class="fic-t" style="min-width:0"><thead><tr><th>N° Solicitud</th><th>F. Solicitud</th><th>Unidad</th><th>Km</th><th>Tipo</th><th>Estado</th><th>F. Programada</th></tr></thead><tbody>';
+    let h='<table class="fic-tabla" style="min-width:0"><thead><tr><th>N° Solicitud</th><th>F. Solicitud</th><th>Unidad</th><th>Km</th><th>Tipo</th><th>Estado</th><th>F. Programada</th></tr></thead><tbody>';
     lista.forEach(function(s){
       h+='<tr><td><b>'+(s.id||'')+'</b></td><td>'+(s.fechaSolicitud||'—')+'</td>'+
         '<td>'+(s.unidad||((s.marca||'')+' '+(s.modelo||'')).trim()||'—')+'</td>'+
@@ -629,7 +629,7 @@ async function guardarProgramacion(){
     .fic-h .fic-sub{display:block;font-size:12px;font-weight:500;color:#a9b8cc;margin-top:3px;letter-spacing:.1px}
     .fic-x{width:32px;height:32px;flex:0 0 32px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.08);color:#fff;font-size:15px;cursor:pointer;line-height:1}
     .fic-x:hover{background:rgba(255,255,255,.18)}
-    .fic-b{padding:18px 22px 20px}
+    .fic-cuerpo{padding:18px 22px 20px}
     .fic-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
     .fic-kpi{border:1px solid #e2e8f0;border-left:4px solid #94a3b8;border-radius:8px;padding:10px 14px;background:#fff}
     .fic-kpi b{display:block;font-size:22px;font-weight:800;color:#0f172a;line-height:1.1}
@@ -646,18 +646,18 @@ async function guardarProgramacion(){
     .fic-msg{display:none;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:10px}
     .fic-load{display:none;color:#64748b;font-size:13px;padding:24px;text-align:center}
     .fic-tablewrap{overflow:auto;max-height:68vh;border:1px solid #e2e8f0;border-radius:8px}
-    .fic-t{width:100%;border-collapse:collapse;font-size:13px;color:#0f172a}
-    .fic-t th{background:#f8fafc;color:#475569;padding:9px 10px;box-shadow:inset 0 -1px 0 #e2e8f0;text-align:left;position:sticky;top:0;z-index:2;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;border-bottom:1px solid #e2e8f0}
-    .fic-t th.sep,.fic-t td.sep{border-left:1px solid #e2e8f0}
-    .fic-t td{padding:9px 10px;border-bottom:1px solid #eef2f7;vertical-align:middle}
-    .fic-t tbody tr:hover td{background:#f8fafc}
-    .fic-t tbody tr.r-ven td:first-child{box-shadow:inset 3px 0 0 #b91c1c}
-    .fic-t .n{color:#94a3b8;font-variant-numeric:tabular-nums;width:34px}
-    .fic-t .nom{font-weight:700;white-space:nowrap}
-    .fic-t .sub{display:block;font-size:11.5px;color:#64748b;margin-top:2px}
-    .fic-t .nw{white-space:nowrap}
-    .fic-t .vacio{color:#cbd5e1}
-    .fic-t .lic{display:block;max-width:170px;line-height:1.3}
+    .fic-tabla{width:100%;border-collapse:collapse;font-size:13px;color:#0f172a}
+    .fic-tabla th{background:#f8fafc;color:#475569;padding:9px 10px;box-shadow:inset 0 -1px 0 #e2e8f0;text-align:left;position:sticky;top:0;z-index:2;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;border-bottom:1px solid #e2e8f0}
+    .fic-tabla th.sep,.fic-tabla td.sep{border-left:1px solid #e2e8f0}
+    .fic-tabla td{padding:9px 10px;border-bottom:1px solid #eef2f7;vertical-align:middle}
+    .fic-tabla tbody tr:hover td{background:#f8fafc}
+    .fic-tabla tbody tr.r-ven td:first-child{box-shadow:inset 3px 0 0 #b91c1c}
+    .fic-tabla .n{color:#94a3b8;font-variant-numeric:tabular-nums;width:34px}
+    .fic-tabla .nom{font-weight:700;white-space:nowrap}
+    .fic-tabla .sub{display:block;font-size:11.5px;color:#64748b;margin-top:2px}
+    .fic-tabla .nw{white-space:nowrap}
+    .fic-tabla .vacio{color:#cbd5e1}
+    .fic-tabla .lic{display:block;max-width:170px;line-height:1.3}
     .fic-emp{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.3px;padding:2px 8px;border-radius:4px;background:#eef2f7;color:#0a2540}
     .fic-est{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.3px;padding:3px 9px;border-radius:4px;white-space:nowrap}
     .fe-ven{background:#fef2f2;color:#b91c1c;border:1px solid #fecaca}
@@ -668,18 +668,18 @@ async function guardarProgramacion(){
     .fic-hist{padding:5px 10px;font-size:12px;font-weight:600;border-radius:6px;border:1px solid #cbd5e1;background:#fff;color:#0a2540;cursor:pointer;font-family:Barlow,sans-serif}
     .fic-hist:hover{background:#0a2540;color:#fff;border-color:#0a2540}
     .fic-pie{margin-top:10px;font-size:11.5px;color:#94a3b8}
-    @media(max-width:900px){.fic-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fic-t{min-width:1000px}}
+    @media(max-width:900px){.fic-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.fic-tabla{min-width:1000px}}
   </style>
   <div class="fic-ov" id="histOverlay" onclick="if(event.target===this)cerrarHistorial()" style="z-index:1300">
     <div class="fic-card" style="max-width:980px;width:96vw">
       <div class="fic-h"><h3 id="histTitulo">Historial de mantenimientos</h3><button class="fic-x" onclick="cerrarHistorial()" title="Cerrar">&#x2715;</button></div>
-      <div class="fic-b"><div class="fic-tablewrap" id="histBody" style="max-height:70vh"></div></div>
+      <div class="fic-cuerpo"><div class="fic-tablewrap" id="histBody" style="max-height:70vh"></div></div>
     </div>
   </div>
   <div class="fic-ov" id="ficOverlay" onclick="if(event.target===this)cerrarFicha()">
     <div class="fic-card">
       <div class="fic-h"><h3>Ficha de Conductores<span class="fic-sub">Responsables de unidades y estado de licencias &#xb7; VERFRUT / RAPEL</span></h3><button class="fic-x" onclick="cerrarFicha()" title="Cerrar">&#x2715;</button></div>
-      <div class="fic-b">
+      <div class="fic-cuerpo">
         <div class="fic-kpis">
           <div class="fic-kpi k-tot"><b id="kpiTot">0</b><span>Conductores</span></div>
           <div class="fic-kpi k-ven"><b id="chipVen">0</b><span>Licencias vencidas</span></div>
@@ -777,7 +777,7 @@ async function guardarProgramacion(){
     const pie=document.getElementById('ficPie');
     pie.textContent='Mostrando '+items.length+' de '+total+' conductores \u00b7 Fuente: BB.DD. RESPONSABLES \u00b7 Ordenado por urgencia de licencia';
     if(!items.length){tw.style.display='block';tw.innerHTML='<div style="padding:24px;text-align:center;color:#64748b;font-size:13px">Sin resultados para la b\u00fasqueda.</div>';return;}
-    let h='<table class="fic-t"><thead>'+
+    let h='<table class="fic-tabla"><thead>'+
       '<tr><th>N\u00b0</th><th>Colaborador</th><th>Empresa</th><th>Unidad asignada</th><th>Estatus</th><th>Zona de recorrido</th>'+
       '<th class="sep">Licencia moto</th><th>Estado moto</th><th class="sep">Licencia auto</th><th>Estado auto</th><th class="sep"></th></tr></thead><tbody>';
     items.forEach(function(d,i){
@@ -859,6 +859,270 @@ async function guardarProgramacion(){
     doc.save('Conductores_Licencias_'+new Date().toISOString().slice(0,10)+'.pdf');
   }
   </script>
+  <!-- === _MANT_RESP_UI_V1 (17-nov-2026): Asignar / editar unidad (Supabase manda; la hoja recibe la copia) === -->
+  <style>
+    .ru-sec{font-size:11.5px;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:.4px;margin:16px 0 8px}
+    .ru-g{display:grid;gap:10px}
+    .ru-g3{grid-template-columns:repeat(3,minmax(0,1fr))}.ru-g2{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .ru-f label{display:block;font-size:11.5px;font-weight:600;color:#64748b;margin-bottom:4px}
+    .ru-f input,.ru-f select{width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font-family:Barlow,sans-serif;font-size:13px;color:#0f172a;background:#fff}
+    .ru-f input:focus,.ru-f select:focus{outline:none;border-color:#0a2540;box-shadow:0 0 0 3px rgba(10,37,64,.08)}
+    .ru-lista{border:1px solid #e2e8f0;border-radius:8px;max-height:210px;overflow:auto;margin-top:6px}
+    .ru-op{padding:8px 12px;border-bottom:1px solid #eef2f7;cursor:pointer;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+    .ru-op:hover{background:#f8fafc}.ru-op:last-child{border-bottom:none}
+    .ru-op small{color:#64748b;font-size:11.5px}
+    .ru-sel{border:1px solid #bfdbfe;background:#eff6ff;border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .ru-sel b{color:#0a2540;font-size:13.5px}.ru-sel span{color:#1e40af;font-size:12px}
+    .ru-tag{font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:#eef2f7;color:#0a2540;white-space:nowrap}
+    .ru-tag.si{background:#f0fdf4;color:#15803d}
+    .ru-msg{display:none;border-radius:8px;padding:9px 12px;font-size:13px;margin-top:12px}
+    .ru-msg.err{display:block;background:#fef2f2;border:1px solid #fecaca;color:#b91c1c}
+    .ru-msg.inf{display:block;background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af}
+    .ru-pie{padding:14px 22px;border-top:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;gap:10px;background:#f8fafc}
+    .ru-mas{margin-top:14px;font-size:12.5px;color:#0a2540;font-weight:600;cursor:pointer;background:none;border:none;padding:0;font-family:Barlow,sans-serif}
+    .fic-ed{padding:5px 10px;font-size:12px;font-weight:600;border-radius:6px;border:1px solid #0a2540;background:#0a2540;color:#fff;cursor:pointer;font-family:Barlow,sans-serif;margin-left:6px}
+    .fic-ed:hover{background:#13355a}
+    .fic-fuente{margin-left:8px;color:#94a3b8}
+    @media(max-width:700px){.ru-g3,.ru-g2{grid-template-columns:minmax(0,1fr)}}
+  </style>
+  <div class="fic-ov" id="ruOverlay" style="z-index:1300" onclick="if(event.target===this)ruCerrar()">
+    <div class="fic-card" style="max-width:760px;width:96vw">
+      <div class="fic-h"><h3 id="ruTitulo">Asignar unidad<span class="fic-sub">Se guarda en Supabase y se copia a BB.DD. RESPONSABLES</span></h3><button class="fic-x" onclick="ruCerrar()" title="Cerrar">&#x2715;</button></div>
+      <div class="fic-cuerpo" style="max-height:72vh;overflow:auto">
+        <div id="ruBuscaWrap" class="ru-f">
+          <label for="ruBusca">Colaborador (usuarios activos del sistema)</label>
+          <input type="text" id="ruBusca" placeholder="Escribe nombre o usuario" oninput="ruFiltrar()" autocomplete="off">
+          <div class="ru-lista" id="ruLista" style="display:none"></div>
+        </div>
+        <div id="ruSel" class="ru-sel" style="display:none;margin-top:10px"></div>
+        <div class="ru-sec">Identificaci&#xf3;n</div>
+        <div class="ru-g ru-g3">
+          <div class="ru-f"><label for="ru_dni">DNI *</label><input id="ru_dni" inputmode="numeric" maxlength="12" placeholder="8 d&#xed;gitos"></div>
+          <div class="ru-f" style="grid-column:span 2"><label for="ru_usuario">Nombre completo *</label><input id="ru_usuario" maxlength="200"></div>
+        </div>
+        <div class="ru-sec">Unidad</div>
+        <div class="ru-g ru-g3">
+          <div class="ru-f"><label for="ru_marca">Marca</label><input id="ru_marca" maxlength="100" placeholder="HONDA"></div>
+          <div class="ru-f"><label for="ru_modelo">Modelo</label><input id="ru_modelo" maxlength="100" placeholder="XR-150L"></div>
+          <div class="ru-f"><label for="ru_anio">A&#xf1;o</label><input id="ru_anio" maxlength="10" inputmode="numeric"></div>
+          <div class="ru-f"><label for="ru_codInterno">C&#xf3;d. interno</label><input id="ru_codInterno" maxlength="60"></div>
+          <div class="ru-f"><label for="ru_estatus">Estatus</label><select id="ru_estatus"><option value="">&#x2014;</option><option>Operativo</option><option>PROPIA</option><option>En taller</option><option>Sin unidad</option></select></div>
+          <div class="ru-f"><label for="ru_zonaRecorrido">Zona de recorrido</label><input id="ru_zonaRecorrido" maxlength="150"></div>
+        </div>
+        <div class="ru-sec">Licencia de moto</div>
+        <div class="ru-g ru-g3">
+          <div class="ru-f"><label for="ru_numLicencia">N&#xb0; licencia</label><input id="ru_numLicencia" maxlength="120"></div>
+          <div class="ru-f"><label for="ru_fExpedicion">F. expedici&#xf3;n</label><input id="ru_fExpedicion" maxlength="10" placeholder="dd/mm/aaaa"></div>
+          <div class="ru-f"><label for="ru_fRevalidacion">F. revalidaci&#xf3;n</label><input id="ru_fRevalidacion" maxlength="10" placeholder="dd/mm/aaaa"></div>
+        </div>
+        <div class="ru-sec">Licencia de auto (opcional)</div>
+        <div class="ru-g ru-g3">
+          <div class="ru-f"><label for="ru_numLicenciaCarro">N&#xb0; licencia</label><input id="ru_numLicenciaCarro" maxlength="120"></div>
+          <div class="ru-f"><label for="ru_fExpedicionCarro">F. expedici&#xf3;n</label><input id="ru_fExpedicionCarro" maxlength="10" placeholder="dd/mm/aaaa"></div>
+          <div class="ru-f"><label for="ru_fRevalidacionCarro">F. revalidaci&#xf3;n</label><input id="ru_fRevalidacionCarro" maxlength="10" placeholder="dd/mm/aaaa"></div>
+        </div>
+        <button type="button" class="ru-mas" id="ruMasBtn" onclick="ruMas()">+ M&#xe1;s datos (correo, cargo, empresa, motor, chasis&#x2026;)</button>
+        <div id="ruMas" style="display:none">
+          <div class="ru-g ru-g3" style="margin-top:10px">
+            <div class="ru-f"><label for="ru_correo">Correo</label><input id="ru_correo" maxlength="200"></div>
+            <div class="ru-f"><label for="ru_cargo">Cargo</label><input id="ru_cargo" maxlength="150"></div>
+            <div class="ru-f"><label for="ru_empresa">Empresa</label><select id="ru_empresa"><option value="">&#x2014;</option><option>RAPEL</option><option>VERFRUT</option></select></div>
+            <div class="ru-f"><label for="ru_codSist">C&#xf3;d. sistema</label><input id="ru_codSist" maxlength="60"></div>
+            <div class="ru-f"><label for="ru_nMotor">N&#xb0; motor</label><input id="ru_nMotor" maxlength="80"></div>
+            <div class="ru-f"><label for="ru_nChasis">N&#xb0; chasis</label><input id="ru_nChasis" maxlength="80"></div>
+            <div class="ru-f"><label for="ru_zonaAbastecimiento">Zona de abastecimiento</label><input id="ru_zonaAbastecimiento" maxlength="150"></div>
+            <div class="ru-f" style="grid-column:span 2"><label for="ru_municipalidad">Municipalidad</label><input id="ru_municipalidad" maxlength="150"></div>
+          </div>
+        </div>
+        <div class="ru-msg" id="ruMsg"></div>
+      </div>
+      <div class="ru-pie">
+        <span style="font-size:12px;color:#64748b">Solo administradores &#xb7; la hoja se actualiza en unos minutos</span>
+        <div style="display:flex;gap:8px"><button class="fic-btn" onclick="ruCerrar()">Cancelar</button><button class="fic-btn pri" id="ruGuardar" onclick="ruGuardar()">Guardar unidad</button></div>
+      </div>
+    </div>
+  </div>
+  <script>
+  (function(){
+  'use strict';
+  if (window._MANT_RESP_UI_V1) return; window._MANT_RESP_UI_V1 = true;
+  var BASE = (function(){ try { if (typeof AZURE_FN_BASE === 'string' && AZURE_FN_BASE) return AZURE_FN_BASE; } catch(e){} return 'https://rl-fn-verfrut.azurewebsites.net/api'; })();
+  var CAMPOS = ['usuario','correo','cargo','modelo','marca','codInterno','codSist','nMotor','nChasis','anio','estatus','zonaRecorrido','numLicencia','fExpedicion','fRevalidacion','empresa','zonaAbastecimiento','municipalidad','numLicenciaCarro','fExpedicionCarro','fRevalidacionCarro'];
+  var FECHAS = { fExpedicion:1, fRevalidacion:1, fExpedicionCarro:1, fRevalidacionCarro:1 };
+  var USUARIOS = null, editando = null, elegido = null;
+  function tk(){ try { return sessionStorage.getItem('rl_token') || ''; } catch(e){ return ''; } }
+  function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+  function norm(s){ return String(s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim(); }
+  function $(id){ return document.getElementById(id); }
+  async function api(accion, cuerpo, ms){
+    var c = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    var t = setTimeout(function(){ try { c && c.abort(); } catch(e){} }, ms || 12000);
+    try {
+      var h = { 'Content-Type': 'application/json' }; if (tk()) h.Authorization = 'Bearer ' + tk();
+      var r = await fetch(BASE + '/mant/resp/' + accion, { method: 'POST', headers: h, body: JSON.stringify(cuerpo || {}), signal: c ? c.signal : undefined });
+      var j = null; try { j = await r.json(); } catch(e){}
+      return { status: r.status, j: j };
+    } finally { clearTimeout(t); }
+  }
+  window._respApi = api;
+
+  /* 1) La Ficha lee primero de Supabase; si no responde, Google como siempre */
+  var cargarGoogle = window.cargarConductores;
+  window.cargarConductores = async function(forzar){
+    var msg = $('ficMsg'), load = $('ficLoad'), tw = $('ficTabla');
+    if (msg) msg.style.display = 'none';
+    if (!_CONDUCTORES || forzar){ if (load) load.style.display = 'block'; if (tw) tw.style.display = 'none'; }
+    try {
+      var r = await api('listar', {}, 9000);
+      if (r.status === 200 && r.j && r.j.ok && Array.isArray(r.j.items) && r.j.items.length){
+        if (load) load.style.display = 'none';
+        _CONDUCTORES = r.j.items; window._RESP_FUENTE = 'Supabase';
+        renderConductores(); return;
+      }
+    } catch(e){ console.warn('[_MANT_RESP_UI_V1] Supabase no respondio:', e && e.message); }
+    window._RESP_FUENTE = 'Google';
+    return cargarGoogle(forzar);
+  };
+
+  /* 2) Botones: "Asignar unidad" en la barra y "Editar" en cada fila */
+  function ponerBoton(){
+    var tools = document.querySelector('#ficOverlay .fic-tools');
+    if (!tools || $('ruNuevo')) return;
+    var b = document.createElement('button'); b.className = 'fic-btn pri'; b.id = 'ruNuevo'; b.type = 'button';
+    b.textContent = 'Asignar unidad'; b.onclick = function(){ ruAbrir(null); };
+    tools.insertBefore(b, tools.querySelector('#ficRefresh'));
+  }
+  var renderBase = window.renderConductores;
+  window.renderConductores = function(){
+    renderBase.apply(this, arguments);
+    ponerBoton();
+    var pie = $('ficPie'); if (pie && window._RESP_FUENTE) pie.textContent = pie.textContent.replace('Fuente: BB.DD. RESPONSABLES', 'Fuente: ' + (window._RESP_FUENTE === 'Supabase' ? 'Supabase' : 'BB.DD. RESPONSABLES (Google)'));
+    var filas = document.querySelectorAll('#ficTabla tbody tr');
+    filas.forEach(function(tr, i){
+      var d = _ULTIMA_LISTA[i]; if (!d) return;
+      var td = tr.lastElementChild; if (!td || td.querySelector('.fic-ed')) return;
+      var b = document.createElement('button'); b.className = 'fic-ed'; b.type = 'button'; b.textContent = 'Editar';
+      b.title = 'Editar unidad y licencias'; b.onclick = function(){ ruAbrir(d.dni); };
+      td.appendChild(b); td.style.whiteSpace = 'nowrap';
+    });
+  };
+
+  /* 3) Ventana Asignar / Editar */
+  async function cargarUsuarios(){
+    if (USUARIOS) return USUARIOS;
+    try {
+      var r = await fetch(BASE + '/usuarios/lista', { headers: { Authorization: 'Bearer ' + tk() } });
+      var j = await r.json();
+      if (j && j.success && Array.isArray(j.data)) USUARIOS = j.data.filter(function(u){ return u.activo !== false && u.usuario; })
+        .map(function(u){ return { usuario: String(u.usuario).toLowerCase(), nombre: u.nombre || '', cargo: u.cargo || '', empresa: u.empresa || '', correo: u.correo || '', rol: u.rol || '' }; });
+    } catch(e){ console.warn('[_MANT_RESP_UI_V1] usuarios:', e && e.message); }
+    return USUARIOS || [];
+  }
+  function palabras(s){ return norm(s).split(' ').filter(function(w){ return w.length > 2; }); }
+  /* el usuario del sistema tiene nombre corto ("Pool Tamayo"); la hoja, el completo: todas sus palabras deben estar, y una sola coincidencia */
+  function existente(u){
+    var L = _CONDUCTORES || [];
+    var x = L.find(function(r){ return r.usuarioSistema && r.usuarioSistema.toLowerCase() === u.usuario; });
+    if (x) return x;
+    var t = palabras(u.nombre); if (t.length < 2) return null;
+    var m = L.filter(function(r){ var w = palabras(r.usuario); return t.every(function(p){ return w.indexOf(p) >= 0; }); });
+    return m.length === 1 ? m[0] : null;
+  }
+  function aviso(txt, tipo){ var m = $('ruMsg'); m.className = 'ru-msg ' + (tipo || ''); m.textContent = txt || ''; if (!txt) m.style.display = 'none'; else m.style.display = 'block'; }
+  function llenar(d){ CAMPOS.forEach(function(k){ var el = $('ru_' + k); if (el) { var v = (d && d[k]) || ''; if (el.tagName === 'SELECT' && v && !Array.prototype.some.call(el.options, function(o){ return o.value === v; })) { var o = document.createElement('option'); o.textContent = v; el.appendChild(o); } el.value = v; } }); $('ru_dni').value = (d && d.dni) || ''; }
+  window.ruAbrir = async function(dni){
+    editando = null; elegido = null; aviso('');
+    $('ruMas').style.display = 'none'; $('ruMasBtn').style.display = 'block';
+    $('ruSel').style.display = 'none'; $('ruBusca').value = ''; $('ruLista').style.display = 'none';
+    if (dni){
+      editando = (_CONDUCTORES || []).find(function(x){ return String(x.dni) === String(dni); }) || null;
+      llenar(editando);
+      $('ruTitulo').firstChild.nodeValue = 'Editar unidad';
+      $('ruBuscaWrap').style.display = 'none'; $('ru_dni').readOnly = true;
+      if (window._RESP_FUENTE !== 'Supabase') aviso('La lista se cargo desde Google: al guardar, los datos pasan a Supabase.', 'inf');
+    } else {
+      llenar(null);
+      $('ruTitulo').firstChild.nodeValue = 'Asignar unidad';
+      $('ruBuscaWrap').style.display = 'block'; $('ru_dni').readOnly = false;
+      cargarUsuarios();
+    }
+    $('ruOverlay').classList.add('show');
+    setTimeout(function(){ try { (dni ? $('ru_marca') : $('ruBusca')).focus(); } catch(e){} }, 50);
+  };
+  window.ruCerrar = function(){ $('ruOverlay').classList.remove('show'); };
+  window.ruMas = function(){ $('ruMas').style.display = 'block'; $('ruMasBtn').style.display = 'none'; };
+  window.ruFiltrar = async function(){
+    var q = norm($('ruBusca').value), box = $('ruLista');
+    if (q.length < 2){ box.style.display = 'none'; return; }
+    var L = (await cargarUsuarios()).filter(function(u){ return norm(u.nombre + ' ' + u.usuario).indexOf(q) >= 0; }).slice(0, 8);
+    box.innerHTML = L.length ? L.map(function(u, i){
+      var ya = existente(u);
+      return '<div class="ru-op" data-i="' + i + '"><div><b>' + esc(u.nombre || u.usuario) + '</b><br><small>' + esc(u.usuario) + (u.cargo ? ' &#xb7; ' + esc(u.cargo) : '') + (u.empresa ? ' &#xb7; ' + esc(u.empresa) : '') + '</small></div>' +
+        '<span class="ru-tag' + (ya ? ' si' : '') + '">' + (ya ? 'Ya tiene unidad' : 'Sin unidad') + '</span></div>';
+    }).join('') : '<div class="ru-op" style="cursor:default;color:#64748b">Sin coincidencias. Revisa el nombre o el usuario.</div>';
+    Array.prototype.forEach.call(box.querySelectorAll('.ru-op[data-i]'), function(el){ el.onclick = function(){ ruElegir(L[+el.getAttribute('data-i')]); }; });
+    box.style.display = 'block';
+  };
+  function ruElegir(u){
+    var ya = existente(u);
+    $('ruLista').style.display = 'none'; $('ruBusca').value = '';
+    if (ya){ ruAbrir(ya.dni).then(function(){ if (!ya.usuarioSistema) editando._ponerUsuario = u.usuario; aviso((u.nombre || u.usuario) + ' ya tiene una unidad registrada: puedes editarla aqui.', 'inf'); }); return; }
+    elegido = u;
+    $('ruSel').innerHTML = '<div><b>' + esc(u.nombre || u.usuario) + '</b><br><span>' + esc(u.usuario) + (u.cargo ? ' &#xb7; ' + esc(u.cargo) : '') + '</span></div><span class="ru-tag">Sin unidad</span>';
+    $('ruSel').style.display = 'flex';
+    $('ru_usuario').value = String(u.nombre || '').toUpperCase();
+    $('ru_cargo').value = u.cargo || ''; $('ru_correo').value = u.correo || '';
+    var e = String(u.empresa || '').toUpperCase(); $('ru_empresa').value = (e === 'RAPEL' || e === 'VERFRUT') ? e : '';
+    setTimeout(function(){ try { $('ru_dni').focus(); } catch(x){} }, 30);
+  }
+  window.ruGuardar = async function(){
+    aviso('');
+    var dni = String($('ru_dni').value || '').replace(/\D/g, '');
+    if (dni.length < 7 || dni.length > 12){ aviso('Escribe un DNI valido (8 digitos).', 'err'); $('ru_dni').focus(); return; }
+    if (!String($('ru_usuario').value || '').trim()){ aviso('Falta el nombre completo.', 'err'); $('ru_usuario').focus(); return; }
+    for (var k in FECHAS){ var v = String($('ru_' + k).value || '').trim(); if (v && !/^\d{2}\/\d{2}\/\d{4}$/.test(v)){ aviso('La fecha "' + v + '" debe tener la forma dd/mm/aaaa.', 'err'); $('ru_' + k).focus(); return; } }
+    if (!editando){ var otro = (_CONDUCTORES || []).find(function(x){ return String(x.dni) === dni; });
+      if (otro){   /* ese DNI ya tiene registro: se edita ese (y se vincula al usuario elegido), nunca se duplica */
+        var u0 = elegido; await ruAbrir(otro.dni);
+        if (u0 && !otro.usuarioSistema) editando._ponerUsuario = u0.usuario;
+        aviso('Ese DNI ya esta registrado como ' + (otro.usuario || '') + '. Se abrio su ficha para editarla.', 'inf'); return; } }
+    var campos = {}, base = editando || {};
+    CAMPOS.forEach(function(k){ var el = $('ru_' + k); if (!el) return; var v = String(el.value || '').trim(); if (k === 'usuario') v = v.toUpperCase(); if (v !== String(base[k] || '').trim()) campos[k] = v; });
+    if (elegido) campos.usuarioSistema = elegido.usuario;
+    else if (editando && editando._ponerUsuario) campos.usuarioSistema = editando._ponerUsuario;
+    if (!Object.keys(campos).length){ aviso('No hay cambios para guardar.', 'inf'); return; }
+    var b = $('ruGuardar'); b.disabled = true; b.textContent = 'Guardando...';
+    try {
+      var r = await api('guardar', { dni: dni, campos: campos }, 20000);
+      if (r.status !== 200 || !r.j || !r.j.ok){ aviso((r.j && r.j.msg) || ('No se pudo guardar (codigo ' + r.status + ').'), 'err'); return; }
+      var it = r.j.item;
+      if (it){ var L = _CONDUCTORES || (_CONDUCTORES = []); var i = L.findIndex(function(x){ return String(x.dni) === String(it.dni); }); if (i >= 0) L[i] = it; else L.push(it); }
+      window._RESP_FUENTE = 'Supabase';
+      ruCerrar(); renderConductores();
+      try { if (typeof mostrarToast === 'function') mostrarToast('Unidad guardada. La hoja se actualiza en unos minutos.', 'success'); else if (typeof appAlert === 'function') appAlert('Unidad guardada. La hoja BB.DD. RESPONSABLES se actualiza en unos minutos.'); } catch(e){}
+    } catch(e){ aviso('Sin conexion con el servidor. Intenta de nuevo.', 'err'); }
+    finally { b.disabled = false; b.textContent = 'Guardar unidad'; }
+  };
+
+  /* 4) Solicitud: la busqueda por DNI mira primero Supabase; si no esta (o falla), Google como siempre */
+  var fOrig = window.fetch;
+  window.fetch = function(input, init){
+    try {
+      var u = typeof input === 'string' ? input : ((input && input.url) || '');
+      if (u.indexOf('action=buscarResponsableMantenimiento') >= 0 && tk()){
+        var dni = (u.match(/[?&]dni=(\d+)/) || [])[1];
+        var self = this, args = arguments;
+        if (dni) return api('buscar', { dni: dni }, 6000).then(function(r){
+          if (r.status === 200 && r.j && r.j.ok && r.j.data) return new Response(JSON.stringify({ ok: true, data: r.j.data }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+          return fOrig.apply(self, args);
+        }, function(){ return fOrig.apply(self, args); });
+      }
+    } catch(e){}
+    return fOrig.apply(this, arguments);
+  };
+  })();
+  </script>
+
   <script src="/sistema-rl-verfrut/frontend/js/presencia.js" data-modulo="Solicitud de Mantenimiento"></script>
 <script src="/sistema-rl-verfrut/frontend/js/trafico.js?v=2"></script>  <!-- _TRAFICO_V2: acciones de este modulo al Monitor en vivo -->
 <script src="../js/ui-toast.js?v=1"></script>  <!-- _UI_TOAST_V1 (15-oct): avisos unificados + esqueletos de carga -->
