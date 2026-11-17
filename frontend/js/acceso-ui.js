@@ -59,7 +59,7 @@
      ['bs_quejas', 'Bienestar: Quejas y reclamos', '📣'], ['bs_accidentes', 'Bienestar: Accidentes', '🚑'],
      ['bs_hostigamiento', 'Bienestar: Hostigamiento', '🔒'], ['bs_subsidios', 'Bienestar: Subsidios', '💊'],
      ['bs_rendiciones', 'Bienestar: Rendiciones', '🧾'], ['bs_panel', 'Bienestar: Panel', '📊'],
-     ['bs_estadisticas', 'Bienestar: Estadísticas', '📈'], ['bs_descansos', 'Bienestar: Descansos médicos', '🩺'], ['bs_gestion_social', 'Bienestar: Gestión Social (casos sociales)', '🤝'], ['bs_gs_gestantes', 'Bienestar: Gestantes y lactancia', '🤱'], ['bs_gs_canal', 'Bienestar: Canal anónimo QR', '🗣️'], ['bs_gs_condiciones', 'Bienestar: Condiciones en campo', '🌾'], ['bs_gs_datos', 'Bienestar: Protección de datos (consentimientos)', '🛡️'], ['bs_gs_comite', 'Bienestar: Comité de hostigamiento (actas)', '📜'], ['bs_gs_adolescentes', 'Bienestar: Adolescentes autorizados', '🧒'], ['bs_gs_lactario', 'Bienestar: Lactarios', '🍼'], ['bs_gs_discapacidad', 'Bienestar: Discapacidad y cuota 3 %', '♿'] ['bs_gs_lactancia', 'Bienestar: Lactancia (acumulación de horas)', '🍼'],,
+     ['bs_estadisticas', 'Bienestar: Estadísticas', '📈'], ['bs_descansos', 'Bienestar: Descansos médicos', '🩺'], ['bs_gestion_social', 'Bienestar: Gestión Social (casos sociales)', '🤝'], ['bs_gs_gestantes', 'Bienestar: Gestantes y lactancia', '🤱'], ['bs_gs_canal', 'Bienestar: Canal anónimo QR', '🗣️'], ['bs_gs_condiciones', 'Bienestar: Condiciones en campo', '🌾'], ['bs_gs_datos', 'Bienestar: Protección de datos (consentimientos)', '🛡️'], ['bs_gs_comite', 'Bienestar: Comité de hostigamiento (actas)', '📜'], ['bs_gs_adolescentes', 'Bienestar: Adolescentes autorizados', '🧒'], ['bs_gs_lactario', 'Bienestar: Lactarios', '🍼'], ['bs_gs_discapacidad', 'Bienestar: Discapacidad y cuota 3 %', '♿'], ['bs_gs_lactancia', 'Bienestar: Lactancia (acumulación de horas)', '🍼'],
      ['ev_acceso', 'Evaluaciones ETI: puede ingresar', '📝'],
      ['navActividad', 'Actividad de Usuarios', '📊'], ['act_todos', 'Actividad: ver a TODOS los usuarios', '👥']].forEach(function (x) { if (!hay[x[0]]) out.push({ clave: x[0], etiqueta: x[1], ic: x[2] }); });
     return out;
@@ -438,7 +438,8 @@
       var t = ev.target, b = t && t.closest ? t.closest('#navPermisos') : null;
       if (!b) return;
       ev.preventDefault(); ev.stopImmediatePropagation();
-      try { abrir(); } catch (e) { console.warn('[_ACCESO_UI_V3] fallo, se abre la pantalla anterior:', e); if (typeof window.permAbrir === 'function') window.permAbrir(); }
+      var respaldo = function (e) { console.warn('[_ACCESO_UI_V3] fallo, se abre la pantalla anterior:', e); try { var o = document.getElementById('ac3Ov'); if (o) o.classList.remove('on'); } catch (x) {} if (typeof window.permAbrir === 'function') window.permAbrir(); };
+      try { Promise.resolve(abrir()).catch(respaldo); } catch (e) { respaldo(e); }   /* v8 (17-nov): abrir() es async; antes un error dentro no llegaba al respaldo y el panel quedaba en blanco */
     } catch (e) {}
   }, true);
   console.log('[_ACCESO_UI_V3] listo');
