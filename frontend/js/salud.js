@@ -77,7 +77,7 @@ function saliendo() { return _salidaFin || (_salidaTs && (Date.now() - _salidaTs
 function esRuido(tipo, accion, detalle) {
   try {
     var a = String(accion || ''), d = String(detalle || '');
-    if (tipo === 'azure_http' && /HTTP 503/.test(d) && /^azure:mod\/(mant|acc|resp)\//.test(a)) return true;
+    if ((tipo === 'azure_http' || tipo === 'supabase_http') && /HTTP 503/.test(d) && /^(azure|supabase):mod\/(mant|acc|resp)\//.test(a)) return true;
     if (tipo === 'js_promesa' && /Failed to update a ServiceWorker/i.test(d)) return true;
   } catch (e) {}
   return false;
@@ -86,7 +86,8 @@ function registrar(tipo, accion, ms, detalle) {
   try {
     if ((/_falla$/.test(String(tipo)) || tipo === 'js_promesa') && saliendo()) return;   /* _SALUD_SALIENDO_V1 */
     if (esRuido(tipo, accion, detalle)) return;   /* _SALUD_RUIDO_V1 */
-    var clave = tipo + '|' + accion + '|' + String(detalle || '').slice(0, 60);
+    if (navigator.onLine === false && /_(falla|error)$/.test(String(tipo))) { detalle = 'el equipo no tenia internet (' + tipo + ' ' + accion + ')'; tipo = 'sin_internet'; accion = ''; }   /* _SALUD_V2 */
+    var clave = tipo === 'sin_internet' ? 'sin_internet' : tipo + '|' + accion + '|' + String(detalle || '').slice(0, 60);
     var t = Date.now();
     if (_vistos[clave] && (t - _vistos[clave]) < 60000) return;   // mismo error en 60 s = 1 registro
     _vistos[clave] = t;
@@ -111,14 +112,16 @@ function enviar(keepalive) {
                body: JSON.stringify({ action: 'saludLog', registros: lote }) };
     if (keepalive) op.keepalive = true;
     _enviando = true;
+    guardarCola(c.slice(lote.length));   /* _SALUD_V2: antes el lote quedaba en cola mientras Google respondia (3-18 s) y al cambiar de pagina se reenviaba -> registros duplicados */
+    var devolver = function () { if (!keepalive) { try { guardarCola(lote.concat(leerCola())); } catch (e) {} } };
     _f.call(window, GAS_URL, op)
       .then(function (r) { return r.text(); })
       .then(function (txt) {
         var ok = false;
         try { ok = JSON.parse(txt).ok === true; } catch (e) {}
-        if (ok) guardarCola(leerCola().slice(lote.length));
+        if (!ok) devolver();
       })
-      .catch(function () {})
+      .catch(devolver)
       .then(function () { _enviando = false; });
   } catch (e) { _enviando = false; }
 }
@@ -137,7 +140,7 @@ function accionDe(u, op, esGas) {
       return 'gas';
     }
     var p = u.split('?')[0].split('/api/');
-    return 'azure:' + (p[1] || p[0]);
+    return 'supabase:' + (p[1] || p[0]);   /* _SALUD_V2: la URL vieja azurewebsites.net la redirige rl-edge.js a Supabase */
   } catch (e) { return '?'; }
 }
 window.fetch = function (recurso, opciones) {
@@ -145,7 +148,7 @@ window.fetch = function (recurso, opciones) {
   try { u = (typeof recurso === 'string') ? recurso : (recurso && recurso.url) || ''; } catch (e) {}
   var esGas = u.indexOf('script.google.com') >= 0, esAz = u.indexOf('azurewebsites.net') >= 0;
   if (!esGas && !esAz) return _f.apply(this, arguments);
-  var accion = accionDe(u, opciones, esGas), t0 = ahora(), pre = esGas ? 'google' : 'azure';
+  var accion = accionDe(u, opciones, esGas), t0 = ahora(), pre = esGas ? 'google' : 'supabase';
   return _f.apply(this, arguments).then(function (r) {
     try {
       var ms = ahora() - t0;
