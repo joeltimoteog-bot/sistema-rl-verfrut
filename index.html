@@ -853,7 +853,8 @@ async function doLogin(){
       sessionStorage.setItem('user',JSON.stringify(d.user));
       try{ RLTrafico.emit({accion:'Inició sesión',destino:'Azure SQL',user:{u:d.user.usuario,n:d.user.nombre||d.user.usuario,rol:d.user.rol||''}}); }catch(e){} /* _TRAFICO_V1 */
       sessionStorage.setItem('api',API);
-      if (d.token) sessionStorage.setItem('rl_token', d.token);
+      if (d.token) { sessionStorage.setItem('rl_token', d.token); try { sessionStorage.removeItem('rl_sin'); } catch(e){} }
+      else { try { sessionStorage.setItem('rl_sin', 'login-google'); } catch(e){} }   /* _SEG_FASE1_V1: diagnostico (ingreso validado por Google, sin llave) */
       // ── SSO Bienestar Social: obtener token con las mismas credenciales (no bloquea el login RL) ──
       try {
         fetch('https://script.google.com/macros/s/AKfycbyJIUtdpApEc35Jj4ZNP-3ONqGe64J1VhaRvkt87vVUNTgSagrOgOS0T99eIt0-w3Yi/exec', {

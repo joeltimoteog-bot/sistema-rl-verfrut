@@ -36,6 +36,28 @@
     }
     return [url, init];
   }
+  /* _SEG_FASE1_V1 (17-nov-2026): si una llamada a Google sale SIN llave se agrega rl_sin = motivo|pagina, para que la hoja
+     SESION_LOG diga POR QUE (ingreso por Google, llave borrada por 401, pantalla sin ingreso). Solo diagnostico: no da acceso. */
+  function motivoSinLlave() {
+    var m = '';
+    try { m = sessionStorage.getItem('rl_sin') || ''; } catch (e) {}
+    if (!m) { var u = null; try { u = sessionStorage.getItem('user'); } catch (e) {} m = u ? 'ingreso-sin-llave' : 'sin-ingreso'; }
+    var pg = ''; try { pg = (location.pathname.split('/').pop() || 'inicio').replace(/\.html$/, ''); } catch (e) {}
+    return (m + '|' + pg).slice(0, 80);
+  }
+  function conMotivoGas(input, init) {
+    try {
+      var mo = motivoSinLlave(), url = input;
+      if (!init || String(init.method || 'GET').toUpperCase() === 'GET') {
+        if (/[?&]rl_sin=/.test(url)) return [url, init];
+        return [url + (url.indexOf('?') >= 0 ? '&' : '?') + 'rl_sin=' + encodeURIComponent(mo), init];
+      }
+      if (typeof init.body === 'string' && /^\s*\{/.test(init.body)) {
+        var b = JSON.parse(init.body); if (b && typeof b === 'object' && !b.rl_sin && !b.rl_token) { b.rl_sin = mo; var i2 = Object.assign({}, init); i2.body = JSON.stringify(b); return [url, i2]; }
+      }
+    } catch (e) {}
+    return [input, init];
+  }
   /* _MODO_GOOGLE_V1 (04-nov-2026) — EMERGENCIA: caida de Azure Storage en Brazil South (Microsoft).
      Con MODO_GOOGLE = true NINGUNA llamada va a Azure: falla al instante y cada modulo usa su respaldo de
      Google sin esperar los 12-14 s del reloj. Al volver Azure: MODO_GOOGLE = false (y subir ?v=).
@@ -76,7 +98,7 @@
          sin credencial: se avisa de inmediato y se vuelve a ingresar (antes la pantalla quedaba vacia hasta el siguiente reloj). */
       if (r.status === 401 && !/\/api\/auth\//.test(url)) {
         /* _SEG_401_V2: el token rechazado se descarta en todas sus copias, para que el siguiente ingreso sea limpio */
-        try { sessionStorage.removeItem('rl_token'); } catch (e) {}
+        try { sessionStorage.removeItem('rl_token'); sessionStorage.setItem('rl_sin', 'borrada-401'); } catch (e) {}   /* _SEG_FASE1_V1 */
         try { localStorage.removeItem('rl_session'); } catch (e) {}
         try { var bA = JSON.parse(localStorage.getItem('bienestarSocialAuth') || 'null'); if (bA && bA.rl_token) { delete bA.rl_token; localStorage.setItem('bienestarSocialAuth', JSON.stringify(bA)); } } catch (e) {}
         if (window.rlSesion && typeof window.rlSesion.vencida === 'function') { try { window.rlSesion.vencida('Por seguridad, las sesiones se renuevan cada día. Vuelve a ingresar y regresarás a esta misma página.'); } catch (e) {} }
@@ -97,7 +119,7 @@
   var previaEnCurso = null, previaFalloTk = '', previaFalloHasta = 0;
   function expDe(t) { try { var p = JSON.parse(atob(t.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))); return (p.exp || 0) * 1000; } catch (e) { return 0; } }
   function guardarTk(nuevo) {
-    try { sessionStorage.setItem('rl_token', nuevo); } catch (e) {}
+    try { sessionStorage.setItem('rl_token', nuevo); sessionStorage.removeItem('rl_sin'); } catch (e) {}
     try { var s = JSON.parse(localStorage.getItem('rl_session') || 'null'); if (s) { s.token = nuevo; s.timestamp = Date.now(); localStorage.setItem('rl_session', JSON.stringify(s)); } } catch (e) {}
     try { var b = JSON.parse(localStorage.getItem('bienestarSocialAuth') || 'null'); if (b && b.rl_token !== undefined) { b.rl_token = nuevo; localStorage.setItem('bienestarSocialAuth', JSON.stringify(b)); } } catch (e) {}
   }
@@ -139,7 +161,7 @@
   var envoltura = function (input, init) {
     try {
       var uP = (typeof input === 'string') ? input : '';
-      if (uP && uP.indexOf(MARCA) >= 0) {
+      if (uP && (uP.indexOf(MARCA) >= 0 || uP.indexOf(MARCA_GAS) >= 0)) {   /* _SEG_FASE1_V1: Google tambien recibe la llave renovada (antes salia vencida) */
         var viejoP = necesitaPrevia(uP, init);
         if (viejoP) { var selfP = this; return renovarPrevia(viejoP).then(function (nuevoP) { return envoltura.call(selfP, input, nuevoP ? cambiarLlave(init, viejoP, nuevoP) : init); }); }
       }
@@ -167,7 +189,7 @@
       }
       if (typeof input === 'string' && url.indexOf(MARCA_GAS) >= 0) {
         var tg = null; try { tg = sessionStorage.getItem('rl_token'); } catch (e) {}
-        if (!tg) return fOrig.apply(this, arguments);
+        if (!tg) { var rS = conMotivoGas(input, init); return fOrig.call(this, rS[0], rS[1]); }   /* _SEG_FASE1_V1 */
         var r = conSesionGas(input, init, tg);
         return fOrig.call(this, r[0], r[1]);
       }
@@ -289,7 +311,7 @@
       var r = await fetch(BASE + '/auth/renovar', { method: 'POST', headers: { Authorization: 'Bearer ' + t }, signal: ctl ? ctl.signal : undefined });
       clearTimeout(reloj);
       if (r.status === 401) {
-        try { sessionStorage.removeItem('rl_token'); localStorage.removeItem('rl_session'); } catch (x) {}   /* _SEG_401_V2 */
+        try { sessionStorage.removeItem('rl_token'); sessionStorage.setItem('rl_sin', 'renovar-401'); localStorage.removeItem('rl_session'); } catch (x) {}   /* _SEG_401_V2 · _SEG_FASE1_V1 */
         var j = null; try { j = await r.json(); } catch (x) {}
         aviso(j && j.motivo === 'inactivo' ? 'Tu usuario fue desactivado. Comunícate con Relaciones Laborales.' : 'Por seguridad, las sesiones se renuevan cada día. Vuelve a ingresar y regresarás a esta misma pantalla.');
         return;
