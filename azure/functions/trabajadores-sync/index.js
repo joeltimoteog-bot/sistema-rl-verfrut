@@ -221,6 +221,18 @@ module.exports = async function (context, req) {
     const pool = await getPool();
     const results = {};
 
+    /* _PADRON_EXCEL_V1 (17-nov-2026): si el padron ya se carga desde el Excel (boton "Actualizar padron" del
+       sistema), esta sincronizacion desde las hojas de Google NO toca nada: si no, la de las 3 a. m. pisaria
+       cada noche la carga del Excel con datos viejos. Se apaga borrando la clave padron_fuente de CV_Estado. */
+    let fuente = '';
+    try { const f = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'padron_fuente'"); fuente = String((f.recordset[0] || {}).valor || ''); } catch (eF) { fuente = ''; }
+    if (/^excel/i.test(fuente)) {
+      const motivo = 'El padron se carga desde el Excel (' + fuente + '): la hoja de Google ya no lo actualiza';
+      for (const e of pendientes) results[e.clave] = { total_recibidos: body[e.clave].length, inserted: 0, eliminados: 0, abortado: true, motivo };
+      context.res = { status: 200, body: { success: true, omitido: true, results, motivo } };
+      return;
+    }
+
     for (const e of pendientes) results[e.clave] = await syncTabla(pool, e.tabla, body[e.clave], context.log);
     EMP.invalidarTablas();   /* una tabla nueva (ej. OLMOS) entra a la busqueda de inmediato */
 
@@ -250,3 +262,7 @@ module.exports = async function (context, req) {
     };
   }
 };
+
+/* _PADRON_EXCEL_V1: el boton del sistema (padron/cargar) usa este mismo motor seguro */
+module.exports.syncTabla = syncTabla;
+module.exports.detalleError = detalleError;

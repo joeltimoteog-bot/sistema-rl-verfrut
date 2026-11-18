@@ -79424,6 +79424,369 @@ var require_mod_importar = __commonJS({
   }
 });
 
+// trabajadores-sync/index.js
+var require_trabajadores_sync = __commonJS({
+  "trabajadores-sync/index.js"(exports, module) {
+    var { sql, getPool } = require_db();
+    var { exigirAuth } = require_auth();
+    function parseDate(value) {
+      if (value === null || value === void 0 || value === "") return null;
+      if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
+      if (typeof value === "number") {
+        const ms = Math.round((value - 25569) * 86400 * 1e3);
+        const d2 = new Date(ms);
+        return isNaN(d2.getTime()) ? null : d2;
+      }
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    function s(v, max) {
+      if (v === null || v === void 0) return null;
+      const str = String(v).trim();
+      if (str === "") return null;
+      return max && str.length > max ? str.substring(0, max) : str;
+    }
+    function toInt(v) {
+      if (v === null || v === void 0 || v === "") return null;
+      const n = parseInt(v, 10);
+      return isNaN(n) ? null : n;
+    }
+    var COLS = [
+      ["dni", "NVARCHAR(20) NOT NULL", () => sql.NVarChar(20)],
+      ["ap_paterno", "NVARCHAR(100) NULL", () => sql.NVarChar(100)],
+      ["ap_materno", "NVARCHAR(100) NULL", () => sql.NVarChar(100)],
+      ["nombres", "NVARCHAR(150) NULL", () => sql.NVarChar(150)],
+      ["codigo_trab", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
+      ["fecha_inicio", "DATE NULL", () => sql.Date],
+      ["sexo", "NCHAR(1) NULL", () => sql.NChar(1)],
+      ["oficio", "NVARCHAR(150) NULL", () => sql.NVarChar(150)],
+      ["tipo_regimen", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
+      ["id_empresa", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
+      ["zona_labor", "NVARCHAR(150) NULL", () => sql.NVarChar(150)],
+      ["direccion", "NVARCHAR(255) NULL", () => sql.NVarChar(255)],
+      ["total", "INT NULL", () => sql.Int],
+      ["empresa", "NVARCHAR(20) NULL", () => sql.NVarChar(20)],
+      ["nombre_completo", "NVARCHAR(300) NULL", () => sql.NVarChar(300)],
+      ["ruta", "NVARCHAR(100) NULL", () => sql.NVarChar(100)],
+      ["cod", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
+      ["fecha_termino", "DATE NULL", () => sql.Date],
+      ["fecha_nacimiento", "DATE NULL", () => sql.Date]
+    ];
+    var LISTA = COLS.map((c) => c[0]).join(", ");
+    var ST = COLS.map((c) => "s." + c[0]).join(", ");
+    var TT = COLS.map((c) => "t." + c[0]).join(", ");
+    function filaDe(row) {
+      const dni = s(row.dni, 20);
+      if (!dni) return null;
+      return [
+        dni,
+        s(row.ap_paterno, 100),
+        s(row.ap_materno, 100),
+        s(row.nombres, 150),
+        s(row.codigo_trab, 50),
+        parseDate(row.fecha_inicio),
+        s(row.sexo, 1),
+        s(row.oficio, 150),
+        s(row.tipo_regimen, 50),
+        s(row.id_empresa, 50),
+        s(row.zona_labor, 150),
+        s(row.direccion, 255),
+        toInt(row.total),
+        s(row.empresa, 20),
+        s(row.nombre_completo, 300),
+        s(row.ruta, 100),
+        s(row.cod, 50),
+        parseDate(row.fecha_termino),
+        parseDate(row.fecha_nacimiento)
+      ];
+    }
+    function detalleError(e) {
+      const partes = [];
+      if (e && e.message) partes.push(e.message);
+      if (e && e.originalError && e.originalError.message) partes.push(e.originalError.message);
+      if (e && e.originalError && e.originalError.info && e.originalError.info.message) partes.push(e.originalError.info.message);
+      if (e && Array.isArray(e.precedingErrors)) e.precedingErrors.forEach((x) => x && x.message && partes.push(x.message));
+      const unico = partes.filter((v, i, a) => v && a.indexOf(v) === i);
+      return unico.join(" | ") || String(e);
+    }
+    function tablaBulk(nombre, filas) {
+      const tabla = new sql.Table(nombre);
+      tabla.create = false;
+      COLS.forEach((c) => tabla.columns.add(c[0], c[2](), { nullable: c[0] !== "dni" }));
+      filas.forEach((f) => tabla.rows.add.apply(tabla.rows, f));
+      return tabla;
+    }
+    async function syncIncremental(pool, tableName, filas, rows, descartados) {
+      const STG = tableName + "_stage";
+      let paso = "crear_stage";
+      try {
+        await pool.request().query(`IF OBJECT_ID('dbo.${STG}', 'U') IS NULL
+      CREATE TABLE dbo.${STG} (${COLS.map((c) => c[0] + " " + c[1]).join(", ")})`);
+        paso = "vaciar_stage";
+        await pool.request().query(`DELETE FROM dbo.${STG}`);
+        paso = "cargar_stage";
+        await pool.request().bulk(tablaBulk(STG, filas));
+      } catch (e) {
+        e._paso = paso;
+        throw e;
+      }
+      const transaction = new sql.Transaction(pool);
+      paso = "iniciar_transaccion";
+      await transaction.begin();
+      try {
+        const q = (txt) => transaction.request().query(txt);
+        paso = "config";
+        await q("SET DEADLOCK_PRIORITY LOW; SET LOCK_TIMEOUT 20000;");
+        paso = "contar";
+        const actual = (await q(`SELECT COUNT(*) AS n FROM dbo.${tableName}`)).recordset[0].n;
+        if (actual > 100 && filas.length < actual * 0.5) {
+          await transaction.rollback();
+          return {
+            total_recibidos: rows.length,
+            inserted: 0,
+            eliminados: 0,
+            sin_cambios: actual,
+            descartados_sin_dni: descartados,
+            abortado: true,
+            motivo: "Llegaron " + filas.length + " filas y la tabla tiene " + actual + ": posible lectura incompleta, no se toco nada"
+          };
+        }
+        paso = "borrar_cambiados";
+        const del = await q(`DELETE t FROM dbo.${tableName} t
+      WHERE NOT EXISTS (SELECT 1 FROM dbo.${STG} s WHERE s.dni = t.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
+        paso = "insertar_nuevos";
+        const ins = await q(`INSERT INTO dbo.${tableName} (${LISTA})
+      SELECT ${ST} FROM dbo.${STG} s
+      WHERE NOT EXISTS (SELECT 1 FROM dbo.${tableName} t WHERE t.dni = s.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
+        paso = "confirmar";
+        await transaction.commit();
+        const eliminados = del.rowsAffected && del.rowsAffected[0] || 0;
+        const insertados = ins.rowsAffected && ins.rowsAffected[0] || 0;
+        return {
+          total_recibidos: rows.length,
+          inserted: insertados,
+          eliminados,
+          sin_cambios: Math.max(0, actual - eliminados),
+          descartados_sin_dni: descartados,
+          modo: "incremental"
+        };
+      } catch (err) {
+        try {
+          await transaction.rollback();
+        } catch (e2) {
+        }
+        err._paso = paso;
+        throw err;
+      }
+    }
+    async function syncCompleto(pool, tableName, filas, rows, descartados) {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        await transaction.request().query(`DELETE FROM dbo.${tableName}`);
+        const r = await transaction.request().bulk(tablaBulk(tableName, filas));
+        await transaction.commit();
+        return { total_recibidos: rows.length, inserted: r.rowsAffected, descartados_sin_dni: descartados, modo: "completo" };
+      } catch (err) {
+        try {
+          await transaction.rollback();
+        } catch (e2) {
+        }
+        err._paso = "completo";
+        throw err;
+      }
+    }
+    async function syncTabla(pool, tableName, rows, log) {
+      if (!rows || rows.length === 0) return { inserted: 0, total_recibidos: 0 };
+      if (!/^Trabajadores_(RAPEL|VERFRUT)$/.test(tableName)) throw new Error("Tabla no permitida: " + tableName);
+      const filas = [];
+      let descartados = 0;
+      for (const row of rows) {
+        const f = filaDe(row);
+        if (f) filas.push(f);
+        else descartados++;
+      }
+      try {
+        return await syncIncremental(pool, tableName, filas, rows, descartados);
+      } catch (e) {
+        const motivo = "paso " + (e._paso || "?") + ": " + detalleError(e);
+        if (log) log.warn("Incremental fallo en " + tableName + " (" + motivo + ") -> uso metodo completo");
+        const actual = (await pool.request().query(`SELECT COUNT(*) AS n FROM dbo.${tableName}`)).recordset[0].n;
+        if (actual > 100 && filas.length < actual * 0.5) {
+          return {
+            total_recibidos: rows.length,
+            inserted: 0,
+            abortado: true,
+            incremental_error: motivo,
+            motivo: "Llegaron " + filas.length + " filas y la tabla tiene " + actual + ": no se toco nada"
+          };
+        }
+        const r = await syncCompleto(pool, tableName, filas, rows, descartados);
+        r.incremental_error = motivo;
+        return r;
+      }
+    }
+    module.exports = async function(context, req) {
+      const authUser = exigirAuth(context, req);
+      if (authUser === null) return;
+      context.log("trabajadores-sync triggered");
+      const startTime = Date.now();
+      try {
+        const body = req.body || {};
+        const EMP = require_empresas();
+        const pendientes = EMP.EMPRESAS.filter(function(e) {
+          return Array.isArray(body[e.clave]);
+        });
+        if (!pendientes.length) {
+          context.res = {
+            status: 400,
+            body: {
+              success: false,
+              error: "Debe enviar al menos uno de los arrays: " + EMP.EMPRESAS.map(function(e) {
+                return e.clave;
+              }).join(", ")
+            }
+          };
+          return;
+        }
+        const pool = await getPool();
+        const results = {};
+        let fuente = "";
+        try {
+          const f = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'padron_fuente'");
+          fuente = String((f.recordset[0] || {}).valor || "");
+        } catch (eF) {
+          fuente = "";
+        }
+        if (/^excel/i.test(fuente)) {
+          const motivo = "El padron se carga desde el Excel (" + fuente + "): la hoja de Google ya no lo actualiza";
+          for (const e of pendientes) results[e.clave] = { total_recibidos: body[e.clave].length, inserted: 0, eliminados: 0, abortado: true, motivo };
+          context.res = { status: 200, body: { success: true, omitido: true, results, motivo } };
+          return;
+        }
+        for (const e of pendientes) results[e.clave] = await syncTabla(pool, e.tabla, body[e.clave], context.log);
+        EMP.invalidarTablas();
+        const elapsed = Date.now() - startTime;
+        context.log("Sync completado en", elapsed, "ms");
+        context.res = {
+          status: 200,
+          body: {
+            success: true,
+            results,
+            elapsed_ms: elapsed,
+            fuente: "AZURE_SQL"
+          }
+        };
+      } catch (e) {
+        context.log.error("Error en trabajadores-sync:", e);
+        context.res = {
+          status: 500,
+          body: {
+            success: false,
+            error: detalleError(e),
+            paso: e._paso || null,
+            code: e.code,
+            name: e.name
+          }
+        };
+      }
+    };
+    module.exports.syncTabla = syncTabla;
+    module.exports.detalleError = detalleError;
+  }
+});
+
+// padron/index.js
+var require_padron = __commonJS({
+  "padron/index.js"(exports, module) {
+    "use strict";
+    var { sql, getPool } = require_db();
+    var EMP = require_empresas();
+    var SYNC = require_trabajadores_sync();
+    var ADMIN_ROLES = ["administrador", "admin", "administrador 01", "administrador 02", "admin01", "admin02"];
+    var HABILITADAS = ["RAPEL", "VERFRUT"];
+    function token(req) {
+      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        return require_auth().verificarSoloRL(h.slice(7).trim());
+      } catch (e) {
+        return null;
+      }
+    }
+    function esAdmin(t) {
+      return String(t.usuario || "").toLowerCase() === "jtimoteo" || ADMIN_ROLES.indexOf(String(t.rol || "").toLowerCase().trim()) >= 0;
+    }
+    function sello() {
+      const d = new Date(Date.now() - 5 * 36e5), z = (n) => String(n).padStart(2, "0");
+      return z(d.getUTCDate()) + "/" + z(d.getUTCMonth() + 1) + "/" + d.getUTCFullYear() + " " + z(d.getUTCHours()) + ":" + z(d.getUTCMinutes());
+    }
+    async function fuente(pool) {
+      try {
+        const r = await pool.request().query("SELECT valor FROM dbo.CV_Estado WHERE clave = 'padron_fuente'");
+        return String((r.recordset[0] || {}).valor || "");
+      } catch (e) {
+        return "";
+      }
+    }
+    async function estado(pool) {
+      const ex = await EMP.tablasExistentes(pool, sql), empresas = [];
+      for (const e of EMP.EMPRESAS) {
+        if (!ex.has(e.tabla)) {
+          empresas.push({ empresa: e.codigo, existe: false, total: 0 });
+          continue;
+        }
+        const r = await pool.request().query(`SELECT COUNT(*) AS n FROM dbo.${e.tabla}`);
+        empresas.push({ empresa: e.codigo, existe: true, total: Number(r.recordset[0].n) || 0, habilitada: HABILITADAS.indexOf(e.codigo) >= 0 });
+      }
+      return { ok: true, empresas, fuente: await fuente(pool) };
+    }
+    async function cargar(pool, b, t, log) {
+      const e = EMP.porCodigo(b.empresa);
+      if (!e || HABILITADAS.indexOf(e.codigo) < 0) return { status: 200, body: { ok: false, msg: "Empresa no habilitada para carga: " + (b.empresa || "(vacia)") } };
+      if (!Array.isArray(b.filas) || !b.filas.length) return { status: 200, body: { ok: false, msg: "No llegaron filas de " + e.codigo } };
+      if (b.filas.length > 6e4) return { status: 200, body: { ok: false, msg: "Demasiadas filas (" + b.filas.length + ")" } };
+      const r = await SYNC.syncTabla(pool, e.tabla, b.filas, log);
+      EMP.invalidarTablas();
+      if (r && !r.abortado) {
+        const v = "excel|" + sello() + "|" + String(t.usuario || "").slice(0, 40);
+        await pool.request().input("v", sql.NVarChar(200), v).query(`MERGE dbo.CV_Estado AS x USING (SELECT 'padron_fuente' AS clave) AS s ON x.clave = s.clave
+        WHEN MATCHED THEN UPDATE SET valor = @v WHEN NOT MATCHED THEN INSERT (clave, valor) VALUES ('padron_fuente', @v);`);
+      }
+      return { status: 200, body: { ok: !(r && r.abortado), empresa: e.codigo, resultado: r, msg: r && r.abortado ? r.motivo : "" } };
+    }
+    module.exports = async function(context, req) {
+      const accion = context.bindingData.accion;
+      try {
+        const t = token(req);
+        if (!t || !t.usuario) {
+          context.res = { status: 401, body: { ok: false, msg: "Sin sesion valida" } };
+          return;
+        }
+        if (!esAdmin(t)) {
+          context.res = { status: 403, body: { ok: false, msg: "Solo un administrador puede actualizar el padron" } };
+          return;
+        }
+        const pool = await getPool();
+        if (accion === "estado") {
+          context.res = { status: 200, body: await estado(pool) };
+          return;
+        }
+        if (accion === "cargar") {
+          const r = await cargar(pool, req.body || {}, t, context.log);
+          context.res = { status: r.status, body: r.body };
+          return;
+        }
+        context.res = { status: 404, body: { ok: false, msg: "Accion desconocida" } };
+      } catch (err) {
+        const det = SYNC.detalleError ? SYNC.detalleError(err) : err.message;
+        context.log.error("[padron] " + accion + ": " + det);
+        context.res = { status: 500, body: { ok: false, msg: det, paso: err._paso || null } };
+      }
+    };
+  }
+});
+
 // personas/index.js
 var require_personas = __commonJS({
   "personas/index.js"(exports, module) {
@@ -80526,263 +80889,6 @@ var require_trabajadores_search = __commonJS({
   }
 });
 
-// trabajadores-sync/index.js
-var require_trabajadores_sync = __commonJS({
-  "trabajadores-sync/index.js"(exports, module) {
-    var { sql, getPool } = require_db();
-    var { exigirAuth } = require_auth();
-    function parseDate(value) {
-      if (value === null || value === void 0 || value === "") return null;
-      if (value instanceof Date) return isNaN(value.getTime()) ? null : value;
-      if (typeof value === "number") {
-        const ms = Math.round((value - 25569) * 86400 * 1e3);
-        const d2 = new Date(ms);
-        return isNaN(d2.getTime()) ? null : d2;
-      }
-      const d = new Date(value);
-      return isNaN(d.getTime()) ? null : d;
-    }
-    function s(v, max) {
-      if (v === null || v === void 0) return null;
-      const str = String(v).trim();
-      if (str === "") return null;
-      return max && str.length > max ? str.substring(0, max) : str;
-    }
-    function toInt(v) {
-      if (v === null || v === void 0 || v === "") return null;
-      const n = parseInt(v, 10);
-      return isNaN(n) ? null : n;
-    }
-    var COLS = [
-      ["dni", "NVARCHAR(20) NOT NULL", () => sql.NVarChar(20)],
-      ["ap_paterno", "NVARCHAR(100) NULL", () => sql.NVarChar(100)],
-      ["ap_materno", "NVARCHAR(100) NULL", () => sql.NVarChar(100)],
-      ["nombres", "NVARCHAR(150) NULL", () => sql.NVarChar(150)],
-      ["codigo_trab", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
-      ["fecha_inicio", "DATE NULL", () => sql.Date],
-      ["sexo", "NCHAR(1) NULL", () => sql.NChar(1)],
-      ["oficio", "NVARCHAR(150) NULL", () => sql.NVarChar(150)],
-      ["tipo_regimen", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
-      ["id_empresa", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
-      ["zona_labor", "NVARCHAR(150) NULL", () => sql.NVarChar(150)],
-      ["direccion", "NVARCHAR(255) NULL", () => sql.NVarChar(255)],
-      ["total", "INT NULL", () => sql.Int],
-      ["empresa", "NVARCHAR(20) NULL", () => sql.NVarChar(20)],
-      ["nombre_completo", "NVARCHAR(300) NULL", () => sql.NVarChar(300)],
-      ["ruta", "NVARCHAR(100) NULL", () => sql.NVarChar(100)],
-      ["cod", "NVARCHAR(50) NULL", () => sql.NVarChar(50)],
-      ["fecha_termino", "DATE NULL", () => sql.Date],
-      ["fecha_nacimiento", "DATE NULL", () => sql.Date]
-    ];
-    var LISTA = COLS.map((c) => c[0]).join(", ");
-    var ST = COLS.map((c) => "s." + c[0]).join(", ");
-    var TT = COLS.map((c) => "t." + c[0]).join(", ");
-    function filaDe(row) {
-      const dni = s(row.dni, 20);
-      if (!dni) return null;
-      return [
-        dni,
-        s(row.ap_paterno, 100),
-        s(row.ap_materno, 100),
-        s(row.nombres, 150),
-        s(row.codigo_trab, 50),
-        parseDate(row.fecha_inicio),
-        s(row.sexo, 1),
-        s(row.oficio, 150),
-        s(row.tipo_regimen, 50),
-        s(row.id_empresa, 50),
-        s(row.zona_labor, 150),
-        s(row.direccion, 255),
-        toInt(row.total),
-        s(row.empresa, 20),
-        s(row.nombre_completo, 300),
-        s(row.ruta, 100),
-        s(row.cod, 50),
-        parseDate(row.fecha_termino),
-        parseDate(row.fecha_nacimiento)
-      ];
-    }
-    function detalleError(e) {
-      const partes = [];
-      if (e && e.message) partes.push(e.message);
-      if (e && e.originalError && e.originalError.message) partes.push(e.originalError.message);
-      if (e && e.originalError && e.originalError.info && e.originalError.info.message) partes.push(e.originalError.info.message);
-      if (e && Array.isArray(e.precedingErrors)) e.precedingErrors.forEach((x) => x && x.message && partes.push(x.message));
-      const unico = partes.filter((v, i, a) => v && a.indexOf(v) === i);
-      return unico.join(" | ") || String(e);
-    }
-    function tablaBulk(nombre, filas) {
-      const tabla = new sql.Table(nombre);
-      tabla.create = false;
-      COLS.forEach((c) => tabla.columns.add(c[0], c[2](), { nullable: c[0] !== "dni" }));
-      filas.forEach((f) => tabla.rows.add.apply(tabla.rows, f));
-      return tabla;
-    }
-    async function syncIncremental(pool, tableName, filas, rows, descartados) {
-      const STG = tableName + "_stage";
-      let paso = "crear_stage";
-      try {
-        await pool.request().query(`IF OBJECT_ID('dbo.${STG}', 'U') IS NULL
-      CREATE TABLE dbo.${STG} (${COLS.map((c) => c[0] + " " + c[1]).join(", ")})`);
-        paso = "vaciar_stage";
-        await pool.request().query(`DELETE FROM dbo.${STG}`);
-        paso = "cargar_stage";
-        await pool.request().bulk(tablaBulk(STG, filas));
-      } catch (e) {
-        e._paso = paso;
-        throw e;
-      }
-      const transaction = new sql.Transaction(pool);
-      paso = "iniciar_transaccion";
-      await transaction.begin();
-      try {
-        const q = (txt) => transaction.request().query(txt);
-        paso = "config";
-        await q("SET DEADLOCK_PRIORITY LOW; SET LOCK_TIMEOUT 20000;");
-        paso = "contar";
-        const actual = (await q(`SELECT COUNT(*) AS n FROM dbo.${tableName}`)).recordset[0].n;
-        if (actual > 100 && filas.length < actual * 0.5) {
-          await transaction.rollback();
-          return {
-            total_recibidos: rows.length,
-            inserted: 0,
-            eliminados: 0,
-            sin_cambios: actual,
-            descartados_sin_dni: descartados,
-            abortado: true,
-            motivo: "Llegaron " + filas.length + " filas y la tabla tiene " + actual + ": posible lectura incompleta, no se toco nada"
-          };
-        }
-        paso = "borrar_cambiados";
-        const del = await q(`DELETE t FROM dbo.${tableName} t
-      WHERE NOT EXISTS (SELECT 1 FROM dbo.${STG} s WHERE s.dni = t.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
-        paso = "insertar_nuevos";
-        const ins = await q(`INSERT INTO dbo.${tableName} (${LISTA})
-      SELECT ${ST} FROM dbo.${STG} s
-      WHERE NOT EXISTS (SELECT 1 FROM dbo.${tableName} t WHERE t.dni = s.dni AND EXISTS (SELECT ${ST} INTERSECT SELECT ${TT}))`);
-        paso = "confirmar";
-        await transaction.commit();
-        const eliminados = del.rowsAffected && del.rowsAffected[0] || 0;
-        const insertados = ins.rowsAffected && ins.rowsAffected[0] || 0;
-        return {
-          total_recibidos: rows.length,
-          inserted: insertados,
-          eliminados,
-          sin_cambios: Math.max(0, actual - eliminados),
-          descartados_sin_dni: descartados,
-          modo: "incremental"
-        };
-      } catch (err) {
-        try {
-          await transaction.rollback();
-        } catch (e2) {
-        }
-        err._paso = paso;
-        throw err;
-      }
-    }
-    async function syncCompleto(pool, tableName, filas, rows, descartados) {
-      const transaction = new sql.Transaction(pool);
-      await transaction.begin();
-      try {
-        await transaction.request().query(`DELETE FROM dbo.${tableName}`);
-        const r = await transaction.request().bulk(tablaBulk(tableName, filas));
-        await transaction.commit();
-        return { total_recibidos: rows.length, inserted: r.rowsAffected, descartados_sin_dni: descartados, modo: "completo" };
-      } catch (err) {
-        try {
-          await transaction.rollback();
-        } catch (e2) {
-        }
-        err._paso = "completo";
-        throw err;
-      }
-    }
-    async function syncTabla(pool, tableName, rows, log) {
-      if (!rows || rows.length === 0) return { inserted: 0, total_recibidos: 0 };
-      if (!/^Trabajadores_(RAPEL|VERFRUT)$/.test(tableName)) throw new Error("Tabla no permitida: " + tableName);
-      const filas = [];
-      let descartados = 0;
-      for (const row of rows) {
-        const f = filaDe(row);
-        if (f) filas.push(f);
-        else descartados++;
-      }
-      try {
-        return await syncIncremental(pool, tableName, filas, rows, descartados);
-      } catch (e) {
-        const motivo = "paso " + (e._paso || "?") + ": " + detalleError(e);
-        if (log) log.warn("Incremental fallo en " + tableName + " (" + motivo + ") -> uso metodo completo");
-        const actual = (await pool.request().query(`SELECT COUNT(*) AS n FROM dbo.${tableName}`)).recordset[0].n;
-        if (actual > 100 && filas.length < actual * 0.5) {
-          return {
-            total_recibidos: rows.length,
-            inserted: 0,
-            abortado: true,
-            incremental_error: motivo,
-            motivo: "Llegaron " + filas.length + " filas y la tabla tiene " + actual + ": no se toco nada"
-          };
-        }
-        const r = await syncCompleto(pool, tableName, filas, rows, descartados);
-        r.incremental_error = motivo;
-        return r;
-      }
-    }
-    module.exports = async function(context, req) {
-      const authUser = exigirAuth(context, req);
-      if (authUser === null) return;
-      context.log("trabajadores-sync triggered");
-      const startTime = Date.now();
-      try {
-        const body = req.body || {};
-        const EMP = require_empresas();
-        const pendientes = EMP.EMPRESAS.filter(function(e) {
-          return Array.isArray(body[e.clave]);
-        });
-        if (!pendientes.length) {
-          context.res = {
-            status: 400,
-            body: {
-              success: false,
-              error: "Debe enviar al menos uno de los arrays: " + EMP.EMPRESAS.map(function(e) {
-                return e.clave;
-              }).join(", ")
-            }
-          };
-          return;
-        }
-        const pool = await getPool();
-        const results = {};
-        for (const e of pendientes) results[e.clave] = await syncTabla(pool, e.tabla, body[e.clave], context.log);
-        EMP.invalidarTablas();
-        const elapsed = Date.now() - startTime;
-        context.log("Sync completado en", elapsed, "ms");
-        context.res = {
-          status: 200,
-          body: {
-            success: true,
-            results,
-            elapsed_ms: elapsed,
-            fuente: "AZURE_SQL"
-          }
-        };
-      } catch (e) {
-        context.log.error("Error en trabajadores-sync:", e);
-        context.res = {
-          status: 500,
-          body: {
-            success: false,
-            error: detalleError(e),
-            paso: e._paso || null,
-            code: e.code,
-            name: e.name
-          }
-        };
-      }
-    };
-  }
-});
-
 // usr-guardar/index.js
 var require_usr_guardar2 = __commonJS({
   "usr-guardar/index.js"(exports, module) {
@@ -81266,6 +81372,7 @@ var require_rutas_edge = __commonJS({
       { fn: "mant-resp-hoja", ruta: "mantenimiento/resp/{accion}", metodos: ["POST"], llave: true, h: require_mant_resp_hoja() },
       { fn: "mod", ruta: "mod/{modulo}/{accion}", metodos: ["POST"], llave: false, h: require_mod() },
       { fn: "mod-importar", ruta: "mod-importar", metodos: ["GET", "POST"], llave: true, h: require_mod_importar() },
+      { fn: "padron", ruta: "padron/{accion}", metodos: ["POST"], llave: false, h: require_padron() },
       { fn: "personas", ruta: "personas/{accion}", metodos: ["POST"], llave: false, h: require_personas() },
       { fn: "preav-guardar", ruta: "preav/{accion}", metodos: ["POST"], llave: false, h: require_preav_guardar2() },
       { fn: "prec", ruta: "prec/{accion}", metodos: ["POST", "OPTIONS"], llave: false, h: require_prec() },
