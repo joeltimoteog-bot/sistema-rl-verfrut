@@ -1031,8 +1031,18 @@ function _crAplicarOficial(j) {
   P = Object.assign(JSON.parse(JSON.stringify(PARAMS_DEFAULT)), j.params, { _oficialVersion: j.version, _modLocal: false });
   try { localStorage.setItem(LS_KEY, JSON.stringify(P)); } catch (e) {}
 }
+/* _CALC_SUPABASE_V1 (19-nov-2026): los parametros oficiales salen de Supabase (calc/leer, tabla rl.calc_parametros),
+   ya no de la hoja de Google. 1 reintento a los 1,5 s; sin respuesta se usan los guardados en este equipo (como antes). */
+var CALC_SUPA = 'https://rl-fn-verfrut.azurewebsites.net/api/calc/';
+function _calcPedir(accion, cuerpo) {
+  var pedir = function () {
+    return fetch(CALC_SUPA + accion, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo || {}) })
+      .then(function (r) { if (r.status >= 500 || r.status === 0) throw new Error('HTTP ' + r.status); return r.json(); });
+  };
+  return pedir().catch(function (e) { if (accion !== 'leer') throw e; return new Promise(function (ok) { setTimeout(ok, 1500); }).then(pedir); });
+}
 function cargarOficiales() {
-  fetch(CALC_GAS + '?action=calcParamsLeer').then(function (r) { return r.json(); }).then(function (j) {
+  _calcPedir('leer').then(function (j) {
     if (j && j.success && j.params) {
       OFICIAL = j;
       if (P._oficialVersion !== j.version || (P._modLocal && !_crEsDueno())) { _crAplicarOficial(j); _crRefrescar(); }   /* _CALC_DUENO_V1 */
@@ -1069,9 +1079,8 @@ function publicarOficiales() {
   leerParamsUI();
   var u = _crUser();
   if (!confirm('Se publicarán estos parámetros (RMV S/ ' + fnum(P.rmv) + ', Rem. Bruta S/ ' + fnum(P.remBruta) + ', tasas AFP, jornadas y feriados) como OFICIALES.\n\nTodos los usuarios los usarán al abrir el módulo.\n\n¿Continuar?')) return;
-  fetch(CALC_GAS, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'guardarCalcParams', usuario: u.usuario, rol: u.rol, params: _crLimpio(P) }) })
-    .then(function (r) { return r.json(); }).then(function (j) {
+  _calcPedir('guardar', { params: _crLimpio(P) })   /* _CALC_SUPABASE_V1: se publica en Supabase (quien publica sale de la sesion) */
+    .then(function (j) {
       if (!j || !j.success) { alert('❌ ' + ((j && j.error) || 'No se pudo publicar.')); return; }
       OFICIAL = { params: _crLimpio(P), version: j.version, fecha: 'hace un momento', por: u.usuario };
       P._oficialVersion = j.version; P._modLocal = false;

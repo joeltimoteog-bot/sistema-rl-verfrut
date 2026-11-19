@@ -207,6 +207,8 @@ def resp_azure(url, post=''):
                 'resultados': [{'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'}]}
     if '/atenciones/by-dni' in url:
         return {'success': True, 'en_proceso': [], 'finalizadas_recientes': []}
+    if '/api/calc/leer' in url:   # _CALC_SUPABASE_V1: parametros oficiales del calculo desde Supabase
+        return {'success': True, 'params': {'rmv': 1130, 'remBruta': 1428.07}, 'version': 'vPRUEBA-SUPABASE', 'fecha': '19/11/2026 10:00', 'por': 'jtimoteo'}
     if '/api/atenciones/eliminadas' in url:   # _PAPELERA_SUPABASE_V1: la papelera sale de Supabase, no de Google
         return {'success': True, 'marca': '1', 'eliminadas': [{'id': 1, 'nro': 500, 'dni': '11111111'}]}
     if re.search(r'/api/atenciones\?', url):
@@ -1098,8 +1100,12 @@ with sync_playwright() as pw:
     for nombre, ruta in [('Calculo Remunerativo', 'frontend/pages/calculo-remunerativo.html'), ('Login (index)', 'index.html')]:
         pag = ctx.new_page(); errores = []
         pag.on('pageerror', lambda e: errores.append((str(e)+' @ '+(e.stack or '').split('\n')[1:3].__str__())[:400]))
+        RED['google'].clear()
         pag.goto(BASE + ruta, wait_until='load'); pag.wait_for_timeout(3000)
         ok(nombre + ' carga sin errores de JavaScript', not errores, '; '.join(errores[:4]))
+        if 'calculo' in ruta:
+            v = pag.evaluate("(typeof OFICIAL !== 'undefined' && OFICIAL) ? OFICIAL.version + '|' + P.rmv : 'sin oficiales'")
+            ok('Calculo: los parametros oficiales salen de Supabase (no de la hoja de Google)', v == 'vPRUEBA-SUPABASE|1130' and 'calcParamsLeer' not in RED['google'], v + ' | google: ' + ','.join(sorted(set(RED['google']))))
         pag.close()
     nav.close()
 
