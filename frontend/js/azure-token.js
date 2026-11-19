@@ -85,15 +85,31 @@
     try { console.warn('[_EDGE_V1] Supabase no respondio (' + motivo + '): se usa Azure'); } catch (e) {}
     if (edgeFallas >= 3) { edgeFallas = 0; try { sessionStorage.setItem('rl_edge_pausa', String(Date.now() + 5 * 60000)); } catch (e) {} }
   }
-  function enviar(url, init) {
+  /* _REINTENTO_LECTURA_V1 (19-nov-2026): LOG_ERRORES mostro que casi todas las "fallas de Supabase" son cortes de senal del
+     equipo en campo (Google falla en el mismo milisegundo). Saltar a Google no ayuda y es lento: una LECTURA (GET) que falla
+     por red o 502/503/504 se reintenta UNA vez contra Supabase a los 1,5 s. Los guardados (POST) NO se reintentan aqui
+     (no se duplica nada). Apagar: localStorage.rl_reintento = 'off' */
+  var REINTENTO_ON = true; try { if (localStorage.getItem('rl_reintento') === 'off') REINTENTO_ON = false; } catch (e) {}
+  function reintentar(url, init) {
+    return new Promise(function (ok) { setTimeout(ok, 1500); }).then(function () {
+      if (init && init.signal && init.signal.aborted) { var eA = new Error('cancelado'); eA.name = 'AbortError'; throw eA; }
+      try { console.warn('[_REINTENTO_LECTURA_V1] reintento a Supabase: ' + (url.split(MARCA)[1] || '').split('?')[0]); } catch (e) {}
+      return enviar(url, init, 1);
+    });
+  }
+  function enviar(url, init, intento) {
     var metodo = String((init && init.method) || 'GET').toUpperCase();
     var ruta = url.split(MARCA)[1] || '';
     if (!EDGE_ACTIVO || edgePausado() || SOLO_AZURE.test(ruta) || (init && init.body && typeof init.body !== 'string')) return fOrig.call(window, url, init);
+    var puedeReintentar = REINTENTO_ON && !intento && metodo === 'GET';
     /* _EDGE_V3: POST /atenciones (crear, con llave) tambien va a Supabase */
     return fOrig.call(window, rg(EDGE + ruta), init).then(function (r) {
       /* _SIN_AZURE_V1 (08-nov-2026): Azure se apaga el 12-nov. Si Supabase responde 5xx ya NO se reintenta contra Azure:
          se anota la falla y se devuelve la respuesta tal cual (la pantalla muestra su propio aviso de error). */
-      if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) { edgeFalla('HTTP ' + r.status); return r; }
+      if ([502, 503, 504, 546].indexOf(r.status) >= 0 || (r.status === 404 && r.headers.get('x-rl-edge') === 'sin-ruta')) {
+        if (puedeReintentar && r.status !== 404) return reintentar(url, init);   /* _REINTENTO_LECTURA_V1 */
+        edgeFalla('HTTP ' + r.status); return r;
+      }
       /* _SEG_401_V1 (08-nov-2026): con el servidor en modo estricto, un 401 en una ruta de datos significa sesion vencida o
          sin credencial: se avisa de inmediato y se vuelve a ingresar (antes la pantalla quedaba vacia hasta el siguiente reloj). */
       if (r.status === 401 && !/\/api\/auth\//.test(url)) {
@@ -106,6 +122,7 @@
       edgeFallas = 0; return r;
     }, function (e) {
       if (init && init.signal && init.signal.aborted) throw e;   /* la pantalla cancelo: no reintentar */
+      if (puedeReintentar) return reintentar(url, init);   /* _REINTENTO_LECTURA_V1 */
       edgeFalla(e && e.message); throw e;   /* _SIN_AZURE_V1: sin respaldo a Azure */
     });
   }

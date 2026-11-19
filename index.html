@@ -876,14 +876,8 @@ async function doLogin(){
       } catch(eSso) {}
       const rol=(d.user.rol||'').toLowerCase().trim();
       try { sessionStorage.removeItem('rl_app_eti'); await _etiPermCargar(); } catch(eEP) {}   /* _ETI_PERMISO_V1 */
-      // Precalentar caché del backend (fire & forget) — medir respuesta
-      const _tPre=performance.now();
-      console.time('[login] 2-preload-backend');
-      try { fetch(API,{method:'POST',body:JSON.stringify({action:'getPreload',usuario:d.user.usuario,rol:d.user.rol,empresa:d.user.empresa}),headers:{'Content-Type':'text/plain'}})
-        .then(rp=>rp.json()).then(pd=>{
-          console.timeEnd('[login] 2-preload-backend');
-          console.log('[login] preload backend: '+Math.round(performance.now()-_tPre)+'ms | fromCache:'+(pd.data&&pd.data.fromCache||false)+' | rol:'+d.user.rol);
-        }).catch(()=>{console.timeEnd('[login] 2-preload-backend');}); } catch(e){}
+      /* _SIN_PRECALENTAR_V1 (19-nov-2026): se quito el 'precalentar' de Google (getPreload) al ingresar: su respuesta no se usaba
+         (solo media tiempos) y el dashboard ya carga todo desde Supabase. Una consulta menos a Google por cada ingreso. */
       setLoading(false);
       console.log('[login] 3-navegacion: '+Math.round(performance.now()-_tLogin0)+'ms desde inicio');
       if(puedeElegirSistema(rol)){          /* _ROLES_ELEGIR_V1 */
