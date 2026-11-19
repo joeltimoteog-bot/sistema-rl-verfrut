@@ -302,7 +302,18 @@
     var conUsuario = false; try { conUsuario = !!sessionStorage.getItem('user'); } catch (e) {}
     /* _SESION_SIN_BUCLE_V1 (04-nov-2026): si el login entró por Google (Azure no respondió) NO se bloquea la pantalla:
        volver a ingresar daría otra vez una sesión sin credencial y el aviso salía en bucle. Se trabaja con el respaldo. */
-    if (!t) { if (conUsuario) console.warn('[_SESION_RENOVAR_V1] sesión sin credencial de Supabase (entró por Google): se trabaja con el respaldo'); return; }
+    /* _SEG_FASE2_V1 (18-nov-2026): una pantalla de trabajo SIN llave (la llave vencida se borro y la persona apreto F5 en el aviso)
+       seguia funcionando todo el dia por Google, lento y sin seguridad. Ahora pide volver a ingresar y regresa a la misma pagina.
+       Excepcion: si el ingreso fue validado por Google porque Supabase no respondia (rl_sin = login-google), se trabaja con el
+       respaldo como antes, para no crear un bucle. Apagar: localStorage.rl_sin_llave = 'off' */
+    if (!t) {
+      if (!conUsuario) return;
+      var mSin = ''; try { mSin = sessionStorage.getItem('rl_sin') || ''; } catch (x) {}
+      var apagado = false; try { apagado = localStorage.getItem('rl_sin_llave') === 'off'; } catch (x) {}
+      if (mSin === 'login-google' || apagado) { console.warn('[_SESION_RENOVAR_V1] sesión sin credencial de Supabase (entró por Google): se trabaja con el respaldo'); return; }
+      aviso('Por seguridad, vuelve a ingresar. Regresar\u00e1s a esta misma pantalla.');
+      return;
+    }
     var e = exp(t); if (!e) return;
     if (e - Date.now() > RENOVAR_ANTES_MS) return;   /* todavía le queda más de 6 h */
     enCurso = true;
