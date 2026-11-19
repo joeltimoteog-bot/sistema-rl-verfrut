@@ -738,18 +738,20 @@
         .filter(function (p) { return _pCoincide(p.nombre_mostrar, miNombre); }).length;
       return { visitas: visitas, casos: casos, semana: res.semana || 0, rango: res.rangoSemana || '' };
     };
-    var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var t = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 6000);
-    var op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usuario: USER.usuario || '' }) };
-    if (ctrl) op.signal = ctrl.signal;
-    return fetch('https://rl-fn-verfrut.azurewebsites.net/api/cumpl/getCumplimiento', op)
-      .then(function (r) { clearTimeout(t); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (j) { if (!j || !j.success) throw new Error('sin datos'); return leer(j); })
-      .catch(function () {
-        clearTimeout(t);
-        return fetch(PEND_GAS + '?' + new URLSearchParams({ action: 'getCumplimiento', usuario: USER.usuario || '' }))
-          .then(function (r) { return r.json(); }).then(leer).catch(function () { return vacio; });
-      });
+    /* _CUMPL_SOLO_SUPABASE_V1 (19-nov-2026): si Supabase no responde se reintenta Supabase UNA vez a los 1,5 s (ya no Google);
+       sin respuesta, el aviso queda sin pendientes como antes (vacio). */
+    function pedirSupa() {
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var t = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 6000);
+      var op = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usuario: USER.usuario || '' }) };
+      if (ctrl) op.signal = ctrl.signal;
+      return fetch('https://rl-fn-verfrut.azurewebsites.net/api/cumpl/getCumplimiento', op)
+        .then(function (r) { clearTimeout(t); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }, function (e) { clearTimeout(t); throw e; })
+        .then(function (j) { if (!j || !j.success) throw new Error('sin datos'); return leer(j); });
+    }
+    return pedirSupa()
+      .catch(function () { return new Promise(function (ok) { setTimeout(ok, 1500); }).then(pedirSupa); })
+      .catch(function () { return vacio; });
   }
 
   var _pendMin = false, _pendReabrirT = null;

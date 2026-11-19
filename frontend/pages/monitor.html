@@ -837,8 +837,15 @@ const normN = s => String(s||'').toUpperCase().replace(/\s+/g,' ').trim();
 
 async function cargarPendientes(){
   try{
-    const r = await fetch(GAS_API+'?'+new URLSearchParams({action:'getCumplimiento', usuario: USER.usuario||''}));
-    const res = await r.json();
+    /* _CUMPL_SOLO_SUPABASE_V1 (19-nov-2026): antes se pedia DIRECTO a Google cada vez. Ahora sale de Supabase
+       (cumpl/getCumplimiento, el mismo calculo del aviso del dashboard), con 1 reintento a los 1,5 s. */
+    const pedir = async () => {
+      const r = await fetch('https://rl-fn-verfrut.azurewebsites.net/api/cumpl/getCumplimiento', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ usuario: USER.usuario||'' }) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const j = await r.json(); if (!j || !j.success) throw new Error('sin datos'); return j;
+    };
+    let res;
+    try { res = await pedir(); } catch (e1) { await new Promise(ok => setTimeout(ok, 1500)); res = await pedir(); }
     if(!res || !res.success) return;
     const map = {};
     (res.pendientesVisitas||[]).forEach(p=>{
