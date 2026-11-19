@@ -158,6 +158,30 @@ function fsGet(col){
 }
 function rtdb(path){ return fetch(DB+'/'+path+'.json?nc='+Date.now()).then(r=>r.json()).catch(()=>null); }
 
+/* _INFORME_SUPABASE_V1 (19-nov-2026): atenciones, casos y cumplimiento salen de Supabase (antes: Google, con la lista
+   COMPLETA de atenciones de todos los anos). Atenciones: solo el mes elegido y el anterior (paginado de a 1000).
+   Cada consulta con 1 reintento. Si alguna no responde se avisa arriba del informe (no se inventan ceros en silencio). */
+const AZ_INF = 'https://rl-fn-verfrut.azurewebsites.net/api';
+async function supaPedir(ruta, cuerpo){
+  for (let i = 0; i < 2; i++) {
+    try {
+      const r = await fetch(AZ_INF + ruta, cuerpo ? { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cuerpo) } : { method:'GET' });
+      if (r.ok) return await r.json();
+    } catch (e) {}
+    if (i === 0) await new Promise(ok => setTimeout(ok, 1500));
+  }
+  return null;
+}
+async function supaAtenciones(desde, hasta){
+  let out = [];
+  for (let p = 1; p <= 40; p++) {
+    const j = await supaPedir('/atenciones?limit=1000&pagina=' + p + '&desde=' + desde + '&hasta=' + hasta);
+    if (!j || !j.success) return null;
+    const d = j.data || []; out = out.concat(d);
+    if (d.length < 1000) break;
+  }
+  return { success: true, data: out };
+}
 // ── Generación ──
 async function generar(){
   const anio=+el('iAnio').value, mes=+el('iMes').value;
@@ -167,9 +191,9 @@ async function generar(){
   const [iniA,finA]=mesRango(anioAnt,mesAnt);
 
   const [at, cas, cumpl, progsCap, capsReg, progsEv, evals, msgs, hist] = await Promise.all([
-    apiGet({action:'getAtencionesOptimizado', usuario:USER.usuario, nombre:USER.nombre||USER.usuario, rol:USER.rol, empresa:''}),
-    apiGet({action:'getCasos', nombre:USER.nombre||USER.usuario, usuario:USER.usuario, rol:USER.rol, empresa:'', motivo:''}),
-    apiGet({action:'getCumplimiento', usuario:USER.usuario}),
+    supaAtenciones(iniA, fin),   /* _INFORME_SUPABASE_V1 */
+    supaPedir('/cv/getCasos', {nombre:USER.nombre||USER.usuario, usuario:USER.usuario, rol:USER.rol, empresa:'', motivo:''}),
+    supaPedir('/cumpl/getCumplimiento', {usuario:USER.usuario}),
     fsGet('programaciones_eti'),
     fsGet('capacitaciones'),
     fsGet('programaciones_eval'),
@@ -178,6 +202,12 @@ async function generar(){
     rtdb('historial')
   ]);
 
+  /* _INFORME_SUPABASE_V1: aviso si alguna fuente no respondio */
+  const sinDatos = [[at,'atenciones'],[cas,'casos'],[cumpl,'cumplimiento']].filter(x => !(x[0] && x[0].success)).map(x => x[1]);
+  if (sinDatos.length) { try { const av = document.createElement('div'); av.id = 'avisoSinDatos'; av.style.cssText = 'background:#fef2f2;border:1px solid #fecaca;color:#b91c1c;border-radius:8px;padding:10px 14px;margin:10px 0;font-weight:600';
+    av.textContent = 'No se pudo leer: ' + sinDatos.join(', ') + ' (sin conexión con el servidor). Esas cifras salen en cero: vuelve a generar el informe.';
+    const viejo = document.getElementById('avisoSinDatos'); if (viejo) viejo.remove(); el('informe').parentNode.insertBefore(av, el('informe')); } catch (e) {} }
+  else { const viejo = document.getElementById('avisoSinDatos'); if (viejo) viejo.remove(); }
   // ── Atenciones ──
   const A = (at && at.success && at.data) ? at.data : [];
   const aMes = A.filter(a=>enMes(a.fecha_atencion,ini,fin));
