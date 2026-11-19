@@ -107,15 +107,19 @@
       var t = setTimeout(function () { try { ctrl && ctrl.abort(); } catch (e) {} }, 20000);
       var op = { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
       if (ctrl) op.signal = ctrl.signal;
-      /* _AH_AZURE_V1 (02-oct-2026): primero Azure (/acceso/accesoHorarioDeUsuario, 6 s); si falla, Google como siempre */
-      var _azC = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-      var _azT = setTimeout(function () { try { _azC && _azC.abort(); } catch (e) {} }, 6000);
-      var _azO = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
-      if (_azC) _azO.signal = _azC.signal;
-      var _pedir = fetch('https://rl-fn-verfrut.azurewebsites.net/api/acceso/accesoHorarioDeUsuario', _azO)
-        .then(function (r) { clearTimeout(_azT); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-        .then(function (j) { if (!j || j.success !== true) throw new Error('sin respuesta valida'); return j; })
-        .catch(function () { clearTimeout(_azT); return fetch(AH_API, op).then(function (r) { return r.json(); }); });
+      /* _AH_AZURE_V1 (02-oct-2026): primero Azure (/acceso/accesoHorarioDeUsuario, 6 s); si falla, Google como siempre
+         _AH_SOLO_SUPABASE_V1 (19-nov-2026): las fallas eran cortes de senal (Google fallaba igual). Ahora, si Supabase no
+         responde, se reintenta Supabase UNA vez a los 1,5 s; sin respuesta queda null = "sin red": la sesion NO se cierra. */
+      function _azPedir() {
+        var _azC = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var _azT = setTimeout(function () { try { _azC && _azC.abort(); } catch (e) {} }, 6000);
+        var _azO = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
+        if (_azC) _azO.signal = _azC.signal;
+        return fetch('https://rl-fn-verfrut.azurewebsites.net/api/acceso/accesoHorarioDeUsuario', _azO)
+          .then(function (r) { clearTimeout(_azT); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }, function (e) { clearTimeout(_azT); throw e; })
+          .then(function (j) { if (!j || j.success !== true) throw new Error('sin respuesta valida'); return j; });
+      }
+      var _pedir = _azPedir().catch(function () { return new Promise(function (ok) { setTimeout(ok, 1500); }).then(_azPedir); });
       _ahEnCurso = _pedir.then(function (d) {
         /* _SESION_HORARIO_V3 (24-oct-2026): la hora de fin guardada se SINCRONIZA con el servidor cada minuto.
            Si el administrador acorta/alarga el horario mientras el usuario esta activo, aqui se detecta. */

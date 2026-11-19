@@ -1272,20 +1272,20 @@ checkSessionCache();
       opciones.signal = ctrl.signal;
       reloj = setTimeout(function () { try { ctrl.abort(); } catch (e) {} }, ESPERA_MS);
     }
-    /* _AH_AZURE_V1 (02-oct-2026): primero Azure (~1 s); si no responde en 6 s, Google como siempre */
-    var _azCtrl = null, _azReloj = null;
-    try { _azCtrl = new AbortController(); _azReloj = setTimeout(function () { try { _azCtrl.abort(); } catch (e) {} }, 6000); } catch (e) {}
-    var _azOp = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
-    if (_azCtrl) _azOp.signal = _azCtrl.signal;
-    return fetch('https://rl-fn-verfrut.azurewebsites.net/api/acceso/accesoHorarioDeUsuario', _azOp)
-      .then(function (r) { if (_azReloj) clearTimeout(_azReloj); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-      .then(function (j) { if (!j || j.success !== true) throw new Error('sin respuesta valida'); if (reloj) clearTimeout(reloj); return j; })
-      .catch(function () {
-        if (_azReloj) clearTimeout(_azReloj);
-        return fetch(API, opciones)
-          .then(function (r) { if (reloj) clearTimeout(reloj); return r.json(); })
-          .catch(function (e) { if (reloj) clearTimeout(reloj); throw e; });
-      });
+    /* _AH_AZURE_V1 (02-oct-2026): primero Azure (~1 s); si no responde en 6 s, Google como siempre
+       _AH_SOLO_SUPABASE_V1 (19-nov-2026): si Supabase no responde se reintenta Supabase UNA vez a los 1,5 s (ya no Google).
+       Si tampoco responde, el error sube y decide el mecanismo de siempre (verificarAccesoTemporal original). */
+    if (reloj) clearTimeout(reloj);
+    function _azPedirAH() {
+      var _azCtrl = null, _azReloj = null;
+      try { _azCtrl = new AbortController(); _azReloj = setTimeout(function () { try { _azCtrl.abort(); } catch (e) {} }, 6000); } catch (e) {}
+      var _azOp = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'accesoHorarioDeUsuario', usuario: usuario }) };
+      if (_azCtrl) _azOp.signal = _azCtrl.signal;
+      return fetch('https://rl-fn-verfrut.azurewebsites.net/api/acceso/accesoHorarioDeUsuario', _azOp)
+        .then(function (r) { if (_azReloj) clearTimeout(_azReloj); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }, function (e) { if (_azReloj) clearTimeout(_azReloj); throw e; })
+        .then(function (j) { if (!j || j.success !== true) throw new Error('sin respuesta valida'); return j; });
+    }
+    return _azPedirAH().catch(function () { return new Promise(function (ok) { setTimeout(ok, 1500); }).then(_azPedirAH); });
   }
 
   window.verificarAccesoTemporal = async function (usuario) {
