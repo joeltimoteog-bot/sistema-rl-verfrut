@@ -35,7 +35,7 @@
       var p = (async function () {
         var cuerpo = {}; Object.keys(b).forEach(function (k) { if (k !== 'action') cuerpo[k] = b[k]; }); if (!lee) cuerpo.client_id = clave;
         var r = null;
-        for (var intento = 1; intento <= (lee ? 1 : 2); intento++) {
+        for (var intento = 1; intento <= 2; intento++) {   /* _HOR_LEER_SOLO_SUPABASE_V1: la lectura tambien tiene 2 intentos */
           try { r = await llamar(b.action, cuerpo, lee ? 10000 : 12000); } catch (e) { r = null; }
           if (valida(r) || decideOtro(r)) break;
           if (intento < 2) await new Promise(function (z) { setTimeout(z, 1500); });
@@ -45,6 +45,9 @@
           if (!lee) console.log('[_HOR_AZURE_V1] ' + b.action + ' en Supabase' + (r.j.duplicadoEvitado ? ' (envio repetido, no se duplico)' : '') + (r.j.success ? '' : ': ' + r.j.error));
           return r.j;
         }
+        /* _HOR_LEER_SOLO_SUPABASE_V1 (19-nov-2026): una LECTURA que Supabase no contesta en 2 intentos ya no va a Google
+           (la hoja es solo copia); se devuelve el error y la pantalla muestra su aviso de siempre. Los guardados siguen igual. */
+        if (lee) { console.warn('[_HOR_AZURE_V1] horariosListar: Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' (sin respaldo a Google)'); return { success: false, error: 'No se pudo leer los horarios (sin conexion con el servidor). Intenta de nuevo en un momento.' }; }
         if (r && r.status === 503) apagadoHasta = Date.now() + 5 * 60 * 1000;
         console.warn('[_HOR_AZURE_V1] ' + b.action + ': Supabase ' + (r ? 'HTTP ' + r.status : 'sin respuesta') + ' -> Google (respaldo)');
         return previo.apply(self, args);
