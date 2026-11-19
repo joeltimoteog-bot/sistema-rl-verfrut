@@ -125,6 +125,16 @@ async function leer(pool, modulo, body) {
   if (!T) return null;
   const out = L.fn(T, body || {});
   if (!primero && out) { out.preliminar = true; try { out.sincronizado = T.marca || T.actualizado || null; } catch (e) {} }
+  /* _MANT_CORREO_V1 (19-nov-2026): el correo del solicitante (boton "Notificar") sale de rl.mant_responsables (DNI -> correo),
+     igual que en Google (hoja BB.DD. RESPONSABLES, col. A=DNI, C=correo). Asi la pantalla ya no confirma con Google. */
+  if (modulo === 'mant' && out && Array.isArray(out.data)) {
+    try {
+      const rr = await pool.request().query("SELECT dni, correo FROM dbo.Mant_Responsables WHERE ISNULL(correo, '') <> ''");
+      const mapa = {}; (rr.recordset || []).forEach(x => { mapa[String(x.dni || '').trim()] = String(x.correo || '').trim(); });
+      out.data.forEach(x => { x.correo = mapa[String(x.dni || '').trim()] || ''; });
+      out.sinCorreo = false;
+    } catch (eC) { /* si falla, queda como antes (sinCorreo: true) */ }
+  }
   return out;
 }
 module.exports = { leer, LECTURAS, solicitudesAcceso, solicitudesMant, responsablesEnRango };

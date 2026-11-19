@@ -100,6 +100,7 @@ def resp_azure(url, post=''):
         if acc == 'estadisticasCapacitaciones': base.update({'esAdmin': True, 'stats': {}})
         if acc == 'exportarCapacitaciones': base.update({'data': [], 'total': 0, 'esAdmin': True})   # _CAP_EXPORT_AZURE_V1
         if acc in ('getFusiones', 'getSolicitudes', 'getMotivosCasos'): base['data'] = []
+        if acc == 'listarSolicitudesMantenimiento': base.update({'ok': True, 'data': [], 'sinCorreo': False, 'estadosExtra': {}})   # _MANT_SOLO_SUPABASE_V1
         if acc == 'getSupervisores': base['data'] = resp_google('getSupervisores')['data']   # _PRELOAD_AZURE_V1: la misma lista que da Google
         if acc == 'invGetAll': base.update({'productos': [], 'ingresos': [], 'entregas': []})
         if acc == 'getEstadisticasAdmin': base['data'] = {'stats': {'atenciones': {'total': 5, 'enProceso': 1, 'finalizados': 4, 'esteMes': 2}, 'visitas': {'total': 0, 'enPlazo': 0, 'retrasadas': 0, 'esteMes': 0}, 'casos': {'total': 0, 'enPlazo': 0, 'retrasados': 0, 'esteMes': 0}, 'fusiones': {'total': 0, 'pendientes': 0, 'validados': 0, 'trabajadores': 0, 'esteMes': 0}}, 'porSupervisor': {}, 'tendencia': [], 'filtros': {'anio': '', 'mes': ''}}
@@ -985,11 +986,11 @@ with sync_playwright() as pw:
     pag.wait_for_timeout(600)
     t = pag.evaluate("() => document.getElementById('solicitudId').textContent + ' | visible=' + document.getElementById('confirmMsg').classList.contains('show')")
     ok('Mantenimiento (pantalla): ENVIAR SOLICITUD muestra el N° que dio Azure', 'SOL-018' in t and 'visible=True' in t.replace('true', 'True') and MANTG['llamadas'] == ['guardarSolicitudMantenimiento'] and 'guardarSolicitudMantenimiento' not in RED['google'], t + ' | azure: ' + ','.join(MANTG['llamadas']) + ' | google: ' + ','.join(RED['google']))
-    MANTG['llamadas'].clear(); RED['google'].clear()
+    MANTG['llamadas'].clear(); RED['google'].clear(); MODX['llamadas'].clear()
     pag.evaluate("""async () => { _idActual = 'SOL-001'; document.getElementById('progFecha').value = '2026-09-30'; document.getElementById('progComentario').value = 'Traer 8:00'; await guardarProgramacion(); }""")
     pag.wait_for_timeout(600)
     cu = MANTG['cuerpos'][-1] if MANTG['cuerpos'] else ''
-    ok('Mantenimiento (pantalla): Programar va a Azure con la fecha dd/mm/aaaa y NO por Google; luego recarga la lista de Google', MANTG['llamadas'] == ['programarMantenimiento'] and '"fechaProgramada":"30/09/2026"' in cu and 'programarMantenimiento' not in RED['google'] and 'listarSolicitudesMantenimiento' in RED['google'], cu[:160] + ' | google: ' + ','.join(RED['google']))
+    ok('Mantenimiento (pantalla): Programar va a Supabase con la fecha dd/mm/aaaa y NO por Google; luego recarga la lista desde Supabase (ya no de Google)', MANTG['llamadas'] == ['programarMantenimiento'] and '"fechaProgramada":"30/09/2026"' in cu and 'programarMantenimiento' not in RED['google'] and 'listarSolicitudesMantenimiento' not in RED['google'] and 'mant/listarSolicitudesMantenimiento' in MODX['llamadas'], cu[:160] + ' | google: ' + ','.join(RED['google']) + ' | supabase: ' + ','.join(MODX['llamadas']))
     MANTG['llamadas'].clear(); RED['google'].clear()
     r = pag.evaluate(MPOST, {'action': 'actualizarEstadoMantenimiento', 'id': 'SOL-001', 'estado': 'ATENDIDO', 'admin': 'jtimoteo'})
     ok('Mantenimiento: Atendida/Cerrar va a Azure y NO por Google', r.get('ok') is True and r.get('fuente') == 'azure' and 'actualizarEstadoMantenimiento' not in RED['google'], json.dumps(r) + ' | google: ' + ','.join(RED['google']))

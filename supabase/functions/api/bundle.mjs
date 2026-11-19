@@ -79195,6 +79195,20 @@ var require_mod_lecturas = __commonJS({
         } catch (e) {
         }
       }
+      if (modulo === "mant" && out && Array.isArray(out.data)) {
+        try {
+          const rr = await pool.request().query("SELECT dni, correo FROM dbo.Mant_Responsables WHERE ISNULL(correo, '') <> ''");
+          const mapa = {};
+          (rr.recordset || []).forEach((x) => {
+            mapa[String(x.dni || "").trim()] = String(x.correo || "").trim();
+          });
+          out.data.forEach((x) => {
+            x.correo = mapa[String(x.dni || "").trim()] || "";
+          });
+          out.sinCorreo = false;
+        } catch (eC) {
+        }
+      }
       return out;
     }
     module.exports = { leer, LECTURAS, solicitudesAcceso, solicitudesMant, responsablesEnRango };

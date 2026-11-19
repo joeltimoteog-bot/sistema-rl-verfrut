@@ -1472,6 +1472,15 @@ if(typeof _adminPrev==='function'){
     var body=document.getElementById('adminBody'); asegurarNota('adminBody','adminNota');
     body.innerHTML='<tr><td colspan="10" class="empty">⏳ Cargando...</td></tr>';
     var az=await azure({});
+    if(!az){ await new Promise(function(ok){setTimeout(ok,1500);}); az=await azure({}); }   /* _MANT_SOLO_SUPABASE_V1: 1 reintento a Supabase */
+    if(az && az.sinCorreo===false){   /* _MANT_SOLO_SUPABASE_V1 (19-nov-2026): Supabase ya trae el correo: no se confirma con Google */
+      _solicitudes=az.data; _estadosExtra=az.estadosExtra||{}; renderAdmin(); nota('adminNota','');
+      return;
+    }
+    if(!az){
+      body.innerHTML='<tr><td colspan="10" class="empty">No se pudo cargar (sin conexión con el servidor). <button class="btn btn-az btn-sm" onclick="cargarAdmin()">Reintentar</button></td></tr>';
+      return;
+    }
     if(az){
       _solicitudes=az.data; _estadosExtra=az.estadosExtra||{}; renderAdmin();
       nota('adminNota','⚡ Datos al instante desde Supabase · confirmando con Google…','#64748b');
@@ -1509,8 +1518,10 @@ if(typeof _misPrev==='function'){
         '<td class="muted">'+(s.comentarioAdmin||'—')+'</td></tr>';}).join('');
     }
     var az=await azure({solicitante:USER.usuario});
-    if(az){pintar(az.data);nota('misNota','⚡ Al instante desde Supabase · confirmando…');}
-    else{ return _misPrev.apply(this,arguments); }
+    if(!az){ await new Promise(function(ok){setTimeout(ok,1500);}); az=await azure({solicitante:USER.usuario}); }   /* _MANT_SOLO_SUPABASE_V1 */
+    if(az){pintar(az.data);nota('misNota','');return;}   /* _MANT_SOLO_SUPABASE_V1: Supabase manda; ya no se confirma con Google */
+    body.innerHTML='<tr><td colspan="8" class="empty">No se pudo cargar (sin conexión con el servidor). <button class="btn btn-az btn-sm" onclick="cargarMis()">Reintentar</button></td></tr>';
+    return;
     try{var g=await google({action:'listarSolicitudesMantenimiento',solicitante:USER.usuario});if(g&&g.ok&&Array.isArray(g.data)){pintar(g.data);}nota('misNota','');}
     catch(e){nota('misNota','');}
   };
