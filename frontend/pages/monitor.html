@@ -1047,23 +1047,42 @@ async function buscarFicha(){
   if(dni.length!==8){ toast('Escribe un DNI de 8 dígitos', true); return; }
   $('fichaPDF').style.display='none';
   $('fichaBody').innerHTML='<div class="empty">⏳ Consultando atenciones, casos, ETI y mantenimiento…</div>';
-  const gas=p=>fetch(GAS_API+'?'+new URLSearchParams(p)).then(r=>r.json()).catch(()=>null);
+  /* _FICHA_SUPABASE_V1 (19-nov-2026): la ficha por DNI ya no consulta a Google. Cada dato sale de su ruta de Supabase
+     (las mismas que usan el dashboard y Mantenimiento), con 1 reintento; se entregan con la misma forma que daba Google.
+     Capacitaciones y evaluaciones ETI siguen en Firebase (se retira en su propia fase). */
+  const AZ='https://rl-fn-verfrut.azurewebsites.net/api';
+  const pedir=async(ruta,cuerpo)=>{
+    for(let i=0;i<2;i++){
+      try{
+        const r=await fetch(AZ+ruta, cuerpo?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(cuerpo)}:{method:'GET'});
+        if(r.status===404) return null;
+        if(r.ok) return await r.json();
+      }catch(e){}
+      if(i===0) await new Promise(ok=>setTimeout(ok,1500));
+    }
+    return null;
+  };
   const fsGet=c=>fetch(_FS_BASE+c+'?pageSize=300&key='+_FS_KEY).then(r=>r.json()).then(d=>(d.documents||[]).map(_fsDoc)).catch(()=>[]);
   // Fase 1: identificar a la persona (necesitamos el nombre para buscar su labor como responsable)
-  const trab=await gas({action:'buscarTrabajador',q:dni,empresa:''});
-  const t=(trab&&trab.success&&trab.data&&trab.data[0])||null;
+  const trab=await pedir('/trabajadores/buscar?dni='+encodeURIComponent(dni));
+  const a0=(trab&&trab.success&&trab.trabajadores&&trab.trabajadores[0])||null;
+  const t=a0?{ nombre:(a0.nombre_completo||[a0.ap_paterno,a0.ap_materno,a0.nombres].filter(Boolean).join(' ').trim()), empresa:a0.empresa||a0.empresa_origen||'',
+    cargo:a0.oficio||'', fundo:a0.zona_labor||'', regimen:a0.tipo_regimen||'', fecha_inicio_periodo:a0.fecha_inicio||'' }:null;
   let nombre=(t&&t.nombre)||'';
   // Fase 2: todo en paralelo — lo que RECIBIÓ como trabajador y lo que HIZO como responsable
   const [aten,casos,resp,sols,caps,evals,atenResp]=await Promise.all([
-    gas({action:'consultaDNI',dni:dni}),
-    gas({action:'getCasos',usuario:USER.usuario,rol:USER.rol}),
-    gas({action:'buscarResponsableMantenimiento',dni:dni}),
-    gas({action:'listarSolicitudesMantenimiento'}),
+    pedir('/atenciones?limit=1000&dni='+encodeURIComponent(dni)),
+    pedir('/cv/getCasos',{usuario:USER.usuario,rol:USER.rol}),
+    pedir('/mant/resp/buscar',{dni:dni}),
+    pedir('/mod/mant/listarSolicitudesMantenimiento',{}),
     fsGet('capacitaciones'),
     fsGet('evaluaciones_conocimiento'),
-    nombre?gas({action:'consultaDNI',supervisor:nombre}):Promise.resolve(null)
+    nombre?pedir('/atenciones?limit=1000&supervisor='+encodeURIComponent(nombre)):Promise.resolve(null)
   ]);
   if(!nombre) nombre=(aten&&aten.trabajador&&aten.trabajador.nombre)||'';
+  /* _FICHA_SUPABASE_V1: Supabase entrega la fecha como 2026-11-10T00:00:00Z; se muestra dd/mm/aaaa como lo daba Google */
+  const fF=v=>{ const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?m[3]+'/'+m[2]+'/'+m[1]:String(v||''); };
+  [aten,atenResp].forEach(x=>{ if(x&&Array.isArray(x.data)) x.data.forEach(a=>{ a.fecha_atencion=fF(a.fecha_atencion); }); });
   const atenciones=(aten&&aten.success&&aten.data)||[];
   const todosCasos=((casos&&casos.success&&casos.data)||[]);
   const misCasos=todosCasos.filter(c=>String(c.dni||'').trim()===dni);
