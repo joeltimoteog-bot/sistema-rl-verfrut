@@ -207,6 +207,8 @@ def resp_azure(url, post=''):
                 'resultados': [{'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'}]}
     if '/atenciones/by-dni' in url:
         return {'success': True, 'en_proceso': [], 'finalizadas_recientes': []}
+    if '/api/atenciones/eliminadas' in url:   # _PAPELERA_SUPABASE_V1: la papelera sale de Supabase, no de Google
+        return {'success': True, 'marca': '1', 'eliminadas': [{'id': 1, 'nro': 500, 'dni': '11111111'}]}
     if re.search(r'/api/atenciones\?', url):
         ATC['urls'].append(url)
     if re.search(r'/api/atenciones\?', url) and 'cambiosDesde=' in url:   # _AT_CAMBIOS_V1
@@ -786,6 +788,7 @@ with sync_playwright() as pw:
     r = pag.evaluate("""async () => { await _sincronizarPapelera(); const x = await window._azAtencionesSup(30, true);
       return (x||[]).map(a => a.nro + '|' + a.dni).join(','); }""")
     ok('Supervisor: eliminada se oculta y la otra con el mismo N° sigue visible', r == '500|22222222', r)
+    ok('Supervisor: la papelera ya no se pide a Google (sale de Supabase)', 'papeleraNros' not in RED['google'], ','.join(sorted(set(RED['google']))))
     RED['google'].clear(); AZE['llamadas'].clear()
     r = pag.evaluate(CARRERA, {'action': 'updateAtencion', 'nro': 500, 'estado': 'FINALIZADO', 'usuario': 'sprueba', 'rol': 'supervisor'})
     pag.wait_for_timeout(1500)

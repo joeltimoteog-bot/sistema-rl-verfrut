@@ -115,8 +115,24 @@ if (typeof _fullPrev === 'function') {
 /* ── 3) Traer del servidor los N° que ya estan en la papelera ── */
 async function _sincronizarPapelera() {
   try {
-    if (typeof apiGet !== 'function') return;
-    var r = await apiGet({ action: 'papeleraNros' });
+    /* _PAPELERA_SUPABASE_V1 (18-nov-2026): antes se pedia a Google (papeleraNros, 3-4 s en cada ingreso). Verificado: ninguna
+       atencion de la papelera de Google sigue en Supabase (eliminar ya la borra alli). Ahora se leen de Supabase las eliminadas
+       recientes (45 dias), igual formato { data:[N°], pares:[N°|DNI] }. Si Supabase no responde se sigue con la lista de este
+       equipo, SIN ir a Google. */
+    if (typeof AZURE_FN_BASE === 'undefined') return;
+    var r = null;
+    try {
+      var jE = await fetch(AZURE_FN_BASE + '/atenciones/eliminadas').then(function (x) { if (!x.ok) throw new Error('HTTP ' + x.status); return x.json(); });
+      if (jE && jE.success && Array.isArray(jE.eliminadas)) {
+        var dN = [], dV = {}, pR = [], pV = {};
+        jE.eliminadas.forEach(function (e) {
+          var n = String(e && e.nro != null ? e.nro : '').trim(), d = String(e && e.dni != null ? e.dni : '').trim();
+          if (n && !dV[n]) { dV[n] = 1; dN.push(n); }
+          if (n && d && !pV[n + '|' + d]) { pV[n + '|' + d] = 1; pR.push(n + '|' + d); }
+        });
+        r = { success: true, data: dN, pares: pR };
+      }
+    } catch (eE) { console.log('[_PAPELERA_SUPABASE_V1] Supabase no respondio (' + eE.message + '): se usa la lista de este equipo'); }
     if (!r || !r.success || !Array.isArray(r.data)) return;
     var nuevos = 0;
     if (Array.isArray(r.pares) && r.pares.length) {
