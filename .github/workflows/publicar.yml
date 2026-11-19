@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
+      url: ${{ steps.deploy.outputs.page_url || steps.deploy2.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -92,5 +92,15 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+      # _PUBLICAR_REINTENTO_V1 (19-nov-2026): GitHub a veces responde "No artifacts named github-pages" justo despues de subir
+      # el paquete (fallo de su lado; paso 2 veces en 12 h). Se espera 30 s y se intenta UNA vez mas. Si vuelve a fallar, la
+      # publicacion queda en rojo como antes y el sitio sigue con la version anterior.
       - id: deploy
+        uses: actions/deploy-pages@v4
+        continue-on-error: true
+      - name: Esperar antes de reintentar la publicacion
+        if: steps.deploy.outcome == 'failure'
+        run: sleep 30
+      - id: deploy2
+        if: steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
