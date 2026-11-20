@@ -7,7 +7,7 @@ function clasificarDocIncap(t) {
   /* _SUBSIDIO_ALERTA_V2 (20-nov, Joel): el CITT que entrega un companero o familiar ES del trabajador (no puede venir por su salud): cuenta igual */
   if (/MATERNIDAD/.test(x)) return 'maternidad';
   if (/ENFERMEDAD PROFESIONAL/.test(x)) return 'profesional';
-  if (/CITT|DESCANSO MEDICO/.test(x)) return 'incap';
+  if (/CITT|DESCANSO MEDICO|\bCMP\b/.test(x)) return 'incap';   /* _SUBSIDIO_ALERTA_V3 (20-nov): tambien el certificado medico particular (CMP) y sus regularizaciones / validados por SIS */
   return null;
 }
 

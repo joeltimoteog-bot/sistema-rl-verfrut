@@ -800,13 +800,15 @@ with sync_playwright() as pw:
       out.prof = await caso('12345678','39 DESCANSO MEDICO - ENFERMEDAD PROFESIONAL','2026-11-10','2026-11-20');
       out.compa = await caso('12345678','PRESENTA CITT Y/O CMP DE SU COMPAÑERO Y/O FAMILIAR','2026-11-10','2026-11-30');
       out.anio = await caso('11111111','03 REGULARIZAR CITT - GENERAR FORMULARIO','2026-12-28','2027-01-03');
+      out.cmp = await caso('12345678','04 CMP - EMPRESA VERFRUT / RAPEL','2026-11-10','2026-11-20');
+      out.cita = await caso('12345678','CITA MÉDICA - PARTICULAR','2026-11-10','2026-11-20');
       localStorage.setItem('rl_subsidio','off'); out.off = await caso('12345678','01 CITT','2026-11-10','2026-11-20'); localStorage.removeItem('rl_subsidio');
       ['at_dni','at_doc','at_fid','at_ftd','at_dias'].forEach(i=>set(i,''));
       return out;
     }""")
-    _okS = (('suma 23' in r.get('suma','')) and ('18/11' in r.get('suma','')) and r.get('bajo','') == '' and 'maternidad' in r.get('matern','')
-            and 'SCTR' in r.get('prof','') and 'suma 33' in r.get('compa','') and 'Ya está en subsidio en 2026' in r.get('anio','') and '2027' not in r.get('anio','') and r.get('off','') == '')
-    ok('Nueva Atencion: alerta de subsidio (dias unicos del ano, maternidad, SCTR, CITT entregado por familiar cuenta, ano nuevo desde cero)', _okS, json.dumps(r, ensure_ascii=False))
+    _okS = (('suma 23' in r.get('suma','')) and ('18/11' in r.get('suma','')) and 'suma 14 de 20' in r.get('bajo','') and 'suma 23' in r.get('cmp','') and r.get('cita','') == '' and 'maternidad' in r.get('matern','')
+            and 'SCTR' in r.get('prof','') and 'suma 33' in r.get('compa','') and 'Ya está en subsidio en 2026' in r.get('anio','') and 'Incapacidad 2027: con este descanso suma 3 de 20' in r.get('anio','') and r.get('off','') == '')
+    ok('Nueva Atencion: alerta de subsidio (dias unicos del ano, maternidad, SCTR, CITT entregado por familiar cuenta, CMP cuenta, cita no, ano nuevo desde cero, conteo siempre visible)', _okS, json.dumps(r, ensure_ascii=False))
     # Registro de Casos: lista de supervisores desde la hoja
     r = pag.evaluate("""async () => {
       if (typeof _casosSupLlenar !== 'function') return {x:'SIN BLOQUE'};

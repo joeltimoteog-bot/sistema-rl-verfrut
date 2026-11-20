@@ -61599,7 +61599,7 @@ var require_atenciones_by_dni = __commonJS({
       const x = String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
       if (/MATERNIDAD/.test(x)) return "maternidad";
       if (/ENFERMEDAD PROFESIONAL/.test(x)) return "profesional";
-      if (/CITT|DESCANSO MEDICO/.test(x)) return "incap";
+      if (/CITT|DESCANSO MEDICO|\bCMP\b/.test(x)) return "incap";
       return null;
     }
     module.exports = async function(context, req) {

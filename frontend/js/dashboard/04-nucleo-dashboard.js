@@ -6666,7 +6666,7 @@ function _clasificarDocIncap(t) {
   /* _SUBSIDIO_ALERTA_V2: el CITT que entrega un companero o familiar es del propio trabajador: cuenta igual */
   if (/MATERNIDAD/.test(x)) return 'maternidad';
   if (/ENFERMEDAD PROFESIONAL/.test(x)) return 'profesional';
-  if (/CITT|DESCANSO MEDICO/.test(x)) return 'incap';
+  if (/CITT|DESCANSO MEDICO|\bCMP\b/.test(x)) return 'incap';   /* _SUBSIDIO_ALERTA_V3 (20-nov): tambien el certificado medico particular (CMP) y sus regularizaciones / validados por SIS */
   return null;
 }
 function _diasIncapAnio(rangos, anio) {   /* dias unicos de incapacidad del ano, ordenados */
@@ -6703,14 +6703,16 @@ function _alertaSubsidio() {
   const fm = k => k.slice(8, 10) + '/' + k.slice(5, 7);
   const nroEd = String(v('at_nro_edit') || '').trim();   /* al editar, el propio registro no se cuenta dos veces como "antes" */
   const prev = (D.rangos || []).filter(r => !nroEd || String(r.nro) !== nroEd);
-  const msgs = []; let color = 'ambar';
+  const msgs = []; let rojo = false, ambar = false;
   for (let anio = +fi.slice(0, 4); anio <= +ff.slice(0, 4); anio++) {
     const antes = _diasIncapAnio(prev, anio);
     const con = _diasIncapAnio(prev.concat([{ tipo: 'incap', ini: fi, fin: ff }]), anio);
-    if (antes.length > 20) { msgs.push('Ya está en subsidio en ' + anio + ': pasó los 20 días el ' + fm(antes[20]) + ' (lleva ' + antes.length + ' días; con este descanso suma ' + con.length + ').'); color = 'rojo'; }
-    else if (con.length > 20) { msgs.push('Con este descanso suma ' + con.length + ' días de incapacidad en ' + anio + '. Desde el ' + fm(con[20]) + ' (día 21) corresponde subsidio EsSalud.'); color = 'rojo'; }
-    else if (con.length >= 15) msgs.push('Lleva ' + con.length + ' de los 20 días de incapacidad que paga la empresa en ' + anio + '.');
+    if (antes.length > 20) { msgs.push('Ya está en subsidio en ' + anio + ': pasó los 20 días el ' + fm(antes[20]) + ' (lleva ' + antes.length + ' días; con este descanso suma ' + con.length + ').'); rojo = true; }
+    else if (con.length > 20) { msgs.push('Con este descanso suma ' + con.length + ' días de incapacidad en ' + anio + '. Desde el ' + fm(con[20]) + ' (día 21) corresponde subsidio EsSalud.'); rojo = true; }
+    else if (con.length >= 15) { msgs.push('Lleva ' + con.length + ' de los 20 días de incapacidad que paga la empresa en ' + anio + '.'); ambar = true; }
+    else if (con.length > 0) msgs.push('Incapacidad ' + anio + ': con este descanso suma ' + con.length + ' de 20 días.');   /* _SUBSIDIO_ALERTA_V3: el conteo se ve siempre */
   }
+  const color = rojo ? 'rojo' : ambar ? 'ambar' : 'azul';
   if (!msgs.length) return ocultar();
   pinta('🏥 ' + msgs.join(' ') + ' Según lo registrado en el sistema.', color);
 }
