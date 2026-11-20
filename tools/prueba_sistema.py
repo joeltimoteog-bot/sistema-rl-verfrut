@@ -208,7 +208,12 @@ def resp_azure(url, post=''):
                 'resultados': [{'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'}]}
     if '/atenciones/by-dni' in url:
         if 'contacto=1' in url:   # _AUTOLLENADO_DNI_V1: ultimo celular / ruta / codigo de atenciones anteriores
-            return {'success': True, 'en_proceso': [], 'finalizadas_recientes': [], 'contacto': {'celular': '987654321', 'celular_fecha': '2026-11-02', 'ruta': 'R-15', 'ruta_fecha': '2026-11-10', 'codigo': 'C-777', 'codigo_fecha': '2026-11-10'}}
+            r = {'success': True, 'en_proceso': [], 'finalizadas_recientes': [], 'contacto': {'celular': '987654321', 'celular_fecha': '2026-11-02', 'ruta': 'R-15', 'ruta_fecha': '2026-11-10', 'codigo': 'C-777', 'codigo_fecha': '2026-11-10'}}
+            if 'incap=1' in url:   # _SUBSIDIO_ALERTA_V1: 12 dias unicos en marzo (dos CITT que se cruzan) + enf. profesional (no suma) + diciembre 25 dias
+                r['incapacidad'] = [{'nro': 1, 'ini': '2026-03-01', 'fin': '2026-03-10', 'tipo': 'incap'}, {'nro': 2, 'ini': '2026-03-05', 'fin': '2026-03-12', 'tipo': 'incap'},
+                                    {'nro': 3, 'ini': '2026-04-01', 'fin': '2026-04-30', 'tipo': 'profesional'}]
+                if '11111111' in url: r['incapacidad'] = [{'nro': 9, 'ini': '2026-12-01', 'fin': '2026-12-25', 'tipo': 'incap'}]
+            return r
         return {'success': True, 'en_proceso': [], 'finalizadas_recientes': []}
     if '/api/calc/leer' in url:   # _CALC_SUPABASE_V1: parametros oficiales del calculo desde Supabase
         return {'success': True, 'params': {'rmv': 1130, 'remBruta': 1428.07}, 'version': 'vPRUEBA-SUPABASE', 'fecha': '19/11/2026 10:00', 'por': 'jtimoteo'}
@@ -781,6 +786,27 @@ with sync_playwright() as pw:
       return {a, b, c};
     }""")
     ok('Nueva Atencion: autollenado de celular, ruta y codigo por DNI', r.get('a') == {'cel': '987654321', 'ruta': 'R-15', 'cod': 'C-777'} and r.get('b') == {'cel': '911111111', 'ruta': 'R-15'} and r.get('c') == {'cel': ''}, json.dumps(r))
+    # _SUBSIDIO_ALERTA_V1: aviso de subsidio por mas de 20 dias de incapacidad en el ano (dias unicos), maternidad y enf. profesional
+    r = pag.evaluate("""async () => {
+      if (typeof _alertaSubsidio !== 'function') return {x:'SIN FUNCION'};
+      try { if (typeof abrirNuevaAt==='function') abrirNuevaAt(); } catch(e) {}
+      const set=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;};
+      const leer=()=>{const b=document.getElementById('subsidioAlerta'); return b && b.style.display!=='none' ? b.textContent : '';};
+      const caso=async (dni, doc, fi, ff)=>{ set('at_dni',dni); set('at_nro_edit',''); await _chequearHistorialDNI(dni); set('at_doc',doc); set('at_fid',fi); set('at_ftd',ff); calcDias(); return leer(); };
+      const out = {};
+      out.suma = await caso('12345678','01 CITT - EMPRESA VERFRUT','2026-11-10','2026-11-20');
+      out.bajo = await caso('12345678','01 CITT','2026-11-10','2026-11-11');
+      out.matern = await caso('12345678','34 LICENCIA POR MATERNIDAD','2026-11-10','2026-12-20');
+      out.prof = await caso('12345678','39 DESCANSO MEDICO - ENFERMEDAD PROFESIONAL','2026-11-10','2026-11-20');
+      out.compa = await caso('12345678','PRESENTA CITT Y/O CMP DE SU COMPAÑERO Y/O FAMILIAR','2026-11-10','2026-11-30');
+      out.anio = await caso('11111111','03 REGULARIZAR CITT - GENERAR FORMULARIO','2026-12-28','2027-01-03');
+      localStorage.setItem('rl_subsidio','off'); out.off = await caso('12345678','01 CITT','2026-11-10','2026-11-20'); localStorage.removeItem('rl_subsidio');
+      ['at_dni','at_doc','at_fid','at_ftd','at_dias'].forEach(i=>set(i,''));
+      return out;
+    }""")
+    _okS = (('suma 23' in r.get('suma','')) and ('18/11' in r.get('suma','')) and r.get('bajo','') == '' and 'maternidad' in r.get('matern','')
+            and 'SCTR' in r.get('prof','') and 'suma 33' in r.get('compa','') and 'Ya está en subsidio en 2026' in r.get('anio','') and '2027' not in r.get('anio','') and r.get('off','') == '')
+    ok('Nueva Atencion: alerta de subsidio (dias unicos del ano, maternidad, SCTR, CITT entregado por familiar cuenta, ano nuevo desde cero)', _okS, json.dumps(r, ensure_ascii=False))
     # Registro de Casos: lista de supervisores desde la hoja
     r = pag.evaluate("""async () => {
       if (typeof _casosSupLlenar !== 'function') return {x:'SIN BLOQUE'};

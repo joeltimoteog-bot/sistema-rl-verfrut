@@ -61595,6 +61595,13 @@ var require_atenciones_by_dni = __commonJS({
   "atenciones-by-dni/index.js"(exports, module) {
     var { sql, getPool } = require_db();
     var { exigirAuth } = require_auth();
+    function clasificarDocIncap(t) {
+      const x = String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+      if (/MATERNIDAD/.test(x)) return "maternidad";
+      if (/ENFERMEDAD PROFESIONAL/.test(x)) return "profesional";
+      if (/CITT|DESCANSO MEDICO/.test(x)) return "incap";
+      return null;
+    }
     module.exports = async function(context, req) {
       const authUser = exigirAuth(context, req);
       if (authUser === null) return;
@@ -61671,6 +61678,28 @@ var require_atenciones_by_dni = __commonJS({
             contacto = null;
           }
         }
+        let incapacidad;
+        if (String(req.query.incap || "") === "1") {
+          try {
+            const desdeInc = new Date(Date.UTC((/* @__PURE__ */ new Date()).getUTCFullYear() - 1, 0, 1));
+            const ri = await pool.request().input("dni", sql.NVarChar(15), dni).input("desdeInc", sql.Date, desdeInc).query(`
+          SELECT TOP 400 nro, detalle_documento, fecha_inicio_doc, fecha_termino_doc
+          FROM Atenciones
+          WHERE dni = @dni AND fecha_termino_doc >= @desdeInc
+          ORDER BY fecha_inicio_doc DESC`);
+            const ymdI = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || "").slice(0, 10);
+            incapacidad = [];
+            (ri.recordset || []).forEach((x) => {
+              const tipo = clasificarDocIncap(x.detalle_documento);
+              const ini = ymdI(x.fecha_inicio_doc), fin = ymdI(x.fecha_termino_doc);
+              if (!tipo || !/^\d{4}-\d{2}-\d{2}$/.test(ini) || !/^\d{4}-\d{2}-\d{2}$/.test(fin) || fin < ini) return;
+              incapacidad.push({ nro: x.nro, ini, fin, tipo });
+            });
+          } catch (eI) {
+            context.log.warn("atenciones-by-dni incapacidad: " + eI.message);
+            incapacidad = null;
+          }
+        }
         const elapsed_ms = Date.now() - t0;
         context.log(`atenciones-by-dni: dni=${dni} total=${atenciones.length} en_proceso=${en_proceso.length} finalizadas=${finalizadas_recientes.length} - ${elapsed_ms}ms`);
         context.res = {
@@ -61685,6 +61714,8 @@ var require_atenciones_by_dni = __commonJS({
             ventana_dias: dias,
             ...contacto !== void 0 ? { contacto } : {},
             /* _AUTOLLENADO_DNI_V1 */
+            ...incapacidad !== void 0 ? { incapacidad } : {},
+            /* _SUBSIDIO_ALERTA_V1 */
             elapsed_ms
           }
         };
@@ -61696,6 +61727,7 @@ var require_atenciones_by_dni = __commonJS({
         };
       }
     };
+    module.exports.clasificarDocIncap = clasificarDocIncap;
   }
 });
 

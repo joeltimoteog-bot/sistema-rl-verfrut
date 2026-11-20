@@ -4546,11 +4546,12 @@ async function _chequearHistorialDNI(dni) {
   // Promesa 1 — Azure SQL (rápido, ~200ms)
   const promAzure = (async () => {
     try {
-      const r = await fetch(AZURE_FN_BASE + '/atenciones/by-dni?dni=' + dni + '&dias=60&contacto=1');   /* _AUTOLLENADO_DNI_V1 */
+      const r = await fetch(AZURE_FN_BASE + '/atenciones/by-dni?dni=' + dni + '&dias=60&contacto=1&incap=1');   /* _AUTOLLENADO_DNI_V1 · _SUBSIDIO_ALERTA_V1 */
       if (!r.ok) return null;
       const d = await r.json();
       if (!d.success) return null;
       try { _autollenarContactoDNI(dni, d.contacto); } catch (eA) { console.warn('[autollenado] ' + eA.message); }
+      try { window._incapDNI = Array.isArray(d.incapacidad) ? { dni: String(dni), rangos: d.incapacidad } : null; _alertaSubsidio(); } catch (eS) { console.warn('[subsidio] ' + eS.message); }   /* _SUBSIDIO_ALERTA_V1 */
       return { enProc: d.en_proceso || [], finRec: d.finalizadas_recientes || [] };
     } catch (e) {
       console.warn('[historialDNI] Supabase error:', e);
@@ -4794,6 +4795,7 @@ function abrirAt() {
   // Reset campos
   ['at_dni','at_nom','at_fip','at_ftp','at_fundo','at_cargo','at_ruta','at_cod','at_fac','at_cel','at_fid','at_ftd','at_dias','at_resp','at_obs'].forEach(id=>sv(id,''));
   sv('at_sex',''); sv('at_emp','RAPEL'); sv('at_doc',''); sv('at_est','FINALIZADO');
+  try { const _sa = document.getElementById('subsidioAlerta'); if (_sa) { _sa.style.display = 'none'; _sa.textContent = ''; } } catch (e) {}   /* _SUBSIDIO_ALERTA_V1 */
   sv('at_fec',hoy()); sv('at_hi',new Date().toTimeString().substring(0,5)); sv('at_ht','');
   iniciarReloj();
   // Reset autocomplete documento
@@ -6572,6 +6574,7 @@ function _selectAtDoc(val) {
   }
   if (cp) cp.style.display = 'none';
   sv('at_doc', val);
+  try { _alertaSubsidio(); } catch (e) {}   /* _SUBSIDIO_ALERTA_V1 */
   autoResponsable();   // REGLA CLAVE: llena responsable automáticamente
   setTimeout(() => { const el = document.getElementById('at_fid'); if(el) el.focus(); }, 40);
 }
@@ -6650,6 +6653,66 @@ function calcDias() {
     const d = Math.floor((new Date(ff) - new Date(fi)) / (1000*60*60*24)) + 1;
     if (d >= 1) sv('at_dias', d);
   }
+  try { _alertaSubsidio(); } catch (e) { console.warn('[subsidio] ' + e.message); }   /* _SUBSIDIO_ALERTA_V1 */
+}
+
+/* _SUBSIDIO_ALERTA_V1 (20-nov-2026, decision de Joel): aviso en Nueva atencion cuando el trabajador pasa de 20 dias de
+   incapacidad en el ano calendario (los primeros 20 los paga el empleador; desde el dia 21 corresponde subsidio EsSalud).
+   Cuenta DIAS UNICOS (un CITT y su regularizacion o canje por el mismo periodo cuentan una vez) de CITT y DESCANSO MEDICO,
+   mas el descanso que se esta registrando. Maternidad: subsidio desde el primer dia. Enfermedad profesional: va por SCTR y
+   no suma a los 20. Es solo un AVISO (no bloquea el guardado) y usa lo registrado en el sistema. Apagar: localStorage.rl_subsidio='off' */
+function _clasificarDocIncap(t) {
+  const x = String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  /* _SUBSIDIO_ALERTA_V2: el CITT que entrega un companero o familiar es del propio trabajador: cuenta igual */
+  if (/MATERNIDAD/.test(x)) return 'maternidad';
+  if (/ENFERMEDAD PROFESIONAL/.test(x)) return 'profesional';
+  if (/CITT|DESCANSO MEDICO/.test(x)) return 'incap';
+  return null;
+}
+function _diasIncapAnio(rangos, anio) {   /* dias unicos de incapacidad del ano, ordenados */
+  const ini = anio + '-01-01', fin = anio + '-12-31', set = {};
+  (rangos || []).forEach(r => {
+    if (!r || r.tipo !== 'incap' || !r.ini || !r.fin || r.fin < r.ini) return;
+    let a = r.ini < ini ? ini : r.ini; const b = r.fin > fin ? fin : r.fin;
+    if (a > b) return;
+    let d = new Date(a + 'T00:00:00Z'), n = 0;
+    while (n++ < 400) { const k = d.toISOString().slice(0, 10); if (k > b) break; set[k] = 1; d.setUTCDate(d.getUTCDate() + 1); }
+  });
+  return Object.keys(set).sort();
+}
+function _alertaSubsidio() {
+  const fiEl = document.getElementById('at_fid'); if (!fiEl) return;
+  let box = document.getElementById('subsidioAlerta');
+  if (!box) {
+    const fila = fiEl.closest('.fg3') || fiEl.parentNode;
+    box = document.createElement('div'); box.id = 'subsidioAlerta';
+    box.style.cssText = 'display:none;margin:8px 0 4px;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.45';
+    fila.parentNode.insertBefore(box, fila.nextSibling);
+  }
+  const ocultar = () => { box.style.display = 'none'; box.textContent = ''; };
+  try { if (localStorage.getItem('rl_subsidio') === 'off') return ocultar(); } catch (e) {}
+  const tipo = _clasificarDocIncap(v('at_doc'));
+  if (!tipo) return ocultar();
+  const pinta = (txt, color) => { box.style.display = 'block'; box.style.background = color === 'rojo' ? '#fef2f2' : color === 'ambar' ? '#fffbeb' : '#eff6ff'; box.style.border = '1.5px solid ' + (color === 'rojo' ? '#fecaca' : color === 'ambar' ? '#fde68a' : '#bfdbfe'); box.style.color = '#0f172a'; box.textContent = txt; };
+  if (tipo === 'maternidad') return pinta('🤱 Licencia por maternidad: corresponde subsidio por maternidad de EsSalud desde el primer día.', 'azul');
+  if (tipo === 'profesional') return pinta('🦺 Enfermedad profesional: no suma a los 20 días que paga la empresa; corresponde atención y subsidio por el SCTR.', 'azul');
+  const dni = String(v('at_dni') || '').trim(), fi = v('at_fid'), ff = v('at_ftd') || v('at_fid');
+  const D = window._incapDNI;
+  if (!fi || !/^\d{4}-\d{2}-\d{2}$/.test(fi) || !/^\d{4}-\d{2}-\d{2}$/.test(ff) || ff < fi) return ocultar();
+  if (!D || D.dni !== dni) return ocultar();   /* aun no llega el historial de este DNI */
+  const fm = k => k.slice(8, 10) + '/' + k.slice(5, 7);
+  const nroEd = String(v('at_nro_edit') || '').trim();   /* al editar, el propio registro no se cuenta dos veces como "antes" */
+  const prev = (D.rangos || []).filter(r => !nroEd || String(r.nro) !== nroEd);
+  const msgs = []; let color = 'ambar';
+  for (let anio = +fi.slice(0, 4); anio <= +ff.slice(0, 4); anio++) {
+    const antes = _diasIncapAnio(prev, anio);
+    const con = _diasIncapAnio(prev.concat([{ tipo: 'incap', ini: fi, fin: ff }]), anio);
+    if (antes.length > 20) { msgs.push('Ya está en subsidio en ' + anio + ': pasó los 20 días el ' + fm(antes[20]) + ' (lleva ' + antes.length + ' días; con este descanso suma ' + con.length + ').'); color = 'rojo'; }
+    else if (con.length > 20) { msgs.push('Con este descanso suma ' + con.length + ' días de incapacidad en ' + anio + '. Desde el ' + fm(con[20]) + ' (día 21) corresponde subsidio EsSalud.'); color = 'rojo'; }
+    else if (con.length >= 15) msgs.push('Lleva ' + con.length + ' de los 20 días de incapacidad que paga la empresa en ' + anio + '.');
+  }
+  if (!msgs.length) return ocultar();
+  pinta('🏥 ' + msgs.join(' ') + ' Según lo registrado en el sistema.', color);
 }
 
 let relojTO;

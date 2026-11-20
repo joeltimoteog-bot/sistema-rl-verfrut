@@ -1,6 +1,16 @@
 const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
 
+/* _SUBSIDIO_ALERTA_V1: tipo de un documento de atencion para el conteo de incapacidad (misma regla en la pantalla) */
+function clasificarDocIncap(t) {
+  const x = String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  /* _SUBSIDIO_ALERTA_V2 (20-nov, Joel): el CITT que entrega un companero o familiar ES del trabajador (no puede venir por su salud): cuenta igual */
+  if (/MATERNIDAD/.test(x)) return 'maternidad';
+  if (/ENFERMEDAD PROFESIONAL/.test(x)) return 'profesional';
+  if (/CITT|DESCANSO MEDICO/.test(x)) return 'incap';
+  return null;
+}
+
 module.exports = async function (context, req) {
   // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
   const authUser = exigirAuth(context, req);
@@ -87,6 +97,32 @@ module.exports = async function (context, req) {
       } catch (eC) { context.log.warn('atenciones-by-dni contacto: ' + eC.message); contacto = null; }
     }
 
+    /* _SUBSIDIO_ALERTA_V1 (20-nov-2026, decision de Joel): con incap=1 (Nueva atencion) se devuelven los periodos de
+       incapacidad del trabajador desde el 1 de enero del ano anterior (solo fechas y tipo, sin nombres): la pantalla suma
+       los dias unicos del ano calendario para avisar desde cuando corresponde subsidio EsSalud (el empleador paga los
+       primeros 20 dias del ano). Tipos: incap = CITT (todas sus variantes, regularizar, canjear) y DESCANSO MEDICO;
+       maternidad (subsidio desde el primer dia); profesional (va por SCTR, no suma a los 20). El CITT que entrega un
+       companero o familiar cuenta (es del trabajador). Cada ano calendario se cuenta desde cero. Sin el parametro la respuesta no cambia. */
+    let incapacidad;
+    if (String(req.query.incap || '') === '1') {
+      try {
+        const desdeInc = new Date(Date.UTC(new Date().getUTCFullYear() - 1, 0, 1));
+        const ri = await pool.request().input('dni', sql.NVarChar(15), dni).input('desdeInc', sql.Date, desdeInc).query(`
+          SELECT TOP 400 nro, detalle_documento, fecha_inicio_doc, fecha_termino_doc
+          FROM Atenciones
+          WHERE dni = @dni AND fecha_termino_doc >= @desdeInc
+          ORDER BY fecha_inicio_doc DESC`);
+        const ymdI = v => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || '').slice(0, 10);
+        incapacidad = [];
+        (ri.recordset || []).forEach(x => {
+          const tipo = clasificarDocIncap(x.detalle_documento);
+          const ini = ymdI(x.fecha_inicio_doc), fin = ymdI(x.fecha_termino_doc);
+          if (!tipo || !/^\d{4}-\d{2}-\d{2}$/.test(ini) || !/^\d{4}-\d{2}-\d{2}$/.test(fin) || fin < ini) return;
+          incapacidad.push({ nro: x.nro, ini, fin, tipo });
+        });
+      } catch (eI) { context.log.warn('atenciones-by-dni incapacidad: ' + eI.message); incapacidad = null; }
+    }
+
     const elapsed_ms = Date.now() - t0;
     context.log(`atenciones-by-dni: dni=${dni} total=${atenciones.length} en_proceso=${en_proceso.length} finalizadas=${finalizadas_recientes.length} - ${elapsed_ms}ms`);
 
@@ -101,6 +137,7 @@ module.exports = async function (context, req) {
         completo,
         ventana_dias: dias,
         ...(contacto !== undefined ? { contacto } : {}),   /* _AUTOLLENADO_DNI_V1 */
+        ...(incapacidad !== undefined ? { incapacidad } : {}),   /* _SUBSIDIO_ALERTA_V1 */
         elapsed_ms
       }
     };
@@ -112,3 +149,4 @@ module.exports = async function (context, req) {
     };
   }
 };
+module.exports.clasificarDocIncap = clasificarDocIncap;   /* _SUBSIDIO_ALERTA_V1: para las pruebas */
