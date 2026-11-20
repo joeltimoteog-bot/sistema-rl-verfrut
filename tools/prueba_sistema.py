@@ -566,6 +566,16 @@ with sync_playwright() as pw:
     pag.evaluate("() => { _ausAbrir('nuevo'); sv('aus_tipo','VACACIONES'); sv('aus_reemp','jtimoteo'); sv('aus_desde','2026-10-01'); _ausGuardarForm(); }"); pag.wait_for_timeout(1200)
     ok('Dashboard > Gestion Usuarios: registrar ausencia va a Azure y no por Google', CUMPLW['llamadas'] == ['cumplAusencia'] and '"titular":"nuevo"' in ''.join(CUMPLW['cuerpos']) and 'cumplAusencia' not in RED['google'], ','.join(CUMPLW['llamadas']) + ' | google: ' + ','.join(RED['google']))
     pag.evaluate("() => cerrar('mAus')")
+    # ── _USR_EDITAR_V1: boton Editar en Gestion Usuarios (nombre, rol, empresa); solo se envia lo que cambio ──
+    r = pag.evaluate("() => document.querySelectorAll('#tbUs .ue-btn').length + '|' + document.querySelectorAll('#tbUs button[onclick^=\"toggleUs(\"]').length")
+    ok('Gestion Usuarios: cada fila tiene el boton ✏️ Editar (jtimoteo)', r.split('|')[0] == r.split('|')[1] and r.split('|')[0] != '0', r)
+    USRG['llamadas'].clear(); USRG['cuerpos'].clear(); RED['google'].clear()
+    r = pag.evaluate("""() => { rlUsrEditar('nuevo'); const s = document.getElementById('ueR'); const prev = s.value; s.value = prev === 'supervisor' ? 'administrador 02' : 'supervisor'; document.getElementById('ueE').value = 'OLMOS'; document.getElementById('ueG').click(); return s.value; }"""); pag.wait_for_timeout(1500)
+    cu = ''.join(USRG['cuerpos'])
+    ok('Gestion Usuarios: Editar guarda en Supabase (updateUsuario) solo rol y empresa cambiados, sin Google', USRG['llamadas'] == ['updateUsuario'] and ('"rol":"' + r + '"') in cu and '"empresa":"OLMOS"' in cu and '"nombre"' not in cu and 'updateUsuario' not in RED['google'] and not pag.evaluate("() => !!document.getElementById('ueOv')"), ','.join(USRG['llamadas']) + ' | ' + cu[:200])
+    USRG['llamadas'].clear(); USRG['cuerpos'].clear()
+    r = pag.evaluate("() => { rlUsrEditar('jtimoteo'); const d = document.getElementById('ueR').disabled; document.getElementById('ueX').click(); return d + '|' + !!document.getElementById('ueOv'); }")
+    ok('Gestion Usuarios: la cuenta del dueño no permite cambiar su rol; Cancelar no guarda nada', r == 'true|false' and not USRG['llamadas'], r)
     pag.evaluate("() => { const b = document.getElementById('navDash') || document.querySelector('.ni'); if (b) b.click(); }"); pag.wait_for_timeout(300)
     # ── _COLUMNAS_AT_V1: Mis Atenciones (Excel) y Consulta por DNI (tabla y Excel) con TODAS las columnas ──
     r = pag.evaluate("""async () => { const cap = []; const orig = window.exportarExcelGen; window.exportarExcelGen = (d, cols, n) => cap.push(n + ':' + cols.length + ':' + cols.map(c => c.key).join('|'));

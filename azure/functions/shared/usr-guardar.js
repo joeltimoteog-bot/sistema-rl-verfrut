@@ -20,6 +20,8 @@ const CAP = require('./cap-guardar');
 const ACCIONES = ['saveUsuario', 'updateUsuario', 'saveSolicitudAcceso', 'resolverAccesoTemporal', 'aprobarAccesoTemporal', 'cambiarMiClave', 'desbloquearUsuario', 'eliminarUsuario', 'restaurarUsuario'];   /* _USR_BAJA_V1 */   /* _SEG_USUARIOS_V1 */   /* _CLAVE_POLITICA_V1 */
 const POL = require('./clave-politica');
 const DUENOS = ['jtimoteo'];
+const ROLES_EDITABLES = ['administrador', 'administrador 01', 'administrador 02', 'supervisor'];   /* _USR_EDITAR_V1: los del formulario de creacion */
+const EMPRESAS_EDITABLES = ['AMBAS', 'RAPEL', 'VERFRUT', 'OLMOS'];
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
 const S = v => esD(v) ? v.$s : String(v == null ? '' : v);
 const p2 = n => (n < 10 ? '0' : '') + n;
@@ -150,6 +152,19 @@ async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
         /* y se levanta cualquier bloqueo por intentos */
         try { await tx.request().input('lu', sql.NVarChar(100), String(b.usuario).trim().toLowerCase()).query("IF OBJECT_ID('dbo.Login_Intentos','U') IS NOT NULL DELETE FROM dbo.Login_Intentos WHERE usuario = @lu"); } catch (eL) {} }   /* _SEG_USUARIOS_V1 */
       if (b.correo) { r.input('c', sql.NVarChar(200), String(b.correo)); sets.push('correo = @c'); cuerpo.correo = b.correo; }
+      /* _USR_EDITAR_V1 (20-nov-2026, decision de Joel): el dueño edita nombre, rol y empresa desde Gestion de Usuarios.
+         Solo valores de las listas del formulario de creacion; la cuenta del dueño no cambia de rol. Los modulos de
+         "Acceso a Modulos" no se tocan (van por usuario, no por rol). La hoja de Google recibe el mismo cambio (cuerpo). */
+      if (b.nombre !== undefined) { const nm = String(b.nombre || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        if (!nm) { await tx.rollback(); return no('El nombre no puede quedar vacío.'); }
+        r.input('nm', sql.NVarChar(200), nm); sets.push('nombre = @nm'); cuerpo.nombre = nm; }
+      if (b.rol !== undefined) { const rl = String(b.rol || '').trim().toLowerCase();
+        if (ROLES_EDITABLES.indexOf(rl) < 0) { await tx.rollback(); return no('Rol no válido: ' + ROLES_EDITABLES.join(', ') + '.'); }
+        if (DUENOS.indexOf(String(b.usuario).trim().toLowerCase()) >= 0 && rl !== 'administrador') { await tx.rollback(); return no('La cuenta del dueño del sistema siempre es administrador.'); }
+        r.input('rl', sql.NVarChar(50), rl); sets.push('rol = @rl'); cuerpo.rol = rl; }
+      if (b.empresa !== undefined) { const em = String(b.empresa || '').trim().toUpperCase();
+        if (EMPRESAS_EDITABLES.indexOf(em) < 0) { await tx.rollback(); return no('Empresa no válida: ' + EMPRESAS_EDITABLES.join(', ') + '.'); }
+        r.input('em', sql.NVarChar(50), em); sets.push('empresa = @em'); cuerpo.empresa = em; }
       if (sets.length) await r.query(`UPDATE dbo.usuarios SET ${sets.join(', ')}, fecha_sync = GETDATE() WHERE id_sistema = @id`);
       resp = { success: true };
 

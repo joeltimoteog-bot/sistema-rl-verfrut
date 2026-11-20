@@ -73052,6 +73052,8 @@ var require_usr_guardar = __commonJS({
     var ACCIONES = ["saveUsuario", "updateUsuario", "saveSolicitudAcceso", "resolverAccesoTemporal", "aprobarAccesoTemporal", "cambiarMiClave", "desbloquearUsuario", "eliminarUsuario", "restaurarUsuario"];
     var POL = require_clave_politica();
     var DUENOS = ["jtimoteo"];
+    var ROLES_EDITABLES = ["administrador", "administrador 01", "administrador 02", "supervisor"];
+    var EMPRESAS_EDITABLES = ["AMBAS", "RAPEL", "VERFRUT", "OLMOS"];
     var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
     var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
     var p2 = (n) => (n < 10 ? "0" : "") + n;
@@ -73224,6 +73226,40 @@ var require_usr_guardar = __commonJS({
             r.input("c", sql.NVarChar(200), String(b.correo));
             sets.push("correo = @c");
             cuerpo.correo = b.correo;
+          }
+          if (b.nombre !== void 0) {
+            const nm = String(b.nombre || "").replace(/\s+/g, " ").trim().slice(0, 200);
+            if (!nm) {
+              await tx.rollback();
+              return no("El nombre no puede quedar vac\xEDo.");
+            }
+            r.input("nm", sql.NVarChar(200), nm);
+            sets.push("nombre = @nm");
+            cuerpo.nombre = nm;
+          }
+          if (b.rol !== void 0) {
+            const rl = String(b.rol || "").trim().toLowerCase();
+            if (ROLES_EDITABLES.indexOf(rl) < 0) {
+              await tx.rollback();
+              return no("Rol no v\xE1lido: " + ROLES_EDITABLES.join(", ") + ".");
+            }
+            if (DUENOS.indexOf(String(b.usuario).trim().toLowerCase()) >= 0 && rl !== "administrador") {
+              await tx.rollback();
+              return no("La cuenta del due\xF1o del sistema siempre es administrador.");
+            }
+            r.input("rl", sql.NVarChar(50), rl);
+            sets.push("rol = @rl");
+            cuerpo.rol = rl;
+          }
+          if (b.empresa !== void 0) {
+            const em = String(b.empresa || "").trim().toUpperCase();
+            if (EMPRESAS_EDITABLES.indexOf(em) < 0) {
+              await tx.rollback();
+              return no("Empresa no v\xE1lida: " + EMPRESAS_EDITABLES.join(", ") + ".");
+            }
+            r.input("em", sql.NVarChar(50), em);
+            sets.push("empresa = @em");
+            cuerpo.empresa = em;
           }
           if (sets.length) await r.query(`UPDATE dbo.usuarios SET ${sets.join(", ")}, fecha_sync = GETDATE() WHERE id_sistema = @id`);
           resp = { success: true };
