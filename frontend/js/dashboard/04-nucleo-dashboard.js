@@ -6715,7 +6715,8 @@ function _alertaSubsidio() {
   const color = rojo ? 'rojo' : ambar ? 'ambar' : 'azul';
   if (!msgs.length) return ocultar();
   pinta('🏥 ' + msgs.join(' ') + ' Según lo registrado en el sistema.', color);
-  if (rojo || ambar) _flotarSubsidio(rojo ? 'Corresponde subsidio EsSalud' : 'Cerca del límite de 20 días', msgs.join(' ') + ' Según lo registrado en el sistema.', color);   /* _SUBSIDIO_FLOTANTE_V1 */
+  /* _SUBSIDIO_FLOTANTE_V2 (20-nov, Joel): el flotante sale tambien con el conteo azul (menos de 15 dias) */
+  _flotarSubsidio(rojo ? 'Corresponde subsidio EsSalud' : ambar ? 'Cerca del límite de 20 días' : 'Días de incapacidad en el año', msgs.join(' ') + ' Según lo registrado en el sistema.', color);
 }
 
 /* _SUBSIDIO_FLOTANTE_V1 (20-nov-2026, pedido de Joel): ademas del recuadro, un aviso flotante que saluda al usuario por su
@@ -6742,7 +6743,7 @@ function _flotarSubsidio(titulo, texto, color) {
     x.onclick = () => d.remove();
     d.appendChild(h); d.appendChild(t); d.appendChild(m); d.appendChild(x);
     document.body.appendChild(d);
-    setTimeout(() => { try { d.remove(); } catch (e) {} }, 25000);
+    setTimeout(() => { try { d.remove(); } catch (e) {} }, color === 'azul' && titulo === 'Días de incapacidad en el año' ? 12000 : 25000);   /* el conteo informativo se va antes */
   } catch (e) { console.warn('[subsidio flotante] ' + e.message); }
 }
 
