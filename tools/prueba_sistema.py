@@ -794,9 +794,14 @@ with sync_playwright() as pw:
       const leer=()=>{const b=document.getElementById('subsidioAlerta'); return b && b.style.display!=='none' ? b.textContent : '';};
       const caso=async (dni, doc, fi, ff)=>{ set('at_dni',dni); set('at_nro_edit',''); await _chequearHistorialDNI(dni); set('at_doc',doc); set('at_fid',fi); set('at_ftd',ff); calcDias(); return leer(); };
       const out = {};
+      const flot=()=>{const f=document.getElementById('subsidioFlotante'); const t=f?f.textContent:''; if(f) f.remove(); return t;};
       out.suma = await caso('12345678','01 CITT - EMPRESA VERFRUT','2026-11-10','2026-11-20');
+      out.flotSuma = flot();
+      out.repetido = (await caso('12345678','01 CITT - EMPRESA VERFRUT','2026-11-10','2026-11-20'), flot());
       out.bajo = await caso('12345678','01 CITT','2026-11-10','2026-11-11');
+      out.flotBajo = flot();
       out.matern = await caso('12345678','34 LICENCIA POR MATERNIDAD','2026-11-10','2026-12-20');
+      out.flotMatern = flot();
       out.prof = await caso('12345678','39 DESCANSO MEDICO - ENFERMEDAD PROFESIONAL','2026-11-10','2026-11-20');
       out.compa = await caso('12345678','PRESENTA CITT Y/O CMP DE SU COMPAÑERO Y/O FAMILIAR','2026-11-10','2026-11-30');
       out.anio = await caso('11111111','03 REGULARIZAR CITT - GENERAR FORMULARIO','2026-12-28','2027-01-03');
@@ -806,6 +811,9 @@ with sync_playwright() as pw:
       ['at_dni','at_doc','at_fid','at_ftd','at_dias'].forEach(i=>set(i,''));
       return out;
     }""")
+    _okF = ('Hola' in r.get('flotSuma','') and 'Corresponde subsidio EsSalud' in r.get('flotSuma','') and 'suma 23' in r.get('flotSuma','') and r.get('repetido','') == ''
+            and r.get('flotBajo','') == '' and 'maternidad' in r.get('flotMatern','').lower())
+    ok('Nueva Atencion: aviso flotante de subsidio (saludo + motivo, no se repite, conteo azul sin flotante)', _okF, json.dumps({k: r.get(k) for k in ('flotSuma','repetido','flotBajo','flotMatern')}, ensure_ascii=False))
     _okS = (('suma 23' in r.get('suma','')) and ('18/11' in r.get('suma','')) and 'suma 14 de 20' in r.get('bajo','') and 'suma 23' in r.get('cmp','') and r.get('cita','') == '' and 'maternidad' in r.get('matern','')
             and 'SCTR' in r.get('prof','') and 'suma 33' in r.get('compa','') and 'Ya está en subsidio en 2026' in r.get('anio','') and 'Incapacidad 2027: con este descanso suma 3 de 20' in r.get('anio','') and r.get('off','') == '')
     ok('Nueva Atencion: alerta de subsidio (dias unicos del ano, maternidad, SCTR, CITT entregado por familiar cuenta, CMP cuenta, cita no, ano nuevo desde cero, conteo siempre visible)', _okS, json.dumps(r, ensure_ascii=False))

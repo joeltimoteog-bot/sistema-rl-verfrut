@@ -4795,7 +4795,7 @@ function abrirAt() {
   // Reset campos
   ['at_dni','at_nom','at_fip','at_ftp','at_fundo','at_cargo','at_ruta','at_cod','at_fac','at_cel','at_fid','at_ftd','at_dias','at_resp','at_obs'].forEach(id=>sv(id,''));
   sv('at_sex',''); sv('at_emp','RAPEL'); sv('at_doc',''); sv('at_est','FINALIZADO');
-  try { const _sa = document.getElementById('subsidioAlerta'); if (_sa) { _sa.style.display = 'none'; _sa.textContent = ''; } } catch (e) {}   /* _SUBSIDIO_ALERTA_V1 */
+  try { const _sa = document.getElementById('subsidioAlerta'); if (_sa) { _sa.style.display = 'none'; _sa.textContent = ''; } const _sf = document.getElementById('subsidioFlotante'); if (_sf) _sf.remove(); window._subsidioFlotUlt = ''; } catch (e) {}   /* _SUBSIDIO_ALERTA_V1 · _SUBSIDIO_FLOTANTE_V1 */
   sv('at_fec',hoy()); sv('at_hi',new Date().toTimeString().substring(0,5)); sv('at_ht','');
   iniciarReloj();
   // Reset autocomplete documento
@@ -6694,8 +6694,8 @@ function _alertaSubsidio() {
   const tipo = _clasificarDocIncap(v('at_doc'));
   if (!tipo) return ocultar();
   const pinta = (txt, color) => { box.style.display = 'block'; box.style.background = color === 'rojo' ? '#fef2f2' : color === 'ambar' ? '#fffbeb' : '#eff6ff'; box.style.border = '1.5px solid ' + (color === 'rojo' ? '#fecaca' : color === 'ambar' ? '#fde68a' : '#bfdbfe'); box.style.color = '#0f172a'; box.textContent = txt; };
-  if (tipo === 'maternidad') return pinta('🤱 Licencia por maternidad: corresponde subsidio por maternidad de EsSalud desde el primer día.', 'azul');
-  if (tipo === 'profesional') return pinta('🦺 Enfermedad profesional: no suma a los 20 días que paga la empresa; corresponde atención y subsidio por el SCTR.', 'azul');
+  if (tipo === 'maternidad') { const tM = '🤱 Licencia por maternidad: corresponde subsidio por maternidad de EsSalud desde el primer día.'; pinta(tM, 'azul'); return _flotarSubsidio('Licencia por maternidad', tM.slice(3), 'azul'); }
+  if (tipo === 'profesional') { const tP = '🦺 Enfermedad profesional: no suma a los 20 días que paga la empresa; corresponde atención y subsidio por el SCTR.'; pinta(tP, 'azul'); return _flotarSubsidio('Enfermedad profesional (SCTR)', tP.slice(3), 'azul'); }
   const dni = String(v('at_dni') || '').trim(), fi = v('at_fid'), ff = v('at_ftd') || v('at_fid');
   const D = window._incapDNI;
   if (!fi || !/^\d{4}-\d{2}-\d{2}$/.test(fi) || !/^\d{4}-\d{2}-\d{2}$/.test(ff) || ff < fi) return ocultar();
@@ -6715,6 +6715,35 @@ function _alertaSubsidio() {
   const color = rojo ? 'rojo' : ambar ? 'ambar' : 'azul';
   if (!msgs.length) return ocultar();
   pinta('🏥 ' + msgs.join(' ') + ' Según lo registrado en el sistema.', color);
+  if (rojo || ambar) _flotarSubsidio(rojo ? 'Corresponde subsidio EsSalud' : 'Cerca del límite de 20 días', msgs.join(' ') + ' Según lo registrado en el sistema.', color);   /* _SUBSIDIO_FLOTANTE_V1 */
+}
+
+/* _SUBSIDIO_FLOTANTE_V1 (20-nov-2026, pedido de Joel): ademas del recuadro, un aviso flotante que saluda al usuario por su
+   nombre y explica el motivo (subsidio, cerca del limite, maternidad o SCTR). El conteo azul (< 15 dias) queda solo en el
+   recuadro para no interrumpir. No se repite para el mismo DNI y mismo aviso; se cierra con la X o solo a los 25 s. */
+function _flotarSubsidio(titulo, texto, color) {
+  try {
+    const dni = String(v('at_dni') || '').trim();
+    const clave = dni + '|' + titulo + '|' + texto;
+    if (window._subsidioFlotUlt === clave) return;
+    window._subsidioFlotUlt = clave;
+    const viejo = document.getElementById('subsidioFlotante'); if (viejo) viejo.remove();
+    const tc = t => String(t || '').toLowerCase().replace(/(^|\s)\S/g, c => c.toUpperCase());
+    const quien = tc((typeof USER !== 'undefined' && USER && (USER.nombre || USER.usuario)) || '');
+    const trab = tc(v('at_nom') || '');
+    const col = color === 'rojo' ? ['#fef2f2', '#dc2626'] : color === 'ambar' ? ['#fffbeb', '#d97706'] : ['#eff6ff', '#2563eb'];
+    const d = document.createElement('div'); d.id = 'subsidioFlotante'; d.setAttribute('role', 'alert');
+    d.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:99990;max-width:380px;background:' + col[0] + ';border:2px solid ' + col[1] + ';border-left-width:6px;border-radius:12px;padding:14px 38px 14px 16px;box-shadow:0 12px 32px rgba(15,23,42,.25);font-family:Barlow,Inter,Segoe UI,sans-serif;color:#0f172a;font-size:13.5px;line-height:1.45';
+    const h = document.createElement('div'); h.style.cssText = 'font-weight:700;font-size:14.5px;margin-bottom:4px'; h.textContent = '👋 Hola' + (quien ? ', ' + quien : '');
+    const t = document.createElement('div'); t.style.cssText = 'font-weight:700;color:' + col[1] + ';margin-bottom:4px'; t.textContent = (color === 'rojo' ? '🏥 ' : color === 'ambar' ? '⚠️ ' : 'ℹ️ ') + titulo + (trab ? ' — ' + trab : '');
+    const m = document.createElement('div'); m.textContent = texto;
+    const x = document.createElement('button'); x.type = 'button'; x.setAttribute('aria-label', 'Cerrar'); x.textContent = '✕';
+    x.style.cssText = 'position:absolute;top:8px;right:10px;border:0;background:transparent;font-size:16px;cursor:pointer;color:#475569';
+    x.onclick = () => d.remove();
+    d.appendChild(h); d.appendChild(t); d.appendChild(m); d.appendChild(x);
+    document.body.appendChild(d);
+    setTimeout(() => { try { d.remove(); } catch (e) {} }, 25000);
+  } catch (e) { console.warn('[subsidio flotante] ' + e.message); }
 }
 
 let relojTO;
