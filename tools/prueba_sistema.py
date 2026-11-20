@@ -572,11 +572,11 @@ with sync_playwright() as pw:
         window._atFiltradas = [{nro: 1, dni: '11111111'}]; exportarAtenciones(); window._consultaDNIResultados = [{nro: 1}]; exportarConsultaDNI(); window.exportarExcelGen = orig; return cap; }""")
     at = r[0] if r else ''; cd = r[1] if len(r) > 1 else ''
     faltan = [k for k in ['nro','fecha_atencion','hora_inicio','hora_termino','nro_semana','mes','anio','dni','nombre','sexo','fecha_inicio_periodo','empresa','fundo','cargo','ruta','codigo','fundo_actual','celular','supervisor','detalle_documento','fecha_inicio_doc','fecha_termino_doc','dias_transcurridos','responsable_recepcion','observaciones','estado','fecha_registro','usuario_sistema','nro_licencia','parentesco'] if k not in at.split(':')[-1].split('|') or k not in cd.split(':')[-1].split('|')]
-    ok('Excel de Mis Atenciones y de Consulta por DNI llevan TODAS las columnas (33 / 34 con cumpleaños; + Tipo de Licencia)', at.startswith('Atenciones:33:') and cd.startswith('ConsultaDNI:34:') and 'tipo_licencia' in at and not faltan, at[:40] + ' | ' + cd[:40] + ' | faltan: ' + ','.join(faltan))
+    ok('Excel de Mis Atenciones y de Consulta por DNI llevan TODAS las columnas (34 / 35 con cumpleaños; + Tipo de Licencia y Alerta Subsidio)', at.startswith('Atenciones:34:') and cd.startswith('ConsultaDNI:35:') and 'tipo_licencia' in at and at.endswith('alerta_subsidio') and not faltan, at[:40] + ' | ' + cd[:40] + ' | faltan: ' + ','.join(faltan))
     pag.evaluate("() => { document.getElementById('cDNI').value = '11111111'; }")
     pag.evaluate("async () => { await consultarDNI(); }"); pag.wait_for_timeout(800)
     r = pag.evaluate("() => { const t = document.querySelector('#consultaResult table'); if (!t) return 'sin tabla: ' + document.getElementById('consultaResult').innerText.slice(0, 120); return t.querySelectorAll('thead th').length + ':' + t.querySelectorAll('tbody tr').length + ':' + (t.querySelector('tbody tr') ? t.querySelector('tbody tr').children.length : 0) + ':' + Array.from(t.querySelectorAll('thead th')).map(x => x.textContent).slice(0, 6).join('|'); }")
-    ok('Consulta por DNI: la tabla muestra TODAS las columnas (34) en cada fila', re.match(r'^34:[1-9]\d*:34:', str(r)) is not None, str(r))   # _AT_TIPO_LIC_V1: + Tipo de Licencia
+    ok('Consulta por DNI: la tabla muestra TODAS las columnas (35) en cada fila', re.match(r'^35:[1-9]\d*:35:', str(r)) is not None, str(r))   # _AT_TIPO_LIC_V1: + Tipo de Licencia · _SUBSIDIO_REGISTRO_V1: + Alerta Subsidio
     # ── _CAPAS_V1: 'Eliminar caso' se abre ENCIMA del formulario del caso · _PROGRESO_V1: circulo y ✓ ──
     pag.evaluate("() => { ['rlNovOv', 'rlNov', 'rlAvisoSupabase'].forEach(i => { const n = document.getElementById(i); if (n) n.remove(); }); }")
     pag.wait_for_function("() => { const c = document.getElementById('rlProg'); return !c || c.style.display !== 'flex'; }", timeout=8000)
@@ -806,6 +806,8 @@ with sync_playwright() as pw:
       out.compa = await caso('12345678','PRESENTA CITT Y/O CMP DE SU COMPAÑERO Y/O FAMILIAR','2026-11-10','2026-11-30');
       out.anio = await caso('11111111','03 REGULARIZAR CITT - GENERAR FORMULARIO','2026-12-28','2027-01-03');
       out.cmp = await caso('12345678','04 CMP - EMPRESA VERFRUT / RAPEL','2026-11-10','2026-11-20');
+      out.registro = (typeof _textoSubsidioRegistro==='function') ? _textoSubsidioRegistro() : 'SIN FUNCION';   /* _SUBSIDIO_REGISTRO_V1 */
+      set('at_ftd','2026-11-25'); out.registroCambio = _textoSubsidioRegistro();   /* cambiaron las fechas sin recalcular: no se guarda una foto vieja */
       out.cita = await caso('12345678','CITA MÉDICA - PARTICULAR','2026-11-10','2026-11-20');
       localStorage.setItem('rl_subsidio','off'); out.off = await caso('12345678','01 CITT','2026-11-10','2026-11-20'); localStorage.removeItem('rl_subsidio');
       ['at_dni','at_doc','at_fid','at_ftd','at_dias'].forEach(i=>set(i,''));
@@ -814,7 +816,7 @@ with sync_playwright() as pw:
     _okF = ('Hola' in r.get('flotSuma','') and 'Corresponde subsidio EsSalud' in r.get('flotSuma','') and 'suma 23' in r.get('flotSuma','') and r.get('repetido','') == ''
             and 'Días de incapacidad en el año' in r.get('flotBajo','') and 'suma 14 de 20' in r.get('flotBajo','') and 'maternidad' in r.get('flotMatern','').lower())
     ok('Nueva Atencion: aviso flotante de subsidio (saludo + motivo, no se repite, tambien con el conteo azul)', _okF, json.dumps({k: r.get(k) for k in ('flotSuma','repetido','flotBajo','flotMatern')}, ensure_ascii=False))
-    _okS = (('suma 23' in r.get('suma','')) and ('18/11' in r.get('suma','')) and 'suma 14 de 20' in r.get('bajo','') and 'suma 23' in r.get('cmp','') and r.get('cita','') == '' and 'maternidad' in r.get('matern','')
+    _okS = (('suma 23' in r.get('suma','')) and ('18/11' in r.get('suma','')) and 'suma 14 de 20' in r.get('bajo','') and 'suma 23' in r.get('cmp','') and 'suma 23' in r.get('registro','') and '(al registrar el' in r.get('registro','') and not r.get('registro','').startswith('🏥') and r.get('registroCambio','') == '' and r.get('cita','') == '' and 'maternidad' in r.get('matern','')
             and 'SCTR' in r.get('prof','') and 'suma 33' in r.get('compa','') and 'Ya está en subsidio en 2026' in r.get('anio','') and 'Incapacidad 2027: con este descanso suma 3 de 20' in r.get('anio','') and r.get('off','') == '')
     ok('Nueva Atencion: alerta de subsidio (dias unicos del ano, maternidad, SCTR, CITT entregado por familiar cuenta, CMP cuenta, cita no, ano nuevo desde cero, conteo siempre visible)', _okS, json.dumps(r, ensure_ascii=False))
     # Registro de Casos: lista de supervisores desde la hoja

@@ -4865,7 +4865,8 @@ async function guardarAt() { if(window._savingAt) return;
     responsable_recepcion:v('at_resp'), observaciones:v('at_obs'),
     estado:v('at_est'), supervisor:USER.nombre||USER.usuario, usuario_sistema:USER.usuario,
     nro_licencia:v('at_nlic'),      /* _NRO_LICENCIA_V1 */
-    autorizado_por:v('at_autoriz')  /* _ATENCION_V3 */
+    autorizado_por:v('at_autoriz'),  /* _ATENCION_V3 */
+    alerta_subsidio:(typeof _textoSubsidioRegistro === 'function' ? _textoSubsidioRegistro() : '')   /* _SUBSIDIO_REGISTRO_V1 */
   };
   const _miss=[];if(!/^\d{8}$/.test(String(d.dni||'').trim()))_miss.push(['at_dni','DNI (8 digitos)']);if(!String(d.nombre||'').trim())_miss.push(['at_nom','Nombre']);if(!String(d.detalle_documento||'').trim())_miss.push(['at_doc_txt','Documento']);if(typeof _licenciaObligatoria==='function'&&_licenciaObligatoria(d.detalle_documento)&&!String(d.nro_licencia||'').trim())_miss.push(['at_nlic','N° de licencia']);if(_miss.length){const el=document.getElementById(_miss[0][0]);if(el){el.focus();el.style.borderColor='#ef4444';setTimeout(function(){el.style.borderColor='';},2500);}mostrarToast('Falta completar: '+_miss.map(function(m){return m[1];}).join(', '),'error');return;}
   if (!modoEdicion && window._atRegularizadas && window._atRegularizadas.length) {
@@ -6661,6 +6662,17 @@ function calcDias() {
    Cuenta DIAS UNICOS (un CITT y su regularizacion o canje por el mismo periodo cuentan una vez) de CITT y DESCANSO MEDICO,
    mas el descanso que se esta registrando. Maternidad: subsidio desde el primer dia. Enfermedad profesional: va por SCTR y
    no suma a los 20. Es solo un AVISO (no bloquea el guardado) y usa lo registrado en el sistema. Apagar: localStorage.rl_subsidio='off' */
+/* _SUBSIDIO_REGISTRO_V1 (20-nov-2026, opcion B de Joel): el texto de la alerta que se vio al registrar se guarda con la
+   atencion (columna alerta_subsidio) y sale en el Excel como "Alerta Subsidio". Solo si coincide con el DNI, documento y
+   fechas actuales del formulario; si no hay alerta va vacio (al editar, vacio no borra lo guardado). */
+function _textoSubsidioRegistro() {
+  try {
+    const s = window._subsidioRegistro; if (!s || !s.texto) return '';
+    if (s.dni !== String(v('at_dni') || '').trim() || s.doc !== v('at_doc') || s.fi !== v('at_fid') || s.ff !== v('at_ftd')) return '';
+    const h = new Date(), f = ('0' + h.getDate()).slice(-2) + '/' + ('0' + (h.getMonth() + 1)).slice(-2) + '/' + h.getFullYear();
+    return (s.texto + ' (al registrar el ' + f + ')').slice(0, 600);
+  } catch (e) { return ''; }
+}
 function _clasificarDocIncap(t) {
   const x = String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
   /* _SUBSIDIO_ALERTA_V2: el CITT que entrega un companero o familiar es del propio trabajador: cuenta igual */
@@ -6689,11 +6701,11 @@ function _alertaSubsidio() {
     box.style.cssText = 'display:none;margin:8px 0 4px;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.45';
     fila.parentNode.insertBefore(box, fila.nextSibling);
   }
-  const ocultar = () => { box.style.display = 'none'; box.textContent = ''; };
+  const ocultar = () => { box.style.display = 'none'; box.textContent = ''; window._subsidioRegistro = null; };
   try { if (localStorage.getItem('rl_subsidio') === 'off') return ocultar(); } catch (e) {}
   const tipo = _clasificarDocIncap(v('at_doc'));
   if (!tipo) return ocultar();
-  const pinta = (txt, color) => { box.style.display = 'block'; box.style.background = color === 'rojo' ? '#fef2f2' : color === 'ambar' ? '#fffbeb' : '#eff6ff'; box.style.border = '1.5px solid ' + (color === 'rojo' ? '#fecaca' : color === 'ambar' ? '#fde68a' : '#bfdbfe'); box.style.color = '#0f172a'; box.textContent = txt; };
+  const pinta = (txt, color) => { window._subsidioRegistro = { dni: String(v('at_dni') || '').trim(), doc: v('at_doc'), fi: v('at_fid'), ff: v('at_ftd'), texto: String(txt).replace(/^\S+\s/, '') };   /* _SUBSIDIO_REGISTRO_V1: foto de lo que se mostro */ box.style.display = 'block'; box.style.background = color === 'rojo' ? '#fef2f2' : color === 'ambar' ? '#fffbeb' : '#eff6ff'; box.style.border = '1.5px solid ' + (color === 'rojo' ? '#fecaca' : color === 'ambar' ? '#fde68a' : '#bfdbfe'); box.style.color = '#0f172a'; box.textContent = txt; };
   if (tipo === 'maternidad') { const tM = '🤱 Licencia por maternidad: corresponde subsidio por maternidad de EsSalud desde el primer día.'; pinta(tM, 'azul'); return _flotarSubsidio('Licencia por maternidad', tM.slice(3), 'azul'); }
   if (tipo === 'profesional') { const tP = '🦺 Enfermedad profesional: no suma a los 20 días que paga la empresa; corresponde atención y subsidio por el SCTR.'; pinta(tP, 'azul'); return _flotarSubsidio('Enfermedad profesional (SCTR)', tP.slice(3), 'azul'); }
   const dni = String(v('at_dni') || '').trim(), fi = v('at_fid'), ff = v('at_ftd') || v('at_fid');
@@ -8996,7 +9008,8 @@ var COLS_AT_TODAS = [
   {key:'detalle_documento',label:'Documento'},{key:'tipo_licencia',label:'Tipo de Licencia'},{key:'fecha_inicio_doc',label:'F. Inicio Doc.'},{key:'fecha_termino_doc',label:'F. Fin Doc.'},
   {key:'dias_transcurridos',label:'Días'},{key:'responsable_recepcion',label:'Responsable Recepción'},{key:'observaciones',label:'Observaciones'},
   {key:'estado',label:'Estado'},{key:'fecha_registro',label:'Fecha Registro'},{key:'usuario_sistema',label:'Usuario Sistema'},
-  {key:'nro_licencia',label:'N° Licencia'},{key:'parentesco',label:'Parentesco'},{key:'autorizado_por',label:'Autorizado por'}   /* _AT_COLS_V1 (28-set): + F. Término Periodo y Autorizado por */
+  {key:'nro_licencia',label:'N° Licencia'},{key:'parentesco',label:'Parentesco'},{key:'autorizado_por',label:'Autorizado por'},   /* _AT_COLS_V1 (28-set): + F. Término Periodo y Autorizado por */
+  {key:'alerta_subsidio',label:'Alerta Subsidio'}   /* _SUBSIDIO_REGISTRO_V1 */
 ];
 var _iCod = COLS_AT_TODAS.findIndex(function (c) { return c.key === 'codigo'; }) + 1;   /* _AT_COLS_V1: Cumpleaños sigue despues de Código */
 var COLS_CONSULTA_DNI = COLS_AT_TODAS.slice(0, _iCod).concat([{key:'cumpleanos',label:'Cumpleaños'}], COLS_AT_TODAS.slice(_iCod));

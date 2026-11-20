@@ -61805,7 +61805,8 @@ var require_at_guardar = __commonJS({
       estado: 30,
       usuario_sistema: 50,
       autorizado_por: 100,
-      tipo_licencia: 100
+      tipo_licencia: 100,
+      alerta_subsidio: 600
     };
     function armar(b) {
       const L = lima(), d = {};
@@ -62450,6 +62451,10 @@ var require_atenciones_editar = __commonJS({
             "fecha_termino_periodo = COALESCE(@fecha_termino_periodo, fecha_termino_periodo)"
           );
         }
+        if (b.alerta_subsidio !== void 0 && String(b.alerta_subsidio || "").trim()) {
+          r.input("alerta_subsidio", sql.NVarChar(600), String(b.alerta_subsidio).trim().slice(0, 600));
+          set.push("alerta_subsidio = @alerta_subsidio");
+        }
         if (b.tipo_licencia !== void 0) {
           r.input("tipo_licencia", sql.NVarChar(100), String(b.tipo_licencia || "").trim().slice(0, 100));
           set.push("tipo_licencia = CASE WHEN @tipo_licencia <> N'' THEN @tipo_licencia ELSE tipo_licencia END");
@@ -62671,12 +62676,12 @@ var require_atenciones_guardar = __commonJS({
     nro, fecha_atencion, hora_inicio, hora_termino, nro_semana, mes, anio, dni, nombre, sexo, fecha_inicio_periodo,
     empresa, fundo, cargo, ruta, codigo, fundo_actual, celular, supervisor, detalle_documento, nro_licencia, parentesco,
     fecha_inicio_doc, fecha_termino_doc, dias_transcurridos, responsable_recepcion, observaciones, estado, usuario_sistema,
-    autorizado_por, fecha_termino_periodo, tipo_licencia)
+    autorizado_por, fecha_termino_periodo, tipo_licencia, alerta_subsidio)
   OUTPUT INSERTED.id INTO @t
   VALUES (@nro, @fecha_atencion, @hora_inicio, @hora_termino, @nro_semana, @mes, @anio, @dni, @nombre, @sexo, @fecha_inicio_periodo,
     @empresa, @fundo, @cargo, @ruta, @codigo, @fundo_actual, @celular, @supervisor, @detalle_documento, @nro_licencia, @parentesco,
     @fecha_inicio_doc, @fecha_termino_doc, @dias_transcurridos, @responsable_recepcion, @observaciones, @estado, @usuario_sistema,
-    @autorizado_por, @fecha_termino_periodo, @tipo_licencia);`;
+    @autorizado_por, @fecha_termino_periodo, @tipo_licencia, @alerta_subsidio);`;
     async function yaGuardado(pool, clave) {
       const r = await pool.request().input("k", sql.NVarChar(80), clave).query("SELECT nro, anio FROM dbo.AtIdem WHERE clave = @k");
       return r.recordset[0] || null;
@@ -62745,7 +62750,7 @@ var require_atenciones_guardar = __commonJS({
           const ult = c.recordset[0].ultimo || 0, maxAz = c.recordset[0].maxAz || 0;
           nro = Math.max(ult, maxAz) + 1;
           const r = tx.request();
-          r.input("nro", sql.Int, nro).input("fecha_atencion", sql.Date, d.fecha_atencion).input("hora_inicio", sql.NVarChar(10), d.hora_inicio).input("hora_termino", sql.NVarChar(10), d.hora_termino).input("nro_semana", sql.Int, d.nro_semana).input("mes", sql.Int, d.mes).input("anio", sql.Int, d.anio).input("dni", sql.NVarChar(15), d.dni).input("nombre", sql.NVarChar(200), d.nombre).input("sexo", sql.NVarChar(10), d.sexo).input("fecha_inicio_periodo", sql.Date, d.fecha_inicio_periodo).input("empresa", sql.NVarChar(50), d.empresa).input("fundo", sql.NVarChar(100), d.fundo).input("cargo", sql.NVarChar(150), d.cargo).input("ruta", sql.NVarChar(50), d.ruta).input("codigo", sql.NVarChar(50), d.codigo).input("fundo_actual", sql.NVarChar(100), d.fundo_actual).input("celular", sql.NVarChar(20), d.celular).input("supervisor", sql.NVarChar(100), d.supervisor).input("detalle_documento", sql.NVarChar(500), d.detalle_documento).input("nro_licencia", sql.NVarChar(40), d.nro_licencia).input("parentesco", sql.NVarChar(40), d.parentesco).input("fecha_inicio_doc", sql.Date, d.fecha_inicio_doc).input("fecha_termino_doc", sql.Date, d.fecha_termino_doc).input("dias_transcurridos", sql.Int, d.dias_transcurridos).input("responsable_recepcion", sql.NVarChar(150), d.responsable_recepcion).input("observaciones", sql.NVarChar(sql.MAX), d.observaciones).input("estado", sql.NVarChar(30), d.estado).input("usuario_sistema", sql.NVarChar(50), d.usuario_sistema).input("autorizado_por", sql.NVarChar(100), d.autorizado_por).input("fecha_termino_periodo", sql.Date, d.fecha_termino_periodo).input("tipo_licencia", sql.NVarChar(100), d.tipo_licencia || "").input("a", sql.Int, anioHoja).input("k", sql.NVarChar(80), clave || "sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8));
+          r.input("nro", sql.Int, nro).input("fecha_atencion", sql.Date, d.fecha_atencion).input("hora_inicio", sql.NVarChar(10), d.hora_inicio).input("hora_termino", sql.NVarChar(10), d.hora_termino).input("nro_semana", sql.Int, d.nro_semana).input("mes", sql.Int, d.mes).input("anio", sql.Int, d.anio).input("dni", sql.NVarChar(15), d.dni).input("nombre", sql.NVarChar(200), d.nombre).input("sexo", sql.NVarChar(10), d.sexo).input("fecha_inicio_periodo", sql.Date, d.fecha_inicio_periodo).input("empresa", sql.NVarChar(50), d.empresa).input("fundo", sql.NVarChar(100), d.fundo).input("cargo", sql.NVarChar(150), d.cargo).input("ruta", sql.NVarChar(50), d.ruta).input("codigo", sql.NVarChar(50), d.codigo).input("fundo_actual", sql.NVarChar(100), d.fundo_actual).input("celular", sql.NVarChar(20), d.celular).input("supervisor", sql.NVarChar(100), d.supervisor).input("detalle_documento", sql.NVarChar(500), d.detalle_documento).input("nro_licencia", sql.NVarChar(40), d.nro_licencia).input("parentesco", sql.NVarChar(40), d.parentesco).input("fecha_inicio_doc", sql.Date, d.fecha_inicio_doc).input("fecha_termino_doc", sql.Date, d.fecha_termino_doc).input("dias_transcurridos", sql.Int, d.dias_transcurridos).input("responsable_recepcion", sql.NVarChar(150), d.responsable_recepcion).input("observaciones", sql.NVarChar(sql.MAX), d.observaciones).input("estado", sql.NVarChar(30), d.estado).input("usuario_sistema", sql.NVarChar(50), d.usuario_sistema).input("autorizado_por", sql.NVarChar(100), d.autorizado_por).input("fecha_termino_periodo", sql.Date, d.fecha_termino_periodo).input("tipo_licencia", sql.NVarChar(100), d.tipo_licencia || "").input("alerta_subsidio", sql.NVarChar(600), d.alerta_subsidio || "").input("a", sql.Int, anioHoja).input("k", sql.NVarChar(80), clave || "sin-huella-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8));
           let ins;
           if (sql._pg) {
             ins = await r.query(INSERT.replace(/\s*OUTPUT\s+INSERTED\.id\s+INTO\s+@t/i, "").replace(/;\s*$/, "") + " RETURNING id");

@@ -102,6 +102,9 @@ module.exports = async function (context, req) {
                "autorizado_por = CASE WHEN @autorizado_por <> N'' THEN @autorizado_por ELSE autorizado_por END",
                'fecha_termino_periodo = COALESCE(@fecha_termino_periodo, fecha_termino_periodo)');
     }
+    if (b.alerta_subsidio !== undefined && String(b.alerta_subsidio || '').trim()) {   /* _SUBSIDIO_REGISTRO_V1: solo si hay alerta (vacio NO borra la foto guardada) */
+      r.input('alerta_subsidio', sql.NVarChar(600), String(b.alerta_subsidio).trim().slice(0, 600)); set.push('alerta_subsidio = @alerta_subsidio');
+    }
     if (b.tipo_licencia !== undefined) {   /* _AT_TIPO_LIC_V1: un campo vacio NO borra lo guardado */
       r.input('tipo_licencia', sql.NVarChar(100), String(b.tipo_licencia || '').trim().slice(0, 100));
       set.push("tipo_licencia = CASE WHEN @tipo_licencia <> N'' THEN @tipo_licencia ELSE tipo_licencia END");

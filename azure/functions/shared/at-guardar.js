@@ -66,7 +66,7 @@ function fechaValida(v) {
 
 const LARGOS = { hora_inicio: 10, hora_termino: 10, nombre: 200, sexo: 10, empresa: 50, fundo: 100, cargo: 150, ruta: 50,
   codigo: 50, fundo_actual: 100, celular: 20, supervisor: 100, detalle_documento: 500, nro_licencia: 40, parentesco: 40,
-  responsable_recepcion: 150, estado: 30, usuario_sistema: 50, autorizado_por: 100, tipo_licencia: 100 };   /* _AT_COLS_V1: + autorizado_por · _AT_TIPO_LIC_V1: + tipo_licencia */
+  responsable_recepcion: 150, estado: 30, usuario_sistema: 50, autorizado_por: 100, tipo_licencia: 100, alerta_subsidio: 600 };   /* _SUBSIDIO_REGISTRO_V1: + alerta_subsidio */   /* _AT_COLS_V1: + autorizado_por · _AT_TIPO_LIC_V1: + tipo_licencia */
 
 /* Arma la atencion igual que saveAtencion del Apps Script */
 function armar(b) {
