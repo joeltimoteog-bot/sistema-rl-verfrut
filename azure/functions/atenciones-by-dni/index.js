@@ -62,6 +62,31 @@ module.exports = async function (context, req) {
       return est.includes('FINALIZ');
     });
 
+    /* _AUTOLLENADO_DNI_V1 (20-nov-2026): con contacto=1 (Nueva atencion) se devuelve el ultimo celular, ruta y codigo
+       registrados para ese DNI en atenciones anteriores: celular de la atencion mas reciente que lo tenga; ruta y codigo
+       solo si la atencion es de los ultimos 60 dias (cambian entre campanas). Una consulta chica por DNI (indice por dni).
+       Sin el parametro la respuesta es identica a la de antes (Bienestar y Consulta por DNI no cambian). */
+    let contacto;
+    if (String(req.query.contacto || '') === '1') {
+      try {
+        const rc = await pool.request().input('dni', sql.NVarChar(15), dni).query(`
+          SELECT TOP 20 fecha_atencion, celular, ruta, codigo
+          FROM Atenciones
+          WHERE dni = @dni
+          ORDER BY fecha_atencion DESC, id DESC`);
+        const ymd = v => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || '').slice(0, 10);
+        const lim60 = new Date(); lim60.setDate(lim60.getDate() - 60); const l60 = lim60.toISOString().slice(0, 10);
+        const txt = v => String(v == null ? '' : v).trim();
+        contacto = { celular: '', celular_fecha: '', ruta: '', ruta_fecha: '', codigo: '', codigo_fecha: '' };
+        (rc.recordset || []).forEach(x => {
+          const f = ymd(x.fecha_atencion);
+          if (!contacto.celular && txt(x.celular)) { contacto.celular = txt(x.celular); contacto.celular_fecha = f; }
+          if (f >= l60 && !contacto.ruta && txt(x.ruta)) { contacto.ruta = txt(x.ruta); contacto.ruta_fecha = f; }
+          if (f >= l60 && !contacto.codigo && txt(x.codigo)) { contacto.codigo = txt(x.codigo); contacto.codigo_fecha = f; }
+        });
+      } catch (eC) { context.log.warn('atenciones-by-dni contacto: ' + eC.message); contacto = null; }
+    }
+
     const elapsed_ms = Date.now() - t0;
     context.log(`atenciones-by-dni: dni=${dni} total=${atenciones.length} en_proceso=${en_proceso.length} finalizadas=${finalizadas_recientes.length} - ${elapsed_ms}ms`);
 
@@ -75,6 +100,7 @@ module.exports = async function (context, req) {
         finalizadas_recientes: completo ? finalizadas_recientes : finalizadas_recientes.slice(0, 5),
         completo,
         ventana_dias: dias,
+        ...(contacto !== undefined ? { contacto } : {}),   /* _AUTOLLENADO_DNI_V1 */
         elapsed_ms
       }
     };

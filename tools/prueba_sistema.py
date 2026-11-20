@@ -207,6 +207,8 @@ def resp_azure(url, post=''):
         return {'success': True, 'trabajadores': [{'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'}], 'data': {'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'},
                 'resultados': [{'dni': '12345678', 'nombre_completo': 'TRABAJADOR PRUEBA', 'empresa': 'RAPEL'}]}
     if '/atenciones/by-dni' in url:
+        if 'contacto=1' in url:   # _AUTOLLENADO_DNI_V1: ultimo celular / ruta / codigo de atenciones anteriores
+            return {'success': True, 'en_proceso': [], 'finalizadas_recientes': [], 'contacto': {'celular': '987654321', 'celular_fecha': '2026-11-02', 'ruta': 'R-15', 'ruta_fecha': '2026-11-10', 'codigo': 'C-777', 'codigo_fecha': '2026-11-10'}}
         return {'success': True, 'en_proceso': [], 'finalizadas_recientes': []}
     if '/api/calc/leer' in url:   # _CALC_SUPABASE_V1: parametros oficiales del calculo desde Supabase
         return {'success': True, 'params': {'rmv': 1130, 'remBruta': 1428.07}, 'version': 'vPRUEBA-SUPABASE', 'fecha': '19/11/2026 10:00', 'por': 'jtimoteo'}
@@ -761,6 +763,24 @@ with sync_playwright() as pw:
       return {fin, ms: Math.round(performance.now()-t0), boton: btn ? btn.textContent.trim() : '?', libre: btn ? !btn.disabled : null, pregunto, modales, redGuardo: 0};
     }""")
     ok('Dashboard pantalla Nueva Atencion (boton Guardar)', r['fin'] == 'TERMINO' and r['libre'], json.dumps(r, ensure_ascii=False))
+    # _AUTOLLENADO_DNI_V1: al escribir el DNI se completan celular, ruta y codigo VACIOS desde atenciones anteriores (no pisa lo escrito)
+    r = pag.evaluate("""async () => {
+      if (typeof _chequearHistorialDNI !== 'function') return {x:'SIN FUNCION'};
+      try { if (typeof abrirNuevaAt==='function') abrirNuevaAt(); } catch(e) {}
+      const set=(id,v)=>{const e=document.getElementById(id); if(e) e.value=v;}; const g=id=>(document.getElementById(id)||{}).value;
+      set('at_dni','12345678'); set('at_cel',''); set('at_ruta',''); set('at_cod','');
+      await _chequearHistorialDNI('12345678');
+      const a = {cel:g('at_cel'), ruta:g('at_ruta'), cod:g('at_cod')};
+      set('at_cel','911111111'); set('at_ruta',''); set('at_cod','');
+      await _chequearHistorialDNI('12345678');
+      const b = {cel:g('at_cel'), ruta:g('at_ruta')};
+      set('at_dni','87654321'); set('at_cel',''); set('at_ruta',''); set('at_cod','');
+      await _chequearHistorialDNI('12345678');   // el formulario ya tiene otro DNI: no se llena
+      const c = {cel:g('at_cel')};
+      set('at_dni',''); set('at_cel',''); set('at_ruta',''); set('at_cod','');
+      return {a, b, c};
+    }""")
+    ok('Nueva Atencion: autollenado de celular, ruta y codigo por DNI', r.get('a') == {'cel': '987654321', 'ruta': 'R-15', 'cod': 'C-777'} and r.get('b') == {'cel': '911111111', 'ruta': 'R-15'} and r.get('c') == {'cel': ''}, json.dumps(r))
     # Registro de Casos: lista de supervisores desde la hoja
     r = pag.evaluate("""async () => {
       if (typeof _casosSupLlenar !== 'function') return {x:'SIN BLOQUE'};

@@ -61637,6 +61637,40 @@ var require_atenciones_by_dni = __commonJS({
           const est = String(a.estado || "").toUpperCase();
           return est.includes("FINALIZ");
         });
+        let contacto;
+        if (String(req.query.contacto || "") === "1") {
+          try {
+            const rc = await pool.request().input("dni", sql.NVarChar(15), dni).query(`
+          SELECT TOP 20 fecha_atencion, celular, ruta, codigo
+          FROM Atenciones
+          WHERE dni = @dni
+          ORDER BY fecha_atencion DESC, id DESC`);
+            const ymd = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || "").slice(0, 10);
+            const lim60 = /* @__PURE__ */ new Date();
+            lim60.setDate(lim60.getDate() - 60);
+            const l60 = lim60.toISOString().slice(0, 10);
+            const txt = (v) => String(v == null ? "" : v).trim();
+            contacto = { celular: "", celular_fecha: "", ruta: "", ruta_fecha: "", codigo: "", codigo_fecha: "" };
+            (rc.recordset || []).forEach((x) => {
+              const f = ymd(x.fecha_atencion);
+              if (!contacto.celular && txt(x.celular)) {
+                contacto.celular = txt(x.celular);
+                contacto.celular_fecha = f;
+              }
+              if (f >= l60 && !contacto.ruta && txt(x.ruta)) {
+                contacto.ruta = txt(x.ruta);
+                contacto.ruta_fecha = f;
+              }
+              if (f >= l60 && !contacto.codigo && txt(x.codigo)) {
+                contacto.codigo = txt(x.codigo);
+                contacto.codigo_fecha = f;
+              }
+            });
+          } catch (eC) {
+            context.log.warn("atenciones-by-dni contacto: " + eC.message);
+            contacto = null;
+          }
+        }
         const elapsed_ms = Date.now() - t0;
         context.log(`atenciones-by-dni: dni=${dni} total=${atenciones.length} en_proceso=${en_proceso.length} finalizadas=${finalizadas_recientes.length} - ${elapsed_ms}ms`);
         context.res = {
@@ -61649,6 +61683,8 @@ var require_atenciones_by_dni = __commonJS({
             finalizadas_recientes: completo ? finalizadas_recientes : finalizadas_recientes.slice(0, 5),
             completo,
             ventana_dias: dias,
+            ...contacto !== void 0 ? { contacto } : {},
+            /* _AUTOLLENADO_DNI_V1 */
             elapsed_ms
           }
         };

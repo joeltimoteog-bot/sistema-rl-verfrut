@@ -4501,6 +4501,31 @@ function filtrarAt() {
 
 
 // ─── ALERTA DE HISTORIAL POR DNI (Azure SQL) ──────────────────
+/* _AUTOLLENADO_DNI_V1 (20-nov-2026): al escribir el DNI en Nueva atencion se completan solos el celular, la ruta y el
+   codigo con lo registrado en sus atenciones anteriores (celular: la ultima que lo tenga; ruta y codigo: solo de los
+   ultimos 60 dias). Solo llena los campos VACIOS (no pisa lo que vino del padron ni lo que escribio el usuario) y solo
+   si el DNI del formulario sigue siendo el mismo. Viene en la misma consulta del historial: no agrega peticiones. */
+function _autollenarContactoDNI(dni, c) {
+  if (!c) return;
+  const inpDni = document.getElementById('at_dni');
+  if (!inpDni || String(inpDni.value || '').trim() !== String(dni)) return;
+  const fm = f => f ? String(f).slice(8, 10) + '/' + String(f).slice(5, 7) : '';
+  const puestos = [];
+  [['at_cel', c.celular, 'celular', c.celular_fecha], ['at_ruta', c.ruta, 'ruta', c.ruta_fecha], ['at_cod', c.codigo, 'código', c.codigo_fecha]].forEach(([id, val, nom, f]) => {
+    const el = document.getElementById(id);
+    if (!el || !val || String(el.value || '').trim()) return;
+    el.value = val; puestos.push(nom + (f ? ' (' + fm(f) + ')' : ''));
+    try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+  });
+  if (!puestos.length) return;
+  const r = document.getElementById('trabRes');
+  if (r && r.style.display !== 'none') {
+    let n = document.getElementById('autollenadoNota');
+    if (!n) { n = document.createElement('div'); n.id = 'autollenadoNota'; n.style.cssText = 'font-size:12px;color:#475569;margin-top:4px'; r.appendChild(n); }
+    n.textContent = '📱 Tomado de atenciones anteriores: ' + puestos.join(', ') + '. Revísalo antes de guardar.';
+  }
+  console.log('[autollenado] DNI ' + dni + ': ' + puestos.join(', '));
+}
 async function _chequearHistorialDNI(dni) {
   const div = document.getElementById('historialDniAlerta');
   if (!div) return;
@@ -4521,10 +4546,11 @@ async function _chequearHistorialDNI(dni) {
   // Promesa 1 — Azure SQL (rápido, ~200ms)
   const promAzure = (async () => {
     try {
-      const r = await fetch(AZURE_FN_BASE + '/atenciones/by-dni?dni=' + dni + '&dias=60');
+      const r = await fetch(AZURE_FN_BASE + '/atenciones/by-dni?dni=' + dni + '&dias=60&contacto=1');   /* _AUTOLLENADO_DNI_V1 */
       if (!r.ok) return null;
       const d = await r.json();
       if (!d.success) return null;
+      try { _autollenarContactoDNI(dni, d.contacto); } catch (eA) { console.warn('[autollenado] ' + eA.message); }
       return { enProc: d.en_proceso || [], finRec: d.finalizadas_recientes || [] };
     } catch (e) {
       console.warn('[historialDNI] Supabase error:', e);
