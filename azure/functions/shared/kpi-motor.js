@@ -24,6 +24,11 @@ const PERIODO = { ini: '2026-09-01', fin: '2026-12-31', curso_desde: '2026-12-01
 const VISORES = ['jtimoteo', 'lcovenas'];            /* ven el modulo */
 const EDITORES = ['jtimoteo'];                        /* registran la nota del curso */
 const TEMAS_ETI = ['CAPACITACIONES ETI', 'EVALUACIONES DE CHECKLIST', 'INGRESOS MASIVOS'];
+/* _K3_CAP_RRLL_V1: temas del modulo Capacitaciones del Sistema RR.LL. que corresponden a la capacitacion ETI */
+function esTemaEtiRRLL(t) {
+  const x = String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  return x.indexOf('BUENAS PRACTICAS SOCIALES') === 0 || (x.indexOf('LEGISLACION LABORAL') === 0 && x.indexOf('ETICA') >= 0);
+}
 const TEMA_OPCIONAL = 'REFORZAMIENTO';
 const HORA_CIERRE = '16:36';                          /* cierre de la jornada: hasta esa hora se registra lo del dia (decision de Joel, 30-set) */
 const DIAS_CONSULTA = 5;
@@ -344,6 +349,14 @@ function calcular(E) {
     const hechasReal = {};
     ((E.eti && E.eti.actas) || []).forEach(a => { if (a.ejecucion && esPersonaEti(a.supervisor, p, u.nombre, etiNombre)) hechasReal[String(a.tema || 'CAPACITACIONES ETI').toUpperCase().trim() + '|' + a.ejecucion] = 1; });
     ((E.eti && E.eti.evaluaciones) || []).forEach(x => { if (x.fecha && ((x.usuario && x.usuario === u.usuario) || esPersonaEti(x.nombre, p, u.nombre, etiNombre))) hechasReal['EVALUACIONES DE CHECKLIST|' + x.fecha] = 1; });
+    /* _K3_CAP_RRLL_V1 (20-nov-2026, decision de Joel): la capacitacion ETI registrada en el modulo Capacitaciones del
+       Sistema RR.LL. (acta creada por el mismo supervisor, con tema ETI, en la FECHA PROGRAMADA) cuenta como ejecutada
+       ese dia. Solo cubre fechas programadas: lo no programado sigue contando solo desde ETI. */
+    const _yo = String(u.usuario || '').toLowerCase().trim();
+    ((E.compl && E.compl.capacitaciones) || []).forEach(c => {
+      if (!c || !c.fecha || c.creada_por !== _yo || !esTemaEtiRRLL(c.tema)) return;
+      const k = 'CAPACITACIONES ETI|' + c.fecha; if (!hechasReal[k]) hechasReal[k] = 'rrll';
+    });
     progs.forEach(g => {
       const tema = String(g.tema || '').toUpperCase().trim();
       const opcional = tema === TEMA_OPCIONAL;
@@ -391,6 +404,7 @@ function calcular(E) {
           const tarde = realDe[f] ? (realDe[f] > fin && !realEseDia) : (!ejec.has(f) && !realEseDia && fReg && fReg > fin);
           e.ok = !tarde;
           e.detalle = tarde ? 'Programada el ' + dm(f) + ', ejecutada recién el ' + dm(realDe[f] || fReg) + ' (fuera de la fecha programada)' : 'Programada el ' + dm(f) + ' · ejecutada' + ((realDe[f] || fReg) ? ' (registro del ' + dm(realDe[f] || fReg) + ')' : '');
+          if (hechasReal[tema + '|' + f] === 'rrll' && !ejec.has(f)) e.detalle += ' · acta en el módulo Capacitaciones del Sistema RR.LL.';   /* _K3_CAP_RRLL_V1 */
           if (opcional) e.detalle += ' · reforzamiento (opcional)';
           den++; if (e.ok) num++;
         } else if (f < hoyS) {
@@ -602,4 +616,4 @@ function calcular(E) {
   }
 }
 
-module.exports = { calcular, fechaDeUrl, HORA_CIERRE, nivelPct, nivelNota, esPersona, esPersonaEti, PERIODO, DEF, PERSONAS, VISORES, EDITORES, TEMAS_ETI, TEMA_OPCIONAL };
+module.exports = { calcular, esTemaEtiRRLL, fechaDeUrl, HORA_CIERRE, nivelPct, nivelNota, esPersona, esPersonaEti, PERIODO, DEF, PERSONAS, VISORES, EDITORES, TEMAS_ETI, TEMA_OPCIONAL };

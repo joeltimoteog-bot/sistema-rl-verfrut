@@ -163,3 +163,26 @@ console.log('✅ motor OK');
   assert.equal(k2b.estado, 'sin_datos');   // sin atenciones: los casos ya no entran a K2
   console.log('✅ informes sin prueba (antes del 19-set) y K2 solo atenciones OK');
 }
+
+/* _K3_CAP_RRLL_V1 (20-nov-2026): acta ETI registrada en el modulo Capacitaciones del Sistema RR.LL. en la fecha programada */
+{
+  const D7 = { casos: [], config: cfg, usuarios: usuarios.concat([{ usuario: 'almartinez', nombre: 'MARTINEZ JUAREZ ALEXANDER', activo: true }]), sups: [], restricc: [], constantes: {}, visitas: [] };
+  const progs = [{ id: 'pa', supervisor: 'ALEXANDER MARTINEZ JUAREZ', sector: 'SANTA ROSA', tema: 'CAPACITACIONES ETI', fechas: ['2026-11-17', '2026-11-18', '2026-11-19'], fechas_ejecutadas: [], estado: 'pendiente', veces_reprog: 1, reprogramaciones: [] }];
+  const caps = [
+    { creada_por: 'almartinez', fecha: '2026-11-17', tema: 'BUENAS PRÁCTICAS SOCIALES, LABORALES, COMERCIO ÉTICO Y SUSTENTABILIDAD / ÉTICA EMPRESARIAL' },
+    { creada_por: 'almartinez', fecha: '2026-11-18', tema: 'BUENAS PRÁCTICAS SOCIALES, LABORALES, COMERCIO ÉTICO Y SUSTENTABILIDAD / ÉTICA EMPRESARIAL' },
+    { creada_por: 'almartinez', fecha: '2026-11-19', tema: 'COMUNICADO DE CAMBIO DE HORARIO' },            // tema no ETI -> no cubre
+    { creada_por: 'ptamayo',    fecha: '2026-11-19', tema: 'BUENAS PRÁCTICAS SOCIALES, LABORALES, COMERCIO ÉTICO' },   // otro supervisor -> no cubre
+    { creada_por: 'almartinez', fecha: '2026-11-03', tema: 'BUENAS PRÁCTICAS SOCIALES, LABORALES, COMERCIO ÉTICO' }    // sin programacion -> no suma (solo cubre fechas programadas)
+  ];
+  const r7 = K.calcular({ M: crearMotor(D7)._kpi, personas: K.PERSONAS, informes: {}, atenciones: [], eti: { programaciones: progs, registros: {} }, compl: { capacitaciones: caps }, notas: {}, hoy: '2026-11-20' });
+  const k3 = r7.personas.find(p => p.usuario === 'almartinez').kpis.find(x => x.codigo === 'K3');
+  k3.evidencia.forEach(e => console.log('   cap-rrll', e.fecha, e.ok, e.detalle));
+  assert.equal(k3.num, 2); assert.equal(k3.den, 3);
+  assert.ok(/módulo Capacitaciones del Sistema RR\.LL\./.test(k3.evidencia.find(e => e.fecha === '2026-11-17').detalle));
+  assert.equal(k3.evidencia.find(e => e.fecha === '2026-11-19').ok, false);
+  const r8 = K.calcular({ M: crearMotor(D7)._kpi, personas: K.PERSONAS, informes: {}, atenciones: [], eti: { programaciones: progs, registros: {} }, notas: {}, hoy: '2026-11-20' });
+  const k3b = r8.personas.find(p => p.usuario === 'almartinez').kpis.find(x => x.codigo === 'K3');
+  assert.equal(k3b.num, 0); assert.equal(k3b.den, 3);   // sin el modulo: como antes
+  console.log('✅ K3 reconoce el acta ETI del modulo Capacitaciones del Sistema RR.LL. en la fecha programada');
+}

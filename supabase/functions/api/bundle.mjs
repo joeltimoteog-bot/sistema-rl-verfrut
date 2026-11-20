@@ -70055,6 +70055,10 @@ var require_kpi_motor = __commonJS({
     var VISORES = ["jtimoteo", "lcovenas"];
     var EDITORES = ["jtimoteo"];
     var TEMAS_ETI = ["CAPACITACIONES ETI", "EVALUACIONES DE CHECKLIST", "INGRESOS MASIVOS"];
+    function esTemaEtiRRLL(t) {
+      const x = String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/\s+/g, " ").trim();
+      return x.indexOf("BUENAS PRACTICAS SOCIALES") === 0 || x.indexOf("LEGISLACION LABORAL") === 0 && x.indexOf("ETICA") >= 0;
+    }
     var TEMA_OPCIONAL = "REFORZAMIENTO";
     var HORA_CIERRE = "16:36";
     var DIAS_CONSULTA = 5;
@@ -70507,6 +70511,12 @@ var require_kpi_motor = __commonJS({
         (E.eti && E.eti.evaluaciones || []).forEach((x) => {
           if (x.fecha && (x.usuario && x.usuario === u.usuario || esPersonaEti(x.nombre, p, u.nombre, etiNombre))) hechasReal["EVALUACIONES DE CHECKLIST|" + x.fecha] = 1;
         });
+        const _yo = String(u.usuario || "").toLowerCase().trim();
+        (E.compl && E.compl.capacitaciones || []).forEach((c) => {
+          if (!c || !c.fecha || c.creada_por !== _yo || !esTemaEtiRRLL(c.tema)) return;
+          const k = "CAPACITACIONES ETI|" + c.fecha;
+          if (!hechasReal[k]) hechasReal[k] = "rrll";
+        });
         progs.forEach((g) => {
           const tema = String(g.tema || "").toUpperCase().trim();
           const opcional = tema === TEMA_OPCIONAL;
@@ -70567,6 +70577,7 @@ var require_kpi_motor = __commonJS({
               const tarde = realDe[f] ? realDe[f] > fin && !realEseDia : !ejec.has(f) && !realEseDia && fReg && fReg > fin;
               e.ok = !tarde;
               e.detalle = tarde ? "Programada el " + dm(f) + ", ejecutada reci\xE9n el " + dm(realDe[f] || fReg) + " (fuera de la fecha programada)" : "Programada el " + dm(f) + " \xB7 ejecutada" + (realDe[f] || fReg ? " (registro del " + dm(realDe[f] || fReg) + ")" : "");
+              if (hechasReal[tema + "|" + f] === "rrll" && !ejec.has(f)) e.detalle += " \xB7 acta en el m\xF3dulo Capacitaciones del Sistema RR.LL.";
               if (opcional) e.detalle += " \xB7 reforzamiento (opcional)";
               den++;
               if (e.ok) num++;
@@ -70896,7 +70907,7 @@ var require_kpi_motor = __commonJS({
         return { estado: den ? "ok" : "sin_datos", num, den, evidencia: ev };
       }
     }
-    module.exports = { calcular, fechaDeUrl, HORA_CIERRE, nivelPct, nivelNota, esPersona, esPersonaEti, PERIODO, DEF, PERSONAS, VISORES, EDITORES, TEMAS_ETI, TEMA_OPCIONAL };
+    module.exports = { calcular, esTemaEtiRRLL, fechaDeUrl, HORA_CIERRE, nivelPct, nivelNota, esPersona, esPersonaEti, PERIODO, DEF, PERSONAS, VISORES, EDITORES, TEMAS_ETI, TEMA_OPCIONAL };
   }
 });
 
