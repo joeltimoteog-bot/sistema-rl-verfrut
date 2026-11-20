@@ -58,6 +58,38 @@
     } catch (e) {}
     return [input, init];
   }
+  /* _SEG_FASE3_V1 (20-nov-2026): si Supabase RECHAZO la llave (401: vencida hace mas de 36 h o invalida) la pantalla ya NO
+     sigue trabajando por Google (lento, sin sesion y con datos que solo quedaban en la hoja): se muestra el aviso de volver a
+     ingresar y las llamadas al Apps Script del Sistema RR.LL. responden { success:false, sesion_vencida:true } sin salir.
+     No toca: el ingreso por Google cuando Supabase no respondia (rl_sin = login-google), la pantalla de ingreso, el monitoreo
+     (ping, saludLog) ni otros Apps Script (Bienestar). Apagar: localStorage.rl_sin_llave = 'off' (el mismo de la fase 2). */
+  var GAS_RRLL = 'AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA';
+  var LIBRES_SIN_LLAVE = { ping: 1, saludLog: 1 };
+  function accionGas(url, init) {
+    try {
+      if (init && typeof init.body === 'string' && /^\s*\{/.test(init.body)) { var b = JSON.parse(init.body); if (b && b.action) return String(b.action); }
+      var m = /[?&]action=([^&#]+)/.exec(url); return m ? decodeURIComponent(m[1]) : '';
+    } catch (e) { return ''; }
+  }
+  function bloqueoSinLlave(url, init) {
+    try {
+      if (url.indexOf(GAS_RRLL) < 0) return false;
+      if (/\/index\.html$|\/sistema-rl-verfrut\/?$/.test(location.pathname) || location.pathname === '/') return false;
+      if (localStorage.getItem('rl_sin_llave') === 'off') return false;
+      var m = sessionStorage.getItem('rl_sin') || '';
+      if (m !== 'borrada-401' && m !== 'renovar-401') return false;
+      if (!sessionStorage.getItem('user')) return false;
+      if (LIBRES_SIN_LLAVE[accionGas(url, init)]) return false;
+      if (!window.rlSesion || typeof window.rlSesion.vencida !== 'function') return false;   /* sin aviso disponible: como antes */
+      try { window.rlSesion.vencida('Por seguridad, las sesiones se renuevan cada día. Vuelve a ingresar y regresarás a esta misma pantalla.'); } catch (e) {}
+      try { console.warn('[_SEG_FASE3_V1] llave rechazada por Supabase: no se consulta Google (' + accionGas(url, init) + ')'); } catch (e) {}
+      return true;
+    } catch (e) { return false; }
+  }
+  function respuestaSinLlave() {
+    var cuerpo = JSON.stringify({ success: false, sesion_vencida: true, error: 'Tu sesión venció. Vuelve a ingresar.', message: 'Tu sesión venció. Vuelve a ingresar.' });
+    try { return new Response(cuerpo, { status: 200, headers: { 'Content-Type': 'application/json' } }); } catch (e) { return { ok: true, status: 200, json: function () { return Promise.resolve(JSON.parse(cuerpo)); }, text: function () { return Promise.resolve(cuerpo); }, clone: function () { return this; } }; }
+  }
   /* _MODO_GOOGLE_V1 (04-nov-2026) — EMERGENCIA: caida de Azure Storage en Brazil South (Microsoft).
      Con MODO_GOOGLE = true NINGUNA llamada va a Azure: falla al instante y cada modulo usa su respaldo de
      Google sin esperar los 12-14 s del reloj. Al volver Azure: MODO_GOOGLE = false (y subir ?v=).
@@ -206,6 +238,7 @@
       }
       if (typeof input === 'string' && url.indexOf(MARCA_GAS) >= 0) {
         var tg = null; try { tg = sessionStorage.getItem('rl_token'); } catch (e) {}
+        if (!tg && bloqueoSinLlave(url, init)) return Promise.resolve(respuestaSinLlave());   /* _SEG_FASE3_V1 */
         if (!tg) { var rS = conMotivoGas(input, init); return fOrig.call(this, rS[0], rS[1]); }   /* _SEG_FASE1_V1 */
         var r = conSesionGas(input, init, tg);
         return fOrig.call(this, r[0], r[1]);
@@ -350,6 +383,14 @@
     } catch (x) { /* red: se reintenta */ } finally { enCurso = false; }
   }
   setTimeout(function () { revisar('inicio'); }, 4000);
+  /* _SEG_FASE3_V1: si la llave ya fue rechazada (401) el aviso sale al cargar, no a los 4 s (antes la pantalla alcanzaba a
+     pedir todo a Google antes del aviso) */
+  try {
+    var _m3 = sessionStorage.getItem('rl_sin') || '';
+    if (!tk() && (_m3 === 'borrada-401' || _m3 === 'renovar-401') && localStorage.getItem('rl_sin_llave') !== 'off') {
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { revisar('llave rechazada'); }); else revisar('llave rechazada');
+    }
+  } catch (e) {}
   setInterval(function () { if (document.visibilityState === 'visible') revisar('reloj'); }, CADA_MS);
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(function () { revisar('al volver'); }, 500); });
   window.addEventListener('online', function () { setTimeout(function () { revisar('volvio internet'); }, 1500); });   /* _SESION_PREVIA_V1 */
