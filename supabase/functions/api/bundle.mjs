@@ -70058,6 +70058,9 @@ var require_kpi_motor = __commonJS({
     var TEMA_OPCIONAL = "REFORZAMIENTO";
     var HORA_CIERRE = "16:36";
     var DIAS_CONSULTA = 5;
+    var K2_SOLO_ATENCIONES = true;
+    var LOG_INI = "2026-09-19";
+    var LOG_FIN = "2026-09-23";
     var a2ActivoDesde = () => {
       const v = String(typeof process !== "undefined" && process.env && process.env.KPI_A2_ACTIVO_DESDE || "").trim().slice(0, 10);
       return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "";
@@ -70328,6 +70331,13 @@ var require_kpi_motor = __commonJS({
               fuente = "env\xEDo por correo";
             }
           }
+          if (fi && (fuente === "registro de Azure" || fuente === "historial de Cumplimiento") && ymd(base) < LOG_INI) {
+            const fl = ymd(fi);
+            if (fl >= LOG_INI && fl <= LOG_FIN && fi > lim5) {
+              fi = null;
+              fuente = "";
+            }
+          }
           out.push({ c, ref, base, lim5, lim3, limInt, fi, fuente, fSubida, cubre: !propio, sinFecha: !!(c.enlace_informe && !fi) });
         });
         return out;
@@ -70467,6 +70477,7 @@ var require_kpi_motor = __commonJS({
         const ev = [];
         const r = mismoDia(ats, ev);
         let num = r.num, den = r.den;
+        if (K2_SOLO_ATENCIONES) return { estado: den ? "ok" : "sin_datos", num, den, evidencia: ev, fuera_horario: r.fuera };
         casos.forEach((x) => {
           if (x.excluido || x.sinFecha || !enR(ymd(x.limInt))) return;
           const c = x.c, pz = M.habilesEntre(x.base, x.limInt);

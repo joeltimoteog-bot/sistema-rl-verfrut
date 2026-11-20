@@ -27,6 +27,8 @@ const TEMAS_ETI = ['CAPACITACIONES ETI', 'EVALUACIONES DE CHECKLIST', 'INGRESOS 
 const TEMA_OPCIONAL = 'REFORZAMIENTO';
 const HORA_CIERRE = '16:36';                          /* cierre de la jornada: hasta esa hora se registra lo del dia (decision de Joel, 30-set) */
 const DIAS_CONSULTA = 5;
+const K2_SOLO_ATENCIONES = true;                      /* _KPI_K2_SOLO_AT_V1 */
+const LOG_INI = '2026-09-19', LOG_FIN = '2026-09-23'; /* _KPI_INF_SIN_PRUEBA_V1: primera revision del historial de Cumplimiento */
 /* _KPI_A2_SUSPENDIDO_V1 (12-nov-2026, decision de Joel): el boton "Remitido a" no se esta usando (las 3 asistentes en 0%).
    A2 queda SUSPENDIDO: se muestra como informativo y NO suma a la nota, hasta que las asistentes sean capacitadas.
    Para reactivarlo: definir el secreto KPI_A2_ACTIVO_DESDE=aaaa-mm-dd -> A2 vuelve a sumar, midiendo SOLO las atenciones
@@ -212,6 +214,14 @@ function calcular(E) {
         const fe = aFecha(c.fecha_envio_informe);
         if (fe && (!base || fe >= aFecha(ymd(base))) && (!fi || fe <= fi)) { fSubida = fi; fi = fe; fuente = 'envío por correo'; }
       }
+      /* _KPI_INF_SIN_PRUEBA_V1 (20-nov-2026, decision de Joel): el historial de Cumplimiento empezo el 19-set y el registro
+         de operaciones el 27-set. Si el caso se reporto ANTES del 19-set y la unica fecha del informe es la de esa primera
+         revision (19 al 23-set), no se puede probar cuando se subio: si esa fecha ya esta dentro del plazo, cumple; si no,
+         NO suma ni resta (antes contaba como fuera de plazo sin prueba). No toca el envio por correo ni lo posterior. */
+      if (fi && (fuente === 'registro de Azure' || fuente === 'historial de Cumplimiento') && ymd(base) < LOG_INI) {
+        const fl = ymd(fi);
+        if (fl >= LOG_INI && fl <= LOG_FIN && fi > lim5) { fi = null; fuente = ''; }
+      }
       out.push({ c, ref, base, lim5, lim3, limInt, fi, fuente, fSubida, cubre: !propio, sinFecha: !!(c.enlace_informe && !fi) });
     });
     return out;
@@ -308,6 +318,9 @@ function calcular(E) {
     const ev = [];
     const r = mismoDia(ats, ev);
     let num = r.num, den = r.den;
+    /* _KPI_K2_SOLO_AT_V1 (20-nov-2026, decision de Joel): K2 mide SOLO las atenciones. El informe del caso ya se mide en K1
+       (mismo plazo de 5 dias): contarlo tambien aqui castigaba dos veces el mismo retraso. */
+    if (K2_SOLO_ATENCIONES) return { estado: den ? 'ok' : 'sin_datos', num, den, evidencia: ev, fuera_horario: r.fuera };
     casos.forEach(x => {
       if (x.excluido || x.sinFecha || !enR(ymd(x.limInt))) return;
       const c = x.c, pz = M.habilesEntre(x.base, x.limInt);

@@ -53,7 +53,8 @@ k1.evidencia.forEach(e => console.log('   ', e.ref, e.ok, e.detalle));
 assert.equal(k1.num, 3); assert.equal(k1.den, 5); assert.equal(k1.estrellas, 2);   // 1,2,10 ok; 3,4 no; 5 pend; 6 excl
 const k2 = KP('ptamayo', 'K2'); console.log('K2 ptamayo', k2.num, '/', k2.den); k2.evidencia.forEach(e => console.log('   ', e.ref, e.ok, e.detalle));
 // atenciones: 1 ok, 2 no (sin hora excl) ; informes: 1 (limInt 5 hasta 08/09) ok, 2 (limInt 5 -> 14/09) ok, 3 (hasta 21/09) no, 4 sin informe vencido (limInt 23/09) no, 10 (3 dias hasta 02/10) ok, 5 (limInt 3 -> 01/10 hoy) not passed -> skip
-assert.equal(k2.num, 1 + 3); assert.equal(k2.den, 2 + 5);
+assert.equal(k2.num, 1); assert.equal(k2.den, 2);   /* _KPI_K2_SOLO_AT_V1: K2 = solo atenciones (los informes ya cuentan en K1) */
+assert.ok(k2.evidencia.every(e => !/Informe del caso/.test(e.ref)));
 const k3 = KP('ptamayo', 'K3'); console.log('K3 ptamayo', k3.num, '/', k3.den); k3.evidencia.forEach(e => console.log('   ', e.fecha, e.ok, e.detalle, e.sustento || ''));
 // p1: 2 fechas ok; p2: 21 ok, 22 no; p3: opcional no hecho -> excl; p4: ejecutado 25/09 > 15/09 -> tarde (no); p5 pendiente
 assert.equal(k3.num, 3); assert.equal(k3.den, 5);
@@ -65,7 +66,7 @@ assert.equal(KP('fzapata', 'K3').den, 1); assert.equal(KP('fzapata', 'K3').num, 
 assert.equal(KP('almartinez', 'K3').den, 0);   // no toma la programacion de ALEX ZAPATA JUAREZ
 const sm = P('smiranda'); console.log('smiranda', sm.kpis.map(k => k.codigo + ':' + k.estado + ':' + k.num + '/' + k.den).join(' '), 'nota', sm.nota);
 assert.equal(KP('smiranda', 'A1').num, 2); assert.equal(KP('smiranda', 'A1').den, 3);
-assert.equal(KP('smiranda', 'A3').estado, 'en_evaluacion'); assert.equal(KP('smiranda', 'A3').calc_num, 1); assert.equal(KP('smiranda', 'A3').calc_den, 2);
+assert.equal(KP('smiranda', 'A3').estado, 'ok'); assert.equal(KP('smiranda', 'A3').num, 1); assert.equal(KP('smiranda', 'A3').den, 2);   /* _KPI_A3_ACTIVO_V1 (25-oct): A3 ya suma */
 console.log('avisos', r.avisos.map(a => a.clave).join(' | '));
 console.log('niveles', K.nivelPct(1,.95), K.nivelPct(.98,.95), K.nivelPct(.95,.95), K.nivelPct(.9,.95), K.nivelPct(.899,.95), K.nivelPct(.95,.9), K.nivelPct(.9,.9), K.nivelPct(.85,.9), K.nivelPct(.849,.9));
 console.log('notas', [10,12,14.9,15,18,20].map(K.nivelNota).join(','));
@@ -139,4 +140,26 @@ console.log('✅ motor OK');
   const rt = K.calcular({ M: m._kpi, personas: K.PERSONAS, informes, atenciones: ats, eti, notas: {}, hoy: '2026-10-01', desde: '2026-08-01' });
   assert.equal(rt.rango.desde, '2026-09-01');   // nunca antes del inicio de la medicion
   console.log('✅ rango de fechas OK');
+}
+
+/* _KPI_INF_SIN_PRUEBA_V1 (20-nov-2026): caso reportado antes del 19-set con unica fecha de informe en la primera revision (19-23 set) */
+{
+  const D6 = { casos: [
+      C(81, 'POOL WILFREDO TAMAYO RODRIGUEZ', '2026-09-04', { enlace_informe: 'https://x.supabase.co/a.pdf' }),   // log 22-09 > vence 11-09 -> no suma ni resta
+      C(82, 'POOL WILFREDO TAMAYO RODRIGUEZ', '2026-09-16', { enlace_informe: 'https://x.supabase.co/b.pdf' }),   // log 22-09 <= vence 23-09 -> cumple
+      C(83, 'POOL WILFREDO TAMAYO RODRIGUEZ', '2026-09-18', { enlace_informe: 'https://x.supabase.co/c.pdf' }),   // log 29-09 > vence 25-09 -> fuera de plazo (fecha real)
+      C(84, 'POOL WILFREDO TAMAYO RODRIGUEZ', '2026-09-22', { enlace_informe: 'https://x.supabase.co/d.pdf' }),   // reportado despues -> sin cambio (log 23-09 ok)
+      C(85, 'POOL WILFREDO TAMAYO RODRIGUEZ', '2026-09-03', { enlace_informe: 'https://x.supabase.co/e.pdf', fecha_envio_informe: '2026-09-09' })   // envio por correo -> cumple
+    ], config: cfg, usuarios, sups: [], restricc: [], constantes: {}, visitas: [] };
+  const inf6 = { 81: { fecha: '2026-09-22', fuente: 'historial de Cumplimiento' }, 82: { fecha: '2026-09-22', fuente: 'historial de Cumplimiento' },
+    83: { fecha: '2026-09-29', fuente: 'registro de Azure' }, 84: { fecha: '2026-09-23', fuente: 'historial de Cumplimiento' }, 85: { fecha: '2026-09-22', fuente: 'historial de Cumplimiento' } };
+  const r6 = K.calcular({ M: crearMotor(D6)._kpi, personas: K.PERSONAS, informes: inf6, atenciones: [], eti: { programaciones: [], registros: {} }, notas: {}, hoy: '2026-10-15' });
+  const k = r6.personas.find(p => p.usuario === 'ptamayo').kpis.find(x => x.codigo === 'K1');
+  const ev = n => k.evidencia.find(e => e.caso === n);
+  k.evidencia.forEach(e => console.log('   sin-prueba', e.caso, e.ok, e.detalle));
+  assert.equal(ev(81).ok, null); assert.equal(ev(82).ok, true); assert.equal(ev(83).ok, false); assert.equal(ev(84).ok, true); assert.equal(ev(85).ok, true);
+  assert.equal(k.num, 3); assert.equal(k.den, 4);
+  const k2b = r6.personas.find(p => p.usuario === 'ptamayo').kpis.find(x => x.codigo === 'K2');
+  assert.equal(k2b.estado, 'sin_datos');   // sin atenciones: los casos ya no entran a K2
+  console.log('✅ informes sin prueba (antes del 19-set) y K2 solo atenciones OK');
 }
