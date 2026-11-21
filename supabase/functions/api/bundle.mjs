@@ -67445,7 +67445,31 @@ var require_bs = __commonJS({
       }
       return c == null ? "" : c;
     }
-    async function objetos(pool, clave, conHora) {
+    var SD = require_sede();
+    async function sedeBS(pool, u) {
+      try {
+        const modo = await SD.modo(pool, u && u.usuario ? { usuario: u.usuario } : null);
+        return modo === "TODO" ? null : { modo, o: await SD.olmos(pool) };
+      } catch (e) {
+        throw Object.assign(new Error("No se pudo determinar tu sede en este momento. Intenta de nuevo en unos segundos."), { status: 503 });
+      }
+    }
+    function filaOlmosBS(clave, f, o) {
+      if (clave === "bs_hostigamiento_olmos") return true;
+      if (SD.esOlmos(f, o, { empresa: "empresa", fundo: "fundo", usuario: "created_by", supervisor: null })) return true;
+      if (f && f.sede && SD._N(f.sede).indexOf("OLMOS") >= 0) return true;
+      if (f && f.usuario && !f.created_by && o.usuarios.indexOf(String(f.usuario).trim().toLowerCase()) >= 0) return true;
+      return false;
+    }
+    function porSedeBS(clave, filas, sd) {
+      if (!sd || !filas) return filas;
+      const quiere = sd.modo === "OLMOS";
+      return filas.filter((f) => filaOlmosBS(clave, f, sd.o) === quiere);
+    }
+    async function objetos(pool, clave, conHora, sd) {
+      return porSedeBS(clave, await objetosTodos(pool, clave, conHora), sd);
+    }
+    async function objetosTodos(pool, clave, conHora) {
       const d = await H.leer(pool, clave);
       if (!d) return null;
       const enc = d.encabezado.map(plano).map(String), P = conHora ? planoHora : plano;
@@ -67509,7 +67533,7 @@ var require_bs = __commonJS({
         porVencerDias: term ? Math.round((term - hoy) / 864e5) : null
       };
     }
-    async function ficha(pool, dni, perm, esAdmin) {
+    async function ficha(pool, dni, perm, esAdmin, sd) {
       const t0 = Date.now(), ms = {}, hoy = hoyLima();
       const puede = (m) => esAdmin || !!perm[m];
       const out = {
@@ -67530,12 +67554,12 @@ var require_bs = __commonJS({
       };
       const [p, acc, sub, hosP, hosO, dms, docs] = await Promise.all([
         padron(pool, dni),
-        puede("accidentes") ? objetos(pool, "bs_accidentes_casos") : [],
-        puede("subsidios") ? objetos(pool, "bs_subsidios") : [],
-        puede("hostigamiento") ? objetos(pool, "bs_hostigamiento") : [],
-        puede("hostigamiento") ? objetos(pool, "bs_hostigamiento_olmos") : [],
-        puede("descansos") ? objetos(pool, "bs_descansos") : [],
-        objetos(pool, "bs_documentos")
+        puede("accidentes") ? objetos(pool, "bs_accidentes_casos", false, sd) : [],
+        puede("subsidios") ? objetos(pool, "bs_subsidios", false, sd) : [],
+        puede("hostigamiento") ? objetos(pool, "bs_hostigamiento", false, sd) : [],
+        puede("hostigamiento") ? objetos(pool, "bs_hostigamiento_olmos", false, sd) : [],
+        puede("descansos") ? objetos(pool, "bs_descansos", false, sd) : [],
+        objetos(pool, "bs_documentos", false, sd)
       ]);
       ms.lecturas = Date.now() - t0;
       out.padron = p;
@@ -67778,9 +67802,9 @@ var require_bs = __commonJS({
       const dr = Math.round((fl - rHoy()) / 864e5);
       return { estado: dr < 0 ? "rojo" : dr <= RES_CFG.UMBRAL_AMBAR_DIAS ? "ambar" : "verde", diasRestantes: dr };
     };
-    async function resObjetos(pool, clave) {
+    async function resObjetos(pool, clave, sd) {
       try {
-        const f = await objetos(pool, clave);
+        const f = await objetos(pool, clave, false, sd);
         return (f || []).filter((o) => !anulado(o));
       } catch (e) {
         return [];
@@ -67801,7 +67825,7 @@ var require_bs = __commonJS({
         const d = rFecha(fecha);
         recientes.push({ modulo, icon, fecha: rYmd(d), titulo, estado, empresa, _ts: d ? d.getTime() : 0 });
       };
-      const [Q, A, H1, H2, S] = await Promise.all([resObjetos(pool, "bs_quejas"), resObjetos(pool, "bs_accidentes_casos"), ver.hostigamiento ? resObjetos(pool, "bs_hostigamiento") : [], ver.hostigamiento ? resObjetos(pool, "bs_hostigamiento_olmos") : [], resObjetos(pool, "bs_subsidios")]);
+      const [Q, A, H1, H2, S] = await Promise.all([resObjetos(pool, "bs_quejas", P.sd), resObjetos(pool, "bs_accidentes_casos", P.sd), ver.hostigamiento ? resObjetos(pool, "bs_hostigamiento", P.sd) : [], ver.hostigamiento ? resObjetos(pool, "bs_hostigamiento_olmos", P.sd) : [], resObjetos(pool, "bs_subsidios", P.sd)]);
       const quejas = { total: 0, resueltas: 0, pendientes: 0, porEmpresa: { RAPEL: 0, VERFRUT: 0 } };
       Q.forEach((r) => {
         quejas.total++;
@@ -67854,7 +67878,7 @@ var require_bs = __commonJS({
         const e = rVenc(fl);
         alertas.push({ modulo, id, regla, descripcion, fechaBase: rYmd(fb), fechaLimite: rYmd(fl), diasRestantes: e.diasRestantes, estado: e.estado, empresa });
       };
-      const [Q, D, H1, H2, A] = await Promise.all([ver.quejas ? resObjetos(pool, "bs_quejas") : [], ver.descansos ? resObjetos(pool, "bs_descansos") : [], ver.hostigamiento ? resObjetos(pool, "bs_hostigamiento") : [], ver.hostigamiento ? resObjetos(pool, "bs_hostigamiento_olmos") : [], ver.accidentes ? resObjetos(pool, "bs_accidentes_casos") : []]);
+      const [Q, D, H1, H2, A] = await Promise.all([ver.quejas ? resObjetos(pool, "bs_quejas", P.sd) : [], ver.descansos ? resObjetos(pool, "bs_descansos", P.sd) : [], ver.hostigamiento ? resObjetos(pool, "bs_hostigamiento", P.sd) : [], ver.hostigamiento ? resObjetos(pool, "bs_hostigamiento_olmos", P.sd) : [], ver.accidentes ? resObjetos(pool, "bs_accidentes_casos", P.sd) : []]);
       Q.forEach((r) => {
         if (/resuelt|cerrad/i.test(rTxt(r.resultado))) return;
         const fb = rFecha(r.fecha_recepcion);
@@ -67885,7 +67909,7 @@ var require_bs = __commonJS({
       if (ver.lactancia) {
         try {
           const Lm = require_bs_lactancia_motor();
-          const [LA, HO] = await Promise.all([resObjetos(pool, "bs_gs_lactancia"), resObjetos(pool, "bs_gs_lactancia_horarios")]);
+          const [LA, HO] = await Promise.all([resObjetos(pool, "bs_gs_lactancia", P.sd), resObjetos(pool, "bs_gs_lactancia_horarios", P.sd)]);
           const hoy = rYmd(rHoy()), horarios = HO.filter((h) => !rTxt(h.anulado));
           LA.forEach((r) => {
             if (rTxt(r.anulado) || rTxt(r.estado) === "Cerrada") return;
@@ -67935,7 +67959,7 @@ var require_bs = __commonJS({
       const cache = {};
       for (const cfg of cfgs) {
         let rows = [];
-        for (const k of cfg.claves) rows = rows.concat(await resObjetos(pool, k));
+        for (const k of cfg.claves) rows = rows.concat(await resObjetos(pool, k, P.sd));
         cache[cfg.modulo] = rows;
       }
       const usuariosSet = {};
@@ -68068,7 +68092,7 @@ var require_bs = __commonJS({
           const dni = String(q.dni || "").trim();
           if (!/^\d{8}$/.test(dni)) return res(400, { ok: false, success: false, message: "DNI inv\xE1lido (8 d\xEDgitos)." });
           const P = await permisosBS(u, q);
-          const out = await ficha(pool, dni, P.permisos, P.esAdmin);
+          const out = await ficha(pool, dni, P.permisos, P.esAdmin, await sedeBS(pool, u));
           out.success = true;
           out.permisos_fuente = P.fuente;
           return res(200, out);
@@ -68076,10 +68100,12 @@ var require_bs = __commonJS({
         if (accion === "estadisticas") {
           const P = await permisosBS(u, q);
           if (!P.esAdmin && !P.permisos.estadisticas) return res(403, { ok: false, success: false, message: "Sin permiso para Estad\xEDsticas." });
+          P.sd = await sedeBS(pool, u);
           return res(200, await resEstadisticas(pool, P, q));
         }
         if (accion === "dashboard" || accion === "alertas") {
           const P = await permisosBS(u, q);
+          P.sd = await sedeBS(pool, u);
           return res(200, accion === "dashboard" ? await resDashboard(pool, P) : await resAlertas(pool, P));
         }
         if (accion === "permisos") {
@@ -68098,7 +68124,7 @@ var require_bs = __commonJS({
             const PT = await permisosBS(u, q);
             if (!PT.esAdmin && !PT.permisos[modT]) return res(403, { success: false, error: "Sin permiso para el m\xF3dulo " + modT + "." });
           }
-          let filas = await objetos(pool, clave, String(q.hora || "") === "1");
+          let filas = await objetos(pool, clave, String(q.hora || "") === "1", await sedeBS(pool, u));
           if (filas === null) return res(200, { success: true, cargada: false, items: [] });
           if (String(q.anulados || "") !== "1") filas = filas.filter((o) => !anulado(o));
           const dni = String(q.dni || "").trim();

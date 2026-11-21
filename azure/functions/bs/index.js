@@ -69,7 +69,30 @@ function planoHora(c) {   /* _BS_AUDITORIA_SUPA_V1: fecha y hora de Lima 'YYYY-M
   }
   return c == null ? '' : c;
 }
-async function objetos(pool, clave, conHora) {
+/* ═══ _BS_SEDE_V1 (21-nov-2026, decision de Joel): Bienestar por sede, aplicado en el servidor ═══
+   Misma regla del Sistema RR.LL. (shared/sede.js): usuario de Olmos ve solo registros de Olmos; usuario de Piura, solo de Piura;
+   alcance General (y jtimoteo) ve las dos. Un registro es de Olmos si su empresa/fundo/sede es de Olmos o si lo creo un
+   usuario de Olmos (created_by). La tabla bs_hostigamiento_olmos es completa de Olmos. Los registros antiguos (sin nada de
+   Olmos) son de Piura. Llamadas internas (sin usuario) no se filtran. Apagar: secreto SEDE_FILTRO=off. */
+const SD = require('../shared/sede');
+async function sedeBS(pool, u) {
+  try { const modo = await SD.modo(pool, (u && u.usuario) ? { usuario: u.usuario } : null); return modo === 'TODO' ? null : { modo, o: await SD.olmos(pool) }; }
+  catch (e) { throw Object.assign(new Error('No se pudo determinar tu sede en este momento. Intenta de nuevo en unos segundos.'), { status: 503 }); }
+}
+function filaOlmosBS(clave, f, o) {
+  if (clave === 'bs_hostigamiento_olmos') return true;
+  if (SD.esOlmos(f, o, { empresa: 'empresa', fundo: 'fundo', usuario: 'created_by', supervisor: null })) return true;
+  if (f && f.sede && SD._N(f.sede).indexOf('OLMOS') >= 0) return true;
+  if (f && f.usuario && !f.created_by && o.usuarios.indexOf(String(f.usuario).trim().toLowerCase()) >= 0) return true;   /* bs_auditoria */
+  return false;
+}
+function porSedeBS(clave, filas, sd) {
+  if (!sd || !filas) return filas;
+  const quiere = sd.modo === 'OLMOS';
+  return filas.filter(f => filaOlmosBS(clave, f, sd.o) === quiere);
+}
+async function objetos(pool, clave, conHora, sd) { return porSedeBS(clave, await objetosTodos(pool, clave, conHora), sd); }
+async function objetosTodos(pool, clave, conHora) {
   const d = await H.leer(pool, clave); if (!d) return null;
   const enc = d.encabezado.map(plano).map(String), P = conHora ? planoHora : plano;
   return d.filas.map(f => { const o = {}; enc.forEach((k, i) => { if (k) o[k] = P(f[i]); }); return o; });
@@ -106,15 +129,15 @@ function contrato(p, hoy) {
     proximoIndeterminado: tipo === 'plazo_fijo' && dPara >= 0 && dPara <= CFG.PROXIMO_INDET_DIAS, fechaTermino: p.fecha_termino || '', porVencerDias: term ? Math.round((term - hoy) / 86400000) : null };
 }
 
-async function ficha(pool, dni, perm, esAdmin) {
+async function ficha(pool, dni, perm, esAdmin, sd) {
   const t0 = Date.now(), ms = {}, hoy = hoyLima();
   const puede = m => esAdmin || !!perm[m];
   const out = { ok: true, dni, padron: null, contrato: null, kpis: {}, alertas: [], accidentes: [], subsidios: [], hostigamiento: [], descansos: [], documentos: [], timeline: [],
     permisos: { accidentes: puede('accidentes'), subsidios: puede('subsidios'), hostigamiento: puede('hostigamiento'), descansos: puede('descansos') }, fuente: 'azure' };
   const [p, acc, sub, hosP, hosO, dms, docs] = await Promise.all([
-    padron(pool, dni), puede('accidentes') ? objetos(pool, 'bs_accidentes_casos') : [], puede('subsidios') ? objetos(pool, 'bs_subsidios') : [],
-    puede('hostigamiento') ? objetos(pool, 'bs_hostigamiento') : [], puede('hostigamiento') ? objetos(pool, 'bs_hostigamiento_olmos') : [],
-    puede('descansos') ? objetos(pool, 'bs_descansos') : [], objetos(pool, 'bs_documentos')]);
+    padron(pool, dni), puede('accidentes') ? objetos(pool, 'bs_accidentes_casos', false, sd) : [], puede('subsidios') ? objetos(pool, 'bs_subsidios', false, sd) : [],
+    puede('hostigamiento') ? objetos(pool, 'bs_hostigamiento', false, sd) : [], puede('hostigamiento') ? objetos(pool, 'bs_hostigamiento_olmos', false, sd) : [],
+    puede('descansos') ? objetos(pool, 'bs_descansos', false, sd) : [], objetos(pool, 'bs_documentos', false, sd)]);
   ms.lecturas = Date.now() - t0;
   out.padron = p; if (p) out.contrato = contrato(p, hoy);
   if (out.contrato) {
@@ -272,14 +295,14 @@ const rHabil = d => { const w = d.getUTCDay(); return w !== 0 && w !== 6 && RES_
 const rSumaCal = (d, n) => new Date(d.getTime() + n * 86400000);
 const rSumaHab = (d, n) => { let x = new Date(d.getTime()), c = 0; while (c < n) { x = rSumaCal(x, 1); if (rHabil(x)) c++; } return x; };
 const rVenc = fl => { const dr = Math.round((fl - rHoy()) / 86400000); return { estado: dr < 0 ? 'rojo' : dr <= RES_CFG.UMBRAL_AMBAR_DIAS ? 'ambar' : 'verde', diasRestantes: dr }; };
-async function resObjetos(pool, clave) { try { const f = await objetos(pool, clave); return (f || []).filter(o => !anulado(o)); } catch (e) { return []; } }
+async function resObjetos(pool, clave, sd) { try { const f = await objetos(pool, clave, false, sd); return (f || []).filter(o => !anulado(o)); } catch (e) { return []; } }
 function resPermisos(P) { const v = k => P.esAdmin || !!P.permisos[k]; return { quejas: v('quejas'), accidentes: v('accidentes'), hostigamiento: v('hostigamiento'), descansos: v('descansos'), subsidios: v('subsidios'), lactancia: v('gs_lactancia') || v('gs_gestantes') }; }   /* _BS_LACTANCIA_V1: alertas de lactancia para quien tiene el módulo (o Gestantes) */
 
 async function resDashboard(pool, P) {
   const ver = resPermisos(P), tend = {}, recientes = [];
   const bump = (per, mod) => { if (!per) return; if (!tend[per]) tend[per] = { quejas: 0, accidentes: 0, hostigamiento: 0, subsidios: 0 }; tend[per][mod]++; };
   const addRec = (modulo, icon, fecha, titulo, estado, empresa) => { const d = rFecha(fecha); recientes.push({ modulo, icon, fecha: rYmd(d), titulo, estado, empresa, _ts: d ? d.getTime() : 0 }); };
-  const [Q, A, H1, H2, S] = await Promise.all([resObjetos(pool, 'bs_quejas'), resObjetos(pool, 'bs_accidentes_casos'), ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento') : [], ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento_olmos') : [], resObjetos(pool, 'bs_subsidios')]);
+  const [Q, A, H1, H2, S] = await Promise.all([resObjetos(pool, 'bs_quejas', P.sd), resObjetos(pool, 'bs_accidentes_casos', P.sd), ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento', P.sd) : [], ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento_olmos', P.sd) : [], resObjetos(pool, 'bs_subsidios', P.sd)]);
   const quejas = { total: 0, resueltas: 0, pendientes: 0, porEmpresa: { RAPEL: 0, VERFRUT: 0 } };
   Q.forEach(r => { quejas.total++; if (/resuelt|cerrad/i.test(rTxt(r.resultado))) quejas.resueltas++; const e = rEmp(r.empresa); if (quejas.porEmpresa[e] !== undefined) quejas.porEmpresa[e]++; bump(rYm(r.fecha_recepcion), 'quejas'); addRec('Quejas', '📋', r.fecha_recepcion, 'Queja' + (rTxt(r.categoria) ? ' · ' + rTxt(r.categoria) : ''), rTxt(r.resultado) || 'Pendiente', e); });
   quejas.pendientes = quejas.total - quejas.resueltas;
@@ -298,7 +321,7 @@ async function resDashboard(pool, P) {
 async function resAlertas(pool, P) {
   const ver = resPermisos(P), alertas = [];
   const push = (modulo, id, regla, descripcion, fb, fl, empresa) => { const e = rVenc(fl); alertas.push({ modulo, id, regla, descripcion, fechaBase: rYmd(fb), fechaLimite: rYmd(fl), diasRestantes: e.diasRestantes, estado: e.estado, empresa }); };
-  const [Q, D, H1, H2, A] = await Promise.all([ver.quejas ? resObjetos(pool, 'bs_quejas') : [], ver.descansos ? resObjetos(pool, 'bs_descansos') : [], ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento') : [], ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento_olmos') : [], ver.accidentes ? resObjetos(pool, 'bs_accidentes_casos') : []]);
+  const [Q, D, H1, H2, A] = await Promise.all([ver.quejas ? resObjetos(pool, 'bs_quejas', P.sd) : [], ver.descansos ? resObjetos(pool, 'bs_descansos', P.sd) : [], ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento', P.sd) : [], ver.hostigamiento ? resObjetos(pool, 'bs_hostigamiento_olmos', P.sd) : [], ver.accidentes ? resObjetos(pool, 'bs_accidentes_casos', P.sd) : []]);
   Q.forEach(r => { if (/resuelt|cerrad/i.test(rTxt(r.resultado))) return; const fb = rFecha(r.fecha_recepcion); if (!fb) return; const fl = RES_CFG.PLAZO_QUEJAS_TIPO === 'calendario' ? rSumaCal(fb, RES_CFG.PLAZO_QUEJAS_DIAS) : rSumaHab(fb, RES_CFG.PLAZO_QUEJAS_DIAS); push('Quejas', rTxt(r.id), 'Atencion/resolucion', 'Queja' + (rTxt(r.categoria) ? ' · ' + rTxt(r.categoria) : ''), fb, fl, rTxt(r.empresa) ? rEmp(r.empresa) : ''); });
   D.forEach(x => { if (rTxt(x.citt_estado) !== 'Pendiente de canje') return; const fb = rFecha(x.fecha_inicio); if (!fb) return; push('Descansos', x.id, 'Canje de CITT', 'DM ' + rTxt(x.tipo) + ' · ' + rTxt(x.nombre).split(/\s+/).slice(0, 2).join(' '), fb, rSumaCal(fb, RES_CFG.PLAZO_CANJE_CITT), rTxt(x.empresa)); });
   H1.concat(H2).forEach(r => { const fb = rFecha(r.fecha_denuncia); if (!fb) return; const cerrado = /cerrad|resuelt|archivad/i.test(rTxt(r.status)); if (!rTxt(r.medida_proteccion)) push('Hostigamiento', rTxt(r.id), 'Medidas de proteccion (3 dh)', 'Caso de hostigamiento #' + rTxt(r.id), fb, rSumaHab(fb, 3), ''); if (!cerrado) push('Hostigamiento', rTxt(r.id), 'Informe de investigacion (15 dcal)', 'Caso de hostigamiento #' + rTxt(r.id), fb, rSumaCal(fb, 15), ''); });
@@ -307,7 +330,7 @@ async function resAlertas(pool, P) {
   if (ver.lactancia) {
     try {
       const Lm = require('../shared/bs-lactancia-motor');
-      const [LA, HO] = await Promise.all([resObjetos(pool, 'bs_gs_lactancia'), resObjetos(pool, 'bs_gs_lactancia_horarios')]);
+      const [LA, HO] = await Promise.all([resObjetos(pool, 'bs_gs_lactancia', P.sd), resObjetos(pool, 'bs_gs_lactancia_horarios', P.sd)]);
       const hoy = rYmd(rHoy()), horarios = HO.filter(h => !rTxt(h.anulado));
       LA.forEach(r => {
         if (rTxt(r.anulado) || rTxt(r.estado) === 'Cerrada') return;
@@ -339,7 +362,7 @@ async function resEstadisticas(pool, P, q) {
   const ver = resPermisos(P), fModulo = q.modulo && q.modulo !== 'Todos' ? q.modulo : null, fUsuario = q.usuario && q.usuario !== 'Todos' ? q.usuario : null, fEmpresa = q.empresa && q.empresa !== 'Todas' ? q.empresa : null;
   const fDesde = q.desde ? rFecha(q.desde) : null, fHasta = q.hasta ? rFecha(q.hasta) : null, hoy = rHoy();
   const cfgs = EST_CFG.filter(c => c.modulo !== 'Hostigamiento' || ver.hostigamiento);   /* hostigamiento solo con permiso */
-  const cache = {}; for (const cfg of cfgs) { let rows = []; for (const k of cfg.claves) rows = rows.concat(await resObjetos(pool, k)); cache[cfg.modulo] = rows; }
+  const cache = {}; for (const cfg of cfgs) { let rows = []; for (const k of cfg.claves) rows = rows.concat(await resObjetos(pool, k, P.sd)); cache[cfg.modulo] = rows; }
   const usuariosSet = {}; cfgs.forEach(cfg => cache[cfg.modulo].forEach(r => { const u = rTxt(r.created_by); if (u) usuariosSet[u] = true; }));
   const totales = {}, estados = {}, porEmpresa = { RAPEL: {}, VERFRUT: {} }, tendMap = {}, usuariosMap = {}, cumpModulo = {}, cumpUsuario = {}, vencidos = [];
   let generalTotal = 0; const nuevoCump = () => ({ total: 0, cerrados: 0, a_tiempo: 0, fuera: 0, abierto_plazo: 0, vencido: 0, suma_dias_cierre: 0, n_cierre: 0 }); const cumpGlobal = nuevoCump();
@@ -398,14 +421,15 @@ module.exports = async function (context, req) {
       /* _BS_PERMISOS_SERVIDOR_V1 (08-nov-2026): antes el rol podia venir en ?rol= y los permisos en ?permisos= (el navegador
          decidia). Ahora el rol sale SOLO del token y los permisos de "Acceso a Modulos" del RR.LL. (dbo.PermisosModulos). */
       const P = await permisosBS(u, q);
-      const out = await ficha(pool, dni, P.permisos, P.esAdmin); out.success = true; out.permisos_fuente = P.fuente; return res(200, out);
+      const out = await ficha(pool, dni, P.permisos, P.esAdmin, await sedeBS(pool, u)); out.success = true; out.permisos_fuente = P.fuente; return res(200, out);
     }
     if (accion === 'estadisticas') {   /* _BS_RESUMEN_SUPABASE_V1: Estadísticas empresariales (solo administración / permiso estadisticas) */
       const P = await permisosBS(u, q); if (!P.esAdmin && !P.permisos.estadisticas) return res(403, { ok: false, success: false, message: 'Sin permiso para Estadísticas.' });
+      P.sd = await sedeBS(pool, u);   /* _BS_SEDE_V1 */
       return res(200, await resEstadisticas(pool, P, q));
     }
     if (accion === 'dashboard' || accion === 'alertas') {   /* _BS_RESUMEN_SUPABASE_V1 (15-nov-2026): KPIs y alertas del portal desde Supabase */
-      const P = await permisosBS(u, q);
+      const P = await permisosBS(u, q); P.sd = await sedeBS(pool, u);   /* _BS_SEDE_V1 */
       return res(200, accion === 'dashboard' ? await resDashboard(pool, P) : await resAlertas(pool, P));
     }
     if (accion === 'permisos') {   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026): permisos de Bienestar decididos en el servidor ("Acceso a Modulos" del RR.LL.), para que el portal de Bienestar los use en vez de la hoja Usuarios congelada */
@@ -419,7 +443,7 @@ module.exports = async function (context, req) {
       /* _BS_PERMISOS_SERVIDOR_V1: cada tabla exige el permiso de su modulo (calculado en el servidor) */
       const modT = MODULO_DE_CLAVE[clave] || '';
       if (modT && clave !== 'bs_auditoria') { const PT = await permisosBS(u, q); if (!PT.esAdmin && !PT.permisos[modT]) return res(403, { success: false, error: 'Sin permiso para el módulo ' + modT + '.' }); }
-      let filas = await objetos(pool, clave, String(q.hora || '') === '1'); if (filas === null) return res(200, { success: true, cargada: false, items: [] });
+      let filas = await objetos(pool, clave, String(q.hora || '') === '1', await sedeBS(pool, u)); if (filas === null) return res(200, { success: true, cargada: false, items: [] });
       if (String(q.anulados || '') !== '1') filas = filas.filter(o => !anulado(o));   /* _BS_GUARDA_SUPABASE_V1: las páginas de módulo piden anulados=1 y los ocultan ellas (casilla "Ver anulados") */
       const dni = String(q.dni || '').trim(); if (dni) filas = filas.filter(o => [o.dni, o.numero, o.denunciante_dni, o.denunciado_dni].some(v => String(v || '').trim() === dni));
       return res(200, { success: true, cargada: true, total: filas.length, items: filas });

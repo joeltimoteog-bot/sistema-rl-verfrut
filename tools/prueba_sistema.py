@@ -936,7 +936,7 @@ with sync_playwright() as pw:
     EMP_SES['daguilar'] = 'OLMOS'
     c, pg, errs = sesion_perm('daguilar'); pg.wait_for_timeout(2500)
     t1 = pg.evaluate("() => { const o = document.getElementById('boOv'); return o ? o.innerText : 'SIN BIENVENIDA'; }")
-    ok('Bienvenida Olmos: el usuario de empresa OLMOS ve la bienvenida con su nombre, la sede y el contacto de Joel Timoteo', 'Daguilar' in t1 and 'sede Olmos' in t1 and 'Joel Timoteo Gonza' in t1 and 'una sola Gestión Humana' in t1, t1[:160])
+    ok('Bienvenida Olmos: el usuario de empresa OLMOS ve la bienvenida con su nombre, la sede y el contacto de Joel Timoteo', 'Daguilar' in t1 and 'Olmos' in t1 and 'Bienestar Social' in t1 and 'Evaluaciones ETI' in t1 and 'Joel A. Timoteo Gonza' in t1 and 'una sola Gestión Humana' in t1, t1[:160])
     pg.evaluate("() => document.getElementById('boOk').click()")
     pg.reload(wait_until='load'); pg.wait_for_timeout(9000)
     ok('Bienvenida Olmos: tras pulsar Entendido no vuelve a salir', not pg.evaluate("() => !!document.getElementById('boOv')") and not errs, '; '.join(errs[:2])); c.close()
