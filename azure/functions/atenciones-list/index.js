@@ -1,6 +1,7 @@
 const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
 const AC = require('../shared/at-cambios');   /* _AT_CAMBIOS_V1 */
+const SD = require('../shared/sede');   /* _SEDE_SERVIDOR_V1 */
 
 module.exports = async function (context, req) {
   // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
@@ -61,6 +62,8 @@ module.exports = async function (context, req) {
         context.log('[_AT_SOLO_PROPIAS_V1] ' + authUser.usuario + ' (' + rolA + ') solo ve sus atenciones');
       }
     }
+    /* _SEDE_SERVIDOR_V1 (20-nov-2026): cada usuario ve solo las atenciones de su sede (Olmos / Piura); jtimoteo ve las dos */
+    { const fsd = await SD.filtroSQL(pool, request, authUser, null, 'sd'); if (fsd.sql) where.push(fsd.sql); }
     /* _AT_CAMBIOS_V1 (01-oct-2026): ?cambiosDesde=<ISO UTC> -> solo lo que cambio desde esa hora (+ 'ahora' de Azure) */
     let ahora = null;
     if (q.cambiosDesde !== undefined) {

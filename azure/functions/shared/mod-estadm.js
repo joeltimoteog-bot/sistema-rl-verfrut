@@ -16,6 +16,10 @@ const { getPool } = require('./db');
 const LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 const limaHoy = () => new Date(Date.now() - 5 * 3600e3);
+/* _SEDE_SERVIDOR_V1 (20-nov-2026): las cifras se separan por sede (Olmos / Piura) segun quien consulta; jtimoteo ve las dos */
+const SD = require('./sede');
+const SD_FO = "CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(fundo, '')))) IN ('BOMAREA', 'PIRONA', 'MOSQUETA', 'HEFEI', 'LEFKADA') THEN 1 ELSE 0 END";
+const SD_US = "LOWER(LTRIM(RTRIM(ISNULL(usuario_sistema, ''))))";
 let atCache = null;   // { t, d, filas, ultimo }
 async function atencionesAgrupadas() {
   const dia = limaHoy().getUTCDate();
@@ -24,11 +28,11 @@ async function atencionesAgrupadas() {
   const r = await pool.request().query(`
     SELECT supervisor AS s, UPPER(ISNULL(empresa, '')) AS e, UPPER(ISNULL(estado, '')) AS st,
            ISNULL(YEAR(fecha_atencion), 0) AS a, ISNULL(MONTH(fecha_atencion), 0) AS m, COUNT(*) AS n,
-           SUM(CASE WHEN DAY(fecha_atencion) <= ${dia} THEN 1 ELSE 0 END) AS nd
+           SUM(CASE WHEN DAY(fecha_atencion) <= ${dia} THEN 1 ELSE 0 END) AS nd, ${SD_FO} AS fo, ${SD_US} AS us
     FROM dbo.Atenciones
-    GROUP BY supervisor, UPPER(ISNULL(empresa, '')), UPPER(ISNULL(estado, '')), ISNULL(YEAR(fecha_atencion), 0), ISNULL(MONTH(fecha_atencion), 0);
+    GROUP BY supervisor, UPPER(ISNULL(empresa, '')), UPPER(ISNULL(estado, '')), ISNULL(YEAR(fecha_atencion), 0), ISNULL(MONTH(fecha_atencion), 0), ${SD_FO}, ${SD_US};
     SELECT CONVERT(VARCHAR(19), MAX(fecha_registro), 126) AS u FROM dbo.Atenciones;`);
-  const filas = r.recordsets[0].map(x => ({ supervisor: String(x.s || '').trim(), empresa: x.e, estado: x.st, mes: x.m, anio: x.a, n: x.n, nd: x.nd || 0 }));
+  const filas = r.recordsets[0].map(x => ({ supervisor: String(x.s || '').trim(), empresa: x.e, estado: x.st, mes: x.m, anio: x.a, n: x.n, nd: x.nd || 0, fo: Number(x.fo) || 0, us: String(x.us || '') }));
   atCache = { t: Date.now(), d: dia, filas, ultimo: (r.recordsets[1][0] || {}).u || null };
   return atCache;
 }
@@ -70,7 +74,16 @@ function crear(D) {
     const AT = await atencionesAgrupadas();
     let TB = null, fuenteVC = 'tablas';
     try { TB = await tablasVisCas(); } catch (e) { fuenteVC = 'copia de Google'; }
-    const baseAt = filtrarBase(AT.filas, false), baseVi = filtrarBase(TB ? TB.vis : visG, false), baseCa = filtrarBase(TB ? TB.cas : casG, false), baseFu = filtrarBase(fus, true);
+    /* _SEDE_SERVIDOR_V1: solo la sede de quien consulta (p.usuario sale del token; sin usuario = llamada interna, ve todo) */
+    let deSede = arr => arr;
+    if (p.usuario) {
+      const poolS = await getPool(), modoS = await SD.modo(poolS, { usuario: p.usuario });
+      if (modoS !== 'TODO') {
+        const oS = await SD.olmos(poolS), quiere = modoS === 'OLMOS';
+        deSede = arr => arr.filter(x => (x.fo === 1 || SD.esOlmos(x, oS, { empresa: 'empresa', fundo: null, usuario: 'us', supervisor: 'supervisor' })) === quiere);
+      }
+    }
+    const baseAt = filtrarBase(deSede(AT.filas), false), baseVi = filtrarBase(deSede(TB ? TB.vis : visG), false), baseCa = filtrarBase(deSede(TB ? TB.cas : casG), false), baseFu = filtrarBase(deSede(fus), true);
     const at = filtrarFecha(baseAt), vi = filtrarFecha(baseVi), ca = filtrarFecha(baseCa), fu = filtrarFecha(baseFu);
     const refAnio = filtroAnio || anioActual;
     const esteMes = x => x.mes === mesActual && x.anio === refAnio;

@@ -61590,11 +61590,87 @@ var require_atenciones_batch = __commonJS({
   }
 });
 
+// shared/sede.js
+var require_sede = __commonJS({
+  "shared/sede.js"(exports, module) {
+    "use strict";
+    var FUNDOS_OLMOS = ["BOMAREA", "PIRONA", "MOSQUETA", "HEFEI", "LEFKADA"];
+    var VER_AMBAS = ["jtimoteo"];
+    var TTL = 6e4;
+    var _cache = { t: 0, usuarios: [], nombres: [] };
+    var N = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+    var activo = () => String(process.env.SEDE_FILTRO || "").toLowerCase() !== "off";
+    async function olmos(pool) {
+      if (Date.now() - _cache.t < TTL) return _cache;
+      const r = await pool.request().query("SELECT usuario, nombre FROM dbo.usuarios WHERE UPPER(LTRIM(RTRIM(ISNULL(empresa, '')))) = 'OLMOS'");
+      const filas = r.recordset || [];
+      _cache = { t: Date.now(), usuarios: filas.map((x) => String(x.usuario || "").trim().toLowerCase()).filter(Boolean), nombres: filas.map((x) => N(x.nombre)).filter(Boolean) };
+      return _cache;
+    }
+    async function modo(pool, authUser) {
+      if (!activo()) return "TODO";
+      if (!authUser || !authUser.usuario) return "TODO";
+      const u = String(authUser.usuario).trim().toLowerCase();
+      if (VER_AMBAS.indexOf(u) >= 0) return "TODO";
+      const o = await olmos(pool);
+      return o.usuarios.indexOf(u) >= 0 ? "OLMOS" : "PIURA";
+    }
+    function condOlmos(request, o, cols, pref) {
+      const c = Object.assign({ empresa: "empresa", fundo: "fundo", usuario: "usuario_sistema", supervisor: "supervisor" }, cols || {});
+      const p = pref || "sd";
+      const partes = [];
+      if (c.empresa) partes.push(`UPPER(ISNULL(${c.empresa}, '')) LIKE '%OLMOS%'`);
+      if (c.fundo) partes.push(`UPPER(LTRIM(RTRIM(ISNULL(${c.fundo}, '')))) IN (${FUNDOS_OLMOS.map((f) => "'" + f + "'").join(", ")})`);
+      if (c.usuario && o.usuarios.length) {
+        const ks = o.usuarios.map((x, i) => {
+          request.input(p + "u" + i, x);
+          return "@" + p + "u" + i;
+        });
+        partes.push(`LOWER(LTRIM(RTRIM(ISNULL(${c.usuario}, '')))) IN (${ks.join(", ")})`);
+      }
+      if (c.supervisor && o.nombres.length) {
+        const ks = o.nombres.map((x, i) => {
+          request.input(p + "n" + i, x);
+          return "@" + p + "n" + i;
+        });
+        partes.push(`UPPER(LTRIM(RTRIM(ISNULL(${c.supervisor}, '')))) IN (${ks.join(", ")})`);
+      }
+      return "(" + partes.join(" OR ") + ")";
+    }
+    async function filtroSQL(pool, request, authUser, cols, pref) {
+      const m = await modo(pool, authUser);
+      if (m === "TODO") return { modo: m, sql: "" };
+      const o = await olmos(pool);
+      const cond = condOlmos(request, o, cols, pref);
+      return { modo: m, sql: m === "OLMOS" ? cond : "NOT " + cond };
+    }
+    function esOlmos(fila, o, cols) {
+      const c = Object.assign({ empresa: "empresa", fundo: "fundo", usuario: "usuario_sistema", supervisor: "supervisor" }, cols || {});
+      if (!fila) return false;
+      if (c.empresa && N(fila[c.empresa]).indexOf("OLMOS") >= 0) return true;
+      if (c.fundo && FUNDOS_OLMOS.indexOf(N(fila[c.fundo])) >= 0) return true;
+      if (c.usuario && o.usuarios.indexOf(String(fila[c.usuario] || "").trim().toLowerCase()) >= 0) return true;
+      if (c.supervisor && o.nombres.indexOf(N(fila[c.supervisor])) >= 0) return true;
+      return false;
+    }
+    async function filtrarFilas(pool, authUser, filas, cols) {
+      const m = await modo(pool, authUser);
+      if (m === "TODO") return filas;
+      const o = await olmos(pool);
+      return (filas || []).filter((f) => m === "OLMOS" === esOlmos(f, o, cols));
+    }
+    module.exports = { modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, FUNDOS_OLMOS, VER_AMBAS, _N: N, _reset: () => {
+      _cache = { t: 0, usuarios: [], nombres: [] };
+    } };
+  }
+});
+
 // atenciones-by-dni/index.js
 var require_atenciones_by_dni = __commonJS({
   "atenciones-by-dni/index.js"(exports, module) {
     var { sql, getPool } = require_db();
     var { exigirAuth } = require_auth();
+    var SD = require_sede();
     function clasificarDocIncap(t) {
       const x = String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
       if (/MATERNIDAD/.test(x)) return "maternidad";
@@ -61624,7 +61700,13 @@ var require_atenciones_by_dni = __commonJS({
         fechaLimite.setDate(fechaLimite.getDate() - dias);
         fechaLimite.setHours(0, 0, 0, 0);
         const pool = await getPool();
-        const result = await pool.request().input("dni", sql.NVarChar(15), dni).input("fechaLimite", sql.Date, fechaLimite).query(`
+        const conSede = async (rq) => {
+          const f = await SD.filtroSQL(pool, rq, authUser, null, "sd");
+          return f.sql ? " AND " + f.sql : "";
+        };
+        const rq0 = pool.request();
+        const sd0 = await conSede(rq0);
+        const result = await rq0.input("dni", sql.NVarChar(15), dni).input("fechaLimite", sql.Date, fechaLimite).query(`
         SELECT TOP ${topN}
           id, nro, fecha_atencion, dni, nombre, empresa, fundo,
           detalle_documento, fecha_inicio_doc, fecha_termino_doc,
@@ -61632,7 +61714,7 @@ var require_atenciones_by_dni = __commonJS({
           responsable_recepcion, estado
         FROM Atenciones
         WHERE dni = @dni
-          AND fecha_atencion >= @fechaLimite
+          AND fecha_atencion >= @fechaLimite${sd0}
         ORDER BY fecha_atencion DESC, id DESC
       `);
         const atenciones = result.recordset || [];
@@ -61647,10 +61729,12 @@ var require_atenciones_by_dni = __commonJS({
         let contacto;
         if (String(req.query.contacto || "") === "1") {
           try {
-            const rc = await pool.request().input("dni", sql.NVarChar(15), dni).query(`
+            const rqC = pool.request();
+            const sdC = await conSede(rqC);
+            const rc = await rqC.input("dni", sql.NVarChar(15), dni).query(`
           SELECT TOP 20 fecha_atencion, celular, ruta, codigo
           FROM Atenciones
-          WHERE dni = @dni
+          WHERE dni = @dni${sdC}
           ORDER BY fecha_atencion DESC, id DESC`);
             const ymd = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || "").slice(0, 10);
             const lim60 = /* @__PURE__ */ new Date();
@@ -61682,10 +61766,12 @@ var require_atenciones_by_dni = __commonJS({
         if (String(req.query.incap || "") === "1") {
           try {
             const desdeInc = new Date(Date.UTC((/* @__PURE__ */ new Date()).getUTCFullYear() - 1, 0, 1));
-            const ri = await pool.request().input("dni", sql.NVarChar(15), dni).input("desdeInc", sql.Date, desdeInc).query(`
+            const rqI = pool.request();
+            const sdI = await conSede(rqI);
+            const ri = await rqI.input("dni", sql.NVarChar(15), dni).input("desdeInc", sql.Date, desdeInc).query(`
           SELECT TOP 400 nro, detalle_documento, fecha_inicio_doc, fecha_termino_doc
           FROM Atenciones
-          WHERE dni = @dni AND fecha_termino_doc >= @desdeInc
+          WHERE dni = @dni AND fecha_termino_doc >= @desdeInc${sdI}
           ORDER BY fecha_inicio_doc DESC`);
             const ymdI = (v) => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || "").slice(0, 10);
             incapacidad = [];
@@ -62197,19 +62283,21 @@ var require_stats_pizarron = __commonJS({
     var _gen = 0;
     var HOY = "CONVERT(date, SWITCHOFFSET(SYSDATETIMEOFFSET(), '-05:00'))";
     var AHORA = "SWITCHOFFSET(SYSDATETIMEOFFSET(), '-05:00')";
+    var SD_FO = "CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(fundo, '')))) IN ('BOMAREA', 'PIRONA', 'MOSQUETA', 'HEFEI', 'LEFKADA') THEN 1 ELSE 0 END";
+    var SD_US = "LOWER(LTRIM(RTRIM(ISNULL(usuario_sistema, ''))))";
     var Q_BASE = `
-  SELECT supervisor, empresa, estado, anio, mes,
+  SELECT supervisor, empresa, estado, anio, mes, ${SD_FO} AS sd_fo, ${SD_US} AS sd_us,
     SUM(CASE WHEN CONVERT(date, fecha_atencion) = ${HOY} THEN 1 ELSE 0 END) AS hoy,
     SUM(CASE WHEN YEAR(fecha_atencion) = YEAR(${AHORA}) AND MONTH(fecha_atencion) = MONTH(${AHORA}) THEN 1 ELSE 0 END) AS este_mes,
     SUM(CASE WHEN YEAR(fecha_atencion) = YEAR(${AHORA}) THEN 1 ELSE 0 END) AS este_anio,
     COUNT(*) AS n
   FROM Atenciones WITH (NOLOCK)
-  GROUP BY supervisor, empresa, estado, anio, mes`;
+  GROUP BY supervisor, empresa, estado, anio, mes, ${SD_FO}, ${SD_US}`;
     var Q_TIPO = `
-  SELECT detalle_documento AS tipo, supervisor, empresa, anio, COUNT(*) AS n
+  SELECT detalle_documento AS tipo, supervisor, empresa, anio, ${SD_FO} AS sd_fo, ${SD_US} AS sd_us, COUNT(*) AS n
   FROM Atenciones WITH (NOLOCK)
   WHERE detalle_documento IS NOT NULL AND detalle_documento != ''
-  GROUP BY detalle_documento, supervisor, empresa, anio`;
+  GROUP BY detalle_documento, supervisor, empresa, anio, ${SD_FO}, ${SD_US}`;
     var REFRESCO_MIN_MS = 1e4;
     function invalidar() {
       _gen++;
@@ -62265,13 +62353,25 @@ var require_stats_pizarron = __commonJS({
       return [...m.values()];
     }
     var noVacio = (v) => v != null && String(v) !== "";
-    function armar(agg, q) {
+    function filaOlmos(r, o) {
+      if (Number(r.sd_fo) === 1) return true;
+      if (String(r.empresa == null ? "" : r.empresa).toUpperCase().indexOf("OLMOS") >= 0) return true;
+      if (r.sd_us && o.usuarios.indexOf(String(r.sd_us)) >= 0) return true;
+      const sp = String(r.supervisor == null ? "" : r.supervisor).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+      return !!sp && o.nombres.indexOf(sp) >= 0;
+    }
+    function porSede(filas, sede) {
+      if (!sede || sede.modo === "TODO" || !sede.o) return filas;
+      const quiereOlmos = sede.modo === "OLMOS";
+      return filas.filter((r) => filaOlmos(r, sede.o) === quiereOlmos);
+    }
+    function armar(agg, q, sede) {
       const f = {
         anio: q.anio ? parseInt(q.anio, 10) : null,
         empresa: q.empresa ? nrm(q.empresa) : null,
         supervisor: q.supervisor ? String(q.supervisor).toUpperCase() : null
       };
-      const B = agg.base.filter((r) => pasaFiltro(r, f));
+      const B = porSede(agg.base, sede).filter((r) => pasaFiltro(r, f));
       const g = { total: 0, hoy: 0, este_mes: 0, este_anio: 0, en_proceso: 0, finalizados: 0 };
       B.forEach((r) => {
         const n = Number(r.n) || 0, e = nrm(r.estado);
@@ -62313,7 +62413,7 @@ var require_stats_pizarron = __commonJS({
         por_supervisor[x.label] = x.n;
       });
       const por_tipo = {};
-      desc(sumarPor(agg.tipo.filter((r) => pasaFiltro(r, f)), "tipo", noVacio)).forEach((x) => {
+      desc(sumarPor(porSede(agg.tipo, sede).filter((r) => pasaFiltro(r, f)), "tipo", noVacio)).forEach((x) => {
         por_tipo[x.label] = x.n;
       });
       return { success: true, resumen_global: g, por_mes, por_anio, por_empresa, por_estado, por_tipo, por_supervisor, fuente: "AZURE_SQL", pizarron: true };
@@ -62918,6 +63018,7 @@ var require_atenciones_list = __commonJS({
     var { sql, getPool } = require_db();
     var { exigirAuth } = require_auth();
     var AC = require_at_cambios();
+    var SD = require_sede();
     module.exports = async function(context, req) {
       const authUser = exigirAuth(context, req);
       if (authUser === null) return;
@@ -62984,6 +63085,10 @@ var require_atenciones_list = __commonJS({
             request.input("usuarioSesion", sql.NVarChar, String(authUser.usuario));
             context.log("[_AT_SOLO_PROPIAS_V1] " + authUser.usuario + " (" + rolA + ") solo ve sus atenciones");
           }
+        }
+        {
+          const fsd = await SD.filtroSQL(pool, request, authUser, null, "sd");
+          if (fsd.sql) where.push(fsd.sql);
         }
         let ahora = null;
         if (q.cambiosDesde !== void 0) {
@@ -63091,6 +63196,7 @@ var require_atenciones_stats = __commonJS({
   "atenciones-stats/index.js"(exports, module) {
     var { sql, getPool } = require_db();
     var { exigirAuth } = require_auth();
+    var SD = require_sede();
     async function calcularOriginal(context, req) {
       const authUser = exigirAuth(context, req);
       if (authUser === null) return;
@@ -63113,10 +63219,17 @@ var require_atenciones_stats = __commonJS({
           filtros.push("supervisor LIKE @supervisor");
           inputs.supervisor = { type: sql.NVarChar, value: "%" + supervisor + "%" };
         }
+        const oSd = await SD.olmos(pool), modoSd = await SD.modo(pool, req._sedeUser || authUser);
+        if (modoSd !== "TODO") {
+          const cnd = SD.condOlmos({ input() {
+          } }, oSd, null, "sd");
+          filtros.push(modoSd === "OLMOS" ? cnd : "NOT " + cnd);
+        }
         const whereClause = filtros.join(" AND ");
         const runQuery = async (query) => {
           const request = pool.request();
           Object.keys(inputs).forEach((k) => request.input(k, inputs[k].type, inputs[k].value));
+          if (modoSd !== "TODO") SD.condOlmos(request, oSd, null, "sd");
           return await request.query(query);
         };
         const resumenResult = await runQuery(`
@@ -63239,8 +63352,10 @@ var require_atenciones_stats = __commonJS({
       const q = req.query || {};
       try {
         const t0 = Date.now();
-        const agg = await PIZ.leer(await getPool());
-        const body = PIZ.armar(agg, q);
+        const poolP = await getPool();
+        const agg = await PIZ.leer(poolP);
+        const modoSd = await SD.modo(poolP, authUser);
+        const body = PIZ.armar(agg, q, modoSd === "TODO" ? null : { modo: modoSd, o: await SD.olmos(poolP) });
         body.elapsed = Date.now() - t0;
         body.edad_s = Math.round((Date.now() - agg.ts) / 1e3);
         context.res = { status: 200, headers: { "X-Cache": "PIZARRON" }, body };
@@ -63248,7 +63363,14 @@ var require_atenciones_stats = __commonJS({
       } catch (eP) {
         context.log.warn("[atenciones-stats] pizarron no disponible, calculo original: " + eP.message);
       }
-      const k = [q.anio || "", q.empresa || "", q.supervisor || ""].join("|").toUpperCase();
+      let modoK = "TODO";
+      try {
+        modoK = await SD.modo(await getPool(), authUser);
+      } catch (eS) {
+        modoK = "X" + String(authUser && authUser.usuario || "");
+      }
+      req._sedeUser = authUser;
+      const k = [q.anio || "", q.empresa || "", q.supervisor || "", modoK].join("|").toUpperCase();
       const c = _cache.get(k), ahora = Date.now();
       if (c && ahora - c.ts < TTL_MS) {
         context.res = { status: 200, headers: { "X-Cache": "HIT" }, body: c.body };
@@ -79034,6 +79156,9 @@ var require_mod_estadm = __commonJS({
     var { getPool } = require_db();
     var LABELS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
     var limaHoy = () => new Date(Date.now() - 5 * 36e5);
+    var SD = require_sede();
+    var SD_FO = "CASE WHEN UPPER(LTRIM(RTRIM(ISNULL(fundo, '')))) IN ('BOMAREA', 'PIRONA', 'MOSQUETA', 'HEFEI', 'LEFKADA') THEN 1 ELSE 0 END";
+    var SD_US = "LOWER(LTRIM(RTRIM(ISNULL(usuario_sistema, ''))))";
     var atCache = null;
     async function atencionesAgrupadas() {
       const dia = limaHoy().getUTCDate();
@@ -79042,11 +79167,11 @@ var require_mod_estadm = __commonJS({
       const r = await pool.request().query(`
     SELECT supervisor AS s, UPPER(ISNULL(empresa, '')) AS e, UPPER(ISNULL(estado, '')) AS st,
            ISNULL(YEAR(fecha_atencion), 0) AS a, ISNULL(MONTH(fecha_atencion), 0) AS m, COUNT(*) AS n,
-           SUM(CASE WHEN DAY(fecha_atencion) <= ${dia} THEN 1 ELSE 0 END) AS nd
+           SUM(CASE WHEN DAY(fecha_atencion) <= ${dia} THEN 1 ELSE 0 END) AS nd, ${SD_FO} AS fo, ${SD_US} AS us
     FROM dbo.Atenciones
-    GROUP BY supervisor, UPPER(ISNULL(empresa, '')), UPPER(ISNULL(estado, '')), ISNULL(YEAR(fecha_atencion), 0), ISNULL(MONTH(fecha_atencion), 0);
+    GROUP BY supervisor, UPPER(ISNULL(empresa, '')), UPPER(ISNULL(estado, '')), ISNULL(YEAR(fecha_atencion), 0), ISNULL(MONTH(fecha_atencion), 0), ${SD_FO}, ${SD_US};
     SELECT CONVERT(VARCHAR(19), MAX(fecha_registro), 126) AS u FROM dbo.Atenciones;`);
-      const filas = r.recordsets[0].map((x) => ({ supervisor: String(x.s || "").trim(), empresa: x.e, estado: x.st, mes: x.m, anio: x.a, n: x.n, nd: x.nd || 0 }));
+      const filas = r.recordsets[0].map((x) => ({ supervisor: String(x.s || "").trim(), empresa: x.e, estado: x.st, mes: x.m, anio: x.a, n: x.n, nd: x.nd || 0, fo: Number(x.fo) || 0, us: String(x.us || "") }));
       atCache = { t: Date.now(), d: dia, filas, ultimo: (r.recordsets[1][0] || {}).u || null };
       return atCache;
     }
@@ -79087,7 +79212,15 @@ var require_mod_estadm = __commonJS({
         } catch (e) {
           fuenteVC = "copia de Google";
         }
-        const baseAt = filtrarBase(AT.filas, false), baseVi = filtrarBase(TB ? TB.vis : visG, false), baseCa = filtrarBase(TB ? TB.cas : casG, false), baseFu = filtrarBase(fus, true);
+        let deSede = (arr) => arr;
+        if (p.usuario) {
+          const poolS = await getPool(), modoS = await SD.modo(poolS, { usuario: p.usuario });
+          if (modoS !== "TODO") {
+            const oS = await SD.olmos(poolS), quiere = modoS === "OLMOS";
+            deSede = (arr) => arr.filter((x) => (x.fo === 1 || SD.esOlmos(x, oS, { empresa: "empresa", fundo: null, usuario: "us", supervisor: "supervisor" })) === quiere);
+          }
+        }
+        const baseAt = filtrarBase(deSede(AT.filas), false), baseVi = filtrarBase(deSede(TB ? TB.vis : visG), false), baseCa = filtrarBase(deSede(TB ? TB.cas : casG), false), baseFu = filtrarBase(deSede(fus), true);
         const at = filtrarFecha(baseAt), vi = filtrarFecha(baseVi), ca = filtrarFecha(baseCa), fu = filtrarFecha(baseFu);
         const refAnio = filtroAnio || anioActual;
         const esteMes = (x) => x.mes === mesActual && x.anio === refAnio;
@@ -79502,7 +79635,7 @@ var require_mod = __commonJS({
           {
             const _tu = String(_uSeg.usuario).toLowerCase().trim(), _tr = String(_uSeg.rol || "").toLowerCase().trim();
             const _bu = String(req.body.usuario == null ? "" : req.body.usuario).toLowerCase().trim(), _br = String(req.body.rol == null ? "" : req.body.rol).toLowerCase().trim();
-            const _siempre = ["horas", "cap"].indexOf(String(context.bindingData.modulo)) >= 0;
+            const _siempre = ["horas", "cap", "estadm"].indexOf(String(context.bindingData.modulo)) >= 0;
             if (_bu && _bu !== _tu || _br && _br !== _tr) context.log.warn('[mod] _SEG_SERVIDOR_V1: el cuerpo decia usuario/rol "' + _bu + '"/"' + _br + '" y el token "' + _tu + '"/"' + _tr + '": se usa el token');
             if (_bu !== _tu && (_bu || _siempre)) req.body.usuario = _tu;
             if (_br !== _tr && (_br || _siempre)) req.body.rol = _tr;

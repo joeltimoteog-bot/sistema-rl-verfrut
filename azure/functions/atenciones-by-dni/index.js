@@ -1,5 +1,6 @@
 const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
+const SD = require('../shared/sede');   /* _SEDE_SERVIDOR_V1 */
 
 /* _SUBSIDIO_ALERTA_V1: tipo de un documento de atencion para el conteo de incapacidad (misma regla en la pantalla) */
 function clasificarDocIncap(t) {
@@ -44,7 +45,11 @@ module.exports = async function (context, req) {
 
     // Query Azure SQL
     const pool = await getPool();
-    const result = await pool.request()
+    /* _SEDE_SERVIDOR_V1 (20-nov-2026): solo atenciones de la sede del usuario (Olmos / Piura); jtimoteo ve las dos */
+    const conSede = async (rq) => { const f = await SD.filtroSQL(pool, rq, authUser, null, 'sd'); return f.sql ? ' AND ' + f.sql : ''; };
+    const rq0 = pool.request();
+    const sd0 = await conSede(rq0);
+    const result = await rq0
       .input('dni', sql.NVarChar(15), dni)
       .input('fechaLimite', sql.Date, fechaLimite)
       .query(`
@@ -55,7 +60,7 @@ module.exports = async function (context, req) {
           responsable_recepcion, estado
         FROM Atenciones
         WHERE dni = @dni
-          AND fecha_atencion >= @fechaLimite
+          AND fecha_atencion >= @fechaLimite${sd0}
         ORDER BY fecha_atencion DESC, id DESC
       `);
 
@@ -79,10 +84,11 @@ module.exports = async function (context, req) {
     let contacto;
     if (String(req.query.contacto || '') === '1') {
       try {
-        const rc = await pool.request().input('dni', sql.NVarChar(15), dni).query(`
+        const rqC = pool.request(); const sdC = await conSede(rqC);
+        const rc = await rqC.input('dni', sql.NVarChar(15), dni).query(`
           SELECT TOP 20 fecha_atencion, celular, ruta, codigo
           FROM Atenciones
-          WHERE dni = @dni
+          WHERE dni = @dni${sdC}
           ORDER BY fecha_atencion DESC, id DESC`);
         const ymd = v => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || '').slice(0, 10);
         const lim60 = new Date(); lim60.setDate(lim60.getDate() - 60); const l60 = lim60.toISOString().slice(0, 10);
@@ -107,10 +113,11 @@ module.exports = async function (context, req) {
     if (String(req.query.incap || '') === '1') {
       try {
         const desdeInc = new Date(Date.UTC(new Date().getUTCFullYear() - 1, 0, 1));
-        const ri = await pool.request().input('dni', sql.NVarChar(15), dni).input('desdeInc', sql.Date, desdeInc).query(`
+        const rqI = pool.request(); const sdI = await conSede(rqI);
+        const ri = await rqI.input('dni', sql.NVarChar(15), dni).input('desdeInc', sql.Date, desdeInc).query(`
           SELECT TOP 400 nro, detalle_documento, fecha_inicio_doc, fecha_termino_doc
           FROM Atenciones
-          WHERE dni = @dni AND fecha_termino_doc >= @desdeInc
+          WHERE dni = @dni AND fecha_termino_doc >= @desdeInc${sdI}
           ORDER BY fecha_inicio_doc DESC`);
         const ymdI = v => v instanceof Date ? v.toISOString().slice(0, 10) : String(v || '').slice(0, 10);
         incapacidad = [];

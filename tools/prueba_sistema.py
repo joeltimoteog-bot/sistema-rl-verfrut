@@ -889,9 +889,10 @@ with sync_playwright() as pw:
 
     # ───────── PERMISOS BLINDADOS (supervisor real: fpulache) ─────────
     PF = {"mod_dashboard": True, "navAt": True, "navCasos": True, "navVisitas": True, "navMisEstadisticas": True, "navFusiones": False, "navMonitor": False, "navHoras": False, "mod_trabajadores": True}
+    EMP_SES = {}   # _BIENV_OLMOS_V1: empresa por usuario de prueba
     def sesion_perm(usuario, ls_perm=None):
         c = nav.new_context(service_workers='block')
-        U = {'usuario': usuario, 'nombre': usuario.upper(), 'rol': 'supervisor', 'sector': '', 'empresa': 'VERFRUT'}
+        U = {'usuario': usuario, 'nombre': usuario.upper(), 'rol': 'supervisor', 'sector': '', 'empresa': EMP_SES.get(usuario, 'VERFRUT')}
         c.add_init_script(SIN_ESCAPE)
         c.add_init_script('sessionStorage.setItem("user", ' + json.dumps(json.dumps(U)) + '); sessionStorage.setItem("rl_token","x"); sessionStorage.setItem("api","https://script.google.com/macros/s/AKfycbxZP3UGad-XwRl7sCYmTxeex57b1hEfmqslhe5x0IOzzvpbEbM4VYFR2d52b_YMB1lyyA/exec");'
                           + 'try{localStorage.setItem("rl_nov_2026-09-23_' + usuario + '","1")}catch(e){}'
@@ -925,6 +926,18 @@ with sync_playwright() as pw:
     ok('Permisos: si la revision automatica falla, el menu queda como estaba', not cambio and m['casos'] and m['fusiones'] is False, str(cambio) + ' | ' + json.dumps(m))
     ACC['modo'] = 'ok'; PERMX['gas_falla'] = False
     ok('Permisos: la revision automatica no deja errores de JavaScript', not errs, '; '.join(errs[:3])); c.close()
+    # _BIENV_OLMOS_V1: bienvenida a la sede Olmos (una sola vez); los usuarios de Piura no la ven
+    PERMX['resp'] = {'success': True, 'permisos': PF, 'vacio': False, 'usuario': 'daguilar', 'fuente': 'azure'}
+    EMP_SES['daguilar'] = 'OLMOS'
+    c, pg, errs = sesion_perm('daguilar'); pg.wait_for_timeout(2500)
+    t1 = pg.evaluate("() => { const o = document.getElementById('boOv'); return o ? o.innerText : 'SIN BIENVENIDA'; }")
+    ok('Bienvenida Olmos: el usuario de empresa OLMOS ve la bienvenida con su nombre, la sede y el contacto de Joel Timoteo', 'Daguilar' in t1 and 'sede Olmos' in t1 and 'Joel Timoteo Gonza' in t1 and 'una sola Gestión Humana' in t1, t1[:160])
+    pg.evaluate("() => document.getElementById('boOk').click()")
+    pg.reload(wait_until='load'); pg.wait_for_timeout(9000)
+    ok('Bienvenida Olmos: tras pulsar Entendido no vuelve a salir', not pg.evaluate("() => !!document.getElementById('boOv')") and not errs, '; '.join(errs[:2])); c.close()
+    PERMX['resp'] = {'success': True, 'permisos': PF, 'vacio': False, 'usuario': 'fpulache', 'fuente': 'azure'}
+    c, pg, errs = sesion_perm('fpulache'); pg.wait_for_timeout(2500)
+    ok('Bienvenida Olmos: un usuario de Piura no la ve', not pg.evaluate("() => !!document.getElementById('boOv')")); c.close()
     # 2) Azure y Google fallan, sin permisos previos -> solo lo basico
     ACC['modo'] = 'caido'; PERMX['gas_falla'] = True
     c, pg, errs = sesion_perm('fpulache')

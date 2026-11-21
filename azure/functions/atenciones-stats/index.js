@@ -1,5 +1,6 @@
 const { sql, getPool } = require('../shared/db');
 const { exigirAuth } = require('../shared/auth');
+const SD = require('../shared/sede');   /* _SEDE_SERVIDOR_V1 */
 
 async function calcularOriginal(context, req) {
   // Validación JWT (modo suave hasta activar JWT_REQUIRED=1)
@@ -27,11 +28,15 @@ async function calcularOriginal(context, req) {
       filtros.push('supervisor LIKE @supervisor');
       inputs.supervisor = { type: sql.NVarChar, value: '%' + supervisor + '%' };
     }
+    /* _SEDE_SERVIDOR_V1: solo la sede del usuario */
+    const oSd = await SD.olmos(pool), modoSd = await SD.modo(pool, req._sedeUser || authUser);
+    if (modoSd !== 'TODO') { const cnd = SD.condOlmos({ input() {} }, oSd, null, 'sd'); filtros.push(modoSd === 'OLMOS' ? cnd : 'NOT ' + cnd); }
     const whereClause = filtros.join(' AND ');
 
     const runQuery = async (query) => {
       const request = pool.request();
       Object.keys(inputs).forEach(k => request.input(k, inputs[k].type, inputs[k].value));
+      if (modoSd !== 'TODO') SD.condOlmos(request, oSd, null, 'sd');   /* agrega los parametros @sdu.. / @sdn.. */
       return await request.query(query);
     };
 
@@ -172,15 +177,21 @@ module.exports = async function (context, req) {
   /* 1) Pizarron: una lectura agrupada por minuto para TODOS; si falla, el calculo de siempre (abajo) */
   try {
     const t0 = Date.now();
-    const agg = await PIZ.leer(await getPool());
-    const body = PIZ.armar(agg, q);
+    const poolP = await getPool();
+    const agg = await PIZ.leer(poolP);
+    /* _SEDE_SERVIDOR_V1 (20-nov-2026): las cifras son solo de la sede del usuario (Olmos / Piura); jtimoteo ve las dos */
+    const modoSd = await SD.modo(poolP, authUser);
+    const body = PIZ.armar(agg, q, modoSd === 'TODO' ? null : { modo: modoSd, o: await SD.olmos(poolP) });
     body.elapsed = Date.now() - t0; body.edad_s = Math.round((Date.now() - agg.ts) / 1000);
     context.res = { status: 200, headers: { 'X-Cache': 'PIZARRON' }, body };
     return;
   } catch (eP) {
     context.log.warn('[atenciones-stats] pizarron no disponible, calculo original: ' + eP.message);
   }
-  const k = [q.anio || '', q.empresa || '', q.supervisor || ''].join('|').toUpperCase();
+  /* _SEDE_SERVIDOR_V1: en el calculo de respaldo la sede va en el WHERE y en la clave de la memoria (una memoria por sede) */
+  let modoK = 'TODO'; try { modoK = await SD.modo(await getPool(), authUser); } catch (eS) { modoK = 'X' + String((authUser && authUser.usuario) || ''); }
+  req._sedeUser = authUser;
+  const k = [q.anio || '', q.empresa || '', q.supervisor || '', modoK].join('|').toUpperCase();
   const c = _cache.get(k), ahora = Date.now();
   if (c && (ahora - c.ts) < TTL_MS) {
     context.res = { status: 200, headers: { 'X-Cache': 'HIT' }, body: c.body };

@@ -132,7 +132,7 @@ module.exports = async function (context, req) {
       {
         const _tu = String(_uSeg.usuario).toLowerCase().trim(), _tr = String(_uSeg.rol || '').toLowerCase().trim();
         const _bu = String(req.body.usuario == null ? '' : req.body.usuario).toLowerCase().trim(), _br = String(req.body.rol == null ? '' : req.body.rol).toLowerCase().trim();
-        const _siempre = ['horas', 'cap'].indexOf(String(context.bindingData.modulo)) >= 0;
+        const _siempre = ['horas', 'cap', 'estadm'].indexOf(String(context.bindingData.modulo)) >= 0;   /* _SEDE_SERVIDOR_V1: estadm separa por sede segun el usuario del token */
         if ((_bu && _bu !== _tu) || (_br && _br !== _tr)) context.log.warn('[mod] _SEG_SERVIDOR_V1: el cuerpo decia usuario/rol "' + _bu + '"/"' + _br + '" y el token "' + _tu + '"/"' + _tr + '": se usa el token');
         if (_bu !== _tu && (_bu || _siempre)) req.body.usuario = _tu;
         if (_br !== _tr && (_br || _siempre)) req.body.rol = _tr;
