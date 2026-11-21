@@ -80994,6 +80994,9 @@ var require_prec = __commonJS({
         const pool = await getPool();
         await asegurarTabla(pool);
         const porU = POR_USUARIO();
+        const SD = require_sede(), COLS_P = { empresa: "empresa", fundo: "fundo", usuario: "creado_por", supervisor: null }, COLS_C = { empresa: "empresa", fundo: "sector", usuario: null, supervisor: "registrado_por" };
+        const modoS = await SD.modo(pool, t);
+        const otraSede = async (f, cols) => modoS !== "TODO" && !!f && SD.esOlmos(f, await SD.olmos(pool), cols) !== (modoS === "OLMOS");
         if (accion === "aviso") {
           const dni = s(b.dni, 20);
           if (!dniOk(dni)) {
@@ -81002,9 +81005,9 @@ var require_prec = __commonJS({
           }
           const yo = await quien(pool, usuario, t), mios = [usuario, s(yo.nombre).toLowerCase(), s(t.nombre).toLowerCase()].filter(Boolean);
           const [rp, rc] = await Promise.all([
-            pool.request().input("dni", sql.NVarChar(20), dni).query(`SELECT TOP (50) id, codigo, caso_fecha, creado, materia, motivo_falta, creado_por, creado_nombre, creado_sector
+            pool.request().input("dni", sql.NVarChar(20), dni).query(`SELECT TOP (50) id, codigo, caso_fecha, creado, materia, motivo_falta, creado_por, creado_nombre, creado_sector, empresa, fundo
           FROM dbo.Casos_Precedentes WHERE activo = 1 AND dni = @dni ORDER BY COALESCE(caso_fecha, creado) DESC, id DESC`),
-            pool.request().input("dni", sql.NVarChar(20), dni).query(`SELECT TOP (50) nro, fecha_reg, fecha_reporte, motivo, sector, supervisor, registrado_por
+            pool.request().input("dni", sql.NVarChar(20), dni).query(`SELECT TOP (50) nro, fecha_reg, fecha_reporte, motivo, sector, supervisor, registrado_por, empresa
           FROM dbo.Casos WHERE dni = @dni AND nro IS NOT NULL ORDER BY COALESCE(fecha_reporte, fecha_reg) DESC, nro DESC`).catch(() => ({ recordset: [] }))
           ]);
           const nrm = (v) => s(v, 300).normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -81021,6 +81024,10 @@ var require_prec = __commonJS({
             secDe = {};
           }
           const miosN = mios.map(nrm);
+          if (modoS !== "TODO") {
+            rp.recordset = await SD.filtrarFilas(pool, t, rp.recordset, COLS_P);
+            rc.recordset = await SD.filtrarFilas(pool, t, rc.recordset, COLS_C);
+          }
           const excluir = parseInt(b.excluir_id, 10) || 0;
           const items = [];
           rp.recordset.filter((x) => x.id !== excluir).forEach((x) => {
@@ -81061,7 +81068,8 @@ var require_prec = __commonJS({
           return;
         }
         if (accion === "materias") {
-          const r = await pool.request().query("SELECT materia, COUNT(*) AS n FROM dbo.Casos_Precedentes WHERE activo = 1 GROUP BY materia ORDER BY n DESC");
+          const rqM = pool.request(), fsM = await SD.filtroSQL(pool, rqM, t, COLS_P, "sm");
+          const r = await rqM.query("SELECT materia, COUNT(*) AS n FROM dbo.Casos_Precedentes WHERE activo = 1" + (fsM.sql ? " AND " + fsM.sql : "") + " GROUP BY materia ORDER BY n DESC");
           context.res = { status: 200, body: { success: true, materias: r.recordset, sanciones: SANCIONES } };
           return;
         }
@@ -81099,6 +81107,8 @@ var require_prec = __commonJS({
             w.push("(hechos LIKE @q OR procedimiento LIKE @q OR motivo_precedente LIKE @q OR palabras_clave LIKE @q OR nombre LIKE @q OR codigo LIKE @q OR caso_nro LIKE @q OR motivo_falta LIKE @q OR dni LIKE @q)");
             rq.input("q", sql.NVarChar(200), "%" + s(b.q, 150) + "%");
           }
+          const fsL = await SD.filtroSQL(pool, rq, t, COLS_P, "sl");
+          if (fsL.sql) w.push(fsL.sql);
           const top = Math.min(Math.max(parseInt(b.top, 10) || 200, 1), 500);
           const r = await rq.query(`SELECT TOP (${top}) id, codigo, dni, nombre, empresa, fundo, cargo, caso_nro, caso_fecha, materia, sancion, palabras_clave,
           LEFT(hechos, 220) AS hechos, LEFT(motivo_precedente, 220) AS motivo_precedente, creado_por, creado, actualizado,
@@ -81109,7 +81119,7 @@ var require_prec = __commonJS({
         }
         if (accion === "obtener") {
           const r = await pool.request().input("id", sql.Int, parseInt(b.id, 10) || 0).query("SELECT * FROM dbo.Casos_Precedentes WHERE id = @id AND activo = 1");
-          if (!r.recordset.length) {
+          if (!r.recordset.length || await otraSede(r.recordset[0], COLS_P)) {
             context.res = { status: 200, body: { success: false, error: "No existe el precedente" } };
             return;
           }
@@ -81123,6 +81133,13 @@ var require_prec = __commonJS({
         if (!porU && !esAdm) {
           context.res = { status: 403, body: { success: false, error: "Solo administracion puede registrar o modificar precedentes" } };
           return;
+        }
+        if (modoS !== "TODO" && (accion === "editar" || accion === "eliminar")) {
+          const rS = await pool.request().input("id", sql.Int, parseInt(b.id, 10) || 0).query("SELECT empresa, fundo, creado_por FROM dbo.Casos_Precedentes WHERE id = @id AND activo = 1");
+          if (rS.recordset.length && await otraSede(rS.recordset[0], COLS_P)) {
+            context.res = { status: 403, body: { success: false, error: SD.MSG_OTRA_SEDE } };
+            return;
+          }
         }
         if (porU && !esAdm && (accion === "editar" || accion === "eliminar")) {
           const due = await pool.request().input("id", sql.Int, parseInt(b.id, 10) || 0).query("SELECT creado_por FROM dbo.Casos_Precedentes WHERE id = @id AND activo = 1");

@@ -6901,8 +6901,11 @@ function getCCFinal() {
 
 function _fbAplicarEstadisticasFirebase(fbData) {
   if (!fbData) return;
-  _fbEstadisticas = fbData;
-  window._fbEstadisticas = fbData;
+  /* _SEDE_FB_STATS_V1 (21-nov-2026, decision de Joel): /estadisticas de Firebase es un resumen GLOBAL (no distingue sede).
+     Un usuario de Olmos no lo usa: sus cifras salen del servidor (Supabase), que ya entrega solo lo de su sede.
+     El refresco en vivo de la lista de atenciones se conserva. */
+  const _sedeOlmosFb = (function () { try { return String((USER && USER.empresa) || '').toUpperCase().trim() === 'OLMOS'; } catch (e) { return false; } })();
+  if (!_sedeOlmosFb) { _fbEstadisticas = fbData; window._fbEstadisticas = fbData; }
   // FB-refresh-at: en cada evento Firebase real-time refrescar la lista "Mis Atenciones" (debounced 1.5s).
   // Cuando un supervisor registra una atencion, Firebase dispara onValue -> aqui re-fetch sin polling.
   try {
@@ -6922,6 +6925,7 @@ function _fbAplicarEstadisticasFirebase(fbData) {
       }, 700 + Math.floor(Math.random() * 2300));   /* _AT_VIGIA_V1 (02-nov): 0,7–3 s (antes 3–30 s: los usuarios creian que no se actualizaba). refrescarAtencionesHoy solo trae lo que cambio (_AT_CAMBIOS_V1), asi que el costo es minimo */
     }
   } catch (e) { /* no romper el flujo si falla */ }
+  if (_sedeOlmosFb) return;   /* _SEDE_FB_STATS_V1 */
   const rg = fbData.resumen_global;
   if (!rg) return;
 

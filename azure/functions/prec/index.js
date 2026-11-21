@@ -110,6 +110,14 @@ module.exports = async function (context, req) {
     const b = req.body || {};
     const pool = await getPool(); await asegurarTabla(pool);
     const porU = POR_USUARIO();   /* _PREC_USUARIO_V1 */
+    /* _PREC_SEDE_V1 (21-nov-2026, decision de Joel): Precedentes tambien se separa por sede (shared/sede.js).
+       Un precedente es de Olmos si su empresa o fundo es de Olmos o lo registro un usuario de Olmos. Vale para TODOS,
+       tambien para la administracion: solo jtimoteo y quien tenga alcance GENERAL ven las dos sedes.
+       El aviso general de reincidencia muestra solo casos y precedentes de la sede del usuario. Apagar: SEDE_FILTRO=off. */
+    const SD = require('../shared/sede'), COLS_P = { empresa: 'empresa', fundo: 'fundo', usuario: 'creado_por', supervisor: null },
+      COLS_C = { empresa: 'empresa', fundo: 'sector', usuario: null, supervisor: 'registrado_por' };
+    const modoS = await SD.modo(pool, t);
+    const otraSede = async (f, cols) => modoS !== 'TODO' && !!f && SD.esOlmos(f, await SD.olmos(pool), cols) !== (modoS === 'OLMOS');
 
     /* _PREC_USUARIO_V1: aviso general de reincidencia (solo lo minimo de lo registrado por otros) */
     if (accion === 'aviso') {
@@ -117,9 +125,9 @@ module.exports = async function (context, req) {
       if (!dniOk(dni)) { context.res = { status: 200, body: { success: true, items: [], casos: 0, precedentes: 0 } }; return; }
       const yo = await quien(pool, usuario, t), mios = [usuario, s(yo.nombre).toLowerCase(), s(t.nombre).toLowerCase()].filter(Boolean);
       const [rp, rc] = await Promise.all([
-        pool.request().input('dni', sql.NVarChar(20), dni).query(`SELECT TOP (50) id, codigo, caso_fecha, creado, materia, motivo_falta, creado_por, creado_nombre, creado_sector
+        pool.request().input('dni', sql.NVarChar(20), dni).query(`SELECT TOP (50) id, codigo, caso_fecha, creado, materia, motivo_falta, creado_por, creado_nombre, creado_sector, empresa, fundo
           FROM dbo.Casos_Precedentes WHERE activo = 1 AND dni = @dni ORDER BY COALESCE(caso_fecha, creado) DESC, id DESC`),
-        pool.request().input('dni', sql.NVarChar(20), dni).query(`SELECT TOP (50) nro, fecha_reg, fecha_reporte, motivo, sector, supervisor, registrado_por
+        pool.request().input('dni', sql.NVarChar(20), dni).query(`SELECT TOP (50) nro, fecha_reg, fecha_reporte, motivo, sector, supervisor, registrado_por, empresa
           FROM dbo.Casos WHERE dni = @dni AND nro IS NOT NULL ORDER BY COALESCE(fecha_reporte, fecha_reg) DESC, nro DESC`).catch(() => ({ recordset: [] }))
       ]);
       /* _PREC_USUARIO_V2 (12-nov, verificado con datos reales): en los CASOS "registrado_por" es el NOMBRE de quien lo registro
@@ -132,6 +140,7 @@ module.exports = async function (context, req) {
         pp.recordset.forEach((x) => { const sec = s(x.sector, 120); if (!sec) return; if (x.nombre_mostrar) secDe[nrm(x.nombre_mostrar)] = sec; if (x.usuario) secDe[nrm(x.usuario)] = sec; });
       } catch (e) { secDe = {}; }
       const miosN = mios.map(nrm);
+      if (modoS !== 'TODO') { rp.recordset = await SD.filtrarFilas(pool, t, rp.recordset, COLS_P); rc.recordset = await SD.filtrarFilas(pool, t, rc.recordset, COLS_C); }   /* _PREC_SEDE_V1 */
       const excluir = parseInt(b.excluir_id, 10) || 0;
       const items = [];
       rp.recordset.filter((x) => x.id !== excluir).forEach((x) => {
@@ -152,7 +161,8 @@ module.exports = async function (context, req) {
     }
 
     if (accion === 'materias') {
-      const r = await pool.request().query('SELECT materia, COUNT(*) AS n FROM dbo.Casos_Precedentes WHERE activo = 1 GROUP BY materia ORDER BY n DESC');
+      const rqM = pool.request(), fsM = await SD.filtroSQL(pool, rqM, t, COLS_P, 'sm');   /* _PREC_SEDE_V1 */
+      const r = await rqM.query('SELECT materia, COUNT(*) AS n FROM dbo.Casos_Precedentes WHERE activo = 1' + (fsM.sql ? ' AND ' + fsM.sql : '') + ' GROUP BY materia ORDER BY n DESC');
       context.res = { status: 200, body: { success: true, materias: r.recordset, sanciones: SANCIONES } }; return;
     }
     if (accion === 'listar') {
@@ -166,6 +176,7 @@ module.exports = async function (context, req) {
       if (s(b.empresa)) { w.push('empresa = @empresa'); rq.input('empresa', sql.NVarChar(60), s(b.empresa, 60).toUpperCase()); }
       if (/^\d{4}$/.test(s(b.anio))) { w.push('YEAR(COALESCE(caso_fecha, creado)) = @anio'); rq.input('anio', sql.Int, +s(b.anio)); }
       if (s(b.q)) { w.push('(hechos LIKE @q OR procedimiento LIKE @q OR motivo_precedente LIKE @q OR palabras_clave LIKE @q OR nombre LIKE @q OR codigo LIKE @q OR caso_nro LIKE @q OR motivo_falta LIKE @q OR dni LIKE @q)'); rq.input('q', sql.NVarChar(200), '%' + s(b.q, 150) + '%'); }
+      const fsL = await SD.filtroSQL(pool, rq, t, COLS_P, 'sl'); if (fsL.sql) w.push(fsL.sql);   /* _PREC_SEDE_V1 */
       const top = Math.min(Math.max(parseInt(b.top, 10) || 200, 1), 500);
       const r = await rq.query(`SELECT TOP (${top}) id, codigo, dni, nombre, empresa, fundo, cargo, caso_nro, caso_fecha, materia, sancion, palabras_clave,
           LEFT(hechos, 220) AS hechos, LEFT(motivo_precedente, 220) AS motivo_precedente, creado_por, creado, actualizado,
@@ -175,11 +186,15 @@ module.exports = async function (context, req) {
     }
     if (accion === 'obtener') {
       const r = await pool.request().input('id', sql.Int, parseInt(b.id, 10) || 0).query('SELECT * FROM dbo.Casos_Precedentes WHERE id = @id AND activo = 1');
-      if (!r.recordset.length) { context.res = { status: 200, body: { success: false, error: 'No existe el precedente' } }; return; }
+      if (!r.recordset.length || await otraSede(r.recordset[0], COLS_P)) { context.res = { status: 200, body: { success: false, error: 'No existe el precedente' } }; return; }   /* _PREC_SEDE_V1 */
       if (porU && !esAdm && s(r.recordset[0].creado_por).toLowerCase() !== usuario) { context.res = { status: 403, body: { success: false, error: 'Ese precedente lo registro otro usuario: solo el y la administracion ven el detalle' } }; return; }   /* _PREC_USUARIO_V1 */
       context.res = { status: 200, body: { success: true, data: fila(r.recordset[0]) } }; return;
     }
     if (!porU && !esAdm) { context.res = { status: 403, body: { success: false, error: 'Solo administracion puede registrar o modificar precedentes' } }; return; }
+    if (modoS !== 'TODO' && (accion === 'editar' || accion === 'eliminar')) {   /* _PREC_SEDE_V1: nadie modifica ni elimina un precedente de la otra sede */
+      const rS = await pool.request().input('id', sql.Int, parseInt(b.id, 10) || 0).query('SELECT empresa, fundo, creado_por FROM dbo.Casos_Precedentes WHERE id = @id AND activo = 1');
+      if (rS.recordset.length && await otraSede(rS.recordset[0], COLS_P)) { context.res = { status: 403, body: { success: false, error: SD.MSG_OTRA_SEDE } }; return; }
+    }
     /* _PREC_USUARIO_V1: editar o eliminar = solo quien lo registro o la administracion */
     if (porU && !esAdm && (accion === 'editar' || accion === 'eliminar')) {
       const due = await pool.request().input('id', sql.Int, parseInt(b.id, 10) || 0).query('SELECT creado_por FROM dbo.Casos_Precedentes WHERE id = @id AND activo = 1');
