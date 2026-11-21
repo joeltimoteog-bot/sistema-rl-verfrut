@@ -114,7 +114,7 @@
   function edgePausadoViejo_() { try { return Date.now() < +(sessionStorage.getItem('rl_edge_pausa') || 0); } catch (e) { return false; } }
   function edgeFalla(motivo) {
     edgeFallas++;
-    try { console.warn('[_EDGE_V1] Supabase no respondio (' + motivo + '): se usa Azure'); } catch (e) {}
+    try { console.warn('[_EDGE_V1] Supabase no respondio (' + motivo + '): revisa la conexion de este equipo (no hay respaldo en Azure)'); } catch (e) {}
     if (edgeFallas >= 3) { edgeFallas = 0; try { sessionStorage.setItem('rl_edge_pausa', String(Date.now() + 5 * 60000)); } catch (e) {} }
   }
   /* _REINTENTO_LECTURA_V1 (19-nov-2026): LOG_ERRORES mostro que casi todas las "fallas de Supabase" son cortes de senal del

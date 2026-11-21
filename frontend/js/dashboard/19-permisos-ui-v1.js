@@ -467,5 +467,58 @@ window._permRestaurar = function () {
   };
 })();
 
+/* ═════════════════════════════════════════════════════════════════
+   _PERM_REFRESCO_V1 (20-nov-2026, decision de Joel) — los cambios de "Acceso a Modulos"
+   llegan solos a las sesiones abiertas, sin recargar ni volver a iniciar sesion.
+   · Cada 60 s (solo con la pestana visible) y al volver a la pestana, se leen los permisos
+     propios en Supabase (consulta liviana, ~0,3-0,7 s). Si cambiaron, se aplica el menu nuevo
+     y se avisa con un mensaje.
+   · Si la consulta falla o llega algo raro, NO se toca nada (el menu queda como estaba).
+   · No aplica a jtimoteo ni a usuarios sin permisos definidos (menu de siempre).
+   · Apagar: localStorage.rl_perm_refresco = 'off'.
+   ═════════════════════════════════════════════════════════════════ */
+(function () {
+  try { if (localStorage.getItem('rl_perm_refresco') === 'off') return; } catch (e) {}
+  var CADA = 60000, enCurso = false, ultimo = 0;
+  function firma(o) { try { return JSON.stringify(Object.keys(o || {}).sort().map(function (k) { return k + ':' + (o[k] ? 1 : 0); })); } catch (e) { return ''; } }
+  async function revisar(motivo, forzar) {
+    if (enCurso || (document.hidden && !forzar)) return false;
+    if (typeof USER === 'undefined' || !USER || !USER.usuario) return false;
+    if (String(USER.usuario).toLowerCase().trim() === 'jtimoteo') return false;
+    if (!_permMios) return false;
+    if (!forzar && Date.now() - ultimo < 20000) return false;
+    enCurso = true; ultimo = Date.now();
+    try {
+      var d = await apiPost({ action: 'permisosListar', usuario: USER.usuario, rol: USER.rol });
+      if (!d || !d.success || d.porDefecto || d.vacio || !d.permisos || typeof d.permisos !== 'object' || !Object.keys(d.permisos).length) return false;
+      if (firma(d.permisos) === firma(_permMios)) return false;
+      _permTemporal = null;
+      _permMios = d.permisos; permAplicar(); permObservar(); _permGuardarLS(_permMios);
+      salirSiRetirado();
+      try { mostrarToast('🔄 Tus accesos a los módulos fueron actualizados.', 'info', 5000); } catch (e) {}
+      console.log('[_PERM_REFRESCO_V1] permisos actualizados (' + motivo + ')');
+      return true;
+    } catch (e) { return false; } finally { enCurso = false; }
+  }
+  /* si le retiraron el modulo que tiene abierto, se le lleva al primer modulo permitido */
+  function salirSiRetirado() {
+    try {
+      var sec = document.querySelector('.sec.on[id^="sec-"]'); if (!sec) return;
+      var id = sec.id.slice(4), cat = permCatalogo(), retirado = false, destino = null;
+      for (var i = 0; i < cat.length; i++) {
+        var oc = cat[i].boton.getAttribute('onclick') || '';
+        if (oc.indexOf("ir('" + id + "'") >= 0 && _permMios[cat[i].clave] === false) retirado = true;
+        if (!destino && _permMios[cat[i].clave] && /ir\('/.test(oc)) destino = cat[i].boton;
+      }
+      if (!retirado) return;
+      if (_permMios['mod_dashboard'] !== false && typeof ir === 'function') { ir('dashboard', null); return; }
+      if (destino) destino.click();
+    } catch (e) {}
+  }
+  setInterval(function () { revisar('reloj'); }, CADA);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) revisar('volvio'); });
+  window._permRefrescar = revisar;
+})();
+
 console.log('[_PERMISOS_UI_V1] listo');
 })();

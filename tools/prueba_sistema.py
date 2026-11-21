@@ -908,7 +908,23 @@ with sync_playwright() as pw:
     c, pg, errs = sesion_perm('fpulache')
     m = pg.evaluate(VIS); f = pg.evaluate(ABRIR, 'fusiones'); cs = pg.evaluate(ABRIR, 'casos')
     ok('Permisos: supervisor ve solo lo suyo y Fusiones no se abre por ningun camino', m['fusiones'] is False and m['casos'] and f is False and cs is True, json.dumps(m) + ' | abre fusiones: ' + str(f) + ' | abre casos: ' + str(cs))
-    ok('Permisos: sin errores de JavaScript', not errs, '; '.join(errs[:3])); c.close()
+    ok('Permisos: sin errores de JavaScript', not errs, '; '.join(errs[:3]))
+    # _PERM_REFRESCO_V1: un cambio en Acceso a Modulos llega solo a la sesion abierta, sin recargar
+    PF2 = dict(PF); PF2['navFusiones'] = True
+    PERMX['resp'] = {'success': True, 'permisos': PF2, 'vacio': False, 'usuario': 'fpulache', 'fuente': 'azure'}
+    cambio = pg.evaluate("() => window._permRefrescar('prueba', true)"); pg.wait_for_timeout(300)
+    m = pg.evaluate(VIS); f = pg.evaluate(ABRIR, 'fusiones')
+    ok('Permisos: un modulo asignado en Acceso a Modulos aparece solo en la sesion abierta (sin recargar)', cambio is True and m['fusiones'] and f is True, str(cambio) + ' | ' + json.dumps(m) + ' | abre fusiones: ' + str(f))
+    PERMX['resp'] = {'success': True, 'permisos': PF, 'vacio': False, 'usuario': 'fpulache', 'fuente': 'azure'}
+    cambio = pg.evaluate("() => window._permRefrescar('prueba', true)"); pg.wait_for_timeout(300)
+    m = pg.evaluate(VIS); dash = pg.evaluate("() => { const s = document.getElementById('sec-dashboard'); return !!(s && s.classList.contains('on')); }"); f = pg.evaluate(ABRIR, 'fusiones')
+    ok('Permisos: un modulo retirado desaparece solo de la sesion abierta, lo saca a Mi Dashboard y ya no se abre', cambio is True and m['fusiones'] is False and dash and f is False, str(cambio) + ' | ' + json.dumps(m) + ' | en dashboard: ' + str(dash) + ' | abre fusiones: ' + str(f))
+    ACC['modo'] = 'caido'; PERMX['gas_falla'] = True
+    cambio = pg.evaluate("() => window._permRefrescar('prueba', true)"); pg.wait_for_timeout(300)
+    m = pg.evaluate(VIS)
+    ok('Permisos: si la revision automatica falla, el menu queda como estaba', not cambio and m['casos'] and m['fusiones'] is False, str(cambio) + ' | ' + json.dumps(m))
+    ACC['modo'] = 'ok'; PERMX['gas_falla'] = False
+    ok('Permisos: la revision automatica no deja errores de JavaScript', not errs, '; '.join(errs[:3])); c.close()
     # 2) Azure y Google fallan, sin permisos previos -> solo lo basico
     ACC['modo'] = 'caido'; PERMX['gas_falla'] = True
     c, pg, errs = sesion_perm('fpulache')
