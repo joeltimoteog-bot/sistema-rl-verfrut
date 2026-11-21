@@ -54,6 +54,8 @@ module.exports = async function (context, req) {
     if (!filas.length) { context.res = { status: 404, body: { success: false, noEsta: true, error: 'Atencion no encontrada en Supabase' } }; return; }
     if (filas.length > 1) { context.res = { status: 409, body: { success: false, ambiguo: true, error: 'Hay ' + filas.length + ' atenciones con el N° ' + nro + '. No se elimino ninguna: avisa al administrador.' } }; return; }
     const fila = filas[0];
+    /* _SEDE_ESCRITURA_V1 (21-nov-2026): no se elimina una atencion de otra sede */
+    { const SDe = require('../shared/sede'); if (!(await SDe.permiteAtencion(pool, { usuario: t.usuario }, fila.id))) { context.res = { status: 403, body: { success: false, otra_sede: true, error: SDe.MSG_OTRA_SEDE } }; return; } }
 
     /* 2) permisos: el rol y el usuario salen del TOKEN */
     const rol = low(t.rol), usuario = String(t.usuario).trim();

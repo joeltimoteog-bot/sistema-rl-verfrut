@@ -66,6 +66,8 @@ module.exports = async function (context, req) {
     const dnis = Array.from(new Set(filas.map(x => String(x.dni || '').trim())));
     if (dnis.length > 1) { context.res = { status: 409, body: { success: false, ambiguo: true, error: 'N° repetido con distinto DNI' } }; return; }
     const fila = filas[0];
+    /* _SEDE_ESCRITURA_V1 (21-nov-2026): no se edita una atencion de otra sede */
+    { const SDe = require('../shared/sede'); if (!(await SDe.permiteAtencion(pool, { usuario: t.usuario }, fila.id))) { context.res = { status: 403, body: { success: false, otra_sede: true, error: SDe.MSG_OTRA_SEDE } }; return; } }
 
     /* 2) permisos (igual que updateAtencion): el rol y el usuario salen del TOKEN */
     const rol = String(t.rol || b.rol || '').trim().toLowerCase();

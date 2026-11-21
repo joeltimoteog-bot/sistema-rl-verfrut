@@ -61690,7 +61690,16 @@ var require_sede = __commonJS({
       const o = await olmos(pool);
       return (filas || []).filter((f) => m === "OLMOS" === esOlmos(f, o, cols));
     }
-    module.exports = { modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => {
+    async function permiteAtencion(pool, authUser, id) {
+      const m = await modo(pool, authUser);
+      if (m === "TODO") return true;
+      const r = await pool.request().input("sdid", Number(id) || 0).query("SELECT empresa, fundo, usuario_sistema, supervisor FROM dbo.Atenciones WHERE id = @sdid");
+      const f = (r.recordset || [])[0];
+      if (!f) return true;
+      return esOlmos(f, await olmos(pool), null) === (m === "OLMOS");
+    }
+    var MSG_OTRA_SEDE = "Este registro pertenece a otra sede. No se puede modificar desde tu usuario.";
+    module.exports = { permiteAtencion, MSG_OTRA_SEDE, modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => {
       _cache = { t: 0, usuarios: [], nombres: [], todos: [] };
     } };
   }
@@ -62537,6 +62546,13 @@ var require_atenciones_editar = __commonJS({
           return;
         }
         const fila = filas[0];
+        {
+          const SDe = require_sede();
+          if (!await SDe.permiteAtencion(pool, { usuario: t.usuario }, fila.id)) {
+            context.res = { status: 403, body: { success: false, otra_sede: true, error: SDe.MSG_OTRA_SEDE } };
+            return;
+          }
+        }
         const rol = String(t.rol || b.rol || "").trim().toLowerCase();
         const usuario = String(t.usuario).trim();
         const soloEstado = Object.keys(b).filter((k) => NO_CUENTAN.indexOf(k) < 0).length === 0;
@@ -62749,6 +62765,13 @@ var require_atenciones_eliminar = __commonJS({
           return;
         }
         const fila = filas[0];
+        {
+          const SDe = require_sede();
+          if (!await SDe.permiteAtencion(pool, { usuario: t.usuario }, fila.id)) {
+            context.res = { status: 403, body: { success: false, otra_sede: true, error: SDe.MSG_OTRA_SEDE } };
+            return;
+          }
+        }
         const rol = low(t.rol), usuario = String(t.usuario).trim();
         if (rol === "supervisor" && low(fila.usuario_sistema) !== low(usuario) && low(fila.supervisor) !== low(usuario)) {
           context.res = { status: 403, body: { success: false, error: "No tienes permiso para eliminar este registro." } };
@@ -63469,6 +63492,13 @@ var require_atenciones_update = __commonJS({
           const quien = String(authUser && authUser.usuario || usuario_actualiza || "").trim().toLowerCase().slice(0, 60);
           const lima = new Intl.DateTimeFormat("sv-SE", { timeZone: "America/Lima", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(/* @__PURE__ */ new Date()).replace("T", " ");
           const pool2 = await getPool();
+          {
+            const SDe = require_sede();
+            if (!await SDe.permiteAtencion(pool2, authUser, id)) {
+              context.res = { status: 403, body: { success: false, otra_sede: true, error: SDe.MSG_OTRA_SEDE } };
+              return;
+            }
+          }
           try {
             await pool2.request().query("IF COL_LENGTH('dbo.Atenciones', 'remitido_a') IS NULL ALTER TABLE dbo.Atenciones ADD remitido_a NVARCHAR(60) NULL, remitido_en DATETIME2(0) NULL, remitido_por NVARCHAR(60) NULL");
           } catch (e) {
@@ -63497,6 +63527,13 @@ var require_atenciones_update = __commonJS({
           return;
         }
         const pool = await getPool();
+        {
+          const SDe = require_sede();
+          if (!await SDe.permiteAtencion(pool, authUser, id)) {
+            context.res = { status: 403, body: { success: false, otra_sede: true, error: SDe.MSG_OTRA_SEDE } };
+            return;
+          }
+        }
         await AC.asegurar(pool);
         const result = await pool.request().input("id", sql.Int, id).input("estado", sql.NVarChar(30), estado).query(`
         UPDATE Atenciones SET estado = @estado, modificado = SYSUTCDATETIME() WHERE id = @id;
@@ -67661,7 +67698,7 @@ var require_bs = __commonJS({
       }
       if (acc && acc.definido) {
         if (!acc.activo || !acc.bs || !acc.bs.acceso) return { esAdmin: false, permisos: {}, fuente: "rrll:sin-acceso" };
-        if (acc.bs.admin) esAdmin = true;
+        esAdmin = !!acc.bs.admin || usuario === "jtimoteo";
         return { esAdmin, permisos: Object.assign({}, acc.bs.permisos || {}), fuente: "rrll" };
       }
       const legadoUrl = process.env.BS_PERMISOS_URL !== "0";
@@ -68155,6 +68192,15 @@ var require_bs = __commonJS({
           const modG = MODULO_DE_CLAVE[clave] || "";
           const PG = u && u.interno ? { esAdmin: true, permisos: {} } : await permisosBS(u, q);
           if (!PG.esAdmin && modG && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: "Sin permiso para el m\xF3dulo " + modG + "." });
+          if (!(u && u.interno)) {
+            const sdG = await sedeBS(pool, u);
+            if (sdG) {
+              if (op !== "crear" && b.id !== void 0 && b.id !== null && b.id !== "") {
+                const todas = await objetosTodos(pool, clave) || [], reg = todas.filter((o) => String(o.id) === String(b.id))[0];
+                if (reg && filaOlmosBS(clave, reg, sdG.o) !== (sdG.modo === "OLMOS")) return res(403, { ok: false, success: false, otra_sede: true, message: SD.MSG_OTRA_SEDE });
+              }
+            }
+          }
           let out;
           if (op === "crear") out = await BG.crear(pool, clave, b.datos || {}, usuario);
           else if (op === "actualizar") {

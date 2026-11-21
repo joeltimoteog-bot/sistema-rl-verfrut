@@ -41,7 +41,7 @@
         mod('Capacitaciones ETI', 'Programación y registro de capacitaciones por sector.') +
         mod('Evaluaciones ETI', 'Evaluación de conocimiento por código QR e indicadores.') +
       '</div>' +
-      '<p>Su usuario pertenece a la sede <b>Olmos</b>: lo que registre quedará identificado con su sede, y verá la información de los módulos y el alcance que se le han asignado. Sus datos y los de los trabajadores están protegidos: cada acceso es personal y queda registrado.</p>' +
+      '<p>Su usuario pertenece a la sede <b>Olmos</b>: lo que registre quedará identificado con su sede, y verá la información de los módulos y el alcance que se le han asignado. La información de los trabajadores es confidencial: su acceso es personal e intransferible.</p>' +
       '<p class="bo-c">Este sistema fue creado y es administrado por <b>Joel A. Timoteo Gonza</b>, Coordinador de Relaciones Laborales. Si tiene una duda, una sugerencia o detecta algo que deba mejorarse, escríbale a <a href="mailto:' + CONTACTO + '">' + CONTACTO + '</a>. Su opinión ayuda a mejorar la plataforma.</p>' +
       '<div class="bo-l">Piura y Olmos, una sola Gestión Humana</div></div>' +
       '<div class="bo-f"><button type="button" id="boOk">Comenzar</button></div></div>';

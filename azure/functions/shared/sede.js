@@ -108,4 +108,14 @@ async function filtrarFilas(pool, authUser, filas, cols) {
   return (filas || []).filter(f => (m === 'OLMOS') === esOlmos(f, o, cols));
 }
 
-module.exports = { modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => { _cache = { t: 0, usuarios: [], nombres: [], todos: [] }; } };
+/* _SEDE_ESCRITURA_V1 (21-nov-2026): nadie modifica ni elimina una atencion de la otra sede (aunque conozca su numero).
+   true = puede · false = es de otra sede. Si la atencion no existe devuelve true (la ruta responde su 404 de siempre). */
+async function permiteAtencion(pool, authUser, id) {
+  const m = await modo(pool, authUser);
+  if (m === 'TODO') return true;
+  const r = await pool.request().input('sdid', Number(id) || 0).query('SELECT empresa, fundo, usuario_sistema, supervisor FROM dbo.Atenciones WHERE id = @sdid');
+  const f = (r.recordset || [])[0]; if (!f) return true;
+  return esOlmos(f, await olmos(pool), null) === (m === 'OLMOS');
+}
+const MSG_OTRA_SEDE = 'Este registro pertenece a otra sede. No se puede modificar desde tu usuario.';
+module.exports = { permiteAtencion, MSG_OTRA_SEDE, modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => { _cache = { t: 0, usuarios: [], nombres: [], todos: [] }; } };

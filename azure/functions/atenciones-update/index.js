@@ -23,6 +23,7 @@ module.exports = async function (context, req) {
       const quien = String((authUser && authUser.usuario) || usuario_actualiza || '').trim().toLowerCase().slice(0, 60);
       const lima = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Lima', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(new Date()).replace('T', ' ');
       const pool = await getPool();
+      { const SDe = require('../shared/sede'); if (!(await SDe.permiteAtencion(pool, authUser, id))) { context.res = { status: 403, body: { success: false, otra_sede: true, error: SDe.MSG_OTRA_SEDE } }; return; } }   /* _SEDE_ESCRITURA_V1 */
       try { await pool.request().query("IF COL_LENGTH('dbo.Atenciones', 'remitido_a') IS NULL ALTER TABLE dbo.Atenciones ADD remitido_a NVARCHAR(60) NULL, remitido_en DATETIME2(0) NULL, remitido_por NVARCHAR(60) NULL"); } catch (e) {}
       const r = await pool.request().input('id', sql.Int, id).input('a', sql.NVarChar(60), area).input('f', sql.NVarChar(19), lima).input('q', sql.NVarChar(60), quien)
         .query('UPDATE Atenciones SET remitido_a = @a, remitido_en = CAST(@f AS DATETIME2(0)), remitido_por = @q, modificado = SYSUTCDATETIME() WHERE id = @id; SELECT @@ROWCOUNT AS n;');
@@ -50,6 +51,7 @@ module.exports = async function (context, req) {
     }
 
     const pool = await getPool();
+    { const SDe = require('../shared/sede'); if (!(await SDe.permiteAtencion(pool, authUser, id))) { context.res = { status: 403, body: { success: false, otra_sede: true, error: SDe.MSG_OTRA_SEDE } }; return; } }   /* _SEDE_ESCRITURA_V1 */
     await AC.asegurar(pool);   /* _AT_CAMBIOS_V1 */
     const result = await pool.request()
       .input('id', sql.Int, id)

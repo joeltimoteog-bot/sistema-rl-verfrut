@@ -223,7 +223,9 @@ async function permisosBS(u, q) {
   let acc = null; try { acc = usuario ? await require('../auth-sso/index.js').accesosDe(usuario) : null; } catch (e) { acc = null; }
   if (acc && acc.definido) {
     if (!acc.activo || !acc.bs || !acc.bs.acceso) return { esAdmin: false, permisos: {}, fuente: 'rrll:sin-acceso' };
-    if (acc.bs.admin) esAdmin = true;
+    /* _BS_ADMIN_MODULOS_V1 (21-nov-2026, decision de Joel): con el usuario configurado en "Acceso a Modulos", el ROL ya no abre
+       todo Bienestar: administra solo quien tiene marcado "Administrador de Bienestar" (bs_admin). jtimoteo, siempre. */
+    esAdmin = !!acc.bs.admin || usuario === 'jtimoteo';
     return { esAdmin, permisos: Object.assign({}, acc.bs.permisos || {}), fuente: 'rrll' };
   }
   /* _SEG_SERVIDOR_V1 (10-nov-2026): los permisos YA NO se leen de la URL (?permisos=): cualquiera podia escribirlos.
@@ -475,6 +477,17 @@ module.exports = async function (context, req) {
       const modG = MODULO_DE_CLAVE[clave] || '';
       const PG = u && u.interno ? { esAdmin: true, permisos: {} } : await permisosBS(u, q);
       if (!PG.esAdmin && modG && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: 'Sin permiso para el módulo ' + modG + '.' });
+      /* _SEDE_ESCRITURA_V1 (21-nov-2026): no se modifica, anula ni restaura un registro de la otra sede.
+         (importar y cierre masivo no cambian: los usa hoy el equipo de Piura) */
+      if (!(u && u.interno)) {
+        const sdG = await sedeBS(pool, u);
+        if (sdG) {
+          if (op !== 'crear' && b.id !== undefined && b.id !== null && b.id !== '') {
+            const todas = (await objetosTodos(pool, clave)) || [], reg = todas.filter(o => String(o.id) === String(b.id))[0];
+            if (reg && filaOlmosBS(clave, reg, sdG.o) !== (sdG.modo === 'OLMOS')) return res(403, { ok: false, success: false, otra_sede: true, message: SD.MSG_OTRA_SEDE });
+          }
+        }
+      }
       /* anular/restaurar: igual que hoy en Google, basta el permiso del módulo (queda en auditoría con usuario y motivo) */
       let out;
       if (op === 'crear') out = await BG.crear(pool, clave, b.datos || {}, usuario);
