@@ -52,6 +52,32 @@ function col(c) { if (COLS.indexOf(c) < 0) throw Object.assign(new Error('Colecc
 const campoOk = (f) => /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)*$/.test(String(f));
 function ruta(f) { return '{' + String(f).split('.').join(',') + '}'; }
 
+/* ═══ _ETI_SEDE_SERVIDOR_V1 (21-nov-2026, decision de Joel): la separacion Piura / Olmos de los ETI tambien se aplica en el SERVIDOR ═══
+   Con sesion, cada usuario recibe solo los documentos de su sede (misma regla del Sistema RR.LL.: shared/sede.js).
+   · Ven las dos sedes: jtimoteo, quien tenga alcance GENERAL y ETI_AMBAS (lcastillo programa las dos sedes en los ETI).
+   · Un documento es de Olmos si su sede/empresa/sector nombra a Olmos o a una de sus empresas, o lo registro un usuario de Olmos.
+   · Sin sesion (pagina QR del trabajador) no cambia nada. Apagar: secreto SEDE_FILTRO=off (el mismo del RR.LL.). */
+const SEDE_COLS = ['respuestas_qr', 'evaluaciones_conocimiento', 'sesiones_qr', 'programaciones_eti', 'programaciones_eval', 'capacitaciones',
+  'encuestas_qr', 'encuestas_sat', 'alertas_ref', 'informes_eti', 'informes_cap', 'informes_enviados', 'evaluaciones_depuradas'];
+const ETI_AMBAS = ['lcastillo'];
+const SEDE_USR = ['usuario', 'creadoPor', 'usuarioSup', 'asignado', 'creadoPorUsuario'];
+async function sedeDe(c, u) {
+  if (!u || !u.usuario || SEDE_COLS.indexOf(c) < 0) return null;
+  if (ETI_AMBAS.indexOf(String(u.usuario).trim().toLowerCase()) >= 0) return null;
+  const S = require('../shared/sede'), p = await require('../shared/db').getPool();
+  const m = await S.modo(p, u);
+  if (m === 'TODO') return null;
+  return { modo: m, usuarios: (await S.olmos(p)).usuarios, re: '(' + S.EMPRESAS_OLMOS.join('|') + ')' };
+}
+/* condicion SQL (agrega sus parametros a v). sd = resultado de sedeDe; null = sin filtro */
+function condSede(sd, v) {
+  if (!sd) return '';
+  v.push(sd.re);
+  let c = `upper(concat_ws(' ', datos->>'sede', datos->>'emp', datos->>'empresa', datos->>'sector')) ~ $${v.length}`;
+  if (sd.usuarios && sd.usuarios.length) { v.push(sd.usuarios); const pn = '$' + v.length; c += SEDE_USR.map(k => ` OR lower(btrim(coalesce(datos->>'${k}', ''))) = ANY(${pn}::text[])`).join(''); }
+  return sd.modo === 'OLMOS' ? `(${c})` : `NOT (${c})`;
+}
+
 async function consultar(b, u) {
   const c = col(b.col);
   if (!u && LECTURA_ANONIMA.indexOf(c) < 0) throw Object.assign(new Error('Sesion requerida'), { status: 401 });
@@ -68,6 +94,7 @@ async function consultar(b, u) {
     /* Firestore no compara tipos distintos: el valor del documento debe ser del mismo tipo que el filtro */
     if (OPS[op] && op !== '==') { v.push(valor === null ? 'null' : Array.isArray(valor) ? 'array' : typeof valor === 'object' ? 'object' : typeof valor === 'boolean' ? 'boolean' : typeof valor === 'number' ? 'number' : 'string'); w.push(`jsonb_typeof(datos #> ${pc}::text[]) = $${v.length}`); }
   }
+  const cs = condSede(await sedeDe(c, u), v); if (cs) w.push(cs);   /* _ETI_SEDE_SERVIDOR_V1 */
   let orden = 'id';
   if (Array.isArray(b.orden) && b.orden[0]) {
     if (!campoOk(b.orden[0])) throw Object.assign(new Error('Campo invalido'), { status: 400 });
@@ -84,7 +111,9 @@ async function leerDoc(b, u) {
   const c = col(b.col);
   if (!u && LECTURA_ANONIMA.indexOf(c) < 0 && DOC_ANONIMO.indexOf(c) < 0) throw Object.assign(new Error('Sesion requerida'), { status: 401 });
   soloGestor(c, u);   /* _SEG_SERVIDOR_V1 */
-  const r = await pool().query(`SELECT id, datos FROM eti.${c} WHERE id = $1`, [String(b.id)]);
+  /* _ETI_SEDE_SERVIDOR_V1: un documento de la otra sede se responde como "no existe" (sin error, para no activar el respaldo) */
+  const vD = [String(b.id)], csD = condSede(await sedeDe(c, u), vD);
+  const r = await pool().query(`SELECT id, datos FROM eti.${c} WHERE id = $1${csD ? ' AND ' + csD : ''}`, vD);
   return { success: true, existe: r.rows.length > 0, id: String(b.id), datos: r.rows.length ? r.rows[0].datos : null };
 }
 

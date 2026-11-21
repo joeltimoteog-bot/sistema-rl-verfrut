@@ -76568,6 +76568,42 @@ var require_eti = __commonJS({
     function ruta(f) {
       return "{" + String(f).split(".").join(",") + "}";
     }
+    var SEDE_COLS = [
+      "respuestas_qr",
+      "evaluaciones_conocimiento",
+      "sesiones_qr",
+      "programaciones_eti",
+      "programaciones_eval",
+      "capacitaciones",
+      "encuestas_qr",
+      "encuestas_sat",
+      "alertas_ref",
+      "informes_eti",
+      "informes_cap",
+      "informes_enviados",
+      "evaluaciones_depuradas"
+    ];
+    var ETI_AMBAS = ["lcastillo"];
+    var SEDE_USR = ["usuario", "creadoPor", "usuarioSup", "asignado", "creadoPorUsuario"];
+    async function sedeDe(c, u) {
+      if (!u || !u.usuario || SEDE_COLS.indexOf(c) < 0) return null;
+      if (ETI_AMBAS.indexOf(String(u.usuario).trim().toLowerCase()) >= 0) return null;
+      const S = require_sede(), p = await require_db().getPool();
+      const m = await S.modo(p, u);
+      if (m === "TODO") return null;
+      return { modo: m, usuarios: (await S.olmos(p)).usuarios, re: "(" + S.EMPRESAS_OLMOS.join("|") + ")" };
+    }
+    function condSede(sd, v) {
+      if (!sd) return "";
+      v.push(sd.re);
+      let c = `upper(concat_ws(' ', datos->>'sede', datos->>'emp', datos->>'empresa', datos->>'sector')) ~ $${v.length}`;
+      if (sd.usuarios && sd.usuarios.length) {
+        v.push(sd.usuarios);
+        const pn = "$" + v.length;
+        c += SEDE_USR.map((k) => ` OR lower(btrim(coalesce(datos->>'${k}', ''))) = ANY(${pn}::text[])`).join("");
+      }
+      return sd.modo === "OLMOS" ? `(${c})` : `NOT (${c})`;
+    }
     async function consultar(b, u) {
       const c = col(b.col);
       if (!u && LECTURA_ANONIMA.indexOf(c) < 0) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
@@ -76593,6 +76629,8 @@ var require_eti = __commonJS({
           w.push(`jsonb_typeof(datos #> ${pc}::text[]) = $${v.length}`);
         }
       }
+      const cs = condSede(await sedeDe(c, u), v);
+      if (cs) w.push(cs);
       let orden = "id";
       if (Array.isArray(b.orden) && b.orden[0]) {
         if (!campoOk(b.orden[0])) throw Object.assign(new Error("Campo invalido"), { status: 400 });
@@ -76608,7 +76646,8 @@ var require_eti = __commonJS({
       const c = col(b.col);
       if (!u && LECTURA_ANONIMA.indexOf(c) < 0 && DOC_ANONIMO.indexOf(c) < 0) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
       soloGestor(c, u);
-      const r = await pool().query(`SELECT id, datos FROM eti.${c} WHERE id = $1`, [String(b.id)]);
+      const vD = [String(b.id)], csD = condSede(await sedeDe(c, u), vD);
+      const r = await pool().query(`SELECT id, datos FROM eti.${c} WHERE id = $1${csD ? " AND " + csD : ""}`, vD);
       return { success: true, existe: r.rows.length > 0, id: String(b.id), datos: r.rows.length ? r.rows[0].datos : null };
     }
     async function escribir(b, u) {
