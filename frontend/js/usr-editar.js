@@ -12,7 +12,7 @@
   if (window._rlUsrEditarOk) return; window._rlUsrEditarOk = true;
   try { if (localStorage.getItem('rl_usr_editar') === 'off') return; } catch (e) {}
   var ROLES = [['administrador', 'Administrador'], ['administrador 01', 'Administrador 01 (solo ver/exportar)'], ['administrador 02', 'Administrador 02 (solo ver/exportar)'], ['supervisor', 'Supervisor']];
-  var EMPRESAS = [['AMBAS', 'Todas (sede Piura)'], ['RAPEL', 'RAPEL S.A.C (sede Piura)'], ['VERFRUT', 'VERFRUT S.A.C (sede Piura)'], ['OLMOS', 'OLMOS (sede Olmos)']];
+  var EMPRESAS = [['AMBAS', 'Todas las empresas de Piura'], ['RAPEL', 'RAPEL S.A.C (sede Piura)'], ['VERFRUT', 'VERFRUT S.A.C (sede Piura)'], ['OLMOS', 'OLMOS (sede Olmos)']];
   /* _ALCANCE_V1 (21-nov-2026): cuanto ve el usuario dentro de los modulos que tiene asignados */
   var ALCANCES = [['PROPIO', 'Propio: solo lo que registra'], ['SEDE', 'Sede: todo lo de su sede (jefatura)'], ['GENERAL', 'General: las dos sedes']];
   function yo() { try { return (typeof USER !== 'undefined' && USER) ? String(USER.usuario || '').toLowerCase().trim() : ''; } catch (e) { return ''; } }

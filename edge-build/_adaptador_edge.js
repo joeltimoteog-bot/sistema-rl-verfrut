@@ -78,6 +78,12 @@ async function manejar(request) {
       const t0 = Date.now(); await r.h(context, { isPastDue: false, schedule: {} });
       return new Response(JSON.stringify({ success: true, reloj: r.fn, ms: Date.now() - t0 }), { status: 200, headers: Object.assign({ 'Content-Type': 'application/json' }, C) });
     }
+    /* _MODULOS_GUARD_V1 (21-nov-2026): el servidor comprueba el modulo asignado en "Acceso a Modulos".
+       Modo registro por defecto (no bloquea); con el secreto MODULOS_GUARD=on responde 403. Si la revision falla, la llamada pasa. */
+    if (!r.llave) {
+      let g = null; try { g = await require('./shared/modulos-guard').revisar(r.fn, req, context.bindingData); } catch (eG) { g = null; }
+      if (g && g.bloquear) return new Response(JSON.stringify({ success: false, error: 'No tienes asignado este módulo. Solicítalo al administrador del sistema.', modulo_no_asignado: g.modulo }), { status: 403, headers: Object.assign({ 'Content-Type': 'application/json' }, C) });
+    }
     const ret = await r.h(context, req);
     const res = context.res || ret || { status: 204 };
     const h = Object.assign({}, res.headers || {}, C);

@@ -81818,6 +81818,105 @@ var require_rutas_edge = __commonJS({
   }
 });
 
+// shared/modulos-guard.js
+var require_modulos_guard = __commonJS({
+  "shared/modulos-guard.js"(exports, module) {
+    "use strict";
+    var jwt = require_jsonwebtoken();
+    var { getPool } = require_db();
+    var DUENOS = ["jtimoteo"];
+    var TTL = 6e4;
+    var CADA_REG = 6e5;
+    var _perm = {};
+    var _anotado = {};
+    var POR_MOD = { horas: "navHoras", cap: "mod_capacitaciones", fus: "navFusiones", mant: "navMantenimiento", sol: "navSolicitudes" };
+    var MAPA = {
+      "cv": (b) => /isita/i.test(String(b.accion || "")) ? "navVisitas" : /aso/i.test(String(b.accion || "")) ? "navCasos" : null,
+      "cv-guardar": (b) => /isita/i.test(String(b.accion || "")) ? "navVisitas" : /aso/i.test(String(b.accion || "")) ? "navCasos" : null,
+      "mod": (b) => POR_MOD[String(b.modulo || "")] || null,
+      "fus-guardar": "navFusiones",
+      "sol-guardar": "navSolicitudes",
+      "mant-guardar": "navMantenimiento",
+      "mant-resp": "navMantenimiento",
+      "horas-guardar": "navHoras",
+      "alm-guardar": "navAlmuerzos",
+      "inv-guardar": "navInventario",
+      "preav-guardar": "navPreaviso",
+      "cap-guardar": "mod_capacitaciones",
+      "cap-firmas": "mod_capacitaciones",
+      "kpi": "navKpis",
+      "informe-gh": "navInformeGH",
+      "padron": "navPadron",
+      "cumpl-guardar": "navCumpl"
+    };
+    function modo() {
+      const m = String(process.env.MODULOS_GUARD || "log").toLowerCase();
+      return m === "on" || m === "off" ? m : "log";
+    }
+    function usuarioDe(req) {
+      try {
+        const h = String(req.headers && (req.headers.authorization || req.headers.Authorization) || "");
+        const m = h.match(/^Bearer\s+(.+)$/i);
+        if (!m || !process.env.JWT_SECRET) return "";
+        const t = jwt.verify(m[1], process.env.JWT_SECRET);
+        return String(t && t.usuario || "").trim().toLowerCase();
+      } catch (e) {
+        return "";
+      }
+    }
+    async function permisosDe(pool, u) {
+      const c = _perm[u];
+      if (c && Date.now() - c.t < TTL) return c.m;
+      const r = await pool.request().input("u", u).query("SELECT modulo, permitido FROM dbo.permisosmodulos WHERE LOWER(LTRIM(RTRIM(usuario))) = @u");
+      let m = null;
+      if (r.recordset && r.recordset.length) {
+        m = {};
+        r.recordset.forEach((x) => {
+          const v = x.permitido;
+          m[String(x.modulo || "").trim()] = v === true || v === 1 || String(v).trim() === "1" || String(v).trim().toLowerCase() === "true";
+        });
+      }
+      _perm[u] = { t: Date.now(), m };
+      return m;
+    }
+    async function anotar(pool, u, fn, accion, mod) {
+      const dia = new Date(Date.now() - 5 * 36e5).toISOString().slice(0, 10);
+      const k = [dia, u, fn, accion, mod].join("|");
+      if (_anotado[k] && Date.now() - _anotado[k] < CADA_REG) return;
+      _anotado[k] = Date.now();
+      const rq = () => pool.request().input("d", dia).input("u", u).input("f", fn).input("a", accion).input("m", mod);
+      const up = await rq().query("UPDATE dbo.acceso_registro SET n = n + 1, ultimo = SYSUTCDATETIME() WHERE dia = @d AND usuario = @u AND fn = @f AND accion = @a AND modulo = @m");
+      if (!up.rowsAffected || !up.rowsAffected[0]) await rq().query("INSERT INTO dbo.acceso_registro (dia, usuario, fn, accion, modulo, n, ultimo) VALUES (@d, @u, @f, @a, @m, 1, SYSUTCDATETIME())");
+    }
+    async function revisar(fn, req, binding) {
+      try {
+        const md = modo();
+        if (md === "off") return null;
+        const regla = MAPA[fn];
+        if (!regla) return null;
+        const mod = typeof regla === "function" ? regla(binding || {}) : regla;
+        if (!mod) return null;
+        const u = usuarioDe(req);
+        if (!u || DUENOS.indexOf(u) >= 0) return null;
+        const pool = await getPool();
+        const P = await permisosDe(pool, u);
+        if (!P || P[mod] !== false) return null;
+        try {
+          await anotar(pool, u, fn, String(binding && (binding.accion || binding.modulo) || "").slice(0, 60), mod);
+        } catch (e) {
+        }
+        return md === "on" ? { bloquear: true, modulo: mod } : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    module.exports = { revisar, MAPA, modo, _reset: () => {
+      Object.keys(_perm).forEach((k) => delete _perm[k]);
+      Object.keys(_anotado).forEach((k) => delete _anotado[k]);
+    } };
+  }
+});
+
 // _adaptador_edge.js
 var require_adaptador_edge = __commonJS({
   "_adaptador_edge.js"(exports, module) {
@@ -81919,6 +82018,15 @@ var require_adaptador_edge = __commonJS({
           const t0 = Date.now();
           await r.h(context, { isPastDue: false, schedule: {} });
           return new Response(JSON.stringify({ success: true, reloj: r.fn, ms: Date.now() - t0 }), { status: 200, headers: Object.assign({ "Content-Type": "application/json" }, C) });
+        }
+        if (!r.llave) {
+          let g = null;
+          try {
+            g = await require_modulos_guard().revisar(r.fn, req, context.bindingData);
+          } catch (eG) {
+            g = null;
+          }
+          if (g && g.bloquear) return new Response(JSON.stringify({ success: false, error: "No tienes asignado este m\xF3dulo. Solic\xEDtalo al administrador del sistema.", modulo_no_asignado: g.modulo }), { status: 403, headers: Object.assign({ "Content-Type": "application/json" }, C) });
         }
         const ret = await r.h(context, req);
         const res = context.res || ret || { status: 204 };
