@@ -76660,6 +76660,10 @@ var require_eti = __commonJS({
         if (!o.id || String(o.id).length > 200) throw Object.assign(new Error("id invalido"), { status: 400 });
         if (!u && !(o.col === "respuestas_qr" && (o.op === "set" || o.op === "update"))) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
       }
+      const sedeCol = {};
+      if (u) {
+        for (const o of ops) if (!(o.col in sedeCol)) sedeCol[o.col] = await sedeDe(o.col, u);
+      }
       const cli = await pool().connect();
       let omitidas = 0;
       try {
@@ -76686,6 +76690,11 @@ var require_eti = __commonJS({
             if (hecho) await cli.query(`INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`, [o.col, id, o.op, "anonimo", o.origen || "espejo"]);
             else omitidas++;
             continue;
+          }
+          if (sedeCol[o.col]) {
+            const vS = [id], cS = condSede(sedeCol[o.col], vS);
+            const rS = await cli.query(`SELECT (${cS}) AS mia FROM eti.${o.col} WHERE id = $1`, vS);
+            if (rS.rows.length && !rS.rows[0].mia) throw Object.assign(new Error("Operacion no permitida: este documento pertenece a otra sede"), { status: 403 });
           }
           if (o.col === "encuestas_qr" && !gestor(u)) {
             const yaQ = await cli.query(`SELECT datos->>'creadoPor' AS c, datos->>'usuario' AS s FROM eti.encuestas_qr WHERE id = $1`, [id]);
@@ -77167,11 +77176,34 @@ var require_eti_eval_stats = __commonJS({
   "eti-eval-stats/index.js"(exports, module) {
     var { getPool } = require_db();
     var E = require_eti_eval();
+    function sesion(req) {
+      try {
+        const a = String(req.headers && (req.headers.authorization || req.headers.Authorization) || ""), k = process.env.JWT_SECRET || "";
+        if (!a.startsWith("Bearer ") || !k) return null;
+        const p = require_jsonwebtoken().verify(a.slice(7).trim(), k);
+        if (!p || !p.usuario || p.aud && p.aud !== "eti-sesion") return null;
+        return p;
+      } catch (e) {
+        return null;
+      }
+    }
     module.exports = async function(context, req) {
       try {
         const pool = await getPool();
         await E.asegurarTablas(pool);
-        const filas = await E.stats(pool, req.query || {});
+        let filas = await E.stats(pool, req.query || {});
+        const u = sesion(req);
+        if (!u && String(process.env.ETI_STATS_SESION || "").toLowerCase() === "on") {
+          context.res = { status: 401, body: { success: false, error: "Sesion requerida" } };
+          return;
+        }
+        if (u && ["lcastillo"].indexOf(String(u.usuario).trim().toLowerCase()) < 0) {
+          const S = require_sede(), m = await S.modo(pool, u);
+          if (m !== "TODO") {
+            const re = new RegExp("(" + S.EMPRESAS_OLMOS.join("|") + ")");
+            filas = (filas || []).filter((f) => re.test(S._N((f.empresa || "") + " " + (f.sector || ""))) === (m === "OLMOS"));
+          }
+        }
         context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { success: true, filas, generado: (/* @__PURE__ */ new Date()).toISOString() } };
       } catch (err) {
         context.log.error("[eti-eval-stats] " + err.message);

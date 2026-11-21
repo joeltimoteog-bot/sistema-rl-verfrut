@@ -128,6 +128,10 @@ async function escribir(b, u) {
     /* sin sesion: solo la respuesta del trabajador (crear o marcar azOk), nunca borrar */
     if (!u && !(o.col === 'respuestas_qr' && (o.op === 'set' || o.op === 'update'))) throw Object.assign(new Error('Sesion requerida'), { status: 401 });
   }
+  /* _ETI_SEDE_ESCRITURA_V1 (21-nov-2026): con sesion, nadie modifica ni borra un documento que YA existe y es de la otra sede.
+     Crear documentos no se restringe (asi ningun usuario queda sin poder registrar lo suyo). La sede se resuelve antes de la transaccion. */
+  const sedeCol = {};
+  if (u) for (const o of ops) if (!(o.col in sedeCol)) sedeCol[o.col] = await sedeDe(o.col, u);
   const cli = await pool().connect();
   let omitidas = 0;   /* _SEG_SERVIDOR_V1 */
   try {
@@ -160,6 +164,11 @@ async function escribir(b, u) {
         if (hecho) await cli.query(`INSERT INTO eti._bitacora (coleccion, id, op, usuario, origen) VALUES ($1, $2, $3, $4, $5)`, [o.col, id, o.op, 'anonimo', o.origen || 'espejo']);
         else omitidas++;
         continue;
+      }
+      if (sedeCol[o.col]) {   /* _ETI_SEDE_ESCRITURA_V1 */
+        const vS = [id], cS = condSede(sedeCol[o.col], vS);
+        const rS = await cli.query(`SELECT (${cS}) AS mia FROM eti.${o.col} WHERE id = $1`, vS);
+        if (rS.rows.length && !rS.rows[0].mia) throw Object.assign(new Error('Operacion no permitida: este documento pertenece a otra sede'), { status: 403 });
       }
       /* _SEG_SERVIDOR_V1: el QR de una encuesta solo lo cambia o borra quien lo creo, el supervisor evaluado o un administrador/editor */
       if (o.col === 'encuestas_qr' && !gestor(u)) {
