@@ -76581,7 +76581,8 @@ var require_eti = __commonJS({
       "informes_eti",
       "informes_cap",
       "informes_enviados",
-      "evaluaciones_depuradas"
+      "evaluaciones_depuradas",
+      "supervisores_eti"
     ];
     var ETI_AMBAS = ["lcastillo"];
     var SEDE_USR = ["usuario", "creadoPor", "usuarioSup", "asignado", "creadoPorUsuario"];

@@ -58,7 +58,8 @@ function ruta(f) { return '{' + String(f).split('.').join(',') + '}'; }
    · Un documento es de Olmos si su sede/empresa/sector nombra a Olmos o a una de sus empresas, o lo registro un usuario de Olmos.
    · Sin sesion (pagina QR del trabajador) no cambia nada. Apagar: secreto SEDE_FILTRO=off (el mismo del RR.LL.). */
 const SEDE_COLS = ['respuestas_qr', 'evaluaciones_conocimiento', 'sesiones_qr', 'programaciones_eti', 'programaciones_eval', 'capacitaciones',
-  'encuestas_qr', 'encuestas_sat', 'alertas_ref', 'informes_eti', 'informes_cap', 'informes_enviados', 'evaluaciones_depuradas'];
+  'encuestas_qr', 'encuestas_sat', 'alertas_ref', 'informes_eti', 'informes_cap', 'informes_enviados', 'evaluaciones_depuradas',
+  'supervisores_eti'];   /* _ETI_SEDE_SUPS_V1 (21-nov-2026): la lista de supervisores de Capacitaciones ETI tambien va por sede (por su sector) */
 const ETI_AMBAS = ['lcastillo'];
 const SEDE_USR = ['usuario', 'creadoPor', 'usuarioSup', 'asignado', 'creadoPorUsuario'];
 async function sedeDe(c, u) {
