@@ -11,18 +11,28 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 const FUNDOS_OLMOS = ['BOMAREA', 'PIRONA', 'MOSQUETA', 'HEFEI', 'LEFKADA'];
+/* _ALCANCE_V1 (21-nov-2026, decision de Joel): Bomarea, Pirona, Mosqueta, Hefei y Lefkada son EMPRESAS de la sede Olmos
+   (como Rapel y Verfrut lo son de Piura). Un registro es de Olmos si su empresa contiene OLMOS o alguno de esos nombres.
+   Alcance de cada usuario (columna usuarios.alcance): PROPIO = solo lo suyo · SEDE = todo lo de su sede · GENERAL = las dos sedes.
+   El alcance nunca cruza de sede salvo GENERAL; jtimoteo es siempre GENERAL. Sin dato o valor raro = PROPIO (lo mas cerrado). */
+const EMPRESAS_OLMOS = ['OLMOS'].concat(FUNDOS_OLMOS);
+const ALCANCES = ['PROPIO', 'SEDE', 'GENERAL'];
 const VER_AMBAS = ['jtimoteo'];
 const TTL = 60000;
-let _cache = { t: 0, usuarios: [], nombres: [] };
+let _cache = { t: 0, usuarios: [], nombres: [], todos: [] };
 
 const N = s => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
 const activo = () => String(process.env.SEDE_FILTRO || '').toLowerCase() !== 'off';
 
 async function olmos(pool) {
   if (Date.now() - _cache.t < TTL) return _cache;
-  const r = await pool.request().query("SELECT usuario, nombre FROM dbo.usuarios WHERE UPPER(LTRIM(RTRIM(ISNULL(empresa, '')))) = 'OLMOS'");
-  const filas = r.recordset || [];
-  _cache = { t: Date.now(), usuarios: filas.map(x => String(x.usuario || '').trim().toLowerCase()).filter(Boolean), nombres: filas.map(x => N(x.nombre)).filter(Boolean) };
+  let rs;
+  try { rs = (await pool.request().query('SELECT usuario, nombre, empresa, alcance FROM dbo.usuarios')).recordset || []; }
+  catch (e) { rs = ((await pool.request().query('SELECT usuario, nombre, empresa FROM dbo.usuarios')).recordset || []); }   /* sin la columna alcance: todos PROPIO */
+  const todos = rs.map(x => ({ usuario: String(x.usuario || '').trim().toLowerCase(), nombre: N(x.nombre), olmos: EMPRESAS_OLMOS.indexOf(N(x.empresa)) >= 0,
+    alcance: ALCANCES.indexOf(N(x.alcance)) >= 0 ? N(x.alcance) : 'PROPIO' })).filter(x => x.usuario);
+  const filas = todos.filter(x => x.olmos);
+  _cache = { t: Date.now(), usuarios: filas.map(x => x.usuario), nombres: filas.map(x => x.nombre).filter(Boolean), todos };
   return _cache;
 }
 
@@ -34,7 +44,23 @@ async function modo(pool, authUser) {
   const u = String(authUser.usuario).trim().toLowerCase();
   if (VER_AMBAS.indexOf(u) >= 0) return 'TODO';
   const o = await olmos(pool);
+  const yo = o.todos.filter(x => x.usuario === u)[0];
+  if (yo && yo.alcance === 'GENERAL') return 'TODO';   /* _ALCANCE_V1 */
   return o.usuarios.indexOf(u) >= 0 ? 'OLMOS' : 'PIURA';
+}
+/* _ALCANCE_V1: { alcance, sede, companeros:[[usuario, nombre], ...] } — companeros = los usuarios de su misma sede (solo con alcance SEDE). */
+async function alcanceDe(pool, usuario) {
+  const u = String(usuario || '').trim().toLowerCase();
+  if (!u) return { alcance: 'PROPIO', sede: 'PIURA', companeros: [] };
+  if (VER_AMBAS.indexOf(u) >= 0) return { alcance: 'GENERAL', sede: 'TODO', companeros: [] };
+  if (!activo()) return { alcance: 'PROPIO', sede: 'PIURA', companeros: [] };
+  const o = await olmos(pool);
+  const yo = o.todos.filter(x => x.usuario === u)[0];
+  if (!yo) return { alcance: 'PROPIO', sede: 'PIURA', companeros: [] };
+  const sede = yo.olmos ? 'OLMOS' : 'PIURA';
+  if (yo.alcance === 'GENERAL') return { alcance: 'GENERAL', sede: 'TODO', companeros: [] };
+  if (yo.alcance !== 'SEDE') return { alcance: 'PROPIO', sede, companeros: [] };
+  return { alcance: 'SEDE', sede, companeros: o.todos.filter(x => x.olmos === yo.olmos && x.usuario !== u).map(x => [x.usuario, x.nombre.toLowerCase()]) };
 }
 
 /* Condicion SQL "el registro es de Olmos" para tablas con empresa/fundo/usuario_sistema/supervisor.
@@ -43,7 +69,7 @@ function condOlmos(request, o, cols, pref) {
   const c = Object.assign({ empresa: 'empresa', fundo: 'fundo', usuario: 'usuario_sistema', supervisor: 'supervisor' }, cols || {});
   const p = pref || 'sd';
   const partes = [];
-  if (c.empresa) partes.push(`UPPER(ISNULL(${c.empresa}, '')) LIKE '%OLMOS%'`);
+  if (c.empresa) EMPRESAS_OLMOS.forEach(e => partes.push(`UPPER(ISNULL(${c.empresa}, '')) LIKE '%${e}%'`));   /* _ALCANCE_V1: las 5 empresas de Olmos */
   if (c.fundo) partes.push(`UPPER(LTRIM(RTRIM(ISNULL(${c.fundo}, '')))) IN (${FUNDOS_OLMOS.map(f => "'" + f + "'").join(', ')})`);
   if (c.usuario && o.usuarios.length) {
     const ks = o.usuarios.map((x, i) => { request.input(p + 'u' + i, x); return '@' + p + 'u' + i; });
@@ -69,7 +95,7 @@ async function filtroSQL(pool, request, authUser, cols, pref) {
 function esOlmos(fila, o, cols) {
   const c = Object.assign({ empresa: 'empresa', fundo: 'fundo', usuario: 'usuario_sistema', supervisor: 'supervisor' }, cols || {});
   if (!fila) return false;
-  if (c.empresa && N(fila[c.empresa]).indexOf('OLMOS') >= 0) return true;
+  if (c.empresa) { const em = N(fila[c.empresa]); if (EMPRESAS_OLMOS.some(e => em.indexOf(e) >= 0)) return true; }
   if (c.fundo && FUNDOS_OLMOS.indexOf(N(fila[c.fundo])) >= 0) return true;
   if (c.usuario && o.usuarios.indexOf(String(fila[c.usuario] || '').trim().toLowerCase()) >= 0) return true;
   if (c.supervisor && o.nombres.indexOf(N(fila[c.supervisor])) >= 0) return true;
@@ -82,4 +108,4 @@ async function filtrarFilas(pool, authUser, filas, cols) {
   return (filas || []).filter(f => (m === 'OLMOS') === esOlmos(f, o, cols));
 }
 
-module.exports = { modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, FUNDOS_OLMOS, VER_AMBAS, _N: N, _reset: () => { _cache = { t: 0, usuarios: [], nombres: [] }; } };
+module.exports = { modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => { _cache = { t: 0, usuarios: [], nombres: [], todos: [] }; } };

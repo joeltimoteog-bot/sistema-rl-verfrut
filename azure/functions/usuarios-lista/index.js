@@ -48,6 +48,8 @@ module.exports = async function (context, req) {
         r = await pool.request().query(`SELECT id_sistema, usuario, nombre, rol, empresa, activo, fecha_creacion, correo, cargo, sector
                                             FROM dbo.usuarios ORDER BY id_sistema`);
       }
+      /* _ALCANCE_V1: el alcance se lee aparte para no tocar la consulta principal (si la columna no existe, todos PROPIO) */
+      const alc = {}; try { (await pool.request().query('SELECT usuario, alcance FROM dbo.usuarios')).recordset.forEach(x => { alc[String(x.usuario || '').trim().toLowerCase()] = String(x.alcance || '').trim().toUpperCase(); }); } catch (eA) {}
       const data = r.recordset.filter(u => u.id_sistema && (incluirElim || !(u.eliminado === true || u.eliminado === 1))).map(u => {   /* _USR_BAJA_V1 */
         const o = {};
         Object.keys(u).forEach(k => { o[k] = txt(u[k]); });
@@ -56,6 +58,7 @@ module.exports = async function (context, req) {
         o.rol = String(u.rol || '').trim().toLowerCase();
         o.fecha_creacion = u.fecha_creacion instanceof Date ? u.fecha_creacion.toISOString() : (u.fecha_creacion || '');
         o.fundos = FUNDOS_SUPERVISOR[o.usuario] || [];
+        o.alcance = String(u.usuario || '').trim().toLowerCase() === 'jtimoteo' ? 'GENERAL' : (['PROPIO', 'SEDE', 'GENERAL'].indexOf(alc[String(u.usuario || '').trim().toLowerCase()]) >= 0 ? alc[String(u.usuario || '').trim().toLowerCase()] : 'PROPIO');   /* _ALCANCE_V1 */
         /* _SEG_USUARIOS_V1 */
         const fechaIso = v => v instanceof Date ? v.toISOString() : (v ? String(v) : '');
         o.eliminado = u.eliminado === true || u.eliminado === 1;   /* _USR_BAJA_V1 */

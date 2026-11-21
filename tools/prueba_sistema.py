@@ -574,7 +574,12 @@ with sync_playwright() as pw:
     cu = ''.join(USRG['cuerpos'])
     ok('Gestion Usuarios: Editar guarda en Supabase (updateUsuario) solo rol y empresa cambiados, sin Google', USRG['llamadas'] == ['updateUsuario'] and ('"rol":"' + r + '"') in cu and '"empresa":"OLMOS"' in cu and '"nombre"' not in cu and 'updateUsuario' not in RED['google'] and not pag.evaluate("() => !!document.getElementById('ueOv')"), ','.join(USRG['llamadas']) + ' | ' + cu[:200])
     USRG['llamadas'].clear(); USRG['cuerpos'].clear()
-    r = pag.evaluate("() => { rlUsrEditar('jtimoteo'); const d = document.getElementById('ueR').disabled; document.getElementById('ueX').click(); return d + '|' + !!document.getElementById('ueOv'); }")
+    USRG['llamadas'].clear(); USRG['cuerpos'].clear()
+    pag.evaluate("() => { rlUsrEditar('nuevo'); document.getElementById('ueA').value = 'SEDE'; document.getElementById('ueG').click(); }"); pag.wait_for_timeout(1200)
+    cu = ''.join(USRG['cuerpos'])
+    ok('Gestion Usuarios: Editar envia el alcance (Sede) y nada mas', USRG['llamadas'] == ['updateUsuario'] and '"alcance":"SEDE"' in cu and '"rol"' not in cu and '"empresa"' not in cu, cu[:200])
+    USRG['llamadas'].clear(); USRG['cuerpos'].clear()
+    r = pag.evaluate("() => { rlUsrEditar('jtimoteo'); const d = document.getElementById('ueR').disabled && document.getElementById('ueA').disabled; document.getElementById('ueX').click(); return d + '|' + !!document.getElementById('ueOv'); }")
     ok('Gestion Usuarios: la cuenta del dueño no permite cambiar su rol; Cancelar no guarda nada', r == 'true|false' and not USRG['llamadas'], r)
     pag.evaluate("() => { const b = document.getElementById('navDash') || document.querySelector('.ni'); if (b) b.click(); }"); pag.wait_for_timeout(300)
     # ── _COLUMNAS_AT_V1: Mis Atenciones (Excel) y Consulta por DNI (tabla y Excel) con TODAS las columnas ──

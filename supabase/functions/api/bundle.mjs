@@ -61595,16 +61595,29 @@ var require_sede = __commonJS({
   "shared/sede.js"(exports, module) {
     "use strict";
     var FUNDOS_OLMOS = ["BOMAREA", "PIRONA", "MOSQUETA", "HEFEI", "LEFKADA"];
+    var EMPRESAS_OLMOS = ["OLMOS"].concat(FUNDOS_OLMOS);
+    var ALCANCES = ["PROPIO", "SEDE", "GENERAL"];
     var VER_AMBAS = ["jtimoteo"];
     var TTL = 6e4;
-    var _cache = { t: 0, usuarios: [], nombres: [] };
+    var _cache = { t: 0, usuarios: [], nombres: [], todos: [] };
     var N = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
     var activo = () => String(process.env.SEDE_FILTRO || "").toLowerCase() !== "off";
     async function olmos(pool) {
       if (Date.now() - _cache.t < TTL) return _cache;
-      const r = await pool.request().query("SELECT usuario, nombre FROM dbo.usuarios WHERE UPPER(LTRIM(RTRIM(ISNULL(empresa, '')))) = 'OLMOS'");
-      const filas = r.recordset || [];
-      _cache = { t: Date.now(), usuarios: filas.map((x) => String(x.usuario || "").trim().toLowerCase()).filter(Boolean), nombres: filas.map((x) => N(x.nombre)).filter(Boolean) };
+      let rs;
+      try {
+        rs = (await pool.request().query("SELECT usuario, nombre, empresa, alcance FROM dbo.usuarios")).recordset || [];
+      } catch (e) {
+        rs = (await pool.request().query("SELECT usuario, nombre, empresa FROM dbo.usuarios")).recordset || [];
+      }
+      const todos = rs.map((x) => ({
+        usuario: String(x.usuario || "").trim().toLowerCase(),
+        nombre: N(x.nombre),
+        olmos: EMPRESAS_OLMOS.indexOf(N(x.empresa)) >= 0,
+        alcance: ALCANCES.indexOf(N(x.alcance)) >= 0 ? N(x.alcance) : "PROPIO"
+      })).filter((x) => x.usuario);
+      const filas = todos.filter((x) => x.olmos);
+      _cache = { t: Date.now(), usuarios: filas.map((x) => x.usuario), nombres: filas.map((x) => x.nombre).filter(Boolean), todos };
       return _cache;
     }
     async function modo(pool, authUser) {
@@ -61613,13 +61626,28 @@ var require_sede = __commonJS({
       const u = String(authUser.usuario).trim().toLowerCase();
       if (VER_AMBAS.indexOf(u) >= 0) return "TODO";
       const o = await olmos(pool);
+      const yo = o.todos.filter((x) => x.usuario === u)[0];
+      if (yo && yo.alcance === "GENERAL") return "TODO";
       return o.usuarios.indexOf(u) >= 0 ? "OLMOS" : "PIURA";
+    }
+    async function alcanceDe(pool, usuario) {
+      const u = String(usuario || "").trim().toLowerCase();
+      if (!u) return { alcance: "PROPIO", sede: "PIURA", companeros: [] };
+      if (VER_AMBAS.indexOf(u) >= 0) return { alcance: "GENERAL", sede: "TODO", companeros: [] };
+      if (!activo()) return { alcance: "PROPIO", sede: "PIURA", companeros: [] };
+      const o = await olmos(pool);
+      const yo = o.todos.filter((x) => x.usuario === u)[0];
+      if (!yo) return { alcance: "PROPIO", sede: "PIURA", companeros: [] };
+      const sede = yo.olmos ? "OLMOS" : "PIURA";
+      if (yo.alcance === "GENERAL") return { alcance: "GENERAL", sede: "TODO", companeros: [] };
+      if (yo.alcance !== "SEDE") return { alcance: "PROPIO", sede, companeros: [] };
+      return { alcance: "SEDE", sede, companeros: o.todos.filter((x) => x.olmos === yo.olmos && x.usuario !== u).map((x) => [x.usuario, x.nombre.toLowerCase()]) };
     }
     function condOlmos(request, o, cols, pref) {
       const c = Object.assign({ empresa: "empresa", fundo: "fundo", usuario: "usuario_sistema", supervisor: "supervisor" }, cols || {});
       const p = pref || "sd";
       const partes = [];
-      if (c.empresa) partes.push(`UPPER(ISNULL(${c.empresa}, '')) LIKE '%OLMOS%'`);
+      if (c.empresa) EMPRESAS_OLMOS.forEach((e) => partes.push(`UPPER(ISNULL(${c.empresa}, '')) LIKE '%${e}%'`));
       if (c.fundo) partes.push(`UPPER(LTRIM(RTRIM(ISNULL(${c.fundo}, '')))) IN (${FUNDOS_OLMOS.map((f) => "'" + f + "'").join(", ")})`);
       if (c.usuario && o.usuarios.length) {
         const ks = o.usuarios.map((x, i) => {
@@ -61647,7 +61675,10 @@ var require_sede = __commonJS({
     function esOlmos(fila, o, cols) {
       const c = Object.assign({ empresa: "empresa", fundo: "fundo", usuario: "usuario_sistema", supervisor: "supervisor" }, cols || {});
       if (!fila) return false;
-      if (c.empresa && N(fila[c.empresa]).indexOf("OLMOS") >= 0) return true;
+      if (c.empresa) {
+        const em = N(fila[c.empresa]);
+        if (EMPRESAS_OLMOS.some((e) => em.indexOf(e) >= 0)) return true;
+      }
       if (c.fundo && FUNDOS_OLMOS.indexOf(N(fila[c.fundo])) >= 0) return true;
       if (c.usuario && o.usuarios.indexOf(String(fila[c.usuario] || "").trim().toLowerCase()) >= 0) return true;
       if (c.supervisor && o.nombres.indexOf(N(fila[c.supervisor])) >= 0) return true;
@@ -61659,8 +61690,8 @@ var require_sede = __commonJS({
       const o = await olmos(pool);
       return (filas || []).filter((f) => m === "OLMOS" === esOlmos(f, o, cols));
     }
-    module.exports = { modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, FUNDOS_OLMOS, VER_AMBAS, _N: N, _reset: () => {
-      _cache = { t: 0, usuarios: [], nombres: [] };
+    module.exports = { modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => {
+      _cache = { t: 0, usuarios: [], nombres: [], todos: [] };
     } };
   }
 });
@@ -62355,7 +62386,10 @@ var require_stats_pizarron = __commonJS({
     var noVacio = (v) => v != null && String(v) !== "";
     function filaOlmos(r, o) {
       if (Number(r.sd_fo) === 1) return true;
-      if (String(r.empresa == null ? "" : r.empresa).toUpperCase().indexOf("OLMOS") >= 0) return true;
+      {
+        const em = String(r.empresa == null ? "" : r.empresa).toUpperCase();
+        if (["OLMOS", "BOMAREA", "PIRONA", "MOSQUETA", "HEFEI", "LEFKADA"].some((e) => em.indexOf(e) >= 0)) return true;
+      }
       if (r.sd_us && o.usuarios.indexOf(String(r.sd_us)) >= 0) return true;
       const sp = String(r.supervisor == null ? "" : r.supervisor).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
       return !!sp && o.nombres.indexOf(sp) >= 0;
@@ -71859,6 +71893,12 @@ var require_cv = __commonJS({
           quienes2 = quienes2.concat(await cubiertos(pool, un2));
         } catch (e) {
         }
+        try {
+          const al = await require_sede().alcanceDe(pool, un2);
+          if (al.alcance === "GENERAL") return { todo: true };
+          if (al.alcance === "SEDE") quienes2 = quienes2.concat(al.companeros);
+        } catch (e) {
+        }
         return { todo: false, quienes: quienes2, todos: _nomCache.todos || [] };
       }
       const rolNorm = String(p.rol || "").trim().toLowerCase();
@@ -73176,6 +73216,7 @@ var require_usr_guardar = __commonJS({
     var DUENOS = ["jtimoteo"];
     var ROLES_EDITABLES = ["administrador", "administrador 01", "administrador 02", "supervisor"];
     var EMPRESAS_EDITABLES = ["AMBAS", "RAPEL", "VERFRUT", "OLMOS"];
+    var ALCANCES_EDITABLES = ["PROPIO", "SEDE", "GENERAL"];
     var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
     var S = (v) => esD(v) ? v.$s : String(v == null ? "" : v);
     var p2 = (n) => (n < 10 ? "0" : "") + n;
@@ -73382,6 +73423,19 @@ var require_usr_guardar = __commonJS({
             r.input("em", sql.NVarChar(50), em);
             sets.push("empresa = @em");
             cuerpo.empresa = em;
+          }
+          if (b.alcance !== void 0) {
+            const al = String(b.alcance || "").trim().toUpperCase();
+            if (ALCANCES_EDITABLES.indexOf(al) < 0) {
+              await tx.rollback();
+              return no("Alcance no v\xE1lido: " + ALCANCES_EDITABLES.join(", ") + ".");
+            }
+            if (DUENOS.indexOf(String(b.usuario).trim().toLowerCase()) >= 0 && al !== "GENERAL") {
+              await tx.rollback();
+              return no("La cuenta del due\xF1o del sistema siempre tiene alcance General.");
+            }
+            r.input("al", sql.NVarChar(20), al);
+            sets.push("alcance = @al");
           }
           if (sets.length) await r.query(`UPDATE dbo.usuarios SET ${sets.join(", ")}, fecha_sync = GETDATE() WHERE id_sistema = @id`);
           resp = { success: true };
@@ -81355,6 +81409,13 @@ var require_usuarios_lista = __commonJS({
             r = await pool.request().query(`SELECT id_sistema, usuario, nombre, rol, empresa, activo, fecha_creacion, correo, cargo, sector
                                             FROM dbo.usuarios ORDER BY id_sistema`);
           }
+          const alc = {};
+          try {
+            (await pool.request().query("SELECT usuario, alcance FROM dbo.usuarios")).recordset.forEach((x) => {
+              alc[String(x.usuario || "").trim().toLowerCase()] = String(x.alcance || "").trim().toUpperCase();
+            });
+          } catch (eA) {
+          }
           const data = r.recordset.filter((u) => u.id_sistema && (incluirElim || !(u.eliminado === true || u.eliminado === 1))).map((u) => {
             const o = {};
             Object.keys(u).forEach((k) => {
@@ -81365,6 +81426,7 @@ var require_usuarios_lista = __commonJS({
             o.rol = String(u.rol || "").trim().toLowerCase();
             o.fecha_creacion = u.fecha_creacion instanceof Date ? u.fecha_creacion.toISOString() : u.fecha_creacion || "";
             o.fundos = FUNDOS_SUPERVISOR[o.usuario] || [];
+            o.alcance = String(u.usuario || "").trim().toLowerCase() === "jtimoteo" ? "GENERAL" : ["PROPIO", "SEDE", "GENERAL"].indexOf(alc[String(u.usuario || "").trim().toLowerCase()]) >= 0 ? alc[String(u.usuario || "").trim().toLowerCase()] : "PROPIO";
             const fechaIso = (v) => v instanceof Date ? v.toISOString() : v ? String(v) : "";
             o.eliminado = u.eliminado === true || u.eliminado === 1;
             if (o.eliminado) o.baja = { en: u.eliminado_en instanceof Date ? u.eliminado_en.toISOString() : "", por: u.eliminado_por || "", motivo: u.motivo_baja || "" };

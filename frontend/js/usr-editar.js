@@ -12,7 +12,9 @@
   if (window._rlUsrEditarOk) return; window._rlUsrEditarOk = true;
   try { if (localStorage.getItem('rl_usr_editar') === 'off') return; } catch (e) {}
   var ROLES = [['administrador', 'Administrador'], ['administrador 01', 'Administrador 01 (solo ver/exportar)'], ['administrador 02', 'Administrador 02 (solo ver/exportar)'], ['supervisor', 'Supervisor']];
-  var EMPRESAS = [['AMBAS', 'Todas'], ['RAPEL', 'RAPEL S.A.C'], ['VERFRUT', 'VERFRUT S.A.C'], ['OLMOS', 'OLMOS']];
+  var EMPRESAS = [['AMBAS', 'Todas (sede Piura)'], ['RAPEL', 'RAPEL S.A.C (sede Piura)'], ['VERFRUT', 'VERFRUT S.A.C (sede Piura)'], ['OLMOS', 'OLMOS (sede Olmos)']];
+  /* _ALCANCE_V1 (21-nov-2026): cuanto ve el usuario dentro de los modulos que tiene asignados */
+  var ALCANCES = [['PROPIO', 'Propio: solo lo que registra'], ['SEDE', 'Sede: todo lo de su sede (jefatura)'], ['GENERAL', 'General: las dos sedes']];
   function yo() { try { return (typeof USER !== 'undefined' && USER) ? String(USER.usuario || '').toLowerCase().trim() : ''; } catch (e) { return ''; } }
   function cache() { try { return (typeof CACHE !== 'undefined' && CACHE && Array.isArray(CACHE.usuarios)) ? CACHE.usuarios : []; } catch (e) { return []; } }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -32,16 +34,17 @@
   function abrir(usuario) {
     var u = cache().filter(function (x) { return String(x.usuario || '') === usuario; })[0];
     if (!u) { aviso('No encuentro a ' + usuario + ' en la lista. Pulsa Actualizar y vuelve a intentar.'); return; }
-    var rolAct = String(u.rol || '').toLowerCase().trim(), empAct = String(u.empresa || '').toUpperCase().trim();
+    var rolAct = String(u.rol || '').toLowerCase().trim(), empAct = String(u.empresa || '').toUpperCase().trim(), alcAct = String(u.alcance || 'PROPIO').toUpperCase().trim();
     var opt = function (L, v) { var hay = L.some(function (o) { return o[0] === v; }); return (hay ? '' : '<option value="' + esc(v) + '" selected>' + esc(v || '(vacío)') + '</option>') + L.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (o[0] === v ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join(''); };
     var dueno = usuario.toLowerCase() === 'jtimoteo';
     var ov = document.createElement('div'); ov.id = 'ueOv';
     ov.innerHTML = '<div class="ue"><div class="ue-h">✏️ Editar usuario · ' + esc(usuario) + '</div><div class="ue-b">' +
       '<div><label>Nombre completo</label><input id="ueN" value="' + esc(u.nombre || '') + '" maxlength="200"></div>' +
       '<div><label>Rol</label><select id="ueR"' + (dueno ? ' disabled' : '') + '>' + opt(ROLES, rolAct) + '</select></div>' +
-      '<div><label>Empresa</label><select id="ueE">' + opt(EMPRESAS, empAct) + '</select></div>' +
+      '<div><label>Empresa / sede</label><select id="ueE">' + opt(EMPRESAS, empAct) + '</select></div>' +
+      '<div><label>Alcance (cuánto ve en sus módulos)</label><select id="ueA"' + (dueno ? ' disabled' : '') + '>' + opt(ALCANCES, alcAct) + '</select></div>' +
       '<div><label>Correo</label><input id="ueC" type="email" value="' + esc(u.correo || '') + '"></div>' +
-      '<div class="ue-n">Los módulos asignados en Acceso a Módulos no cambian. El usuario verá el cambio de rol al volver a iniciar sesión.' + (dueno ? ' La cuenta del dueño siempre es Administrador.' : '') + '</div>' +
+      '<div class="ue-n">Los módulos asignados en Acceso a Módulos no cambian. El alcance nunca cruza de sede, salvo General. El usuario verá el cambio de rol al volver a iniciar sesión.' + (dueno ? ' La cuenta del dueño siempre es Administrador.' : '') + '</div>' +
       '</div><div class="ue-f"><button class="c" type="button" id="ueX">Cancelar</button><button class="g" type="button" id="ueG">Guardar cambios</button></div></div>';
     document.body.appendChild(ov);
     var cerrar = function () { try { ov.remove(); } catch (e) {} };
@@ -54,6 +57,7 @@
       if (n !== String(u.nombre || '').trim()) cambios.nombre = n;
       if (!dueno && r !== rolAct) cambios.rol = r;
       if (em !== empAct) cambios.empresa = em;
+      var al = document.getElementById('ueA').value; if (!dueno && al !== alcAct) cambios.alcance = al;
       if (c && c !== String(u.correo || '').trim()) cambios.correo = c;
       if (!Object.keys(cambios).length) { cerrar(); return; }
       if (cambios.nombre === '') { aviso('El nombre no puede quedar vacío.'); return; }
@@ -62,7 +66,7 @@
       try { res = await window.apiPost(Object.assign({ action: 'updateUsuario', usuario: usuario }, cambios)); } catch (e) { res = { success: false, error: e.message }; }
       if (!res || res.success === false) { bt.disabled = false; bt.textContent = 'Guardar cambios'; aviso('No se guardó: ' + ((res && res.error) || 'sin respuesta')); return; }
       Object.assign(u, cambios); cerrar();
-      aviso('✅ Usuario ' + usuario + ' actualizado' + (cambios.rol ? ' (rol: ' + cambios.rol + ')' : ''), true);
+      aviso('✅ Usuario ' + usuario + ' actualizado' + (cambios.rol ? ' (rol: ' + cambios.rol + ')' : '') + (cambios.alcance ? ' (alcance: ' + cambios.alcance + ')' : ''), true);
       try {
         if (typeof _renderUs === 'function') { if (typeof _usCacheSet === 'function') _usCacheSet(cache()); _renderUs(); if (typeof cargarUs === 'function') cargarUs(true); }
         else if (typeof cargarUs === 'function') { try { delete CACHE.usuarios; } catch (e) {} cargarUs(); }

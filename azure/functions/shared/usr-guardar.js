@@ -22,6 +22,7 @@ const POL = require('./clave-politica');
 const DUENOS = ['jtimoteo'];
 const ROLES_EDITABLES = ['administrador', 'administrador 01', 'administrador 02', 'supervisor'];   /* _USR_EDITAR_V1: los del formulario de creacion */
 const EMPRESAS_EDITABLES = ['AMBAS', 'RAPEL', 'VERFRUT', 'OLMOS'];
+const ALCANCES_EDITABLES = ['PROPIO', 'SEDE', 'GENERAL'];   /* _ALCANCE_V1 */
 const esD = v => !!(v && typeof v === 'object' && typeof v.$d === 'string');
 const S = v => esD(v) ? v.$s : String(v == null ? '' : v);
 const p2 = n => (n < 10 ? '0' : '') + n;
@@ -165,6 +166,11 @@ async function ejecutar(pool, accion, b, operador, prueba, ahoraMs) {
       if (b.empresa !== undefined) { const em = String(b.empresa || '').trim().toUpperCase();
         if (EMPRESAS_EDITABLES.indexOf(em) < 0) { await tx.rollback(); return no('Empresa no válida: ' + EMPRESAS_EDITABLES.join(', ') + '.'); }
         r.input('em', sql.NVarChar(50), em); sets.push('empresa = @em'); cuerpo.empresa = em; }
+      /* _ALCANCE_V1 (21-nov-2026): cuanto ve el usuario dentro de sus modulos. Solo vive en Supabase (no va a la hoja). */
+      if (b.alcance !== undefined) { const al = String(b.alcance || '').trim().toUpperCase();
+        if (ALCANCES_EDITABLES.indexOf(al) < 0) { await tx.rollback(); return no('Alcance no válido: ' + ALCANCES_EDITABLES.join(', ') + '.'); }
+        if (DUENOS.indexOf(String(b.usuario).trim().toLowerCase()) >= 0 && al !== 'GENERAL') { await tx.rollback(); return no('La cuenta del dueño del sistema siempre tiene alcance General.'); }
+        r.input('al', sql.NVarChar(20), al); sets.push('alcance = @al'); }
       if (sets.length) await r.query(`UPDATE dbo.usuarios SET ${sets.join(', ')}, fecha_sync = GETDATE() WHERE id_sistema = @id`);
       resp = { success: true };
 

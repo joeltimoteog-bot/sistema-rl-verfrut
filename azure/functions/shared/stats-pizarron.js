@@ -95,7 +95,7 @@ const noVacio = v => v != null && String(v) !== '';
 /* _SEDE_SERVIDOR_V1: sede = { modo: 'TODO'|'OLMOS'|'PIURA', o: { usuarios, nombres } } (shared/sede.js). Sin sede o 'TODO': todo. */
 function filaOlmos(r, o) {
   if (Number(r.sd_fo) === 1) return true;
-  if (String(r.empresa == null ? '' : r.empresa).toUpperCase().indexOf('OLMOS') >= 0) return true;
+  { const em = String(r.empresa == null ? '' : r.empresa).toUpperCase(); if (['OLMOS', 'BOMAREA', 'PIRONA', 'MOSQUETA', 'HEFEI', 'LEFKADA'].some(e => em.indexOf(e) >= 0)) return true; }   /* _ALCANCE_V1 */
   if (r.sd_us && o.usuarios.indexOf(String(r.sd_us)) >= 0) return true;
   const sp = String(r.supervisor == null ? '' : r.supervisor).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim().toUpperCase();
   return !!sp && o.nombres.indexOf(sp) >= 0;

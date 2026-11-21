@@ -55,6 +55,13 @@ async function alcance(pool, p, t) {
     if (VER_TODO_CV.indexOf(un) >= 0) return { todo: true };
     let quienes = [[un, await nombreDe(pool, un)]];
     try { quienes = quienes.concat(await cubiertos(pool, un)); } catch (e) {}   /* _AUSENCIAS_V1 */
+    /* _ALCANCE_V1 (21-nov-2026): alcance GENERAL ve todo; alcance SEDE ve ademas lo de los usuarios de su misma sede
+       (Olmos o Piura, nunca la otra). Si la consulta falla, queda en lo propio (lo mas cerrado). */
+    try {
+      const al = await require('../shared/sede').alcanceDe(pool, un);
+      if (al.alcance === 'GENERAL') return { todo: true };
+      if (al.alcance === 'SEDE') quienes = quienes.concat(al.companeros);
+    } catch (e) {}
     return { todo: false, quienes, todos: _nomCache.todos || [] };
   }
   /* sin token: llamada interna (Apps Script) -> como antes, por el rol que envia */
