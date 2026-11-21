@@ -221,6 +221,15 @@ async function ejecutar(pool, accion, b, usuario, prueba) {
           const oS = await SDc.olmos(pool);
           const esO = SDc.esOlmos(reg, oS, { empresa: 'empresa', fundo: 'fundo', usuario: 'registrado_por', supervisor: 'supervisor' }) || oS.nombres.indexOf(SDc._N(reg.registrado_por)) >= 0;
           if (esO !== (mS === 'OLMOS')) return { status: 403, body: { success: false, otra_sede: true, error: SDc.MSG_OTRA_SEDE } };
+          /* _CV_AJENO_REGISTRO_V1 (21-nov-2026): dentro de la misma sede NO se bloquea todavia. Solo se anota (rl.acceso_registro)
+             cuando alguien modifica un caso/visita que no es suyo ni de su alcance, para decidir la regla con datos reales. */
+          try {
+            const al = await SDc.alcanceDe(pool, usuario), yo = String(usuario).trim().toLowerCase();
+            const mios = [[yo, '']].concat(al.companeros || []), nYo = (oS.todos.filter(x => x.usuario === yo)[0] || {}).nombre || '';
+            const rp = SDc._N(reg.registrado_por), sp = SDc._N(reg.supervisor);
+            const propio = al.alcance === 'GENERAL' || rp === yo.toUpperCase() || (nYo && (rp === nYo || sp === nYo)) || mios.some(q => q[1] && (SDc._N(q[1]) === rp || SDc._N(q[1]) === sp) || q[0].toUpperCase() === rp);
+            if (!propio) await require('./modulos-guard').anotar(pool, yo, 'cv-guardar', accion, tipo === 'casos' ? 'caso-ajeno' : 'visita-ajena');
+          } catch (eA) {}
         }
       }
     } catch (eS) {}

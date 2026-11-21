@@ -11490,6 +11490,108 @@ var require_sede = __commonJS({
   }
 });
 
+// shared/modulos-guard.js
+var require_modulos_guard = __commonJS({
+  "shared/modulos-guard.js"(exports, module) {
+    "use strict";
+    var jwt = require_jsonwebtoken();
+    var { getPool } = require_db();
+    var DUENOS = ["jtimoteo"];
+    var TTL = 6e4;
+    var CADA_REG = 6e5;
+    var _perm = {};
+    var _anotado = {};
+    var POR_MOD = { horas: "navHoras", cap: "mod_capacitaciones", mant: "navMantenimiento" };
+    var MAPA = {
+      "cv": (b) => /isita/i.test(String(b.accion || "")) ? "navVisitas" : /aso/i.test(String(b.accion || "")) ? "navCasos" : null,
+      "cv-guardar": (b) => /isita/i.test(String(b.accion || "")) ? "navVisitas" : /aso/i.test(String(b.accion || "")) ? "navCasos" : null,
+      "mod": (b) => POR_MOD[String(b.modulo || "")] || null,
+      "fus-guardar": "navFusiones",
+      "sol-guardar": "navSolicitudes",
+      "mant-guardar": "navMantenimiento",
+      "mant-resp": "navMantenimiento",
+      "horas-guardar": "navHoras",
+      "alm-guardar": "navAlmuerzos",
+      "inv-guardar": "navInventario",
+      "preav-guardar": "navPreaviso",
+      "cap-guardar": "mod_capacitaciones",
+      "cap-firmas": "mod_capacitaciones",
+      "kpi": ["navKpis", "navEval360"],
+      "informe-gh": "navInformeGH",
+      "padron": "navPadron"
+    };
+    function modo() {
+      const m = String(process.env.MODULOS_GUARD || "log").toLowerCase();
+      return m === "on" || m === "off" ? m : "log";
+    }
+    function usuarioDe(req) {
+      try {
+        const h = String(req.headers && (req.headers.authorization || req.headers.Authorization) || "");
+        const m = h.match(/^Bearer\s+(.+)$/i);
+        if (!m || !process.env.JWT_SECRET) return "";
+        const t = jwt.verify(m[1], process.env.JWT_SECRET);
+        return String(t && t.usuario || "").trim().toLowerCase();
+      } catch (e) {
+        return "";
+      }
+    }
+    async function permisosDe(pool, u) {
+      const c = _perm[u];
+      if (c && Date.now() - c.t < TTL) return c.m;
+      const r = await pool.request().input("u", u).query("SELECT modulo, permitido FROM dbo.permisosmodulos WHERE LOWER(LTRIM(RTRIM(usuario))) = @u");
+      let m = null;
+      if (r.recordset && r.recordset.length) {
+        m = {};
+        r.recordset.forEach((x) => {
+          const v = x.permitido;
+          m[String(x.modulo || "").trim()] = v === true || v === 1 || String(v).trim() === "1" || String(v).trim().toLowerCase() === "true";
+        });
+      }
+      _perm[u] = { t: Date.now(), m };
+      return m;
+    }
+    async function anotar(pool, u, fn, accion, mod) {
+      const dia = new Date(Date.now() - 5 * 36e5).toISOString().slice(0, 10);
+      const k = [dia, u, fn, accion, mod].join("|");
+      if (_anotado[k] && Date.now() - _anotado[k] < CADA_REG) return;
+      _anotado[k] = Date.now();
+      const rq = () => pool.request().input("d", dia).input("u", u).input("f", fn).input("a", accion).input("m", mod);
+      const up = await rq().query("UPDATE dbo.acceso_registro SET n = n + 1, ultimo = SYSUTCDATETIME() WHERE dia = @d AND usuario = @u AND fn = @f AND accion = @a AND modulo = @m");
+      if (!up.rowsAffected || !up.rowsAffected[0]) await rq().query("INSERT INTO dbo.acceso_registro (dia, usuario, fn, accion, modulo, n, ultimo) VALUES (@d, @u, @f, @a, @m, 1, SYSUTCDATETIME())");
+    }
+    async function revisar(fn, req, binding) {
+      try {
+        const md = modo();
+        if (md === "off") return null;
+        const regla = MAPA[fn];
+        if (!regla) return null;
+        const mod = typeof regla === "function" ? regla(binding || {}) : regla;
+        if (!mod) return null;
+        const u = usuarioDe(req);
+        if (!u || DUENOS.indexOf(u) >= 0) return null;
+        const pool = await getPool();
+        const P = await permisosDe(pool, u);
+        if (!P) return null;
+        if (Array.isArray(mod)) {
+          if (mod.some((k) => P[k] !== false)) return null;
+        } else if (P[mod] !== false) return null;
+        const modTxt = Array.isArray(mod) ? mod[0] : mod;
+        try {
+          await anotar(pool, u, fn, String(binding && (binding.accion || binding.modulo) || "").slice(0, 60), modTxt);
+        } catch (e) {
+        }
+        return md === "on" ? { bloquear: true, modulo: modTxt } : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    module.exports = { revisar, anotar, MAPA, modo, _reset: () => {
+      Object.keys(_perm).forEach((k) => delete _perm[k]);
+      Object.keys(_anotado).forEach((k) => delete _anotado[k]);
+    } };
+  }
+});
+
 // shared/cv-guardar.js
 var require_cv_guardar = __commonJS({
   "shared/cv-guardar.js"(exports, module) {
@@ -11792,6 +11894,14 @@ var require_cv_guardar = __commonJS({
               const oS = await SDc.olmos(pool);
               const esO = SDc.esOlmos(reg, oS, { empresa: "empresa", fundo: "fundo", usuario: "registrado_por", supervisor: "supervisor" }) || oS.nombres.indexOf(SDc._N(reg.registrado_por)) >= 0;
               if (esO !== (mS === "OLMOS")) return { status: 403, body: { success: false, otra_sede: true, error: SDc.MSG_OTRA_SEDE } };
+              try {
+                const al = await SDc.alcanceDe(pool, usuario), yo = String(usuario).trim().toLowerCase();
+                const mios = [[yo, ""]].concat(al.companeros || []), nYo = (oS.todos.filter((x) => x.usuario === yo)[0] || {}).nombre || "";
+                const rp = SDc._N(reg.registrado_por), sp = SDc._N(reg.supervisor);
+                const propio = al.alcance === "GENERAL" || rp === yo.toUpperCase() || nYo && (rp === nYo || sp === nYo) || mios.some((q) => q[1] && (SDc._N(q[1]) === rp || SDc._N(q[1]) === sp) || q[0].toUpperCase() === rp);
+                if (!propio) await require_modulos_guard().anotar(pool, yo, "cv-guardar", accion, tipo === "casos" ? "caso-ajeno" : "visita-ajena");
+              } catch (eA) {
+              }
             }
           }
         } catch (eS) {
@@ -81939,105 +82049,6 @@ var require_rutas_edge = __commonJS({
       { fn: "usuarios-sync", ruta: "usuarios/sync", metodos: ["POST"], llave: true, h: require_usuarios_sync() },
       { fn: "vigia", ruta: "vigia/{accion}", metodos: ["GET"], llave: false, h: require_vigia() }
     ];
-  }
-});
-
-// shared/modulos-guard.js
-var require_modulos_guard = __commonJS({
-  "shared/modulos-guard.js"(exports, module) {
-    "use strict";
-    var jwt = require_jsonwebtoken();
-    var { getPool } = require_db();
-    var DUENOS = ["jtimoteo"];
-    var TTL = 6e4;
-    var CADA_REG = 6e5;
-    var _perm = {};
-    var _anotado = {};
-    var POR_MOD = { horas: "navHoras", cap: "mod_capacitaciones", fus: "navFusiones", mant: "navMantenimiento", sol: "navSolicitudes" };
-    var MAPA = {
-      "cv": (b) => /isita/i.test(String(b.accion || "")) ? "navVisitas" : /aso/i.test(String(b.accion || "")) ? "navCasos" : null,
-      "cv-guardar": (b) => /isita/i.test(String(b.accion || "")) ? "navVisitas" : /aso/i.test(String(b.accion || "")) ? "navCasos" : null,
-      "mod": (b) => POR_MOD[String(b.modulo || "")] || null,
-      "fus-guardar": "navFusiones",
-      "sol-guardar": "navSolicitudes",
-      "mant-guardar": "navMantenimiento",
-      "mant-resp": "navMantenimiento",
-      "horas-guardar": "navHoras",
-      "alm-guardar": "navAlmuerzos",
-      "inv-guardar": "navInventario",
-      "preav-guardar": "navPreaviso",
-      "cap-guardar": "mod_capacitaciones",
-      "cap-firmas": "mod_capacitaciones",
-      "kpi": "navKpis",
-      "informe-gh": "navInformeGH",
-      "padron": "navPadron",
-      "cumpl-guardar": "navCumpl"
-    };
-    function modo() {
-      const m = String(process.env.MODULOS_GUARD || "log").toLowerCase();
-      return m === "on" || m === "off" ? m : "log";
-    }
-    function usuarioDe(req) {
-      try {
-        const h = String(req.headers && (req.headers.authorization || req.headers.Authorization) || "");
-        const m = h.match(/^Bearer\s+(.+)$/i);
-        if (!m || !process.env.JWT_SECRET) return "";
-        const t = jwt.verify(m[1], process.env.JWT_SECRET);
-        return String(t && t.usuario || "").trim().toLowerCase();
-      } catch (e) {
-        return "";
-      }
-    }
-    async function permisosDe(pool, u) {
-      const c = _perm[u];
-      if (c && Date.now() - c.t < TTL) return c.m;
-      const r = await pool.request().input("u", u).query("SELECT modulo, permitido FROM dbo.permisosmodulos WHERE LOWER(LTRIM(RTRIM(usuario))) = @u");
-      let m = null;
-      if (r.recordset && r.recordset.length) {
-        m = {};
-        r.recordset.forEach((x) => {
-          const v = x.permitido;
-          m[String(x.modulo || "").trim()] = v === true || v === 1 || String(v).trim() === "1" || String(v).trim().toLowerCase() === "true";
-        });
-      }
-      _perm[u] = { t: Date.now(), m };
-      return m;
-    }
-    async function anotar(pool, u, fn, accion, mod) {
-      const dia = new Date(Date.now() - 5 * 36e5).toISOString().slice(0, 10);
-      const k = [dia, u, fn, accion, mod].join("|");
-      if (_anotado[k] && Date.now() - _anotado[k] < CADA_REG) return;
-      _anotado[k] = Date.now();
-      const rq = () => pool.request().input("d", dia).input("u", u).input("f", fn).input("a", accion).input("m", mod);
-      const up = await rq().query("UPDATE dbo.acceso_registro SET n = n + 1, ultimo = SYSUTCDATETIME() WHERE dia = @d AND usuario = @u AND fn = @f AND accion = @a AND modulo = @m");
-      if (!up.rowsAffected || !up.rowsAffected[0]) await rq().query("INSERT INTO dbo.acceso_registro (dia, usuario, fn, accion, modulo, n, ultimo) VALUES (@d, @u, @f, @a, @m, 1, SYSUTCDATETIME())");
-    }
-    async function revisar(fn, req, binding) {
-      try {
-        const md = modo();
-        if (md === "off") return null;
-        const regla = MAPA[fn];
-        if (!regla) return null;
-        const mod = typeof regla === "function" ? regla(binding || {}) : regla;
-        if (!mod) return null;
-        const u = usuarioDe(req);
-        if (!u || DUENOS.indexOf(u) >= 0) return null;
-        const pool = await getPool();
-        const P = await permisosDe(pool, u);
-        if (!P || P[mod] !== false) return null;
-        try {
-          await anotar(pool, u, fn, String(binding && (binding.accion || binding.modulo) || "").slice(0, 60), mod);
-        } catch (e) {
-        }
-        return md === "on" ? { bloquear: true, modulo: mod } : null;
-      } catch (e) {
-        return null;
-      }
-    }
-    module.exports = { revisar, MAPA, modo, _reset: () => {
-      Object.keys(_perm).forEach((k) => delete _perm[k]);
-      Object.keys(_anotado).forEach((k) => delete _anotado[k]);
-    } };
   }
 });
 

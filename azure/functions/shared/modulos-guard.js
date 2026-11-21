@@ -19,15 +19,19 @@ const _perm = {};      // usuario -> { t, m: { modulo: bool } | null }
 const _anotado = {};   // clave -> t
 
 /* ruta (carpeta de la funcion) -> modulo de "Acceso a Modulos". Funcion = depende de la accion / del modulo de la URL. */
-const POR_MOD = { horas: 'navHoras', cap: 'mod_capacitaciones', fus: 'navFusiones', mant: 'navMantenimiento', sol: 'navSolicitudes' };
+/* _MODULOS_GUARD_V2 (21-nov-2026, revision del mapa antes del modo obligatorio):
+   · mod/fus y mod/sol NO se revisan: el dashboard los pide al entrar para TODOS los usuarios (precarga); bloquearlos haria fallar el ingreso.
+   · cumpl-guardar NO se revisa: los supervisores justifican sus retrasos sin tener el panel de Control de Cumplimiento.
+   · kpi pasa con KPIs o con Evaluacion 360 (la 360 lee el tablero de KPIs). */
+const POR_MOD = { horas: 'navHoras', cap: 'mod_capacitaciones', mant: 'navMantenimiento' };
 const MAPA = {
   'cv': b => /isita/i.test(String(b.accion || '')) ? 'navVisitas' : (/aso/i.test(String(b.accion || '')) ? 'navCasos' : null),
   'cv-guardar': b => /isita/i.test(String(b.accion || '')) ? 'navVisitas' : (/aso/i.test(String(b.accion || '')) ? 'navCasos' : null),
   'mod': b => POR_MOD[String(b.modulo || '')] || null,
   'fus-guardar': 'navFusiones', 'sol-guardar': 'navSolicitudes', 'mant-guardar': 'navMantenimiento', 'mant-resp': 'navMantenimiento',
   'horas-guardar': 'navHoras', 'alm-guardar': 'navAlmuerzos', 'inv-guardar': 'navInventario', 'preav-guardar': 'navPreaviso',
-  'cap-guardar': 'mod_capacitaciones', 'cap-firmas': 'mod_capacitaciones', 'kpi': 'navKpis', 'informe-gh': 'navInformeGH',
-  'padron': 'navPadron', 'cumpl-guardar': 'navCumpl'
+  'cap-guardar': 'mod_capacitaciones', 'cap-firmas': 'mod_capacitaciones', 'kpi': ['navKpis', 'navEval360'], 'informe-gh': 'navInformeGH',
+  'padron': 'navPadron'
 };
 function modo() { const m = String(process.env.MODULOS_GUARD || 'log').toLowerCase(); return m === 'on' || m === 'off' ? m : 'log'; }
 function usuarioDe(req) {
@@ -64,9 +68,11 @@ async function revisar(fn, req, binding) {
     const mod = typeof regla === 'function' ? regla(binding || {}) : regla; if (!mod) return null;
     const u = usuarioDe(req); if (!u || DUENOS.indexOf(u) >= 0) return null;
     const pool = await getPool();
-    const P = await permisosDe(pool, u); if (!P || P[mod] !== false) return null;
-    try { await anotar(pool, u, fn, String((binding && (binding.accion || binding.modulo)) || '').slice(0, 60), mod); } catch (e) {}
-    return md === 'on' ? { bloquear: true, modulo: mod } : null;
+    const P = await permisosDe(pool, u); if (!P) return null;
+    if (Array.isArray(mod)) { if (mod.some(k => P[k] !== false)) return null; } else if (P[mod] !== false) return null;
+    const modTxt = Array.isArray(mod) ? mod[0] : mod;
+    try { await anotar(pool, u, fn, String((binding && (binding.accion || binding.modulo)) || '').slice(0, 60), modTxt); } catch (e) {}
+    return md === 'on' ? { bloquear: true, modulo: modTxt } : null;
   } catch (e) { return null; }
 }
-module.exports = { revisar, MAPA, modo, _reset: () => { Object.keys(_perm).forEach(k => delete _perm[k]); Object.keys(_anotado).forEach(k => delete _anotado[k]); } };
+module.exports = { revisar, anotar, MAPA, modo, _reset: () => { Object.keys(_perm).forEach(k => delete _perm[k]); Object.keys(_anotado).forEach(k => delete _anotado[k]); } };
