@@ -209,6 +209,22 @@ async function ejecutar(pool, accion, b, usuario, prueba) {
     if (accion === 'eliminarCaso' && String(d.motivo || '').trim().length < 10) return { status: 400, body: { success: false, error: 'El motivo es obligatorio y debe tener al menos 10 caracteres' } };
   }
   if ((accion === 'updateCaso' || accion === 'updateVisita') && (d.nro === undefined || d.nro === '')) return { status: 400, body: { success: false, error: 'Falta el N°' } };
+  /* _SEDE_ESCRITURA_V2 (21-nov-2026): no se modifica ni elimina un caso o visita de la otra sede (jtimoteo y alcance General, si).
+     El registro se ubica por su N°; si no se puede comprobar, la operacion sigue como antes. */
+  if (/^(update|eliminar)/.test(accion) && usuario && d.nro !== undefined && d.nro !== '' && !prueba) {
+    try {
+      const SDc = require('./sede'), mS = await SDc.modo(pool, { usuario });
+      if (mS !== 'TODO') {
+        const Tc = await TC.leerCV(pool), lista = Tc ? (tipo === 'casos' ? Tc.casos : Tc.visitas) : null;
+        const reg = lista && lista.filter(x => String(x.nro) === String(d.nro))[0];
+        if (reg) {
+          const oS = await SDc.olmos(pool);
+          const esO = SDc.esOlmos(reg, oS, { empresa: 'empresa', fundo: 'fundo', usuario: 'registrado_por', supervisor: 'supervisor' }) || oS.nombres.indexOf(SDc._N(reg.registrado_por)) >= 0;
+          if (esO !== (mS === 'OLMOS')) return { status: 403, body: { success: false, otra_sede: true, error: SDc.MSG_OTRA_SEDE } };
+        }
+      }
+    } catch (eS) {}
+  }
   /* _ENVIO_INFORME_ADMIN_V1 (24-oct-2026, decision de Joel): la fecha en que se envio el informe por correo la registra
      SOLO un administrador (administrador, administrador 01/02, coordinador, jefa_rl). Si la manda otro usuario, se ignora
      (el caso se guarda igual, sin esa fecha). */

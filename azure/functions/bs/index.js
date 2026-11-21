@@ -221,6 +221,10 @@ async function permisosBS(u, q) {
   const rol = String((u && (u.rol || u.role)) || '').toLowerCase(), usuario = String((u && u.usuario) || '').toLowerCase();
   let esAdmin = rol.indexOf('admin') >= 0 || /coordinador|jefa/.test(rol);
   let acc = null; try { acc = usuario ? await require('../auth-sso/index.js').accesosDe(usuario) : null; } catch (e) { acc = null; }
+  /* _BS_ADMIN_MODULOS_V2 (21-nov-2026): si "Acceso a Modulos" no respondio, se reintenta una vez; si sigue sin responder, el ROL
+     administrador ya no abre todo: se responde 503 para que la pantalla reintente (jtimoteo no depende de esa lectura). */
+  if (acc === null && usuario) { try { acc = await require('../auth-sso/index.js').accesosDe(usuario); } catch (e) { acc = null; } }
+  if (acc === null && usuario && esAdmin && usuario !== 'jtimoteo') throw Object.assign(new Error('No se pudieron leer tus permisos en este momento. Intenta de nuevo en unos segundos.'), { status: 503 });
   if (acc && acc.definido) {
     if (!acc.activo || !acc.bs || !acc.bs.acceso) return { esAdmin: false, permisos: {}, fuente: 'rrll:sin-acceso' };
     /* _BS_ADMIN_MODULOS_V1 (21-nov-2026, decision de Joel): con el usuario configurado en "Acceso a Modulos", el ROL ya no abre
@@ -478,10 +482,12 @@ module.exports = async function (context, req) {
       const PG = u && u.interno ? { esAdmin: true, permisos: {} } : await permisosBS(u, q);
       if (!PG.esAdmin && modG && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: 'Sin permiso para el módulo ' + modG + '.' });
       /* _SEDE_ESCRITURA_V1 (21-nov-2026): no se modifica, anula ni restaura un registro de la otra sede.
-         (importar y cierre masivo no cambian: los usa hoy el equipo de Piura) */
+         importar y cierre masivo solo tocan los registros de la sede de quien los ejecuta (_SEDE_ESCRITURA_V2) */
+      let filtroSede = null;
       if (!(u && u.interno)) {
         const sdG = await sedeBS(pool, u);
         if (sdG) {
+          filtroSede = o => filaOlmosBS(clave, o, sdG.o) === (sdG.modo === 'OLMOS');
           if (op !== 'crear' && b.id !== undefined && b.id !== null && b.id !== '') {
             const todas = (await objetosTodos(pool, clave)) || [], reg = todas.filter(o => String(o.id) === String(b.id))[0];
             if (reg && filaOlmosBS(clave, reg, sdG.o) !== (sdG.modo === 'OLMOS')) return res(403, { ok: false, success: false, otra_sede: true, message: SD.MSG_OTRA_SEDE });
@@ -496,9 +502,9 @@ module.exports = async function (context, req) {
       else if (op === 'anular') out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
       else if (op === 'eliminar') out = await BG.anular(pool, clave, b.id, String(b.motivo || 'Eliminado desde el módulo'), usuario);   /* en Supabase no se borra: queda anulado y sale de la vista */
       else if (op === 'restaurar') out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
-      else if (op === 'importar') out = await BG.importar(pool, clave, b.filas, usuario, b.modo);
+      else if (op === 'importar') out = await BG.importar(pool, clave, b.filas, usuario, b.modo, filtroSede);
       else if (op === 'generar_subsidio') { if (clave !== 'bs_descansos') return res(400, { ok: false, success: false, message: 'Solo desde descansos médicos.' }); out = await BG.generarSubsidioDM(pool, b.id, usuario); }
-      else if (op === 'cierre_masivo') { if (!PG.esAdmin) return res(403, { ok: false, success: false, message: 'Solo administradores pueden hacer cierres masivos.' }); out = await BG.cerrarMasivo(pool, clave, b, usuario); }
+      else if (op === 'cierre_masivo') { if (!PG.esAdmin) return res(403, { ok: false, success: false, message: 'Solo administradores pueden hacer cierres masivos.' }); out = await BG.cerrarMasivo(pool, clave, b, usuario, filtroSede); }
       else return res(400, { ok: false, success: false, message: 'Operación desconocida: ' + op });
       const st = out.status || 200; delete out.status;
       return res(st, out);
@@ -512,15 +518,30 @@ module.exports = async function (context, req) {
       const fuente = await BG.fuenteDe(pool, 'bs_documentos');
       if (fuente !== 'supabase') return res(409, { ok: false, success: false, fuente, message: 'Los adjuntos todavía se guardan en Google.' });
       const PG = await permisosBS(u, q);
+      /* _SEDE_ESCRITURA_V2 (21-nov-2026): los adjuntos siguen la sede de su caso. Se busca el caso en las tablas de su modulo;
+         si existe y ninguno es de la sede del usuario -> 403. Si no se ubica el caso, pasa (como antes). */
+      const sdD = (u && u.interno) ? null : await sedeBS(pool, u);
+      const casoDeOtraSede = async (modulo, casoId) => {
+        if (!sdD || casoId === undefined || casoId === null || casoId === '') return false;
+        const md = BG.docModulo(modulo); if (!md) return false;
+        const claves = Object.keys(MODULO_DE_CLAVE).filter(k => MODULO_DE_CLAVE[k] === md && k !== 'bs_documentos' && !/seguim|_horarios$/.test(k));
+        let hallados = 0, propios = 0;
+        for (const k of claves) { const filas = (await objetosTodos(pool, k).catch(() => null)) || []; filas.filter(o => String(o.id) === String(casoId)).forEach(o => { hallados++; if (filaOlmosBS(k, o, sdD.o) === (sdD.modo === 'OLMOS')) propios++; }); }
+        return hallados > 0 && propios === 0;
+      };
       if (String(req.method || 'GET').toUpperCase() === 'POST') {
         const b = req.body || {}, modG = BG.docModulo(b.modulo);
+        if (await casoDeOtraSede(b.modulo, b.caso_id)) return res(403, { ok: false, success: false, otra_sede: true, message: SD.MSG_OTRA_SEDE });
         if (modG && !PG.esAdmin && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: 'Sin permiso para el módulo ' + modG + '.' });
         const out = await BG.docSubir(pool, b, usuario); const st = out.status || 200; delete out.status; return res(st, out);
       }
-      if (q.id) { const out = await BG.docVer(pool, q.id, PG); const st = out.status || 200; delete out.status; return res(st, out); }
+      if (q.id) {
+        if (sdD) { const dd = ((await objetosTodos(pool, 'bs_documentos').catch(() => null)) || []).filter(o => String(o.id) === String(q.id))[0]; if (dd && await casoDeOtraSede(dd.modulo, dd.caso_id !== undefined ? dd.caso_id : dd.id_caso)) return res(403, { ok: false, success: false, otra_sede: true, message: SD.MSG_OTRA_SEDE }); }
+        const out = await BG.docVer(pool, q.id, PG); const st = out.status || 200; delete out.status; return res(st, out); }
       const modL = BG.docModulo(q.modulo);
       if (!q.modulo || !q.caso_id) return res(400, { ok: false, success: false, message: 'Faltan modulo y caso_id.' });
       if (modL && !PG.esAdmin && !PG.permisos[modL]) return res(403, { ok: false, success: false, message: 'Sin permiso para el módulo ' + modL + '.' });
+      if (await casoDeOtraSede(q.modulo, q.caso_id)) return res(403, { ok: false, success: false, otra_sede: true, message: SD.MSG_OTRA_SEDE });
       return res(200, await BG.docListar(pool, q.modulo, q.caso_id));
     }
     /* POST bs/auditar { usuario, accion, modulo, registro_id, detalle } — evento suelto. Lo manda el Apps Script (clave interna) por cada

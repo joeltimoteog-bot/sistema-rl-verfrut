@@ -11375,6 +11375,121 @@ var require_cv_db = __commonJS({
   }
 });
 
+// shared/sede.js
+var require_sede = __commonJS({
+  "shared/sede.js"(exports, module) {
+    "use strict";
+    var FUNDOS_OLMOS = ["BOMAREA", "PIRONA", "MOSQUETA", "HEFEI", "LEFKADA"];
+    var EMPRESAS_OLMOS = ["OLMOS"].concat(FUNDOS_OLMOS);
+    var ALCANCES = ["PROPIO", "SEDE", "GENERAL"];
+    var VER_AMBAS = ["jtimoteo"];
+    var TTL = 6e4;
+    var _cache = { t: 0, usuarios: [], nombres: [], todos: [] };
+    var N = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
+    var activo = () => String(process.env.SEDE_FILTRO || "").toLowerCase() !== "off";
+    async function olmos(pool) {
+      if (Date.now() - _cache.t < TTL) return _cache;
+      let rs;
+      try {
+        rs = (await pool.request().query("SELECT usuario, nombre, empresa, alcance FROM dbo.usuarios")).recordset || [];
+      } catch (e) {
+        rs = (await pool.request().query("SELECT usuario, nombre, empresa FROM dbo.usuarios")).recordset || [];
+      }
+      const todos = rs.map((x) => ({
+        usuario: String(x.usuario || "").trim().toLowerCase(),
+        nombre: N(x.nombre),
+        olmos: EMPRESAS_OLMOS.indexOf(N(x.empresa)) >= 0,
+        alcance: ALCANCES.indexOf(N(x.alcance)) >= 0 ? N(x.alcance) : "PROPIO"
+      })).filter((x) => x.usuario);
+      const filas = todos.filter((x) => x.olmos);
+      _cache = { t: Date.now(), usuarios: filas.map((x) => x.usuario), nombres: filas.map((x) => x.nombre).filter(Boolean), todos };
+      return _cache;
+    }
+    async function modo(pool, authUser) {
+      if (!activo()) return "TODO";
+      if (!authUser || !authUser.usuario) return "TODO";
+      const u = String(authUser.usuario).trim().toLowerCase();
+      if (VER_AMBAS.indexOf(u) >= 0) return "TODO";
+      const o = await olmos(pool);
+      const yo = o.todos.filter((x) => x.usuario === u)[0];
+      if (yo && yo.alcance === "GENERAL") return "TODO";
+      return o.usuarios.indexOf(u) >= 0 ? "OLMOS" : "PIURA";
+    }
+    async function alcanceDe(pool, usuario) {
+      const u = String(usuario || "").trim().toLowerCase();
+      if (!u) return { alcance: "PROPIO", sede: "PIURA", companeros: [] };
+      if (VER_AMBAS.indexOf(u) >= 0) return { alcance: "GENERAL", sede: "TODO", companeros: [] };
+      if (!activo()) return { alcance: "PROPIO", sede: "PIURA", companeros: [] };
+      const o = await olmos(pool);
+      const yo = o.todos.filter((x) => x.usuario === u)[0];
+      if (!yo) return { alcance: "PROPIO", sede: "PIURA", companeros: [] };
+      const sede = yo.olmos ? "OLMOS" : "PIURA";
+      if (yo.alcance === "GENERAL") return { alcance: "GENERAL", sede: "TODO", companeros: [] };
+      if (yo.alcance !== "SEDE") return { alcance: "PROPIO", sede, companeros: [] };
+      return { alcance: "SEDE", sede, companeros: o.todos.filter((x) => x.olmos === yo.olmos && x.usuario !== u).map((x) => [x.usuario, x.nombre.toLowerCase()]) };
+    }
+    function condOlmos(request, o, cols, pref) {
+      const c = Object.assign({ empresa: "empresa", fundo: "fundo", usuario: "usuario_sistema", supervisor: "supervisor" }, cols || {});
+      const p = pref || "sd";
+      const partes = [];
+      if (c.empresa) EMPRESAS_OLMOS.forEach((e) => partes.push(`UPPER(ISNULL(${c.empresa}, '')) LIKE '%${e}%'`));
+      if (c.fundo) partes.push(`UPPER(LTRIM(RTRIM(ISNULL(${c.fundo}, '')))) IN (${FUNDOS_OLMOS.map((f) => "'" + f + "'").join(", ")})`);
+      if (c.usuario && o.usuarios.length) {
+        const ks = o.usuarios.map((x, i) => {
+          request.input(p + "u" + i, x);
+          return "@" + p + "u" + i;
+        });
+        partes.push(`LOWER(LTRIM(RTRIM(ISNULL(${c.usuario}, '')))) IN (${ks.join(", ")})`);
+      }
+      if (c.supervisor && o.nombres.length) {
+        const ks = o.nombres.map((x, i) => {
+          request.input(p + "n" + i, x);
+          return "@" + p + "n" + i;
+        });
+        partes.push(`UPPER(LTRIM(RTRIM(ISNULL(${c.supervisor}, '')))) IN (${ks.join(", ")})`);
+      }
+      return "(" + partes.join(" OR ") + ")";
+    }
+    async function filtroSQL(pool, request, authUser, cols, pref) {
+      const m = await modo(pool, authUser);
+      if (m === "TODO") return { modo: m, sql: "" };
+      const o = await olmos(pool);
+      const cond = condOlmos(request, o, cols, pref);
+      return { modo: m, sql: m === "OLMOS" ? cond : "NOT " + cond };
+    }
+    function esOlmos(fila, o, cols) {
+      const c = Object.assign({ empresa: "empresa", fundo: "fundo", usuario: "usuario_sistema", supervisor: "supervisor" }, cols || {});
+      if (!fila) return false;
+      if (c.empresa) {
+        const em = N(fila[c.empresa]);
+        if (EMPRESAS_OLMOS.some((e) => em.indexOf(e) >= 0)) return true;
+      }
+      if (c.fundo && FUNDOS_OLMOS.indexOf(N(fila[c.fundo])) >= 0) return true;
+      if (c.usuario && o.usuarios.indexOf(String(fila[c.usuario] || "").trim().toLowerCase()) >= 0) return true;
+      if (c.supervisor && o.nombres.indexOf(N(fila[c.supervisor])) >= 0) return true;
+      return false;
+    }
+    async function filtrarFilas(pool, authUser, filas, cols) {
+      const m = await modo(pool, authUser);
+      if (m === "TODO") return filas;
+      const o = await olmos(pool);
+      return (filas || []).filter((f) => m === "OLMOS" === esOlmos(f, o, cols));
+    }
+    async function permiteAtencion(pool, authUser, id) {
+      const m = await modo(pool, authUser);
+      if (m === "TODO") return true;
+      const r = await pool.request().input("sdid", Number(id) || 0).query("SELECT empresa, fundo, usuario_sistema, supervisor FROM dbo.Atenciones WHERE id = @sdid");
+      const f = (r.recordset || [])[0];
+      if (!f) return true;
+      return esOlmos(f, await olmos(pool), null) === (m === "OLMOS");
+    }
+    var MSG_OTRA_SEDE = "Este registro pertenece a otra sede. No se puede modificar desde tu usuario.";
+    module.exports = { permiteAtencion, MSG_OTRA_SEDE, modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => {
+      _cache = { t: 0, usuarios: [], nombres: [], todos: [] };
+    } };
+  }
+});
+
 // shared/cv-guardar.js
 var require_cv_guardar = __commonJS({
   "shared/cv-guardar.js"(exports, module) {
@@ -11667,6 +11782,21 @@ var require_cv_guardar = __commonJS({
         if (accion === "eliminarCaso" && String(d.motivo || "").trim().length < 10) return { status: 400, body: { success: false, error: "El motivo es obligatorio y debe tener al menos 10 caracteres" } };
       }
       if ((accion === "updateCaso" || accion === "updateVisita") && (d.nro === void 0 || d.nro === "")) return { status: 400, body: { success: false, error: "Falta el N\xB0" } };
+      if (/^(update|eliminar)/.test(accion) && usuario && d.nro !== void 0 && d.nro !== "" && !prueba) {
+        try {
+          const SDc = require_sede(), mS = await SDc.modo(pool, { usuario });
+          if (mS !== "TODO") {
+            const Tc = await TC.leerCV(pool), lista = Tc ? tipo === "casos" ? Tc.casos : Tc.visitas : null;
+            const reg = lista && lista.filter((x) => String(x.nro) === String(d.nro))[0];
+            if (reg) {
+              const oS = await SDc.olmos(pool);
+              const esO = SDc.esOlmos(reg, oS, { empresa: "empresa", fundo: "fundo", usuario: "registrado_por", supervisor: "supervisor" }) || oS.nombres.indexOf(SDc._N(reg.registrado_por)) >= 0;
+              if (esO !== (mS === "OLMOS")) return { status: 403, body: { success: false, otra_sede: true, error: SDc.MSG_OTRA_SEDE } };
+            }
+          }
+        } catch (eS) {
+        }
+      }
       if ((accion === "saveCaso" || accion === "updateCaso") && d.fecha_envio_informe !== void 0 && d.fecha_envio_informe !== "") {
         if (!await esAdminUsuario(pool, usuario)) delete d.fecha_envio_informe;
       }
@@ -61590,121 +61720,6 @@ var require_atenciones_batch = __commonJS({
   }
 });
 
-// shared/sede.js
-var require_sede = __commonJS({
-  "shared/sede.js"(exports, module) {
-    "use strict";
-    var FUNDOS_OLMOS = ["BOMAREA", "PIRONA", "MOSQUETA", "HEFEI", "LEFKADA"];
-    var EMPRESAS_OLMOS = ["OLMOS"].concat(FUNDOS_OLMOS);
-    var ALCANCES = ["PROPIO", "SEDE", "GENERAL"];
-    var VER_AMBAS = ["jtimoteo"];
-    var TTL = 6e4;
-    var _cache = { t: 0, usuarios: [], nombres: [], todos: [] };
-    var N = (s) => String(s == null ? "" : s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toUpperCase();
-    var activo = () => String(process.env.SEDE_FILTRO || "").toLowerCase() !== "off";
-    async function olmos(pool) {
-      if (Date.now() - _cache.t < TTL) return _cache;
-      let rs;
-      try {
-        rs = (await pool.request().query("SELECT usuario, nombre, empresa, alcance FROM dbo.usuarios")).recordset || [];
-      } catch (e) {
-        rs = (await pool.request().query("SELECT usuario, nombre, empresa FROM dbo.usuarios")).recordset || [];
-      }
-      const todos = rs.map((x) => ({
-        usuario: String(x.usuario || "").trim().toLowerCase(),
-        nombre: N(x.nombre),
-        olmos: EMPRESAS_OLMOS.indexOf(N(x.empresa)) >= 0,
-        alcance: ALCANCES.indexOf(N(x.alcance)) >= 0 ? N(x.alcance) : "PROPIO"
-      })).filter((x) => x.usuario);
-      const filas = todos.filter((x) => x.olmos);
-      _cache = { t: Date.now(), usuarios: filas.map((x) => x.usuario), nombres: filas.map((x) => x.nombre).filter(Boolean), todos };
-      return _cache;
-    }
-    async function modo(pool, authUser) {
-      if (!activo()) return "TODO";
-      if (!authUser || !authUser.usuario) return "TODO";
-      const u = String(authUser.usuario).trim().toLowerCase();
-      if (VER_AMBAS.indexOf(u) >= 0) return "TODO";
-      const o = await olmos(pool);
-      const yo = o.todos.filter((x) => x.usuario === u)[0];
-      if (yo && yo.alcance === "GENERAL") return "TODO";
-      return o.usuarios.indexOf(u) >= 0 ? "OLMOS" : "PIURA";
-    }
-    async function alcanceDe(pool, usuario) {
-      const u = String(usuario || "").trim().toLowerCase();
-      if (!u) return { alcance: "PROPIO", sede: "PIURA", companeros: [] };
-      if (VER_AMBAS.indexOf(u) >= 0) return { alcance: "GENERAL", sede: "TODO", companeros: [] };
-      if (!activo()) return { alcance: "PROPIO", sede: "PIURA", companeros: [] };
-      const o = await olmos(pool);
-      const yo = o.todos.filter((x) => x.usuario === u)[0];
-      if (!yo) return { alcance: "PROPIO", sede: "PIURA", companeros: [] };
-      const sede = yo.olmos ? "OLMOS" : "PIURA";
-      if (yo.alcance === "GENERAL") return { alcance: "GENERAL", sede: "TODO", companeros: [] };
-      if (yo.alcance !== "SEDE") return { alcance: "PROPIO", sede, companeros: [] };
-      return { alcance: "SEDE", sede, companeros: o.todos.filter((x) => x.olmos === yo.olmos && x.usuario !== u).map((x) => [x.usuario, x.nombre.toLowerCase()]) };
-    }
-    function condOlmos(request, o, cols, pref) {
-      const c = Object.assign({ empresa: "empresa", fundo: "fundo", usuario: "usuario_sistema", supervisor: "supervisor" }, cols || {});
-      const p = pref || "sd";
-      const partes = [];
-      if (c.empresa) EMPRESAS_OLMOS.forEach((e) => partes.push(`UPPER(ISNULL(${c.empresa}, '')) LIKE '%${e}%'`));
-      if (c.fundo) partes.push(`UPPER(LTRIM(RTRIM(ISNULL(${c.fundo}, '')))) IN (${FUNDOS_OLMOS.map((f) => "'" + f + "'").join(", ")})`);
-      if (c.usuario && o.usuarios.length) {
-        const ks = o.usuarios.map((x, i) => {
-          request.input(p + "u" + i, x);
-          return "@" + p + "u" + i;
-        });
-        partes.push(`LOWER(LTRIM(RTRIM(ISNULL(${c.usuario}, '')))) IN (${ks.join(", ")})`);
-      }
-      if (c.supervisor && o.nombres.length) {
-        const ks = o.nombres.map((x, i) => {
-          request.input(p + "n" + i, x);
-          return "@" + p + "n" + i;
-        });
-        partes.push(`UPPER(LTRIM(RTRIM(ISNULL(${c.supervisor}, '')))) IN (${ks.join(", ")})`);
-      }
-      return "(" + partes.join(" OR ") + ")";
-    }
-    async function filtroSQL(pool, request, authUser, cols, pref) {
-      const m = await modo(pool, authUser);
-      if (m === "TODO") return { modo: m, sql: "" };
-      const o = await olmos(pool);
-      const cond = condOlmos(request, o, cols, pref);
-      return { modo: m, sql: m === "OLMOS" ? cond : "NOT " + cond };
-    }
-    function esOlmos(fila, o, cols) {
-      const c = Object.assign({ empresa: "empresa", fundo: "fundo", usuario: "usuario_sistema", supervisor: "supervisor" }, cols || {});
-      if (!fila) return false;
-      if (c.empresa) {
-        const em = N(fila[c.empresa]);
-        if (EMPRESAS_OLMOS.some((e) => em.indexOf(e) >= 0)) return true;
-      }
-      if (c.fundo && FUNDOS_OLMOS.indexOf(N(fila[c.fundo])) >= 0) return true;
-      if (c.usuario && o.usuarios.indexOf(String(fila[c.usuario] || "").trim().toLowerCase()) >= 0) return true;
-      if (c.supervisor && o.nombres.indexOf(N(fila[c.supervisor])) >= 0) return true;
-      return false;
-    }
-    async function filtrarFilas(pool, authUser, filas, cols) {
-      const m = await modo(pool, authUser);
-      if (m === "TODO") return filas;
-      const o = await olmos(pool);
-      return (filas || []).filter((f) => m === "OLMOS" === esOlmos(f, o, cols));
-    }
-    async function permiteAtencion(pool, authUser, id) {
-      const m = await modo(pool, authUser);
-      if (m === "TODO") return true;
-      const r = await pool.request().input("sdid", Number(id) || 0).query("SELECT empresa, fundo, usuario_sistema, supervisor FROM dbo.Atenciones WHERE id = @sdid");
-      const f = (r.recordset || [])[0];
-      if (!f) return true;
-      return esOlmos(f, await olmos(pool), null) === (m === "OLMOS");
-    }
-    var MSG_OTRA_SEDE = "Este registro pertenece a otra sede. No se puede modificar desde tu usuario.";
-    module.exports = { permiteAtencion, MSG_OTRA_SEDE, modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => {
-      _cache = { t: 0, usuarios: [], nombres: [], todos: [] };
-    } };
-  }
-});
-
 // atenciones-by-dni/index.js
 var require_atenciones_by_dni = __commonJS({
   "atenciones-by-dni/index.js"(exports, module) {
@@ -67041,7 +67056,7 @@ var require_bs_guardar = __commonJS({
         return k === "|||" ? null : "K:" + k;
       } }
     };
-    async function importar(pool, clave, filas, usuario, modo) {
+    async function importar(pool, clave, filas, usuario, modo, filtroSede) {
       const L = LLAVE_IMPORTAR[clave];
       if (!L) return { ok: false, success: false, status: 400, message: "La tabla " + clave + " no admite importaci\xF3n." };
       if (!Array.isArray(filas) || !filas.length) return { ok: false, success: false, status: 400, message: "No llegaron filas para importar." };
@@ -67089,6 +67104,10 @@ var require_bs_guardar = __commonJS({
             if (NORMALIZAR[clave]) NORMALIZAR[clave](vN, true);
             const f = firmaDe(enc.map((h) => vN[h] !== void 0 ? vN[h] : ""), enc), ex = f && !soloAgregar ? existentes[f] : null;
             if (ex && ex.id_fila > 0) {
+              if (filtroSede && !filtroSede(filaObjeto(enc, ex.celdas))) {
+                out.errores.push({ fila: n + 1, error: "ya existe un registro igual en la otra sede: no se modific\xF3" });
+                continue;
+              }
               const dLleno = {};
               Object.keys(d).forEach((k) => {
                 if (!vacio(d[k])) dLleno[k] = d[k];
@@ -67123,7 +67142,7 @@ var require_bs_guardar = __commonJS({
         return out;
       });
     }
-    async function cerrarMasivo(pool, clave, p, usuario) {
+    async function cerrarMasivo(pool, clave, p, usuario, filtroSede) {
       if (clave !== "bs_quejas") return { ok: false, success: false, status: 400, message: "El cierre masivo solo aplica a hallazgos." };
       const mC = String(p.fecha_corte || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (!mC) return { ok: false, success: false, status: 400, message: "Indica una fecha de corte v\xE1lida." };
@@ -67152,6 +67171,7 @@ var require_bs_guardar = __commonJS({
           const c = TH.aCeldas(clave, x, cab.ancho);
           while (c.length < enc.length) c.push("");
           if (marcaAnulado(enc, c)) continue;
+          if (filtroSede && !filtroSede(filaObjeto(enc, c))) continue;
           if (/cerrad|resuelt/i.test(texto(c[iRes]))) continue;
           const f = ymdCelda(c[iFec]);
           if (!f || f >= corte) continue;
@@ -67696,6 +67716,14 @@ var require_bs = __commonJS({
       } catch (e) {
         acc = null;
       }
+      if (acc === null && usuario) {
+        try {
+          acc = await require_auth_sso().accesosDe(usuario);
+        } catch (e) {
+          acc = null;
+        }
+      }
+      if (acc === null && usuario && esAdmin && usuario !== "jtimoteo") throw Object.assign(new Error("No se pudieron leer tus permisos en este momento. Intenta de nuevo en unos segundos."), { status: 503 });
       if (acc && acc.definido) {
         if (!acc.activo || !acc.bs || !acc.bs.acceso) return { esAdmin: false, permisos: {}, fuente: "rrll:sin-acceso" };
         esAdmin = !!acc.bs.admin || usuario === "jtimoteo";
@@ -68192,9 +68220,11 @@ var require_bs = __commonJS({
           const modG = MODULO_DE_CLAVE[clave] || "";
           const PG = u && u.interno ? { esAdmin: true, permisos: {} } : await permisosBS(u, q);
           if (!PG.esAdmin && modG && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: "Sin permiso para el m\xF3dulo " + modG + "." });
+          let filtroSede = null;
           if (!(u && u.interno)) {
             const sdG = await sedeBS(pool, u);
             if (sdG) {
+              filtroSede = (o) => filaOlmosBS(clave, o, sdG.o) === (sdG.modo === "OLMOS");
               if (op !== "crear" && b.id !== void 0 && b.id !== null && b.id !== "") {
                 const todas = await objetosTodos(pool, clave) || [], reg = todas.filter((o) => String(o.id) === String(b.id))[0];
                 if (reg && filaOlmosBS(clave, reg, sdG.o) !== (sdG.modo === "OLMOS")) return res(403, { ok: false, success: false, otra_sede: true, message: SD.MSG_OTRA_SEDE });
@@ -68212,13 +68242,13 @@ var require_bs = __commonJS({
           } else if (op === "anular") out = await BG.anular(pool, clave, b.id, b.motivo, usuario);
           else if (op === "eliminar") out = await BG.anular(pool, clave, b.id, String(b.motivo || "Eliminado desde el m\xF3dulo"), usuario);
           else if (op === "restaurar") out = await BG.restaurar(pool, clave, b.id, usuario, b.motivo);
-          else if (op === "importar") out = await BG.importar(pool, clave, b.filas, usuario, b.modo);
+          else if (op === "importar") out = await BG.importar(pool, clave, b.filas, usuario, b.modo, filtroSede);
           else if (op === "generar_subsidio") {
             if (clave !== "bs_descansos") return res(400, { ok: false, success: false, message: "Solo desde descansos m\xE9dicos." });
             out = await BG.generarSubsidioDM(pool, b.id, usuario);
           } else if (op === "cierre_masivo") {
             if (!PG.esAdmin) return res(403, { ok: false, success: false, message: "Solo administradores pueden hacer cierres masivos." });
-            out = await BG.cerrarMasivo(pool, clave, b, usuario);
+            out = await BG.cerrarMasivo(pool, clave, b, usuario, filtroSede);
           } else return res(400, { ok: false, success: false, message: "Operaci\xF3n desconocida: " + op });
           const st = out.status || 200;
           delete out.status;
@@ -68231,8 +68261,25 @@ var require_bs = __commonJS({
           const fuente = await BG.fuenteDe(pool, "bs_documentos");
           if (fuente !== "supabase") return res(409, { ok: false, success: false, fuente, message: "Los adjuntos todav\xEDa se guardan en Google." });
           const PG = await permisosBS(u, q);
+          const sdD = u && u.interno ? null : await sedeBS(pool, u);
+          const casoDeOtraSede = async (modulo, casoId) => {
+            if (!sdD || casoId === void 0 || casoId === null || casoId === "") return false;
+            const md = BG.docModulo(modulo);
+            if (!md) return false;
+            const claves = Object.keys(MODULO_DE_CLAVE).filter((k) => MODULO_DE_CLAVE[k] === md && k !== "bs_documentos" && !/seguim|_horarios$/.test(k));
+            let hallados = 0, propios = 0;
+            for (const k of claves) {
+              const filas = await objetosTodos(pool, k).catch(() => null) || [];
+              filas.filter((o) => String(o.id) === String(casoId)).forEach((o) => {
+                hallados++;
+                if (filaOlmosBS(k, o, sdD.o) === (sdD.modo === "OLMOS")) propios++;
+              });
+            }
+            return hallados > 0 && propios === 0;
+          };
           if (String(req.method || "GET").toUpperCase() === "POST") {
             const b = req.body || {}, modG = BG.docModulo(b.modulo);
+            if (await casoDeOtraSede(b.modulo, b.caso_id)) return res(403, { ok: false, success: false, otra_sede: true, message: SD.MSG_OTRA_SEDE });
             if (modG && !PG.esAdmin && !PG.permisos[modG]) return res(403, { ok: false, success: false, message: "Sin permiso para el m\xF3dulo " + modG + "." });
             const out = await BG.docSubir(pool, b, usuario);
             const st = out.status || 200;
@@ -68240,6 +68287,10 @@ var require_bs = __commonJS({
             return res(st, out);
           }
           if (q.id) {
+            if (sdD) {
+              const dd = (await objetosTodos(pool, "bs_documentos").catch(() => null) || []).filter((o) => String(o.id) === String(q.id))[0];
+              if (dd && await casoDeOtraSede(dd.modulo, dd.caso_id !== void 0 ? dd.caso_id : dd.id_caso)) return res(403, { ok: false, success: false, otra_sede: true, message: SD.MSG_OTRA_SEDE });
+            }
             const out = await BG.docVer(pool, q.id, PG);
             const st = out.status || 200;
             delete out.status;
@@ -68248,6 +68299,7 @@ var require_bs = __commonJS({
           const modL = BG.docModulo(q.modulo);
           if (!q.modulo || !q.caso_id) return res(400, { ok: false, success: false, message: "Faltan modulo y caso_id." });
           if (modL && !PG.esAdmin && !PG.permisos[modL]) return res(403, { ok: false, success: false, message: "Sin permiso para el m\xF3dulo " + modL + "." });
+          if (await casoDeOtraSede(q.modulo, q.caso_id)) return res(403, { ok: false, success: false, otra_sede: true, message: SD.MSG_OTRA_SEDE });
           return res(200, await BG.docListar(pool, q.modulo, q.caso_id));
         }
         if (accion === "auditar") {

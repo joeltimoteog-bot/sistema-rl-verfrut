@@ -566,7 +566,7 @@ const LLAVE_IMPORTAR = {
   /* igual que bs_importarSubsidios del Apps Script: expediente manda; si no, numero|anio|tipo|periodo */
   bs_subsidios: { campos: [], firma: g => { const e = texto(g('expediente')).trim().toUpperCase(); if (e) return 'EXP:' + e; const k = [texto(g('numero')).trim(), texto(g('anio')).trim(), texto(g('tipo')).trim().toUpperCase(), texto(g('periodo')).trim().toUpperCase()].join('|'); return k === '|||' ? null : 'K:' + k; } }
 };
-async function importar(pool, clave, filas, usuario, modo) {
+async function importar(pool, clave, filas, usuario, modo, filtroSede) {   /* _SEDE_ESCRITURA_V2: filtroSede(obj) = el registro es de la sede de quien importa */
   const L = LLAVE_IMPORTAR[clave]; if (!L) return { ok: false, success: false, status: 400, message: 'La tabla ' + clave + ' no admite importación.' };
   if (!Array.isArray(filas) || !filas.length) return { ok: false, success: false, status: 400, message: 'No llegaron filas para importar.' };
   if (filas.length > 500) return { ok: false, success: false, status: 400, message: 'Máximo 500 filas por lote.' };
@@ -588,6 +588,7 @@ async function importar(pool, clave, filas, usuario, modo) {
         const vN = valoresDesde(d, enc, usuario, ahora, true, clave); if (NORMALIZAR[clave]) NORMALIZAR[clave](vN, true);
         const f = firmaDe(enc.map(h => (vN[h] !== undefined ? vN[h] : '')), enc), ex = f && !soloAgregar ? existentes[f] : null;
         if (ex && ex.id_fila > 0) {
+          if (filtroSede && !filtroSede(filaObjeto(enc, ex.celdas))) { out.errores.push({ fila: n + 1, error: 'ya existe un registro igual en la otra sede: no se modificó' }); continue; }   /* _SEDE_ESCRITURA_V2 */
           /* actualizar: solo los campos que traen valor (como el Apps Script) */
           const dLleno = {}; Object.keys(d).forEach(k => { if (!vacio(d[k])) dLleno[k] = d[k]; });
           const vU = valoresDesde(dLleno, enc, usuario, ahora, false, clave); if (NORMALIZAR[clave]) NORMALIZAR[clave](vU, false);
@@ -608,7 +609,7 @@ async function importar(pool, clave, filas, usuario, modo) {
 }
 /* cierre masivo de hallazgos (bs_cierreMasivoQuejas del Apps Script): los no cerrados con fecha_recepcion anterior al corte pasan a 'Cerrado',
    con sello en observaciones. simular=true solo cuenta. */
-async function cerrarMasivo(pool, clave, p, usuario) {
+async function cerrarMasivo(pool, clave, p, usuario, filtroSede) {   /* _SEDE_ESCRITURA_V2: solo cierra los hallazgos de la sede de quien lo ejecuta */
   if (clave !== 'bs_quejas') return { ok: false, success: false, status: 400, message: 'El cierre masivo solo aplica a hallazgos.' };
   const mC = String(p.fecha_corte || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!mC) return { ok: false, success: false, status: 400, message: 'Indica una fecha de corte válida.' };
@@ -625,6 +626,7 @@ async function cerrarMasivo(pool, clave, p, usuario) {
     for (const x of todo.recordset) {
       const c = TH.aCeldas(clave, x, cab.ancho); while (c.length < enc.length) c.push('');
       if (marcaAnulado(enc, c)) continue;
+      if (filtroSede && !filtroSede(filaObjeto(enc, c))) continue;   /* _SEDE_ESCRITURA_V2 */
       if (/cerrad|resuelt/i.test(texto(c[iRes]))) continue;
       const f = ymdCelda(c[iFec]); if (!f || f >= corte) continue;
       n++; const e = texto(c[iEmp]) || '—'; porEmp[e] = (porEmp[e] || 0) + 1;
