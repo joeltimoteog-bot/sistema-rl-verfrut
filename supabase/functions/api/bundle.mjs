@@ -62584,7 +62584,35 @@ var require_stats_pizarron = __commonJS({
       desc(sumarPor(porSede(agg.tipo, sede).filter((r) => pasaFiltro(r, f)), "tipo", noVacio)).forEach((x) => {
         por_tipo[x.label] = x.n;
       });
-      return { success: true, resumen_global: g, por_mes, por_anio, por_empresa, por_estado, por_tipo, por_supervisor, fuente: "AZURE_SQL", pizarron: true };
+      const empMes = /* @__PURE__ */ new Map(), supMes = /* @__PURE__ */ new Map(), mesEmp = /* @__PURE__ */ new Map();
+      B.forEach((r) => {
+        const n = Number(r.n) || 0, m = Number(r.este_mes) || 0, em = noVacio(r.empresa) ? nrm(r.empresa) : "";
+        if (em && r.anio != null && r.mes != null) {
+          const k = r.anio + "-" + String(r.mes).padStart(2, "0").slice(-2);
+          const x = mesEmp.get(k) || {};
+          x[em] = (x[em] || 0) + n;
+          mesEmp.set(k, x);
+        }
+        if (!m) return;
+        if (em) empMes.set(em, (empMes.get(em) || 0) + m);
+        if (noVacio(r.supervisor)) {
+          const ks = nrm(r.supervisor), y = supMes.get(ks) || { label: r.supervisor, n: 0 };
+          y.n += m;
+          supMes.set(ks, y);
+        }
+      });
+      const mes_actual = { por_empresa: {}, por_supervisor: {} };
+      [...empMes.keys()].sort().forEach((k) => {
+        mes_actual.por_empresa[k] = empMes.get(k);
+      });
+      desc([...supMes.values()]).slice(0, 40).forEach((x) => {
+        mes_actual.por_supervisor[x.label] = x.n;
+      });
+      const por_mes_empresa = {};
+      [...mesEmp.keys()].sort().reverse().forEach((k) => {
+        por_mes_empresa[k] = mesEmp.get(k);
+      });
+      return { success: true, resumen_global: g, por_mes, por_anio, por_empresa, por_estado, por_tipo, por_supervisor, mes_actual, por_mes_empresa, fuente: "AZURE_SQL", pizarron: true };
     }
     module.exports = { leer, armar, invalidar, TTL_MS, _Q: { Q_BASE, Q_TIPO } };
   }

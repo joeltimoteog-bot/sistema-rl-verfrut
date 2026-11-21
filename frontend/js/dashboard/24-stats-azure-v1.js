@@ -43,8 +43,42 @@ async function pedir() {
   if (jg && jg.success) _glob = { ts: Date.now(), j: jg }; else if (_glob) jg = _glob.j;
   var g = j.resumen_global;
   agg = { por_mes: j.por_mes || {}, por_anio: (jg && jg.por_anio) || j.por_anio || {}, por_estado: j.por_estado || {}, por_empresa: j.por_empresa || {} };
+  /* _SEDE_FB_STATS_V2: agregados del mes y por empresa (ya filtrados por sede en el servidor) */
+  agg.mes_actual = j.mes_actual || null;
+  agg.por_mes_todo = Object.assign({}, (jg && jg.por_mes) || {}, j.por_mes || {});
+  agg.por_mes_empresa = Object.assign({}, (jg && jg.por_mes_empresa) || {}, j.por_mes_empresa || {});
+  _srvViejo = !j.mes_actual;
   return { hoy: g.hoy || 0, mes: g.este_mes || 0, anio: g.este_anio || 0,
            enProceso: g.en_proceso || 0, finalizados: g.finalizados || 0, total: g.total || 0, ts: Date.now() };
+}
+
+/* ══════════════════ _SEDE_FB_STATS_V2 (21-nov-2026, decision de Joel) ══════════════════
+   Los cuadros del panel que aun salian del resumen GLOBAL de Firebase /estadisticas (flechas y barras,
+   comparativa, RAPEL/VERFRUT del mes, ranking de supervisores, tendencia de 6 meses) ahora se dibujan con
+   las cifras del SERVIDOR (Supabase), que ya llegan filtradas por sede: un administrador de Piura deja de
+   ver a Olmos en sus totales. Firebase queda solo como aviso de "algo cambio" (refresca la lista en vivo).
+   · Volver a lo anterior en este navegador: localStorage.stats_fuente = 'firebase' y recargar.
+   · Si el servidor aun no entrega los campos nuevos (version anterior), se sigue con Firebase como antes.
+   · Usuarios de Olmos: sin cambios (ya no usaban Firebase desde _SEDE_FB_STATS_V1). */
+var _srvViejo = false, _ultFb = null;
+function fuenteFb() { try { return localStorage.getItem('stats_fuente') === 'firebase'; } catch (e) { return false; } }
+function soloServidor() { return !fuenteFb() && !_srvViejo; }
+function esOlmosU() { try { return String((USER && USER.empresa) || '').toUpperCase().trim() === 'OLMOS'; } catch (e) { return false; } }
+function pintarWidgets() {
+  if (!soloServidor() || !agg || !ultimo || !agg.mes_actual) return;
+  var tsEl = document.getElementById('fbActualizadoHace');
+  if (tsEl) { var segs = Math.max(0, Math.round((Date.now() - ultimo.ts) / 1000)); tsEl.textContent = 'actualizado ' + (segs < 60 ? segs + 's' : Math.round(segs / 60) + ' min') + ' atrás'; }
+  if (!esAdmin() || esOlmosU()) return;   /* los cuadros generales son solo de administrador / coordinador, como antes */
+  var rg = { hoy: ultimo.hoy, este_mes: ultimo.mes, en_proceso: ultimo.enProceso, finalizados: ultimo.finalizados, total: ultimo.total };
+  var un = function (f) { try { f(); } catch (e) { console.warn('[_SEDE_FB_STATS_V2]', e.message); } };
+  un(function () { if (typeof _fbIndicadoresYComparativa === 'function') _fbIndicadoresYComparativa(rg, agg.por_mes_todo); });
+  var wrap = document.getElementById('fbDashWidgets'); if (wrap) wrap.style.display = '';
+  var bd = document.getElementById('fbBadgeDash');
+  if (bd) { bd.style.display = 'inline-flex'; if (!bd.querySelector('.live-dot')) bd.innerHTML = '<span class="live-dot"></span>En vivo'; }
+  var me = agg.mes_actual.por_empresa || {}, ms = agg.mes_actual.por_supervisor || {};
+  un(function () { if (typeof _fbDibujarEmpresa === 'function') _fbDibujarEmpresa({ RAPEL: { este_mes: Number(me.RAPEL || 0) }, VERFRUT: { este_mes: Number(me.VERFRUT || 0) } }); });
+  un(function () { if (typeof _fbRenderRankingSup === 'function') { var o = {}; Object.keys(ms).forEach(function (k) { o[k] = { nombre: k, este_mes: Number(ms[k] || 0) }; }); _fbRenderRankingSup(o); } });
+  un(function () { if (typeof _fbDibujarTendencia === 'function') { var t = {}; Object.keys(agg.por_mes_empresa || {}).forEach(function (k) { var v = agg.por_mes_empresa[k] || {}; t[k] = { rapel: Number(v.RAPEL || 0), verfrut: Number(v.VERFRUT || 0) }; }); _fbDibujarTendencia(t); } });
 }
 
 function pintar(s) {
@@ -61,7 +95,9 @@ async function refrescar(motivo) {
   enCurso = (async function () {
     try {
       var s = await pedir();
-      if (s) { ultimo = s; pintar(s); try { if (!_hayFiltro()) dibujarDesdeAzure(); } catch (e) { console.warn('[_STATS_AZURE_V1] graficos:', e.message); }
+      if (s) { ultimo = s; pintar(s);
+        try { if (soloServidor()) pintarWidgets(); else if (_srvViejo && _ultFb && !fuenteFb()) window._fbAplicarEstadisticasFirebase(_ultFb); } catch (e) { console.warn('[_SEDE_FB_STATS_V2]', e.message); }
+        try { if (!_hayFiltro()) dibujarDesdeAzure(); } catch (e) { console.warn('[_STATS_AZURE_V1] graficos:', e.message); }
         console.log('[_STATS_AZURE_V1] ' + (motivo || '') + ' → hoy ' + s.hoy + ' | mes ' + s.mes + ' | año ' + s.anio + ' | en proceso ' + s.enProceso + (esAdmin() ? ' (global)' : ' (solo ' + (USER.nombre || USER.usuario) + ')'));
         return true; }
     } catch (e) { _pausaHasta = Date.now() + 180000; console.warn('[_STATS_AZURE_V1] Supabase no respondió (' + (motivo || '') + '): ' + e.message + ' — se mantiene el cálculo anterior (pausa 3 min)'); }
@@ -146,6 +182,13 @@ var _fbOrig = window._fbAplicarEstadisticasFirebase;
 if (typeof _fbOrig === 'function') {
   window._fbAplicarEstadisticasFirebase = function () {
     var args = arguments, self = this;
+    if (args[0] && args[0].resumen_global) _ultFb = args[0];   /* solo para el camino de retorno */
+    if (soloServidor()) {   /* _SEDE_FB_STATS_V2: Firebase ya no pinta cifras; solo avisa que algo cambio */
+      try { _fbOrig.call(self, { _soloAviso: true }); } catch (e) { console.warn('[_SEDE_FB_STATS_V2] aviso:', e.message); }   /* refresca la lista en vivo y sale (no trae resumen) */
+      try { pintarWidgets(); if (agg && !_hayFiltro()) dibujarDesdeAzure(); } catch (e) {}
+      if (ultimo) programar('firebase', 5000 + Math.floor(Math.random() * 55000)); else refrescar('firebase');
+      return;
+    }
     if (!ultimo) return _fbOrig.apply(self, args);
     var cu = window.countUp;
     if (typeof cu === 'function') {

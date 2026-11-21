@@ -234,7 +234,9 @@ def resp_azure(url, post=''):
         RED.setdefault('usrlista', []).append(1)
         return {'success': True, 'data': resp_google('getUsuarios')['data'], 'fuente': 'azure'}
     if '/atenciones/stats' in url:
-        return {'success': True, 'resumen_global': {'hoy': 1, 'este_mes': 2, 'este_anio': 3, 'en_proceso': 1, 'finalizados': 2, 'total': 3}}
+        return {'success': True, 'resumen_global': {'hoy': 1, 'este_mes': 2, 'este_anio': 3, 'en_proceso': 1, 'finalizados': 2, 'total': 3},
+                'por_mes': {time.strftime('%Y-%m'): 2}, 'por_anio': {time.strftime('%Y'): 3}, 'por_estado': {'EN PROCESO': 1, 'FINALIZADO': 2}, 'por_empresa': {'RAPEL': 2, 'VERFRUT': 1},
+                'mes_actual': {'por_empresa': {'RAPEL': 1, 'VERFRUT': 1}, 'por_supervisor': {'ANA PIURA SERVIDOR': 2}}, 'por_mes_empresa': {time.strftime('%Y-%m'): {'RAPEL': 1, 'VERFRUT': 1}}}
     return {'success': True, 'data': []}
 
 def enrutar(route):
@@ -411,6 +413,14 @@ with sync_playwright() as pw:
     ok('Mi cuenta (admin): datos de sesion, compromiso aceptado y lista de aceptaciones (1 de 2)', pag.evaluate("() => { const t = document.getElementById('mcBody').textContent; return /jtimoteo/.test(t) && /Aceptado el/.test(t) && /1 de 2 (usuarios activos|aceptaron)/.test(t); }"))
     pag.evaluate("() => { document.getElementById('mcOv').classList.remove('on'); }")
     PRE = {'action': 'getPreloadOptimizado', 'usuario': 'jtimoteo', 'nombre': 'JOEL', 'rol': 'administrador', 'empresa': '', 'cvAzure': '1'}
+    r = pag.evaluate("""async () => { await window._refrescarStatsAzure('guardado-prueba'); await new Promise(x => setTimeout(x, 400));
+        window._fbAplicarEstadisticasFirebase({resumen_global:{hoy:999,este_mes:999,en_proceso:999,finalizados:999,total:999,ultima_actualizacion:Date.now(),fecha_ultima_actualizacion:hoy()},por_mes:{},por_empresa:{RAPEL:{este_mes:999},VERFRUT:{este_mes:999}},por_supervisor:{x:{nombre:'GLOBAL FIREBASE',este_mes:999}}});
+        await new Promise(x => setTimeout(x, 1500));
+        const w = document.getElementById('fbDashWidgets'), rk = document.getElementById('fbRankingLista');
+        return JSON.stringify({widgets: !!w && w.style.display !== 'none', ranking: rk ? rk.innerText.replace(/\\s+/g,' ').slice(0,80) : null, sM: document.getElementById('sM').textContent, sH: document.getElementById('sH').textContent,
+          emp: (typeof charts !== 'undefined' && charts.fbEmpresa) ? charts.fbEmpresa.data.datasets[0].data.join(',') : null, tend: (typeof charts !== 'undefined' && charts.fbTend) ? charts.fbTend.data.datasets.map(d => d.data.join(',')).join('|') : null,
+          comp: (document.getElementById('dashComparativa') || {style:{}}).style.display, fbGuardado: !!(window._fbEstadisticas && window._fbEstadisticas.resumen_global)}); }""")
+    ok('_SEDE_FB_STATS_V2: con servidor nuevo, ranking/empresa/tendencia salen del SERVIDOR y un evento global de Firebase NO pinta cifras', ('ANA PIURA SERVIDOR' in r) and ('GLOBAL FIREBASE' not in r) and ('999' not in r) and '"emp":"1,1"' in r and '"widgets":true' in r and '"fbGuardado":false' in r, r)
     RED['google'].clear()
     r = pag.evaluate("""async (p) => { const d = await apiGet(p); return [d && d.fuente, d && d.data && d.data.usuarios && d.data.usuarios.length, d && d.data && d.data.stats && d.data.stats.anio].join('|'); }""", PRE)
     ok('Carga al entrar (administrador): usuarios y cifras vienen de Azure (/usuarios/lista y /atenciones/stats)', r == 'azure|4|3' and 'getPreloadOptimizado' not in RED['google'] and 'getUsuarios' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))

@@ -47,6 +47,7 @@ El servidor se arma con `bash edge-build/build.sh SRC OUT` y se publica con `des
 - Control central de modulos (`shared/modulos-guard.js`): secreto `MODULOS_GUARD` = `log` (hoy) / `on` / `off`; anota en `rl.acceso_registro`.
 - **Precedentes por sede** (`prec/index.js`, `_PREC_SEDE_V1`): listar, ver, editar, eliminar, materias y aviso. Commit `4593fad`.
 - **Panel principal** (`04-nucleo-dashboard.js`, `_SEDE_FB_STATS_V1`): un usuario de Olmos no usa el resumen global de Firebase `/estadisticas`; sus cifras salen del servidor. Commit `4593fad`.
+- **Panel principal, todos los usuarios** (`24-stats-azure-v1.js` + `shared/stats-pizarron.js`, `_SEDE_FB_STATS_V2`): flechas y barras, comparativa, RAPEL/VERFRUT del mes, ranking de supervisores y tendencia de 6 meses salen del servidor (`/atenciones/stats`, campos nuevos `mes_actual` y `por_mes_empresa`), ya filtrados por sede. Firebase `/estadisticas` solo avisa que algo cambio (refresca la lista en vivo); ya no pinta cifras. Si el servidor no entrega los campos nuevos, la pantalla sigue con Firebase como antes. Con el servidor caido no se muestran cifras globales de Firebase. Prueba automatica agregada en `tools/prueba_sistema.py` (232 pruebas).
 
 ### Evaluaciones ETI (`C:\Sistema - Evaluacion Eti`, repo `eti-evaluacion-verfrut`)
 - Sin prueba automatica: **el push publica directo**. Se edita con respaldo en `_bak/`.
@@ -54,7 +55,7 @@ El servidor se arma con `bash edge-build/build.sh SRC OUT` y se publica con `des
 - Evaluacion manual, Indicadores, Mis evaluaciones, informes (cierre de ciclo, expediente, capacitaciones, evaluaciones, hojas por ruta, informe por sector) y encuesta de satisfaccion por sede; razon social de Olmos en informes; "General · ambas empresas" es solo Piura (`b70e873`).
 - El QR permanente de un supervisor que ya tiene uno se puede cambiar de empresa/sector: pregunta y actualiza el mismo QR (`_ETI_QR_CAMBIO_V1`, `b70e873`).
 - Indicadores se piden con la sesion (`e87b5ba`).
-- **Pagina del QR (`evaluar.html`) lee la evaluacion primero de Supabase**, luego Firebase, luego la copia del celular (`_QR_SUPABASE_V1`, `f494161`). El ENVIO de respuestas no se toco.
+- **Pagina del QR (`evaluar.html`) lee la evaluacion primero de Supabase**, luego Firebase, luego la copia del celular (`_QR_SUPABASE_V1`, `f494161`). - **El ENVIO de respuestas del QR tiene a Supabase como destino principal** (`_QR_ENVIO_SUPABASE_V1`, `ecfdc45`): la pagina envia directo a `/api/eti/escribir` (origen `qr`), Firebase queda de respaldo y `etieval/guardar` como copia; "enviada" = confirma Supabase (o Firebase si Supabase no responde). Mismo id en los reintentos: no duplica. Probado en vivo el 21-nov con una sesion de prueba (envio normal y con reintentos), ya eliminada.
 
 ### Capacitaciones ETI (`C:\sistema-eti`, repo `sistema-eti`)
 - Lee y guarda por el mismo servidor `/api/eti` (motor `eti-fs-shim.js`), asi que el filtro por sede del servidor ya le aplica.
@@ -77,6 +78,8 @@ El servidor se arma con `bash edge-build/build.sh SRC OUT` y se publica con `des
 | `ETI_STATS_SESION` | `on` | Exige sesion para ver indicadores de ETI. Hoy apagado: activar tras confirmar que todos entran. |
 
 En el navegador: `localStorage.eti_motor = 'firestore'` devuelve Capacitaciones ETI a Firebase (camino de retorno).
+En el celular / navegador: `localStorage.eti_qr_envio = 'firebase'` devuelve el envio del QR a como era (Firebase manda).
+En el navegador: `localStorage.stats_fuente = 'firebase'` devuelve los cuadros del panel principal del RR.LL. al resumen de Firebase.
 
 ## 5. Pendientes
 
@@ -88,9 +91,10 @@ En el navegador: `localStorage.eti_motor = 'firestore'` devuelve Capacitaciones 
 
 **Tecnicos, en este orden**
 1. Con uso real: revisar que todos entren a Indicadores de ETI y activar `ETI_STATS_SESION=on`; revisar `rl.acceso_registro` antes de `MODULOS_GUARD=on`.
-2. Pagina del QR: que el ENVIO tenga a Supabase como destino principal (hoy "enviado" = Firebase confirma; la respuesta ya llega a Supabase por dos caminos). Requiere una evaluacion de prueba con Joel presente.
-3. Panel principal: pasar las cifras de los administradores de Piura del resumen de Firebase al servidor (hoy el resumen global incluira a Olmos en los totales).
-4. Retirar Firebase (solo despues de 2 y 3). Unas 30 pantallas del RR.LL. y los dos ETI aun lo leen o lo usan de respaldo.
+2. HECHO (21-nov): envio del QR con Supabase como destino principal (`_QR_ENVIO_SUPABASE_V1`).
+3. HECHO (21-nov): panel principal con las cifras del servidor para todos (`_SEDE_FB_STATS_V2`). Falta mirarlo con uso real el lunes.
+4. Retirar Firebase (ya se puede empezar). Unas 30 pantallas del RR.LL. y los dos ETI aun lo leen o lo usan de respaldo. Decision de Joel (21-nov): TODO debe leer y guardar en Supabase; Firebase no debe quedar ni como respaldo.
+   Ojo: `evaluar.html` hoy NO abre si Firebase no carga (muestra "Sin conexion"); hay que quitar esa dependencia antes de retirar Firebase del QR. Opcional: prueba de carga de 100 envios simultaneos del QR (no se ha hecho).
 5. Pendientes antiguos: sesion obligatoria en Apps Script (`GAS_SESION_MODO=on`), rotar la clave de sesiones (cierra la sesion de todos: hacerlo en un horario sin usuarios), origenes permitidos (CORS/CSP), retirar Azure.
 6. Supervisores de Olmos en la lista fija de Evaluaciones ETI (`js/01-nucleo-evaluaciones.js`) cuando los contraten.
 
