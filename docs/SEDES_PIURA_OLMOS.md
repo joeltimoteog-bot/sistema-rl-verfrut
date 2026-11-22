@@ -98,6 +98,12 @@ En el navegador: `localStorage.stats_fuente = 'firebase'` devuelve los cuadros d
 5. Pendientes antiguos: sesion obligatoria en Apps Script (`GAS_SESION_MODO=on`), rotar la clave de sesiones (cierra la sesion de todos: hacerlo en un horario sin usuarios), origenes permitidos (CORS/CSP), retirar Azure.
 6. Supervisores de Olmos en la lista fija de Evaluaciones ETI (`js/01-nucleo-evaluaciones.js`) cuando los contraten.
 
+**Respaldos (21-nov-2026, sin costo adicional; Joel descarto PITR por precio)**
+- Supabase: respaldo diario automatico (toda la base, ultimos dias). PITR NO esta activo.
+- Drive `Respaldos Sistema RR.LL.`: copia semanal (domingo 03:00, `respaldo-semanal.js`), ahora con los esquemas `rl` y `eti`.
+- Drive `Respaldos Sistema RR.LL. > ETI diario`: copia de cada noche (23:00, `respaldo-eti-diario.js`, `_RESPALDO_ETI_V1`) del esquema `eti`; guarda 14 noches; avisa por correo si falla. Primera copia real: 53 tablas, 10 390 filas, unos 2,5 min (el limite del script es 5 min: si los ETI crecen mucho habra que partirla).
+- Sin copia propia: los archivos de Storage (pendiente de revisar).
+
 **Limites conocidos (no ocultar)**
 - Mientras Firebase exista como respaldo, los datos de los ETI siguen ahi sin el filtro por sede.
 - Usuarios de ETI que no existen en `rl.usuarios` se tratan como de Piura.
