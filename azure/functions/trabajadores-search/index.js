@@ -3,9 +3,32 @@ const { exigirAuth } = require('../shared/auth');
 /* _EMPRESAS_V1 (26-oct-2026): las tablas salen del catalogo central shared/empresas.js
    (RAPEL, VERFRUT, OLMOS...). Solo se consultan las tablas que existen en la base. */
 const EMP = require('../shared/empresas');
-async function tablasEmpresa(pool, empresa) {
+const SD = require('../shared/sede');
+/* _SEDE_TRAB_V1 (23-nov-2026, decision de Joel: "nadie de Olmos debe ver lo de Piura"): la busqueda de trabajadores va por sede.
+   Usuario de Olmos -> solo la nomina de Olmos (tabla Trabajadores_OLMOS; si aun no se ha cargado, no encuentra a nadie).
+   Usuario de Piura -> RAPEL y VERFRUT, nunca la nomina de Olmos. jtimoteo y alcance GENERAL -> todas. Apagar: SEDE_FILTRO=off. */
+async function tablasEmpresa(pool, empresa, modoSd) {
   const ex = await EMP.tablasExistentes(pool, sql);
-  return EMP.EMPRESAS.filter(function (e) { return ex.has(e.tabla) && (EMP.esTodas(empresa) || e.codigo === empresa); });
+  return EMP.EMPRESAS.filter(function (e) {
+    if (modoSd === 'OLMOS' && e.codigo !== 'OLMOS') return false;
+    if (modoSd === 'PIURA' && e.codigo === 'OLMOS') return false;
+    return ex.has(e.tabla) && (EMP.esTodas(empresa) || e.codigo === empresa);
+  });
+}
+/* _SEDE_TRAB_V2 (23-nov-2026, pedido de Joel): si la busqueda no encuentra nada en la sede del usuario pero el trabajador SI
+   existe en la otra sede, se responde "no cuenta con acceso a la informacion de la sede ..." (sin entregar ningun dato). */
+const OTRA_SEDE = { OLMOS: 'PIURA', PIURA: 'OLMOS' };
+const NOM_SEDE = { OLMOS: 'Olmos', PIURA: 'Piura' };
+function msgOtraSede(modoSd) { return 'No cuenta con acceso a la información de la sede ' + NOM_SEDE[OTRA_SEDE[modoSd]] + '.'; }
+async function existeEnOtraSede(pool, modoSd, cond, poner) {
+  try {
+    if (!OTRA_SEDE[modoSd]) return false;
+    const tb = await tablasEmpresa(pool, '', OTRA_SEDE[modoSd]);
+    if (!tb.length) return false;
+    const rq = pool.request(); poner(rq);
+    const r = await rq.query(tb.map(function (e) { return `(SELECT TOP 1 1 AS x FROM dbo.${e.tabla} WHERE ${cond})`; }).join(' UNION ALL '));
+    return (r.recordset || []).length > 0;
+  } catch (e) { return false; }
 }
 
 module.exports = async function (context, req) {
@@ -19,6 +42,7 @@ module.exports = async function (context, req) {
   try {
     const dni = (req.query.dni || '').toString().trim();
     const empresa = (req.query.empresa || '').toString().trim().toUpperCase();
+    const modoSd = await SD.modo(await getPool(), authUser);   /* _SEDE_TRAB_V1 */
 
     /* _BUSCAR_NOMBRE_V1 (23-set-2026): busqueda por NOMBRE (?q=juan perez).
        Cada palabra debe aparecer en el nombre completo. Maximo 30 resultados.
@@ -29,10 +53,14 @@ module.exports = async function (context, req) {
       const poolQ = await getPool();
       const rq = poolQ.request();
       const conds = palabras.map(function (w, i) { rq.input('w' + i, sql.NVarChar(120), '%' + w + '%'); return 'nombre_completo LIKE @w' + i; }).join(' AND ') || '1=0';
-      const partes = (await tablasEmpresa(poolQ, empresa)).map(function (e) { return `SELECT TOP 30 *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE ${conds}`; });
+      const partes = (await tablasEmpresa(poolQ, empresa, modoSd)).map(function (e) { return `SELECT TOP 30 *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE ${conds}`; });
       const rs = partes.length ? await rq.query(partes.map(function (x) { return '(' + x + ')'; }).join(' UNION ALL ')) : { recordset: [] };
       const lista = (rs.recordset || []).slice(0, 30);
-      context.res = { status: 200, body: { success: true, encontrados: lista.length, trabajadores: lista, elapsed_ms: Date.now() - startTime, fuente: 'AZURE_SQL' } };
+      const cuerpoQ = { success: true, encontrados: lista.length, trabajadores: lista, elapsed_ms: Date.now() - startTime, fuente: 'AZURE_SQL' };
+      if (!lista.length && await existeEnOtraSede(poolQ, modoSd, conds, function (r2) { palabras.forEach(function (w, i) { r2.input('w' + i, sql.NVarChar(120), '%' + w + '%'); }); })) {
+        cuerpoQ.otra_sede = true; cuerpoQ.aviso_sede = msgOtraSede(modoSd);   /* _SEDE_TRAB_V2 */
+      }
+      context.res = { status: 200, body: cuerpoQ };
       return;
     }
 
@@ -60,7 +88,7 @@ module.exports = async function (context, req) {
     request.input('dni3', sql.NVarChar(20), dni8);
     const W = 'dni IN (@dni, @dni2, @dni3)';
 
-    const tablas = await tablasEmpresa(pool, empresa);
+    const tablas = await tablasEmpresa(pool, empresa, modoSd);
     const query = tablas.map(function (e) { return `SELECT *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE ${W}`; }).join(' UNION ALL ');
     const result = query ? await request.query(query) : { recordset: [] };
     (result.recordset || []).forEach(function (t) {
@@ -71,11 +99,13 @@ module.exports = async function (context, req) {
     context.log('Busqueda DNI ' + dni + ' en ' + elapsed + 'ms - ' + result.recordset.length + ' resultado(s)');
 
     if (result.recordset.length === 0) {
+      const otraSd = await existeEnOtraSede(pool, modoSd, W, function (r2) { r2.input('dni', sql.NVarChar(20), dni); r2.input('dni2', sql.NVarChar(20), dniSin0 || dni); r2.input('dni3', sql.NVarChar(20), dni8); });   /* _SEDE_TRAB_V2 */
       context.res = {
         status: 404,
         body: {
           success: false,
-          mensaje: 'Trabajador no encontrado',
+          mensaje: otraSd ? msgOtraSede(modoSd) : 'Trabajador no encontrado',
+          otra_sede: otraSd,
           dni: dni,
           elapsed_ms: elapsed,
           fuente: 'AZURE_SQL'

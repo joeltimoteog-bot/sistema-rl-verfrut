@@ -131,5 +131,38 @@
   }
   setInterval(function () { if (typeof charts !== 'undefined' && charts && charts.empresa && !charts.empresa._sedeOk) completarGrafico(); }, 3000);
   iniciarSedeUsuario(0);   /* _SEDE_USUARIO_V1 */
+
+  /* _SEDE_TRAB_V2 (23-nov-2026, pedido de Joel): aviso cuando se busca a un trabajador de la otra sede.
+     El texto lo manda el servidor ("No cuenta con acceso a la información de la sede Piura."). Maximo un aviso cada 2,5 s. */
+  var _avisoSedeT = 0;
+  window.RLSedeAviso = function (msg) {
+    try {
+      var m = String(msg || 'No cuenta con acceso a la información de la otra sede.');
+      if (Date.now() - _avisoSedeT < 2500) return; _avisoSedeT = Date.now();
+      console.log('[_SEDE_TRAB_V2] ' + m);
+      if (typeof mostrarToast === 'function') mostrarToast('🔒 ' + m, 'error');
+      else if (typeof window.appAlert === 'function') window.appAlert('🔒 ' + m);
+    } catch (e) {}
+  };
+
+  /* _SEDE_GOOGLE_V1 (23-nov-2026, decision de Joel: "nadie de Olmos debe ver lo de Piura"): cuando Supabase no responde, la
+     busqueda de trabajadores caia a Google (hoja con la nomina de RAPEL y VERFRUT). Para un usuario de empresa OLMOS ese
+     respaldo ya no se usa: la busqueda devuelve "sin resultados" y puede reintentar. Los usuarios de Piura no cambian.
+     El servidor ya filtra por sede (_SEDE_TRAB_V1); esto cierra el camino de respaldo. Apagar: localStorage.rl_sede_google = 'off'. */
+  var _apiGetSede = window.apiGet;
+  if (typeof _apiGetSede === 'function') {
+    window.apiGet = function (p) {
+      try {
+        var off = false; try { off = localStorage.getItem('rl_sede_google') === 'off'; } catch (e0) {}
+        var emp = ''; try { emp = String((typeof USER !== 'undefined' && USER && USER.empresa) || '').toUpperCase().trim(); } catch (e1) {}
+        if (!off && emp === 'OLMOS' && p && p.action === 'buscarTrabajador') {
+          console.log('[_SEDE_GOOGLE_V1] usuario de Olmos: no se usa la busqueda de respaldo en Google (nomina de Piura)');
+          return Promise.resolve({ success: true, data: [], fuente: 'sede' });
+        }
+      } catch (e) {}
+      return _apiGetSede.apply(this, arguments);
+    };
+    try { apiGet = window.apiGet; } catch (e) {}
+  }
   console.log('[_SEDE_OLMOS_V1] listo: sede Piura / Olmos en atenciones y estadísticas');
 })();

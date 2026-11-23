@@ -49,6 +49,9 @@ El servidor se arma con `bash edge-build/build.sh SRC OUT` y se publica con `des
 - **Panel principal** (`04-nucleo-dashboard.js`, `_SEDE_FB_STATS_V1`): un usuario de Olmos no usa el resumen global de Firebase `/estadisticas`; sus cifras salen del servidor. Commit `4593fad`.
 - **Panel principal, todos los usuarios** (`24-stats-azure-v1.js` + `shared/stats-pizarron.js`, `_SEDE_FB_STATS_V2`): flechas y barras, comparativa, RAPEL/VERFRUT del mes, ranking de supervisores y tendencia de 6 meses salen del servidor (`/atenciones/stats`, campos nuevos `mes_actual` y `por_mes_empresa`), ya filtrados por sede. Firebase `/estadisticas` solo avisa que algo cambio (refresca la lista en vivo); ya no pinta cifras. Si el servidor no entrega los campos nuevos, la pantalla sigue con Firebase como antes. Con el servidor caido no se muestran cifras globales de Firebase. Prueba automatica agregada en `tools/prueba_sistema.py` (232 pruebas).
 
+- **Busqueda de trabajadores por sede** (`trabajadores-search`, `_SEDE_TRAB_V1/V2`, 23-nov): usuario de Olmos -> solo `Trabajadores_OLMOS` (si no esta cargada, no encuentra a nadie); usuario de Piura -> RAPEL y VERFRUT; GENERAL y jtimoteo -> todas. Si el trabajador existe en la otra sede responde "No cuenta con acceso a la información de la sede ..." (`otra_sede: true`, sin datos). La pantalla muestra el aviso (`RLSedeAviso` en `68-sede-v1.js`) y, para usuarios de Olmos, ya no usa la busqueda de respaldo en Google (`_SEDE_GOOGLE_V1`). Decision de Joel (23-nov): ningun usuario de Olmos, incluida Dora (alcance SEDE), ve personal de Piura; la excepcion solo la da Joel con alcance GENERAL.
+- **Papelera de atenciones eliminadas por sede** (`atenciones-eliminadas`, `_SEDE_ELIMINADAS_V1`, 23-nov).
+
 ### Evaluaciones ETI (`C:\Sistema - Evaluacion Eti`, repo `eti-evaluacion-verfrut`)
 - Sin prueba automatica: **el push publica directo**. Se edita con respaldo en `_bak/`.
 - Sedes y sectores centralizados (`8aec61e`); empresa del QR sigue al sector y la sede (`5bf1b4a`).
@@ -105,6 +108,9 @@ En el navegador: `localStorage.stats_fuente = 'firebase'` devuelve los cuadros d
 - Sin copia propia: los archivos de Storage (pendiente de revisar).
 
 **Limites conocidos (no ocultar)**
+- Bienestar Social (sitio aparte, servidor en Google) NO conoce las sedes: la "Ficha del trabajador" vuelve a buscar en la hoja de Google si el servidor no devuelve nada, y la ficha se arma en Google sin filtro de sede. Pendiente (23-nov), junto con las tarjetas de Olmos y sus sectores.
+- El servidor de Google (Apps Script) del RR.LL. tampoco filtra por sede; solo se usa de respaldo cuando Supabase falla.
+- `MODULOS_GUARD` sigue en `log`: con `on` hoy se bloquearia a una usuaria de Piura al cargar Casos y Visitas en su panel (revisar el mapa antes).
 - Mientras Firebase exista como respaldo, los datos de los ETI siguen ahi sin el filtro por sede.
 - Usuarios de ETI que no existen en `rl.usuarios` se tratan como de Piura.
 - El filtro del servidor de ETI solo se probo en produccion con `jtimoteo` (que ve todo); el resto se probo en base de prueba y por conteos.

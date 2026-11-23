@@ -291,6 +291,10 @@ def enrutar(route):
             if FUSG['modo'] == 'caido':
                 FUSG['llamadas'].append('caido')
                 return route.abort()
+        if '/trabajadores/buscar' in url and 'dni=77777777' in url:   # _SEDE_TRAB_V2: trabajador de la otra sede
+            return route.fulfill(status=404, body=json.dumps({'success': False, 'mensaje': 'No cuenta con acceso a la información de la sede Piura.', 'otra_sede': True}), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
+        if '/trabajadores/buscar' in url and 'q=piurano' in url:
+            return route.fulfill(status=200, body=json.dumps({'success': True, 'encontrados': 0, 'trabajadores': [], 'otra_sede': True, 'aviso_sede': 'No cuenta con acceso a la información de la sede Piura.'}), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if '/api/e360/guardar/' in url:
             E360G['auth'].append(req.headers.get('authorization', ''))
             if E360G['modo'] == 'caido':
@@ -949,10 +953,21 @@ with sync_playwright() as pw:
     ok('Bienvenida Olmos: el usuario de empresa OLMOS ve la bienvenida con su nombre, la sede y el contacto de Joel Timoteo', 'Daguilar' in t1 and 'Olmos' in t1 and 'Bienestar Social' in t1 and 'Evaluaciones ETI' in t1 and 'Joel A. Timoteo Gonza' in t1 and 'una sola Gestión Humana' in t1, t1[:160])
     pg.evaluate("() => document.getElementById('boOk').click()")
     pg.reload(wait_until='load'); pg.wait_for_timeout(9000)
-    ok('Bienvenida Olmos: tras pulsar Entendido no vuelve a salir', not pg.evaluate("() => !!document.getElementById('boOv')") and not errs, '; '.join(errs[:2])); c.close()
+    ok('Bienvenida Olmos: tras pulsar Entendido no vuelve a salir', not pg.evaluate("() => !!document.getElementById('boOv')") and not errs, '; '.join(errs[:2]))
+    # _SEDE_GOOGLE_V1 (23-nov-2026): un usuario de Olmos no usa la busqueda de respaldo en Google (nomina de RAPEL / VERFRUT)
+    RED['google'].clear()
+    r = pg.evaluate("""async () => { const a = await _buscarTrabApi('ab', 'AMBAS'); const b = await apiGet({action: 'buscarTrabajador', q: 'juan', empresa: 'AMBAS'}); return [a && a.fuente, a && a.data && a.data.length, b && b.fuente, b && b.data && b.data.length].join('|'); }""")
+    r2 = pg.evaluate("""async () => { const vistos = []; const mt = window.mostrarToast; window.mostrarToast = function (m, t) { vistos.push(String(m)); return mt.apply(this, arguments); }; try { mostrarToast = window.mostrarToast; } catch (e) {}
+        const x = await buscarTrabajadorPorDniAzure('77777777', ''); await new Promise(z => setTimeout(z, 2700)); const y = await _buscarTrabApi('piurano perez', 'AMBAS');
+        const z = await buscarTrabajadorPorDniAzure('12345678', ''); return JSON.stringify({dni: x, nombre: y && y.data && y.data.length, vistos: vistos, normal: !!(z && z.dni)}); }""")
+    ok('Sede Olmos: al buscar un trabajador de Piura sale "No cuenta con acceso a la informacion de la sede Piura" (por DNI y por nombre) y no llegan datos', '"dni":null' in r2 and '"nombre":0' in r2 and r2.count('No cuenta con acceso a la información de la sede Piura') == 2 and '"normal":true' in r2 and 'buscarTrabajador' not in RED['google'], r2[:300])
+    ok('Sede Olmos: la busqueda de trabajadores de respaldo NO va a Google (no ve la nomina de Piura)', r == 'sede|0|sede|0' and 'buscarTrabajador' not in RED['google'], r + ' | google: ' + ','.join(RED['google'])); c.close()
     PERMX['resp'] = {'success': True, 'permisos': PF, 'vacio': False, 'usuario': 'fpulache', 'fuente': 'azure'}
     c, pg, errs = sesion_perm('fpulache'); pg.wait_for_timeout(2500)
-    ok('Bienvenida Olmos: un usuario de Piura no la ve', not pg.evaluate("() => !!document.getElementById('boOv')")); c.close()
+    ok('Bienvenida Olmos: un usuario de Piura no la ve', not pg.evaluate("() => !!document.getElementById('boOv')"))
+    RED['google'].clear()
+    r = pg.evaluate("""async () => { const b = await apiGet({action: 'buscarTrabajador', q: 'juan', empresa: 'AMBAS'}); return String(b && b.fuente); }""")
+    ok('Sede Olmos: para un usuario de Piura el respaldo en Google sigue igual', r != 'sede' and 'buscarTrabajador' in RED['google'], r + ' | google: ' + ','.join(RED['google'])); c.close()
     # 2) Azure y Google fallan, sin permisos previos -> solo lo basico
     ACC['modo'] = 'caido'; PERMX['gas_falla'] = True
     c, pg, errs = sesion_perm('fpulache')

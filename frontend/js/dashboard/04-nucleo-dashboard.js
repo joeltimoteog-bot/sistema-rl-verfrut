@@ -1608,6 +1608,8 @@ async function buscarTrabajadorPorDniAzure(dni, empresa = '') {
          (_SYNC_AL_CAMBIAR_V1). "No existe" en Azure es definitivo: ya no se vuelve a preguntar a Google (eso
          era lo que demoraba). Solo si Azure FALLA (no responde / error) se usa Google de respaldo. */
       console.log('[Trabajador] DNI ' + dni + ' no encontrado en Supabase (' + Math.round(t1-t0) + 'ms)');
+      /* _SEDE_TRAB_V2 (23-nov-2026): el trabajador existe pero es de la otra sede -> aviso claro (el servidor no entrega sus datos) */
+      try { const j404 = await resp.json(); if (j404 && j404.otra_sede && typeof window.RLSedeAviso === 'function') window.RLSedeAviso(j404.mensaje); } catch (eSd) {}
       return null;
     }
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -5157,6 +5159,7 @@ async function _buscarTrabApi(q, emp) {
       const t0 = setTimeout(function () { try { c && c.abort(); } catch (e) {} }, 12000);
       let j = null;
       try { const resp = await fetch(url.toString(), c ? { signal: c.signal } : {}); if (resp.ok) j = await resp.json(); } finally { clearTimeout(t0); }
+      if (j && j.otra_sede && typeof window.RLSedeAviso === 'function') window.RLSedeAviso(j.aviso_sede);   /* _SEDE_TRAB_V2 */
       if (j && j.success && Array.isArray(j.trabajadores)) return { success: true, data: j.trabajadores.map(_mapTrabajadorAzureALegado), fuente: 'AZURE' };
     }
   } catch (e) { console.warn('[_BUSCAR_AZURE_V1] Supabase no respondio, se usa Google:', e && e.message); }

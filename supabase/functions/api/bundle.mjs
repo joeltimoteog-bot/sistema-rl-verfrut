@@ -62806,6 +62806,7 @@ var require_atenciones_eliminadas = __commonJS({
   "atenciones-eliminadas/index.js"(exports, module) {
     "use strict";
     var { getPool } = require_db();
+    var SD = require_sede();
     function token(req) {
       const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
       if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
@@ -62815,7 +62816,7 @@ var require_atenciones_eliminadas = __commonJS({
         return null;
       }
     }
-    var _c = { ts: 0, body: null };
+    var _c = {};
     module.exports = async function(context, req) {
       const u = token(req);
       if (!u || !u.usuario) {
@@ -62823,12 +62824,14 @@ var require_atenciones_eliminadas = __commonJS({
         return;
       }
       const t0 = Date.now();
-      if (_c.body && t0 - _c.ts < 15e3) {
-        context.res = { status: 200, headers: { "X-Cache": "HIT" }, body: _c.body };
-        return;
-      }
       try {
         const pool = await getPool();
+        const modoSd = await SD.modo(pool, u), oSd = modoSd === "TODO" ? null : await SD.olmos(pool);
+        const c = _c[modoSd];
+        if (c && c.body && t0 - c.ts < 15e3) {
+          context.res = { status: 200, headers: { "X-Cache": "HIT" }, body: c.body };
+          return;
+        }
         const r = await pool.request().query(`SELECT TOP (400) rid, id, datos FROM dbo.Atenciones_Respaldo
         WHERE motivo LIKE 'eliminada%' AND fecha >= DATEADD(day, -45, SYSUTCDATETIME()) ORDER BY rid DESC`);
         const out = [];
@@ -62841,10 +62844,11 @@ var require_atenciones_eliminadas = __commonJS({
           } catch (e) {
             d = {};
           }
+          if (oSd && SD.esOlmos(d, oSd, null) !== (modoSd === "OLMOS")) return;
           out.push({ id: x.id, nro: d.nro == null ? null : d.nro, dni: String(d.dni == null ? "" : d.dni).trim() });
         });
         const body = { success: true, marca: String(marca), eliminadas: out, ms: Date.now() - t0 };
-        _c = { ts: Date.now(), body };
+        _c[modoSd] = { ts: Date.now(), body };
         context.res = { status: 200, headers: { "X-Cache": "MISS" }, body };
       } catch (e) {
         context.log.error("atenciones-eliminadas: " + e.message);
@@ -81557,11 +81561,34 @@ var require_trabajadores_search = __commonJS({
     var { sql, getPool } = require_db();
     var { exigirAuth } = require_auth();
     var EMP = require_empresas();
-    async function tablasEmpresa(pool, empresa) {
+    var SD = require_sede();
+    async function tablasEmpresa(pool, empresa, modoSd) {
       const ex = await EMP.tablasExistentes(pool, sql);
       return EMP.EMPRESAS.filter(function(e) {
+        if (modoSd === "OLMOS" && e.codigo !== "OLMOS") return false;
+        if (modoSd === "PIURA" && e.codigo === "OLMOS") return false;
         return ex.has(e.tabla) && (EMP.esTodas(empresa) || e.codigo === empresa);
       });
+    }
+    var OTRA_SEDE = { OLMOS: "PIURA", PIURA: "OLMOS" };
+    var NOM_SEDE = { OLMOS: "Olmos", PIURA: "Piura" };
+    function msgOtraSede(modoSd) {
+      return "No cuenta con acceso a la informaci\xF3n de la sede " + NOM_SEDE[OTRA_SEDE[modoSd]] + ".";
+    }
+    async function existeEnOtraSede(pool, modoSd, cond, poner) {
+      try {
+        if (!OTRA_SEDE[modoSd]) return false;
+        const tb = await tablasEmpresa(pool, "", OTRA_SEDE[modoSd]);
+        if (!tb.length) return false;
+        const rq = pool.request();
+        poner(rq);
+        const r = await rq.query(tb.map(function(e) {
+          return `(SELECT TOP 1 1 AS x FROM dbo.${e.tabla} WHERE ${cond})`;
+        }).join(" UNION ALL "));
+        return (r.recordset || []).length > 0;
+      } catch (e) {
+        return false;
+      }
     }
     module.exports = async function(context, req) {
       const authUser = exigirAuth(context, req);
@@ -81571,6 +81598,7 @@ var require_trabajadores_search = __commonJS({
       try {
         const dni = (req.query.dni || "").toString().trim();
         const empresa = (req.query.empresa || "").toString().trim().toUpperCase();
+        const modoSd = await SD.modo(await getPool(), authUser);
         const q = (req.query.q || "").toString().trim();
         if (!dni && q.length >= 3) {
           const palabras = q.split(/\s+/).filter(function(w) {
@@ -81582,14 +81610,23 @@ var require_trabajadores_search = __commonJS({
             rq.input("w" + i, sql.NVarChar(120), "%" + w + "%");
             return "nombre_completo LIKE @w" + i;
           }).join(" AND ") || "1=0";
-          const partes = (await tablasEmpresa(poolQ, empresa)).map(function(e) {
+          const partes = (await tablasEmpresa(poolQ, empresa, modoSd)).map(function(e) {
             return `SELECT TOP 30 *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE ${conds}`;
           });
           const rs = partes.length ? await rq.query(partes.map(function(x) {
             return "(" + x + ")";
           }).join(" UNION ALL ")) : { recordset: [] };
           const lista = (rs.recordset || []).slice(0, 30);
-          context.res = { status: 200, body: { success: true, encontrados: lista.length, trabajadores: lista, elapsed_ms: Date.now() - startTime, fuente: "AZURE_SQL" } };
+          const cuerpoQ = { success: true, encontrados: lista.length, trabajadores: lista, elapsed_ms: Date.now() - startTime, fuente: "AZURE_SQL" };
+          if (!lista.length && await existeEnOtraSede(poolQ, modoSd, conds, function(r2) {
+            palabras.forEach(function(w, i) {
+              r2.input("w" + i, sql.NVarChar(120), "%" + w + "%");
+            });
+          })) {
+            cuerpoQ.otra_sede = true;
+            cuerpoQ.aviso_sede = msgOtraSede(modoSd);
+          }
+          context.res = { status: 200, body: cuerpoQ };
           return;
         }
         if (!dni) {
@@ -81610,7 +81647,7 @@ var require_trabajadores_search = __commonJS({
         request.input("dni2", sql.NVarChar(20), dniSin0 || dni);
         request.input("dni3", sql.NVarChar(20), dni8);
         const W = "dni IN (@dni, @dni2, @dni3)";
-        const tablas = await tablasEmpresa(pool, empresa);
+        const tablas = await tablasEmpresa(pool, empresa, modoSd);
         const query = tablas.map(function(e) {
           return `SELECT *, '${e.codigo}' AS empresa_origen FROM dbo.${e.tabla} WHERE ${W}`;
         }).join(" UNION ALL ");
@@ -81622,11 +81659,17 @@ var require_trabajadores_search = __commonJS({
         const elapsed = Date.now() - startTime;
         context.log("Busqueda DNI " + dni + " en " + elapsed + "ms - " + result.recordset.length + " resultado(s)");
         if (result.recordset.length === 0) {
+          const otraSd = await existeEnOtraSede(pool, modoSd, W, function(r2) {
+            r2.input("dni", sql.NVarChar(20), dni);
+            r2.input("dni2", sql.NVarChar(20), dniSin0 || dni);
+            r2.input("dni3", sql.NVarChar(20), dni8);
+          });
           context.res = {
             status: 404,
             body: {
               success: false,
-              mensaje: "Trabajador no encontrado",
+              mensaje: otraSd ? msgOtraSede(modoSd) : "Trabajador no encontrado",
+              otra_sede: otraSd,
               dni,
               elapsed_ms: elapsed,
               fuente: "AZURE_SQL"

@@ -10,30 +10,34 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 const { getPool } = require('../shared/db');
+const SD = require('../shared/sede');   /* _SEDE_ELIMINADAS_V1 (23-nov-2026): cada usuario recibe solo las eliminadas de su sede */
 function token(req) {
   const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
   if (!h.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
   try { return require('../shared/auth.js').verificarSoloRL(h.slice(7).trim()); } catch (e) { return null; }
 }
-let _c = { ts: 0, body: null };
+let _c = {};   /* una memoria por sede: { TODO|OLMOS|PIURA: { ts, body } } */
 
 module.exports = async function (context, req) {
   const u = token(req);
   if (!u || !u.usuario) { context.res = { status: 401, body: { success: false, error: 'Sin sesion valida' } }; return; }
   const t0 = Date.now();
-  if (_c.body && t0 - _c.ts < 15000) { context.res = { status: 200, headers: { 'X-Cache': 'HIT' }, body: _c.body }; return; }
   try {
     const pool = await getPool();
+    const modoSd = await SD.modo(pool, u), oSd = modoSd === 'TODO' ? null : await SD.olmos(pool);   /* _SEDE_ELIMINADAS_V1 */
+    const c = _c[modoSd];
+    if (c && c.body && t0 - c.ts < 15000) { context.res = { status: 200, headers: { 'X-Cache': 'HIT' }, body: c.body }; return; }
     const r = await pool.request().query(`SELECT TOP (400) rid, id, datos FROM dbo.Atenciones_Respaldo
         WHERE motivo LIKE 'eliminada%' AND fecha >= DATEADD(day, -45, SYSUTCDATETIME()) ORDER BY rid DESC`);
     const out = []; let marca = 0;
     (r.recordset || []).forEach((x) => {
       if (x.rid > marca) marca = x.rid;
       let d = {}; try { d = JSON.parse(x.datos || '{}'); } catch (e) { d = {}; }
+      if (oSd && SD.esOlmos(d, oSd, null) !== (modoSd === 'OLMOS')) return;   /* de la otra sede: no se entrega */
       out.push({ id: x.id, nro: d.nro == null ? null : d.nro, dni: String(d.dni == null ? '' : d.dni).trim() });
     });
     const body = { success: true, marca: String(marca), eliminadas: out, ms: Date.now() - t0 };
-    _c = { ts: Date.now(), body };
+    _c[modoSd] = { ts: Date.now(), body };
     context.res = { status: 200, headers: { 'X-Cache': 'MISS' }, body };
   } catch (e) {
     context.log.error('atenciones-eliminadas: ' + e.message);
