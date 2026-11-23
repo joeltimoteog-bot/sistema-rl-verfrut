@@ -38,7 +38,7 @@ async function olmos(pool) {
 
 /* 'TODO' | 'OLMOS' | 'PIURA'. Si la lista de Olmos no se puede leer: OLMOS no se reconoce -> 'PIURA' para todos menos VER_AMBAS
    (nunca se abre de mas a un usuario de Olmos: ver modoSeguro). */
-async function modo(pool, authUser) {
+async function modoReal(pool, authUser) {
   if (!activo()) return 'TODO';
   if (!authUser || !authUser.usuario) return 'TODO';
   const u = String(authUser.usuario).trim().toLowerCase();
@@ -47,6 +47,26 @@ async function modo(pool, authUser) {
   const yo = o.todos.filter(x => x.usuario === u)[0];
   if (yo && yo.alcance === 'GENERAL') return 'TODO';   /* _ALCANCE_V1 */
   return o.usuarios.indexOf(u) >= 0 ? 'OLMOS' : 'PIURA';
+}
+/* _SEDE_VISTA_V1 (23-nov-2026, aprobado por Joel): selector de sede para quien ve las dos (jtimoteo y alcance GENERAL).
+   La pantalla manda la cabecera x-rl-sede = PIURA | OLMOS; el adaptador del servidor envuelve la llamada con conVista() y,
+   SOLO si el modo real del usuario es TODO, modo() responde esa sede: todo lo que ya filtra por sede se angosta solo.
+   A un usuario de Piura o de Olmos la cabecera no le cambia nada (su modo real manda). modoReal() = la sede verdadera
+   (la usan auth/sso y bs/permisos para decirle a la pantalla si corresponde mostrar el selector). */
+let _als = null;
+try { _als = new (require('node:async_hooks').AsyncLocalStorage)(); } catch (e) { _als = null; }
+function conVista(vista, fn) {
+  const v = String(vista || '').trim().toUpperCase();
+  if (!_als || (v !== 'PIURA' && v !== 'OLMOS')) return fn();
+  return _als.run({ vista: v }, fn);
+}
+function vistaPedida() {
+  try { const s = _als && _als.getStore(); return s && (s.vista === 'PIURA' || s.vista === 'OLMOS') ? s.vista : ''; } catch (e) { return ''; }
+}
+async function modo(pool, authUser) {
+  const m = await modoReal(pool, authUser);
+  if (m !== 'TODO' || !activo() || !authUser || !authUser.usuario) return m;
+  return vistaPedida() || 'TODO';
 }
 /* _ALCANCE_V1: { alcance, sede, companeros:[[usuario, nombre], ...] } — companeros = los usuarios de su misma sede (solo con alcance SEDE). */
 async function alcanceDe(pool, usuario) {
@@ -118,4 +138,4 @@ async function permiteAtencion(pool, authUser, id) {
   return esOlmos(f, await olmos(pool), null) === (m === 'OLMOS');
 }
 const MSG_OTRA_SEDE = 'Este registro pertenece a otra sede. No se puede modificar desde tu usuario.';
-module.exports = { permiteAtencion, MSG_OTRA_SEDE, modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => { _cache = { t: 0, usuarios: [], nombres: [], todos: [] }; } };
+module.exports = { permiteAtencion, MSG_OTRA_SEDE, modo, modoReal, conVista, vistaPedida, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => { _cache = { t: 0, usuarios: [], nombres: [], todos: [] }; } };

@@ -11405,7 +11405,7 @@ var require_sede = __commonJS({
       _cache = { t: Date.now(), usuarios: filas.map((x) => x.usuario), nombres: filas.map((x) => x.nombre).filter(Boolean), todos };
       return _cache;
     }
-    async function modo(pool, authUser) {
+    async function modoReal(pool, authUser) {
       if (!activo()) return "TODO";
       if (!authUser || !authUser.usuario) return "TODO";
       const u = String(authUser.usuario).trim().toLowerCase();
@@ -11414,6 +11414,30 @@ var require_sede = __commonJS({
       const yo = o.todos.filter((x) => x.usuario === u)[0];
       if (yo && yo.alcance === "GENERAL") return "TODO";
       return o.usuarios.indexOf(u) >= 0 ? "OLMOS" : "PIURA";
+    }
+    var _als = null;
+    try {
+      _als = new (__require("node:async_hooks")).AsyncLocalStorage();
+    } catch (e) {
+      _als = null;
+    }
+    function conVista(vista, fn) {
+      const v = String(vista || "").trim().toUpperCase();
+      if (!_als || v !== "PIURA" && v !== "OLMOS") return fn();
+      return _als.run({ vista: v }, fn);
+    }
+    function vistaPedida() {
+      try {
+        const s = _als && _als.getStore();
+        return s && (s.vista === "PIURA" || s.vista === "OLMOS") ? s.vista : "";
+      } catch (e) {
+        return "";
+      }
+    }
+    async function modo(pool, authUser) {
+      const m = await modoReal(pool, authUser);
+      if (m !== "TODO" || !activo() || !authUser || !authUser.usuario) return m;
+      return vistaPedida() || "TODO";
     }
     async function alcanceDe(pool, usuario) {
       const u = String(usuario || "").trim().toLowerCase();
@@ -11484,7 +11508,7 @@ var require_sede = __commonJS({
       return esOlmos(f, await olmos(pool), null) === (m === "OLMOS");
     }
     var MSG_OTRA_SEDE = "Este registro pertenece a otra sede. No se puede modificar desde tu usuario.";
-    module.exports = { permiteAtencion, MSG_OTRA_SEDE, modo, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => {
+    module.exports = { permiteAtencion, MSG_OTRA_SEDE, modo, modoReal, conVista, vistaPedida, olmos, condOlmos, filtroSQL, esOlmos, filtrarFilas, alcanceDe, FUNDOS_OLMOS, EMPRESAS_OLMOS, ALCANCES, VER_AMBAS, _N: N, _reset: () => {
       _cache = { t: 0, usuarios: [], nombres: [], todos: [] };
     } };
   }
@@ -65962,7 +65986,7 @@ var require_auth_sso = __commonJS({
           try {
             const { getPool } = require_db();
             const SDS = require_sede();
-            sedeU = await Promise.race([getPool().then((p) => SDS.modo(p, { usuario: String(d.usuario).toLowerCase() })), new Promise((_, rj) => setTimeout(() => rj(new Error("timeout")), 4e3))]);
+            sedeU = await Promise.race([getPool().then((p) => SDS.modoReal(p, { usuario: String(d.usuario).toLowerCase() })), new Promise((_, rj) => setTimeout(() => rj(new Error("timeout")), 4e3))]);
           } catch (e) {
             sedeU = "";
           }
@@ -68327,11 +68351,11 @@ var require_bs = __commonJS({
           const P = await permisosBS(u, q);
           let sedeP = "";
           try {
-            sedeP = await SD.modo(pool, u && u.usuario ? { usuario: u.usuario } : null);
+            sedeP = await SD.modoReal(pool, u && u.usuario ? { usuario: u.usuario } : null);
           } catch (e) {
             sedeP = "";
           }
-          return res(200, { ok: true, success: true, usuario: String(u && u.usuario || "").toLowerCase(), esAdmin: P.esAdmin, permisos: P.permisos, fuente: P.fuente, sede: sedeP });
+          return res(200, { ok: true, success: true, usuario: String(u && u.usuario || "").toLowerCase(), esAdmin: P.esAdmin, permisos: P.permisos, fuente: P.fuente, sede: sedeP, vista: sedeP === "TODO" ? SD.vistaPedida() : "" });
         }
         if (accion === "tabla") {
           const clave = String(q.clave || "");
@@ -82339,7 +82363,13 @@ var require_adaptador_edge = __commonJS({
           }
           if (g && g.bloquear) return new Response(JSON.stringify({ success: false, error: "No tienes asignado este m\xF3dulo. Solic\xEDtalo al administrador del sistema.", modulo_no_asignado: g.modulo }), { status: 403, headers: Object.assign({ "Content-Type": "application/json" }, C) });
         }
-        const ret = await r.h(context, req);
+        let conVistaSd = null;
+        try {
+          conVistaSd = headers["x-rl-sede"] ? require_sede().conVista : null;
+        } catch (eV) {
+          conVistaSd = null;
+        }
+        const ret = conVistaSd ? await conVistaSd(headers["x-rl-sede"], () => r.h(context, req)) : await r.h(context, req);
         const res = context.res || ret || { status: 204 };
         const h = Object.assign({}, res.headers || {}, C);
         let cuerpo = res.body;

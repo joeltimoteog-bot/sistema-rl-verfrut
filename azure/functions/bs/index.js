@@ -443,8 +443,8 @@ module.exports = async function (context, req) {
       /* _BS_SEDE_PERMISOS_V1 (23-nov-2026, decision de Joel: "nadie de Olmos debe ver lo de Piura"): la respuesta dice la sede del
          usuario (OLMOS / PIURA / TODO) para que las pantallas de Bienestar cierren los respaldos a Google a quien es de Olmos.
          Si la sede no se puede leer, va vacia y los permisos se entregan igual (no se afecta a nadie). */
-      let sedeP = ''; try { sedeP = await SD.modo(pool, (u && u.usuario) ? { usuario: u.usuario } : null); } catch (e) { sedeP = ''; }
-      return res(200, { ok: true, success: true, usuario: String((u && u.usuario) || '').toLowerCase(), esAdmin: P.esAdmin, permisos: P.permisos, fuente: P.fuente, sede: sedeP });
+      let sedeP = ''; try { sedeP = await SD.modoReal(pool, (u && u.usuario) ? { usuario: u.usuario } : null); } catch (e) { sedeP = ''; }   /* _SEDE_VISTA_V1: la sede verdadera; 'vista' = la elegida en el selector */
+      return res(200, { ok: true, success: true, usuario: String((u && u.usuario) || '').toLowerCase(), esAdmin: P.esAdmin, permisos: P.permisos, fuente: P.fuente, sede: sedeP, vista: sedeP === 'TODO' ? SD.vistaPedida() : '' });
     }
     if (accion === 'tabla') {
       const clave = String(q.clave || ''); if (CLAVES.indexOf(clave) < 0) return res(400, { success: false, error: 'clave desconocida' });

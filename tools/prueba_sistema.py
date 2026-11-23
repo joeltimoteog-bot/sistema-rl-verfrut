@@ -24,6 +24,7 @@ AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
 ATC = {'urls': [], 'data': [], 'total': None}   # _AT_CAMBIOS_V1
 AZE = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _EDIT_AZURE_PRIMERO_V1  ok | caido | 503 | 403 | 404
 MODX = {'modo': 'ok', 'llamadas': []}
+SEDEV = {'sede': None, 'usuario': '', 'cab': []}   # _SEDE_VISTA_V1: sede real que responde auth/sso y cabeceras x-rl-sede recibidas
 CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
 CAPG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _CAP_AZURE_PRIMERO_V1
 USRG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _USR_AZURE_V1  ok | caido
@@ -271,6 +272,9 @@ def enrutar(route):
         return route.fulfill(status=200, body=json.dumps(resp_google(a)), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
     if 'azurewebsites.net' in url:
         RED['azure'].append(urllib.parse.urlparse(url).path)
+        if req.method != 'OPTIONS' and '/api/auth/' not in url: SEDEV['cab'].append(req.headers.get('x-rl-sede', ''))   # _SEDE_VISTA_V1
+        if SEDEV['sede'] and '/api/auth/sso' in url and req.method == 'POST' and '"sesion"' in (req.post_data or ''):
+            return route.fulfill(status=200, body=json.dumps({'success': True, 'user': {'usuario': SEDEV['usuario'], 'rol': 'x', 'accesos': None, 'sede': SEDEV['sede']}}), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if AZ_CAIDO['si'] and req.method != 'OPTIONS':
             return route.fulfill(status=500, body='{"success":false}', headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if req.method == 'OPTIONS':
@@ -968,6 +972,32 @@ with sync_playwright() as pw:
     RED['google'].clear()
     r = pg.evaluate("""async () => { const b = await apiGet({action: 'buscarTrabajador', q: 'juan', empresa: 'AMBAS'}); return String(b && b.fuente); }""")
     ok('Sede Olmos: para un usuario de Piura el respaldo en Google sigue igual', r != 'sede' and 'buscarTrabajador' in RED['google'], r + ' | google: ' + ','.join(RED['google'])); c.close()
+    # _SEDE_VISTA_V1 (23-nov-2026): selector de sede para quien ve las dos sedes
+    SELV = "() => { const s = document.getElementById('sedeVistaSel'); return s ? Array.from(s.options).map(o => o.textContent).join('|') + '#' + s.value : 'SIN'; }"
+    SEDEV['sede'] = 'TODO'; SEDEV['usuario'] = 'jtimoteo'; SEDEV['cab'].clear()
+    PERMX['resp'] = {'success': True, 'permisos': PF, 'vacio': False, 'usuario': 'jtimoteo', 'fuente': 'azure'}
+    c, pg, errs = sesion_perm('jtimoteo'); pg.wait_for_timeout(2500)
+    sel = pg.evaluate(SELV)
+    ok('Selector de sede: quien ve las dos sedes tiene el selector (Ambas / Piura / Olmos) y, sin elegir, ninguna consulta lleva la cabecera', sel == 'Sede: Ambas|Sede: Piura|Sede: Olmos#' and len(SEDEV['cab']) > 0 and not any(SEDEV['cab']), sel + ' | consultas: ' + str(len(SEDEV['cab'])) + ' con cabecera: ' + str(len([x for x in SEDEV['cab'] if x])))
+    SEDEV['cab'].clear()
+    with pg.expect_navigation(): pg.select_option('#sedeVistaSel', 'OLMOS')
+    pg.wait_for_timeout(9500); sel = pg.evaluate(SELV)
+    ok('Selector de sede: al elegir Olmos la pagina se recarga y TODAS las consultas al servidor llevan x-rl-sede: OLMOS', sel.endswith('#OLMOS') and len(SEDEV['cab']) > 0 and all(x == 'OLMOS' for x in SEDEV['cab']), sel + ' | consultas: ' + str(len(SEDEV['cab'])) + ' distintas: ' + ','.join(sorted(set(SEDEV['cab']))))
+    SEDEV['cab'].clear()
+    with pg.expect_navigation(): pg.select_option('#sedeVistaSel', '')
+    pg.wait_for_timeout(9500); sel = pg.evaluate(SELV)
+    ok('Selector de sede: al volver a Ambas ya no viaja la cabecera', sel.endswith('#') and len(SEDEV['cab']) > 0 and not any(SEDEV['cab']), sel + ' | con cabecera: ' + str(len([x for x in SEDEV['cab'] if x])))
+    ok('Selector de sede: sin errores de JavaScript', not errs, '; '.join(errs[:3])); c.close()
+    SEDEV['sede'] = 'PIURA'; SEDEV['usuario'] = 'fpulache'; SEDEV['cab'].clear()
+    PERMX['resp'] = {'success': True, 'permisos': PF, 'vacio': False, 'usuario': 'fpulache', 'fuente': 'azure'}
+    c, pg, errs = sesion_perm('fpulache'); pg.wait_for_timeout(2500)
+    ok('Selector de sede: un usuario de una sola sede NO ve el selector y sus consultas no llevan la cabecera', pg.evaluate(SELV) == 'SIN' and len(SEDEV['cab']) > 0 and not any(SEDEV['cab']) and not errs, pg.evaluate(SELV) + ' | ' + '; '.join(errs[:2]))
+    pg.evaluate("() => { sessionStorage.setItem('rl_sede_vista', 'OLMOS'); sessionStorage.removeItem('rl_sede_real'); }")   # eleccion que quedo de otro usuario en la misma pestaña
+    pg.reload(wait_until='load'); pg.wait_for_timeout(12000); SEDEV['cab'].clear(); pg.wait_for_timeout(500)
+    v = pg.evaluate("() => sessionStorage.getItem('rl_sede_vista')")
+    ok('Selector de sede: una eleccion que quedo en la pestaña se borra sola si el usuario es de una sola sede', v is None and pg.evaluate(SELV) == 'SIN', str(v)); c.close()
+    SEDEV['sede'] = None; SEDEV['cab'].clear()
+    PERMX['resp'] = {'success': True, 'permisos': PF, 'vacio': False, 'usuario': 'fpulache', 'fuente': 'azure'}
     # 2) Azure y Google fallan, sin permisos previos -> solo lo basico
     ACC['modo'] = 'caido'; PERMX['gas_falla'] = True
     c, pg, errs = sesion_perm('fpulache')

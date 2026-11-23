@@ -177,5 +177,42 @@
     } catch (e) {}
   }
   etiquetaSede(0);
+
+  /* _SEDE_VISTA_V1 (23-nov-2026, aprobado por Joel): selector "Sede: Ambas / Piura / Olmos" en la barra superior, SOLO para
+     quien ve las dos sedes (lo dice el servidor: auth/sso -> sede TODO; se recuerda en la pestaña). Al cambiar, la pagina
+     se vuelve a cargar y todo lo que el servidor filtra por sede sale de la sede elegida (sede-vista.js manda la cabecera). */
+  function dibujarSelector() {
+    try {
+      if (document.getElementById('sedeVistaSel') || !window.RLSedeVista) return;
+      var tbE = document.getElementById('tbE'); if (!tbE || !tbE.parentNode) return;
+      var sel = document.createElement('select'); sel.id = 'sedeVistaSel'; sel.title = 'Sede que quieres ver';
+      sel.style.cssText = 'margin-right:8px;padding:3px 8px;border-radius:999px;border:1px solid #bae6fd;background:#e0f2fe;color:#075985;font-size:11.5px;font-weight:700;cursor:pointer';
+      [['', 'Sede: Ambas'], ['PIURA', 'Sede: Piura'], ['OLMOS', 'Sede: Olmos']].forEach(function (o) { var op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; sel.appendChild(op); });
+      sel.value = window.RLSedeVista.get();
+      if (sel.value === 'OLMOS') { sel.style.background = '#ffedd5'; sel.style.color = '#9a3412'; sel.style.borderColor = '#fdba74'; }
+      sel.addEventListener('change', function () { window.RLSedeVista.set(sel.value); });
+      tbE.parentNode.insertBefore(sel, tbE);
+    } catch (e) {}
+  }
+  function selectorSede(intento) {
+    try {
+      var U = usuarioSesion();
+      if (!U || !U.usuario) { if ((intento || 0) < 40) setTimeout(function () { selectorSede((intento || 0) + 1); }, 1500); return; }
+      var u = String(U.usuario).toLowerCase(), real = '';
+      try { var g = JSON.parse(sessionStorage.getItem('rl_sede_real') || 'null'); if (g && g.u === u) real = g.s; } catch (e) {}
+      if (real) { if (real === 'TODO') dibujarSelector(); else if (window.RLSedeVista && window.RLSedeVista.get()) window.RLSedeVista.set(''); return; }
+      var tk = null; try { tk = sessionStorage.getItem('rl_token'); } catch (e) {}
+      if (!tk) return;
+      fetch('https://rl-fn-verfrut.azurewebsites.net/api/auth/sso', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'sesion', token: tk }) })   /* azure-token.js lo dirige a Supabase */
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          var s = j && j.success && j.user && String(j.user.usuario || '').toLowerCase() === u ? String(j.user.sede || '') : '';
+          if (!s) return;
+          try { sessionStorage.setItem('rl_sede_real', JSON.stringify({ u: u, s: s })); } catch (e) {}
+          if (s === 'TODO') dibujarSelector(); else if (window.RLSedeVista && window.RLSedeVista.get()) window.RLSedeVista.set('');
+        }).catch(function () {});
+    } catch (e) {}
+  }
+  selectorSede(0);
   console.log('[_SEDE_OLMOS_V1] listo: sede Piura / Olmos en atenciones y estadísticas');
 })();

@@ -118,7 +118,7 @@ module.exports = async function (context, req) {
       let sedeU = '';
       try {
         const { getPool } = require('../shared/db'); const SDS = require('../shared/sede');
-        sedeU = await Promise.race([getPool().then(p => SDS.modo(p, { usuario: String(d.usuario).toLowerCase() })), new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 4000))]);
+        sedeU = await Promise.race([getPool().then(p => SDS.modoReal(p, { usuario: String(d.usuario).toLowerCase() })), new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 4000))]);
       } catch (e) { sedeU = ''; }
       return out(200, { success: true, user: { usuario: String(d.usuario).toLowerCase(), rol: d.rol || '', accesos: await accesosDe(String(d.usuario).toLowerCase()), sede: sedeU || '' } });   /* _ACCESOS_CENTRAL_V1 */
     }
