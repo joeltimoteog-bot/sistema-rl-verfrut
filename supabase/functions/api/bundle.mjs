@@ -79917,6 +79917,30 @@ var require_mod = __commonJS({
     var TH = require_tablas_hoja();
     var TABLAS = { horas: ["horas_registros", "horas_motivos"], cap: ["cap_cabeceras", "cap_asistentes"], fus: ["fus_buses"], sol: ["sol_edicion"] };
     var FUSG = require_fus_guardar();
+    var SD = require_sede();
+    var TXT = (v) => esDsd(v) ? v.$s : v == null ? "" : String(v);
+    function esDsd(v) {
+      return !!(v && typeof v === "object" && typeof v.$d === "string");
+    }
+    async function sedeMod(pool, req) {
+      const u = req && req._sedeU;
+      if (!u || !u.usuario) return null;
+      const modo = await SD.modo(pool, { usuario: u.usuario });
+      if (modo === "TODO") return null;
+      const o = await SD.olmos(pool);
+      return { modo, o, firma: modo + ":" + o.usuarios.join(",") };
+    }
+    var COLS_SD = { empresa: "empresa", fundo: null, usuario: "usuario", supervisor: null };
+    var deSede = (sd, empresa, usuario) => SD.esOlmos({ empresa: TXT(empresa), usuario: TXT(usuario) }, sd.o, COLS_SD) === (sd.modo === "OLMOS");
+    function colDe(enc, nombre) {
+      for (let i = 0; i < (enc || []).length; i++) if (TXT(enc[i]).trim().toUpperCase() === nombre) return i;
+      return -1;
+    }
+    function hdrDeSede(sd, hdr) {
+      if (!sd || !hdr || hdr.length < 2) return hdr;
+      const iE = colDe(hdr[0], "EMPRESA"), iC = colDe(hdr[0], "CREADA_POR");
+      return [hdr[0]].concat(hdr.slice(1).filter((r) => deSede(sd, iE >= 0 ? r[iE] : "", iC >= 0 ? r[iC] : "")));
+    }
     var SOLG = require_sol_guardar();
     var esD = (v) => !!(v && typeof v === "object" && typeof v.$d === "string");
     var J = (v) => esD(v) ? v.$d : v;
@@ -79957,7 +79981,7 @@ var require_mod = __commonJS({
         _estadoCrudo: J(r[20])
       };
     }
-    async function desdeTablas(pool, modulo, D) {
+    async function desdeTablas(pool, modulo, D, sd) {
       if (modulo === "horas") {
         const reg = await TH.leer(pool, "horas_registros"), mot = await TH.leer(pool, "horas_motivos");
         if (!reg || !mot) return false;
@@ -79976,19 +80000,25 @@ var require_mod = __commonJS({
         if (!h) return false;
         const est = (await pool.request().input("k", sql.NVarChar(40), "cap_asistentes").query("SELECT marca FROM dbo.TH_Estado WHERE clave = @k")).recordset[0];
         if (!est || !est.marca) return false;
-        const r = await pool.request().query(`
+        const rqA = pool.request();
+        let wSd = "";
+        if (sd) {
+          const cnd = SD.condOlmos(rqA, sd.o, { empresa: "empresa", fundo: null, usuario: "creada_por", supervisor: null }, "sc");
+          wSd = " AND " + (sd.modo === "OLMOS" ? cnd : "NOT " + cnd);
+        }
+        const r = await rqA.query(`
       SELECT COUNT(*) AS total,
         SUM(CASE WHEN UPPER(ISNULL(empresa, '')) LIKE '%RAPEL%' THEN 1 ELSE 0 END) AS rapel,
         SUM(CASE WHEN UPPER(ISNULL(empresa, '')) NOT LIKE '%RAPEL%' AND UPPER(ISNULL(empresa, '')) LIKE '%VERFRUT%' THEN 1 ELSE 0 END) AS verfrut
-      FROM dbo.Cap_Asistentes WHERE ISNULL(id_capacitacion, '') <> '';
+      FROM dbo.Cap_Asistentes WHERE ISNULL(id_capacitacion, '') <> ''${wSd};
       SELECT CONVERT(varchar(7), DATEADD(hour, -5, fecha_capacitacion), 126) AS ym, COUNT(*) AS n
-      FROM dbo.Cap_Asistentes WHERE ISNULL(id_capacitacion, '') <> '' AND fecha_capacitacion IS NOT NULL
+      FROM dbo.Cap_Asistentes WHERE ISNULL(id_capacitacion, '') <> '' AND fecha_capacitacion IS NOT NULL${wSd}
       GROUP BY CONVERT(varchar(7), DATEADD(hour, -5, fecha_capacitacion), 126);`);
         const porMes = {};
         r.recordsets[1].forEach((x) => {
           porMes[x.ym] = x.n;
         });
-        D.hdr = [h.encabezado].concat(h.filas);
+        D.hdr = hdrDeSede(sd, [h.encabezado].concat(h.filas));
         D.bbdd = null;
         D.bbddAgg = { total: r.recordsets[0][0].total, rapel: r.recordsets[0][0].rapel, verfrut: r.recordsets[0][0].verfrut, porMes };
         return true;
@@ -80027,14 +80057,16 @@ var require_mod = __commonJS({
       /* _RESP_AZURE_V1 (06-oct) */
     };
     var cache = {};
-    async function datos(modulo) {
+    async function datos(modulo, sd) {
       const pool = await getPool();
       await M.asegurarTablas(pool);
       const v = await pool.request().input("m", sql.NVarChar(40), modulo).query("SELECT CONVERT(VARCHAR(30), MAX(actualizado), 126) AS v, COUNT(*) AS n FROM dbo.MOD_Datos WHERE modulo = @m");
       let ver = (v.recordset[0].v || "") + "#" + v.recordset[0].n;
       if (TABLAS[modulo]) ver += "#" + await TH.marcas(pool, TABLAS[modulo]);
       if (modulo === "horas") ver += "#p" + Math.floor(Date.now() / 6e5);
-      const c = cache[modulo];
+      const kSd = modulo + (sd ? "|" + sd.modo : "");
+      if (sd) ver += "#s" + sd.firma;
+      const c = cache[kSd];
       if (c && c.ver === ver) return c.m;
       const r = await pool.request().input("m", sql.NVarChar(40), modulo).query("SELECT clave, datos FROM dbo.MOD_Datos WHERE modulo = @m AND NOT (modulo = 'cap' AND clave = 'bbdd')");
       const D = {};
@@ -80043,14 +80075,24 @@ var require_mod = __commonJS({
       });
       if (TABLAS[modulo]) {
         try {
-          D._tablas = await desdeTablas(pool, modulo, D);
+          D._tablas = await desdeTablas(pool, modulo, D, sd);
         } catch (e) {
           D._tablas = false;
         }
       }
       if ((M.CLAVES[modulo] || []).some((k) => D[k] === void 0)) return null;
+      if (sd) {
+        if (modulo === "horas" && Array.isArray(D.registros)) D.registros = D.registros.filter((r2) => deSede(sd, r2.empresa, r2.registradoPor));
+        if (modulo === "cap") {
+          if (!D._tablas) D.hdr = hdrDeSede(sd, D.hdr);
+          if (Array.isArray(D.bbdd) && D.bbdd.length > 1) {
+            const iE = colDe(D.bbdd[0], "EMPRESA"), iC = colDe(D.bbdd[0], "CREADA_POR");
+            D.bbdd = [D.bbdd[0]].concat(D.bbdd.slice(1).filter((r2) => deSede(sd, iE >= 0 ? r2[iE] : "", iC >= 0 ? r2[iC] : "")));
+          }
+        }
+      }
       const m = HANDLERS[modulo].crear(D);
-      cache[modulo] = { ver, m };
+      cache[kSd] = { ver, m };
       return m;
     }
     var _enCurso = /* @__PURE__ */ new Map();
@@ -80077,9 +80119,10 @@ var require_mod = __commonJS({
         return;
       }
       const modulo = context.bindingData.modulo, accion = context.bindingData.accion;
+      req._sedeU = _uSeg && _uSeg.usuario && !_uSeg.interno ? { usuario: _uSeg.usuario } : null;
       let clave = "";
       try {
-        clave = modulo + "/" + accion + "|" + JSON.stringify(req.body || {}).slice(0, 2e3);
+        clave = modulo + "/" + accion + "|" + SD.vistaPedida() + "|" + JSON.stringify(req.body || {}).slice(0, 2e3);
       } catch (e) {
         clave = "";
       }
@@ -80120,10 +80163,19 @@ var require_mod = __commonJS({
           if (!h2.startsWith("Bearer ")) require_auth().anotarSinToken(req, "sin-token");
         } catch (e) {
         }
+        let sd = null;
+        if (modulo === "horas" || modulo === "cap") {
+          try {
+            sd = await sedeMod(await getPool(), req);
+          } catch (eSd) {
+            context.res = { status: 503, body: { success: false, error: "No se pudo determinar tu sede en este momento. Intenta de nuevo en unos segundos." } };
+            return;
+          }
+        }
         if (modulo === "cap" && accion === "listarCapacitaciones") {
           const cab = await TH.leer(await getPool(), "cap_cabeceras");
           if (cab) {
-            const out2 = require_mod_cap().crear({ hdr: [cab.encabezado].concat(cab.filas) }).capListar(req.body || {});
+            const out2 = require_mod_cap().crear({ hdr: hdrDeSede(sd, [cab.encabezado].concat(cab.filas)) }).capListar(req.body || {});
             out2.fuente = "azure";
             context.res = { status: 200, body: out2 };
             return;
@@ -80135,6 +80187,10 @@ var require_mod = __commonJS({
           if (!out2) {
             context.res = { status: 503, body: { success: false, error: "Capacitaciones aun no cargadas en Azure" } };
             return;
+          }
+          if (sd && Array.isArray(out2.data)) {
+            out2.data = out2.data.filter((x) => deSede(sd, x.EMPRESA, x.CREADA_POR));
+            out2.total = out2.data.length;
           }
           out2.fuente = "azure";
           out2.ms = Date.now() - t0;
@@ -80156,7 +80212,7 @@ var require_mod = __commonJS({
           context.res = { status: 200, body: out2 };
           return;
         }
-        const m = await datos(modulo);
+        const m = await datos(modulo, sd);
         if (!m) {
           context.res = { status: 503, body: { success: false, error: "Modulo aun no migrado a Azure" } };
           return;
