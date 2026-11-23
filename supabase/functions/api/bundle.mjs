@@ -78404,13 +78404,20 @@ var require_kpi_admin = __commonJS({
           for (let i = 0; i < filas.length; i += 300) {
             const lote = filas.slice(i, i + 300).map((f) => [parseInt(f[0], 10), parseInt(f[1], 10), String(f[2] || "").slice(0, 16)]).filter((f) => f[0] > 2e3 && f[1] > 0 && /^\d{4}-\d{2}-\d{2}( \d{2}:\d{2})?$/.test(f[2]));
             if (!lote.length) continue;
-            const r = await pool.request().input("j", sql.NVarChar(sql.MAX), JSON.stringify(lote)).query(`
+            const SQL_LOTE = sql._pg ? `
+          INSERT INTO KPI_AtRegistro (anio, nro, fecha_registro, fuente)
+          SELECT t.anio, t.nro, MIN(t.f), 'hoja'
+          FROM (SELECT CAST(v.value->>0 AS int) AS anio, CAST(v.value->>1 AS int) AS nro,
+                       CAST(v.value->>2 AS timestamp(0)) AS f FROM jsonb_array_elements(CAST(@j AS jsonb)) AS v(value)) t
+          WHERE NOT EXISTS (SELECT 1 FROM KPI_AtRegistro x WHERE x.anio = t.anio AND x.nro = t.nro)
+          GROUP BY t.anio, t.nro` : `
           INSERT INTO dbo.KPI_AtRegistro (anio, nro, fecha_registro, fuente)
           SELECT t.anio, t.nro, MIN(t.f), 'hoja'
           FROM (SELECT CAST(JSON_VALUE(v.value, '$[0]') AS INT) AS anio, CAST(JSON_VALUE(v.value, '$[1]') AS INT) AS nro,
                        CAST(JSON_VALUE(v.value, '$[2]') AS DATETIME2(0)) AS f FROM OPENJSON(@j) v) t
           WHERE NOT EXISTS (SELECT 1 FROM dbo.KPI_AtRegistro x WHERE x.anio = t.anio AND x.nro = t.nro)
-          GROUP BY t.anio, t.nro`);
+          GROUP BY t.anio, t.nro`;
+            const r = await pool.request().input("j", sql.NVarChar(sql.MAX), JSON.stringify(lote)).query(SQL_LOTE);
             n += r.rowsAffected[0] || 0;
           }
           return res(200, { success: true, nuevas: n, recibidas: filas.length });
