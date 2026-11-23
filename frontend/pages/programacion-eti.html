@@ -71,6 +71,7 @@
   /* _PROGETI_COLOR_FILA_V1 (23-nov-2026): el tema corporativo global (tema-corp-global.js) pinta las filas pares de TODAS las
      tablas con un gris claro (!important) y al pasar el mouse; eso tapaba el color de la proyeccion en una semana si y otra no
      (se guardaba bien, pero no se veia: SEM 4, 6, 8...). Aqui el color de la celda manda sobre el rayado y sobre el hover. */
+  /* _PROGETI_LOGO_UNIFRUTTI_V1 (23-nov-2026, pedido de Joel): la cabecera del cronograma lleva el logo de Unifrutti (antes el texto "Rapel" / "Verfrut"); la razon social sigue debajo del titulo. */
   html body table tbody tr:nth-child(n) td.t-cap.t-cap{background:var(--cap)!important}
   html body table tbody tr:nth-child(n) td.t-chk.t-chk{background:var(--chk)!important}
   html body table tbody tr:nth-child(n) td.t-ref.t-ref{background:var(--ref)!important}
@@ -536,7 +537,7 @@ function renderAnual(){
     const E=EMPRESAS[e], pl=planDe(y,e);
     const nPlan=Object.keys(pl).length, nProg=Object.keys(pl).filter(k=>{const [c,w]=k.split('|');return (cel[c]||{})[w];}).length;
     const seed=(y===2026&&!nPlan&&SEED_2026[e])?`<button class="btn bp noprint" style="padding:5px 10px;font-size:12px" data-seed="${e}">📥 Cargar proyección 2026 de tu Excel</button>`:'';
-    let h=`<div class="crono"><div class="ch"><div class="lg">${E.logo}</div>
+    let h=`<div class="crono"><div class="ch"><div class="lg"><img src="../images/logo-unifrutti.jpg" alt="Unifrutti" title="Unifrutti" style="max-height:58px;max-width:90%;object-fit:contain;display:block;margin:4px 0"></div>
       <div class="tt">CRONOGRAMA DE CAPACITACIÓN DE BUENAS PRÁCTICAS SOCIALES (ETI)<br><span style="font-size:12px;font-weight:700;color:#475569">${E.nom} · AÑO ${y}</span></div>
       <div class="cd"><div>CÓDIGO:<br>PRG-SC-GH-05</div><div>Uso interno</div><div>N° 001</div></div></div>
       <div class="hint noprint" style="margin:0 0 6px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
