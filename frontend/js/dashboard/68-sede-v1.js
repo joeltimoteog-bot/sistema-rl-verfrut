@@ -164,5 +164,18 @@
     };
     try { apiGet = window.apiGet; } catch (e) {}
   }
+  /* _SEDE_ETIQUETA_V1 (23-nov-2026, pedido de Joel): al ingresar un usuario de empresa OLMOS, el encabezado dice "Sede Olmos"
+     (junto al cargo, en la bienvenida y en la barra superior). Los usuarios de Piura no ven nada nuevo. Solo presentacion. */
+  function etiquetaSede(intento) {
+    try {
+      var U = usuarioSesion(), avR = document.getElementById('avR');
+      if (!U || !U.usuario || !avR || !avR.textContent || avR.textContent === '...') { if ((intento || 0) < 40) setTimeout(function () { etiquetaSede((intento || 0) + 1); }, 1500); return; }
+      if (NS(U.empresa) !== 'OLMOS') return;
+      if (!document.getElementById('sedeEtq')) { var c = document.createElement('span'); c.id = 'sedeEtq'; c.className = 'sede-chip olmos'; c.textContent = 'Sede Olmos'; avR.appendChild(c); }
+      var wR = document.getElementById('wR'); if (wR && wR.textContent.indexOf('Sede Olmos') < 0) wR.textContent = wR.textContent + ' · Sede Olmos';
+      var tbE = document.getElementById('tbE'); if (tbE && NS(tbE.textContent) === 'OLMOS') tbE.textContent = 'SEDE OLMOS';
+    } catch (e) {}
+  }
+  etiquetaSede(0);
   console.log('[_SEDE_OLMOS_V1] listo: sede Piura / Olmos en atenciones y estadísticas');
 })();
