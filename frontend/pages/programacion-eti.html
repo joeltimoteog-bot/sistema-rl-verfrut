@@ -68,6 +68,14 @@
   .leg{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;font-weight:600;color:#475569}
   .sw{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:4px;border:1px solid rgba(0,0,0,.15)}
   .t-cap{background:var(--cap)}.t-chk{background:var(--chk)}.t-ref{background:var(--ref)}.t-ing{background:var(--ing)}.t-fer{background:var(--fer)}
+  /* _PROGETI_COLOR_FILA_V1 (23-nov-2026): el tema corporativo global (tema-corp-global.js) pinta las filas pares de TODAS las
+     tablas con un gris claro (!important) y al pasar el mouse; eso tapaba el color de la proyeccion en una semana si y otra no
+     (se guardaba bien, pero no se veia: SEM 4, 6, 8...). Aqui el color de la celda manda sobre el rayado y sobre el hover. */
+  html body table tbody tr:nth-child(n) td.t-cap.t-cap{background:var(--cap)!important}
+  html body table tbody tr:nth-child(n) td.t-chk.t-chk{background:var(--chk)!important}
+  html body table tbody tr:nth-child(n) td.t-ref.t-ref{background:var(--ref)!important}
+  html body table tbody tr:nth-child(n) td.t-ing.t-ing{background:var(--ing)!important}
+  html body table tbody tr:nth-child(n) td.t-fer.t-fer{background:var(--fer)!important}
   .turnos{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
   .turnos td,.turnos th{border:1px solid var(--bd);padding:4px 6px;text-align:center}
   .turnos th{background:#f8fafc;color:var(--az)}
