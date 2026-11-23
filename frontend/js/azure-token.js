@@ -71,6 +71,44 @@
       var m = /[?&]action=([^&#]+)/.exec(url); return m ? decodeURIComponent(m[1]) : '';
     } catch (e) { return ''; }
   }
+  /* ═══ _SIN_GOOGLE_V1 (23-nov-2026, decision de Joel: "todo debe ir con Supabase", Olmos y Piura a la vez) ═══
+     Las acciones de la lista SG_CERRADAS ya salen de Supabase y Google era solo su respaldo: para ellas la consulta a Google
+     no sale y la pantalla recibe "el servidor no respondio, intenta de nuevo".
+     (La hoja de Google no conoce las sedes y sus datos ya no son los vigentes.)
+     Ademas se MIDE todo lo que todavia va a Google (accion por usuario y dia, en Actividad: sistema "google-rrll"),
+     para saber que falta pasar a Supabase. La lista crece conforme se confirma cada modulo.
+     Apagar el cierre: localStorage.rl_sin_google = 'off' · apagar la medicion: localStorage.rl_mide_google = 'off'. */
+  /* 23-nov: la lista empieza VACIA a proposito. La prueba automatica mostro que al menos Mantenimiento (listar) e Inventario
+     todavia dependen de Google por si solos: cerrarlos a ciegas los habria roto. Primero se mide; con el dato real se llena.
+     Candidatas ya identificadas como solo-respaldo: buscarTrabajador, horasListar, horasResumenIndividual, horasResumenGeneral,
+     horasListarMotivos, listarCapacitaciones, estadisticasCapacitaciones, exportarCapacitaciones, getFusiones, getSolicitudes,
+     getMotivosCasos, getSupervisores, getEstadisticasAdmin, getSolicitudesAcceso, getResponsablesEnRango. */
+  var SG_CERRADAS = {};
+  var SG_MSG = 'El servidor no respondió. Revisa tu conexión e intenta de nuevo en unos segundos.';
+  function sgMedir(accion, cerrada) {
+    try {
+      if (!accion || localStorage.getItem('rl_mide_google') === 'off') return;
+      var tk = sessionStorage.getItem('rl_token'); if (!tk) return;
+      var k = accion + (cerrada ? ' (cerrada)' : ''), m = {};
+      try { m = JSON.parse(sessionStorage.getItem('rl_sg_m') || '{}') || {}; } catch (e) { m = {}; }
+      if (Date.now() - (m[k] || 0) < 600000) return;   /* una anotacion por accion cada 10 minutos */
+      m[k] = Date.now(); try { sessionStorage.setItem('rl_sg_m', JSON.stringify(m)); } catch (e) {}
+      fOrig.call(window, rg(EDGE + 'actividad/ingreso'), { method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tk },
+        body: JSON.stringify({ sistema: 'google-rrll', modulo: k.slice(0, 80) }) }).catch(function () {});
+    } catch (e) {}
+  }
+  function cierreGoogle(url, init) {
+    try {
+      if (url.indexOf(GAS_RRLL) < 0) return null;
+      var a = accionGas(url, init), cerrar = false;
+      try { cerrar = !!SG_CERRADAS[a] && !MODO_GOOGLE && localStorage.getItem('rl_sin_google') !== 'off'; } catch (e) { cerrar = false; }
+      sgMedir(a, cerrar);
+      if (!cerrar) return null;
+      try { console.warn('[_SIN_GOOGLE_V1] ' + a + ': el respaldo en Google esta cerrado (todo va con Supabase)'); } catch (e) {}
+      var cuerpo = JSON.stringify({ success: false, sin_respaldo: true, error: SG_MSG, message: SG_MSG });
+      try { return new Response(cuerpo, { status: 200, headers: { 'Content-Type': 'application/json' } }); } catch (e) { return null; }
+    } catch (e) { return null; }
+  }
   function bloqueoSinLlave(url, init) {
     try {
       if (url.indexOf(GAS_RRLL) < 0) return false;
@@ -226,6 +264,7 @@
       /* _FASE4_DIRECTO_V1 (05-nov): las fotos y PDF (action subirArchivoAzure) se suben DIRECTO a Supabase Storage
          con la sesion del usuario, sin pasar por Apps Script. Misma respuesta { success, enlace, url }.
          Si Supabase falla, la MISMA llamada sigue a Apps Script como siempre. */
+      if (typeof input === 'string' && url.indexOf(MARCA_GAS) >= 0) { var cSG = cierreGoogle(url, init); if (cSG) return Promise.resolve(cSG); }   /* _SIN_GOOGLE_V1 */
       if (typeof input === 'string' && url.indexOf(MARCA_GAS) >= 0 && EDGE_ACTIVO && !edgePausado() && init && !init._rlSinEdge && typeof init.body === 'string' && init.body.indexOf('subirArchivoAzure') >= 0) {
         var tkS = null; try { tkS = sessionStorage.getItem('rl_token'); } catch (e) {}
         var cuerpoS = null; try { cuerpoS = JSON.parse(init.body); } catch (e) {}
