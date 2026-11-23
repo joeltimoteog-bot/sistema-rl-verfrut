@@ -112,7 +112,15 @@ module.exports = async function (context, req) {
       try { d = jwt.verify(String(body.token || ''), secret); }
       catch (e) { return out(401, { success: false, error: 'Sesion invalida o vencida' }); }
       if (d.aud === AUD_PASE || !d.usuario) return out(401, { success: false, error: 'Token no valido' });
-      return out(200, { success: true, user: { usuario: String(d.usuario).toLowerCase(), rol: d.rol || '', accesos: await accesosDe(String(d.usuario).toLowerCase()) } });   /* _ACCESOS_CENTRAL_V1 */
+      /* _SSO_SEDE_V1 (23-nov-2026, decision de Joel: "nadie de Olmos debe ver lo de Piura"): la respuesta dice la sede del usuario
+         (OLMOS / PIURA / TODO) para que el Apps Script de Bienestar la guarde en su sesion y cierre las acciones de datos a quien es
+         de Olmos. Si la base no responde en 4 s va vacia y todo sigue como antes. */
+      let sedeU = '';
+      try {
+        const { getPool } = require('../shared/db'); const SDS = require('../shared/sede');
+        sedeU = await Promise.race([getPool().then(p => SDS.modo(p, { usuario: String(d.usuario).toLowerCase() })), new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 4000))]);
+      } catch (e) { sedeU = ''; }
+      return out(200, { success: true, user: { usuario: String(d.usuario).toLowerCase(), rol: d.rol || '', accesos: await accesosDe(String(d.usuario).toLowerCase()), sede: sedeU || '' } });   /* _ACCESOS_CENTRAL_V1 */
     }
 
     return out(400, { success: false, error: 'Accion no valida' });

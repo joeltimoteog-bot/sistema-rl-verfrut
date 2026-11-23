@@ -65958,7 +65958,15 @@ var require_auth_sso = __commonJS({
             return out(401, { success: false, error: "Sesion invalida o vencida" });
           }
           if (d.aud === AUD_PASE || !d.usuario) return out(401, { success: false, error: "Token no valido" });
-          return out(200, { success: true, user: { usuario: String(d.usuario).toLowerCase(), rol: d.rol || "", accesos: await accesosDe(String(d.usuario).toLowerCase()) } });
+          let sedeU = "";
+          try {
+            const { getPool } = require_db();
+            const SDS = require_sede();
+            sedeU = await Promise.race([getPool().then((p) => SDS.modo(p, { usuario: String(d.usuario).toLowerCase() })), new Promise((_, rj) => setTimeout(() => rj(new Error("timeout")), 4e3))]);
+          } catch (e) {
+            sedeU = "";
+          }
+          return out(200, { success: true, user: { usuario: String(d.usuario).toLowerCase(), rol: d.rol || "", accesos: await accesosDe(String(d.usuario).toLowerCase()), sede: sedeU || "" } });
         }
         return out(400, { success: false, error: "Accion no valida" });
       } catch (e) {
