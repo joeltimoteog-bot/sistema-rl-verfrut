@@ -440,7 +440,11 @@ module.exports = async function (context, req) {
     }
     if (accion === 'permisos') {   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026): permisos de Bienestar decididos en el servidor ("Acceso a Modulos" del RR.LL.), para que el portal de Bienestar los use en vez de la hoja Usuarios congelada */
       const P = await permisosBS(u, q);
-      return res(200, { ok: true, success: true, usuario: String((u && u.usuario) || '').toLowerCase(), esAdmin: P.esAdmin, permisos: P.permisos, fuente: P.fuente });
+      /* _BS_SEDE_PERMISOS_V1 (23-nov-2026, decision de Joel: "nadie de Olmos debe ver lo de Piura"): la respuesta dice la sede del
+         usuario (OLMOS / PIURA / TODO) para que las pantallas de Bienestar cierren los respaldos a Google a quien es de Olmos.
+         Si la sede no se puede leer, va vacia y los permisos se entregan igual (no se afecta a nadie). */
+      let sedeP = ''; try { sedeP = await SD.modo(pool, (u && u.usuario) ? { usuario: u.usuario } : null); } catch (e) { sedeP = ''; }
+      return res(200, { ok: true, success: true, usuario: String((u && u.usuario) || '').toLowerCase(), esAdmin: P.esAdmin, permisos: P.permisos, fuente: P.fuente, sede: sedeP });
     }
     if (accion === 'tabla') {
       const clave = String(q.clave || ''); if (CLAVES.indexOf(clave) < 0) return res(400, { success: false, error: 'clave desconocida' });

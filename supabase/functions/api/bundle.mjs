@@ -68317,7 +68317,13 @@ var require_bs = __commonJS({
         }
         if (accion === "permisos") {
           const P = await permisosBS(u, q);
-          return res(200, { ok: true, success: true, usuario: String(u && u.usuario || "").toLowerCase(), esAdmin: P.esAdmin, permisos: P.permisos, fuente: P.fuente });
+          let sedeP = "";
+          try {
+            sedeP = await SD.modo(pool, u && u.usuario ? { usuario: u.usuario } : null);
+          } catch (e) {
+            sedeP = "";
+          }
+          return res(200, { ok: true, success: true, usuario: String(u && u.usuario || "").toLowerCase(), esAdmin: P.esAdmin, permisos: P.permisos, fuente: P.fuente, sede: sedeP });
         }
         if (accion === "tabla") {
           const clave = String(q.clave || "");
