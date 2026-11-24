@@ -920,7 +920,13 @@ function esPrimerDiaDeSemanaEnMes(fecha){
   for(let i=1;i<=5;i++){const p=new Date(d);p.setDate(d.getDate()-i);if(p.getDay()===0)break;if(p.getMonth()===d.getMonth()&&esHabil(p))return false;}
   return true;
 }
+/* _PROGETI_CAL_SIN_PROYECCION_V1 (23-nov-2026, decision de Joel): el Calendario (ejecucion) muestra SOLO lo programado con
+   fecha. La proyeccion por semana vive en el Cronograma anual (presentacion a gerencia); ya no se dibuja en el calendario
+   como "proyectado". El boton + de cada dia sigue ofreciendo los sectores proyectados esa semana para ponerles fecha.
+   Volver a mostrarla: CAL_PROYECCION_VISIBLE = true. */
+var CAL_PROYECCION_VISIBLE=false;   /* var a proposito: si el calendario se dibuja antes de esta linea, vale como apagado */
 function fantasmasDe(fecha,d){
+  if(!CAL_PROYECCION_VISIBLE)return '';
   if(!esPrimerDiaDeSemanaEnMes(fecha))return '';
   const pend=pendientesSemana(fecha);if(!pend.length)return '';
   const vis=pend.slice(0,3);
