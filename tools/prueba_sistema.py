@@ -473,14 +473,14 @@ with sync_playwright() as pw:
     ok('Fusiones, Solicitudes y Motivos salen de Azure (no de Google)', r == 'azure,azure,azure' and not any(a in RED['google'] for a in ['getFusiones', 'getSolicitudes', 'getMotivosCasos']), r + ' | google: ' + ','.join(RED['google']))
     MODX['modo'] = 'caido'; RED['google'].clear()
     r = pag.evaluate("""async () => { const d = await apiGet({action:'getFusiones', usuario:'TODOS'}); return d && d.success ? 'OK' : 'ERROR'; }""")
-    ok('Fusiones: con Azure caido, sale de Google', r == 'OK' and 'getFusiones' in RED['google'], r)
+    ok('Fusiones: con Supabase caido NO se consulta a Google (respaldo cerrado, _SIN_GOOGLE_V1) y la pantalla recibe el aviso', r == 'ERROR' and 'getFusiones' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     # ── Estadisticas Admin desde Azure (_ESTADM_AZURE_V1) ──
     MODX['modo'] = 'ok'; RED['google'].clear(); MODX['llamadas'].clear()
     r = pag.evaluate("""async () => { const d = await apiGet({action:'getEstadisticasAdmin', empresa:'', mes:'', supervisor:'', rol:'administrador'}); return (d && d.fuente) + ':' + (d && d.data && d.data.stats.atenciones.total); }""")
     ok('Estadisticas Admin (dashboard) salen de Azure', r == 'azure:5' and 'getEstadisticasAdmin' not in RED['google'] and 'estadm/getEstadisticasAdmin' in MODX['llamadas'], r + ' | google: ' + ','.join(RED['google']))
     MODX['modo'] = 'caido'; RED['google'].clear()
     r = pag.evaluate("""async () => { const d = await apiGet({action:'getEstadisticasAdmin', empresa:'', mes:'', supervisor:''}); return d && d.success ? 'OK' : 'ERROR'; }""")
-    ok('Estadisticas Admin: con Azure caido, sale de Google', r == 'OK' and 'getEstadisticasAdmin' in RED['google'], r)
+    ok('Estadisticas Admin: con Supabase caido NO se consulta a Google (respaldo cerrado, _SIN_GOOGLE_V1)', r == 'ERROR' and 'getEstadisticasAdmin' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     MODX['modo'] = 'ok'
     RED['google'].clear()
     # ── Fusiones: primero en Azure (_FUS_AZURE_V1) ──
@@ -971,7 +971,14 @@ with sync_playwright() as pw:
     ok('Bienvenida Olmos: un usuario de Piura no la ve', not pg.evaluate("() => !!document.getElementById('boOv')"))
     RED['google'].clear()
     r = pg.evaluate("""async () => { const b = await apiGet({action: 'buscarTrabajador', q: 'juan', empresa: 'AMBAS'}); return String(b && b.fuente); }""")
-    ok('Sede Olmos: para un usuario de Piura el respaldo en Google sigue igual', r != 'sede' and 'buscarTrabajador' in RED['google'], r + ' | google: ' + ','.join(RED['google'])); c.close()
+    ok('Busqueda de trabajadores: el respaldo en Google esta cerrado para todos (Piura incluido, _SIN_GOOGLE_V1)', r != 'sede' and 'buscarTrabajador' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    RED['google'].clear()
+    r = pg.evaluate("""async () => { try { const b = await apiGet({action: 'accionDePruebaSinCierre'}); return String(!!b); } catch (e) { return 'exc'; } }""")
+    ok('Retiro de Google: una accion que NO esta en la lista de cierre sigue llegando a Google', 'accionDePruebaSinCierre' in RED['google'], r + ' | google: ' + ','.join(RED['google']))
+    pg.evaluate("() => localStorage.setItem('rl_sin_google', 'off')"); RED['google'].clear()
+    pg.evaluate("""async () => { try { await apiGet({action: 'buscarTrabajador', q: 'juan', empresa: 'AMBAS'}); } catch (e) {} }""")
+    ok('Retiro de Google: con el interruptor rl_sin_google=off la consulta vuelve a salir a Google', 'buscarTrabajador' in RED['google'], ','.join(RED['google']))
+    pg.evaluate("() => localStorage.removeItem('rl_sin_google')"); c.close()
     # _SEDE_VISTA_V1 (23-nov-2026): selector de sede para quien ve las dos sedes
     SELV = "() => { const s = document.getElementById('sedeVistaSel'); return s ? Array.from(s.options).map(o => o.textContent).join('|') + '#' + s.value : 'SIN'; }"
     SEDEV['sede'] = 'TODO'; SEDEV['usuario'] = 'jtimoteo'; SEDEV['cab'].clear()
@@ -1085,7 +1092,7 @@ with sync_playwright() as pw:
     ok('Capacitaciones: el export (y Fecha anterior) sale de Azure', r['r'] == 'OK' and 'exportarCapacitaciones' not in RED['google'] and 'cap/exportarCapacitaciones' in MODX['llamadas'], r['r'])   # _CAP_EXPORT_AZURE_V1
     MODX['modo'] = 'caido'; RED['google'].clear()
     r = pag.evaluate(CARRERA, {'action': 'listarCapacitaciones', 'rol': 'administrador'})
-    ok('Capacitaciones: con Azure caido, sale de Google', r['r'] == 'OK' and 'listarCapacitaciones' in RED['google'], r['r'])
+    ok('Capacitaciones: con Supabase caido NO se consulta a Google (respaldo cerrado, _SIN_GOOGLE_V1)', r['r'] != 'OK' and 'listarCapacitaciones' not in RED['google'], r['r'] + ' | google: ' + ','.join(RED['google']))
     MODX['modo'] = 'ok'
     # ── Capacitaciones: guardar primero en Azure (_CAP_AZURE_PRIMERO_V1) ──
     RED['google'].clear(); CAPG['llamadas'].clear(); CAPG['auth'].clear()
@@ -1121,7 +1128,7 @@ with sync_playwright() as pw:
     ok('Pagina Estadisticas: los datos salen de Azure', r == 'azure:true' and 'getEstadisticasAdmin' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     MODX['modo'] = 'caido'; RED['google'].clear()
     r = pag.evaluate("""async () => { const d = await apiGet({action:'getEstadisticasAdmin', empresa:'', anio:'2025'}); return d && d.success ? 'OK' : 'ERROR'; }""")
-    ok('Pagina Estadisticas: con Azure caido, sale de Google', r == 'OK' and 'getEstadisticasAdmin' in RED['google'], r)
+    ok('Pagina Estadisticas: con Supabase caido NO se consulta a Google (respaldo cerrado, _SIN_GOOGLE_V1)', r == 'ERROR' and 'getEstadisticasAdmin' not in RED['google'], r + ' | google: ' + ','.join(RED['google']))
     MODX['modo'] = 'ok'
     ok('Pagina Estadisticas sin errores de JavaScript', not errores, '; '.join(errores[:4]))
     pag.close()

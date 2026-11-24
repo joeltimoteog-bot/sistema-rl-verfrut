@@ -78,12 +78,16 @@
      Ademas se MIDE todo lo que todavia va a Google (accion por usuario y dia, en Actividad: sistema "google-rrll"),
      para saber que falta pasar a Supabase. La lista crece conforme se confirma cada modulo.
      Apagar el cierre: localStorage.rl_sin_google = 'off' · apagar la medicion: localStorage.rl_mide_google = 'off'. */
-  /* 23-nov: la lista empieza VACIA a proposito. La prueba automatica mostro que al menos Mantenimiento (listar) e Inventario
-     todavia dependen de Google por si solos: cerrarlos a ciegas los habria roto. Primero se mide; con el dato real se llena.
-     Candidatas ya identificadas como solo-respaldo: buscarTrabajador, horasListar, horasResumenIndividual, horasResumenGeneral,
-     horasListarMotivos, listarCapacitaciones, estadisticasCapacitaciones, exportarCapacitaciones, getFusiones, getSolicitudes,
-     getMotivosCasos, getSupervisores, getEstadisticasAdmin, getSolicitudesAcceso, getResponsablesEnRango. */
-  var SG_CERRADAS = {};
+  /* 23-nov (noche), primer cierre: 15 lecturas que ya salen de Supabase y donde Google era solo respaldo. Se eligieron con dos
+     evidencias: (1) la prueba automatica muestra que solo iban a Google con Supabase caido; (2) la medicion real del 23-nov
+     (15 usuarios, de 12:30 a 20:30) no registro NINGUNA de ellas yendo a Google.
+     NO se cierran todavia (la pantalla aun depende de Google por si sola o no esta confirmado): listarSolicitudesMantenimiento
+     (Mantenimiento confirma su lista con Google y saca de ahi el correo y el historial), invGetAll (Inventario, por confirmar)
+     y las lecturas que la medicion SI vio ir a Google: getAtencionesOptimizado, getUsuarios, getPreloadOptimizado,
+     horariosListar, getVisitas, permisosListar, cumplPendientes. */
+  var SG_CERRADAS = { buscarTrabajador: 1, horasListar: 1, horasResumenIndividual: 1, horasResumenGeneral: 1, horasListarMotivos: 1,
+    listarCapacitaciones: 1, estadisticasCapacitaciones: 1, exportarCapacitaciones: 1, getFusiones: 1, getSolicitudes: 1, getMotivosCasos: 1,
+    getSupervisores: 1, getEstadisticasAdmin: 1, getSolicitudesAcceso: 1, getResponsablesEnRango: 1 };
   var SG_MSG = 'El servidor no respondió. Revisa tu conexión e intenta de nuevo en unos segundos.';
   function sgMedir(accion, cerrada) {
     try {
