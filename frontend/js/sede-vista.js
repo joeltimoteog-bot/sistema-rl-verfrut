@@ -13,10 +13,10 @@
   if (window._rlSedeVista) return; window._rlSedeVista = true;
   var K = 'rl_sede_vista';
   function vista() { try { var v = String(sessionStorage.getItem(K) || '').toUpperCase(); return (v === 'PIURA' || v === 'OLMOS') ? v : ''; } catch (e) { return ''; } }
-  /* _SEDE_AT_GENERAL_V1 (24-nov-2026, decision de Joel): Mis Atenciones y el Dashboard (que se arma con las atenciones) se ven
-     SIEMPRE de las dos sedes para quien tiene alcance general, elija la sede que elija: las consultas de atenciones no llevan
-     la cabecera. Los demas modulos siguen saliendo de la sede elegida. Apagar: localStorage.rl_sede_at_general = 'off'. */
-  var SIEMPRE_GENERAL = (function () { var off = false; try { off = localStorage.getItem('rl_sede_at_general') === 'off'; } catch (e) {} return off ? /^$/ : /\/api\/atenciones(\/|\?|$)/; })();
+  /* _SEDE_AT_SEGUN_SEDE_V1 (24-nov-2026, decision final de Joel, opcion A): las ATENCIONES tambien salen de la sede elegida
+     (Olmos -> solo Olmos, Piura -> solo Piura, Ambas -> las dos). Lo de "siempre generales" (_SEDE_AT_GENERAL_V1, publicado
+     unas horas) queda apagado; solo se enciende a mano en un navegador con localStorage.rl_sede_at_general = 'on'. */
+  var SIEMPRE_GENERAL = (function () { var on = false; try { on = localStorage.getItem('rl_sede_at_general') === 'on'; } catch (e) {} return on ? /\/api\/atenciones(\/|\?|$)/ : /^$/; })();
   var f = window.fetch;
   if (typeof f === 'function') {
     var envuelto = function (input, init) {

@@ -1004,7 +1004,7 @@ with sync_playwright() as pw:
     with pg.expect_navigation(): pg.click('#sedePregOk')
     pg.wait_for_timeout(9500)
     ok('Pregunta de sede: al elegir Olmos y Continuar la pagina se recarga en Olmos, el cuadro ya no vuelve a salir en esa sesion y las consultas llevan x-rl-sede: OLMOS', marc == 'PIURA|OLMOS*|AMBAS' and pg.evaluate(PREG) == 'SIN' and pg.evaluate(SELV).endswith('#OLMOS') and len(SEDEV['cab']) > 0 and all(x == 'OLMOS' for x in SEDEV['cab']), marc + ' | ' + pg.evaluate(PREG) + ' | ' + pg.evaluate(SELV) + ' | ' + ','.join(sorted(set(SEDEV['cab']))))
-    ok('Sede elegida: Mis Atenciones y el Dashboard siguen generales (las consultas de atenciones NO llevan la cabecera aunque se eligio Olmos)', len(SEDEV['at']) > 0 and not any(SEDEV['at']), 'consultas de atenciones: ' + str(len(SEDEV['at'])) + ' con cabecera: ' + str(len([x for x in SEDEV['at'] if x])))
+    ok('Sede elegida: las atenciones tambien salen de la sede elegida (sus consultas llevan x-rl-sede: OLMOS)', len(SEDEV['at']) > 0 and all(x == 'OLMOS' for x in SEDEV['at']), 'consultas de atenciones: ' + str(len(SEDEV['at'])) + ' distintas: ' + ','.join(sorted(set(SEDEV['at']))))
     pg.evaluate("() => sessionStorage.setItem('rl_sede_preg', 'sesion-anterior')")   # otra sesion (otro token) en la misma pestaña
     pg.reload(wait_until='load'); pg.wait_for_timeout(11000)
     ok('Pregunta de sede: en un ingreso nuevo el cuadro vuelve a salir, con la sede que estaba elegida marcada', pg.evaluate(PREG) == 'PIURA|OLMOS*|AMBAS', pg.evaluate(PREG))
