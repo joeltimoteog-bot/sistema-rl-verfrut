@@ -13,12 +13,16 @@
   if (window._rlSedeVista) return; window._rlSedeVista = true;
   var K = 'rl_sede_vista';
   function vista() { try { var v = String(sessionStorage.getItem(K) || '').toUpperCase(); return (v === 'PIURA' || v === 'OLMOS') ? v : ''; } catch (e) { return ''; } }
+  /* _SEDE_AT_GENERAL_V1 (24-nov-2026, decision de Joel): Mis Atenciones y el Dashboard (que se arma con las atenciones) se ven
+     SIEMPRE de las dos sedes para quien tiene alcance general, elija la sede que elija: las consultas de atenciones no llevan
+     la cabecera. Los demas modulos siguen saliendo de la sede elegida. Apagar: localStorage.rl_sede_at_general = 'off'. */
+  var SIEMPRE_GENERAL = (function () { var off = false; try { off = localStorage.getItem('rl_sede_at_general') === 'off'; } catch (e) {} return off ? /^$/ : /\/api\/atenciones(\/|\?|$)/; })();
   var f = window.fetch;
   if (typeof f === 'function') {
     var envuelto = function (input, init) {
       try {
         var v = vista();
-        if (v && typeof input === 'string' && (input.indexOf('azurewebsites.net/api/') >= 0 || input.indexOf('supabase.co/functions/v1/api') >= 0) && !/\/api\/auth\//.test(input)) {
+        if (v && typeof input === 'string' && (input.indexOf('azurewebsites.net/api/') >= 0 || input.indexOf('supabase.co/functions/v1/api') >= 0) && !/\/api\/auth\//.test(input) && !SIEMPRE_GENERAL.test(input)) {
           var i2 = Object.assign({}, init || {}), h = i2.headers;
           if (typeof Headers !== 'undefined' && h instanceof Headers) { h = new Headers(h); h.set('x-rl-sede', v); }
           else if (Array.isArray(h)) { h = h.concat([['x-rl-sede', v]]); }

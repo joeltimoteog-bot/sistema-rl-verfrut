@@ -24,7 +24,7 @@ AZG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # ok | caido | 503
 ATC = {'urls': [], 'data': [], 'total': None}   # _AT_CAMBIOS_V1
 AZE = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _EDIT_AZURE_PRIMERO_V1  ok | caido | 503 | 403 | 404
 MODX = {'modo': 'ok', 'llamadas': []}
-SEDEV = {'sede': None, 'usuario': '', 'cab': []}   # _SEDE_VISTA_V1: sede real que responde auth/sso y cabeceras x-rl-sede recibidas
+SEDEV = {'sede': None, 'usuario': '', 'cab': [], 'at': []}   # _SEDE_VISTA_V1: sede real que responde auth/sso y cabeceras x-rl-sede recibidas
 CVG = {'modo': 'ok', 'llamadas': []}   # _CV_AZURE_PRIMERO_V1
 CAPG = {'modo': 'ok', 'llamadas': [], 'auth': []}   # _CAP_AZURE_PRIMERO_V1
 USRG = {'modo': 'ok', 'llamadas': [], 'cuerpos': []}   # _USR_AZURE_V1  ok | caido
@@ -272,7 +272,7 @@ def enrutar(route):
         return route.fulfill(status=200, body=json.dumps(resp_google(a)), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
     if 'azurewebsites.net' in url:
         RED['azure'].append(urllib.parse.urlparse(url).path)
-        if req.method != 'OPTIONS' and '/api/auth/' not in url: SEDEV['cab'].append(req.headers.get('x-rl-sede', ''))   # _SEDE_VISTA_V1
+        if req.method != 'OPTIONS' and '/api/auth/' not in url: (SEDEV['at'] if re.search(r'/api/atenciones(/|\?|$)', url) else SEDEV['cab']).append(req.headers.get('x-rl-sede', ''))   # _SEDE_AT_GENERAL_V1: las atenciones se anotan aparte   # _SEDE_VISTA_V1
         if SEDEV['sede'] and '/api/auth/sso' in url and req.method == 'POST' and '"sesion"' in (req.post_data or ''):
             return route.fulfill(status=200, body=json.dumps({'success': True, 'user': {'usuario': SEDEV['usuario'], 'rol': 'x', 'accesos': None, 'sede': SEDEV['sede']}}), headers={'content-type': 'application/json', 'access-control-allow-origin': '*'})
         if AZ_CAIDO['si'] and req.method != 'OPTIONS':
@@ -1000,10 +1000,11 @@ with sync_playwright() as pw:
     SEDEV['sede'] = 'TODO'; SEDEV['usuario'] = 'jtimoteo'; SEDEV['cab'].clear()
     c, pg, errs = sesion_perm('jtimoteo'); pg.wait_for_timeout(2500)
     ok('Pregunta de sede: al ingresar, quien ve las dos sedes ve el cuadro con Piura / Olmos / Ambas (Ambas marcada)', pg.evaluate(PREG) == 'PIURA|OLMOS|AMBAS*', pg.evaluate(PREG))
-    pg.click('#sedePregOps button[data-v="OLMOS"]'); marc = pg.evaluate(PREG); SEDEV['cab'].clear()
+    pg.click('#sedePregOps button[data-v="OLMOS"]'); marc = pg.evaluate(PREG); SEDEV['cab'].clear(); SEDEV['at'].clear()
     with pg.expect_navigation(): pg.click('#sedePregOk')
     pg.wait_for_timeout(9500)
     ok('Pregunta de sede: al elegir Olmos y Continuar la pagina se recarga en Olmos, el cuadro ya no vuelve a salir en esa sesion y las consultas llevan x-rl-sede: OLMOS', marc == 'PIURA|OLMOS*|AMBAS' and pg.evaluate(PREG) == 'SIN' and pg.evaluate(SELV).endswith('#OLMOS') and len(SEDEV['cab']) > 0 and all(x == 'OLMOS' for x in SEDEV['cab']), marc + ' | ' + pg.evaluate(PREG) + ' | ' + pg.evaluate(SELV) + ' | ' + ','.join(sorted(set(SEDEV['cab']))))
+    ok('Sede elegida: Mis Atenciones y el Dashboard siguen generales (las consultas de atenciones NO llevan la cabecera aunque se eligio Olmos)', len(SEDEV['at']) > 0 and not any(SEDEV['at']), 'consultas de atenciones: ' + str(len(SEDEV['at'])) + ' con cabecera: ' + str(len([x for x in SEDEV['at'] if x])))
     pg.evaluate("() => sessionStorage.setItem('rl_sede_preg', 'sesion-anterior')")   # otra sesion (otro token) en la misma pestaña
     pg.reload(wait_until='load'); pg.wait_for_timeout(11000)
     ok('Pregunta de sede: en un ingreso nuevo el cuadro vuelve a salir, con la sede que estaba elegida marcada', pg.evaluate(PREG) == 'PIURA|OLMOS*|AMBAS', pg.evaluate(PREG))

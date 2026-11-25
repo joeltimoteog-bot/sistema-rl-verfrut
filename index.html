@@ -1472,7 +1472,7 @@ html.bv4 #bv2.bv3 .bv3-cargo{font-size:15px;color:#3D4A63;font-weight:500;text-t
 html.bv4 #bv2.bv3 .chips{justify-content:flex-start;gap:28px;margin:16px 0 18px}
 html.bv4 #bv2.bv3 .chip{background:transparent;border:0;border-radius:0;padding:0;font-size:15px;font-weight:600;color:#0F1B33;letter-spacing:0;text-transform:none;flex-direction:column;align-items:flex-start;gap:3px}
 html.bv4 #bv2.bv3 .chip:before{font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#6B7A94;content:"Empresa"}
-html.bv4 #bv2.bv3 .chip:nth-child(2):before{content:"Sede"}
+html.bv4 #bv2.bv3 .chip:nth-child(2):before{content:"Sede"}html.bv4 #bv2.bv3 .chip.sd:before{content:"Sede"}html.bv4 #bv2.bv3 .chip.sec:before{content:"Sector"}   /* _BIENV_SEDE_V1 */
 html.bv4 #bv2.bv3 .chip.ok{color:#1B7F4B}html.bv4 #bv2.bv3 .chip.ok:before{content:"Estado"}
 html.bv4 #bv2.bv3 .steps{max-width:none;background:#F5F7FB;border:1px solid #E6EAF2;border-radius:8px;padding:14px 16px;gap:9px}
 html.bv4 #bv2.bv3 .st{color:#6B7A94;font-size:14px}
@@ -1510,6 +1510,7 @@ function pintar(user){
   var nomCompleto=nom?nom.toUpperCase():usu.toUpperCase();
   var cargo=esJoel?'Coordinador de Relaciones Laborales · Administrador del sistema':rolTxt(user.rol);
   var hora=('0'+h).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+  var sedeIni=String(user.empresa||'').toUpperCase().indexOf('OLMOS')>=0?'Olmos':'';   /* _BIENV_SEDE_V1: la sede exacta la confirma el servidor (abajo) */
   wrap.innerHTML='<div id="bv2Fondo"></div><div id="bv2Grid"></div>'+
     '<div id="bv2" class="bv3">'+
     '<div class="bv3-logo"><img src="frontend/images/logo-unifrutti-hd.png" alt="Unifrutti" onerror="this.style.display=\'none\'"></div>'+
@@ -1517,13 +1518,29 @@ function pintar(user){
     '<div class="bv3-bienv">Bienvenido</div>'+
     '<h1 class="bv3-nom">'+esc(nomCompleto)+'</h1>'+
     '<div class="sub bv3-cargo">'+esc(cargo)+'</div>'+
-    '<div class="chips">'+(user.empresa?'<span class="chip">'+esc(String(user.empresa).toUpperCase())+'</span>':'')+(user.sector?'<span class="chip">'+esc(user.sector)+'</span>':'')+'<span class="chip ok">Sesión segura</span></div>'+
+    '<div class="chips">'+(user.empresa?'<span class="chip">'+esc(String(user.empresa).toUpperCase())+'</span>':'')+'<span class="chip sd" id="bv2Sede"'+(sedeIni?'':' style="display:none"')+'>'+esc(sedeIni)+'</span>'+(user.sector?'<span class="chip sec">'+esc(user.sector)+'</span>':'')+'<span class="chip ok">Sesión segura</span></div>'+
     '<div class="steps"><div class="st done"><i>✓</i>Sesión verificada y horario de acceso en regla</div><div class="st done"><i>✓</i>Permisos y módulos cargados</div><div class="st" id="bv2S3"><i></i>Preparando su panel de trabajo</div></div>'+
     '<div class="bar"><i></i></div>'+
     '<div class="foot">Último acceso: <b>'+esc(ult)+'</b><br>Sistema de Relaciones Laborales · Unifrutti Perú · Acceso registrado</div></div>';
   pb.appendChild(wrap);
   setTimeout(function(){var s=document.getElementById('bv2S3');if(s){s.classList.add('done');s.querySelector('i').textContent='✓';s.lastChild.textContent='Panel de trabajo listo';}},1250);
   try{localStorage.setItem('rl_bv2_ult_'+usu,String(Date.now()));}catch(e){}
+  /* _BIENV_SEDE_V1 (24-nov-2026, pedido de Joel): la tarjeta dice a que sede ingresa cada usuario (Olmos / Piura / Piura y Olmos).
+     La sede la dice el servidor (auth/sso sesion, la misma lectura del panel); si no responde a tiempo la tarjeta sigue igual. */
+  try{
+    var tkS=sessionStorage.getItem('rl_token');
+    if(tkS&&typeof AZURE_LOGIN_URL==='string'){
+      fetch(AZURE_LOGIN_URL.replace('/auth/login','/auth/sso'),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accion:'sesion',token:tkS})})
+        .then(function(r){return r.ok?r.json():null;})
+        .then(function(j){
+          var s=j&&j.success&&j.user&&String(j.user.usuario||'').toLowerCase()===usu?String(j.user.sede||''):'';
+          var t=s==='OLMOS'?'Olmos':s==='PIURA'?'Piura':s==='TODO'?'Piura y Olmos':'';
+          if(!t)return;
+          try{sessionStorage.setItem('rl_sede_real',JSON.stringify({u:usu,s:s}));}catch(e){}
+          var c=document.getElementById('bv2Sede');if(c){c.textContent=t;c.style.display='';}
+        }).catch(function(){});
+    }
+  }catch(e){}
   return true;
 }
 window.mostrarBienvenida=function(user,callback){
