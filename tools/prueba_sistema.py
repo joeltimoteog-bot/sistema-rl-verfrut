@@ -1009,6 +1009,8 @@ with sync_playwright() as pw:
     pg.reload(wait_until='load'); pg.wait_for_timeout(11000)
     ok('Pregunta de sede: en un ingreso nuevo el cuadro vuelve a salir, con la sede que estaba elegida marcada', pg.evaluate(PREG) == 'PIURA|OLMOS*|AMBAS', pg.evaluate(PREG))
     pg.click('#sedePregOk'); pg.wait_for_timeout(600)
+    ck = pg.evaluate("() => _lsCacheKey()")
+    ok('Sede elegida (Olmos): la copia local usa una clave propia de la sede (no pinta atenciones guardadas de otra sede)', ck == 'rl_cache_jtimoteo__OLMOS', ck)
     RESP = "async () => { const r = await apiGet({action:'getAtencionesOptimizado', usuario:'jtimoteo', nombre:'x', rol:'administrador', empresa:''}); return (r && r.sin_respaldo ? 'CERRADO' : 'PASA') + '|' + ((r && r.error) || ''); }"
     rr = pg.evaluate(RESP)
     ok('Sede elegida (Olmos): si Supabase no trae atenciones NO se pide el respaldo a Google (que no distingue sede) y se avisa', rr.startswith('CERRADO|No hay atenciones registradas en la sede Olmos'), rr)
@@ -1016,6 +1018,8 @@ with sync_playwright() as pw:
     pg.evaluate("() => { sessionStorage.removeItem('rl_sede_preg'); sessionStorage.removeItem('rl_sede_vista'); localStorage.setItem('rl_sede_pregunta', 'off'); }")
     pg.reload(wait_until='load'); pg.wait_for_timeout(11000)
     ok('Pregunta de sede: con el interruptor rl_sede_pregunta=off no sale y el selector de arriba sigue', pg.evaluate(PREG) == 'SIN' and pg.evaluate(SELV).endswith('#'), pg.evaluate(PREG) + ' | ' + pg.evaluate(SELV))
+    ck = pg.evaluate("() => _lsCacheKey()")
+    ok('Ambas sedes: la copia local usa la clave de siempre', ck == 'rl_cache_jtimoteo', ck)
     rr = pg.evaluate(RESP)
     ok('Ambas sedes: el respaldo de atenciones en Google sigue disponible', rr.startswith('PASA'), rr)
     pg.evaluate("() => localStorage.removeItem('rl_sede_pregunta')")

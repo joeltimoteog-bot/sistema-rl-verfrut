@@ -3626,7 +3626,10 @@ function quitarFotoCaso(div) {
 
 // STATS
 // ══════════════════ CACHE PERSISTENTE (localStorage) ══════════════════
-function _lsCacheKey() { return 'rl_cache_' + USER.usuario; }
+/* _SEDE_CACHE_V1 (25-nov-2026): la copia local guarda las atenciones de hoy. Con una sede elegida (selector de sede) se usa una
+   clave aparte por sede: antes, al pasar de Piura/Ambas a Olmos, la pantalla pintaba la copia guardada (atenciones de Piura)
+   y no la sede elegida (caso real del 25-nov). Sin sede elegida la clave es la de siempre. */
+function _lsCacheKey() { var _v = ''; try { _v = (window.RLSedeVista && window.RLSedeVista.get()) || ''; } catch (e) {} return 'rl_cache_' + USER.usuario + (_v ? '__' + _v : ''); }
 
 function guardarCacheLS() {
   try {
