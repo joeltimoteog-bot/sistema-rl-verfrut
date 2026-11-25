@@ -27,7 +27,7 @@
     { n: 'Operación RR.LL.', ic: '🗂️', c: ['navCorreo', 'navVisitas', 'navCasos', 'navFusiones', 'mod_capacitaciones', 'navMantenimiento', 'navSolicitudes', 'navHoras', 'navAlmuerzos', 'navInventario', 'navPreaviso', 'navCalcRemu', 'navBienestar'] },
     { n: 'Análisis y gerencia', ic: '📈', c: ['navRes', 'navEstadisticas', 'navKpis', 'navEval360'] },
     { n: 'Sistema ETI', ic: '🎓', c: ['navProgEti', 'navAppEti', 'eti_acceso'] },
-    { n: 'Bienestar Social (otro sistema)', ic: '💚', c: ['bs_acceso', 'bs_admin', 'bs_quejas', 'bs_accidentes', 'bs_hostigamiento', 'bs_subsidios', 'bs_rendiciones', 'bs_panel', 'bs_estadisticas', 'bs_auditoria', 'bs_descansos', 'bs_gestion_social', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_condiciones', 'bs_gs_datos', 'bs_gs_comite', 'bs_gs_adolescentes', 'bs_gs_lactario', 'bs_gs_discapacidad', 'bs_gs_lactancia'] },   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V5: submódulos separados */
+    { n: 'Bienestar Social (otro sistema)', ic: '💚', c: ['bs_acceso', 'bs_admin', 'bs_ficha', 'bs_sugerencias_acceso', 'bs_quejas', 'bs_accidentes', 'bs_hostigamiento', 'bs_subsidios', 'bs_rendiciones', 'bs_panel', 'bs_estadisticas', 'bs_expediente', 'bs_auditoria', 'bs_descansos', 'bs_gestion_social', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_condiciones', 'bs_gs_datos', 'bs_gs_comite', 'bs_gs_adolescentes', 'bs_gs_lactario', 'bs_gs_discapacidad', 'bs_gs_lactancia'] },   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V5: submódulos separados */
     { n: 'Evaluaciones ETI (otro sistema)', ic: '📝', c: ['ev_acceso'] },
     { n: 'Administración', ic: '🛡️', c: ['navUsr', 'navPermisos', 'navActividad', 'act_todos', 'navMonitor', 'navFbAlertas'] }
   ];
@@ -59,7 +59,8 @@
      ['bs_quejas', 'Bienestar: Quejas y reclamos', '📣'], ['bs_accidentes', 'Bienestar: Accidentes', '🚑'],
      ['bs_hostigamiento', 'Bienestar: Hostigamiento', '🔒'], ['bs_subsidios', 'Bienestar: Subsidios', '💊'],
      ['bs_rendiciones', 'Bienestar: Rendiciones', '🧾'], ['bs_panel', 'Bienestar: Panel', '📊'],
-     ['bs_estadisticas', 'Bienestar: Estadísticas', '📈'], ['bs_auditoria', 'Bienestar: Auditoría (quién hizo qué)', '🕘'], ['bs_descansos', 'Bienestar: Descansos médicos', '🩺'],   /* _BS_AUDITORIA_ACCESO_V1 (24-nov-2026) */ ['bs_gestion_social', 'Bienestar: Gestión Social (casos sociales)', '🤝'], ['bs_gs_gestantes', 'Bienestar: Gestantes y lactancia', '🤱'], ['bs_gs_canal', 'Bienestar: Canal anónimo QR', '🗣️'], ['bs_gs_condiciones', 'Bienestar: Condiciones en campo', '🌾'], ['bs_gs_datos', 'Bienestar: Protección de datos (consentimientos)', '🛡️'], ['bs_gs_comite', 'Bienestar: Comité de hostigamiento (actas)', '📜'], ['bs_gs_adolescentes', 'Bienestar: Adolescentes autorizados', '🧒'], ['bs_gs_lactario', 'Bienestar: Lactarios', '🍼'], ['bs_gs_discapacidad', 'Bienestar: Discapacidad y cuota 3 %', '♿'], ['bs_gs_lactancia', 'Bienestar: Lactancia (acumulación de horas)', '🍼'],
+     ['bs_estadisticas', 'Bienestar: Estadísticas', '📈'], ['bs_ficha', 'Bienestar: Ficha del Trabajador', '👤'], ['bs_sugerencias_acceso', 'Bienestar: Sugerencias de Mejora', '💡'], ['bs_expediente', 'Bienestar: Expediente de auditoría', '📁'],   /* _BS_TODOS_MODULOS_V1 (24-nov-2026) */
+     ['bs_auditoria', 'Bienestar: Auditoría (quién hizo qué)', '🕘'], ['bs_descansos', 'Bienestar: Descansos médicos', '🩺'],   /* _BS_AUDITORIA_ACCESO_V1 (24-nov-2026) */ ['bs_gestion_social', 'Bienestar: Gestión Social (casos sociales)', '🤝'], ['bs_gs_gestantes', 'Bienestar: Gestantes y lactancia', '🤱'], ['bs_gs_canal', 'Bienestar: Canal anónimo QR', '🗣️'], ['bs_gs_condiciones', 'Bienestar: Condiciones en campo', '🌾'], ['bs_gs_datos', 'Bienestar: Protección de datos (consentimientos)', '🛡️'], ['bs_gs_comite', 'Bienestar: Comité de hostigamiento (actas)', '📜'], ['bs_gs_adolescentes', 'Bienestar: Adolescentes autorizados', '🧒'], ['bs_gs_lactario', 'Bienestar: Lactarios', '🍼'], ['bs_gs_discapacidad', 'Bienestar: Discapacidad y cuota 3 %', '♿'], ['bs_gs_lactancia', 'Bienestar: Lactancia (acumulación de horas)', '🍼'],
      ['ev_acceso', 'Evaluaciones ETI: puede ingresar', '📝'],
      ['navActividad', 'Actividad de Usuarios', '📊'], ['act_todos', 'Actividad: ver a TODOS los usuarios', '👥']].forEach(function (x) { if (!hay[x[0]]) out.push({ clave: x[0], etiqueta: x[1], ic: x[2] }); });
     return out;
@@ -108,9 +109,14 @@
     S.errP = !(p && p.success); S.errH = !(h && h.success);
     S.cargado = true;
   }
+  /* _BS_TODOS_MODULOS_V1 (24-nov-2026), decision de Joel: todos los modulos se designan desde aqui. Estos tres ya se usaban sin casilla;
+     mientras el usuario no tenga la casilla guardada, se muestra (y vale en el servidor) lo que ya tenia: Ficha y Sugerencias = quien
+     ingresa a Bienestar; Expediente = quien tiene Estadisticas. Asi nadie pierde acceso hasta que el administrador lo decida. */
+  var DEF_BS = { bs_ficha: function (p) { return !!p.bs_acceso; }, bs_sugerencias_acceso: function (p) { return !!p.bs_acceso; }, bs_expediente: function (p) { return !!p.bs_acceso && !!p.bs_estadisticas; } };
+  function valP(p, k) { if (!p) return false; if (p[k] === undefined && DEF_BS[k]) return DEF_BS[k](p); return !!p[k]; }
   function resumenUsuario(u) {
     var p = S.permisos[u.usuario], cat = S.cat, n = 0, tot = cat.length;
-    if (p) cat.forEach(function (m) { if (p[m.clave]) n++; });
+    if (p) cat.forEach(function (m) { if (valP(p, m.clave)) n++; });
     var h = S.horarios[u.usuario];
     return { tienePerm: !!p, n: n, tot: tot, hor: h || null };
   }
@@ -297,7 +303,7 @@
   /* ── pestaña modulos ── */
   function pintarModulos(u, r) {
     var P = $('ac3Pane'), p = S.permisos[u.usuario] || null;
-    if (!S.edit) { S.edit = {}; S.cat.forEach(function (m) { S.edit[m.clave] = p ? !!p[m.clave] : false; }); }
+    if (!S.edit) { S.edit = {}; S.cat.forEach(function (m) { S.edit[m.clave] = valP(p, m.clave); }); }
     var otros = S.usuarios.filter(function (x) { return x.usuario !== u.usuario && S.permisos[x.usuario]; });
     P.innerHTML =
       (p ? '' : '<div class="estado gen" style="margin-bottom:12px"><span class="big">ℹ️</span><div><b>Todavía no tiene permisos definidos.</b> ' + (u.activo ? 'Si es un usuario antiguo ve el menú de siempre; si es nuevo solo ve Mi Dashboard, Mis Atenciones y Mis Estadísticas. ' : '') + 'En cuanto guardes, mandan los interruptores de abajo.</div></div>') +
@@ -316,7 +322,7 @@
     P.querySelectorAll('.mod').forEach(function (el) { el.onclick = function () { var k = el.getAttribute('data-k'); S.edit[k] = !S.edit[k]; el.classList.toggle('on', S.edit[k]); cuenta(); setDirty(true); }; });
     $('ac3Todos').onclick = function () { S.cat.forEach(function (m) { S.edit[m.clave] = true; }); P.querySelectorAll('.mod').forEach(function (el) { el.classList.add('on'); }); cuenta(); setDirty(true); };
     $('ac3Nada').onclick = function () { S.cat.forEach(function (m) { S.edit[m.clave] = false; }); P.querySelectorAll('.mod').forEach(function (el) { el.classList.remove('on'); }); cuenta(); setDirty(true); };
-    $('ac3Copiar').onchange = function () { var o = S.permisos[this.value]; if (!o) return; S.cat.forEach(function (m) { S.edit[m.clave] = !!o[m.clave]; }); P.querySelectorAll('.mod').forEach(function (el) { el.classList.toggle('on', !!S.edit[el.getAttribute('data-k')]); }); cuenta(); setDirty(true); toast('Copiado de ' + this.value + ' (aún sin guardar)'); this.value = ''; };
+    $('ac3Copiar').onchange = function () { var o = S.permisos[this.value]; if (!o) return; S.cat.forEach(function (m) { S.edit[m.clave] = valP(o, m.clave); }); P.querySelectorAll('.mod').forEach(function (el) { el.classList.toggle('on', !!S.edit[el.getAttribute('data-k')]); }); cuenta(); setDirty(true); toast('Copiado de ' + this.value + ' (aún sin guardar)'); this.value = ''; };
     cuenta();
     $('ac3Est').innerHTML = p ? '<span style="color:#15803d">✔ Permisos definidos: mandan estos interruptores.</span>' : '';
     $('ac3Btns').innerHTML = '<button class="btn pri" id="ac3Guardar">💾 Guardar módulos</button>';

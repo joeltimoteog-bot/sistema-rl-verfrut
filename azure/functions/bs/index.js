@@ -427,6 +427,7 @@ module.exports = async function (context, req) {
       /* _BS_PERMISOS_SERVIDOR_V1 (08-nov-2026): antes el rol podia venir en ?rol= y los permisos en ?permisos= (el navegador
          decidia). Ahora el rol sale SOLO del token y los permisos de "Acceso a Modulos" del RR.LL. (dbo.PermisosModulos). */
       const P = await permisosBS(u, q);
+      if (!P.esAdmin && P.permisos.ficha === false) return res(403, { ok: false, success: false, message: 'Sin acceso a la Ficha del Trabajador.' });   /* _BS_TODOS_MODULOS_V1 (24-nov-2026) */
       const out = await ficha(pool, dni, P.permisos, P.esAdmin, await sedeBS(pool, u)); out.success = true; out.permisos_fuente = P.fuente; return res(200, out);
     }
     if (accion === 'estadisticas') {   /* _BS_RESUMEN_SUPABASE_V1: Estadísticas empresariales (solo administración / permiso estadisticas) */

@@ -65909,6 +65909,10 @@ var require_auth_sso = __commonJS({
         BS_MODS.forEach((k) => {
           bs.permisos[k] = bs.acceso && !!m["bs_" + k];
         });
+        const conDef = (k, d) => bs.acceso && (Object.prototype.hasOwnProperty.call(m, "bs_" + k) ? !!m["bs_" + k] : !!d);
+        bs.permisos.ficha = conDef("ficha", true);
+        bs.permisos.sugerencias_acceso = conDef("sugerencias_acceso", true);
+        bs.permisos.expediente = conDef("expediente", m.bs_estadisticas);
         return { definido, activo, bs, eti: { acceso: activo && (!!m.eti_acceso || !!m.navAppEti), programar: activo && !!m.navAppEti }, ev: { acceso: activo && !!m.ev_acceso } };
       } catch (e) {
         return null;
@@ -68331,6 +68335,7 @@ var require_bs = __commonJS({
           const dni = String(q.dni || "").trim();
           if (!/^\d{8}$/.test(dni)) return res(400, { ok: false, success: false, message: "DNI inv\xE1lido (8 d\xEDgitos)." });
           const P = await permisosBS(u, q);
+          if (!P.esAdmin && P.permisos.ficha === false) return res(403, { ok: false, success: false, message: "Sin acceso a la Ficha del Trabajador." });
           const out = await ficha(pool, dni, P.permisos, P.esAdmin, await sedeBS(pool, u));
           out.success = true;
           out.permisos_fuente = P.fuente;

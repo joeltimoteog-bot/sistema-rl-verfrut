@@ -53,6 +53,9 @@ async function accesosDe(usuario) {
     const activo = !!u && !(u.eliminado === true || u.eliminado === 1) && (u.activo === true || u.activo === 1 || String(u.activo).trim().toUpperCase() === 'TRUE');
     const bs = { acceso: activo && !!m.bs_acceso, admin: activo && !!m.bs_admin, permisos: {} };
     BS_MODS.forEach(k => { bs.permisos[k] = bs.acceso && !!m['bs_' + k]; });
+    /* _BS_TODOS_MODULOS_V1 (24-nov-2026): casillas nuevas para modulos que ya se usaban. Sin casilla guardada vale lo de antes (nadie pierde acceso). */
+    const conDef = (k, d) => bs.acceso && (Object.prototype.hasOwnProperty.call(m, 'bs_' + k) ? !!m['bs_' + k] : !!d);
+    bs.permisos.ficha = conDef('ficha', true); bs.permisos.sugerencias_acceso = conDef('sugerencias_acceso', true); bs.permisos.expediente = conDef('expediente', m.bs_estadisticas);
     return { definido, activo, bs, eti: { acceso: activo && (!!m.eti_acceso || !!m.navAppEti), programar: activo && !!m.navAppEti }, ev: { acceso: activo && !!m.ev_acceso } };
   } catch (e) { return null; }
 }
