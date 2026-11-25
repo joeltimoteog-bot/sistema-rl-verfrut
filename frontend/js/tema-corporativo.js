@@ -79,7 +79,7 @@ body.tc .tc-cumpl h5{margin:0 0 8px;font-size:11.5px;letter-spacing:1px;text-tra
 body.tc .tc-cumpl table{width:100%;border-collapse:collapse;font-size:12.5px}body.tc .tc-cumpl td{padding:6px 8px;border-bottom:1px solid #EEF2F7;vertical-align:top}\
 body.tc .tc-cumpl td.k{white-space:normal;font-weight:700;color:#0F2748;width:300px;min-width:300px}body.tc .tc-cumpl td.v{padding-left:12px}body.tc .tc-cumpl .n{display:inline-block;width:280px;box-sizing:border-box;margin:3px 8px 3px 0;padding:4px 10px;border-radius:4px;background:#F8FAFC;border:1px solid #E2E8F0;font-weight:600;color:#1F2937;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:top}\
 body.tc .tc-cumpl .n i{font-style:normal;color:#B91C1C;font-size:10.5px;margin-left:4px}\
-body.tc .tc-foot{margin:26px 24px 18px;padding-top:12px;border-top:1px solid #E2E8F0;font-size:11px;color:#64748B;display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}\
+body.tc .tc-foot{margin:26px 24px 18px;padding-top:12px;border-top:1px solid #E2E8F0;font-size:11px;color:#64748B;display:flex;justify-content:center;text-align:center;flex-wrap:wrap;gap:6px}\
 body.tc #rlRepTab{background:#334155!important;opacity:.9!important;font-weight:700;letter-spacing:.5px}\
 body.tc #e360Rec .chip,body.tc #e360Rec span[style*="border-radius:999px"]{display:inline-block;width:230px;box-sizing:border-box;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-radius:4px!important}\
 body.tc .ni .badge,body.tc .ni [id^="badge"]{background:#C8102E!important;animation:none!important;border-radius:999px;font-weight:800}';
@@ -158,7 +158,7 @@ body.tc .ni .badge,body.tc .ni [id^="badge"]{background:#C8102E!important;animat
       var rep = document.getElementById('rlRepTab'); if (rep && rep.textContent !== 'Soporte') rep.textContent = 'Soporte';
       var adm = /^(administrador|coordinador|jefa)/i.test(String(U0.rol || '')) || String(U0.usuario || '').toLowerCase() === 'jtimoteo';
       Array.prototype.forEach.call(document.querySelectorAll('.d2-card .t'), function (el) { var n = el.firstChild; if (n && n.nodeType === 3 && /Actividad reciente/i.test(n.nodeValue) && !adm) n.nodeValue = n.nodeValue.replace(/Actividad reciente/i, 'Mi actividad'); });
-      var main = document.querySelector('.main'); if (main && !document.getElementById('tcFoot')) { var ft = document.createElement('div'); ft.id = 'tcFoot'; ft.className = 'tc-foot'; ft.innerHTML = '<span>Sistema de Relaciones Laborales · Unifrutti Perú · Piura y Olmos</span><span>Creado por Joel A. Timoteo Gonza · Coordinación de Relaciones Laborales · v3.0</span>'; main.appendChild(ft); }
+      var main = document.querySelector('.main'); if (main && !document.getElementById('tcFoot')) { var ft = document.createElement('div'); ft.id = 'tcFoot'; ft.className = 'tc-foot'; ft.innerHTML = '<span>Sistema de Relaciones Laborales · Unifrutti Perú · Piura y Olmos · Creado por Joel A. Timoteo Gonza · Coordinación de Relaciones Laborales · v3.0</span>'; main.appendChild(ft); }
       var ab = document.getElementById('alertCumplBanner'), at = document.getElementById('alertCumplTexto');
       if (ab && at && ab.style.display !== 'none' && at.textContent && at.dataset.tcTxt !== at.textContent) {
         at.dataset.tcTxt = at.textContent;
