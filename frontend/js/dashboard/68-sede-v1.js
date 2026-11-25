@@ -155,6 +155,16 @@
       try {
         var off = false; try { off = localStorage.getItem('rl_sede_google') === 'off'; } catch (e0) {}
         var emp = ''; try { emp = String((typeof USER !== 'undefined' && USER && USER.empresa) || '').toUpperCase().trim(); } catch (e1) {}
+        /* _SEDE_AT_SIN_GOOGLE_V1 (25-nov-2026): con una sede elegida (o usuario de Olmos), si Supabase responde "sin atenciones"
+           NO se pide el respaldo a Google: Google no distingue sede y a un rol administrador le devolvia las atenciones de Piura
+           aunque hubiera elegido Olmos (caso real del 25-nov). Se muestra el aviso en vez de la lista equivocada. */
+        var vis = ''; try { vis = (window.RLSedeVista && window.RLSedeVista.get()) || ''; } catch (e2) {}
+        var rolTodo = false; try { rolTodo = typeof ROLES_VER_TODO !== 'undefined' && ROLES_VER_TODO.includes(USER.rol); } catch (e3) {}
+        var realU = ''; try { var gR = JSON.parse(sessionStorage.getItem('rl_sede_real') || 'null'); if (gR && gR.u === String((USER && USER.usuario) || '').toLowerCase()) realU = gR.s || ''; } catch (e4) {}
+        if (!off && p && p.action === 'getAtencionesOptimizado' && (vis || (emp === 'OLMOS' && rolTodo && realU !== 'TODO'))) {
+          console.log('[_SEDE_AT_SIN_GOOGLE_V1] hay filtro de sede: no se usa el respaldo de atenciones en Google');
+          return Promise.resolve({ success: false, sin_respaldo: true, data: [], error: 'No hay atenciones registradas en ' + (vis === 'PIURA' ? 'la sede Piura' : 'la sede Olmos') + ' para hoy.', fuente: 'sede' });
+        }
         if (!off && emp === 'OLMOS' && p && p.action === 'buscarTrabajador') {
           console.log('[_SEDE_GOOGLE_V1] usuario de Olmos: no se usa la busqueda de respaldo en Google (nomina de Piura)');
           return Promise.resolve({ success: true, data: [], fuente: 'sede' });

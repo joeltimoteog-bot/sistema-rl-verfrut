@@ -29,7 +29,7 @@
     { n: 'Sistema ETI', ic: '🎓', c: ['navProgEti', 'navAppEti', 'eti_acceso'] },
     { n: 'Bienestar Social (otro sistema)', ic: '💚', c: ['bs_acceso', 'bs_admin', 'bs_ficha', 'bs_sugerencias_acceso', 'bs_quejas', 'bs_accidentes', 'bs_hostigamiento', 'bs_subsidios', 'bs_rendiciones', 'bs_panel', 'bs_estadisticas', 'bs_expediente', 'bs_auditoria', 'bs_descansos', 'bs_gestion_social', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_condiciones', 'bs_gs_datos', 'bs_gs_comite', 'bs_gs_adolescentes', 'bs_gs_lactario', 'bs_gs_discapacidad', 'bs_gs_lactancia'] },   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V5: submódulos separados */
     { n: 'Evaluaciones ETI (otro sistema)', ic: '📝', c: ['ev_acceso'] },
-    { n: 'Administración', ic: '🛡️', c: ['navUsr', 'navPermisos', 'navActividad', 'act_todos', 'navMonitor', 'navFbAlertas'] }
+    { n: 'Administración', ic: '🛡️', c: ['navUsr', 'navPermisos', 'navActividad', 'act_todos', 'navMonitor', 'navFbAlertas', 'cumpl_equipo'] }
   ];
   var ROL_COLOR = { administrador: '#7c3aed', coordinador: '#0369a1', jefa_rl: '#0369a1', supervisor: '#15803d' };
 
@@ -62,6 +62,7 @@
      ['bs_estadisticas', 'Bienestar: Estadísticas Empresariales', '📈'], ['bs_ficha', 'Bienestar: Ficha del Trabajador', '👤'], ['bs_sugerencias_acceso', 'Bienestar: Sugerencias de Mejora', '💡'], ['bs_expediente', 'Bienestar: Expediente de auditoría', '📁'],   /* _BS_TODOS_MODULOS_V1 (24-nov-2026) */
      ['bs_auditoria', 'Bienestar: Auditoría', '🕘'], ['bs_descansos', 'Bienestar: Descansos Médicos', '🩺'],   /* _BS_AUDITORIA_ACCESO_V1 (24-nov-2026) */ ['bs_gestion_social', 'Bienestar: Gestión Social', '🤝'], ['bs_gs_gestantes', 'Bienestar: Gestantes y lactancia', '🤱'], ['bs_gs_canal', 'Bienestar: Canal anónimo (QR)', '🗣️'], ['bs_gs_condiciones', 'Bienestar: Condiciones en campo', '🌾'], ['bs_gs_datos', 'Bienestar: Protección de datos', '🛡️'], ['bs_gs_comite', 'Bienestar: Comité de hostigamiento', '📜'], ['bs_gs_adolescentes', 'Bienestar: Adolescentes autorizados', '🧒'], ['bs_gs_lactario', 'Bienestar: Lactarios', '🍼'], ['bs_gs_discapacidad', 'Bienestar: Discapacidad y cuota 3 %', '♿'], ['bs_gs_lactancia', 'Bienestar: Lactancia · acumulación de horas', '🍼'],
      ['ev_acceso', 'Evaluaciones ETI: puede ingresar', '📝'],
+     ['cumpl_equipo', 'Alertas del equipo de Gestión Humana (cumplimiento)', '🚨'],   /* _CUMPL_EQUIPO_CASILLA_V1 (25-nov-2026) */
      ['navActividad', 'Actividad de Usuarios', '📊'], ['act_todos', 'Actividad: ver a TODOS los usuarios', '👥']].forEach(function (x) { if (!hay[x[0]]) out.push({ clave: x[0], etiqueta: x[1], ic: x[2] }); });
     return out;
   }
@@ -112,7 +113,8 @@
   /* _BS_TODOS_MODULOS_V1 (24-nov-2026), decision de Joel: todos los modulos se designan desde aqui. Estos tres ya se usaban sin casilla;
      mientras el usuario no tenga la casilla guardada, se muestra (y vale en el servidor) lo que ya tenia: Ficha y Sugerencias = quien
      ingresa a Bienestar; Expediente = quien tiene Estadisticas. Asi nadie pierde acceso hasta que el administrador lo decida. */
-  var DEF_BS = { bs_ficha: function (p) { return !!p.bs_acceso; }, bs_sugerencias_acceso: function (p) { return !!p.bs_acceso; }, bs_expediente: function (p) { return !!p.bs_acceso && !!p.bs_estadisticas; } };
+  var DEF_BS = { bs_ficha: function (p) { return !!p.bs_acceso; }, bs_sugerencias_acceso: function (p) { return !!p.bs_acceso; }, bs_expediente: function (p) { return !!p.bs_acceso && !!p.bs_estadisticas; },
+    cumpl_equipo: function (p) { return true; } };   /* _CUMPL_EQUIPO_CASILLA_V1: sin casilla guardada sale encendida (como hoy); solo tiene efecto en roles de administrador y solo cuando se guarda APAGADA */
   function valP(p, k) { if (!p) return false; if (p[k] === undefined && DEF_BS[k]) return DEF_BS[k](p); return !!p[k]; }
   function resumenUsuario(u) {
     var p = S.permisos[u.usuario], cat = S.cat, n = 0, tot = cat.length;

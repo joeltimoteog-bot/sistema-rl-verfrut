@@ -20,7 +20,8 @@ function token(req) {
   if (!h.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
   try { return require('../shared/auth.js').verificarSoloRL(h.slice(7).trim()); } catch (e) { return null; }
 }
-function esAdmin(t) { return String(t.usuario || '').toLowerCase() === 'jtimoteo' || ADMIN_ROLES.indexOf(String(t.rol || '').toLowerCase().trim()) >= 0; }
+/* _PADRON_SOLO_CREADOR_V1 (25-nov-2026, decision de Joel): solo el creador del sistema actualiza el padron de trabajadores */
+function esAdmin(t) { return String(t.usuario || '').toLowerCase() === 'jtimoteo'; }
 function sello() {
   const d = new Date(Date.now() - 5 * 3600e3), z = (n) => String(n).padStart(2, '0');
   return z(d.getUTCDate()) + '/' + z(d.getUTCMonth() + 1) + '/' + d.getUTCFullYear() + ' ' + z(d.getUTCHours()) + ':' + z(d.getUTCMinutes());
@@ -60,7 +61,7 @@ module.exports = async function (context, req) {
   try {
     const t = token(req);
     if (!t || !t.usuario) { context.res = { status: 401, body: { ok: false, msg: 'Sin sesion valida' } }; return; }
-    if (!esAdmin(t)) { context.res = { status: 403, body: { ok: false, msg: 'Solo un administrador puede actualizar el padron' } }; return; }
+    if (!esAdmin(t)) { context.res = { status: 403, body: { ok: false, msg: 'Solo el creador del sistema puede actualizar el padron' } }; return; }
     const pool = await getPool();
     if (accion === 'estado') { context.res = { status: 200, body: await estado(pool) }; return; }
     if (accion === 'cargar') { const r = await cargar(pool, req.body || {}, t, context.log); context.res = { status: r.status, body: r.body }; return; }

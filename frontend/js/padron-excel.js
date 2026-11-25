@@ -29,7 +29,8 @@
   function usuario() { try { return (typeof USER !== 'undefined' && USER) || JSON.parse(sessionStorage.getItem('user') || '{}'); } catch (e) { return {}; } }
   function esAdmin() {
     var u = usuario(), r = String(u.rol || '').toLowerCase().trim();
-    return String(u.usuario || '').toLowerCase() === 'jtimoteo' || ['administrador', 'administrador 01', 'administrador 02', 'admin', 'admin01', 'admin02'].indexOf(r) >= 0;
+    /* _PADRON_SOLO_CREADOR_V1 (25-nov-2026, decision de Joel): actualizar el padron de trabajadores lo ve y lo hace solo el creador del sistema (antes: cualquier administrador) */
+    return String(u.usuario || '').toLowerCase() === 'jtimoteo';
   }
   function base() { return (typeof AZURE_FN_BASE !== 'undefined' && AZURE_FN_BASE) || 'https://rl-fn-verfrut.azurewebsites.net/api'; }
   function api(accion, cuerpo, ms) {

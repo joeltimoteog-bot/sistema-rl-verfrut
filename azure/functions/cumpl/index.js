@@ -96,6 +96,26 @@ module.exports = async function (context, req) {
     else if (accion === 'cumplPanel') out = m.cumplPanel(b);
     else if (accion === 'getCumplimientoCasos') out = m.getCumplimientoCasos(b);   /* _CUMPL_CASOS_AZURE_V1 */
     else out = m.getCumplimiento(b, c.recientes);
+    /* _CUMPL_EQUIPO_CASILLA_V1 (25-nov-2026, decision de Joel): casilla "Alertas del equipo de Gestion Humana" de Acceso a Modulos
+       (clave cumpl_equipo). Solo cuenta si esta guardada y APAGADA: ese usuario, aunque su rol sea de administrador, no recibe las
+       alertas de cumplimiento del equipo (aviso del panel, campana y panel de control). Sin casilla guardada todo sigue igual, y si
+       la lectura falla tambien (no se le quita nada a nadie por un error). El creador (jtimoteo) siempre las ve. */
+    if (out && out.success && (out.esAdmin || accion === 'cumplPanel')) {
+      let apagada = false;
+      try {
+        const quien = String((accion === 'cumplPanel' && t && t.usuario) || b.usuario || (t && t.usuario) || '').trim().toLowerCase();
+        if (quien && quien !== 'jtimoteo') {
+          const poolC = await getPool();
+          const rp = await poolC.request().input('cuq', quien).query("SELECT permitido FROM dbo.PermisosModulos WHERE LOWER(usuario) = @cuq AND modulo = 'cumpl_equipo'");
+          apagada = !!(rp.recordset && rp.recordset.length && !rp.recordset[0].permitido);
+        }
+      } catch (e) { console.warn('[cumpl] _CUMPL_EQUIPO_CASILLA_V1: ' + e.message); }
+      if (apagada) {
+        if (accion === 'cumplPanel') out = { success: false, sin_equipo: true, error: 'Sin acceso a las alertas del equipo de Gestion Humana.' };
+        else if (accion === 'getCumplimiento') { out.pendientesVisitas = []; out.casosPendientes = []; out.sin_equipo = true; }
+        else { out.actividades = []; out.resumen = { EN_PLAZO: 0, PROXIMO: 0, VENCE_HOY: 0, VENCIDO: 0, CRITICO: 0 }; out.sin_equipo = true; }
+      }
+    }
     out.fuente = 'azure';
     context.res = { status: 200, body: out };
   } catch (err) {
