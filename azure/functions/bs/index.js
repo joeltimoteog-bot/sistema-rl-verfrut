@@ -449,7 +449,7 @@ module.exports = async function (context, req) {
     if (accion === 'tabla') {
       const clave = String(q.clave || ''); if (CLAVES.indexOf(clave) < 0) return res(400, { success: false, error: 'clave desconocida' });
       if (clave === 'bs_auditoria') { const rolA = String((u && (u.rol || u.role)) || '').toLowerCase(), usA = String((u && u.usuario) || '').toLowerCase();
-        if (rolA.indexOf('admin') < 0 && !/coordinador|jefa/.test(rolA) && ['jtimoteo'].indexOf(usA) < 0) return res(403   /* _SEG_SERVIDOR_V1 (10-nov-2026): se retiro a ovilela (ya no trabaja en el area) */, { success: false, error: 'Solo administradores pueden ver la auditoría.' }); }
+        if (rolA.indexOf('admin') < 0 && !/coordinador|jefa/.test(rolA) && ['jtimoteo'].indexOf(usA) < 0 && !(await permisosBS(u, q)).permisos.auditoria   /* _BS_AUDITORIA_ACCESO_V1 (24-nov-2026): tambien quien tenga 'Bienestar: Auditoria' en Acceso a Modulos */) return res(403   /* _SEG_SERVIDOR_V1 (10-nov-2026): se retiro a ovilela (ya no trabaja en el area) */, { success: false, error: 'Solo administradores pueden ver la auditoría.' }); }
       /* _BS_PERMISOS_SERVIDOR_V1: cada tabla exige el permiso de su modulo (calculado en el servidor) */
       const modT = MODULO_DE_CLAVE[clave] || '';
       if (modT && clave !== 'bs_auditoria') { const PT = await permisosBS(u, q); if (!PT.esAdmin && !PT.permisos[modT]) return res(403, { success: false, error: 'Sin permiso para el módulo ' + modT + '.' }); }

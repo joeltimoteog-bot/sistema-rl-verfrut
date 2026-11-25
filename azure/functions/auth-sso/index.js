@@ -38,7 +38,7 @@ async function etiProg(usuario) {
    definido=false -> ese usuario aun no se configuro aqui y cada sistema usa su lista de siempre.
    Usuario inactivo o eliminado en RR.LL. -> activo=false (sin acceso en ningun sistema).
    Si la base no responde en 4 s devuelve null y cada sistema sigue como siempre. */
-const BS_MODS = ['quejas', 'accidentes', 'hostigamiento', 'subsidios', 'rendiciones', 'panel', 'estadisticas', 'descansos', 'gestion_social', 'gs_gestantes', 'gs_canal', 'gs_condiciones', 'gs_datos', 'gs_comite', 'gs_adolescentes', 'gs_lactario', 'gs_discapacidad', 'gs_lactancia'];   /* V6 (15-nov): cumplimiento legal · _BS_LACTANCIA_V1 (16-nov) */   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026): + bs_gestion_social · V5 (15-nov): casillas separadas bs_gs_gestantes, bs_gs_canal, bs_gs_condiciones */
+const BS_MODS = ['quejas', 'accidentes', 'hostigamiento', 'subsidios', 'rendiciones', 'panel', 'estadisticas', 'descansos', 'gestion_social', 'gs_gestantes', 'gs_canal', 'gs_condiciones', 'gs_datos', 'gs_comite', 'gs_adolescentes', 'gs_lactario', 'gs_discapacidad', 'gs_lactancia', 'auditoria'];   /* _BS_AUDITORIA_ACCESO_V1 (24-nov-2026) */   /* V6 (15-nov): cumplimiento legal · _BS_LACTANCIA_V1 (16-nov) */   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026): + bs_gestion_social · V5 (15-nov): casillas separadas bs_gs_gestantes, bs_gs_canal, bs_gs_condiciones */
 async function accesosDe(usuario) {
   try {
     const { getPool, sql } = require('../shared/db');

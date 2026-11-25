@@ -65888,7 +65888,7 @@ var require_auth_sso = __commonJS({
         return false;
       }
     }
-    var BS_MODS = ["quejas", "accidentes", "hostigamiento", "subsidios", "rendiciones", "panel", "estadisticas", "descansos", "gestion_social", "gs_gestantes", "gs_canal", "gs_condiciones", "gs_datos", "gs_comite", "gs_adolescentes", "gs_lactario", "gs_discapacidad", "gs_lactancia"];
+    var BS_MODS = ["quejas", "accidentes", "hostigamiento", "subsidios", "rendiciones", "panel", "estadisticas", "descansos", "gestion_social", "gs_gestantes", "gs_canal", "gs_condiciones", "gs_datos", "gs_comite", "gs_adolescentes", "gs_lactario", "gs_discapacidad", "gs_lactancia", "auditoria"];
     async function accesosDe(usuario) {
       try {
         const { getPool, sql } = require_db();
@@ -68362,7 +68362,7 @@ var require_bs = __commonJS({
           if (CLAVES.indexOf(clave) < 0) return res(400, { success: false, error: "clave desconocida" });
           if (clave === "bs_auditoria") {
             const rolA = String(u && (u.rol || u.role) || "").toLowerCase(), usA = String(u && u.usuario || "").toLowerCase();
-            if (rolA.indexOf("admin") < 0 && !/coordinador|jefa/.test(rolA) && ["jtimoteo"].indexOf(usA) < 0) return res(403, { success: false, error: "Solo administradores pueden ver la auditor\xEDa." });
+            if (rolA.indexOf("admin") < 0 && !/coordinador|jefa/.test(rolA) && ["jtimoteo"].indexOf(usA) < 0 && !(await permisosBS(u, q)).permisos.auditoria) return res(403, { success: false, error: "Solo administradores pueden ver la auditor\xEDa." });
           }
           const modT = MODULO_DE_CLAVE[clave] || "";
           if (modT && clave !== "bs_auditoria") {
