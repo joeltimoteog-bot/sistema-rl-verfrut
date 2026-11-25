@@ -995,9 +995,29 @@ with sync_playwright() as pw:
     pg.wait_for_timeout(9500); sel = pg.evaluate(SELV)
     ok('Selector de sede: al volver a Ambas ya no viaja la cabecera', sel.endswith('#') and len(SEDEV['cab']) > 0 and not any(SEDEV['cab']), sel + ' | con cabecera: ' + str(len([x for x in SEDEV['cab'] if x])))
     ok('Selector de sede: sin errores de JavaScript', not errs, '; '.join(errs[:3])); c.close()
+    # _SEDE_PREGUNTA_V1 (24-nov-2026): quien ve las dos sedes elige la sede en cada ingreso
+    PREG = "() => { const o = document.getElementById('sedePregOv'); return o ? Array.from(o.querySelectorAll('#sedePregOps button')).map(b => (b.getAttribute('data-v') || 'AMBAS') + (b.getAttribute('aria-pressed') === 'true' ? '*' : '')).join('|') : 'SIN'; }"
+    SEDEV['sede'] = 'TODO'; SEDEV['usuario'] = 'jtimoteo'; SEDEV['cab'].clear()
+    c, pg, errs = sesion_perm('jtimoteo'); pg.wait_for_timeout(2500)
+    ok('Pregunta de sede: al ingresar, quien ve las dos sedes ve el cuadro con Piura / Olmos / Ambas (Ambas marcada)', pg.evaluate(PREG) == 'PIURA|OLMOS|AMBAS*', pg.evaluate(PREG))
+    pg.click('#sedePregOps button[data-v="OLMOS"]'); marc = pg.evaluate(PREG); SEDEV['cab'].clear()
+    with pg.expect_navigation(): pg.click('#sedePregOk')
+    pg.wait_for_timeout(9500)
+    ok('Pregunta de sede: al elegir Olmos y Continuar la pagina se recarga en Olmos, el cuadro ya no vuelve a salir en esa sesion y las consultas llevan x-rl-sede: OLMOS', marc == 'PIURA|OLMOS*|AMBAS' and pg.evaluate(PREG) == 'SIN' and pg.evaluate(SELV).endswith('#OLMOS') and len(SEDEV['cab']) > 0 and all(x == 'OLMOS' for x in SEDEV['cab']), marc + ' | ' + pg.evaluate(PREG) + ' | ' + pg.evaluate(SELV) + ' | ' + ','.join(sorted(set(SEDEV['cab']))))
+    pg.evaluate("() => sessionStorage.setItem('rl_sede_preg', 'sesion-anterior')")   # otra sesion (otro token) en la misma pestaña
+    pg.reload(wait_until='load'); pg.wait_for_timeout(11000)
+    ok('Pregunta de sede: en un ingreso nuevo el cuadro vuelve a salir, con la sede que estaba elegida marcada', pg.evaluate(PREG) == 'PIURA|OLMOS*|AMBAS', pg.evaluate(PREG))
+    pg.click('#sedePregOk'); pg.wait_for_timeout(600)
+    ok('Pregunta de sede: Continuar sin cambiar de sede cierra el cuadro sin recargar', pg.evaluate(PREG) == 'SIN' and pg.evaluate(SELV).endswith('#OLMOS'), pg.evaluate(PREG) + ' | ' + pg.evaluate(SELV))
+    pg.evaluate("() => { sessionStorage.removeItem('rl_sede_preg'); sessionStorage.removeItem('rl_sede_vista'); localStorage.setItem('rl_sede_pregunta', 'off'); }")
+    pg.reload(wait_until='load'); pg.wait_for_timeout(11000)
+    ok('Pregunta de sede: con el interruptor rl_sede_pregunta=off no sale y el selector de arriba sigue', pg.evaluate(PREG) == 'SIN' and pg.evaluate(SELV).endswith('#'), pg.evaluate(PREG) + ' | ' + pg.evaluate(SELV))
+    pg.evaluate("() => localStorage.removeItem('rl_sede_pregunta')")
+    ok('Pregunta de sede: sin errores de JavaScript', not errs, '; '.join(errs[:3])); c.close()
     SEDEV['sede'] = 'PIURA'; SEDEV['usuario'] = 'fpulache'; SEDEV['cab'].clear()
     PERMX['resp'] = {'success': True, 'permisos': PF, 'vacio': False, 'usuario': 'fpulache', 'fuente': 'azure'}
     c, pg, errs = sesion_perm('fpulache'); pg.wait_for_timeout(2500)
+    ok('Pregunta de sede: un usuario de una sola sede NO ve el cuadro', pg.evaluate(PREG) == 'SIN', pg.evaluate(PREG))
     ok('Selector de sede: un usuario de una sola sede NO ve el selector y sus consultas no llevan la cabecera', pg.evaluate(SELV) == 'SIN' and len(SEDEV['cab']) > 0 and not any(SEDEV['cab']) and not errs, pg.evaluate(SELV) + ' | ' + '; '.join(errs[:2]))
     pg.evaluate("() => { sessionStorage.setItem('rl_sede_vista', 'OLMOS'); sessionStorage.removeItem('rl_sede_real'); }")   # eleccion que quedo de otro usuario en la misma pestaña
     pg.reload(wait_until='load'); pg.wait_for_timeout(12000); SEDEV['cab'].clear(); pg.wait_for_timeout(500)
