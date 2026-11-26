@@ -65913,7 +65913,11 @@ var require_auth_sso = __commonJS({
         bs.permisos.ficha = conDef("ficha", true);
         bs.permisos.sugerencias_acceso = conDef("sugerencias_acceso", true);
         bs.permisos.expediente = conDef("expediente", m.bs_estadisticas);
-        return { definido, activo, bs, eti: { acceso: activo && (!!m.eti_acceso || !!m.navAppEti), programar: activo && !!m.navAppEti }, ev: { acceso: activo && !!m.ev_acceso } };
+        const etiPant = {};
+        ["dashboard", "programacion", "registro", "tabla", "ranking", "estadisticas", "usuarios", "mipanel"].forEach((k) => {
+          etiPant[k] = Object.prototype.hasOwnProperty.call(m, "eti_p_" + k) ? !!m["eti_p_" + k] : true;
+        });
+        return { definido, activo, bs, eti: { acceso: activo && (!!m.eti_acceso || !!m.navAppEti), programar: activo && !!m.navAppEti, pantallas: etiPant }, ev: { acceso: activo && !!m.ev_acceso } };
       } catch (e) {
         return null;
       }

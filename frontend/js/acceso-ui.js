@@ -26,7 +26,7 @@
     { n: 'Principal', ic: '🏠', c: ['mod_dashboard', 'navAt', 'mod_trabajadores', 'mod_consulta', 'mod_consulta-masiva', 'navMisEstadisticas'] },
     { n: 'Operación RR.LL.', ic: '🗂️', c: ['navCorreo', 'navVisitas', 'navCasos', 'navFusiones', 'mod_capacitaciones', 'navMantenimiento', 'navSolicitudes', 'navHoras', 'navAlmuerzos', 'navInventario', 'navPreaviso', 'navCalcRemu', 'navBienestar'] },
     { n: 'Análisis y gerencia', ic: '📈', c: ['navRes', 'navEstadisticas', 'navKpis', 'navEval360'] },
-    { n: 'Sistema ETI', ic: '🎓', c: ['navProgEti', 'navAppEti', 'eti_acceso'] },
+    { n: 'Sistema ETI', ic: '🎓', c: ['navProgEti', 'navAppEti', 'eti_acceso', 'eti_p_dashboard', 'eti_p_programacion', 'eti_p_registro', 'eti_p_tabla', 'eti_p_ranking', 'eti_p_estadisticas', 'eti_p_usuarios', 'eti_p_mipanel'] },
     { n: 'Bienestar Social (otro sistema)', ic: '💚', c: ['bs_acceso', 'bs_admin', 'bs_ficha', 'bs_sugerencias_acceso', 'bs_quejas', 'bs_accidentes', 'bs_hostigamiento', 'bs_subsidios', 'bs_rendiciones', 'bs_panel', 'bs_estadisticas', 'bs_expediente', 'bs_auditoria', 'bs_descansos', 'bs_gestion_social', 'bs_gs_gestantes', 'bs_gs_canal', 'bs_gs_condiciones', 'bs_gs_datos', 'bs_gs_comite', 'bs_gs_adolescentes', 'bs_gs_lactario', 'bs_gs_discapacidad', 'bs_gs_lactancia'] },   /* _BS_GESTION_SOCIAL_V1 (14-nov-2026) · V5: submódulos separados */
     { n: 'Evaluaciones ETI (otro sistema)', ic: '📝', c: ['ev_acceso'] },
     { n: 'Administración', ic: '🛡️', c: ['navUsr', 'navPermisos', 'navActividad', 'act_todos', 'navMonitor', 'navFbAlertas', 'cumpl_equipo'] }
@@ -55,6 +55,8 @@
     /* _ACCESOS_CENTRAL_V1 (29-oct-2026): accesos a los OTROS sistemas, desde este mismo panel.
        Se guardan con permisosGuardar igual que los modulos; cada sistema los lee al iniciar sesion. */
     [['eti_acceso', 'ETI Capacitaciones: ingresar como supervisor', '🎓'],
+     /* _ETI_PANTALLAS_V1 (25-nov-2026): una casilla por pantalla de Capacitaciones ETI; solo quitan (lo que el rol no muestra sigue sin mostrarse) */
+     ['eti_p_dashboard', 'ETI Capacitaciones: Dashboard', '📊'], ['eti_p_programacion', 'ETI Capacitaciones: Programación', '🗓️'], ['eti_p_registro', 'ETI Capacitaciones: Registrar Capacitación', '➕'], ['eti_p_tabla', 'ETI Capacitaciones: Registros', '📋'], ['eti_p_ranking', 'ETI Capacitaciones: Ranking', '🏆'], ['eti_p_estadisticas', 'ETI Capacitaciones: Estadísticas', '📈'], ['eti_p_usuarios', 'ETI Capacitaciones: Usuarios', '👥'], ['eti_p_mipanel', 'ETI Capacitaciones: Mi Panel (supervisor)', '🧑‍🏫'],
      ['bs_acceso', 'Bienestar: puede ingresar', '🔑'], ['bs_admin', 'Bienestar: administrador', '🛡️'],
      ['bs_quejas', 'Bienestar: Quejas y Sugerencias', '📣'], ['bs_accidentes', 'Bienestar: Accidentes Laborales', '🚑'],
      ['bs_hostigamiento', 'Bienestar: Hostigamiento Sexual', '🔒'], ['bs_subsidios', 'Bienestar: Subsidios', '💊'],
@@ -114,7 +116,8 @@
      mientras el usuario no tenga la casilla guardada, se muestra (y vale en el servidor) lo que ya tenia: Ficha y Sugerencias = quien
      ingresa a Bienestar; Expediente = quien tiene Estadisticas. Asi nadie pierde acceso hasta que el administrador lo decida. */
   var DEF_BS = { bs_ficha: function (p) { return !!p.bs_acceso; }, bs_sugerencias_acceso: function (p) { return !!p.bs_acceso; }, bs_expediente: function (p) { return !!p.bs_acceso && !!p.bs_estadisticas; },
-    cumpl_equipo: function (p) { return true; } };   /* _CUMPL_EQUIPO_CASILLA_V1: sin casilla guardada sale encendida (como hoy); solo tiene efecto en roles de administrador y solo cuando se guarda APAGADA */
+    cumpl_equipo: function (p) { return true; },
+    eti_p_dashboard: function (p) { return true; }, eti_p_programacion: function (p) { return true; }, eti_p_registro: function (p) { return true; }, eti_p_tabla: function (p) { return true; }, eti_p_ranking: function (p) { return true; }, eti_p_estadisticas: function (p) { return true; }, eti_p_usuarios: function (p) { return true; }, eti_p_mipanel: function (p) { return true; } };   /* _ETI_PANTALLAS_V1 (25-nov-2026): sin casilla guardada salen encendidas (como hoy) */   /* _CUMPL_EQUIPO_CASILLA_V1: sin casilla guardada sale encendida (como hoy); solo tiene efecto en roles de administrador y solo cuando se guarda APAGADA */
   function valP(p, k) { if (!p) return false; if (p[k] === undefined && DEF_BS[k]) return DEF_BS[k](p); return !!p[k]; }
   function resumenUsuario(u) {
     var p = S.permisos[u.usuario], cat = S.cat, n = 0, tot = cat.length;

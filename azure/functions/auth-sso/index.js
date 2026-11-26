@@ -56,7 +56,10 @@ async function accesosDe(usuario) {
     /* _BS_TODOS_MODULOS_V1 (24-nov-2026): casillas nuevas para modulos que ya se usaban. Sin casilla guardada vale lo de antes (nadie pierde acceso). */
     const conDef = (k, d) => bs.acceso && (Object.prototype.hasOwnProperty.call(m, 'bs_' + k) ? !!m['bs_' + k] : !!d);
     bs.permisos.ficha = conDef('ficha', true); bs.permisos.sugerencias_acceso = conDef('sugerencias_acceso', true); bs.permisos.expediente = conDef('expediente', m.bs_estadisticas);
-    return { definido, activo, bs, eti: { acceso: activo && (!!m.eti_acceso || !!m.navAppEti), programar: activo && !!m.navAppEti }, ev: { acceso: activo && !!m.ev_acceso } };
+    /* _ETI_PANTALLAS_V1 (25-nov-2026), decision de Joel: cada pantalla de Capacitaciones ETI tiene su casilla en Acceso a Modulos (eti_p_<pantalla>).
+       Sin casilla guardada la pantalla sigue como siempre (true); la casilla solo quita. */
+    const etiPant = {}; ['dashboard', 'programacion', 'registro', 'tabla', 'ranking', 'estadisticas', 'usuarios', 'mipanel'].forEach(k => { etiPant[k] = Object.prototype.hasOwnProperty.call(m, 'eti_p_' + k) ? !!m['eti_p_' + k] : true; });
+    return { definido, activo, bs, eti: { acceso: activo && (!!m.eti_acceso || !!m.navAppEti), programar: activo && !!m.navAppEti, pantallas: etiPant }, ev: { acceso: activo && !!m.ev_acceso } };
   } catch (e) { return null; }
 }
 
