@@ -99,6 +99,8 @@
     'html.gh-on.gh-cap .btn-logout{background:#FFF1F3;color:#B4122C;border-color:#F5C2C9}',
     'html.gh-on.gh-cap .btn-logout:hover{background:' + ROJO + ';color:#fff}',
     '@media(max-width:900px){html.gh-on.gh-cap .sidebar{border-right:0;border-top:1px solid #E2E8F0}}'
+  , '#gh-barra .gh-sede{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;background:#E0EAFB;color:#18428A;border:1px solid #BFD3F5;white-space:nowrap}'
+  , '#gh-barra .gh-sede.ol{background:#FFEDD5;color:#9A3412;border-color:#FDBA74}'
   ].join('\n');
 
   function css() {
@@ -128,11 +130,32 @@
       '<a href="https://sistemarrll.com/eti-evaluacion-verfrut/"' + (s === 'eval' ? ' class="on" aria-current="page"' : '') + '><span class="gh-l">Evaluación ETI</span><span class="gh-c">Evaluación</span></a>' +
       '<a href="https://sistemarrll.com/sistema-eti/"' + (s === 'cap' ? ' class="on" aria-current="page"' : '') + '><span class="gh-l">Capacitaciones ETI</span><span class="gh-c">Capacitación</span></a>' +
       '</nav>' +
+      '<span class="gh-sede" id="gh-sede" style="display:none" title="Sede con la que trabaja en este sistema"></span>' +   /* _GH_SEDE_V1 */
       '<span class="gh-estado" id="gh-estado" title="Estado del servidor"><i></i><span>Servidor en línea</span></span>';
     document.body.appendChild(b);
     b.querySelector('[data-gh="rrll"]').addEventListener('click', irRRLL);
     /* el sistema activo no navega (evita volver a la pantalla de ingreso) */
     Array.prototype.forEach.call(b.querySelectorAll('nav a.on'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); }); });
+  }
+
+  /* _GH_SEDE_V1 (26-nov-2026, pedido de Joel): en Evaluacion ETI y Capacitaciones ETI la barra dice a que sede ingreso el usuario
+     (Sede Olmos / Sede Piura / Piura y Olmos), igual que la tarjeta de bienvenida del Sistema RR.LL. La sede la dice el servidor
+     (auth/sso, accion sesion) con el token de la sesion; si no responde, la barra sigue sin la etiqueta. Solo informa: no filtra nada. */
+  var sedeVista = '', sedeReintento = 0;
+  function sede() {
+    var el = document.getElementById('gh-sede'); if (!el) return;
+    var tk = ''; try { tk = sessionStorage.getItem(sistema() === 'cap' ? 'eti_rl_token' : 'eti_token') || ''; } catch (e) {}
+    if (!tk || tk === sedeVista || Date.now() < sedeReintento) return; sedeVista = tk;
+    try {
+      fetch('https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/auth/sso?forceFunctionRegion=sa-east-1', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accion: 'sesion', token: tk }) })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) {
+          var s = j && j.success && j.user ? String(j.user.sede || '') : '';
+          var t = s === 'OLMOS' ? 'Sede Olmos' : s === 'PIURA' ? 'Sede Piura' : s === 'TODO' ? 'Piura y Olmos' : '';
+          if (!t) { sedeVista = ''; sedeReintento = Date.now() + 30000; return; }
+          el.textContent = t; el.className = 'gh-sede' + (s === 'OLMOS' ? ' ol' : ''); el.style.display = '';
+        }).catch(function () { sedeVista = ''; sedeReintento = Date.now() + 30000; });
+    } catch (e) { sedeVista = ''; sedeReintento = Date.now() + 30000; }
   }
 
   var tSalud = null;
@@ -155,7 +178,7 @@
   function revisar() {
     try {
       var on = conSesion(), h = document.documentElement, s = sistema();
-      if (on) { css(); barra(); h.classList.add('gh-' + s); }
+      if (on) { css(); barra(); h.classList.add('gh-' + s); sede(); }
       if (h.classList.contains('gh-on') !== on) {
         h.classList.toggle('gh-on', on);
         if (on && !tSalud) { salud(); tSalud = setInterval(salud, 60000); }
