@@ -65917,7 +65917,11 @@ var require_auth_sso = __commonJS({
         ["dashboard", "programacion", "registro", "tabla", "ranking", "estadisticas", "usuarios", "mipanel"].forEach((k) => {
           etiPant[k] = Object.prototype.hasOwnProperty.call(m, "eti_p_" + k) ? !!m["eti_p_" + k] : true;
         });
-        return { definido, activo, bs, eti: { acceso: activo && (!!m.eti_acceso || !!m.navAppEti), programar: activo && !!m.navAppEti, pantallas: etiPant }, ev: { acceso: activo && !!m.ev_acceso } };
+        const evPant = {};
+        ["estadisticas", "indicadores", "trafico", "evaluar", "qr", "encuesta", "mis", "cumplimiento", "alertas", "conectados", "informes", "usuarios"].forEach((k) => {
+          evPant[k] = Object.prototype.hasOwnProperty.call(m, "ev_p_" + k) ? !!m["ev_p_" + k] : true;
+        });
+        return { definido, activo, bs, eti: { acceso: activo && (!!m.eti_acceso || !!m.navAppEti), programar: activo && !!m.navAppEti, pantallas: etiPant }, ev: { acceso: activo && !!m.ev_acceso, pantallas: evPant } };
       } catch (e) {
         return null;
       }
