@@ -25,7 +25,7 @@
 
   var BASE = '/sistema-rl-verfrut', URL_VERSION = BASE + '/version.json';
   var CADA_MS = 3 * 60000, POSPONER_MS = 20 * 60000, INACTIVO_MS = 5 * 60000, CUENTA_S = 10;
-  var K_CARGADA = 'rl_ver_cargada', K_INTENTO = 'rl_ver_intento';
+  var K_CARGADA = 'rl_ver_cargada5', K_INTENTO = 'rl_ver_intento5';   /* _ACTUALIZAR_V5: claves nuevas (la version ahora sale del contenido) */
   var esLogin = /\/index\.html$|\/sistema-rl-verfrut\/?$/.test(location.pathname) || location.pathname === '/';
   var nueva = null, pospuestoHasta = 0, ultActividad = Date.now(), cuentaT = null, aplicando = false;
 
@@ -68,18 +68,31 @@
   var ARCHIVOS = ['index.html', 'frontend/pages/dashboard.html', 'frontend/pages/capacitaciones.html', 'frontend/js/capacitaciones.js',
                   'frontend/js/dash-ui.js', 'frontend/js/ui-piel.js', 'frontend/js/tema-rl.js', 'frontend/js/actualizar.js'];
   function huella(txt) { var h = 5381; for (var i = 0; i < txt.length; i++) h = ((h << 5) + h + txt.charCodeAt(i)) >>> 0; return h.toString(36); }
+  /* _ACTUALIZAR_V5 (26-nov-2026): GitHub Pages arma el ETag como W/"<hora de publicacion>-<tamaño>", asi que CADA
+     publicacion cambia el ETag de TODOS los archivos aunque no se hayan tocado (un cambio solo del servidor o de las pruebas
+     tambien). Por eso salia "Nueva version disponible" a cada rato (10 publicaciones el 25-nov). Ahora el ETag solo avisa
+     que "algo se publico": en ese caso se descarga el archivo y se compara su CONTENIDO. Si el contenido es el mismo, no hay
+     aviso. La huella del contenido se guarda por archivo en la pestaña, asi que solo se descarga tras una publicacion. */
+  var K_HUELLAS = 'rl_ver_huellas';
+  function huellas() { try { return JSON.parse(ss(K_HUELLAS) || '{}') || {}; } catch (e) { return {}; } }
   function etag(ruta) {
-    return fetch(BASE + '/' + ruta + '?h=' + Math.floor(Date.now() / 60000), { method: 'HEAD', cache: 'no-store' })
-      .then(function (r) { if (!r.ok) return ruta + ':x'; var e = r.headers.get('etag'); return e ? ruta + ':' + e : ruta + ':x'; })   /* _ACTUALIZAR_V4: solo ETag; sin ETag o con error = lectura no concluyente */
-      .catch(function () { return ruta + ':x'; });
+    var q = BASE + '/' + ruta + '?h=' + Math.floor(Date.now() / 60000);
+    return fetch(q, { method: 'HEAD', cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) return null; var e = r.headers.get('etag'); if (!e) return null;
+        var H = huellas(); if (H[ruta] && H[ruta].e === e) return ruta + ':' + H[ruta].h;   /* misma publicacion: no se descarga */
+        return fetch(q + '&c=1', { cache: 'no-store' }).then(function (r2) { return r2.ok ? r2.text() : null; }).then(function (t) {
+          if (t == null) return null;
+          var h = huella(t), H2 = huellas(); H2[ruta] = { e: e, h: h }; ss(K_HUELLAS, JSON.stringify(H2));
+          return ruta + ':' + h;
+        });
+      })
+      .catch(function () { return null; });
   }
   function leer() {
     return Promise.all(ARCHIVOS.map(etag)).then(function (tags) {
-      var falt = tags.filter(function (t) { return /:x$/.test(t); }).length;
-      /* _ACTUALIZAR_V4 (02-nov-2026): antes, con UNA sola peticion fallida (red lenta, bloqueador, CDN) la huella
-         cambiaba y salia "Nueva version disponible" sin haber version nueva; luego volvia a la normal y el aviso
-         reaparecia a cada rato. Ahora: si falta cualquier ETag, la lectura no decide nada. */
-      if (falt > 0) throw new Error('lectura incompleta');
+      /* _ACTUALIZAR_V4 (02-nov-2026): si falta cualquier archivo, la lectura no decide nada */
+      if (tags.some(function (t) { return !t; })) throw new Error('lectura incompleta');
       var v = 'v' + huella(tags.join('|'));
       return fetch(URL_VERSION + '?t=' + Date.now(), { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : {}; }).catch(function () { return {}; })
         .then(function (j) { j = j || {}; var fresco = j.version && String(j.version) !== '3.8.0'; return { version: v, fecha: fresco ? (j.fecha || '') : '', titulo: fresco ? (j.titulo || '') : '', notas: fresco ? (j.notas || '') : '' }; });
