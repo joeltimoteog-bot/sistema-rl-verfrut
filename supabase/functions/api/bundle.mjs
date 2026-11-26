@@ -65915,7 +65915,8 @@ var require_auth_sso = __commonJS({
         bs.permisos.expediente = conDef("expediente", m.bs_estadisticas);
         const etiPant = {};
         ["dashboard", "programacion", "registro", "tabla", "ranking", "estadisticas", "usuarios", "mipanel"].forEach((k) => {
-          etiPant[k] = Object.prototype.hasOwnProperty.call(m, "eti_p_" + k) ? !!m["eti_p_" + k] : true;
+          const h = (x) => Object.prototype.hasOwnProperty.call(m, x);
+          etiPant[k] = h("etiv_" + k) ? !!m["etiv_" + k] : h("eti_p_" + k) && !m["eti_p_" + k] ? false : null;
         });
         const evPant = {};
         ["estadisticas", "indicadores", "trafico", "evaluar", "qr", "encuesta", "mis", "cumplimiento", "alertas", "conectados", "informes", "usuarios"].forEach((k) => {

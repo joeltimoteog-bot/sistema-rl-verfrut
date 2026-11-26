@@ -58,7 +58,10 @@ async function accesosDe(usuario) {
     bs.permisos.ficha = conDef('ficha', true); bs.permisos.sugerencias_acceso = conDef('sugerencias_acceso', true); bs.permisos.expediente = conDef('expediente', m.bs_estadisticas);
     /* _ETI_PANTALLAS_V1 (25-nov-2026), decision de Joel: cada pantalla de Capacitaciones ETI tiene su casilla en Acceso a Modulos (eti_p_<pantalla>).
        Sin casilla guardada la pantalla sigue como siempre (true); la casilla solo quita. */
-    const etiPant = {}; ['dashboard', 'programacion', 'registro', 'tabla', 'ranking', 'estadisticas', 'usuarios', 'mipanel'].forEach(k => { etiPant[k] = Object.prototype.hasOwnProperty.call(m, 'eti_p_' + k) ? !!m['eti_p_' + k] : true; });
+    /* _ETI_PANTALLAS_V2 (26-nov-2026), decision de Joel: las casillas de Capacitaciones ETI DAN y QUITAN (claves etiv_<pantalla>).
+       true = se le muestra aunque su rol no la tenga · false = se le quita · null = lo que diga su rol.
+       Las casillas anteriores (eti_p_, solo quitaban) se respetan cuando estan APAGADAS; encendidas no dan nada. */
+    const etiPant = {}; ['dashboard', 'programacion', 'registro', 'tabla', 'ranking', 'estadisticas', 'usuarios', 'mipanel'].forEach(k => { const h = x => Object.prototype.hasOwnProperty.call(m, x); etiPant[k] = h('etiv_' + k) ? !!m['etiv_' + k] : ((h('eti_p_' + k) && !m['eti_p_' + k]) ? false : null); });
     /* _EV_PANTALLAS_V1 (25-nov-2026): lo mismo para las pantallas de Evaluaciones ETI (ev_p_<pantalla>) */
     const evPant = {}; ['estadisticas', 'indicadores', 'trafico', 'evaluar', 'qr', 'encuesta', 'mis', 'cumplimiento', 'alertas', 'conectados', 'informes', 'usuarios'].forEach(k => { evPant[k] = Object.prototype.hasOwnProperty.call(m, 'ev_p_' + k) ? !!m['ev_p_' + k] : true; });
     return { definido, activo, bs, eti: { acceso: activo && (!!m.eti_acceso || !!m.navAppEti), programar: activo && !!m.navAppEti, pantallas: etiPant }, ev: { acceso: activo && !!m.ev_acceso, pantallas: evPant } };
