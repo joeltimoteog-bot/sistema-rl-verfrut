@@ -72009,8 +72009,20 @@ var require_cumpl = __commonJS({
       cache = { t: Date.now(), D, recientes, marcaW };
       return cache;
     }
+    function etiSesionCumpl(req) {
+      const h = req.headers && (req.headers.authorization || req.headers.Authorization) || "";
+      if (!h.startsWith("Bearer ") || !process.env.JWT_SECRET) return null;
+      try {
+        const p = require_jsonwebtoken().verify(h.slice(7).trim(), process.env.JWT_SECRET, { audience: "eti-sesion" });
+        return p && p.usuario ? String(p.usuario).toLowerCase().trim() : null;
+      } catch (e) {
+        return null;
+      }
+    }
     module.exports = async function(context, req) {
-      if (require_auth().exigirSesionLectura(context, req) === null) return;
+      const _etiU = context.bindingData && context.bindingData.accion === "getCumplimiento" ? etiSesionCumpl(req) : null;
+      if (_etiU) req.body = Object.assign({}, req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {}, { usuario: _etiU });
+      else if (require_auth().exigirSesionLectura(context, req) === null) return;
       const accion = context.bindingData && context.bindingData.accion;
       if (["cumplPendientes", "cumplPanel", "getCumplimiento", "cumplAusencias", "getCumplimientoCasos"].indexOf(accion) < 0) {
         context.res = { status: 404, body: { success: false, error: "Accion desconocida: " + accion } };

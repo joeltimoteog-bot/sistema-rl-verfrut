@@ -22,6 +22,12 @@ function token(req) {
   try { return require('../shared/auth.js').verificarSoloRL(h.slice(7).trim()); } catch (e) { return null; }
 }
 
+function etiSesion(req) {   /* _CUMPL_ETI_SESION_V1 */
+  const h = (req.headers && (req.headers.authorization || req.headers.Authorization)) || '';
+  if (!h.startsWith('Bearer ') || !process.env.JWT_SECRET) return null;
+  try { const p = jwt.verify(h.slice(7).trim(), process.env.JWT_SECRET, { audience: 'eti-sesion' }); return (p && p.usuario) ? String(p.usuario).toLowerCase().trim() : null; } catch (e) { return null; }
+}
+
 /* cache corto en memoria: 200 personas entrando a la vez no leen 200 veces la base */
 let cache = { t: 0, D: null, recientes: null };
 const CACHE_MS = 30000;
@@ -73,7 +79,11 @@ async function _datos() {
 
 module.exports = async function (context, req) {
   /* _LECTURAS_SESION_V1 (18-oct-2026): con LECTURAS_CON_SESION=1 las lecturas exigen sesion (o clave interna del Apps Script) */
-  if (require('../shared/auth').exigirSesionLectura(context, req) === null) return;
+  /* _CUMPL_ETI_SESION_V1 (27-nov-2026): el aviso de pendientes de Capacitaciones ETI usa la sesion de los ETI (aud=eti-sesion).
+     Solo para getCumplimiento y SIEMPRE con el usuario del token (no se pueden pedir los pendientes de otra persona). */
+  const _etiU = (context.bindingData && context.bindingData.accion === 'getCumplimiento') ? etiSesion(req) : null;
+  if (_etiU) req.body = Object.assign({}, (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) ? req.body : {}, { usuario: _etiU });
+  else if (require('../shared/auth').exigirSesionLectura(context, req) === null) return;
   const accion = context.bindingData && context.bindingData.accion;
   if (['cumplPendientes', 'cumplPanel', 'getCumplimiento', 'cumplAusencias', 'getCumplimientoCasos'].indexOf(accion) < 0) {   /* _CUMPL_CASOS_AZURE_V1: + getCumplimientoCasos */   /* _AUSENCIAS_V1: + cumplAusencias */
     context.res = { status: 404, body: { success: false, error: 'Accion desconocida: ' + accion } }; return;
