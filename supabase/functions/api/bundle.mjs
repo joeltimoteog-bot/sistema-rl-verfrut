@@ -65962,6 +65962,15 @@ var require_auth_sso = __commonJS({
           return out(200, { success: true, pase });
         }
         if (accion === "verificar") {
+          const sedeVerif = async (usr) => {
+            try {
+              const { getPool } = require_db();
+              const SDS = require_sede();
+              return await Promise.race([getPool().then((p) => SDS.modoReal(p, { usuario: String(usr).toLowerCase() })), new Promise((_, rj) => setTimeout(() => rj(new Error("timeout")), 3e3))]) || "";
+            } catch (e) {
+              return "";
+            }
+          };
           let d;
           try {
             d = jwt.verify(String(body.pase || ""), secret, { audience: AUD_PASE });
@@ -65982,7 +65991,7 @@ var require_auth_sso = __commonJS({
           }
           return out(200, {
             success: true,
-            user: { usuario: d.usuario, nombre: d.nombre || "", rol: d.rol || "", empresa: d.empresa || "", etiProg: !!d.etiProg, accesos: await accesosDe(String(d.usuario).toLowerCase()) },
+            user: { usuario: d.usuario, nombre: d.nombre || "", rol: d.rol || "", empresa: d.empresa || "", etiProg: !!d.etiProg, accesos: await accesosDe(String(d.usuario).toLowerCase()), sede: await sedeVerif(d.usuario) },
             /* _ETI_PERMISO_V1 + _ACCESOS_CENTRAL_V1 */
             token
           });

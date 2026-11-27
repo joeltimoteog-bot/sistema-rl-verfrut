@@ -103,6 +103,11 @@ module.exports = async function (context, req) {
       return out(200, { success: true, pase });
     }
 
+    /* _ETI_SEDE_GENERAL_V1 (27-nov-2026): la misma sede que devuelve 'sesion' (OLMOS / PIURA / TODO); si tarda o falla: '' */
+    async function sedeVerif(usr) {
+      try { const { getPool } = require('../shared/db'); const SDS = require('../shared/sede');
+        return (await Promise.race([getPool().then(p => SDS.modoReal(p, { usuario: String(usr).toLowerCase() })), new Promise((_, rj) => setTimeout(() => rj(new Error('timeout')), 3000))])) || ''; } catch (e) { return ''; }
+    }
     if (accion === 'verificar') {
       let d;
       try { d = jwt.verify(String(body.pase || ''), secret, { audience: AUD_PASE }); }
@@ -113,7 +118,7 @@ module.exports = async function (context, req) {
       try { const { getPool } = require('../shared/db'); const AUD = require('../shared/login-audit'); getPool().then(pool => AUD.registrar(pool, req, { usuario: d.usuario, rol: d.rol, empresa: d.empresa, sistema: 'SSO-ETI', resultado: 'ok' })).catch(() => {}); } catch (e) {}
       return out(200, {
         success: true,
-        user: { usuario: d.usuario, nombre: d.nombre || '', rol: d.rol || '', empresa: d.empresa || '', etiProg: !!d.etiProg, accesos: await accesosDe(String(d.usuario).toLowerCase()) },   /* _ETI_PERMISO_V1 + _ACCESOS_CENTRAL_V1 */
+        user: { usuario: d.usuario, nombre: d.nombre || '', rol: d.rol || '', empresa: d.empresa || '', etiProg: !!d.etiProg, accesos: await accesosDe(String(d.usuario).toLowerCase()), sede: await sedeVerif(d.usuario) },   /* _ETI_SEDE_GENERAL_V1: + sede (TODO = alcance general) */   /* _ETI_PERMISO_V1 + _ACCESOS_CENTRAL_V1 */
         token
       });
     }
