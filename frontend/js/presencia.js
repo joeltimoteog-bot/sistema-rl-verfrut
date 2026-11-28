@@ -658,13 +658,13 @@
     });
   }
   /* _ETI_LECTURA_SUPABASE_V1 (27-nov-2026): los pendientes ETI se leen de Supabase (sesion del RR.LL.; el servidor aplica la sede).
-     Si Supabase no responde o no hay permiso (la lista de cuentas ETI solo la leen los gestores), se lee de Firestore como antes.
+     Si Supabase no responde, se lee de Firestore como antes. _ETI_CUENTA_PROPIA_V1: de las cuentas ETI se pide SOLO la del propio usuario.
      Volver a Firestore sin publicar nada: localStorage.rl_eti_fuente = 'firestore' y recargar. */
   function _etiSb(col){
     var tk=''; try{ if(localStorage.getItem('rl_eti_fuente')==='firestore') return Promise.reject(new Error('interruptor')); tk=sessionStorage.getItem('rl_token')||''; }catch(e){}
     if(!tk) return Promise.reject(new Error('sin sesion'));
     var ctl=null,t=null; try{ ctl=new AbortController(); t=setTimeout(function(){ try{ctl.abort();}catch(e){} },15000); }catch(e){}
-    return fetch('https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/eti/consultar?forceFunctionRegion=sa-east-1',{method:'POST',signal:ctl?ctl.signal:undefined,headers:{'Content-Type':'application/json','Authorization':'Bearer '+tk},body:JSON.stringify({col:col,filtros:[],limite:20000})})
+    return fetch('https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/eti/consultar?forceFunctionRegion=sa-east-1',{method:'POST',signal:ctl?ctl.signal:undefined,headers:{'Content-Type':'application/json','Authorization':'Bearer '+tk},body:JSON.stringify(col==='usuarios_eti'?{col:col,propio:true}:{col:col,filtros:[],limite:20000})})
       .then(function(r){ return r.json().then(function(j){ if(t)clearTimeout(t); if(!r.ok||!j||j.success!==true||!Array.isArray(j.docs)) throw new Error('HTTP '+r.status); return j.docs.map(function(d){ return (d&&d.datos)||{}; }); }); },function(e){ if(t)clearTimeout(t); throw e; });
   }
   function _fsGetFirestore(col) {

@@ -76735,6 +76735,10 @@ var require_eti = __commonJS({
     async function consultar(b, u) {
       const c = col(b.col);
       if (!u && LECTURA_ANONIMA.indexOf(c) < 0) throw Object.assign(new Error("Sesion requerida"), { status: 401 });
+      if (c === "usuarios_eti" && b.propio === true && u && u.usuario) {
+        const rP = await pool().query(`SELECT id, datos - 'password'::text - 'password_hash'::text AS datos FROM eti.usuarios_eti WHERE lower(btrim(datos->>'usuario')) = lower(btrim($1)) ORDER BY id LIMIT 5`, [String(u.usuario)]);
+        return { success: true, docs: rP.rows, propio: true };
+      }
       soloGestor(c, u);
       const w = [], v = [];
       for (const f of Array.isArray(b.filtros) ? b.filtros : []) {

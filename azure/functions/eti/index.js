@@ -83,6 +83,12 @@ function condSede(sd, v) {
 async function consultar(b, u) {
   const c = col(b.col);
   if (!u && LECTURA_ANONIMA.indexOf(c) < 0) throw Object.assign(new Error('Sesion requerida'), { status: 401 });
+  /* _ETI_CUENTA_PROPIA_V1 (27-nov-2026): cualquier usuario con sesion puede leer SOLO su propia cuenta ETI (sin clave), pidiendo
+     { col:'usuarios_eti', propio:true }. El usuario sale de la sesion, nunca del pedido. Sin "propio" todo sigue igual (solo gestores). */
+  if (c === 'usuarios_eti' && b.propio === true && u && u.usuario) {
+    const rP = await pool().query(`SELECT id, datos - 'password'::text - 'password_hash'::text AS datos FROM eti.usuarios_eti WHERE lower(btrim(datos->>'usuario')) = lower(btrim($1)) ORDER BY id LIMIT 5`, [String(u.usuario)]);
+    return { success: true, docs: rP.rows, propio: true };
+  }
   soloGestor(c, u);   /* _SEG_SERVIDOR_V1 */
   const w = [], v = [];
   for (const f of (Array.isArray(b.filtros) ? b.filtros : [])) {
