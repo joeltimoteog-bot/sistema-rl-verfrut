@@ -20,7 +20,18 @@ function coincide(a,b){
   return c>=3||(c>=2&&(Aw.length<=2||Bw.length<=2));
 }
 function fsVal(v){ if(!v)return null; if(v.stringValue!==undefined)return v.stringValue; if(v.integerValue!==undefined)return Number(v.integerValue); if(v.doubleValue!==undefined)return v.doubleValue; if(v.booleanValue!==undefined)return v.booleanValue; if(v.arrayValue)return (v.arrayValue.values||[]).map(fsVal); if(v.mapValue){var o={},f=v.mapValue.fields||{};Object.keys(f).forEach(function(k){o[k]=fsVal(f[k]);});return o;} return null; }
-function fsGet(col){ return fetch(FS+col+'?pageSize=300&key='+KEY).then(function(r){return r.json();}).then(function(j){return (j&&j.documents||[]).map(function(d){var o={},f=d.fields||{};Object.keys(f).forEach(function(k){o[k]=fsVal(f[k]);});return o;});}).catch(function(){return [];}); }
+/* _ETI_LECTURA_SUPABASE_V1 (27-nov-2026): los datos de los ETI se leen de Supabase (eti.<coleccion>, con la sesion del RR.LL.;
+   el servidor aplica la sede del usuario). Si Supabase no responde o no hay permiso, se lee de Firestore como antes.
+   Volver a Firestore sin publicar nada: localStorage.rl_eti_fuente = 'firestore' y recargar. */
+function etiSb(col){
+  var tk=''; try{ if(localStorage.getItem('rl_eti_fuente')==='firestore') return Promise.reject(new Error('interruptor')); tk=sessionStorage.getItem('rl_token')||''; }catch(e){}
+  if(!tk) return Promise.reject(new Error('sin sesion'));
+  var ctl=null,t=null; try{ ctl=new AbortController(); t=setTimeout(function(){ try{ctl.abort();}catch(e){} },15000); }catch(e){}
+  return fetch('https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/eti/consultar?forceFunctionRegion=sa-east-1',{method:'POST',signal:ctl?ctl.signal:undefined,headers:{'Content-Type':'application/json','Authorization':'Bearer '+tk},body:JSON.stringify({col:col,filtros:[],limite:20000})})
+    .then(function(r){ return r.json().then(function(j){ if(t)clearTimeout(t); if(!r.ok||!j||j.success!==true||!Array.isArray(j.docs)) throw new Error('HTTP '+r.status); return j.docs.map(function(d){ return (d&&d.datos)||{}; }); }); },function(e){ if(t)clearTimeout(t); throw e; });
+}
+function fsGetFirestore(col){ return fetch(FS+col+'?pageSize=300&key='+KEY).then(function(r){return r.json();}).then(function(j){return (j&&j.documents||[]).map(function(d){var o={},f=d.fields||{};Object.keys(f).forEach(function(k){o[k]=fsVal(f[k]);});return o;});}).catch(function(){return [];}); }
+function fsGet(col){ return etiSb(col).catch(function(){ return fsGetFirestore(col); }); }
 function hoyISO(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function dias(a,b){return Math.round((new Date(b+'T12:00:00')-new Date(a+'T12:00:00'))/86400000);}
 function fmtD(iso){return iso?iso.slice(8,10)+'/'+iso.slice(5,7):'';}

@@ -1063,7 +1063,23 @@ async function buscarFicha(){
     }
     return null;
   };
-  const fsGet=c=>fetch(_FS_BASE+c+'?pageSize=300&key='+_FS_KEY).then(r=>r.json()).then(d=>(d.documents||[]).map(_fsDoc)).catch(()=>[]);
+  /* _ETI_LECTURA_SUPABASE_V1 (27-nov-2026): capacitaciones y evaluaciones ETI de la ficha se leen de Supabase (sesion del RR.LL.;
+     el servidor aplica la sede). Si no responde, Firestore como antes. Volver: localStorage.rl_eti_fuente='firestore'. */
+  const fsGetFirestore=c=>fetch(_FS_BASE+c+'?pageSize=300&key='+_FS_KEY).then(r=>r.json()).then(d=>(d.documents||[]).map(_fsDoc)).catch(()=>[]);
+  const _sinNulos=v=>v==null?'':Array.isArray(v)?v.map(_sinNulos):(typeof v==='object'?Object.keys(v).reduce((o,k)=>{o[k]=_sinNulos(v[k]);return o;},{}):v);
+  const fsGet=async c=>{
+    try{
+      let tk=''; try{ if(localStorage.getItem('rl_eti_fuente')==='firestore') throw new Error('interruptor'); tk=sessionStorage.getItem('rl_token')||''; }catch(e){ if(e.message==='interruptor') throw e; }
+      if(!tk) throw new Error('sin sesion');
+      const ctl=new AbortController(), t=setTimeout(()=>ctl.abort(),15000);
+      try{
+        const r=await fetch(_FER_SB+'consultar?forceFunctionRegion=sa-east-1',{method:'POST',signal:ctl.signal,headers:{'Content-Type':'application/json',Authorization:'Bearer '+tk},body:JSON.stringify({col:c,filtros:[],limite:20000})});
+        const j=await r.json();
+        if(!r.ok||!j||j.success!==true||!Array.isArray(j.docs)) throw new Error('HTTP '+r.status);
+        return j.docs.map(d=>_sinNulos((d&&d.datos)||{}));
+      } finally { clearTimeout(t); }
+    }catch(e){ return fsGetFirestore(c); }
+  };
   // Fase 1: identificar a la persona (necesitamos el nombre para buscar su labor como responsable)
   const trab=await pedir('/trabajadores/buscar?dni='+encodeURIComponent(dni));
   const a0=(trab&&trab.success&&trab.trabajadores&&trab.trabajadores[0])||null;

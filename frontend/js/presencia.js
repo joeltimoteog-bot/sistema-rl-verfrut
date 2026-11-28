@@ -657,10 +657,21 @@
       return o;
     });
   }
-  function _fsGet(col) {
+  /* _ETI_LECTURA_SUPABASE_V1 (27-nov-2026): los pendientes ETI se leen de Supabase (sesion del RR.LL.; el servidor aplica la sede).
+     Si Supabase no responde o no hay permiso (la lista de cuentas ETI solo la leen los gestores), se lee de Firestore como antes.
+     Volver a Firestore sin publicar nada: localStorage.rl_eti_fuente = 'firestore' y recargar. */
+  function _etiSb(col){
+    var tk=''; try{ if(localStorage.getItem('rl_eti_fuente')==='firestore') return Promise.reject(new Error('interruptor')); tk=sessionStorage.getItem('rl_token')||''; }catch(e){}
+    if(!tk) return Promise.reject(new Error('sin sesion'));
+    var ctl=null,t=null; try{ ctl=new AbortController(); t=setTimeout(function(){ try{ctl.abort();}catch(e){} },15000); }catch(e){}
+    return fetch('https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/eti/consultar?forceFunctionRegion=sa-east-1',{method:'POST',signal:ctl?ctl.signal:undefined,headers:{'Content-Type':'application/json','Authorization':'Bearer '+tk},body:JSON.stringify({col:col,filtros:[],limite:20000})})
+      .then(function(r){ return r.json().then(function(j){ if(t)clearTimeout(t); if(!r.ok||!j||j.success!==true||!Array.isArray(j.docs)) throw new Error('HTTP '+r.status); return j.docs.map(function(d){ return (d&&d.datos)||{}; }); }); },function(e){ if(t)clearTimeout(t); throw e; });
+  }
+  function _fsGetFirestore(col) {
     return fetch(PEND_FS + col + '?pageSize=300&key=' + PEND_FS_KEY)
       .then(function (r) { return r.json(); }).then(_fsDocs);
   }
+  function _fsGet(col) { return _etiSb(col).catch(function () { return _fsGetFirestore(col); }); }
   function _pHoyISO() {
     var d = new Date();
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
