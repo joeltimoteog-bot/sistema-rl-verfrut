@@ -16,7 +16,10 @@ const COL = 'programaciones_eti';
 const est = { inicio: null, revisados: 0, copiados: 0, eliminados: 0, sobrantes: [], errores: 0, ultimoError: '', listo: false };
 window.progetiEspejo = { estado: () => JSON.parse(JSON.stringify(est)) };
 
-function apagado() { try { return localStorage.getItem('progeti_espejo') === 'off'; } catch (e) { return false; } }
+/* _PROGETI_SUPABASE_V1 (27-nov-2026): Programacion ETI ya lee y escribe en Supabase (progeti-fs-shim.js) y copia a Firestore.
+   Este espejo (Firestore -> Supabase) SOLO corre si se volvio a Firestore con localStorage.progeti_motor = 'firestore';
+   asi nunca copia datos viejos de Firestore encima de Supabase. */
+function apagado() { try { if (localStorage.getItem('progeti_espejo') === 'off') return true; return localStorage.getItem('progeti_motor') !== 'firestore' || window.__PROGETI_MOTOR === 'supabase'; } catch (e) { return true; } }
 function token() { try { return sessionStorage.getItem('rl_token') || ''; } catch (e) { return ''; } }
 async function post(accion, cuerpo) {
   const t = token(); if (!t) throw new Error('sin sesion');
@@ -42,7 +45,7 @@ function pintar() {
 }
 
 async function iniciar() {
-  if (apagado()) { console.log('[_PROGETI_ESPEJO_V1] apagado (localStorage progeti_espejo=off)'); return; }
+  if (apagado()) { console.log('[_PROGETI_ESPEJO_V1] apagado (Programacion ETI usa Supabase como fuente; o progeti_espejo=off)'); return; }
   const V = 'https://www.gstatic.com/firebasejs/10.8.0/';
   const { getApps } = await import(V + 'firebase-app.js');
   const { getFirestore, collection, onSnapshot } = await import(V + 'firebase-firestore.js');

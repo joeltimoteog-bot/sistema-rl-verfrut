@@ -76652,7 +76652,8 @@ var require_eti = __commonJS({
       "informes_cap",
       "encuestas_qr",
       "encuestas_sat",
-      "alertas_ref"
+      "alertas_ref",
+      "progeti_plan"
     ];
     var EDITORES_INFORME = ["jtimoteo", "lcastillo"];
     var editorInforme = (u) => !!u && (esAdminU(u) || EDITORES_INFORME.indexOf(String(u.usuario || "").toLowerCase()) >= 0);
@@ -76707,7 +76708,8 @@ var require_eti = __commonJS({
       "informes_cap",
       "informes_enviados",
       "evaluaciones_depuradas",
-      "supervisores_eti"
+      "supervisores_eti",
+      "progeti_plan"
     ];
     var ETI_AMBAS = ["lcastillo"];
     var SEDE_USR = ["usuario", "creadoPor", "usuarioSup", "asignado", "creadoPorUsuario"];

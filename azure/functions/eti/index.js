@@ -17,7 +17,8 @@ const COLS = ['respuestas_qr', 'evaluaciones_conocimiento', 'config_eti', 'sesio
   'capacitaciones', 'supervisores_eti', 'usuarios_eti',
   'informes_eti', 'informes_cap',
   'encuestas_qr', 'encuestas_sat',
-  'alertas_ref'];   /* _ALERTAS_REF_V1 (06-nov): seguimiento del reforzamiento por ruta y tema */   /* _ENCUESTA_SAT_V1 (05-nov): QR de encuesta de satisfaccion y sus respuestas */   /* _CAP_INFORME_V1: informes de capacitacion del Sistema RR.LL. */   /* _INFORME_ETI_V1 (05-nov): informes INF-SC-GH-03 emitidos (solo Supabase) */
+  'alertas_ref',
+  'progeti_plan'];   /* _PROGETI_SUPABASE_V1 (27-nov-2026): proyeccion anual de Programacion ETI */   /* _ALERTAS_REF_V1 (06-nov): seguimiento del reforzamiento por ruta y tema */   /* _ENCUESTA_SAT_V1 (05-nov): QR de encuesta de satisfaccion y sus respuestas */   /* _CAP_INFORME_V1: informes de capacitacion del Sistema RR.LL. */   /* _INFORME_ETI_V1 (05-nov): informes INF-SC-GH-03 emitidos (solo Supabase) */
 /* informes ya emitidos: solo estos usuarios (o un administrador) pueden corregirlos o borrarlos */
 const EDITORES_INFORME = ['jtimoteo', 'lcastillo'];
 const editorInforme = (u) => !!u && (esAdminU(u) || EDITORES_INFORME.indexOf(String(u.usuario || '').toLowerCase()) >= 0);
@@ -59,7 +60,7 @@ function ruta(f) { return '{' + String(f).split('.').join(',') + '}'; }
    · Sin sesion (pagina QR del trabajador) no cambia nada. Apagar: secreto SEDE_FILTRO=off (el mismo del RR.LL.). */
 const SEDE_COLS = ['respuestas_qr', 'evaluaciones_conocimiento', 'sesiones_qr', 'programaciones_eti', 'programaciones_eval', 'capacitaciones',
   'encuestas_qr', 'encuestas_sat', 'alertas_ref', 'informes_eti', 'informes_cap', 'informes_enviados', 'evaluaciones_depuradas',
-  'supervisores_eti'];   /* _ETI_SEDE_SUPS_V1 (21-nov-2026): la lista de supervisores de Capacitaciones ETI tambien va por sede (por su sector) */
+  'supervisores_eti', 'progeti_plan'];   /* _PROGETI_SUPABASE_V1: la proyeccion anual tambien va por sede (por su empresa) */   /* _ETI_SEDE_SUPS_V1 (21-nov-2026): la lista de supervisores de Capacitaciones ETI tambien va por sede (por su sector) */
 const ETI_AMBAS = ['lcastillo'];
 const SEDE_USR = ['usuario', 'creadoPor', 'usuarioSup', 'asignado', 'creadoPorUsuario'];
 async function sedeDe(c, u) {

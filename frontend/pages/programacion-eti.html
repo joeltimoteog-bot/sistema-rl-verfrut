@@ -357,7 +357,9 @@
 <script type="module">
 if(!window.__PROGETI_BLOQ){
 const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js");
-const { getFirestore, collection, addDoc, deleteDoc, doc, setDoc, onSnapshot, updateDoc } = await import("https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js");
+/* _PROGETI_SUPABASE_V1 (27-nov-2026): las mismas funciones, pero leen y escriben en Supabase (Firestore queda como copia).
+   Volver a Firestore sin publicar nada: localStorage.progeti_motor = 'firestore' y recargar. */
+const { getFirestore, collection, addDoc, deleteDoc, doc, setDoc, onSnapshot, updateDoc } = await import("../js/progeti-fs-shim.js?v=1");
 
 /* Mismo proyecto que Capacitaciones ETI. Nombre de app propio para no chocar con otra instancia. */
 const app = initializeApp({
@@ -996,6 +998,6 @@ render();
 <script src="../js/actualizar.js?v=3"></script>  <!-- _ACTUALIZAR_V3 (15-oct): aviso y actualizacion automatica (unico) -->
 <script src="../js/tema-corp-global.js?v=5"></script>   <!-- _TEMA_CORP_GLOBAL_V1 (02-nov): identidad empresarial unica en todos los modulos (apagar: localStorage.rl_corp_global="off") -->
 <script src="../js/eti-informes-acceso-v1.js?v=12"></script>  <!-- _ETI_INFORMES_ACCESO_V1 (10-nov): boton "Informes ETI" (Centro de informes, Expediente de auditoria, Cierre de ciclo en Evaluaciones ETI) -->
-<script type="module" src="../js/progeti-espejo-supabase-v1.js?v=1"></script>  <!-- _PROGETI_ESPEJO_V1 (10-nov): copia a Supabase las programaciones de esta pagina (Firestore sigue siendo la fuente; apagar: localStorage.progeti_espejo=off) -->
+<script type="module" src="../js/progeti-espejo-supabase-v1.js?v=2"></script>  <!-- _PROGETI_ESPEJO_V1 (10-nov): copia a Supabase las programaciones de esta pagina (Firestore sigue siendo la fuente; apagar: localStorage.progeti_espejo=off) -->
 </body>
 </html>
