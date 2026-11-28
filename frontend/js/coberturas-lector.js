@@ -29,12 +29,31 @@
   function dmy(s) { return s ? s.slice(8, 10) + '/' + s.slice(5, 7) + '/' + s.slice(0, 4) : ''; }
   function vig(c, f) { return !!c && !!f && c.desde <= f && (!c.hasta || f <= c.hasta); }
   function hoy() { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date()); } catch (e) { return new Date().toISOString().slice(0, 10); } }
-  var C = { lista: [], cargadoEn: 0, actualizado: '' };
-  function cargar() {
+  var C = { lista: [], cargadoEn: 0, actualizado: '', fuente: '' };
+  /* _COBERTURAS_SUPABASE_V1 (27-nov-2026): se lee de Supabase (eti.config_eti, documento "coberturas": lectura sin sesion,
+     igual que antes en Firestore). Si Supabase no responde o no tiene el documento, se lee de Firestore como antes.
+     Volver a Firestore sin publicar nada: localStorage.eti_cob_fuente = 'firestore' y recargar. */
+  var URL_SB = 'https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/eti/doc?forceFunctionRegion=sa-east-1';
+  function soloFs() { try { return localStorage.getItem('eti_cob_fuente') === 'firestore'; } catch (e) { return false; } }
+  function deSupabase() {
+    if (soloFs()) return Promise.resolve(null);
+    var ctl = null, t = null; try { ctl = new AbortController(); t = setTimeout(function () { try { ctl.abort(); } catch (e) {} }, 8000); } catch (e) {}
+    return fetch(URL_SB, { method: 'POST', cache: 'no-store', signal: ctl ? ctl.signal : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ col: 'config_eti', id: 'coberturas' }) })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (j) { if (t) clearTimeout(t); if (!j || !j.success || !j.existe || !j.datos || typeof j.datos.json !== 'string') return null; return { json: j.datos.json, actualizado: j.datos.actualizado || '' }; })
+      .catch(function () { if (t) clearTimeout(t); return null; });
+  }
+  function deFirestore() {
     return fetch(URL_DOC, { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-      var s = j && j.fields && j.fields.json && j.fields.json.stringValue;
-      var l = []; try { l = s ? JSON.parse(s) : []; } catch (e) { l = []; }
-      C.lista = Array.isArray(l) ? l : []; C.cargadoEn = Date.now(); C.actualizado = (j && j.fields && j.fields.actualizado && j.fields.actualizado.stringValue) || '';
+      if (!j) return null;
+      return { json: (j.fields && j.fields.json && j.fields.json.stringValue) || '', actualizado: (j.fields && j.fields.actualizado && j.fields.actualizado.stringValue) || '' };
+    }).catch(function () { return null; });
+  }
+  function cargar() {
+    return deSupabase().then(function (d) { if (d) { d.fuente = 'supabase'; return d; } return deFirestore().then(function (f) { if (f) f.fuente = 'firestore'; return f; }); }).then(function (d) {
+      if (!d) return C.lista;   /* ninguna fuente respondio: se conserva lo que ya habia */
+      var l = []; try { l = d.json ? JSON.parse(d.json) : []; } catch (e) { l = []; }
+      C.lista = Array.isArray(l) ? l : []; C.cargadoEn = Date.now(); C.actualizado = d.actualizado || ''; C.fuente = d.fuente;
       try { window.dispatchEvent(new CustomEvent('eti-coberturas', { detail: C.lista })); } catch (e) {}
       return C.lista;
     }).catch(function () { return C.lista; });
@@ -45,7 +64,7 @@
   function deReemplazo(x, f) { f = f || hoy(); return C.lista.find(function (c) { return vig(c, f) && (mismo(x, c.reemplazo) || mismo(x, c.reemplazo_nombre)); }) || null; }
   function texto(c) { if (!c) return ''; return 'en reemplazo de ' + titulo(c.titular_nombre || c.titular) + ' (' + (TIPO[c.tipo] || 'ausencia') + ', ' + dmy(c.desde) + ' al ' + (c.hasta ? dmy(c.hasta) : 'sin fecha fin') + ')'; }
   window.ETICob = {
-    get lista() { return C.lista; }, get actualizado() { return C.actualizado; },
+    get lista() { return C.lista; }, get actualizado() { return C.actualizado; }, get fuente() { return C.fuente; },
     listo: listo, recargar: cargar, deTitular: deTitular, deReemplazo: deReemplazo, mismo: mismo, texto: texto, titulo: titulo, dmy: dmy,
     tipoTxt: function (t) { return TIPO[t] || 'ausencia'; }, hoy: hoy,
     vigentes: function (f) { f = f || hoy(); return C.lista.filter(function (c) { return vig(c, f); }); }
