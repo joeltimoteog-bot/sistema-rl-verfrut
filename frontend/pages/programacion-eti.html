@@ -500,6 +500,7 @@ onSnapshot(collection(db,COL_PROG),snap=>{
 onSnapshot(collection(db,COL_PLAN),snap=>{
   PLAN={}; snap.docs.forEach(d=>PLAN[d.id]=d.data());
   if(vista==='anual')renderAnual();
+  try{ renderKpis(); }catch(e){}   /* _PROGETI_KPI_PLAN_V1 (27-nov-2026): los indicadores de arriba tambien se recalculan cuando llega o cambia la proyeccion */
 },e=>{console.warn('[progeti] proyección (opcional)',e);});
 
 /* ── Filtros ── */
