@@ -1033,6 +1033,7 @@ function imprimirEvidencia(){
 
 /* ════════ 👤 FICHA 360° DEL TRABAJADOR ════════ */
 const _FS_BASE='https://firestore.googleapis.com/v1/projects/sistema-eti-verfrut/databases/(default)/documents/';
+const _FER_SB='https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/eti/';   /* _FERIADOS_SUPABASE_V1 */
 const _FS_KEY='AIzaSyAv-1VcbT8VCerClNAeVtVXzOxhSffeDpc';
 function _fsVal(v){ if(v==null)return ''; if(v.stringValue!=null)return v.stringValue; if(v.integerValue!=null)return Number(v.integerValue); if(v.doubleValue!=null)return Number(v.doubleValue); if(v.booleanValue!=null)return v.booleanValue; if(v.timestampValue)return v.timestampValue; if(v.arrayValue)return (v.arrayValue.values||[]).map(_fsVal); if(v.mapValue){const o={};Object.keys(v.mapValue.fields||{}).forEach(k=>o[k]=_fsVal(v.mapValue.fields[k]));return o;} return ''; }
 function _fsDoc(d){ const o={}; Object.keys(d.fields||{}).forEach(k=>o[k]=_fsVal(d.fields[k])); return o; }
@@ -1232,7 +1233,18 @@ function _ferFmt(iso){ try{ return new Date(iso+'T12:00:00').toLocaleDateString(
 async function abrirFeriados(){
   $('ferOverlay').style.display='flex';
   $('ferLista').innerHTML='<div class="empty">⏳ Cargando configuración…</div>';
+  /* _FERIADOS_SUPABASE_V1 (27-nov-2026): primero Supabase; si aun no existe o no responde, Firestore como antes */
+  let _ferSb=null;
   try{
+    if(localStorage.getItem('rl_feriados_fuente')!=='firestore'){
+      const rs=await fetch(_FER_SB+'doc?forceFunctionRegion=sa-east-1',{method:'POST',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({col:'config_eti',id:'feriados_rl'})});
+      const js=rs.ok?await rs.json():null;
+      const ds=js&&js.success&&js.existe&&js.datos;
+      if(ds&&Array.isArray(ds.canjeados)&&Array.isArray(ds.descansos)) _ferSb={canjeados:ds.canjeados.map(String),descansos:ds.descansos.map(String)};
+    }
+  }catch(e){ _ferSb=null; }
+  if(_ferSb){ _ferCfg=_ferSb; }
+  else try{
     const r=await fetch(_FS_BASE+'config_rl/feriados?key='+_FS_KEY);
     const d=await r.json();
     const f=(d&&d.fields)||{};
@@ -1276,9 +1288,15 @@ async function guardarFeriados(){
       descansos:{arrayValue:{values:_ferCfg.descansos.map(v=>({stringValue:v}))}},
       actualizado:{stringValue:new Date().toISOString()+' por '+(USER.usuario||'')}
     };
+    /* _FERIADOS_SUPABASE_V1: se guarda primero en Supabase (manda); Firestore queda como copia */
+    let tk=''; try{ tk=sessionStorage.getItem('rl_token')||''; }catch(e){}
+    const rs=await fetch(_FER_SB+'escribir?forceFunctionRegion=sa-east-1',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+tk},
+      body:JSON.stringify({ops:[{col:'config_eti',id:'feriados_rl',op:'set',datos:{canjeados:_ferCfg.canjeados.slice(),descansos:_ferCfg.descansos.slice(),actualizado:new Date().toISOString(),por:String(USER.usuario||'')}}]})});
+    const jsb=await rs.json().catch(()=>({}));
+    if(!rs.ok||jsb.success===false) throw new Error((jsb&&jsb.error)||('Supabase HTTP '+rs.status));
     const r=await fetch(_FS_BASE+'config_rl/feriados?key='+_FS_KEY+'&updateMask.fieldPaths=canjeados&updateMask.fieldPaths=descansos&updateMask.fieldPaths=actualizado',
-      {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:campos})});
-    if(!r.ok) throw new Error('HTTP '+r.status);
+      {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:campos})}).catch(()=>null);
+    if(!r||!r.ok) console.warn('[_FERIADOS_SUPABASE_V1] guardado en Supabase; la copia en Firestore no se pudo hacer');
     try{ localStorage.setItem('rl_feriados_cfg',JSON.stringify({ts:Date.now(),canjeados:_ferCfg.canjeados,descansos:_ferCfg.descansos})); }catch(e){}
     m.style.color='#22c55e'; m.textContent='✅ Guardado. Aplica al login y al cierre automático de todos en minutos.';
   }catch(e){

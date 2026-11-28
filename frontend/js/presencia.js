@@ -40,7 +40,23 @@
        solo un acceso temporal aprobado a mano. Misma regla que el login (index.html). */
     var FER_FIJOS = ['01-01','05-01','06-07','06-29','07-23','07-28','07-29','08-06','08-30','10-08','11-01','12-08','12-09','12-25'];
     var FER_MOV = { 2026: ['04-02','04-03'], 2027: ['03-25','03-26'], 2028: ['04-13','04-14'] };
+    /* _FERIADOS_SUPABASE_V1 (27-nov-2026): primero Supabase; si no responde o aun no existe, Firestore como antes.
+       Volver atras: localStorage.rl_feriados_fuente = 'firestore'. */
+    var ferSupabase = function(){ try { if (localStorage.getItem('rl_feriados_fuente') === 'firestore') return Promise.resolve(false); } catch (e0) {}
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, t = setTimeout(function () { try { ctl && ctl.abort(); } catch (e) {} }, 6000);
+    return fetch('https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/eti/doc?forceFunctionRegion=sa-east-1', { method: 'POST', cache: 'no-store', signal: ctl ? ctl.signal : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ col: 'config_eti', id: 'feriados_rl' }) })
+      .then(function (r) { clearTimeout(t); return r.ok ? r.json() : null; }, function () { clearTimeout(t); return null; })
+      .then(function (j) {
+        var d = j && j.success && j.existe && j.datos;
+        if (!d || !Array.isArray(d.canjeados) || !Array.isArray(d.descansos)) return false;
+        try { localStorage.setItem('rl_feriados_cfg', JSON.stringify({ ts: Date.now(), canjeados: d.canjeados.map(String), descansos: d.descansos.map(String), fuente: 'supabase' })); } catch (e) {}
+        return true;
+      }).catch(function () { return false; });
+  };
     function ferRefrescar() {
+      try { ferSupabase().then(function (ok) { if (!ok) ferFirestore(); }).catch(function () { ferFirestore(); }); } catch (e) { ferFirestore(); }
+    }
+    function ferFirestore() {
       try {
         fetch('https://firestore.googleapis.com/v1/projects/sistema-eti-verfrut/databases/(default)/documents/config_rl/feriados?key=AIzaSyAv-1VcbT8VCerClNAeVtVXzOxhSffeDpc', { cache: 'no-store' })
           .then(function (r) { return r.json(); }).then(function (d) {

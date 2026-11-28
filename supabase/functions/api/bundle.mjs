@@ -76782,6 +76782,7 @@ var require_eti = __commonJS({
       for (const o of ops) {
         if (!o || typeof o !== "object") throw Object.assign(new Error("operacion invalida"), { status: 400 });
         col(o.col);
+        if (o.col === "config_eti" && String(o.id) === "feriados_rl" && !(gestor(u) || String(u && u.usuario || "").toLowerCase().trim() === "jtimoteo")) throw Object.assign(new Error("Solo el administrador puede cambiar los feriados"), { status: 403 });
         soloGestor(o.col, u);
         if (!o.id || String(o.id).length > 200) throw Object.assign(new Error("id invalido"), { status: 400 });
         if (!u && !(o.col === "respuestas_qr" && (o.op === "set" || o.op === "update"))) throw Object.assign(new Error("Sesion requerida"), { status: 401 });

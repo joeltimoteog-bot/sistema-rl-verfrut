@@ -124,6 +124,8 @@ async function escribir(b, u) {
   for (const o of ops) {
     if (!o || typeof o !== 'object') throw Object.assign(new Error('operacion invalida'), { status: 400 });   /* _SEG_SERVIDOR_V2 */
     col(o.col);
+    /* _FERIADOS_SUPABASE_V1 (27-nov-2026): los feriados del Sistema RR.LL. (config_eti/feriados_rl) solo los cambia jtimoteo o un administrador */
+    if (o.col === 'config_eti' && String(o.id) === 'feriados_rl' && !(gestor(u) || String((u && u.usuario) || '').toLowerCase().trim() === 'jtimoteo')) throw Object.assign(new Error('Solo el administrador puede cambiar los feriados'), { status: 403 });
     soloGestor(o.col, u);   /* _SEG_SERVIDOR_V2 (10-nov-2026, verificacion): el padron de cuentas tampoco se escribe ni se borra sin ser gestor */
     if (!o.id || String(o.id).length > 200) throw Object.assign(new Error('id invalido'), { status: 400 });
     /* sin sesion: solo la respuesta del trabajador (crear o marcar azOk), nunca borrar */

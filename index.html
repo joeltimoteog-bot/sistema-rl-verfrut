@@ -619,7 +619,24 @@ function rlFeriadosCfg() {
         return { canjeados: (c&&c.canjeados)||[], descansos: (c&&c.descansos)||[] }; }
   catch(e) { return { canjeados: [], descansos: [] }; }
 }
+/* _FERIADOS_SUPABASE_V1 (27-nov-2026, "todo con Supabase"): primero Supabase (eti.config_eti / feriados_rl, lectura sin sesion);
+   si no responde o aun no existe, Firestore como antes. Volver atras: localStorage.rl_feriados_fuente = 'firestore'. */
+const rlFeriadosSupabase = function(){ try { if (localStorage.getItem('rl_feriados_fuente') === 'firestore') return Promise.resolve(false); } catch (e0) {}
+    var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, t = setTimeout(function () { try { ctl && ctl.abort(); } catch (e) {} }, 6000);
+    return fetch('https://exdjzbfinppzatjyimxn.supabase.co/functions/v1/api/eti/doc?forceFunctionRegion=sa-east-1', { method: 'POST', cache: 'no-store', signal: ctl ? ctl.signal : undefined, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ col: 'config_eti', id: 'feriados_rl' }) })
+      .then(function (r) { clearTimeout(t); return r.ok ? r.json() : null; }, function () { clearTimeout(t); return null; })
+      .then(function (j) {
+        var d = j && j.success && j.existe && j.datos;
+        if (!d || !Array.isArray(d.canjeados) || !Array.isArray(d.descansos)) return false;
+        try { localStorage.setItem('rl_feriados_cfg', JSON.stringify({ ts: Date.now(), canjeados: d.canjeados.map(String), descansos: d.descansos.map(String), fuente: 'supabase' })); } catch (e) {}
+        return true;
+      }).catch(function () { return false; });
+  };
 function rlFeriadosRefrescar() {
+  try { return rlFeriadosSupabase().then(function (ok) { if (!ok) return rlFeriadosFirestore(); }).catch(function () { return rlFeriadosFirestore(); }); }
+  catch (e) { return rlFeriadosFirestore(); }
+}
+function rlFeriadosFirestore() {
   try {
     return fetch('https://firestore.googleapis.com/v1/projects/sistema-eti-verfrut/databases/(default)/documents/config_rl/feriados?key=AIzaSyAv-1VcbT8VCerClNAeVtVXzOxhSffeDpc', {cache:'no-store'})
       .then(r=>r.json()).then(d=>{
