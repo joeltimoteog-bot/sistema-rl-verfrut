@@ -161,9 +161,13 @@
         var vis = ''; try { vis = (window.RLSedeVista && window.RLSedeVista.get()) || ''; } catch (e2) {}
         var rolTodo = false; try { rolTodo = typeof ROLES_VER_TODO !== 'undefined' && ROLES_VER_TODO.includes(USER.rol); } catch (e3) {}
         var realU = ''; try { var gR = JSON.parse(sessionStorage.getItem('rl_sede_real') || 'null'); if (gR && gR.u === String((USER && USER.usuario) || '').toLowerCase()) realU = gR.s || ''; } catch (e4) {}
-        if (!off && p && p.action === 'getAtencionesOptimizado' && (vis || (emp === 'OLMOS' && rolTodo && realU !== 'TODO'))) {
+        /* _SEDE_AT_SIN_GOOGLE_V2 (27-nov-2026): tambien un ADMINISTRADOR DE PIURA sin alcance general. Desde el 23-nov la hoja de Google
+           recibe copia de cada atencion (tambien las de Olmos) y ese respaldo le devolvia atenciones de Olmos. Solo quien tiene alcance
+           GENERAL y eligio "Ambas sedes" conserva el respaldo (puede ver las dos). Los supervisores no cambian (Google les da solo las suyas). */
+        if (!off && p && p.action === 'getAtencionesOptimizado' && (vis || (rolTodo && realU !== 'TODO'))) {
+          var sedeTxt = vis ? vis : (emp === 'OLMOS' ? 'OLMOS' : 'PIURA');
           console.log('[_SEDE_AT_SIN_GOOGLE_V1] hay filtro de sede: no se usa el respaldo de atenciones en Google');
-          return Promise.resolve({ success: false, sin_respaldo: true, data: [], error: 'No hay atenciones registradas en ' + (vis === 'PIURA' ? 'la sede Piura' : 'la sede Olmos') + ' para hoy.', fuente: 'sede' });
+          return Promise.resolve({ success: false, sin_respaldo: true, data: [], error: 'No hay atenciones registradas en ' + (sedeTxt === 'PIURA' ? 'la sede Piura' : 'la sede Olmos') + ' para hoy.', fuente: 'sede' });
         }
         if (!off && emp === 'OLMOS' && p && p.action === 'buscarTrabajador') {
           console.log('[_SEDE_GOOGLE_V1] usuario de Olmos: no se usa la busqueda de respaldo en Google (nomina de Piura)');
